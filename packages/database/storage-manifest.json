@@ -1985,6 +1985,16 @@
       "writes": []
     },
     {
+      "domain": "spend",
+      "name": "get_work_order_metrics",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "work",
       "name": "get_work_priorities",
       "reads": [],

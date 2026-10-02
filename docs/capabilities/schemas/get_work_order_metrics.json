@@ -1,0 +1,2004 @@
+{
+  "name": "get_work_order_metrics",
+  "domain": "spend",
+  "description": "Report this workspace's operator metrics, work order metrics, and unassigned spend for each week that overlaps a day range. A work order is done at its first passing check run. Unassigned spend is spend on runs whose direct work order has no work item, with a 24-hour grace window, and it is not part of unproductive spend. Each figure cites its definition and the work orders and runs behind it. Org Owner or Admin only.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "billing"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "period": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "x-server-validated": true,
+            "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+          },
+          "to": {
+            "type": "string",
+            "x-server-validated": true,
+            "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "additionalProperties": false,
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      }
+    },
+    "required": [
+      "period"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "period": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "additionalProperties": false
+      },
+      "pseudonyms": {
+        "type": "boolean"
+      },
+      "currency": {
+        "type": "string"
+      },
+      "definitions": {
+        "type": "object",
+        "properties": {
+          "operator": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "definition": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "direction": {
+                  "type": "string",
+                  "enum": [
+                    "up",
+                    "down",
+                    "flat_or_down",
+                    "flat_or_up",
+                    "context"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "definition",
+                "direction"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "workOrder": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "definition": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "direction": {
+                  "type": "string",
+                  "enum": [
+                    "up",
+                    "down",
+                    "flat_or_down",
+                    "flat_or_up",
+                    "context"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "definition",
+                "direction"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "unassigned": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "definition": {
+                "type": "string",
+                "minLength": 1
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "up",
+                  "down",
+                  "flat_or_down",
+                  "flat_or_up",
+                  "context"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "definition",
+              "direction"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "operator",
+          "workOrder",
+          "unassigned"
+        ],
+        "additionalProperties": false
+      },
+      "weeks": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "week": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+                },
+                "to": {
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+                }
+              },
+              "required": [
+                "from",
+                "to"
+              ],
+              "additionalProperties": false
+            },
+            "settled": {
+              "type": "boolean"
+            },
+            "workspace": {
+              "type": "object",
+              "properties": {
+                "spend": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "micros": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "micros",
+                        "currency"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "unproductive": {
+                  "type": "object",
+                  "properties": {
+                    "micros": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "micros",
+                    "currency"
+                  ],
+                  "additionalProperties": false
+                },
+                "unassigned": {
+                  "type": "object",
+                  "properties": {
+                    "spend": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "micros": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "micros",
+                            "currency"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "tokens": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "share": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "runs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "runId": {
+                            "type": "string"
+                          },
+                          "unassigned": {
+                            "type": "object",
+                            "properties": {
+                              "micros": {
+                                "type": "string"
+                              },
+                              "currency": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "micros",
+                              "currency"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "runId",
+                          "unassigned"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 10
+                    }
+                  },
+                  "required": [
+                    "spend",
+                    "tokens",
+                    "share",
+                    "runs"
+                  ],
+                  "additionalProperties": false
+                },
+                "notRecorded": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "micros": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "micros",
+                        "currency"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "workOrders": {
+                  "type": "object",
+                  "properties": {
+                    "done": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "doneRate": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "numerator": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "denominator": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "workOrders": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "maxItems": 10
+                        },
+                        "runs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "maxItems": 10
+                        }
+                      },
+                      "required": [
+                        "value",
+                        "numerator",
+                        "denominator",
+                        "workOrders",
+                        "runs"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "firstPassRate": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "numerator": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "denominator": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "workOrders": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "maxItems": 10
+                        },
+                        "runs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "maxItems": 10
+                        }
+                      },
+                      "required": [
+                        "value",
+                        "numerator",
+                        "denominator",
+                        "workOrders",
+                        "runs"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "costToDone": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "micros": {
+                                  "type": "string"
+                                },
+                                "currency": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "micros",
+                                "currency"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "workOrders": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "maxItems": 10
+                        },
+                        "runs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "maxItems": 10
+                        }
+                      },
+                      "required": [
+                        "value",
+                        "workOrders",
+                        "runs"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "timeToDone": {
+                      "type": "object",
+                      "properties": {
+                        "valueMs": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "workOrders": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "maxItems": 10
+                        },
+                        "runs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "maxItems": 10
+                        }
+                      },
+                      "required": [
+                        "valueMs",
+                        "workOrders",
+                        "runs"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "reworkSpend": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "micros": {
+                                  "type": "string"
+                                },
+                                "currency": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "micros",
+                                "currency"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "workOrders": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "maxItems": 10
+                        },
+                        "runs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "maxItems": 10
+                        }
+                      },
+                      "required": [
+                        "value",
+                        "workOrders",
+                        "runs"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "abandonedSpend": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "micros": {
+                                  "type": "string"
+                                },
+                                "currency": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "micros",
+                                "currency"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "workOrders": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "maxItems": 10
+                        },
+                        "runs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "maxItems": 10
+                        }
+                      },
+                      "required": [
+                        "value",
+                        "workOrders",
+                        "runs"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "reopenRate": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "numerator": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "denominator": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "workOrders": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "maxItems": 10
+                        },
+                        "runs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "maxItems": 10
+                        },
+                        "pending": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "value",
+                        "numerator",
+                        "denominator",
+                        "workOrders",
+                        "runs",
+                        "pending"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "done",
+                    "doneRate",
+                    "firstPassRate",
+                    "costToDone",
+                    "timeToDone",
+                    "reworkSpend",
+                    "abandonedSpend",
+                    "reopenRate"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "spend",
+                "unproductive",
+                "unassigned",
+                "notRecorded",
+                "workOrders"
+              ],
+              "additionalProperties": false
+            },
+            "operators": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "operator": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "const": "named"
+                          },
+                          "key": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "facts": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "name": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "email": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "avatarUrl": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "role": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "email",
+                                  "avatarUrl",
+                                  "role"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "key",
+                          "facts"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "const": "pseudonym"
+                          },
+                          "pseudonym": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "pseudonym"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "metrics": {
+                    "type": "object",
+                    "properties": {
+                      "doneWorkOrders": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "workOrders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "workOrders",
+                          "runs"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "costPerDone": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "micros": {
+                                    "type": "string"
+                                  },
+                                  "currency": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "micros",
+                                  "currency"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "workOrders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "workOrders",
+                          "runs"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "unproductiveShare": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "runs"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "agentsInFlight": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "agents": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "maxItems": 10
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "agents"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "leverage": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "value"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "touchesPerDone": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "touches": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "basis": {
+                            "const": "interrupts"
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "touches",
+                          "basis",
+                          "runs"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "unassignedShare": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "runs"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "doneWorkOrders",
+                      "costPerDone",
+                      "unproductiveShare",
+                      "agentsInFlight",
+                      "leverage",
+                      "touchesPerDone",
+                      "unassignedShare"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "unassigned": {
+                    "type": "object",
+                    "properties": {
+                      "spend": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "micros": {
+                                "type": "string"
+                              },
+                              "currency": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "micros",
+                              "currency"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "tokens": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "share": {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "runs": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "runId": {
+                              "type": "string"
+                            },
+                            "unassigned": {
+                              "type": "object",
+                              "properties": {
+                                "micros": {
+                                  "type": "string"
+                                },
+                                "currency": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "micros",
+                                "currency"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "runId",
+                            "unassigned"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "maxItems": 10
+                      }
+                    },
+                    "required": [
+                      "spend",
+                      "tokens",
+                      "share",
+                      "runs"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "workOrders": {
+                    "type": "object",
+                    "properties": {
+                      "done": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "doneRate": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "numerator": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "denominator": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "workOrders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "numerator",
+                          "denominator",
+                          "workOrders",
+                          "runs"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "firstPassRate": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "numerator": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "denominator": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "workOrders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "numerator",
+                          "denominator",
+                          "workOrders",
+                          "runs"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "costToDone": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "micros": {
+                                    "type": "string"
+                                  },
+                                  "currency": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "micros",
+                                  "currency"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "workOrders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "workOrders",
+                          "runs"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "timeToDone": {
+                        "type": "object",
+                        "properties": {
+                          "valueMs": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "workOrders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          }
+                        },
+                        "required": [
+                          "valueMs",
+                          "workOrders",
+                          "runs"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "reworkSpend": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "micros": {
+                                    "type": "string"
+                                  },
+                                  "currency": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "micros",
+                                  "currency"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "workOrders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "workOrders",
+                          "runs"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "abandonedSpend": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "micros": {
+                                    "type": "string"
+                                  },
+                                  "currency": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "micros",
+                                  "currency"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "workOrders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "workOrders",
+                          "runs"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "reopenRate": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "numerator": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "denominator": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "workOrders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          },
+                          "pending": {
+                            "type": "integer",
+                            "minimum": 0
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "numerator",
+                          "denominator",
+                          "workOrders",
+                          "runs",
+                          "pending"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "done",
+                      "doneRate",
+                      "firstPassRate",
+                      "costToDone",
+                      "timeToDone",
+                      "reworkSpend",
+                      "abandonedSpend",
+                      "reopenRate"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "operator",
+                  "metrics",
+                  "unassigned",
+                  "workOrders"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "agents": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "agentKey": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "unassigned": {
+                    "type": "object",
+                    "properties": {
+                      "spend": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "micros": {
+                                "type": "string"
+                              },
+                              "currency": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "micros",
+                              "currency"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "tokens": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "share": {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "runs": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "runId": {
+                              "type": "string"
+                            },
+                            "unassigned": {
+                              "type": "object",
+                              "properties": {
+                                "micros": {
+                                  "type": "string"
+                                },
+                                "currency": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "micros",
+                                "currency"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "runId",
+                            "unassigned"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "maxItems": 10
+                      }
+                    },
+                    "required": [
+                      "spend",
+                      "tokens",
+                      "share",
+                      "runs"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "workOrders": {
+                    "type": "object",
+                    "properties": {
+                      "done": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "doneRate": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "numerator": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "denominator": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "workOrders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "numerator",
+                          "denominator",
+                          "workOrders",
+                          "runs"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "firstPassRate": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "numerator": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "denominator": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "workOrders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "numerator",
+                          "denominator",
+                          "workOrders",
+                          "runs"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "costToDone": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "micros": {
+                                    "type": "string"
+                                  },
+                                  "currency": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "micros",
+                                  "currency"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "workOrders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "workOrders",
+                          "runs"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "timeToDone": {
+                        "type": "object",
+                        "properties": {
+                          "valueMs": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "workOrders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          }
+                        },
+                        "required": [
+                          "valueMs",
+                          "workOrders",
+                          "runs"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "reworkSpend": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "micros": {
+                                    "type": "string"
+                                  },
+                                  "currency": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "micros",
+                                  "currency"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "workOrders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "workOrders",
+                          "runs"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "abandonedSpend": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "micros": {
+                                    "type": "string"
+                                  },
+                                  "currency": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "micros",
+                                  "currency"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "workOrders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "workOrders",
+                          "runs"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "reopenRate": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "numerator": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "denominator": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "workOrders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10
+                          },
+                          "pending": {
+                            "type": "integer",
+                            "minimum": 0
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "numerator",
+                          "denominator",
+                          "workOrders",
+                          "runs",
+                          "pending"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "done",
+                      "doneRate",
+                      "firstPassRate",
+                      "costToDone",
+                      "timeToDone",
+                      "reworkSpend",
+                      "abandonedSpend",
+                      "reopenRate"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "agentKey",
+                  "unassigned",
+                  "workOrders"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "week",
+            "settled",
+            "workspace",
+            "operators",
+            "agents"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 1,
+        "maxItems": 14
+      }
+    },
+    "required": [
+      "period",
+      "pseudonyms",
+      "currency",
+      "definitions",
+      "weeks"
+    ],
+    "additionalProperties": false
+  }
+}
