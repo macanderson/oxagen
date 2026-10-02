@@ -308,6 +308,7 @@ export const FINDING_KINDS = [
   "repeated_instructions",
   "recurring_runs",
   "spend_with_no_outcome",
+  "retry_loops",
 ] as const;
 
 const FindingKind = z.enum(FINDING_KINDS);

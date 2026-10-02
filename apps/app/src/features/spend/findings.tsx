@@ -6,14 +6,11 @@
 // them sit what detectors 2, 3, and 5 price and what detector 4 estimates,
 // none of which adds to the headline (rules 2 and 3). The list filters, sorts
 // and pages the findings; Evidence opens one finding's arithmetic in a dialog
-// and Fix opens the change that removes it. The one figure computed here is a
-// finding's share of the listed total, divided through the micros seam and
-// printed as a ratio (INV-09, INV-10).
+// and Fix opens the change that removes it. Each card's share of the spend is
+// divided through the micros seam and printed as a ratio (INV-09, INV-10).
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import { ratioOfMicros } from "@/data/contracts/money";
 import type {
-  SpendFinding,
   SpendFindingEvidence,
   SpendFindings,
   SpendReport,
@@ -44,16 +41,6 @@ import type { SpendAt } from "./view";
 
 /** The handler's refusal for a period whose figures hold two currencies. */
 const MIXED_CURRENCY = "unproductive_mixed_currency";
-
-/** Each listed finding's saving over the listed total; null where the total does not divide it. */
-function sharesOf(
-  findings: readonly SpendFinding[],
-  total: SpendFindings["saving"],
-): (number | null)[] {
-  return findings.map((finding) =>
-    total === null ? null : ratioOfMicros(finding.saving, total),
-  );
-}
 
 /**
  * The headline and its share of the period's spend, side by side (rule 5).
@@ -176,7 +163,6 @@ export function FindingsSection({
 }) {
   const t = useTranslations("spend.findings");
   const locale = useLocale();
-  const shares = sharesOf(findings.findings, findings.saving);
   const names = Object.fromEntries(
     operators.flatMap((row) =>
       row.operator?.name ? [[row.key, row.operator.name] as const] : [],
@@ -235,7 +221,7 @@ export function FindingsSection({
       ) : (
         <FindingsList
           findings={findings.findings}
-          shares={shares}
+          spend={findings.spend}
           names={names}
           at={at}
         />

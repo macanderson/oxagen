@@ -1617,6 +1617,12 @@ describe("Assignments, the delivery report", () => {
       }),
     });
     const table = screen.getByRole("table", { name: "Steering delivery" });
+    // The run's agent carries its harness on its avatar.
+    expect(table.querySelector("[data-harness-badge]")).toHaveAttribute(
+      "data-harness-badge",
+      "codex",
+    );
+    expect(within(table).getByText("review")).toBeVisible();
     expect(within(table).getByText("14")).toBeVisible();
     expect(within(table).getByText("3")).toBeVisible();
     expect(within(table).getByText("2")).toBeVisible();
