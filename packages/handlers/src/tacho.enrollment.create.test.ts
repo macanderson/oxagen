@@ -284,6 +284,32 @@ describe("create_tacho_enrollment: the agent file (#5149)", () => {
     expect(mocks.openAgentFile).not.toHaveBeenCalled();
   });
 
+  it("answers once its wait runs out, while the agent file PR keeps opening", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      happyDb();
+      operatorPublicId = "usr_01k5qk7d0000000000000000";
+      // A steering host that never answers.
+      mocks.openAgentFile.mockReturnValue(new Promise(() => {}));
+
+      let output: Awaited<ReturnType<typeof tachoEnrollmentCreateHandler>> | null = null;
+      const pending = tachoEnrollmentCreateHandler(INPUT, CONTEXT).then((out) => {
+        output = out;
+      });
+      // Step the clock until enrollment answers: 20 seconds after the PR
+      // started, which is after the handler's own awaits.
+      for (let step = 0; step < 60 && output === null; step += 1) {
+        await vi.advanceTimersByTimeAsync(1000);
+      }
+      await pending;
+
+      expect(output).not.toBeNull();
+      expect(mocks.openAgentFile).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("still enrolls the host when proposing the agent file throws", async () => {
     happyDb();
     operatorPublicId = "usr_01k5qk7d0000000000000000";

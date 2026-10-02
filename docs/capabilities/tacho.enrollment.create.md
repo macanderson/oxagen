@@ -17,7 +17,7 @@ The PR carries an `agent_file` proposal ([ADR-265](../adr/ADR-265-every-steering
 - the runtime's slug is not a valid agent name, or the host reports only Claude Desktop
 - the workspace has no steering repository
 
-The enrollment's answer does not change either way. A PR that fails to open is logged, and the host stays enrolled.
+The enrollment's answer does not change either way. A PR that fails to open is logged, and the host stays enrolled. Enrollment waits up to 20 seconds for the PR. Past that it answers, and the PR keeps opening.
 
 ## Mode
 

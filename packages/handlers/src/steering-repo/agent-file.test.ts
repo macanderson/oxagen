@@ -27,6 +27,7 @@ import { createSteeringPullRequestOpener } from "../tools.pr.open";
 import {
   AGENT_FILE_PULL_REQUEST,
   openAgentFilePr,
+  openAgentFilePrQuietly,
   type AgentFileDeps,
   type EnrolledRuntime,
 } from "./agent-file";
@@ -276,5 +277,45 @@ describe("openAgentFilePr", () => {
       status: "skipped",
       reason: "no_steering_repo",
     });
+  });
+
+  it("cuts a long runtime name so the label fits the 80 characters agent/v1 takes", async () => {
+    const h = steeringHarness();
+    const name = `Build host ${"x".repeat(100)}`;
+    const out = await openAgentFilePr(
+      deps(h),
+      enrolled({ runtime: { slug: "mcp-live-1", name } }),
+    );
+    if (out.status !== "opened") throw new Error("no PR opened");
+    const text = await h.github.readFile(
+      REPO,
+      "agents/mcp-live-1.toml",
+      out.pullRequest.headSha,
+    );
+    const read = readTomlFile(text ?? "", "agent/v1", agentSchema);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.value.label).toHaveLength(80);
+    expect(read.value.label.startsWith("Claude Code on Build host ")).toBe(true);
+  });
+});
+
+describe("openAgentFilePrQuietly", () => {
+  it("answers the outcome when the PR opens", async () => {
+    const h = steeringHarness();
+    const out = await openAgentFilePrQuietly(deps(h), enrolled());
+    expect(out).toMatchObject({ status: "opened" });
+  });
+
+  it("answers null instead of throwing when the steering host fails, so enrollment goes on", async () => {
+    const h = steeringHarness();
+    const failing: AgentFileDeps = {
+      ...deps(h),
+      host: () => {
+        throw new Error("the steering host is down");
+      },
+    };
+    await expect(openAgentFilePrQuietly(failing, enrolled())).resolves.toBeNull();
+    expect(h.github.pulls).toHaveLength(0);
   });
 });

@@ -56,6 +56,9 @@ export function agentSlugFor(hostname: string): string {
   return `cc-${slug.length > 0 ? slug : "host"}`;
 }
 
+/** How long enrollment waits for the agent file PR before it answers. */
+const AGENT_FILE_WAIT_MS = 20_000;
+
 export const tachoEnrollmentCreateHandler: CapabilityHandler<
   typeof tachoEnrollmentCreate
 > = async (input, ctx) => {
@@ -159,13 +162,30 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
       const { openAgentFilePrQuietly } = await import(
         "./steering-repo/agent-file"
       );
-      await openAgentFilePrQuietly(await agentFileDeps(), {
+      const proposing = openAgentFilePrQuietly(await agentFileDeps(), {
         scope: { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
         operator: { userId: operatorUserId, publicId: operatorPublicId },
         runtime: { slug: minted.runtime.slug, name: minted.runtime.name },
         hostname: input.hostname,
         harnesses: input.harnesses,
+      }).catch((err: unknown) => {
+        // Caught here rather than below, so a failure after enrollment
+        // stopped waiting is still logged and never goes unhandled.
+        logger.warn(
+          { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+          "tacho.enrollment.create: the host enrolled, but its agent file was not proposed",
+        );
       });
+      // The PR runs the steering checks before it opens, so a slow steering
+      // host would hold the enrollment's answer. Past the wait, enrollment
+      // answers and the PR keeps opening; openAgentFilePrQuietly logs how it
+      // ends.
+      if ((await settledWithin(proposing, AGENT_FILE_WAIT_MS)) === "waiting") {
+        logger.warn(
+          { orgId: ctx.orgId, workspaceId: ctx.workspaceId, runtime: minted.runtime.slug },
+          "tacho.enrollment.create: the agent file PR is still opening, so enrollment answers without waiting for it",
+        );
+      }
     } catch (err) {
       // The host is enrolled. A person can add the agent file by hand.
       logger.warn(
@@ -177,6 +197,22 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
 
   return enrollmentDocument(minted, signing, issuedAt);
 };
+
+/** "settled" once `work` ends, or "waiting" when `ms` pass first. `work` runs on either way. */
+async function settledWithin(
+  work: Promise<unknown>,
+  ms: number,
+): Promise<"settled" | "waiting"> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const wait = new Promise<"waiting">((resolve) => {
+    timer = setTimeout(() => resolve("waiting"), ms);
+  });
+  try {
+    return await Promise.race([work.then(() => "settled" as const), wait]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /**
  * The agent file PR's opener, host, and proposal store, loaded on the first

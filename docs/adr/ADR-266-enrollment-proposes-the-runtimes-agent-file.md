@@ -98,6 +98,12 @@ Any refusal or error is logged as `agent file:` and the enrollment answers as
 it always did. A person can still add the file by hand through a steering PR.
 The enrollment's output does not change.
 
+The opener runs the steering checks before the PR opens, so a slow steering
+host could hold the enrollment's answer. Enrollment waits up to 20 seconds.
+Past that it answers, and the PR keeps opening on the server and logs how it
+ends. In the usual case the PR is open by the time enrollment answers, which
+the MCP Studio live test relies on.
+
 The PR goes through the shared steering PR opener with its own kind,
 `AGENT_FILE_PULL_REQUEST`, on an `agents/` branch. It gets the steering check
 and the `agent_file` proposal row ADR-265 gives every steering PR, and
