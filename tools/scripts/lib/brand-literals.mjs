@@ -434,6 +434,7 @@ export const GUARDED_MARKUP = [
   { path: "apps/docs/src/app/docs/[[...slug]]/page.tsx", scale: "a" },
   { path: "apps/docs/src/components/docs/page-actions.tsx", scale: "a" },
   { path: "apps/docs/src/mdx-components.tsx", scale: "a" },
+  { path: "apps/docs/src/components/docs/nav-title.tsx", scale: "a" },
 ];
 
 /** The size in px of each Tailwind size class, from Tailwind's default theme. */

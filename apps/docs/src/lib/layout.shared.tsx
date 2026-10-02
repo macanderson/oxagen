@@ -1,30 +1,18 @@
 import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
-import { OxagenWordmark } from "@oxagen/ui";
+import { NavTitle } from "@/components/docs/nav-title";
 import { SidebarThemeSwitcher } from "@/components/theme-switcher";
 
 /**
  * Shared layout options (nav title, links) consumed by both the docs layout
  * and any future home/landing layout.
  *
- * The nav title is the Oxagen WORDMARK plus a muted "Docs" qualifier. The Ox
- * lettermark is deliberately not placed beside it: Oxagen's logo is the
- * wordmark, and mark-then-word is the lockup the brand system does not use.
- *
+ * The nav title is a client component (src/components/docs/nav-title.tsx).
  * The theme control is the same System / Light / Dark pill the landing
  * footer and oxagen.sh carry, in place of Fumadocs' two-state toggle.
  */
 export function baseOptions(): BaseLayoutProps {
   return {
     slots: { themeSwitch: SidebarThemeSwitcher },
-    nav: {
-      title: (
-        <span className="inline-flex items-center gap-2">
-          <OxagenWordmark className="h-5" />
-          <span className="text-sm font-medium text-muted-foreground">
-            Docs
-          </span>
-        </span>
-      ),
-    },
+    nav: { title: NavTitle },
   };
 }
