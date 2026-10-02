@@ -863,7 +863,13 @@ export interface RevertInput {
  */
 export async function openRevertPr(
   input: RevertInput,
-): Promise<{ number: number; htmlUrl: string; branch: string }> {
+): Promise<{
+  number: number;
+  htmlUrl: string;
+  branch: string;
+  /** Every path the revert changes. */
+  paths: string[];
+}> {
   const { host, repo } = input;
   const changed = (
     await host.changedFiles(repo, input.before, input.mergeCommit)
@@ -912,5 +918,5 @@ export async function openRevertPr(
     base: repo.defaultBranch,
     body: `This steering PR undoes #${input.number} (${input.mergeCommit}). It merges through the queue like any other steering PR.`,
   });
-  return { ...pr, branch };
+  return { ...pr, branch, paths: files.map((file) => file.path) };
 }

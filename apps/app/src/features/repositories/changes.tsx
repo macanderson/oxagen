@@ -182,7 +182,10 @@ function ChangeTable({
     {
       key: "kind",
       label: t("filters.kind"),
-      options: [{ value: "steering_record", label: t("kinds.steering_record") }],
+      options: [
+        { value: "steering_record", label: t("kinds.steering_record") },
+        { value: "steering_pr", label: t("kinds.steering_pr") },
+      ],
       get: (row) => row.kind,
     },
     {

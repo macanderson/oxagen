@@ -305,6 +305,8 @@ export const PROPOSAL_PULL_REQUEST: SteeringPullRequestKind = {
   noun: "proposed steering PR",
   refusal: steeringFilesRefusal,
   refusalAgainstBase: (read, args) => managedBlockRefusal(read, args.files),
+  // The PR's proposal row, so a person merges it from Oxagen (#5122, ADR-265).
+  proposalKind: "agent_proposal",
 };
 
 /** The opener over the workspace's steering host and published index, with the proposal's rules. */

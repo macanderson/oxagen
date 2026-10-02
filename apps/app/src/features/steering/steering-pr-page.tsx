@@ -18,6 +18,7 @@ import { useTranslations } from "next-intl";
 import { type ReactNode, Suspense } from "react";
 import {
   type SteeringPr,
+  isSteeringPrKind,
   type ProposalState,
   proposalStateOf,
 } from "@/data/contracts/steering";
@@ -94,8 +95,14 @@ function RecordSection({ pr }: { pr: SteeringPr }) {
   const record = useTranslations("ui.record");
   const date = useDate();
   const { raised } = pr;
+  // A steering PR changes files rather than one record (#5122), so it has no
+  // lineage, force, or scope of its own. The panel below names its branch.
+  const files = isSteeringPrKind(pr.kind);
   return (
-    <Section id="steering-pr-record" title={t("title")}>
+    <Section
+      id="steering-pr-record"
+      title={files ? t("proposalTitle") : t("title")}
+    >
       <blockquote
         data-testid="steering-pr-statement"
         className="max-w-prose border-l-2 border-border ps-3 text-sm text-foreground"
@@ -103,23 +110,29 @@ function RecordSection({ pr }: { pr: SteeringPr }) {
         {raised.statement}
       </blockquote>
       <Facts>
-        <Fact name="lineage" term={record("lineage")}>
-          <span className={mono}>{pr.lineage}</span>
-        </Fact>
+        {files ? null : (
+          <Fact name="lineage" term={record("lineage")}>
+            <span className={mono}>{pr.lineage}</span>
+          </Fact>
+        )}
         <Fact name="kind" term={t("kind")}>
           {record(`kinds.${pr.kind}`)}
         </Fact>
-        <Fact name="force" term={t("force")}>
-          {raised.force}
-        </Fact>
+        {files ? null : (
+          <Fact name="force" term={t("force")}>
+            {raised.force}
+          </Fact>
+        )}
         {raised.constraintEffect === null ? null : (
           <Fact name="effect" term={t("effect")}>
             {record(`effects.${raised.constraintEffect}`)}
           </Fact>
         )}
-        <Fact name="scope" term={record("scope")}>
-          {record(`scopes.${raised.sharingScope}`)}
-        </Fact>
+        {files ? null : (
+          <Fact name="scope" term={record("scope")}>
+            {record(`scopes.${raised.sharingScope}`)}
+          </Fact>
+        )}
         <Fact name="raised-by" term={t("raisedBy")}>
           {raised.sourceName ?? <span className={mono}>{raised.source}</span>}
         </Fact>

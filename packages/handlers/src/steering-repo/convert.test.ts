@@ -441,6 +441,8 @@ describe("importPullRequestBody", () => {
     const [first, second] = importBatches(conversion);
     const body = importPullRequestBody(conversion, first!, RELINKED);
     expect(body).toContain("2 import batches");
+    // The PR says to merge from Oxagen: a merge on GitHub leaves the repo diverged (#5122).
+    expect(body).toContain("Merge each of them from Oxagen");
     expect(body).toContain("through `steering/import-oxagen-2`");
     expect(body).toContain(IMPORT_REPLACES_PATH);
     expect(body).toContain(renderIdTable(first!.records));

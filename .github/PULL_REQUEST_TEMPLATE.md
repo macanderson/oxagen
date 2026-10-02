@@ -41,7 +41,6 @@ Closes #
 
 ## Checklist
 
-- [ ] CI passes for the final commit (lint, typecheck, tests, build, and integrity checks)
 - [ ] New/changed logic has unit tests; coverage ratchets hold
 - [ ] New capability ships the full parity stack: contract → API route → MCP tool → CLI → `docs/capabilities/` (`pnpm check:manifest` clean)
 - [ ] UI changes have component/action tests or runtime evidence; E2E stays limited to login, pay, and page-load

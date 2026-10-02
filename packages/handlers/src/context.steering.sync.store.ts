@@ -10,6 +10,7 @@ import {
   withTenantDb,
 } from "@oxagen/database";
 import { steeringRecordLabel } from "@oxagen/oxagen/steering-record-label";
+import { recordKindSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
   EMBEDDINGS_SETTING,
   STELLA_ARCHIVE_AFTER_DAYS_SETTING,
@@ -24,6 +25,7 @@ import {
   isNull,
   lte,
   max,
+  notInArray,
   or,
   sql,
   type SQL,
@@ -129,13 +131,13 @@ export interface SyncStore {
     },
   ): Promise<boolean>;
   /**
-   * Record a governance PR the host merged (#4795). A governance proposal
-   * publishes no record, so it points at none: the row moves to `merged` with
-   * its merge commit and no approver. False when the row is not a governance
-   * proposal, already left the open states, or a merge claimed it after
-   * `noClaimSince` and is still landing it.
+   * Record a governance or steering PR the host merged (#4795, #5122). Such
+   * a proposal publishes no single record, so it points at none: the row
+   * moves to `merged` with its merge commit and no approver. False when the
+   * row is a record proposal, already left the open states, or a merge
+   * claimed it after `noClaimSince` and is still landing it.
    */
-  linkMergedGovernance(
+  linkMergedWithoutRecord(
     scope: Scope,
     proposalId: string,
     args: { mergedCommit: string; mergedAt: Date; noClaimSince: Date },
@@ -514,7 +516,7 @@ export const postgresSyncStore: SyncStore = {
     });
   },
 
-  async linkMergedGovernance(scope, proposalId, args) {
+  async linkMergedWithoutRecord(scope, proposalId, args) {
     return withTenantDb(async (tx) => {
       await lockWorkspacePublication(tx, scope.workspaceId);
       const [row] = await tx
@@ -531,7 +533,7 @@ export const postgresSyncStore: SyncStore = {
           and(
             eq(schema.steeringProposals.id, proposalId),
             scoped(schema.steeringProposals, scope),
-            eq(schema.steeringProposals.kind, "governance"),
+            notInArray(schema.steeringProposals.kind, [...recordKindSchema.options]),
             inArray(schema.steeringProposals.status, [...OPEN_PR]),
             or(
               isNull(schema.steeringProposals.mergeClaimedAt),

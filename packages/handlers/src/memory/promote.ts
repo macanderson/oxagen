@@ -35,6 +35,12 @@ import type {
 import type { SteeringHost, SteeringRepository } from "../context.steering.github";
 import { importRecordPath } from "../markdown-import/render";
 import { readSteeringLayout } from "../steering-repo/merge-queue";
+import {
+  jobAuthor,
+  recordSteeringPrQuietly,
+  type SteeringPrAuthor,
+  type SteeringPrProposalStore,
+} from "../steering-repo/pr-proposal";
 import { MEMORY_PR_FILES_MAX, memoryBranch } from "./curate";
 import { memoryLineage, memoryRecordPath, memoryShard } from "./naming";
 import { memoryRecordKind, renderPromotedRecord } from "./record-file";
@@ -47,6 +53,8 @@ import type { WorkspaceMemoryRow, WorkspaceMemoryStore } from "./workspace-store
 export interface PromoteDeps {
   host: SteeringHost;
   store: Pick<MemoryStore, "listOpenPrs" | "openedPrFrom" | "insertMemoryPr">;
+  /** Where the memory PR's proposal row is written, so Oxagen can merge it (#5122). */
+  proposals: SteeringPrProposalStore;
   workspace: Pick<
     WorkspaceMemoryStore,
     "findMemories" | "listMemories" | "appendMemoryPrRecords"
@@ -313,7 +321,12 @@ async function joinablePr(
 export async function promoteMemories(
   deps: PromoteDeps,
   scope: MemoryScope,
-  input: { drafts: readonly MemoryDraftRecord[]; sameText: boolean },
+  input: {
+    drafts: readonly MemoryDraftRecord[];
+    sameText: boolean;
+    /** Who promotes, as the memory PR's proposal row records a new commit. */
+    author?: SteeringPrAuthor;
+  },
 ): Promise<PromoteResult> {
   const openPrs = await deps.store.listOpenPrs(scope);
   const proposed = new Set(
@@ -426,9 +439,10 @@ export async function promoteMemories(
   }
   const message = `Promote ${plural(files.length, "memory record", "memory records")}`;
 
+  const author = input.author ?? jobAuthor("memory-promote");
   if (join !== null) {
     const { pr, head } = join;
-    await deps.host.commitFiles(repo, {
+    const { sha } = await deps.host.commitFiles(repo, {
       branch: pr.branch,
       parent: head,
       message,
@@ -438,12 +452,34 @@ export async function promoteMemories(
       head: pr.branch,
       base: repo.defaultBranch,
     });
+    const title = `Memory PR ${pr.branch.slice("memory/".length)}`;
     if (found !== null)
       await deps.host.updatePullRequest(repo, {
         number: pr.number,
-        title: `Memory PR ${pr.branch.slice("memory/".length)}`,
+        title,
         body: joinedBody(found.body, lines),
       });
+    // The row follows the PR to the commit this promotion added (#5122).
+    await recordSteeringPrQuietly(
+      deps.proposals,
+      {
+        scope,
+        repo,
+        kind: "memory_pr",
+        pullRequest: {
+          number: pr.number,
+          url: pr.url,
+          branch: pr.branch,
+          headSha: sha,
+        },
+        title,
+        paths: files.map((file) => file.path),
+        check: null,
+        author,
+        mode: layout.mode,
+      },
+      deps.now(),
+    );
     if (!(await deps.workspace.appendMemoryPrRecords(scope, pr.id, ledger)))
       refuse(
         "memory_pr_settled",
@@ -470,7 +506,12 @@ export async function promoteMemories(
       `Every memory branch for ${today.slice("memory/".length)} already has a PR. Merge or close one, then promote again.`,
     );
   const title = `Memory PR ${branch.slice("memory/".length)}`;
-  await deps.host.commitFiles(repo, { branch, parent: base, message: title, files });
+  const { sha } = await deps.host.commitFiles(repo, {
+    branch,
+    parent: base,
+    message: title,
+    files,
+  });
   const pr = await deps.host.openPullRequest(repo, {
     title,
     head: branch,
@@ -486,6 +527,23 @@ export async function promoteMemories(
     url: pr.htmlUrl,
     records: ledger,
   });
+  // The memory PR's proposal row, so merge_steering_pr can land it (#5122).
+  // No check ran on it: the merge runs the steering checks itself.
+  await recordSteeringPrQuietly(
+    deps.proposals,
+    {
+      scope,
+      repo,
+      kind: "memory_pr",
+      pullRequest: { number: pr.number, url: pr.htmlUrl, branch, headSha: sha },
+      title,
+      paths: files.map((file) => file.path),
+      check: null,
+      author,
+      mode: layout.mode,
+    },
+    now,
+  );
   return {
     pullRequest: { number: pr.number, url: pr.htmlUrl, branch, opened: true },
     records: promoted,

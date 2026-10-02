@@ -1831,9 +1831,11 @@ export const steeringProposals = agentSchema.table(
       "steering_proposals_label_check",
       sql`${t.label} IS NULL OR (length(btrim(${t.label})) BETWEEN 1 AND 36)`,
     ),
+    // The six record kinds, a governance change (#4795), and the steering
+    // PRs that change files rather than one record (#5122, ADR-265).
     kindCheck: check(
       "steering_proposals_kind_check",
-      sql`${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference', 'governance')`,
+      sql`${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference', 'governance', 'revert', 'tools', 'import', 'memory_pr', 'agent_file', 'agent_proposal', 'workspace')`,
     ),
     forceCheck: check(
       "steering_proposals_force_check",
@@ -1863,11 +1865,12 @@ export const steeringProposals = agentSchema.table(
       "steering_proposals_governance_mode_check",
       sql`${t.governanceMode} IS NULL OR ${t.governanceMode} IN ('solo', 'team', 'regulated')`,
     ),
-    // A governance proposal (#4795) publishes no record and appends no
-    // promotion event, so a merged one needs only its commit.
+    // Only a record proposal publishes a record and appends its promotion
+    // event. A governance proposal (#4795) and a steering PR proposal (#5122)
+    // publish no single record, so a merged one needs only its commit.
     mergedCheck: check(
       "steering_proposals_merged_check",
-      sql`(${t.status} = 'merged') = (${t.mergedCommit} IS NOT NULL AND (${t.kind} = 'governance' OR (${t.promotionEventId} IS NOT NULL AND ${t.publishedRecordId} IS NOT NULL)))`,
+      sql`(${t.status} = 'merged') = (${t.mergedCommit} IS NOT NULL AND (${t.kind} NOT IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference') OR (${t.promotionEventId} IS NOT NULL AND ${t.publishedRecordId} IS NOT NULL)))`,
     ),
   }),
 );

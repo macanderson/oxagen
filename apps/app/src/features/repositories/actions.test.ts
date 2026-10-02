@@ -945,6 +945,23 @@ describe("readRepositoryChanges", () => {
     );
   });
 
+  it("marks a steering PR proposal's row a steering PR (#5122)", async () => {
+    invoke.mockResolvedValue({
+      proposals: [
+        { ...proposal("prp_4", "pr_open", true), kind: "tools", checks: null },
+      ],
+      total: 1,
+    });
+    const result = await readRepositoryChanges("acme", "core-platform");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.changes[0]).toMatchObject({
+      proposalId: "prp_4",
+      kind: "steering_pr",
+      status: "pr_open",
+    });
+  });
+
   it("carries a denial across as denied (negative)", async () => {
     invoke.mockRejectedValue({ code: "authz_denied" });
     expect(await readRepositoryChanges("acme", "core-platform")).toEqual({

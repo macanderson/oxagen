@@ -25,6 +25,7 @@ import {
   PROPOSAL_ID,
   PR_URL,
   type SteeringReads,
+  steeringPrSteeringPr,
   steeringSource,
 } from "@/test/steering-views";
 
@@ -199,6 +200,21 @@ describe("the steering PR page", () => {
     expect(record).toHaveTextContent(
       "Three sealed runs across two agents read CHANGELOG.md again",
     );
+  });
+
+  it("shows a steering PR as a proposal with its kind and no record fields (#5122)", async () => {
+    await renderPage({
+      steeringPr: readOk(steeringPrSteeringPr("tools", "pr_open")),
+    });
+    const proposal = section("Proposal");
+    expect(screen.queryByRole("region", { name: "Record" })).toBeNull();
+    expect(proposal.querySelector('[data-fact="kind"] dd')).toHaveTextContent(
+      "tools",
+    );
+    expect(proposal.querySelector('[data-fact="lineage"]')).toBeNull();
+    expect(proposal.querySelector('[data-fact="force"]')).toBeNull();
+    expect(proposal.querySelector('[data-fact="scope"]')).toBeNull();
+    expect(proposal.querySelector('[data-fact="raised-by"]')).not.toBeNull();
   });
 
   it("shows the six checks and gives the gold to Merge once they passed", async () => {

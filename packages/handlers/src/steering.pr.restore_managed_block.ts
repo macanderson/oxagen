@@ -6,7 +6,8 @@
 //
 // Flow:
 //   1. Refuse what cannot take the commit: no such proposal, a PR that is not
-//      open, a governance PR (its checks are not the record checks), a merge
+//      open, a governance PR or any other steering PR kind (#5122; their
+//      checks are not the record checks), a merge
 //      in progress, a repository on another host, a PR that no longer targets
 //      the production branch, and a repository that is not a steering repo.
 //   2. Read the file on the production branch and at the branch's head, and
@@ -23,7 +24,10 @@
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { resolveActingUserId } from "@oxagen/iam/org-role";
 import { steeringPrRestoreManagedBlock } from "@oxagen/oxagen/contracts/steering.pr.restore_managed_block";
-import type { ProposalStatus } from "@oxagen/oxagen/contracts/context.steering.shared";
+import {
+  isSteeringPrKind,
+  type ProposalStatus,
+} from "@oxagen/oxagen/contracts/context.steering.shared";
 import { checkCommittedHead } from "./steering.pr.open";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
 import {
@@ -70,6 +74,14 @@ export function createRestoreManagedBlockHandler(
       throw refuse(
         "governance_proposal",
         `${row.prUrl ?? row.publicId} changes the governance mode. Its branch holds no managed block to restore.`,
+      );
+    }
+    if (isSteeringPrKind(row.kind)) {
+      // The restore runs the record checks on the commit it writes, and a
+      // steering PR has none: its merge runs the steering checks (#5122).
+      throw refuse(
+        "steering_pr_proposal",
+        `${row.prUrl ?? row.publicId} is a ${row.kind.replace(/_/g, " ")} steering PR, which carries no record checks to run after a restore. Fix ${input.path} on its branch, then merge it from Oxagen: the merge runs the steering checks first.`,
       );
     }
     if (row.status === "proposed" || row.prNumber === null || !row.branch || !row.path) {

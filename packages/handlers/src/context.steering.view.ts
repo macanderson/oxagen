@@ -4,6 +4,7 @@ import { steeringRecordLabel } from "@oxagen/oxagen/steering-record-label";
 import type { SteeringPr } from "@oxagen/oxagen/contracts/steering.pr.open";
 import {
   CHECK_NAMES,
+  isRecordKind,
   type ConstraintEffect,
   type GovernanceMode,
   type ProposalKind,
@@ -92,11 +93,6 @@ export function publishedRecordView(
   };
 }
 
-/**
- * The steering PR panel's view of a proposal, before, during and after its PR.
- * A governance proposal (#4795) publishes no record and appends no promotion
- * event, so its merge leaves the ledger length as it was and names neither.
- */
 /** A UUID in its canonical 8-4-4-4-12 form. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -143,6 +139,12 @@ export function steeringPrUserIds(row: ProposalRow): string[] {
   ].filter((id): id is string => id !== null);
 }
 
+/**
+ * The steering PR panel's view of a proposal, before, during and after its PR.
+ * A governance proposal (#4795) and a steering PR proposal (#5122) publish no
+ * record and append no promotion event of their own, so the view names
+ * neither and expects the ledger length to stay as it was.
+ */
 export function steeringPrView(
   row: ProposalRow,
   ledgerLength: number,
@@ -159,6 +161,9 @@ export function steeringPrView(
   const path = row.path ?? recordFilePath(row.lineageId);
   const isMerged = row.status === "merged";
   const governance = row.kind === "governance";
+  // A governance or steering PR proposal publishes no record and appends no
+  // promotion event of its own (#4795, #5122).
+  const record = isRecordKind(row.kind);
   return {
     proposalId: row.publicId,
     lineageId: row.lineageId,
@@ -183,7 +188,7 @@ export function steeringPrView(
           }
         : null,
     record:
-      row.stampedRecordId && row.recordHash
+      record && row.stampedRecordId && row.recordHash
         ? {
             recordId: row.stampedRecordId,
             recordHash: row.recordHash,
@@ -212,23 +217,26 @@ export function steeringPrView(
       },
       at: row.createdAt.toISOString(),
     },
+    // A steering PR's opener wrote its own body, which no column holds.
     body:
       row.prNumber === null
         ? null
         : governance
           ? STEERING_GOVERNANCE_PR_BODY
-          : prBody(row),
+          : record
+            ? prBody(row)
+            : null,
     checks: row.checks,
     onMerge: {
       publishes: { lineageId: row.lineageId, path },
       bundleVersion: {
         current: ledgerLength,
-        afterMerge: isMerged || governance ? ledgerLength : ledgerLength + 1,
+        afterMerge: isMerged || !record ? ledgerLength : ledgerLength + 1,
       },
       review: mode ? REVIEW_BY_MODE[mode] : null,
     },
     merged:
-      isMerged && row.mergedCommit && row.mergedAt && (merged || governance)
+      isMerged && row.mergedCommit && row.mergedAt && (merged || !record)
         ? {
             commit: row.mergedCommit,
             at: row.mergedAt.toISOString(),

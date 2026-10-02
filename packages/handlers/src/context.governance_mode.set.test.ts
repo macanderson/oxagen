@@ -838,7 +838,7 @@ function mergeSeams(
 ): MergeSeams {
   return {
     readHealth: async () => "healthy",
-    governanceCheck: seams.check,
+    steeringCheck: seams.check,
     publisher: () => fakePublisher(seams.published),
     ...over,
   };
