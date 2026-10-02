@@ -107,8 +107,7 @@ jobs:
       # ERR_MODULE_NOT_FOUND (#1323). Elsewhere `github.repository` is the
       # calling repo, `github.sha` is a commit oxagen does not have, and main
       # is both correct and the only ref a caller can rely on. This repository
-      # moved from macanderson/oxagen to oxageninc/product on 2026-10-01, and
-      # GitHub still redirects the old name, which `repository:` uses.
+      # moved from macanderson/oxagen to oxageninc/product on 2026-10-01.
       - name: Fetch the SCR tooling
         uses: actions/checkout@v5
         with:
