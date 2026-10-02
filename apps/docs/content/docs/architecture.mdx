@@ -1,9 +1,9 @@
 ---
 title: Architecture atlas
-description: "Generated diagrams of the Oxagen monorepo: datastores and schemas, the request path, the capability kernel's gate order, the governed turn, the evidence ledger, metering and billing, the knowledge graph, background jobs, the CLI and MCP surfaces, deployment topology, the configuration contract, and the ADR index."
+description: "Generated diagrams of the Oxagen monorepo: datastores and schemas, the request path, the capability kernel's gate order, the governed turn, the evidence ledger, metering and billing, the knowledge graph, background jobs, the CLI and MCP surfaces, deployment topology, the configuration contract, the inventory of secrets and variables, and the ADR index."
 ---
 
-The **[Architecture Atlas](/architecture/index.html)** is the internal engineering map of the platform. The build generates it from the tree. Package manifests, the storage manifest (ADR-031), the capability manifest, route and function sources, the environment registry, CI workflows, and ADRs feed the figures directly. The hand-described mechanism flows cite the files and symbols they depict, and the build verifies each citation.
+The **[Architecture Atlas](/architecture/index.html)** is the internal engineering map of the platform. The build generates it from the tree. Package manifests, the storage manifest (ADR-031), the capability manifest, route and function sources, the environment registry, the CI inventory of secrets and variables, CI workflows, and ADRs feed the figures directly. The hand-described mechanism flows cite the files and symbols they depict, and the build verifies each citation.
 
 <a href="/architecture/index.html" className="not-prose inline-block rounded-md border px-4 py-2 font-medium">Open the atlas →</a>
 
@@ -19,7 +19,7 @@ The **[Architecture Atlas](/architecture/index.html)** is the internal engineeri
 - **Knowledge graph.** The ingestion pipeline (ADR-012), Neo4j labels, and vector indexes.
 - **Datastores.** The four stores, domains across stores, Postgres schemas, an entity-relationship diagram per schema with RLS classes, ClickHouse tables replayed from migrations, and Blob kinds.
 - **Background jobs.** The Inngest event → function → event graph.
-- **CLI and MCP surfaces**, **Deployment** (production topology, Caddy routing, CI job graph, workflows, and the local stack), **Configuration contract** (every variable × service), and **Decisions** (ADR index).
+- **CLI and MCP surfaces**, **Deployment** (production topology, Caddy routing, CI job graph, workflows, and the local stack), **Configuration contract** (every variable × service), **Secrets and variables** (where each value is kept and how to refresh it), and **Decisions** (ADR index).
 
 ## Regenerating
 

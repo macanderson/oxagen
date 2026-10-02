@@ -13,6 +13,8 @@ function folder(fields: Partial<BuiltFolder> = {}): BuiltFolder {
     reclassified: [],
     described: [],
     tested: [],
+    capped: [],
+    exposure: null,
     tokens: { definitions: 1200, budget: 8000 },
     findings: [],
     tools: {},
@@ -88,6 +90,18 @@ describe("reviewBody", () => {
     );
     expect(body).toContain("## Changed descriptions\n\n- `create_refund`");
     expect(body).toContain("## Saved tests\n\n- `list_charges`");
+  });
+
+  it("lists each capped tool and the exposure mode the draft sets", () => {
+    const body = reviewBody(folder({ capped: ["list_charges"], exposure: "search" }), 2);
+    expect(body).toContain("## Result caps\n\n- `list_charges`");
+    expect(body).toContain("## Exposure\n\nserver.toml's exposure mode is now `search`.");
+  });
+
+  it("leaves the caps and exposure sections out when the draft changes neither", () => {
+    const body = reviewBody(folder(), 1);
+    expect(body).not.toContain("## Result caps");
+    expect(body).not.toContain("## Exposure");
   });
 
   it("says how far a folder is over its definition budget", () => {

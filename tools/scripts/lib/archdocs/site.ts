@@ -5,7 +5,7 @@
  * No timestamps, no random ids, no environment reads: the page is a pure
  * function of the model so `--check` can byte-compare it.
  */
-import type { Model, Capability, ApiRoute } from "./collect";
+import type { Model, Capability, ApiRoute, EnvVar, Refresh } from "./collect";
 import { flows, type Flow } from "./flows";
 import {
   esc,
@@ -280,6 +280,7 @@ function overview(m: Model): Section {
     ],
     ["Inngest functions", m.inngest.length, "#jobs"],
     ["Environment variables", m.env.length, "#config"],
+    ["CI secrets and variables", m.ci.length, "#secrets"],
     ["GitHub workflows", m.workflows.length, "#deploy"],
     ["ADRs", m.adrs.length, "#decisions"],
   ];
@@ -845,24 +846,29 @@ function jobs(m: Model): Section {
   };
 }
 
+/** A variable's name with its secret and client pills. */
+const variableCell = (e: EnvVar): string =>
+  `${code(e.key)}${e.secret ? ' <span class="pill secret">secret</span>' : ""}${e.clientExposed ? ' <span class="pill">client</span>' : ""}`;
+
+/** The initial of each environment that requires the variable, or `empty`. */
+const requiredCell = (e: EnvVar, empty: string): string =>
+  e.requiredIn
+    .map((r) => `<abbr title="required in ${r}">${r[0]!.toUpperCase()}</abbr>`)
+    .join(" ") || empty;
+
 function config(m: Model): Section {
   const services = ["api", "app", "mcp", "docs", "website", "admin"];
   const groups = [...new Set(m.env.map((e) => e.group))];
-  let body = `<p>${m.env.length} variables from <code>packages/config/src/registry.ts</code>, the single source for <code>.env.example</code>, the env-manager catalog and the CI env checker. A dot marks a service that needs the variable; <b>R</b> marks environments where it is required.</p>`;
+  let body = `<p>${m.env.length} variables from <code>packages/config/src/registry.ts</code>, the single source for <code>.env.example</code>, the build environment, <code>pnpm env:pull</code>, and the CI env checker. A dot marks a service that needs the variable. The required column gives the initial of each environment that requires it. <a href="#secrets">Secrets and variables</a> lists where each value is kept and how to refresh it.</p>`;
   for (const g of groups) {
     const rows = m.env
       .filter((e) => e.group === g)
       .map((e) => [
-        `${code(e.key)}${e.secret ? ' <span class="pill secret">secret</span>' : ""}${e.clientExposed ? ' <span class="pill">client</span>' : ""}`,
+        variableCell(e),
         ...services.map((s) =>
           e.services.includes(s) ? "●" : '<span class="muted">·</span>',
         ),
-        e.requiredIn
-          .map(
-            (r) =>
-              `<abbr title="required in ${r}">${r[0]!.toUpperCase()}</abbr>`,
-          )
-          .join(" ") || '<span class="muted">—</span>',
+        requiredCell(e, '<span class="muted">—</span>'),
         esc(e.valueOrigin),
         esc(e.description),
       ]);
@@ -878,6 +884,185 @@ function config(m: Model): Section {
     id: "config",
     title: "Configuration contract",
     lede: "Every deployable surface's environment, declared once and generated everywhere else.",
+    body,
+  };
+}
+
+/**
+ * `/oxagen/{development,staging,production}/KEY` when the names differ in one
+ * path segment, each name on its own line otherwise.
+ */
+function parameterCell(names: string[]): string {
+  if (names.length === 0) return '<span class="muted">none</span>';
+  if (names.length === 1) return code(names[0]!);
+  const parts = names.map((name) => name.split("/"));
+  const first = parts[0]!;
+  const differ = first.flatMap((_, at) =>
+    new Set(parts.map((p) => p[at])).size > 1 ? [at] : [],
+  );
+  const i = differ[0];
+  if (
+    i === undefined ||
+    differ.length > 1 ||
+    parts.some((p) => p.length !== first.length)
+  )
+    return names.map((name) => code(name)).join("<br>");
+  const merged = [
+    ...first.slice(0, i),
+    `{${parts.map((p) => p[i]).join(",")}}`,
+    ...first.slice(i + 1),
+  ];
+  return code(merged.join("/"));
+}
+
+/** Escaped text with each `backtick span` set as code, as the registry writes them. */
+const withInlineCode = (text: string): string =>
+  esc(text).replace(/`([^`]+)`/g, "<code>$1</code>");
+
+/** Where a new value comes from, the command that mints it, and the command that saves it. */
+function refreshCell(refresh: Refresh | undefined, save: string): string {
+  const lines = [
+    refresh
+      ? withInlineCode(refresh.how)
+      : '<span class="muted">No refresh recorded.</span>',
+  ];
+  if (refresh?.command) lines.push(code(refresh.command));
+  if (save) lines.push(`<span class="muted">Save with</span> ${code(save)}`);
+  return lines.join("<br>");
+}
+
+/** "a", "a or b", "a, b, or c". */
+const orList = (words: string[]): string =>
+  words.length <= 2
+    ? words.join(" or ")
+    : `${words.slice(0, -1).join(", ")}, or ${words[words.length - 1]}`;
+
+function secrets(m: Model): Section {
+  const prefixes = m.parameterPrefixes.environments;
+  const none = '<span class="muted">none</span>';
+  const byKey = (a: EnvVar, b: EnvVar): number => a.key.localeCompare(b.key);
+  const inStore = (...stores: string[]): EnvVar[] =>
+    m.env.filter((e) => stores.includes(e.store)).sort(byKey);
+  const push = (key: string, target: string): string =>
+    `pnpm env:push ${key} --env ${target}`;
+  const tableOrNone = (
+    headers: string[],
+    rows: string[][],
+    opts: { cls?: string; filter?: boolean; id?: string },
+  ): string =>
+    rows.length
+      ? table(headers, rows, opts)
+      : '<p class="muted">The registry keeps no variable here yet.</p>';
+
+  // What each environment prefix holds and what reads it, in deploy order.
+  const roles: Record<string, [string, string]> = {
+    production: [
+      "Production values",
+      "The app node at container start and the production build",
+    ],
+    preview: [
+      "Staging values for the registry's <code>preview</code> environment",
+      "The staging node and the staging build",
+    ],
+    development: ["Shared values for a laptop", "<code>pnpm env:pull</code>"],
+  };
+  const known = Object.keys(roles).filter((env) => env in prefixes);
+  const others = Object.keys(prefixes).filter((env) => !(env in roles));
+  const prefixRows = [...known, ...others].map((env) => {
+    const [holds, readBy]: [string, string] = roles[env] ?? [
+      `Values for the <code>${esc(env)}</code> environment`,
+      none,
+    ];
+    return [code(prefixes[env]!), holds, readBy];
+  });
+  prefixRows.push(
+    [
+      code(m.parameterPrefixes.operator),
+      "Secrets for maintainer tooling",
+      "<code>pnpm env:pull --operator</code>",
+    ],
+    [
+      code("/oxagen/ci"),
+      "CI secrets and variables (planned in phase 3 of ADR-240)",
+      "GitHub Actions through OIDC",
+    ],
+  );
+
+  const envRows = inStore("environment").map((e) => [
+    variableCell(e),
+    requiredCell(e, none),
+    parameterCell(e.parameterNames),
+    refreshCell(e.refresh, push(e.key, "<env>")),
+  ]);
+  const operatorRows = inStore("operator").map((e) => [
+    variableCell(e),
+    requiredCell(e, none),
+    parameterCell(e.parameterNames),
+    refreshCell(e.refresh, push(e.key, "operator")),
+  ]);
+  const ciRows = m.ci.map((c) => [
+    code(c.name),
+    `<span class="pill${c.kind === "secret" ? " secret" : ""}">${c.kind}</span>` +
+      (c.environment
+        ? `<br><span class="muted">${esc(c.environment)} environment</span>`
+        : ""),
+    esc(c.description),
+    c.workflows
+      .map((w) => code(w.replace(/^\.github\/workflows\//, "")))
+      .join("<br>") || none,
+    refreshCell(c.refresh, c.saveCommand),
+  ]);
+  const noStoreRows = inStore("registry", "shell").map((e) => [
+    code(e.key),
+    e.store === "registry" ? "Registry static value" : "Shell or script",
+    esc(e.description),
+  ]);
+  // A registry key kept in CI that CI_REGISTRY does not list would otherwise
+  // vanish from this page.
+  const ciNames = new Set(m.ci.map((c) => c.name));
+  const unlisted = inStore("ci").filter((e) => !ciNames.has(e.key));
+
+  const developmentPrefix = prefixes.development ?? "/oxagen/development";
+  // `pnpm env:push --env` names a target by its prefix's last segment:
+  // development, staging, production, or operator.
+  const targets = [...Object.values(prefixes), m.parameterPrefixes.operator].map(
+    (p) => code(p.slice(p.lastIndexOf("/") + 1)),
+  );
+  const body =
+    `<p>SSM Parameter Store holds every value, in AWS account <code>916294258235</code> in <code>us-east-1</code> (ADR-240). Run <code>pnpm env:pull</code> to write <code>${esc(developmentPrefix)}</code> into the four <code>.env.local</code> files: the root, <code>apps/app</code>, <code>apps/api</code>, and <code>apps/mcp</code>. Run ${code("pnpm env:push KEY --env <env>")} to save a new value, where ${code("<env>")} is ${orList(targets)}. Parameter Store keeps a secret as a SecureString and any other value as a String.</p>` +
+    `<h3>Parameter prefixes</h3>` +
+    table(["Prefix", "Holds", "Read by"], prefixRows) +
+    `<h3>Environment values</h3><p>A service reads each of these at build or start. Each one has a parameter in every environment, named by the prefix and the variable.</p>` +
+    tableOrNone(["Variable", "Required", "Parameter", "Refresh"], envRows, {
+      id: "env-store-table",
+      filter: true,
+      cls: "inv",
+    }) +
+    `<h3>Operator values</h3><p>Only maintainer tooling reads these. One parameter holds each one for every environment.</p>` +
+    tableOrNone(
+      ["Variable", "Required", "Parameter", "Refresh"],
+      operatorRows,
+      { cls: "inv" },
+    ) +
+    `<h3>CI secrets and variables</h3><p>${m.ci.length} values from <code>packages/config/src/ci-registry.ts</code>. Each one is a GitHub Actions secret or variable on the repository, or on the GitHub environment named under its kind. <code>pnpm env:check</code> fails when a workflow reads a value the registry does not list, reads one as the wrong kind, or the registry lists one no workflow reads. Phase 3 of ADR-240 moves the secrets to <code>/oxagen/ci</code>.</p>` +
+    (unlisted.length
+      ? `<p>The environment registry keeps these in CI, and <code>CI_REGISTRY</code> does not list them: ${unlisted.map((e) => code(e.key)).join(", ")}.</p>`
+      : "") +
+    tableOrNone(
+      ["Name", "Kind", "Description", "Read by", "Refresh"],
+      ciRows,
+      { id: "ci-table", filter: true, cls: "inv" },
+    ) +
+    `<h3>Values no store holds</h3><p>No parameter holds these: each one is a literal in <code>registry.ts</code>, or the shell sets it for one run.</p>` +
+    tableOrNone(["Variable", "Value source", "Description"], noStoreRows, {
+      id: "no-store-table",
+      filter: true,
+      cls: "inv",
+    });
+  return {
+    id: "secrets",
+    title: "Secrets and variables",
+    lede: "Where each secret and setting is kept and how to mint a new one.",
     body,
   };
 }
@@ -950,7 +1135,8 @@ function about(m: Model, refCount: number): Section {
         "<code>apps/api/src/app.ts</code> + <code>routes/**</code>: mounted routes, tiers, middleware chains.",
         "<code>apps/mcp/src/tools</code>, <code>apps/cli/src/program.ts</code>: the other two surfaces.",
         "<code>packages/inngest-functions/src/functions.ts</code> and <code>functions/*.ts</code>: the served array, each declaration scanned with the exported helpers of <code>check-inngest-senders.ts</code>.",
-        "<code>packages/config/src/registry.ts</code>: <code>ENV_REGISTRY</code>, imported directly.",
+        "<code>packages/config/src/registry.ts</code>: <code>ENV_REGISTRY</code> and the Parameter Store prefixes, imported directly.",
+        "<code>packages/config/src/ci-registry.ts</code>: <code>CI_REGISTRY</code>, joined to the <code>secrets.</code> and <code>vars.</code> names each workflow and each <code>.github/actions/**/action.yml</code> reads.",
         "<code>.github/workflows/*.yml</code>, <code>docs/adr/*.md</code>, <code>infra/tools/caddy/Caddyfile.alb</code>, <code>docker-compose.dev.yml</code>.",
       ]
         .map((s) => `<li>${s}</li>`)
@@ -1005,6 +1191,7 @@ export function renderSite(m: Model): SitePage {
     surfaces(m),
     deploy(m),
     config(m),
+    secrets(m),
     decisions(m),
     about(m, refCount),
   ];
@@ -1101,6 +1288,8 @@ td .num,.num{font-variant-numeric:tabular-nums}
 .heat{display:inline-block;min-width:26px;padding:2px 6px;border-radius:4px;background:rgba(var(--heat),calc(.12 + .5*var(--k)));font-variant-numeric:tabular-nums}
 .env td:nth-child(n+2):nth-child(-n+7){text-align:center;font-size:12px}
 .env abbr{text-decoration:none;font-weight:600;color:var(--accent-ink)}
+.inv abbr{text-decoration:none;font-weight:600;color:var(--accent-ink)}
+.inv td:last-child{min-width:32ch}
 .filter{display:flex;align-items:center;gap:10px;margin:8px 0 0;font-size:13px}
 .filter label{color:var(--muted)}
 .filter input{flex:1;max-width:360px;padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);font:inherit}

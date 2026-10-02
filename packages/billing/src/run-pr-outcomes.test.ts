@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   blankOutcome,
   ciStateOf,
+  ciStateOfRead,
   HEAD_BRANCH_SETTLE_MS,
   ledgerTerminalReason,
   needsForgeRead,
+  OUTCOME_SETTLE_DAYS,
   type OutcomeRow,
   outcomeDeliveryOf,
   type PrStateRead,
@@ -251,20 +253,71 @@ describe("withRevert", () => {
 });
 
 describe("needsForgeRead", () => {
+  // The day after the `settled` row's close.
+  const NOW = at("2026-09-28T10:00:00Z");
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const closedDaysAgo = (days: number) => new Date(NOW.getTime() - days * DAY_MS);
+
   it("reads a row never written, and an open pull request", () => {
-    expect(needsForgeRead(undefined)).toBe(true);
-    expect(needsForgeRead(settled({ prState: "open", merged: false }))).toBe(true);
+    expect(needsForgeRead(undefined, NOW)).toBe(true);
+    expect(needsForgeRead(settled({ prState: "open", merged: false }), NOW)).toBe(true);
   });
 
   it("reads again while CI is pending or unread", () => {
-    expect(needsForgeRead(settled({ ciState: "pending" }))).toBe(true);
-    expect(needsForgeRead(settled({ ciState: null }))).toBe(true);
+    expect(needsForgeRead(settled({ ciState: "pending" }), NOW)).toBe(true);
+    expect(needsForgeRead(settled({ ciState: null }), NOW)).toBe(true);
   });
 
   it("reads the head branch again until an hour after the close", () => {
     const soon = new Date(at("2026-09-27T10:00:00Z").getTime() + HEAD_BRANCH_SETTLE_MS - 1);
-    expect(needsForgeRead(settled({ headBranchReadAt: soon }))).toBe(true);
-    expect(needsForgeRead(settled())).toBe(false);
+    expect(needsForgeRead(settled({ headBranchReadAt: soon }), NOW)).toBe(true);
+    expect(needsForgeRead(settled(), NOW)).toBe(false);
+  });
+
+  it("stops reading a pull request 14 days after it closed, whatever its CI or branch reads say", () => {
+    expect(OUTCOME_SETTLE_DAYS).toBe(14);
+    const closedAt = closedDaysAgo(OUTCOME_SETTLE_DAYS);
+    const unsettled = {
+      closedAt,
+      ciState: "pending" as const,
+      headBranchReadAt: null,
+    };
+    expect(
+      needsForgeRead(settled({ ...unsettled, mergedAt: closedAt }), NOW),
+    ).toBe(false);
+    expect(
+      needsForgeRead(
+        settled({
+          ...unsettled,
+          prState: "closed",
+          merged: false,
+          mergedAt: null,
+          ciState: null,
+        }),
+        NOW,
+      ),
+    ).toBe(false);
+    // A day short of the window, the same rows are still read.
+    const recent = closedDaysAgo(OUTCOME_SETTLE_DAYS - 1);
+    expect(
+      needsForgeRead(
+        settled({ ...unsettled, closedAt: recent, mergedAt: recent }),
+        NOW,
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps reading an open pull request however old, and a row whose state was never read", () => {
+    const old = closedDaysAgo(20);
+    expect(
+      needsForgeRead(
+        settled({ prState: "open", merged: false, mergedAt: null, closedAt: old }),
+        NOW,
+      ),
+    ).toBe(true);
+    expect(
+      needsForgeRead(settled({ prState: null, merged: false, closedAt: old }), NOW),
+    ).toBe(true);
   });
 });
 
@@ -275,6 +328,21 @@ describe("ciStateOf", () => {
     expect(ciStateOf("pending")).toBe("pending");
     expect(ciStateOf("unknown")).toBe("none");
     expect(ciStateOf("neutral")).toBe("none");
+  });
+});
+
+describe("ciStateOfRead", () => {
+  it("maps a complete read as ciStateOf does", () => {
+    expect(ciStateOfRead("passing", true)).toBe("passed");
+    expect(ciStateOfRead("neutral", true)).toBe("none");
+  });
+
+  it("reads a partial read as pending unless a check it read failed", () => {
+    expect(ciStateOfRead("passing", false)).toBe("pending");
+    expect(ciStateOfRead("neutral", false)).toBe("pending");
+    expect(ciStateOfRead("unknown", false)).toBe("pending");
+    expect(ciStateOfRead("pending", false)).toBe("pending");
+    expect(ciStateOfRead("failing", false)).toBe("failed");
   });
 });
 

@@ -358,6 +358,14 @@ rotating a secret is a parameter write plus a restart rather than a rebuild, and
 no secret rides in a tarball built by CI. `apps/docs` is given no prefix at all:
 it renders MDX and holds no credentials.
 
+Parameter Store is the one store for every environment (ADR-240). Staging reads
+`/oxagen/staging`, and a laptop gets `/oxagen/development` through
+`pnpm env:pull`, which writes the four `.env.local` files and never reads
+production. `pnpm env:push <KEY> --env <env>` saves a value. Each registry
+entry says which prefix holds it and how to mint a new one, and the
+Architecture Atlas lists them all. The steps are in
+[`docs/runbooks/secrets-and-variables.md`](docs/runbooks/secrets-and-variables.md).
+
 `NEXT_PUBLIC_*` values are the exception. They are compiled into the client
 bundle, so they have to be a build input rather than something the container
 reads at start. `deploy-node`'s "Resolve the build environment" step reads the

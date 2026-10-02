@@ -579,6 +579,8 @@ describe("SignupForm", () => {
       "input#signup-password",
       "Show",
       "Create account",
+      "terms of service",
+      "privacy policy",
     ]);
     expect(screen.getByLabelText("Name")).toHaveAttribute(
       "autocomplete",
@@ -593,8 +595,20 @@ describe("SignupForm", () => {
       "new-password",
     );
     expect(document.body).toHaveTextContent(
-      "By creating an account you agree to the Oxagen terms and privacy notice. Oxagen never stores your model provider keys in plain text, and never returns them once saved.",
+      "By creating an account you agree to the Oxagen terms of service and confirm that you have read the privacy policy. Oxagen never stores your model provider keys in plain text, and never returns them once saved.",
     );
+  });
+
+  it("links the terms line to the terms of service and privacy policy on oxagen.sh", () => {
+    renderWithIntl(<SignupForm />);
+    const terms = screen.getByRole("link", { name: "terms of service" });
+    const privacy = screen.getByRole("link", { name: "privacy policy" });
+    expect(terms).toHaveAttribute("href", "https://oxagen.sh/terms");
+    expect(privacy).toHaveAttribute("href", "https://oxagen.sh/privacy");
+    for (const link of [terms, privacy]) {
+      expect(link).toHaveAttribute("target", "_blank");
+      expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    }
   });
 
   it("the meter and the three requirements tick as the password meets them", async () => {
