@@ -553,6 +553,9 @@ describe("Context PRs on the host", () => {
     expect(proposal(r, id)).toMatchObject({
       status: "rejected",
       dismissedReason: "Closed on GitHub without merging",
+      // No person closed it; the Context PR page reads this as a close on
+      // the host (#5077).
+      updatedById: null,
     });
     expect(active(r)).toEqual([]);
     // The next proposal on the lineage branches from main, not from the

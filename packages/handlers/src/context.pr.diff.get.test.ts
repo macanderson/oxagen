@@ -3,7 +3,11 @@
 // request settled and its branch is gone.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HandlerError } from "@oxagen/oxagen";
-import { contextPrDiffGet } from "@oxagen/oxagen/contracts/context.pr.diff.get";
+import {
+  CONTEXT_PR_DIFF_MAX_CHARS,
+  CONTEXT_PR_DIFF_MAX_FILES,
+  contextPrDiffGet,
+} from "@oxagen/oxagen/contracts/context.pr.diff.get";
 import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
 
 vi.mock("@oxagen/iam/org-role", () => ({
@@ -80,6 +84,55 @@ describe("get_context_pr_diff", () => {
     );
     await createOpenContextPrHandler(h)({ proposalId }, ctx());
     await createDismissProposalHandler(h)({ proposalId }, ctx());
+    const out = await createGetContextPrDiffHandler(h)({ proposalId }, ctx());
+    expect(out).toMatchObject({ state: "settled", files: [] });
+  });
+
+  it("reads both sides of a modified file, none after a removed one, cuts a long side, and caps the file list", async () => {
+    const { proposalId } = await createProposeRecordHandler(h)(
+      proposal(),
+      ctx(),
+    );
+    await createOpenContextPrHandler(h)({ proposalId }, ctx());
+    const long = "x".repeat(CONTEXT_PR_DIFF_MAX_CHARS + 10);
+    const files = [
+      { path: "a.toml", status: "modified" as const },
+      { path: "b.toml", status: "removed" as const },
+      ...Array.from({ length: CONTEXT_PR_DIFF_MAX_FILES }, (_, i) => ({
+        path: `more/${String(i)}.toml`,
+        status: "added" as const,
+      })),
+    ];
+    vi.spyOn(h.github, "changedFiles").mockResolvedValue(files);
+    vi.spyOn(h.github, "readFile").mockImplementation(
+      async (_repo, path, ref) =>
+        path === "a.toml" ? (ref === "main" ? "old" : long) : "base text",
+    );
+    const out = await createGetContextPrDiffHandler(h)({ proposalId }, ctx());
+    expect(out.files).toHaveLength(CONTEXT_PR_DIFF_MAX_FILES);
+    expect(out.moreFiles).toBe(true);
+    expect(out.files[0]).toMatchObject({
+      path: "a.toml",
+      before: "old",
+      truncated: true,
+    });
+    expect(out.files[0]?.after).toHaveLength(CONTEXT_PR_DIFF_MAX_CHARS);
+    expect(out.files[1]).toMatchObject({
+      path: "b.toml",
+      before: "base text",
+      after: null,
+      truncated: false,
+    });
+    expect(() => contextPrDiffGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers settled when the branch is gone though the proposal is still open", async () => {
+    const { proposalId } = await createProposeRecordHandler(h)(
+      proposal(),
+      ctx(),
+    );
+    await createOpenContextPrHandler(h)({ proposalId }, ctx());
+    vi.spyOn(h.github, "branchHead").mockResolvedValue(null);
     const out = await createGetContextPrDiffHandler(h)({ proposalId }, ctx());
     expect(out).toMatchObject({ state: "settled", files: [] });
   });

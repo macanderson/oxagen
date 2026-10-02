@@ -1,6 +1,7 @@
 // The steering port: kernel reads on the workspace ctx, each mapped into its
 // view model, with a refusal passed through and an unmappable record reported
 // once.
+import { contextPrDiffGet } from "@oxagen/oxagen/contracts/context.pr.diff.get";
 import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
 import { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
@@ -246,6 +247,78 @@ describe("steering.contextPr", () => {
     const missing = readError("not_found", 404);
     kernelRead.mockResolvedValue(missing);
     expect(await steering.contextPr(ctx, "prp_missing")).toEqual(missing);
+  });
+});
+
+describe("steering.contextPrDiff", () => {
+  const out = {
+    proposalId: "prp_01k5ru4a",
+    state: "diff",
+    baseRef: "main",
+    headSha: "9f8e7d6c5b4a",
+    files: [
+      {
+        path: ".oxagen/rules/a.toml",
+        status: "modified",
+        before: "old",
+        after: "new",
+        truncated: false,
+      },
+    ],
+    moreFiles: false,
+  };
+
+  it("reads the diff the host answers and maps it", async () => {
+    kernelRead.mockResolvedValue(readOk(out));
+    const read = await steering.contextPrDiff(ctx, "prp_01k5ru4a");
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: contextPrDiffGet,
+      input: { proposalId: "prp_01k5ru4a" },
+      page: "steering",
+    });
+    expect(read).toEqual(
+      readOk({
+        state: "diff",
+        baseRef: "main",
+        headSha: "9f8e7d6c5b4a",
+        files: out.files,
+        moreFiles: false,
+      }),
+    );
+  });
+
+  it("passes the host's refusal through (negative)", async () => {
+    const refused = readError("github_refused", 409);
+    kernelRead.mockResolvedValue(refused);
+    expect(await steering.contextPrDiff(ctx, "prp_01k5ru4a")).toEqual(refused);
+  });
+});
+
+describe("steering.contextPr, the raised proposal and its close", () => {
+  it("carries who raised it and how it closed", async () => {
+    kernelRead.mockResolvedValue(
+      readOk(
+        contextPrOutput({
+          status: "rejected",
+          closed: {
+            at: "2026-09-15T09:30:00.000Z",
+            reason: "Closed on GitHub without merging",
+            byUserId: null,
+            byName: null,
+            onHost: true,
+          },
+        }),
+      ),
+    );
+    const read = await steering.contextPr(ctx, "prp_01k5ru4a");
+    expect(read.ok && read.value.closed).toEqual({
+      at: "2026-09-15T09:30:00.000Z",
+      reason: "Closed on GitHub without merging",
+      byName: null,
+      onHost: true,
+    });
+    expect(read.ok && read.value.raised.source).toBe("agent:release-bot");
+    expect(read.ok && read.value.pr?.provider).toBe("github");
   });
 });
 

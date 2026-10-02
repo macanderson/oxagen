@@ -11,21 +11,33 @@ import type { WsCtx } from "@/server/viewer";
 import type { PullRequestUrl } from "@/shared/pull-request-url";
 import { linkText, mono } from "@/ui/control-styles";
 import { PullRequestLink } from "@/ui/navigation";
-import { lineDiff } from "./line-diff";
+import { buildDiff, type DiffOp } from "@/shared/line-diff";
 import { SteeringReadFailure } from "./read-failure";
 import { Section } from "./section";
 
-const SIGN = { same: " ", removed: "-", added: "+" } as const;
+/** Each line's kind as the page names it, from the shared diff's op. */
+const KIND = { ctx: "same", del: "removed", add: "added" } as const satisfies Record<
+  DiffOp,
+  string
+>;
+
+const SIGN = { ctx: " ", del: "-", add: "+" } as const;
 
 const LINE_TONE = {
-  same: "",
-  removed: "bg-error/10",
-  added: "bg-success/10",
+  ctx: "",
+  del: "bg-error/10",
+  add: "bg-success/10",
 } as const;
+
+/** A file's text with its final line end dropped, so the diff draws no empty last line. */
+const body = (text: string | null) => (text ?? "").replace(/\r?\n$/, "");
 
 function FileDiff({ file }: { file: ContextPrDiff["files"][number] }) {
   const t = useTranslations("steering.pr.diff");
-  const lines = lineDiff(file.before, file.after);
+  // The transcript's diff (shared/line-diff.ts): bounded, and trimmed to the
+  // changed lines with three lines of context around each run.
+  const diff = buildDiff(body(file.before), body(file.after));
+  const lines = diff.hunks.flatMap((hunk) => hunk.lines);
   return (
     <div
       data-diff-file={file.path}
@@ -48,9 +60,9 @@ function FileDiff({ file }: { file: ContextPrDiff["files"][number] }) {
             <tr
               // A removed line is unique by its base number, an added one by
               // its head number, and a kept one by both.
-              key={`${line.kind}:${String(line.before)}:${String(line.after)}`}
-              data-line={line.kind}
-              className={LINE_TONE[line.kind]}
+              key={`${line.op}:${String(line.before)}:${String(line.after)}`}
+              data-line={KIND[line.op]}
+              className={LINE_TONE[line.op]}
             >
               <td className="w-10 select-none px-2 text-right text-dim">
                 {line.before ?? ""}
@@ -59,16 +71,21 @@ function FileDiff({ file }: { file: ContextPrDiff["files"][number] }) {
                 {line.after ?? ""}
               </td>
               <td className="w-4 select-none text-dim" aria-hidden="true">
-                {SIGN[line.kind]}
+                {SIGN[line.op]}
               </td>
               <td className="whitespace-pre-wrap break-all pe-3 text-foreground">
-                <span className="sr-only">{t(`lines.${line.kind}`)} </span>
+                <span className="sr-only">{t(`lines.${KIND[line.op]}`)} </span>
                 {line.text}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+      {diff.wholesale ? (
+        <p className="px-3 pb-2 text-xs text-muted-foreground">
+          {t("wholesale")}
+        </p>
+      ) : null}
       {file.truncated ? (
         <p className="px-3 pb-2 text-xs text-muted-foreground">
           {t("truncated")}

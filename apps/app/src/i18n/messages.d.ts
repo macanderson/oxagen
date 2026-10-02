@@ -10487,6 +10487,7 @@ type Messages = {
           added: string;
         };
         truncated: string;
+        wholesale: string;
         noPr: string;
         settled: string;
         openFiles: string;

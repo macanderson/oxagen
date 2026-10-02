@@ -17,6 +17,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
+import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { IntlProvider } from "@/test/intl";
 import {
   contextPr,
@@ -302,6 +303,42 @@ describe("the activity", () => {
   });
 });
 
+describe("the activity, on GitLab and with failures", () => {
+  it("names GitLab, a failed check, and a close with no reason", async () => {
+    const base = contextPr("rejected", {
+      closed: {
+        at: "2026-09-15T09:30:00.000Z",
+        reason: null,
+        byName: null,
+        onHost: true,
+      },
+    });
+    if (base.pr === null) throw new Error("fixture has a pull request");
+    await renderPage({
+      contextPr: readOk({
+        ...base,
+        pr: { ...base.pr, provider: "gitlab" },
+        checks: contextPr("checks_failed").checks,
+      }),
+    });
+    const activity = section("Activity");
+    expect(
+      activity.querySelector('[data-step="checks-finished"]'),
+    ).toHaveTextContent("A check failed");
+    const closed = activity.querySelector('[data-step="closed"]');
+    expect(closed).toHaveTextContent("Closed without merging");
+    expect(closed).toHaveTextContent("on GitLab");
+    expect(closed).not.toHaveTextContent("Closed without merging:");
+  });
+
+  it("adds no finished step while a check still runs", async () => {
+    await renderPage({ contextPr: readOk(contextPr("checks_running")) });
+    expect(
+      section("Activity").querySelector('[data-step="checks-finished"]'),
+    ).toBeNull();
+  });
+});
+
 describe("Refresh from GitHub", () => {
   it("asks the host once when the page opens and reloads the page when the proposal moved", async () => {
     refreshContextPr.mockResolvedValue({
@@ -371,6 +408,48 @@ describe("Refresh from GitHub", () => {
     ).toHaveTextContent("no connected repository");
   });
 
+  it("reloads the page when a press finds the proposal moved, and says it matches when it did not", async () => {
+    await renderPage();
+    await waitFor(() => {
+      expect(refreshContextPr).toHaveBeenCalledTimes(1);
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Refresh from GitHub" }),
+    );
+    expect(await screen.findByText("Matches the host.")).toHaveAttribute(
+      "data-found",
+      "current",
+    );
+    refreshContextPr.mockResolvedValueOnce({
+      ok: true,
+      value: {
+        changed: true,
+        syncRequested: false,
+        host: { state: "closed", headSha: "abc", baseRef: "main" },
+      },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Refresh from GitHub" }),
+    );
+    await waitFor(() => {
+      expect(router.refresh).toHaveBeenCalled();
+    });
+  });
+
+  it("names a press that never answered (negative)", async () => {
+    await renderPage();
+    await waitFor(() => {
+      expect(refreshContextPr).toHaveBeenCalledTimes(1);
+    });
+    refreshContextPr.mockRejectedValueOnce(new Error("network"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Refresh from GitHub" }),
+    );
+    expect(
+      await screen.findByTestId("refresh-context-pr-failure"),
+    ).toBeInTheDocument();
+  });
+
   it("offers no refresh before a pull request opens (negative)", async () => {
     await renderPage({ contextPr: readOk(contextPr("proposed")) });
     expect(screen.queryByTestId("refresh-context-pr")).toBeNull();
@@ -413,16 +492,82 @@ describe("the diff", () => {
       <IntlProvider>
         <ContextPrDiffBody
           read={readOk(contextPrDiff({ state: "settled", files: [] }))}
-          prUrl={null}
+          prUrl={parsePullRequestUrl(PR_URL)}
         />
       </IntlProvider>,
     );
     expect(section("Changes")).toHaveTextContent(
       "The branch was deleted when the pull request merged or closed.",
     );
+    expect(
+      screen.getByRole("link", { name: "Open the files on the host" }),
+    ).toHaveAttribute("href", PR_URL);
   });
 
-  it("renders the host's refusal in place of the diff and nothing else (negative)", () => {
+  it("says no branch exists before a pull request opens, and that a long file was cut", () => {
+    render(
+      <IntlProvider>
+        <ContextPrDiffBody
+          read={readOk(contextPrDiff({ state: "no_pr", files: [] }))}
+          prUrl={null}
+        />
+      </IntlProvider>,
+    );
+    expect(section("Changes")).toHaveTextContent(
+      "No pull request is open yet",
+    );
+    cleanup();
+    const [file] = contextPrDiff().files;
+    if (file === undefined) throw new Error("fixture has a file");
+    render(
+      <IntlProvider>
+        <ContextPrDiffBody
+          read={readOk(
+            contextPrDiff({
+              files: [{ ...file, truncated: true }],
+              moreFiles: true,
+            }),
+          )}
+          prUrl={null}
+        />
+      </IntlProvider>,
+    );
+    expect(section("Changes")).toHaveTextContent(
+      "This file is longer than the page shows.",
+    );
+    expect(section("Changes")).toHaveTextContent(
+      "The pull request changes more files than this page shows.",
+    );
+  });
+
+  it("marks the lines an edit removes and adds, keeping the ones around it", () => {
+    render(
+      <IntlProvider>
+        <ContextPrDiffBody
+          read={readOk(
+            contextPrDiff({
+              files: [
+                {
+                  path: ".oxagen/rules/a.toml",
+                  status: "modified",
+                  before: 'id = "a"\nstatement = "old"\n',
+                  after: 'id = "a"\nstatement = "new"\n',
+                  truncated: false,
+                },
+              ],
+            }),
+          )}
+          prUrl={null}
+        />
+      </IntlProvider>,
+    );
+    const kinds = [
+      ...section("Changes").querySelectorAll("[data-line]"),
+    ].map((row) => row.getAttribute("data-line"));
+    expect(kinds).toEqual(["same", "removed", "added"]);
+  });
+
+  it("renders the host's refusal in place of the diff (negative)", () => {
     render(
       <IntlProvider>
         <ContextPrDiffBody
@@ -434,6 +579,7 @@ describe("the diff", () => {
     expect(section("Changes")).toHaveTextContent(
       "Changes could not be loaded: github_refused.",
     );
+    expect(section("Changes").querySelector("[data-diff-file]")).toBeNull();
   });
 });
 

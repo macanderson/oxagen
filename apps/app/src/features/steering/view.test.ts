@@ -4,6 +4,7 @@
 // and a 404 for a segment that names nothing.
 import { describe, expect, it } from "vitest";
 import {
+  proposalListFrom,
   resolveSteeringRoute,
   shelfLink,
   skillRowsParam,
@@ -254,6 +255,25 @@ describe("resolveSteeringRoute", () => {
     [["a", "b", "c", "d"]],
   ])("answers %o with a 404 (negative)", (segments) => {
     expect(resolve(segments)).toEqual({ kind: "not_found" });
+  });
+});
+
+describe("proposalListFrom", () => {
+  it("reads the list a Context PR page was opened from", () => {
+    expect(
+      proposalListFrom({ state: "merged", rows: "25", offset: "50" }),
+    ).toEqual({ state: "merged", rows: 25, offset: 50 });
+  });
+
+  it("drops a state, size or offset the list does not offer (negative)", () => {
+    expect(
+      proposalListFrom({ state: "rejected", rows: "7", offset: "-1" }),
+    ).toEqual({ state: null, rows: null, offset: null });
+    expect(proposalListFrom({})).toEqual({
+      state: null,
+      rows: null,
+      offset: null,
+    });
   });
 });
 

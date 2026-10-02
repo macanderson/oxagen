@@ -636,6 +636,7 @@
           "added": "added"
         },
         "truncated": "This file is longer than the page shows.",
+        "wholesale": "This file is too large to compare line by line, so every line shows as replaced.",
         "noPr": "No pull request is open yet, so there is no branch to compare.",
         "settled": "The branch was deleted when the pull request merged or closed.",
         "openFiles": "Open the files on the host",

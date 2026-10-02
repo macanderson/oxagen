@@ -166,20 +166,72 @@ describe("refresh_context_pr", () => {
     expect(t.row().status).toBe("checks_passed");
   });
 
+  it("answers the proposal as another write left it when that write moved it first, and deletes no branch", async () => {
+    const t = await opened();
+    const branch = t.row().branch!;
+    await t.h.github.closePullRequest(t.h.github.repository!, t.pull().number);
+    // A merge from Oxagen lands between the host read and this write.
+    const update = t.h.store.updateProposal.bind(t.h.store);
+    t.h.store.updateProposal = async (id, patch, from, guard) => {
+      t.h.store.updateProposal = update;
+      await update(id, { status: "merged" }, ["checks_passed"]);
+      return update(id, patch, from, guard);
+    };
+    const out = await t.refresh({ proposalId: t.proposalId }, ctx());
+    expect(out).toMatchObject({ status: "merged", changed: false });
+    expect(t.h.github.deletedBranches).not.toContain(branch);
+  });
+
+  it("rethrows a store failure that is not a lost race (negative)", async () => {
+    const t = await opened();
+    await t.h.github.closePullRequest(t.h.github.repository!, t.pull().number);
+    t.h.store.updateProposal = async () => {
+      throw new Error("db down");
+    };
+    await expect(
+      t.refresh({ proposalId: t.proposalId }, ctx()),
+    ).rejects.toThrow("db down");
+  });
+
+  it("answers no sync requested when the deps carry no way to ask for one", async () => {
+    const t = await opened();
+    Object.assign(t.pull(), { state: "closed", merged: true });
+    const out = await createRefreshContextPrHandler(t.h)(
+      { proposalId: t.proposalId },
+      ctx(),
+    );
+    expect(out).toMatchObject({ syncRequested: false, changed: false });
+  });
+
+  it("leaves the checks of a pull request not yet checked when its head moves", async () => {
+    const t = await opened();
+    t.row().status = "pr_open";
+    t.h.github.commit(t.row().branch!, t.row().path!, "edited by hand");
+    const out = await t.refresh({ proposalId: t.proposalId }, ctx());
+    expect(out).toMatchObject({ status: "pr_open", changed: false });
+  });
+
   it("leaves a proposal a merge from Oxagen has claimed to that merge", async () => {
     const t = await opened();
     await t.h.github.closePullRequest(t.h.github.repository!, t.pull().number);
     t.row().mergeClaimedAt = t.h.now();
+    const write = vi.spyOn(t.h.store, "updateProposal");
     const out = await t.refresh({ proposalId: t.proposalId }, ctx());
     expect(out).toMatchObject({ status: "checks_passed", changed: false });
+    // The handler leaves it before any write, not only the store's guard.
+    expect(write).not.toHaveBeenCalled();
   });
 
   it("refuses a caller without a workspace role and reads nothing (negative)", async () => {
     const t = await opened();
     gate.refuse = true;
+    const find = vi.spyOn(t.h.store, "findProposal");
+    const read = vi.spyOn(t.h.github, "getPullRequest");
     await expect(
       t.refresh({ proposalId: t.proposalId }, ctx()),
     ).rejects.toMatchObject({ code: "forbidden", reason: "org_role_required" });
+    expect(find).not.toHaveBeenCalled();
+    expect(read).not.toHaveBeenCalled();
   });
 
   it("refuses an unknown proposal (negative)", async () => {
