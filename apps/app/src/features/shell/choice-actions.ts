@@ -350,9 +350,16 @@ export async function chooseApprovers(
   ]);
 }
 
-async function agentOptions(ctx: WsCtx): Promise<ActionResult<OptionPage>> {
-  const list = await walk(PAGE_BOUND, async (cursor) => {
-    const read = await dataSource().agents.list(ctx, { cursor });
+/**
+ * The workspace's agents, page by page. `includeRetired` lists a retired
+ * agent too, for the harness its old runs still name.
+ */
+function agentWalk(ctx: WsCtx, includeRetired: boolean) {
+  return walk(PAGE_BOUND, async (cursor) => {
+    const read = await dataSource().agents.list(ctx, {
+      cursor,
+      includeRetired,
+    });
     return read.ok
       ? {
           ok: true,
@@ -363,6 +370,10 @@ async function agentOptions(ctx: WsCtx): Promise<ActionResult<OptionPage>> {
         }
       : read;
   });
+}
+
+async function agentOptions(ctx: WsCtx): Promise<ActionResult<OptionPage>> {
+  const list = await agentWalk(ctx, false);
   if (!list.ok) return readToActionResult<OptionPage>(list.read);
   return loaded(
     list.items
@@ -371,6 +382,8 @@ async function agentOptions(ctx: WsCtx): Promise<ActionResult<OptionPage>> {
         value: agent.id,
         label: agent.name,
         detail: agent.slug,
+        // The agent's avatar with the harness it registered (#4871).
+        icon: { agent: agent.slug, harness: agent.harness },
       })),
     list.partial,
   );
@@ -392,21 +405,45 @@ export async function chooseRuns(
   ws: string,
 ): Promise<ActionResult<OptionPage>> {
   const ctx = await requireViewer(org, ws);
-  const list = await walk(RUN_PAGE_BOUND, async (cursor) => {
-    const read = await dataSource().runs.list(ctx, { cursor });
-    return read.ok
-      ? {
-          ok: true,
-          value: { items: read.value.runs, nextCursor: read.value.nextCursor },
-        }
-      : read;
-  });
+  const [list, agents] = await Promise.all([
+    walk(RUN_PAGE_BOUND, async (cursor) => {
+      const read = await dataSource().runs.list(ctx, { cursor });
+      return read.ok
+        ? {
+            ok: true,
+            value: {
+              items: read.value.runs,
+              nextCursor: read.value.nextCursor,
+            },
+          }
+        : read;
+    }),
+    agentWalk(ctx, true),
+  ]);
   if (!list.ok) return readToActionResult<OptionPage>(list.read);
+  // A run the ledger recorded names no harness of its own, so its agent's
+  // registered harness stands in, as the run's header does. An agents read
+  // that failed leaves those runs unbadged.
+  const registered = new Map<string, string>();
+  if (agents.ok) {
+    for (const agent of agents.items) {
+      if (agent.agentKey !== null) registered.set(agent.agentKey, agent.harness);
+    }
+  }
   return loaded(
     list.items.map((run) => ({
       value: run.id,
       label: run.name ?? run.agentKey ?? run.id,
       detail: run.id,
+      ...(run.agentKey === null
+        ? {}
+        : {
+            icon: {
+              agent: run.agentKey,
+              harness:
+                run.harness?.name ?? registered.get(run.agentKey) ?? null,
+            },
+          }),
     })),
     list.partial,
   );

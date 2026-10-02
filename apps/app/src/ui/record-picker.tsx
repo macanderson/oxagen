@@ -37,12 +37,37 @@ import {
   useRef,
   useState,
 } from "react";
+import { AgentAvatar } from "./agent-avatar";
 import { Badge, type BadgeTone } from "./badge";
 import { inputBase, menuItemActive, menuSurface, mono } from "./control-styles";
 import { ProviderIcon } from "./provider-icon";
 
-/** A logo: the vendor's https icon, or the initial of `name` on a tile. */
-export type PickerIcon = { name: string; url: string | null };
+/**
+ * A logo: the vendor's https icon, or the initial of `name` on a tile. An
+ * agent option carries the agent instead (its key or slug, whose last segment
+ * gives the initials) and the harness it registered, and is drawn as the
+ * agent's avatar with its harness badge, as every other agent surface draws
+ * it (#4871). No harness, no badge.
+ */
+export type PickerIcon =
+  | { name: string; url: string | null }
+  | { agent: string; harness: string | null };
+
+/** An option's mark: an agent's avatar with its harness badge, or a vendor's logo. */
+function PickerMark({ icon, size }: { icon: PickerIcon; size: number }) {
+  if ("agent" in icon)
+    return (
+      <AgentAvatar
+        value={null}
+        initials={(icon.agent.split(".").at(-1) ?? "")
+          .slice(0, 2)
+          .toUpperCase()}
+        harness={icon.harness}
+        size={size}
+      />
+    );
+  return <ProviderIcon name={icon.name} iconUrl={icon.url} size={size} />;
+}
 
 /** A short fact drawn as a badge beside the label, such as "Read only". */
 export type PickerFact = { text: string; tone: BadgeTone };
@@ -355,11 +380,7 @@ function OptionList({
                   {chosen ? "✓" : ""}
                 </span>
                 {row.icon === undefined ? null : (
-                  <ProviderIcon
-                    name={row.icon.name}
-                    iconUrl={row.icon.url}
-                    size={20}
-                  />
+                  <PickerMark icon={row.icon} size={20} />
                 )}
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -537,7 +558,7 @@ export function RecordPicker({
       <div className="relative">
         {icon === undefined ? null : (
           <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center">
-            <ProviderIcon name={icon.name} iconUrl={icon.url} size={18} />
+            <PickerMark icon={icon} size={18} />
           </span>
         )}
         <input
@@ -743,11 +764,7 @@ export function RecordMultiPicker({
               className="inline-flex max-w-full items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-xs text-foreground"
             >
               {shown.icon === undefined ? null : (
-                <ProviderIcon
-                  name={shown.icon.name}
-                  iconUrl={shown.icon.url}
-                  size={16}
-                />
+                <PickerMark icon={shown.icon} size={16} />
               )}
               <span className={`truncate ${shown.raw ? mono : ""}`}>
                 {label}

@@ -23,6 +23,7 @@ import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, numericCell, Table } from "@/ui/table";
+import type { AgentHarnesses } from "./agent-mark";
 import { EvidenceDialog } from "./evidence-dialog";
 import {
   BasisLabel,
@@ -161,6 +162,7 @@ export function FindingsSection({
   operators,
   at,
   evidence,
+  harnesses = {},
 }: {
   findings: SpendFindings;
   /** The operator rollup, to name the person an operator finding is about. */
@@ -168,6 +170,8 @@ export function FindingsSection({
   at: SpendAt;
   /** One finding's evidence, open as a dialog over the list; null when none is. */
   evidence: ReactNode;
+  /** Each agent's registered harness, by key, for an agent finding's avatar. */
+  harnesses?: AgentHarnesses;
 }) {
   const t = useTranslations("spend.findings");
   const locale = useLocale();
@@ -258,6 +262,7 @@ export function FindingsSection({
           findings={findings.findings}
           spend={findings.spend}
           names={names}
+          harnesses={harnesses}
           at={at}
         />
       )}

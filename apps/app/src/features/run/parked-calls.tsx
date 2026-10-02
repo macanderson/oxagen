@@ -30,6 +30,8 @@ const warn =
 
 type Cards = {
   mandates: ReadonlyMap<string, MandateRow>;
+  /** The run's agent key to its harness, for the badge on each card's avatar. */
+  agentHarnesses: Readonly<Record<string, string>>;
   now: number;
   org: string;
   ws: string;
@@ -39,6 +41,7 @@ type Cards = {
 export function ParkedHere({
   item,
   mandates,
+  agentHarnesses,
   now,
   org,
   ws,
@@ -57,6 +60,7 @@ export function ParkedHere({
       <ApprovalsPanel
         approvals={readOk({ items: [item], more: false })}
         mandates={mandates}
+        agentHarnesses={agentHarnesses}
         now={now}
         on="run"
         org={org}
@@ -79,6 +83,7 @@ export function ParkedElsewhere({
   cardShown,
   hrefOf,
   mandates,
+  agentHarnesses,
   now,
   org,
   ws,
@@ -106,6 +111,7 @@ export function ParkedElsewhere({
               : pending
           }
           mandates={mandates}
+          agentHarnesses={agentHarnesses}
           now={now}
           on="run"
           org={org}

@@ -401,6 +401,28 @@ describe("the run step", () => {
     ).toHaveLength(0);
   });
 
+  it("leads the chips with the agent's avatar, badged with the harness it registered (#4871)", async () => {
+    await renderStep("run", "agt_releasebot", {
+      firstFrame: readOk(waitingFrame),
+      agent: readOk(agentDetail()),
+    });
+    expect(
+      screen
+        .getByTestId("first-frame-waiting")
+        .querySelector('[data-agent-avatar] [data-harness-badge="claude-code"]'),
+    ).not.toBeNull();
+  });
+
+  it("draws no avatar or badge when the agent read failed (negative)", async () => {
+    await renderStep("run", "agt_releasebot", {
+      firstFrame: readOk(waitingFrame),
+      agent: readError("upstream", 503),
+    });
+    const card = screen.getByTestId("first-frame-waiting");
+    expect(card.querySelector("[data-agent-avatar]")).toBeNull();
+    expect(card.querySelector("[data-harness-badge]")).toBeNull();
+  });
+
   it("says no host has enrolled when none has", async () => {
     await renderStep("run", "agt_releasebot", {
       firstFrame: readOk(firstFrame({ host: null })),
