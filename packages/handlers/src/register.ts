@@ -13,6 +13,7 @@ import { setNoProgressPauseRunner } from "@oxagen/inngest-functions/no-progress-
 import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
 import { setRunPrOutcomesRunner } from "@oxagen/inngest-functions/run-pr-outcomes-runner";
 import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
+import { setForgePullRequestSyncRunner } from "@oxagen/inngest-functions/forge-pull-request-sync-runner";
 import { setWorkOrderResultsRunner } from "@oxagen/inngest-functions/work-order-results-runner";
 import { setWorkOrderSendBackPorts } from "@oxagen/inngest-functions/work-order-send-back-ports";
 import { setSteeringRepoHealthRunner } from "@oxagen/inngest-functions/steering-repo-health-runner";
@@ -213,6 +214,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
       request,
     ),
   );
+  // The pull request sync (ADR-288) writes the forge tables, reads GitHub and
+  // GitLab, and puts diffs in the diff store through this package, for the
+  // same reason, and is loaded on its first run.
+  const forgeSync = async () =>
+    (await import("./lib/forge-pull-requests/sync")).forgeSyncRunner();
+  setForgePullRequestSyncRunner({
+    upsert: async (request) => (await forgeSync()).upsert(request),
+    capture: async (request, pullRequestId, target) =>
+      (await forgeSync()).capture(request, pullRequestId, target),
+    record: async (request, pullRequestId, target, capture) =>
+      (await forgeSync()).record(request, pullRequestId, target, capture),
+  });
   // A work order's run end and pull request (ADR-251) write work records and
   // read GitHub through this package too, and load on their first run.
   setWorkOrderResultsRunner({
