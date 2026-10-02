@@ -12,7 +12,7 @@
 //    evidence. A memory waits for the curator and a person, as every memory
 //    does. Capture runs before the check posts, so a capture that throws
 //    retries the whole job and the check never claims lines it lost.
-// 5. Store the statements it flagged (ADR-254), replacing the pull request's
+// 5. Store the statements it flagged (ADR-263), replacing the pull request's
 //    earlier ones, so the Repositories page and list_code_repository_findings
 //    read them.
 // 6. Post the check. It warns unless the published workspace.toml sets
@@ -84,7 +84,7 @@ export interface CodeRepoCheckDeps {
     scope: CheckScope,
     memories: PullRequestMemory[],
   ): Promise<{ written: number; refused: number }>;
-  /** The stored findings (ADR-254). */
+  /** The stored findings (ADR-263). */
   findings: Pick<
     CodeRepoFindingStore,
     "replacePullRequest" | "clearPullRequest" | "markMerged" | "mergedElsewhere" | "remove"

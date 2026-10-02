@@ -1,6 +1,6 @@
 # promote_instruction_to_steering
 
-Turn one instruction-file statement that contradicts a steering record into a proposal for a new version of that record, and open the proposal's steering PR (#4518, [ADR-254](../adr/ADR-254-code-repository-findings-are-stored-when-the-check-runs.md)). Pass a finding's id from [list_code_repository_findings](repository.findings.list.md). Nothing steers an agent until the steering PR merges.
+Turn one instruction-file statement that contradicts a steering record into a proposal for a new version of that record, and open the proposal's steering PR (#4518, [ADR-263](../adr/ADR-263-code-repository-findings-are-stored-when-the-check-runs.md)). Pass a finding's id from [list_code_repository_findings](repository.findings.list.md). Nothing steers an agent until the steering PR merges.
 
 **Surfaces:** api, mcp, cli
 

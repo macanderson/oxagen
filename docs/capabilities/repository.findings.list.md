@@ -1,6 +1,6 @@
 # list_code_repository_findings
 
-List the instruction-file statements in the workspace's linked code repositories that repeat or contradict an active steering record. The Repositories page shows them in its Instruction files section (#4518, [ADR-254](../adr/ADR-254-code-repository-findings-are-stored-when-the-check-runs.md)). It writes nothing and runs no model.
+List the instruction-file statements in the workspace's linked code repositories that repeat or contradict an active steering record. The Repositories page shows them in its Instruction files section (#4518, [ADR-263](../adr/ADR-263-code-repository-findings-are-stored-when-the-check-runs.md)). It writes nothing and runs no model.
 
 **Surfaces:** api, mcp, cli
 

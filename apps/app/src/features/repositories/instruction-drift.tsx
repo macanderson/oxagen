@@ -1,6 +1,6 @@
 "use client";
 // The statements a code repository's instruction files hold that repeat or
-// contradict a steering record (#4518, ADR-254). Each finding names the file
+// contradict a steering record (#4518, ADR-263). Each finding names the file
 // and line, quotes the statement, names the record, and links the pull
 // request that added it. A contradiction offers Promote to steering, which
 // proposes the line as the record's new text through

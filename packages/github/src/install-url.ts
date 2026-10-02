@@ -99,9 +99,15 @@ export type GithubInstallStateError =
   | "invalid_json"
   | "expired";
 
+/**
+ * An expired state carries what it said. Its signature matched, so the caller
+ * may trust it to say where the person came from, though not to finish the
+ * connect (#5151).
+ */
 export type GithubInstallStateResult =
   | { ok: true; state: GithubInstallState }
-  | { ok: false; error: GithubInstallStateError };
+  | { ok: false; error: "expired"; state: GithubInstallState }
+  | { ok: false; error: Exclude<GithubInstallStateError, "expired"> };
 
 /**
  * Constant-time comparison of two hex digests. Length is compared first and
@@ -155,7 +161,7 @@ export function verifyInstallState(
     return { ok: false, error: "invalid_json" };
   }
 
-  if (nowMs > state.expiresAt) return { ok: false, error: "expired" };
+  if (nowMs > state.expiresAt) return { ok: false, error: "expired", state };
 
   return { ok: true, state };
 }

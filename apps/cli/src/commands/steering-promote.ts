@@ -1,7 +1,7 @@
 /**
  * `oxagen steering promote <finding-id>`: turn one instruction-file statement
  * that contradicts a steering record into a proposal for that record
- * (promote_instruction_to_steering, #4518, ADR-254).
+ * (promote_instruction_to_steering, #4518, ADR-263).
  *
  * The finding id (`crf_…`) comes from `oxagen steering findings`. The
  * proposal is a new version of the record, with the statement as its text and

@@ -1,6 +1,6 @@
 // code-repo-check/handlers.ts: list_code_repository_findings and
 // promote_instruction_to_steering over the production deps (S7, #4518;
-// ADR-254). register.ts loads this module lazily, so importing it opens no
+// ADR-263). register.ts loads this module lazily, so importing it opens no
 // client until a call needs one.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { codeRepositoryFindingsList } from "@oxagen/oxagen/contracts/repository.findings.list";

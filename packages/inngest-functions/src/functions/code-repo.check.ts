@@ -74,7 +74,7 @@ export function codeRepoCheckRequestOf(
  * with an event id per head commit, so a redelivery runs once. The runner
  * reads the instruction files the pull request changes, compares what they
  * add with the workspace's published steering records, hands new lines to
- * S6's memory capture, stores the statements it flags (ADR-254), and posts
+ * S6's memory capture, stores the statements it flags (ADR-263), and posts
  * the check. A closed pull request's event settles those stored statements
  * and posts nothing. One check runs at a time per pull
  * request and workspace, so two pushes in a row cannot post out of order. A

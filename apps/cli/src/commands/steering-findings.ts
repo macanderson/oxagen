@@ -1,7 +1,7 @@
 /**
  * `oxagen steering findings`: the statements in the instruction files of the
  * workspace's linked code repositories that repeat or contradict a steering
- * record (list_code_repository_findings, #4518, ADR-254).
+ * record (list_code_repository_findings, #4518, ADR-263).
  *
  * The Oxagen check on a linked repository's pull requests stores each
  * statement it flags. The read compares them with today's records, so a

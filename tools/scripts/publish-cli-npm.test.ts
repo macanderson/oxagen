@@ -71,13 +71,15 @@ describe("publish-cli-npm main", () => {
     });
     await expect(main(["2.1.4-3", "--verify"], d)).resolves.toBe(0);
     expect(d.npxVersion).toHaveBeenCalledTimes(3);
-    expect(d.npxVersion).toHaveBeenCalledWith("@oxagen/cli@2.1.4-3");
+    expect(d.npxVersion).toHaveBeenCalledWith(
+      "https://registry.npmjs.org/@oxagen/cli/-/cli-2.1.4-3.tgz",
+    );
     expect(d.sleep).toHaveBeenCalledTimes(2);
     expect(lines.log[0]).toBe(
-      `npx @oxagen/cli@2.1.4-3 --version printed "E404 not found" (try 1 of ${VERIFY_TRIES})`,
+      `npx https://registry.npmjs.org/@oxagen/cli/-/cli-2.1.4-3.tgz --version printed "E404 not found" (try 1 of ${VERIFY_TRIES})`,
     );
     expect(lines.log.at(-1)).toBe(
-      "npx @oxagen/cli@2.1.4-3 --version prints 2.1.4-3",
+      "npx https://registry.npmjs.org/@oxagen/cli/-/cli-2.1.4-3.tgz --version prints 2.1.4-3",
     );
   });
 

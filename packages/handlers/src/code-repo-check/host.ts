@@ -37,7 +37,7 @@ export interface CodeHost {
   /**
    * Every path the pull request touches, from the merge base of `base` and
    * `head`: removed files and both paths of a rename included. A merge reads
-   * the files it touched to settle the stored findings (ADR-254).
+   * the files it touched to settle the stored findings (ADR-263).
    */
   touchedPaths(base: string, head: string): Promise<string[]>;
   /** A file's text at `ref`, or null when the ref has no such file. */

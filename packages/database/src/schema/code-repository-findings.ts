@@ -1,5 +1,5 @@
 // The instruction-file statements the Oxagen check flagged on pull requests
-// in a workspace's linked code repositories (S7, #4518; ADR-254).
+// in a workspace's linked code repositories (S7, #4518; ADR-263).
 //
 // One row per statement. A row keeps what only the host can give: the
 // repository, the pull request, the commit the check read, the file, the

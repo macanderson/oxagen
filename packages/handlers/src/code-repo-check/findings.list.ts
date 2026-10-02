@@ -1,5 +1,5 @@
 // code-repo-check/findings.list.ts: list_code_repository_findings (S7, #4518;
-// ADR-254).
+// ADR-263).
 //
 // The check stored each statement it flagged on a linked repository's pull
 // requests (store.ts). This read compares those statements with the

@@ -7583,6 +7583,23 @@
       }
     },
     {
+      "name": "run_studio_selection",
+      "file": "tool.studio.selection.run.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_studio_server",
       "file": "tool.studio.server.get.ts",
       "domain": "tool",

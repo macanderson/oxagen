@@ -1,5 +1,5 @@
 // code-repo-check/store.ts: the statements the Oxagen check flagged, kept in
-// agent.code_repository_findings (S7, #4518; ADR-254).
+// agent.code_repository_findings (S7, #4518; ADR-263).
 //
 // A row keeps what only the host can give: the repository, the pull request,
 // the commit the check read, the file, the line, and the text. Which record

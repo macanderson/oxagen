@@ -14,7 +14,7 @@ vi.mock("@oxagen/ai", () => ({
   selectModelForOrg: mocks.selectModelForOrg,
 }));
 
-const { aiTriageModelClient, isOutputParseError, triageOutputSchema } = await import("./triage-run");
+const { aiTriageModelClient, triageOutputSchema } = await import("./triage-run");
 
 const scope = { orgId: "00000000-0000-4000-8000-000000000001", workspaceId: "00000000-0000-4000-8000-000000000002" };
 const request = { system: "rules", prompt: "<triage-input>{}</triage-input>", schema: {} };
@@ -58,14 +58,5 @@ describe("aiTriageModelClient", () => {
   it("passes any other error through, so the durable step retries", async () => {
     mocks.generateObjectFor.mockRejectedValue(new Error("credit admission refused"));
     await expect(aiTriageModelClient(scope).complete(request)).rejects.toThrow("credit admission refused");
-  });
-});
-
-describe("isOutputParseError", () => {
-  it("reads the AI SDK's parse errors by name", () => {
-    expect(isOutputParseError(named("AI_TypeValidationError"))).toBe(true);
-    expect(isOutputParseError(named("AI_JSONParseError"))).toBe(true);
-    expect(isOutputParseError(named("AI_APICallError"))).toBe(false);
-    expect(isOutputParseError("AI_JSONParseError")).toBe(false);
   });
 });

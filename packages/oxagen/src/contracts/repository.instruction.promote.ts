@@ -1,7 +1,7 @@
 /**
  * promote_instruction_to_steering: turn one instruction-file statement that
  * contradicts a steering record into a proposal for that record (#4518,
- * ADR-254).
+ * ADR-263).
  *
  * It takes a finding from list_code_repository_findings and compares its
  * statement with today's records again. A contradiction becomes a proposal

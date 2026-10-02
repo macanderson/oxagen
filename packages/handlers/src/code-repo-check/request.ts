@@ -11,7 +11,7 @@
 // names the head and base commits, so a redelivered webhook asks once.
 //
 // A pull request that closes sends the same event with `closed` set, so the
-// job settles the statements the check stored for it (ADR-254): closed
+// job settles the statements the check stored for it (ADR-263): closed
 // without merging they go, and merged they stay. Its id names the close.
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import type { GitLabMergeRequestEvent } from "@oxagen/gitlab";

@@ -1,4 +1,4 @@
-// promote_instruction_to_steering (S7, #4518; ADR-254): a statement that
+// promote_instruction_to_steering (S7, #4518; ADR-263): a statement that
 // contradicts a steering record becomes a proposal for that record, and its
 // steering PR opens. Every refusal comes before anything is written. The
 // finding store is in memory, the steering store and open_context_pr are

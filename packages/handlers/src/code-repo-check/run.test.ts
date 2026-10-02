@@ -382,7 +382,7 @@ describe("runCodeRepoCheck on GitHub", () => {
   });
 });
 
-describe("the stored findings (ADR-254)", () => {
+describe("the stored findings (ADR-263)", () => {
   const CONTRADICTION = "Always push to `main` or force-push any shared branch.";
 
   it("stores each statement it flags, with its pull request and commit, before the check posts", async () => {

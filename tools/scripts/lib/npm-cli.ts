@@ -30,6 +30,21 @@ const DIST_DIR = join(ROOT, "apps/cli/dist-standalone");
 
 export const CLI_PACKAGE = "@oxagen/cli";
 
+/** Where npm serves the CLI's tarball for `version`. */
+export function tarballUrl(version: string): string {
+  return `https://registry.npmjs.org/${CLI_PACKAGE}/-/cli-${version}.tgz`;
+}
+
+/**
+ * Whether npm refused a publish because the version is already there. npm's
+ * reads can trail a publish by minutes, so a run can miss a version another
+ * run just published, and this refusal is the first sign of it.
+ */
+export function isAlreadyPublished(err: unknown): boolean {
+  const text = err instanceof Error ? err.message : String(err);
+  return /cannot publish over the previously published version/i.test(text);
+}
+
 /** Env values pasted into a Vercel dashboard arrive double-quoted; strip one pair. */
 function deQuote(v: string | undefined): string {
   if (!v) return "";
@@ -311,7 +326,7 @@ export async function publishCliToNpm(
       });
     } catch (err) {
       // Another run may have published this version since the check above.
-      if (npmVersionExists(version, npm)) {
+      if (isAlreadyPublished(err) || npmVersionExists(version, npm)) {
         log(kleur.dim(`    another run published ${version} first`));
         repairLatest([version]);
         return "skipped";

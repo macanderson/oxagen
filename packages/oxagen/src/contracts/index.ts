@@ -308,6 +308,7 @@ import { toolStudioCredentialSet } from "./tool.studio.credential.set";
 import { toolStudioFindingsList } from "./tool.studio.findings.list";
 import { toolStudioDescriptionDraft } from "./tool.studio.description.draft";
 import { toolStudioTry } from "./tool.studio.try";
+import { toolStudioSelectionRun } from "./tool.studio.selection.run";
 import { toolSteeringMigrate } from "./tool.steering.migrate";
 import { toolRelayCreate } from "./tool.relay.create";
 import { toolRelayRevoke } from "./tool.relay.revoke";
@@ -370,7 +371,7 @@ import { contextPrMerge } from "./context.pr.merge";
 import { contextPrMergeWithoutReview } from "./context.pr.merge_without_review";
 import { contextPrRevert } from "./context.pr.revert";
 // Instruction files in linked code repositories, and the managed blocks of a
-// steering PR (#4518, ADR-254).
+// steering PR (#4518, ADR-263).
 import { codeRepositoryFindingsList } from "./repository.findings.list";
 import { instructionPromote } from "./repository.instruction.promote";
 import { contextPrRestoreManagedBlock } from "./context.pr.restore_managed_block";
@@ -1154,6 +1155,7 @@ export {
   toolStudioFindingsList,
   toolStudioDescriptionDraft,
   toolStudioTry,
+  toolStudioSelectionRun,
   toolSteeringMigrate,
   toolRelayCreate,
   toolRelayRevoke,
@@ -1640,6 +1642,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   toolStudioFindingsList,
   toolStudioDescriptionDraft,
   toolStudioTry,
+  toolStudioSelectionRun,
   toolSteeringMigrate,
   toolRelayCreate,
   toolRelayRevoke,

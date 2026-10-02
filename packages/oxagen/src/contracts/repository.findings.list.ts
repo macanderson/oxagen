@@ -2,7 +2,7 @@
  * list_code_repository_findings: the instruction-file statements in the
  * workspace's linked code repositories that repeat or contradict a steering
  * record, for the Repositories page's Instruction files section (#4518,
- * ADR-254).
+ * ADR-263).
  *
  * The Oxagen check on a linked repository's pull requests (#5112) stores the
  * statements it flags: the file, the line, the text, and the pull request and

@@ -1,6 +1,6 @@
 // The Repositories page's section for the statements in linked code
 // repositories' instruction files that repeat or contradict a steering record
-// (#4518, ADR-254). Each repository with a finding lists it, and a
+// (#4518, ADR-263). Each repository with a finding lists it, and a
 // contradiction offers Promote to steering (./instruction-drift). A read that
 // fails says why in the section's place. When the read answers and nothing
 // differs, the section draws nothing.

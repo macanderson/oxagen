@@ -11,9 +11,10 @@
 // GitHub's install page installs the app on an organization and authorizes the
 // person in one pass. Authorize comes second: an organization that already has
 // the app gets Configure on the install page, which drops the state, so
-// authorize is the way back. GitHub returns through the app's one callback to
-// the route's `return_to`, with `?steering=connected` or
-// `?steering=error&code=`. Both links return to the first workspace, the step
+// authorize is the way back. GitHub returns through the app's one callback and
+// the `/github/steering` landing (#5151) to the route's `return_to`, with
+// `?steering=connected` or `?steering=error&code=`. Both links return to the
+// first workspace, the step
 // that uses the connection, and its result line reads the query.
 //
 // **GitLab has one form**: a group's path and a group access token.

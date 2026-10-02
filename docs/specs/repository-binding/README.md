@@ -247,7 +247,7 @@ is read at the base branch's commit that the delivery names, not at the
 merge base. So a line the base branch removed after the pull request
 branched, which the head still holds, reads as added.
 
-**Stored findings (ADR-254).** The check stores each statement it flags in
+**Stored findings (ADR-263).** The check stores each statement it flags in
 `agent.code_repository_findings`: the repository, the pull request, the
 commit it read, the file, the line, and the text. Each run replaces its pull
 request's rows. A pull request closed without merging deletes them. A merged
@@ -299,7 +299,7 @@ nothing.
 | `create_github_token` | api | Refuses the steering repo with `steering_repo_propose_only` (§2.2). |
 | `open_init_pr` | api, mcp, cli | Retired. It refuses with `conflict: init_pr_retired`. |
 | `attach_gitlab_project` | api | Attaches a GitLab project with a project access token (#3762). |
-| `list_code_repository_findings` | api, mcp, cli | The stored instruction-file statements that repeat or contradict a record today (§3.5, ADR-254). The CLI command is `oxagen steering findings`. |
+| `list_code_repository_findings` | api, mcp, cli | The stored instruction-file statements that repeat or contradict a record today (§3.5, ADR-263). The CLI command is `oxagen steering findings`. |
 | `promote_instruction_to_steering` | api, mcp, cli | Proposes a contradicted record with the statement as its text, and opens its steering PR (§3.5). The CLI command is `oxagen steering promote`. |
 
 `link_repository` and `unlink_repository` take an org Owner or Admin, or the

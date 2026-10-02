@@ -210,6 +210,7 @@ import { toolStudioCredentialSetRoute } from "./routes/v1/tool.studio.credential
 import { toolStudioFindingsListRoute } from "./routes/v1/tool.studio.findings.list";
 import { toolStudioDescriptionDraftRoute } from "./routes/v1/tool.studio.description.draft";
 import { toolStudioTryRoute } from "./routes/v1/tool.studio.try";
+import { toolStudioSelectionRunRoute } from "./routes/v1/tool.studio.selection.run";
 import { toolStudioDiscoveryStartRoute } from "./routes/v1/tool.studio.discovery.start";
 import { toolSteeringMigrateRoute } from "./routes/v1/tool.steering.migrate";
 import { toolStudioListingGetRoute } from "./routes/v1/tool.studio.listing.get";
@@ -880,7 +881,7 @@ orgScoped.route("/repository/main", repositoryMainGetRoute);
 orgScoped.route("/repositories", repositoryListRoute);
 orgScoped.route("/repository/link", repositoryLinkRoute);
 orgScoped.route("/repository/unlink", repositoryUnlinkRoute);
-// The Instruction files section of the Repositories page (#4518, ADR-254): the
+// The Instruction files section of the Repositories page (#4518, ADR-263): the
 // statements the Oxagen check flagged, and the write that promotes one into a
 // steering proposal. Hono matches each mounted path exactly, so the read does
 // not catch the promote path below it.
@@ -1307,6 +1308,8 @@ orgScoped.route("/tools/studio/credential", toolStudioCredentialSetRoute);
 orgScoped.route("/tools/studio/findings", toolStudioFindingsListRoute);
 orgScoped.route("/tools/studio/description", toolStudioDescriptionDraftRoute);
 orgScoped.route("/tools/studio/try", toolStudioTryRoute);
+// Selection tests (lane M16): run a folder's tests/selection.jsonl when a person asks.
+orgScoped.route("/tools/studio/selection", toolStudioSelectionRunRoute);
 // Discovery (lane M10, #4682): start a discovery, read its state, and list a server's tools.
 orgScoped.route("/tools/studio/discovery/start", toolStudioDiscoveryStartRoute);
 orgScoped.route("/tools/studio/discovery/get", toolStudioDiscoveryGetRoute);

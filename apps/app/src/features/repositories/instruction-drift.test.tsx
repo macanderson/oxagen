@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The instruction-file findings a code repository shows, over fake
-// promotions (#4518, ADR-254). Each finding names the file and line, quotes
+// promotions (#4518, ADR-263). Each finding names the file and line, quotes
 // the statement, names the steering record, and links its pull request. A
 // contradiction offers Promote to steering, which sends the finding's id to
 // `promote_instruction_to_steering`. The refusals are the ones its handler

@@ -10,7 +10,7 @@
 //   version (`mcp-studio/import/tool.try.ports.ts`).
 // - captureMemories: S6's `ingestMemories`.
 // - findings: agent.code_repository_findings, where the check stores what it
-//   flags (ADR-254).
+//   flags (ADR-263).
 import { schema, withTenantDb } from "@oxagen/database";
 import { createGitHubClient } from "@oxagen/github";
 import { createGitLabClient } from "@oxagen/gitlab";

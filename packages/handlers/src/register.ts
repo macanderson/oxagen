@@ -1449,7 +1449,7 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .revertSteeringPrHandler as CapabilityHandlerFn,
   );
   // Restore the managed block on a steering PR's branch, and list or promote
-  // the instruction-file statements the Oxagen check stores (#4518, ADR-254).
+  // the instruction-file statements the Oxagen check stores (#4518, ADR-263).
   registerHandler(
     "restore_managed_block",
     async () =>
@@ -1903,6 +1903,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./mcp-studio/import/tool.try.ports"))
         .tryStudioToolHandler as CapabilityHandlerFn,
+  );
+  // Lane M16: a selection run starts only from this capability, when a person
+  // asks. Nothing schedules it, because every task is a billed model call.
+  registerHandler(
+    "run_studio_selection",
+    async () =>
+      (await import("./mcp-studio/selection/run"))
+        .runStudioSelectionHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "fetch_commands",
