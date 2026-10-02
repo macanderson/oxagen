@@ -5,10 +5,12 @@
  * `oxagen agent run` on this.
  *
  * This process holds nothing the run needs. It names the harness, the
- * operator's image, the repository, and optionally a GitHub installation
- * token, then streams what the daemon streams back. The daemon measures the
- * container, registers it with Oxagen, and only then starts the agent. The
- * run's tier is computed by the control plane from that record, never here.
+ * operator's image, the checkout, and optionally one GitHub repository,
+ * then streams what the daemon streams back. It hands over no GitHub token:
+ * the daemon's Git custody gets one from the server for each request
+ * (ADR-254). The daemon measures the container, registers it with Oxagen,
+ * and only then starts the agent. The run's tier is computed by the control
+ * plane from that record, never here.
  */
 import { request } from "node:http";
 import { readHostFile } from "../host/host-file";
@@ -22,7 +24,11 @@ export const CONTAINED_AGENTS = {
   codex: "codex",
 } as const;
 
-/** The environment variable a GitHub installation token is read from. */
+/**
+ * The environment variable an operator-minted GitHub token was once read
+ * from. The command now refuses to run while it is set, so a workflow that
+ * still mints a token learns the token goes unused (ADR-254).
+ */
 export const CONTAINED_GITHUB_TOKEN_ENV = "OXAGEN_CONTAINED_GITHUB_TOKEN";
 /** The environment variable the operator's image is read from. */
 export const CONTAINED_IMAGE_ENV = "OXAGEN_CONTAINED_IMAGE";
@@ -152,29 +158,19 @@ export async function runContained(
     return 1;
   }
   const token = deps.env[CONTAINED_GITHUB_TOKEN_ENV];
-  const repository =
-    command.githubRepository ??
-    (token !== undefined ? deps.env["GITHUB_REPOSITORY"] : undefined);
-  if (repository !== undefined && (token === undefined || token.length === 0)) {
+  if (token !== undefined && token.length > 0) {
     deps.err(
-      `--github-repository needs an installation token for it in ${CONTAINED_GITHUB_TOKEN_ENV}.`,
+      `${CONTAINED_GITHUB_TOKEN_ENV} is no longer read. A contained run reaches GitHub through Oxagen's Git custody, which gets a token from the workspace's GitHub App for each request. Remove the variable and the step that mints it, and bind the repository to the workspace.`,
     );
     return 2;
   }
-  if (token !== undefined && token.length > 0 && repository === undefined) {
-    deps.err(
-      `${CONTAINED_GITHUB_TOKEN_ENV} is set; name its one repository with --github-repository owner/name.`,
-    );
-    return 2;
-  }
+  const repository = command.githubRepository;
   const body = JSON.stringify({
     workspace: command.workspace ?? deps.cwd,
     harness,
     args: command.args,
     image,
-    ...(repository !== undefined && token !== undefined
-      ? { github: { repository, token } }
-      : {}),
+    ...(repository !== undefined ? { github: { repository } } : {}),
   });
   let exitCode: number | undefined;
   let failure: string | undefined;

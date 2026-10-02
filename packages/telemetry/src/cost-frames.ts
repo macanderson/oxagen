@@ -54,12 +54,16 @@
  *
  * The token sources and the system context pull the same way (#4508). Only
  * the proxy recorded the request, so only the proxy's sighting carries
- * `tool_definition_tokens`, `context_frame_tokens`, `steering_tokens`, and
- * the system context digest and parts. When an OTel or transcript sighting
- * sealed first, the proxy row is the stamped one and the filter drops it. The
- * read joins it back on the same two ids ({@link PROXY_SIGHTING}) and takes a
- * member from it wherever the priced row carries none. The sums still come
- * from the rows the rollup prices, in the same read.
+ * `tool_definition_tokens`, `context_frame_tokens`, and the system context
+ * digest and parts. An OTel or transcript sighting that sealed first carries
+ * `steering_tokens` alone, from the session's steering manifest, and only on
+ * a call of the session's own conversation (ADR-062, amendment of
+ * 2026-10-02). The proxy row is then the stamped one and the
+ * filter drops it. The read joins it back on the same two ids
+ * ({@link PROXY_SIGHTING}) and takes a member from it wherever the priced row
+ * carries none. A side call declares no tools, so its proxy row carries no
+ * steering either, and the join adds none to it. The sums still come from
+ * the rows the rollup prices, in the same read.
  *
  * The findings job reads a workspace's tool calls with their digests and
  * result tokens through the same client (`readTachoToolCallObservations`).
@@ -76,7 +80,12 @@ import {
 } from "@oxagen/recorder";
 import { clickhouse } from "./clickhouse";
 
-type CostFrameBasis = "gateway_observed" | "client_attested";
+/**
+ * How a frame's cost is known. `estimated` is a frame a backfill rebuilt from
+ * a transcript (ADR-161): the price book prices it at its own `ts`, and the
+ * figure is an estimate of spend that happened before the host recorded it.
+ */
+type CostFrameBasis = "gateway_observed" | "client_attested" | "estimated";
 
 export interface ModelCallFrameRow {
   /** RFC 3339. */
@@ -405,6 +414,9 @@ const FRAME_PROXY_OBSERVED = `toUInt8(c.metering = '${TACHO_METERING_OBSERVED}' 
  */
 const CACHE_KEEP_ALIVE_VALUE = "attrs['oxagen.cache_keep_alive']";
 
+/** The mark a backfilled frame carries (ADR-161, `RECORD_BASIS_ATTR`). */
+const RECORD_BASIS_VALUE = "attrs['oxagen.record_basis']";
+
 /**
  * The proxy sighting's token sources and system context, grouped on one
  * call id, for the join named `alias` on `c.<key>`. Keyed on each id apart
@@ -639,6 +651,7 @@ export async function readModelCallFrames(args: {
         ${consume === undefined ? FRAME_CONTEXT_PARTS : "NULL"} AS system_context_parts,
         ${FRAME_PROXY_OBSERVED} AS proxy_observed,
         toUInt8(c.keep_alive = '1') AS cache_keep_alive,
+        toUInt8(c.record_basis = 'backfill') AS backfilled,
         c.seq AS seq
       FROM (
         SELECT
@@ -648,7 +661,8 @@ export async function readModelCallFrames(args: {
           message_id, tool_definition_tokens, context_frame_tokens,
           steering_tokens, system_context_digest, system_context_parts,
           ${METERING_VALUE} AS metering,
-          ${CACHE_KEEP_ALIVE_VALUE} AS keep_alive
+          ${CACHE_KEEP_ALIVE_VALUE} AS keep_alive,
+          ${RECORD_BASIS_VALUE} AS record_basis
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
@@ -726,6 +740,7 @@ export async function readModelCallFrames(args: {
     system_context_parts?: string | null;
     proxy_observed?: string | number | null;
     cache_keep_alive?: string | number | null;
+    backfilled?: string | number | null;
     seq?: string | number | null;
   };
   return consumeFrames<Row, ModelCallFrameRow>(result, (r) => {
@@ -742,12 +757,15 @@ export async function readModelCallFrames(args: {
       reasoning: Number(r.reasoning),
       serverToolRequests: Number(r.server_tool_request),
       reportedCostMicros: r.cost_micros,
+      // A call a backfill rebuilt from a transcript is estimated (ADR-161).
       // A call the loopback proxy carried is gateway_observed. A row with no
       // mark (older rows, or a call the proxy never saw) stays client_attested.
       basis:
-        Number(r.proxy_observed ?? 0) === 1
-          ? "gateway_observed"
-          : "client_attested",
+        Number(r.backfilled ?? 0) === 1
+          ? "estimated"
+          : Number(r.proxy_observed ?? 0) === 1
+            ? "gateway_observed"
+            : "client_attested",
       sessionUuid: r.session_uuid,
       toolDefinitionTokens: nullableCount(r.tool_definition_tokens),
       contextFrameTokens: nullableCount(r.context_frame_tokens),

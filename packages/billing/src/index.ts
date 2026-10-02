@@ -53,10 +53,12 @@ export * from "./work-order-metrics";
 export * from "./work-order-send-back";
 export {
   applyOutcomeDelivery,
+  type DeliveredPrState,
   listOutcomeRuns,
   listWorkspacesForOutcomes,
   type OutcomeRun,
   pruneRevertEvidence,
+  readDeliveredStates,
   readOutcomeRows,
   readRevertEvidence,
   readRunTerminalReasons,

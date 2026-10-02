@@ -4,7 +4,9 @@ import {
   ciStateOf,
   ciStateOfRead,
   HEAD_BRANCH_SETTLE_MS,
+  isStaleRead,
   ledgerTerminalReason,
+  mergedPullRequestRevertPlan,
   needsForgeRead,
   OUTCOME_SETTLE_DAYS,
   type OutcomeRow,
@@ -51,6 +53,7 @@ const read = (over: Partial<PrStateRead> = {}): PrStateRead => ({
 
 const settled = (over: Partial<OutcomeRow> = {}): OutcomeRow => ({
   ...blankOutcome("tse_a1", "tacho", pr),
+  baseRef: "main",
   prState: "merged",
   prStateReadAt: at("2026-09-27T12:00:00Z"),
   merged: true,
@@ -200,6 +203,35 @@ describe("withStateRead", () => {
       prState: "closed",
       sourceUpdatedAt: at("2026-09-27T08:00:00Z"),
     });
+  });
+
+  it("keeps the later read when two states carry the same GitHub time", () => {
+    // GitHub's updated_at counts whole seconds, so a close and a merge in the
+    // same second share it. The merge was read second, so it is newer.
+    const sameSecond = at("2026-09-27T09:59:00Z");
+    const merged = withStateRead(
+      blank,
+      read({
+        state: "merged",
+        readAt: at("2026-09-27T10:00:05Z"),
+        mergedAt: sameSecond,
+        sourceUpdatedAt: sameSecond,
+      }),
+    );
+    const closedReadFirst = read({
+      state: "closed",
+      readAt: at("2026-09-27T10:00:01Z"),
+      sourceUpdatedAt: sameSecond,
+    });
+    expect(isStaleRead(merged, closedReadFirst)).toBe(true);
+    expect(withStateRead(merged, closedReadFirst)).toBe(merged);
+    // A later read of the same second wins, and so does the same read again.
+    const closedReadLater = { ...closedReadFirst, readAt: at("2026-09-27T10:00:09Z") };
+    expect(isStaleRead(merged, closedReadLater)).toBe(false);
+    expect(withStateRead(merged, closedReadLater).prState).toBe("closed");
+    expect(
+      isStaleRead(merged, { ...closedReadFirst, readAt: at("2026-09-27T10:00:05Z") }),
+    ).toBe(false);
   });
 
   it("never moves the read time back when a later read reports an older record", () => {
@@ -490,6 +522,7 @@ describe("outcomeDeliveryOf", () => {
   it("skips any other record, and a payload it cannot read", () => {
     expect(outcomeDeliveryOf("issue", pull(), readAt)).toBeNull();
     expect(outcomeDeliveryOf("pull_request", { number: 9 }, readAt)).toBeNull();
+    expect(outcomeDeliveryOf("pull_request", pull({ number: 9.5 }), readAt)).toBeNull();
     expect(outcomeDeliveryOf("commit", { sha: SHA_B }, readAt)).toBeNull();
   });
 });
@@ -517,12 +550,36 @@ describe("revertPlanOf", () => {
     return out;
   };
 
-  it("marks the pull request a merged revert names", () => {
+  it("marks the pull request a merged revert names, on the branch the revert merged into", () => {
     expect(revertPlanOf(delivery())).toEqual({
       kind: "pull_requests",
       targets: [{ repository: "acme/app", number: 5 }],
+      branch: "main",
       mark: { by: "github:acme/app#9", at: at("2026-09-27T11:00:00Z"), readAt },
     });
+    expect(
+      revertPlanOf(delivery({ base: { ref: "release", repo: { full_name: "acme/app" } } })),
+    ).toMatchObject({ branch: "release" });
+  });
+
+  it("marks no pull request in another repository", () => {
+    // A merge into acme/app changes no branch of acme/lib.
+    expect(revertPlanOf(delivery({ body: "Reverts acme/lib#2" }))).toBeNull();
+    expect(
+      revertPlanOf(delivery({ body: "Reverts acme/lib#2 and Reverts acme/app#5" })),
+    ).toMatchObject({ targets: [{ repository: "acme/app", number: 5 }] });
+  });
+
+  it("marks nothing for a merged revert whose base branch is unknown", () => {
+    expect(
+      mergedPullRequestRevertPlan({
+        repository: "acme/app",
+        number: 9,
+        baseRef: null,
+        body: "Reverts acme/app#5",
+        mark: { at: null, readAt },
+      }),
+    ).toBeNull();
   });
 
   it("marks nothing while the revert is open, or when it closes unmerged", () => {
@@ -550,7 +607,7 @@ describe("revertPlanOf", () => {
       },
       readAt,
     );
-    if (commit === null) throw new Error("fixture did not parse");
+    if (commit?.kind !== "commit") throw new Error("fixture did not parse");
     expect(revertPlanOf(commit)).toEqual({
       kind: "merge_commits",
       repository: "acme/app",
@@ -558,6 +615,8 @@ describe("revertPlanOf", () => {
       branch: "main",
       mark: { by: `github:acme/app@${SHA_B}`, at: at("2026-09-27T11:30:00Z"), readAt },
     });
+    // The incremental poll records no branch, so its revert commit marks nothing.
+    expect(revertPlanOf({ ...commit, branch: null })).toBeNull();
   });
 });
 
@@ -568,19 +627,20 @@ describe("revertEvidenceOf", () => {
     readAt: at("2026-09-27T12:00:00Z"),
   };
 
-  it("keeps one revert per pull request a plan names, with no commit or branch", () => {
+  it("keeps one revert per pull request a plan names, with the branch the revert merged into", () => {
     expect(
       revertEvidenceOf({
         kind: "pull_requests",
         targets: [
           { repository: "Acme/App", number: 5 },
-          { repository: "acme/lib", number: 2 },
+          { repository: "acme/app", number: 2 },
         ],
+        branch: "main",
         mark,
       }),
     ).toEqual([
-      { repository: "acme/app", number: 5, mergeCommitSha: null, branch: null, mark },
-      { repository: "acme/lib", number: 2, mergeCommitSha: null, branch: null, mark },
+      { repository: "acme/app", number: 5, mergeCommitSha: null, branch: "main", mark },
+      { repository: "acme/app", number: 2, mergeCommitSha: null, branch: "main", mark },
     ]);
   });
 
@@ -611,11 +671,12 @@ describe("withStoredReverts", () => {
     by = "github:acme/app#9",
     readAt = "2026-09-27T12:00:00Z",
     repository = "acme/app",
+    branch: string | null = "main",
   ): RevertEvidence => ({
     repository,
     number,
     mergeCommitSha: null,
-    branch: null,
+    branch,
     mark: mark(by, readAt),
   });
   const byCommit = (sha: string, branch: string | null): RevertEvidence => ({
@@ -650,9 +711,32 @@ describe("withStoredReverts", () => {
     expect(withStoredReverts(row, [byCommit(SHA_A, "main")])).toBe(row);
   });
 
-  it("marks the row by its merge commit on any branch when the revert has none", () => {
+  it("does not mark a row by a merge commit revert with no branch", () => {
+    // A revert commit the incremental poll found carries no branch. The pull
+    // request merged into release, not the default branch, so a branchless
+    // revert of its merge commit is not taken as a revert of it.
     const row = settled({ mergeCommitSha: SHA_M, baseRef: "release" });
-    expect(withStoredReverts(row, [byCommit(SHA_M, null)]).reverted).toBe(true);
+    expect(withStoredReverts(row, [byCommit(SHA_M, null)])).toBe(row);
+    // Nor a pull request that merged into main: the branch is unknown either way.
+    const onMain = settled({ mergeCommitSha: SHA_M });
+    expect(withStoredReverts(onMain, [byCommit(SHA_M, null)])).toBe(onMain);
+  });
+
+  it("marks the row by a revert pull request only when both merged into the same branch", () => {
+    // The revert merged into release; the pull request it names merged into main.
+    const onMain = settled();
+    expect(
+      withStoredReverts(onMain, [byNumber(5, undefined, undefined, undefined, "release")]),
+    ).toBe(onMain);
+    // The same revert merged into main marks it.
+    expect(withStoredReverts(onMain, [byNumber(5)]).reverted).toBe(true);
+  });
+
+  it("does not mark a row by a revert pull request kept with no branch, or a row whose base branch is unknown", () => {
+    const row = settled();
+    expect(withStoredReverts(row, [byNumber(5, undefined, undefined, undefined, null)])).toBe(row);
+    const unknownBase = settled({ baseRef: null });
+    expect(withStoredReverts(unknownBase, [byNumber(5)])).toBe(unknownBase);
   });
 
   it("does not match a merge commit revert to a row with no merge commit", () => {

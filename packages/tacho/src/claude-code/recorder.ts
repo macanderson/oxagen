@@ -30,7 +30,8 @@ import {
   type FrameBody,
   prepareContent,
 } from "../evidence/frame-body";
-import { newEventId, sessionUuid } from "../ids";
+import { backfillEventId, newEventId, sessionUuid } from "../ids";
+import { RECORD_BASIS_ATTR } from "../record-basis";
 import {
   LLM_CALL_DUPLICATE_OF_ATTR,
   LlmCallLedger,
@@ -95,6 +96,51 @@ interface SightingAttrs {
 const NO_SIGHTING: SightingAttrs = { attrs: {}, commit: () => {} };
 
 /**
+ * A frame body as a backfill seals it (`RecorderBackfill`): an `agent_start`
+ * without the environment snapshot, and a model call priced as estimated.
+ */
+function backfillBody(
+  kind: TachoKind,
+  body: Record<string, unknown>,
+): Record<string, unknown> {
+  if (kind === "agent_start") {
+    const { env_snapshot: _today, ...rest } = body;
+    return rest;
+  }
+  if (kind === "llm_call") return { ...body, cost_basis: "estimated" };
+  return body;
+}
+
+/**
+ * The `query_source` values Claude Code gives a request on the session's own
+ * conversation: `repl_main_thread` in the interactive terminal, and `sdk` in
+ * print mode (`claude -p`). Every other value names a side call, a
+ * compaction, or a subagent.
+ */
+const MAIN_CONVERSATION_QUERY_SOURCES: ReadonlySet<string> = new Set([
+  "repl_main_thread",
+  "sdk",
+]);
+
+/**
+ * Whether an OTel `api_request` record is a call on the session's own
+ * conversation, the one the `SessionStart` context rides, and so carries the
+ * steering that context delivered (#4493). A side call, such as a session
+ * title or a check of a Bash command's prefix, names another subsystem in
+ * `query_source` and sends a short prompt of its own. A value that starts
+ * `repl_main_thread:` is the main thread with a qualifier, such as the output
+ * style in use. A record with no `query_source` cannot say which call it is,
+ * so it takes no steering count.
+ */
+function onSessionConversation(querySource: string | undefined): boolean {
+  if (querySource === undefined) return false;
+  return (
+    MAIN_CONVERSATION_QUERY_SOURCES.has(querySource) ||
+    querySource.startsWith("repl_main_thread:")
+  );
+}
+
+/**
  * The attr a transcript `user` record carries when its text is the open
  * turn's prompt, which the turn's `turn_start` already sealed as a body. Its
  * value names the frame that holds the text.
@@ -114,6 +160,34 @@ export const AFTER_STOP_ATTR = "oxagen.after_stop";
  * chain rather than guessed onto one of them.
  */
 export const SUBAGENT_TYPE_AMBIGUOUS_ATTR = "oxagen.subagent_type_ambiguous";
+
+/** Where a backfilled frame's git facts came from: the transcript's own lines. */
+const GIT_BASIS_ATTR = "oxagen.git_basis";
+
+/**
+ * Seal a chain from a finished transcript instead of from a live session
+ * (ADR-161, `docs/specs/tacho/backfill.md`). Every field of every frame is
+ * then a function of the transcript bytes, the normalizer version, and the
+ * host's session scope:
+ *
+ * - `event_id` is `backfillEventId(session_uuid, seq, raw_source_digest, ts)`,
+ *   not a random ULID, so a second pass seals byte-identical frames.
+ * - `source` is `transcript` and `fidelity` is `ambient`, whatever path
+ *   sealed the frame. The hook-shaped frames the backfill synthesizes name
+ *   no `hook_event_name`, because no hook ran.
+ * - Every frame carries `oxagen.record_basis = backfill` and
+ *   `oxagen.git_basis = recorded`, and a model call carries
+ *   `cost_basis = estimated`.
+ * - `agent_start` carries no `env_snapshot`: today's environment says
+ *   nothing about the environment then.
+ *
+ * The caller supplies the clock through `context.now`, set to the last
+ * timed line read, so nothing reads the wall clock either.
+ */
+export interface RecorderBackfill {
+  /** The normalizer version the pass ran under, as the cursor file records it. */
+  normalizerVersion: string;
+}
 
 export interface RecorderOptions {
   context: ClaudeCodeContext;
@@ -142,6 +216,11 @@ export interface RecorderOptions {
   };
   /** Continue a chain the collector persisted before a restart. */
   restore?: RecorderState;
+  /**
+   * Seal this chain, and every subagent chain under it, as a backfill from a
+   * finished transcript. See `RecorderBackfill`. Live recorders leave it unset.
+   */
+  backfill?: RecorderBackfill;
 }
 
 interface SubagentLink {
@@ -800,6 +879,23 @@ export class SessionRecorder {
   }
 
   /**
+   * Whether a turn is open on this chain: a `turn_start` sealed and no
+   * `turn_end` after it. The backfill reads it to close a turn the
+   * transcript ended without a `turn_duration` record.
+   */
+  get turnIsOpen(): boolean {
+    return this.turnOpen;
+  }
+
+  /**
+   * How many turns this chain has opened. A backfill records it beside the
+   * chain head, so a live resume numbers its turns after them.
+   */
+  get turnCount(): number {
+    return this.turnSeq;
+  }
+
+  /**
    * Drain the bodies of every event sealed on this chain and its children
    * since the last drain. The caller that took the events takes these in the
    * same breath, so a body is written next to its event and never to a WAL
@@ -1171,6 +1267,9 @@ export class SessionRecorder {
         ...(spawnToolUseId !== undefined ? { spawnToolUseId } : {}),
         spawnDepth: (this.options.parent?.spawnDepth ?? 0) + 1,
       },
+      ...(this.options.backfill !== undefined
+        ? { backfill: this.options.backfill }
+        : {}),
     });
     recorder.context = { ...this.context };
     recorder.anthropic = { ...this.anthropic };
@@ -1283,8 +1382,12 @@ export class SessionRecorder {
         : fields.content_digest !== undefined
           ? { digest: fields.content_digest, redactions: [] }
           : undefined;
+    const backfill = this.options.backfill;
     const attrs = {
       ...fields.attrs,
+      ...(backfill !== undefined
+        ? { [RECORD_BASIS_ATTR]: "backfill", [GIT_BASIS_ATTR]: "recorded" }
+        : {}),
       ...(prepared?.omitted !== undefined
         ? { body_omitted: prepared.omitted }
         : {}),
@@ -1301,15 +1404,24 @@ export class SessionRecorder {
     };
     const unsealed = compact({
       v: "tacho/1.0",
-      event_id: newEventId(Date.parse(fields.ts)),
+      event_id:
+        backfill !== undefined
+          ? backfillEventId(
+              this.sessionUuid,
+              this.cursor.seq,
+              fields.raw_source_digest ?? `kind:${kind}`,
+              Date.parse(fields.ts),
+            )
+          : newEventId(Date.parse(fields.ts)),
       session_id: this.harnessSessionId,
       session_uuid: this.sessionUuid,
       root_session_uuid: this.rootSessionUuid,
       parent_session_uuid: parent?.sessionUuid,
       ts: fields.ts,
-      fidelity: fields.fidelity ?? "sdk",
-      source: fields.source,
-      hook_event_name: fields.hook_event_name,
+      fidelity: backfill !== undefined ? "ambient" : (fields.fidelity ?? "sdk"),
+      source: backfill !== undefined ? "transcript" : fields.source,
+      hook_event_name:
+        backfill !== undefined ? undefined : fields.hook_event_name,
       hook_source_kind: fields.hook_source_kind,
       otel_event_name: fields.otel_event_name,
       harness_event_sequence: fields.harness_event_sequence,
@@ -1342,7 +1454,7 @@ export class SessionRecorder {
       content,
       raw_source_digest: fields.raw_source_digest,
       kind,
-      body,
+      body: backfill !== undefined ? backfillBody(kind, body) : body,
     }) as unknown as UnsealedTachoEvent;
     const sealed = sealWithUnknownBodyKeysAsAttrs(unsealed, this.cursor);
     this.cursor = sealed.next;
@@ -1397,6 +1509,28 @@ export class SessionRecorder {
     if (verdict.kind === "duplicate")
       return { attrs: { [LLM_CALL_DUPLICATE_OF_ATTR]: verdict.of }, commit };
     return { attrs: {}, commit };
+  }
+
+  /**
+   * The body of an OTel or transcript model call, with the token sources the
+   * recorder knows without the call's request (#4493). Only the counted row,
+   * the first sighting of its call, takes them. A stamped duplicate is never
+   * summed, and the rollup joins a stamped proxy row back for the members the
+   * counted row lacks. The steering count is the one source known without
+   * the request, so the tool definitions and the system context stay absent
+   * (ADR-062, amendment of 2026-10-02). A member the producer set itself
+   * wins, as on a proxied call. Only a call on the session's own
+   * conversation comes here: an OTel record whose `query_source` says so
+   * ({@link onSessionConversation}), or a transcript `assistant` record,
+   * since Claude Code writes no side call to the transcript.
+   */
+  private withUnseenRequestSources(
+    body: Record<string, unknown>,
+    attrs: Readonly<Record<string, string>>,
+  ): Record<string, unknown> {
+    if (attrs[LLM_CALL_DUPLICATE_OF_ATTR] !== undefined) return body;
+    const facts = this.systemContext.measureUnseen();
+    return Object.keys(facts).length === 0 ? body : { ...facts, ...body };
   }
 
   /**
@@ -1506,10 +1640,12 @@ export class SessionRecorder {
         out.push(...child.finalize("completed", ts));
         const link = this.children.get(subagentId);
         if (link) link.open = false;
+        // `ok` unless the draft names a status: a live `SubagentStop` always
+        // reads `ok`, and a backfill names the status its tool result had.
         out.push(
           this.seal(
             "subagent_stop",
-            { ...first.body, tool_status: "ok" },
+            { tool_status: "ok", ...first.body },
             {
               ts,
               source: "hook",
@@ -1924,7 +2060,11 @@ export class SessionRecorder {
     }
     const event = this.seal(
       draft.kind,
-      draft.body,
+      draft.kind === "llm_call" &&
+        draft.source === "otel_log" &&
+        onSessionConversation(draft.standard.context.query_source)
+        ? this.withUnseenRequestSources(draft.body, duplicate)
+        : draft.body,
       {
         ts: draft.ts,
         source: draft.source,
@@ -2003,6 +2143,8 @@ export class SessionRecorder {
         body = withoutUsage(body);
         duplicate = { [LLM_CALL_DUPLICATE_OF_ATTR]: "transcript" };
       }
+      if (draft.kind === "llm_call")
+        body = this.withUnseenRequestSources(body, duplicate);
       let content = draft.content;
       if (this.isSealedPrompt(draft.kind, body)) {
         // The turn's `turn_start` holds this text already. The record's own

@@ -33,6 +33,7 @@ import {
   credentialStatus,
   parseCredentialMode,
 } from "./credential";
+import { backfillCommand } from "./backfill";
 import { type CliDeps, defaultCliDeps, isNativeBuild } from "./deps";
 import { detect } from "./detect";
 import { enroll, parseHarnesses } from "./enroll";
@@ -42,6 +43,7 @@ import { reassign } from "./reassign";
 import { runContained } from "./run";
 import { status } from "./status";
 import { unenroll } from "./unenroll";
+import { uninstall } from "./uninstall";
 import { verify } from "./verify";
 
 /**
@@ -114,6 +116,11 @@ export function recordedCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     ...overrides,
     paths: withRecordedHarnessFiles(base, read.host ?? read.salvaged),
   });
+}
+
+/** Commander's way to take a repeatable option as a list. */
+function collect(value: string, previous: string[]): string[] {
+  return [...previous, value];
 }
 
 export interface RecorderProgramOptions {
@@ -385,6 +392,25 @@ export function buildTachoProgram(
     });
 
   program
+    .command("uninstall")
+    .description(
+      "Take Oxagen off this machine without the desktop app: unenroll every agent, then remove the app's per-user copy, PATH links, and shell profile lines, and ~/.config/oxagen, which holds your `oxagen login` session",
+    )
+    .option("--token <apiKey>", "Operator token for the server-side revoke")
+    .option("--token-stdin", "Read the operator token from stdin")
+    .option("--reason <text>", "Reason recorded with each revoke")
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await uninstall(
+        {
+          token: tokenOption(opts, deps.err),
+          reason: opts["reason"] as string | undefined,
+        },
+        recordedCliDeps(options.deps),
+      );
+      if (!result.ok) process.exitCode = 1;
+    });
+
+  program
     .command("reassign")
     .description(
       "Point this host at another workspace (or org): revoke, then enroll again keeping the device key",
@@ -440,6 +466,33 @@ export function buildTachoProgram(
     });
 
   program
+    .command("backfill")
+    .description(
+      "Record the Claude Code sessions this machine ran before it enrolled, from the transcripts Claude Code kept",
+    )
+    .option("--since <date>", "Only sessions that started on or after this UTC date (YYYY-MM-DD)")
+    .option("--until <date>", "Only sessions that started before this UTC date (YYYY-MM-DD)")
+    .option("--project <name>", "Only this folder under ~/.claude/projects (repeatable)", collect, [])
+    .option("--exclude-project <name>", "Skip this folder under ~/.claude/projects (repeatable)", collect, [])
+    .option("--session <id>", "Only this session and its subagents (repeatable)", collect, [])
+    .option("--dry-run", "Read and count, and record and send nothing")
+    .option("--json", "Print the report as one JSON object")
+    .action(async (opts: Record<string, unknown>) => {
+      process.exitCode = await backfillCommand(
+        {
+          since: opts["since"] as string | undefined,
+          until: opts["until"] as string | undefined,
+          project: opts["project"] as string[],
+          excludeProject: opts["excludeProject"] as string[],
+          session: opts["session"] as string[],
+          dryRun: opts["dryRun"] === true,
+          json: opts["json"] === true,
+        },
+        deps,
+      );
+    });
+
+  program
     .command("verify")
     .description(
       "Run one headless turn (Claude Code by default, --harness codex, cursor or stella) and confirm it was chained",
@@ -480,7 +533,7 @@ export function buildTachoProgram(
     )
     .option(
       "--github-repository <owner/name>",
-      "The one repository the run may reach, with a token in OXAGEN_CONTAINED_GITHUB_TOKEN",
+      "The one repository the run may fetch and push, through Oxagen's Git custody. The workspace must have it bound.",
     )
     .argument("<agent>", "claude or codex")
     .argument("[args...]", "Arguments for the agent, after --")

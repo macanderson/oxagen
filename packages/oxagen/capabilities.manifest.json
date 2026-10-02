@@ -2247,6 +2247,27 @@
       }
     },
     {
+      "name": "restore_managed_block",
+      "file": "context.pr.restore_managed_block.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "revert_steering_pr",
       "file": "context.pr.revert.ts",
       "domain": "context",
@@ -4872,6 +4893,27 @@
       }
     },
     {
+      "name": "list_code_repository_findings",
+      "file": "repository.findings.list.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "attach_gitlab_project",
       "file": "repository.gitlab.attach.ts",
       "domain": "repository",
@@ -4955,6 +4997,27 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "promote_instruction_to_steering",
+      "file": "repository.instruction.promote.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
         "unit": true,
         "docs": true,
         "app": true
@@ -6686,6 +6749,21 @@
       }
     },
     {
+      "name": "propose_steering",
+      "file": "steering.propose.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "read_steering",
       "file": "steering.read.ts",
       "domain": "context",
@@ -7122,6 +7200,21 @@
     {
       "name": "list_tacho_sessions",
       "file": "tacho.session.list.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_tacho_session_heads",
+      "file": "tacho.session_heads.list.ts",
       "domain": "tacho",
       "mode": "sync",
       "surfaces": [

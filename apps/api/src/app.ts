@@ -263,6 +263,7 @@ import { contextPrDiffGetRoute } from "./routes/v1/context.pr.diff.get";
 import { contextPrMergeRoute } from "./routes/v1/context.pr.merge";
 import { contextPrMergeWithoutReviewRoute } from "./routes/v1/context.pr.merge_without_review";
 import { contextPrRevertRoute } from "./routes/v1/context.pr.revert";
+import { contextPrRestoreManagedBlockRoute } from "./routes/v1/context.pr.restore_managed_block";
 import { agentRoleAssignRoute } from "./routes/v1/agent.role.assign";
 import { agentRoleRevokeRoute } from "./routes/v1/agent.role.revoke";
 import { agentRoleListRoute } from "./routes/v1/agent.role.list";
@@ -325,6 +326,8 @@ import { repositoryMainGetRoute } from "./routes/v1/repository.main.get";
 import { repositoryLinkRoute } from "./routes/v1/repository.link";
 import { repositoryUnlinkRoute } from "./routes/v1/repository.unlink";
 import { repositoryListRoute } from "./routes/v1/repository.list";
+import { codeRepositoryFindingsListRoute } from "./routes/v1/repository.findings.list";
+import { instructionPromoteRoute } from "./routes/v1/repository.instruction.promote";
 import { repositoryTreeGetRoute } from "./routes/v1/repository.tree.get";
 import { workingCopyRecordRoute } from "./routes/v1/repository.working_copy.record";
 import { workingCopyListRoute } from "./routes/v1/repository.working_copy.list";
@@ -612,15 +615,17 @@ const TACHO_INGEST_PER_MIN = 120;
 // memories on the extra prompts, since the daemon fails open on a 429, and
 // its command poll and bundle refresh keep their own budget.
 const TACHO_RECALL_PER_MIN = 120;
-// Five more buckets of TACHO_HOST_PER_MIN each: the GitHub credential, the
-// contained launch, the memory upload, the memory use report, and the work
-// order claim and rejection, which share one. A memory upload is its own
-// bucket because a daemon's first scan sends every memory file a harness
-// holds, and that burst must not starve the command poll or the bundle
-// refresh. The use report sends a few calls every five minutes, and it must
-// not spend the upload's bucket. A host claims or rejects each work order it
-// receives, and a retry of either must not spend the command poll's bucket.
-const TACHO_OWN_BUCKET_PATHS = 5;
+// Six more buckets of TACHO_HOST_PER_MIN each: the GitHub credential, the
+// contained launch, the memory upload, the memory use report, the work order
+// claim and rejection, which share one, and the backfill's session heads. A
+// memory upload is its own bucket because a daemon's first scan sends every
+// memory file a harness holds, and that burst must not starve the command
+// poll or the bundle refresh. The use report sends a few calls every five
+// minutes, and it must not spend the upload's bucket. A host claims or
+// rejects each work order it receives, and a retry of either must not spend
+// the command poll's bucket. A backfill asks once per 500 sessions, a burst
+// at its start that must not starve the command poll either (ADR-161).
+const TACHO_OWN_BUCKET_PATHS = 6;
 
 // Tacho hosts speak to Oxagen with their enrolled API key, whose scope pins
 // org and workspace, so the machine routes sit on a static path outside the
@@ -816,6 +821,15 @@ tachoScoped.use(
     bucketKey: enrolledMachineBucketKey,
   }),
 );
+// The backfill's pre-flight (ADR-161).
+tachoScoped.use(
+  "/sessions/heads",
+  distributedRateLimiter({
+    keyPrefix: "tacho-session-heads",
+    max: TACHO_HOST_PER_MIN,
+    bucketKey: enrolledMachineBucketKey,
+  }),
+);
 // The work order claim and rejection (ADR-251) share one bucket.
 tachoScoped.use(
   "/work-orders/*",
@@ -878,6 +892,12 @@ orgScoped.route("/repository/main", repositoryMainGetRoute);
 orgScoped.route("/repositories", repositoryListRoute);
 orgScoped.route("/repository/link", repositoryLinkRoute);
 orgScoped.route("/repository/unlink", repositoryUnlinkRoute);
+// The Instruction files section of the Repositories page (#4518, ADR-263): the
+// statements the Oxagen check flagged, and the write that promotes one into a
+// steering proposal. Hono matches each mounted path exactly, so the read does
+// not catch the promote path below it.
+orgScoped.route("/repository/findings", codeRepositoryFindingsListRoute);
+orgScoped.route("/repository/findings/promote", instructionPromoteRoute);
 // The Repositories page (MC spec §10.1, §10.2, §11.4).
 orgScoped.route("/repository/tree", repositoryTreeGetRoute);
 orgScoped.route(
@@ -1385,6 +1405,8 @@ orgScoped.route(
 );
 // Open a steering PR that undoes a merged one (#4449).
 orgScoped.route("/context/prs/revert", contextPrRevertRoute);
+// Put the managed block back in one file of an open steering PR (#4518).
+orgScoped.route("/context/prs/restore-block", contextPrRestoreManagedBlockRoute);
 orgScoped.route("/privacy/export", privacyDataExportRoute);
 orgScoped.route("/privacy/erase", privacyDataEraseRoute);
 orgScoped.route("/connections", connectionRoute);

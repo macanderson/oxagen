@@ -8,6 +8,7 @@ import { tachoGithubTokenIssueRoute } from "./tacho.github_token.issue";
 import { tachoMemoriesIngestRoute } from "./tacho.memories.ingest";
 import { tachoMemoriesRecallRoute } from "./tacho.memories.recall";
 import { tachoMemoryUsesRecordRoute } from "./tacho.memories.uses.record";
+import { tachoSessionHeadsListRoute } from "./tacho.session_heads.list";
 import { workOrderClaimRoute } from "./work.order.claim";
 import { workOrderRejectRoute } from "./work.order.reject";
 
@@ -32,6 +33,7 @@ export function mountTachoHostRoutes(router: Hono<AppEnv>): void {
   router.route("/", tachoMemoryUsesRecordRoute); // 1 MiB
   router.route("/", tachoMemoriesRecallRoute); // 384 KiB
   router.route("/", tachoCommandFetchRoute); // 256 KiB
+  router.route("/", tachoSessionHeadsListRoute); // 128 KiB
   router.route("/", tachoBundleGetRoute); // 64 KiB
   router.route("/", tachoMemoriesIngestRoute); // 32 KiB
   router.route("/", workOrderClaimRoute); // 16 KiB

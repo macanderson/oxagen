@@ -1,0 +1,103 @@
+{
+  "name": "list_tacho_session_heads",
+  "domain": "tacho",
+  "description": "List which of a batch of sessions the control plane already holds for the calling Tacho host, with how each was recorded.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "host_enrollment_id": {
+        "type": "string"
+      },
+      "session_uuids": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "minItems": 1,
+        "maxItems": 500
+      },
+      "harness_session_ids": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 500
+      }
+    },
+    "required": [
+      "host_enrollment_id",
+      "session_uuids"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sessions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "session_uuid": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "harness_session_id": {
+              "type": "string"
+            },
+            "seq_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "record_basis": {
+              "type": "string",
+              "enum": [
+                "live",
+                "backfill",
+                "mixed"
+              ]
+            },
+            "backfill_normalizer": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "session_uuid",
+            "harness_session_id",
+            "seq_count",
+            "record_basis",
+            "backfill_normalizer"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 1000
+      }
+    },
+    "required": [
+      "sessions"
+    ],
+    "additionalProperties": false
+  }
+}
