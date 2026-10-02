@@ -1779,6 +1779,17 @@ export function buildProgram(): Command {
         await agentUnenroll(agentHandle, opts);
       },
     );
+  agent
+    .command("uninstall")
+    .description(
+      "Take Oxagen off this machine without the desktop app: unenroll every agent, then remove the app's per-user copy, links, shell profile lines, and settings",
+    )
+    .option("--token <apiKey>", "Operator token for the server-side revoke")
+    .option("--reason <text>", "Reason recorded with each revoke")
+    .action(async (opts: { token?: string; reason?: string }) => {
+      const { handleTachoUninstall } = await import("./commands/tacho.js");
+      if (!(await handleTachoUninstall(opts))) process.exitCode = 1;
+    });
 
   const agentEnv = agent
     .command("env")

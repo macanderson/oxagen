@@ -25,6 +25,7 @@ const {
   handleTachoEnroll,
   handleTachoStatus,
   handleTachoUnenroll,
+  handleTachoUninstall,
   handleTachoVerify,
   handleAgentEnroll,
   handleAgentRun,
@@ -35,6 +36,7 @@ const {
   handleTachoEnroll: vi.fn<HostHandler>(async () => true),
   handleTachoStatus: vi.fn<HostHandler>(async () => true),
   handleTachoUnenroll: vi.fn<HostHandler>(async () => true),
+  handleTachoUninstall: vi.fn<HostHandler>(async () => true),
   handleTachoVerify: vi.fn<HostHandler>(async () => true),
   handleAgentEnroll: vi.fn<HostHandler>(async () => true),
   handleAgentRun: vi.fn<RunHandler>(async () => 0),
@@ -47,6 +49,7 @@ vi.mock("../commands/tacho.js", () => ({
   handleTachoEnroll,
   handleTachoStatus,
   handleTachoUnenroll,
+  handleTachoUninstall,
   handleTachoReassign: vi.fn(async () => true),
   handleTachoExport: vi.fn(async () => true),
   handleTachoVerify,
@@ -220,6 +223,24 @@ describe("oxagen agent unenroll", () => {
     await run("agent", "unenroll", "deploy-bot", "--harness", "codex", "--all");
     expect(agentUnenroll).not.toHaveBeenCalled();
     expect(stderr).toContain("--harness and --all do not apply");
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe("oxagen agent uninstall", () => {
+  it("unenrolls this machine and removes what the desktop app put here (ADR-230)", async () => {
+    await run("agent", "uninstall", "--reason", "laptop returned");
+    expect(handleTachoUninstall).toHaveBeenCalledTimes(1);
+    expect(handleTachoUninstall.mock.calls[0]?.[0]).toMatchObject({
+      reason: "laptop returned",
+    });
+    expect(handleTachoUnenroll).not.toHaveBeenCalled();
+    expect(agentUnenroll).not.toHaveBeenCalled();
+  });
+
+  it("exits 1 when something stays on the machine (negative)", async () => {
+    handleTachoUninstall.mockResolvedValueOnce(false);
+    await run("agent", "uninstall");
     expect(process.exitCode).toBe(1);
   });
 });
