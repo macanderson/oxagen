@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   memoriesLink,
   memoryStates,
+  proposalListFrom,
   resolveSteeringRoute,
   shelfLink,
   skillRowsParam,
@@ -26,12 +27,11 @@ describe("resolveSteeringRoute", () => {
         view: {
           tab: "library",
           shelf: "all",
-          segment: null,
+          state: null,
           agent: null,
           kind: null,
           offset: 0,
           rows: 50,
-          proposal: null,
           cursor: null,
           skillView: undefined,
           skill: null,
@@ -155,30 +155,63 @@ describe("resolveSteeringRoute", () => {
     });
   });
 
-  it("opens the Context PRs segment with the proposal it selects, and ignores a malformed id (negative)", () => {
-    expect(
-      resolve(["proposals", "prs"], { proposal: "prp_01k5ru4a" }),
-    ).toMatchObject({
-      view: { tab: "proposals", segment: "prs", proposal: "prp_01k5ru4a" },
+  // #5077: the list shows open proposals unless the URL names another state.
+  it("reads the Proposals state from the URL, open by default and for a state it does not offer (negative)", () => {
+    expect(resolve(["proposals"])).toMatchObject({
+      view: { tab: "proposals", state: "open" },
     });
-    expect(
-      resolve(["proposals", "prs"], { proposal: "prp_1;drop" }),
-    ).toMatchObject({ view: { proposal: null } });
-    expect(resolve(["proposals"], { proposal: "prp_01k5ru4a" })).toMatchObject({
-      view: { segment: "candidates", proposal: null },
+    for (const state of ["open", "merged", "closed"] as const) {
+      expect(resolve(["proposals"], { state })).toMatchObject({
+        view: { state },
+      });
+    }
+    expect(resolve(["proposals"], { state: "rejected" })).toMatchObject({
+      view: { state: "open" },
+    });
+    expect(resolve(["records"], { state: "merged" })).toMatchObject({
+      view: { state: null },
     });
   });
 
-  // #4693: Rows per page sits under both Proposals segments.
-  it("reads the size Rows per page picked on both Proposals segments", () => {
+  it("moves the Context PRs segment to the list, and a selected proposal to its own page", () => {
+    expect(resolve(["proposals", "prs"], { state: "merged" })).toEqual({
+      kind: "redirect",
+      to: `${BASE}/proposals?state=merged`,
+    });
+    expect(
+      resolve(["proposals", "prs"], {
+        proposal: "prp_01k5ru4a",
+        state: "closed",
+      }),
+    ).toEqual({
+      kind: "redirect",
+      to: `${BASE}/proposals/prs/prp_01k5ru4a?state=closed`,
+    });
+    expect(resolve(["proposals"], { proposal: "prp_01k5ru4a" })).toEqual({
+      kind: "redirect",
+      to: `${BASE}/proposals/prs/prp_01k5ru4a`,
+    });
+    // A malformed id selects nothing, and the list does not carry it.
+    expect(resolve(["proposals", "prs"], { proposal: "prp_1;drop" })).toEqual({
+      kind: "redirect",
+      to: `${BASE}/proposals`,
+    });
+    expect(resolve(["proposals"], { proposal: "prp_1;drop" })).toMatchObject({
+      kind: "view",
+      view: { tab: "proposals" },
+    });
+  });
+
+  // #4693: Rows per page sits under the Proposals list.
+  it("reads the size Rows per page picked on the Proposals list", () => {
     for (const rows of [10, 25, 50, 100]) {
       expect(resolve(["proposals"], { rows: String(rows) })).toMatchObject({
-        view: { segment: "candidates", rows },
+        view: { tab: "proposals", rows },
       });
     }
     expect(
-      resolve(["proposals", "prs"], { rows: "10", offset: "20" }),
-    ).toMatchObject({ view: { segment: "prs", rows: 10, offset: 20 } });
+      resolve(["proposals"], { rows: "10", offset: "20" }),
+    ).toMatchObject({ view: { rows: 10, offset: 20 } });
   });
 
   it("reads a size Rows does not offer, or a size off Proposals, as 50 (negative)", () => {
@@ -258,12 +291,13 @@ describe("resolveSteeringRoute", () => {
     [["settings"], {}, `${BASE}/gates`],
     [["freshness"], {}, `${BASE}/gates`],
     [["deliveries"], {}, `${BASE}/assignments`],
-    [["prs"], { proposal: "prp_1" }, `${BASE}/proposals/prs?proposal=prp_1`],
+    [["prs"], { proposal: "prp_1" }, `${BASE}/proposals/prs/prp_1`],
     [
       ["prs"],
       { rows: "25", offset: "25" },
-      `${BASE}/proposals/prs?rows=25&offset=25`,
+      `${BASE}/proposals?rows=25&offset=25`,
     ],
+    [["proposals", "prs"], {}, `${BASE}/proposals`],
     [["preview"], {}, `${BASE}/compiler`],
     [["preview", "release-manager"], {}, `${BASE}/compiler/release-manager`],
     [["library", "all"], {}, `${BASE}/library`],
@@ -271,11 +305,8 @@ describe("resolveSteeringRoute", () => {
     [["library", "skills"], {}, `${BASE}/skills`],
     [undefined, { tab: "records", kind: "fact" }, `${BASE}/records?kind=fact`],
     [undefined, { tab: "skills", cursor: "c2" }, `${BASE}/skills?cursor=c2`],
-    [
-      undefined,
-      { tab: "prs", proposal: "prp_1" },
-      `${BASE}/proposals/prs?proposal=prp_1`,
-    ],
+    [undefined, { tab: "prs", proposal: "prp_1" }, `${BASE}/proposals/prs/prp_1`],
+    [undefined, { tab: "prs", state: "merged" }, `${BASE}/proposals?state=merged`],
     [undefined, { tab: "settings" }, `${BASE}/gates`],
     [undefined, { tab: "deliveries" }, `${BASE}/assignments`],
     [undefined, { tab: "memory" }, `${BASE}/memory`],
@@ -304,6 +335,7 @@ describe("resolveSteeringRoute", () => {
     [["records", "extra"]],
     [["gates", "x"]],
     [["proposals", "candidates"]],
+    [["proposals", "prs", "prp_1", "x"]],
     [["memories", "mem_01k5rw3draft"]],
     [["compiler", "a b"]],
     [["compiler", "a", "b"]],
@@ -316,6 +348,25 @@ describe("resolveSteeringRoute", () => {
     [["a", "b", "c", "d"]],
   ])("answers %o with a 404 (negative)", (segments) => {
     expect(resolve(segments)).toEqual({ kind: "not_found" });
+  });
+});
+
+describe("proposalListFrom", () => {
+  it("reads the list a Context PR page was opened from", () => {
+    expect(
+      proposalListFrom({ state: "merged", rows: "25", offset: "50" }),
+    ).toEqual({ state: "merged", rows: 25, offset: 50 });
+  });
+
+  it("drops a state, size or offset the list does not offer (negative)", () => {
+    expect(
+      proposalListFrom({ state: "rejected", rows: "7", offset: "-1" }),
+    ).toEqual({ state: null, rows: null, offset: null });
+    expect(proposalListFrom({})).toEqual({
+      state: null,
+      rows: null,
+      offset: null,
+    });
   });
 });
 
@@ -343,9 +394,18 @@ describe("links", () => {
     expect(steeringLink(AT, { tab: "proposals", rows: 25, offset: 50 })).toBe(
       `${BASE}/proposals?rows=25&offset=50`,
     );
+    expect(steeringLink(AT, { tab: "prs", rows: 10 })).toBe(
+      `${BASE}/proposals?rows=10`,
+    );
+  });
+
+  it("carries the Proposals state, leaving open, the default, off (#5077)", () => {
+    expect(steeringLink(AT, { tab: "proposals", state: "open" })).toBe(
+      `${BASE}/proposals`,
+    );
     expect(
-      steeringLink(AT, { tab: "prs", rows: 10, proposal: "prp_1" }),
-    ).toBe(`${BASE}/proposals/prs?rows=10&proposal=prp_1`);
+      steeringLink(AT, { tab: "proposals", state: "merged", rows: 25 }),
+    ).toBe(`${BASE}/proposals?state=merged&rows=25`);
   });
 
   it("builds the Memories address with its filters, leaving the defaults off", () => {

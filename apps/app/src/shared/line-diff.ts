@@ -44,11 +44,7 @@ export function diffStat(base: string, draft: string): DiffStat {
   return { added: b.length - common, removed: a.length - common };
 }
 
-/**
- * What happened to one line.
- *
- * @internal Exported for its unit test; nothing outside this module imports it.
- */
+/** What happened to one line. The Context PR page maps it to its own words. */
 export type DiffOp = "add" | "del" | "ctx";
 
 export type DiffLine = {

@@ -24,9 +24,9 @@
 // acceptance is refused as stale. Anything that lands between steps 2 and 3,
 // such as a webhook's new head, makes step 3 stale too.
 //
-// A read of the required checks that failed blocks the acceptance outright,
-// even when an older read of the same head is on record: the rule is a read
-// at the press.
+// A read of the required checks, or of the check results, that failed or came
+// back cut short blocks the acceptance outright, even when an older read of
+// the same head is on record: the rule is a read at the press.
 import type { Tx } from "@oxagen/database";
 import type { Sha256Digest } from "@oxagen/run-evidence";
 import { WorkRecordError } from "@oxagen/work/records";
@@ -113,7 +113,7 @@ export async function acceptWork(deps: ReviewDeps, scope: WorkScope, actor: Work
   // With no pull request or no head yet, the store's own gate refuses below
   // with the reason (no_pull_request, no_head). With one, an unread required
   // list refuses here, whatever an older read of the head recorded.
-  if (!repeatOfThis && summary.head !== null && summary.requiredChecks === null) {
+  if (!repeatOfThis && summary.head !== null && (summary.requiredChecks === null || !summary.checksRead)) {
     const why = summary.unreadReason ?? "the read failed";
     throw new WorkRecordError(
       "not_allowed",

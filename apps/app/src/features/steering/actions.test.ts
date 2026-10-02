@@ -38,7 +38,9 @@ const {
   mergeContextPr,
   mergePrWithoutReview,
   openContextPr,
+  refreshContextPr,
   restoreManagedBlock,
+  revertSteeringPr,
   setGovernanceMode,
 } = await import("./actions");
 
@@ -218,14 +220,28 @@ describe("dismissProposal", () => {
     );
   });
 
-  it("refuses a blank reason before the kernel runs (negative)", async () => {
+  // Close without merging takes an optional reason (#5077): a blank one is
+  // sent as none, never as an empty string the contract refuses.
+  it("closes with no reason when the reason is blank", async () => {
+    invoke.mockResolvedValue({ proposalId: ID, status: "rejected" });
     expect(await dismissProposal("acme", "core-platform", ID, "   ")).toEqual({
-      ok: false,
-      reason: "invalid",
-      code: "invalid_input",
-      field: "reason",
+      ok: true,
+      value: { status: "rejected" },
     });
-    expect(invoke).not.toHaveBeenCalled();
+    expect(invoke).toHaveBeenCalledWith(
+      "dismiss_proposal",
+      { proposalId: ID },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("carries the host's refusal to close and changes nothing (negative)", async () => {
+    invoke.mockRejectedValue(refused("conflict", "github_refused"));
+    expect(await dismissProposal("acme", "core-platform", ID, "")).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "github_refused",
+    });
   });
 
   it("returns a merged proposal as a conflict (negative)", async () => {
@@ -238,13 +254,97 @@ describe("dismissProposal", () => {
   });
 });
 
+describe("refreshContextPr", () => {
+  it("reads the pull request from the host and answers what moved", async () => {
+    invoke.mockResolvedValue({
+      proposalId: ID,
+      status: "rejected",
+      host: { state: "closed", headSha: "abc", baseRef: "main" },
+      changed: true,
+      syncRequested: false,
+    });
+    expect(await refreshContextPr("acme", "core-platform", ID)).toEqual({
+      ok: true,
+      value: {
+        changed: true,
+        syncRequested: false,
+        host: { state: "closed", headSha: "abc", baseRef: "main" },
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "refresh_context_pr",
+      { proposalId: ID },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("carries the host's refusal (negative)", async () => {
+    invoke.mockRejectedValue(refused("conflict", "github_refused"));
+    expect(await refreshContextPr("acme", "core-platform", ID)).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "github_refused",
+    });
+  });
+});
+
+describe("revertSteeringPr", () => {
+  it("opens the revert and returns its pull request and check", async () => {
+    invoke.mockResolvedValue({
+      proposalId: ID,
+      reverted: { number: 519, mergedCommit: "4d5e6f7a8b9c" },
+      pullRequest: {
+        number: 520,
+        url: "https://github.com/acme/oxagen-core-platform/pull/520",
+        branch: "steering/revert-519",
+        headSha: "9f8e7d6c",
+      },
+      check: "success",
+    });
+    expect(await revertSteeringPr("acme", "core-platform", ID)).toEqual({
+      ok: true,
+      value: {
+        number: 520,
+        url: "https://github.com/acme/oxagen-core-platform/pull/520",
+        branch: "steering/revert-519",
+        check: "success",
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "revert_steering_pr",
+      { proposalId: ID },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("returns a proposal that has not merged as a conflict (negative)", async () => {
+    invoke.mockRejectedValue(refused("conflict", "not_merged"));
+    expect(await revertSteeringPr("acme", "core-platform", ID)).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "not_merged",
+    });
+  });
+
+  it("returns a member the governance mode does not let merge as denied (negative)", async () => {
+    invoke.mockRejectedValue(refused("forbidden", "org_role_required"));
+    expect(await revertSteeringPr("acme", "core-platform", ID)).toMatchObject({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+  });
+});
+
 describe("a person the workspace refuses", () => {
   it.each([
     ["openContextPr", () => openContextPr("acme", "x", ID)],
     ["mergeContextPr", () => mergeContextPr("acme", "x", ID)],
     ["dismissProposal", () => dismissProposal("acme", "x", ID, "why")],
+    ["refreshContextPr", () => refreshContextPr("acme", "x", ID)],
     ["approveContextPr", () => approveContextPr("acme", "x", ID)],
     ["mergePrWithoutReview", () => mergePrWithoutReview("acme", "x", ID)],
+    ["revertSteeringPr", () => revertSteeringPr("acme", "x", ID)],
     [
       "dropMemoryRecord",
       () => dropMemoryRecord("acme", "x", BRANCH, RECORD_PATH),

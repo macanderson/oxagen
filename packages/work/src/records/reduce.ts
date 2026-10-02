@@ -243,19 +243,28 @@ function reduceOrder(
   closedRevisions: readonly number[],
 ): OrderProjection {
   const delivery = deliveryOf(facts);
-  // A pull request merges once. The first merge fact fixes the merged head, so
-  // a done send stays done whatever arrives after it.
-  const mergeFact = ofKind(facts, "merged")[0];
-  const merge = mergeFact
-    ? { headSha: mergeFact.headSha as string, mergeCommit: mergeFact.data.merge_commit, at: mergeFact.occurredAt }
-    : null;
-  const headFact = last(ofKind(facts, "head_observed"));
-  const head = merge?.headSha ?? headFact?.headSha ?? null;
-  const prFact = last(ofKinds(facts, ["pr_linked", "head_observed"]));
+  // The send's pull request is the last one its run linked (or, with no link,
+  // the last one a head was observed on). A run can close one pull request and
+  // open another, so the head, the merge, and a close count only for that one.
+  // A fact that names no pull request counts for whichever is current.
+  const prFact = last(ofKind(facts, "pr_linked")) ?? last(ofKind(facts, "head_observed"));
   const pullRequest =
     prFact && prFact.repository !== null && prFact.prNumber !== null
       ? { repository: prFact.repository, number: prFact.prNumber }
       : null;
+  const onPullRequest = (fact: WorkFact): boolean =>
+    pullRequest === null ||
+    fact.repository === null ||
+    fact.prNumber === null ||
+    (fact.repository.toLowerCase() === pullRequest.repository.toLowerCase() && fact.prNumber === pullRequest.number);
+  // A pull request merges once. The first merge fact fixes the merged head, so
+  // a done send stays done whatever arrives after it.
+  const mergeFact = ofKind(facts, "merged").filter(onPullRequest)[0];
+  const merge = mergeFact
+    ? { headSha: mergeFact.headSha as string, mergeCommit: mergeFact.data.merge_commit, at: mergeFact.occurredAt }
+    : null;
+  const headFact = last(ofKind(facts, "head_observed").filter(onPullRequest));
+  const head = merge?.headSha ?? headFact?.headSha ?? null;
 
   const requiredFact = head === null ? undefined : last(ofKind(facts, "checks_required").filter((f) => f.headSha === head));
   const requiredChecks = requiredFact ? [...new Set(requiredFact.data.names)].sort() : null;
@@ -284,7 +293,7 @@ function reduceOrder(
   const acceptance = head !== null && onHead ? acceptanceOf(onHead) : null;
   const staleAcceptance = offHead ? acceptanceOf(offHead) : null;
 
-  const prClosed = merge === null && facts.some((fact) => fact.kind === "pr_closed");
+  const prClosed = merge === null && facts.some((fact) => fact.kind === "pr_closed" && onPullRequest(fact));
   const returnFact = last(ofKind(facts, "returned"));
   const returned = returnFact ? { reason: returnFact.data.reason, actor: returnFact.actor, at: returnFact.occurredAt } : null;
   const done = acceptance !== null && merge !== null;

@@ -894,6 +894,16 @@ describe("the GitLab seam's merge-queue calls", () => {
     await expect(seam.holdsCommit(repo, head, moved)).resolves.toBe(false);
   });
 
+  it("reads a commit's parents, none for the first commit", async () => {
+    const { api, seam, repo, head } = await onBranch();
+    await expect(seam.commitParents(repo, head)).resolves.toEqual(["c0"]);
+    await expect(seam.commitParents(repo, "c0")).resolves.toEqual([]);
+    expect(api.restCalls).toContain(`GET /repository/commits/${head}`);
+    await expect(seam.commitParents(repo, "missing")).rejects.toMatchObject({
+      code: "conflict",
+    });
+  });
+
   it("rebases the branch onto main and answers its new head once the rebase finishes", async () => {
     const { api, seam, repo, sleep, head, mr } = await onBranch();
     api.rebasePolls = 2;
@@ -1393,6 +1403,7 @@ describe("the host dispatcher", () => {
       files: [],
     });
     await host.holdsCommit(repo, "b", "a");
+    await host.commitParents(repo, "b");
     await host.updateBranch(repo, {
       number: 1,
       branch: "b",
@@ -1413,6 +1424,7 @@ describe("the host dispatcher", () => {
       "changedFiles",
       "commitFiles",
       "holdsCommit",
+      "commitParents",
       "updateBranch",
       "resetBranch",
       "listApprovals",

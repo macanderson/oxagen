@@ -1007,6 +1007,16 @@ export function createSteeringGitLab(
       });
     },
 
+    commitParents(repo, sha) {
+      return callRest(repo, async (rest, path) => {
+        const out = await rest.request<{ parent_ids?: string[] }>(
+          "GET",
+          `${path}/repository/commits/${encodeURIComponent(sha)}`,
+        );
+        return out.data.parent_ids ?? [];
+      });
+    },
+
     updateBranch(repo, args) {
       return callRest(repo, async (rest, path, gl, project) => {
         const branch = await gl.getBranch({ project, branch: args.branch });

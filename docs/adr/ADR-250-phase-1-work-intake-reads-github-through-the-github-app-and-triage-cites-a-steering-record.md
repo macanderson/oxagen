@@ -55,7 +55,11 @@ Every 15 minutes `work/intake-sweep` asks for one check per collector that is
 not paused, and `work/intake-check` reads up to 20 pages, one step per page.
 A GitHub reconcile reads only the repositories the collector names, and fails
 when the App cannot read one of them, so a lost grant reads as failing rather
-than empty. The cursor moves only after a page's items are stored. Health
+than empty. The cursor moves only after a page's items are stored. A record
+the provider closed before Oxagen stored it is skipped, so a first read brings
+in open work and none of a repository's closed history. A collector that gains
+a repository or changes its connection reads from the start again, because
+the cursor is a time and the new repository's older issues were never read. Health
 follows `healthOf`: lagging when a reconcile found changes a webhook missed or
 the nightly count differed, failing after three failed reconciles in a row,
 and a failing collector waits for `sync_work_collector`. The nightly count
@@ -106,8 +110,8 @@ triaged decision, and T2's route choice and workflow match stay on its branch.
 `work/intake-triage` starts at most 60 runs per workspace per minute and one
 at a time per item. A run reads at most 100 open items, 20,000 characters of
 body, and 2,000 paths of the item's repository tree. It runs only while the
-item is new, held, triaged, needs_info, or changed, and once per item revision
-unless a person asks for a retry. A second invalid answer records
+item is new, held, triaged, needs_info, or changed, while its source issue is
+open, and once per item revision unless a person asks for a retry. A second invalid answer records
 `triage_failed`. When the item moved to a newer revision while triage read the
 older one, nothing is stored, and the change that moved it queues triage
 again. When the run's retries run out, its on-failure job records
