@@ -500,30 +500,53 @@ describe("repeated instructions on a content_exact workspace", () => {
     expect(p!.rationale).toContain("3 times in the last 30 days, across 3 runs");
   });
 
-  // #4579: a run from a second agent moved the key to the workspace, which
-  // has no decision, and brought the covered runs back.
+  // A run from a second agent moved the key to the workspace, which has no
+  // decision, and brought back the runs the dismissal covered.
   it("keeps runs a dismissal covered out of a later finding and proposal under another key", () => {
     const before = [run(), run(), run()];
     const dismissed = new Date(before[2]!.startedAt.getTime() + 30_000);
     const decidedSince = new Map([
       [findingFingerprint("repeated_instructions", "agent", AGENT), dismissed],
     ]);
-    const other = run({ agentKey: "acme.core.review" });
-    const runs = [...before, other];
+    const review = "acme.core.review";
+    const later = [
+      run({ agentKey: review }),
+      run({ agentKey: review }),
+      run({ agentKey: review }),
+    ];
+    const runs = [...before, ...later];
     const prompts = read(
       "content_exact",
-      [...runs.map((r, i) => prompt(r, i + 1, TESTS)), prompt(other, 10, TESTS)],
-      { [other.runId]: [frame(5, TURN_MICROS)] },
+      [
+        ...runs.map((r, i) => prompt(r, i + 1, TESTS)),
+        prompt(later[0]!, 10, TESTS),
+      ],
+      { [later[0]!.runId]: [frame(8, TURN_MICROS)] },
     );
+    const laterIds = later.map((r) => r.runId).sort();
 
-    expect(instructionProposals(prompts, runs, { decidedSince })).toEqual([]);
+    const [p, ...rest] = instructionProposals(prompts, runs, { decidedSince });
+    expect(rest).toEqual([]);
+    expect(p!.runs).toEqual(laterIds);
+    expect(p!.agents).toEqual([review]);
+
     const findings = habits(input(runs, prompts, decidedSince));
     expect(findings).toHaveLength(1);
     const [f] = findings;
     expect(f!.level).toBe("agent");
-    expect(f!.subject).toBe("acme.core.review");
-    expect(f!.citedRuns).toEqual([other.runId]);
-    expect(f!.evidence.calls).toBe(2);
+    expect(f!.subject).toBe(review);
+    expect([...f!.citedRuns].sort()).toEqual(laterIds);
+    expect(f!.evidence.calls).toBe(4);
+    expect(f!.savingMicros).toBe(TURN_MICROS);
+
+    // Two later runs are under the 3 a repeat needs, so neither comes back.
+    const two = [...before, ...later.slice(1)];
+    const fewer = read(
+      "content_exact",
+      two.map((r, i) => prompt(r, i + 1, TESTS)),
+    );
+    expect(instructionProposals(fewer, two, { decidedSince })).toEqual([]);
+    expect(habits(input(two, fewer, decidedSince))).toEqual([]);
   });
 
   it("ignores prompts of runs the pass did not read", () => {

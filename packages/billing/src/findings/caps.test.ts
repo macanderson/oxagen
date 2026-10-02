@@ -288,10 +288,13 @@ describe("the findings caps and the headline (#5050)", () => {
     expect(kept[0]!.claims!.map((c) => c.detector)).toEqual(
       Array<number>(3 * RECURRING_RUNS_MIN).fill(7),
     );
-    // The smallest finding of the other kinds made room for it.
-    expect(findings.map((f) => f.subject)).not.toContain(
-      `acme.${OTHER_KINDS[0]}.0`,
-    );
+    // One of the smallest findings of the other kinds made room for it.
+    const shown = new Set(findings.map((f) => f.subject));
+    const left = OTHER_KINDS.flatMap((kind) =>
+      Array.from({ length: FINDINGS_PER_KIND }, (_, i) => `acme.${kind}.${i}`),
+    ).filter((subject) => !shown.has(subject));
+    expect(left).toHaveLength(1);
+    expect(left[0]).toMatch(/\.0$/);
     // The headline counts each of the job's frames once.
     expect(
       new Set(stored(findings).map((c) => claimKey(c.runId, c.frameKey))),

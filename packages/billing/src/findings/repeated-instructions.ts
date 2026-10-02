@@ -176,11 +176,15 @@ export function repeatsOf(
     for (const s of sentencesOf(p.prompt.text))
       note(sentenceDigest(s.key), s.text, p);
   }
-  const min =
-    read.mode === "digest_only" ? MIN_WHOLE_PROMPT_RUNS : MIN_INSTRUCTION_RUNS;
+  const min = minRuns(read.mode);
   return [...byDigest.values()]
     .filter((r) => r.runs.size >= min)
     .sort(mostRepeated);
+}
+
+/** The runs a repeat needs: sentences on `content_exact`, whole prompts on `digest_only`. */
+function minRuns(mode: PromptRead["mode"]): number {
+  return mode === "digest_only" ? MIN_WHOLE_PROMPT_RUNS : MIN_INSTRUCTION_RUNS;
 }
 
 /** Most prompts first, then most runs, then by digest. */
@@ -285,14 +289,16 @@ interface OpenPart {
  * The prompts and runs of a repeat that no decision covers (#4579). The runs
  * a decision covers drop out and set no key. The rest report under the key
  * they name, and `admits` drops the runs a decision on that key covers.
- * Null when no run is left. The finding and the proposal both read this, so
- * a dismissal holds for both.
+ * Null when fewer than `min` runs are left, so a decided repeat comes back
+ * only once enough later runs repeat it. The finding and the proposal both
+ * read this, so a dismissal holds for both.
  */
 function openPart(
   repeat: Repeat,
   runs: ReadonlyMap<string, RunTotalsRecord>,
   decisions: readonly Decision[],
   admits: (key: FindingKey, run: RunTotalsRecord) => boolean,
+  min: number,
 ): OpenPart | null {
   const all = [...repeat.runs].map((runId) => runs.get(runId)!);
   const until = decidedUntil(all, decisions);
@@ -302,7 +308,7 @@ function openPart(
   const admitted = new Set(
     open.filter((r) => admits(key, r)).map((r) => r.runId),
   );
-  if (admitted.size === 0) return null;
+  if (admitted.size < min) return null;
   return {
     key,
     repeat: {
@@ -379,8 +385,9 @@ function detect(input: DetectInput, ctx: DetectContext): void {
   const decisions = decisionsOf(input.decidedSince);
   const admits = (key: FindingKey, run: RunTotalsRecord) =>
     ctx.groups.admits(key, run);
+  const min = minRuns(read.mode);
   for (const whole of repeatsOf(read, ctx.runs)) {
-    const part = openPart(whole, ctx.runs, decisions, admits);
+    const part = openPart(whole, ctx.runs, decisions, admits, min);
     if (part === null) continue;
     const { key, repeat } = part;
     const id = `${key.level}|${key.subject}`;
@@ -515,9 +522,8 @@ export function instructionProposals(
     groups.admits(key, run);
   const open: Repeat[] = [];
   for (const whole of repeatsOf(read, byId)) {
-    const part = openPart(whole, byId, decisions, admits);
-    if (part !== null && part.repeat.runs.size >= MIN_INSTRUCTION_RUNS)
-      open.push(part.repeat);
+    const part = openPart(whole, byId, decisions, admits, MIN_INSTRUCTION_RUNS);
+    if (part !== null) open.push(part.repeat);
   }
   return open
     .sort(mostRepeated)
