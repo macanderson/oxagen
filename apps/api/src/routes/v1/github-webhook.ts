@@ -65,6 +65,7 @@ import {
   githubPullRequestStateDeps,
   recordGithubPullRequestState,
 } from "@oxagen/handlers/github.pull-request.webhook";
+import { recordWorkOrderPullRequest } from "@oxagen/handlers/work.pull-request.webhook";
 import {
   findHealthScopes,
   healthRequests,
@@ -401,6 +402,18 @@ githubAppWebhookRoute.post("/", async (c) => {
       logger.error(
         { err, eventName },
         "GitHub App webhook: could not store the pull request's state; runs show the last state stored",
+      );
+    }
+    // ── Work orders (ADR-251) ───────────────────────────────────────────
+    // A send whose run linked this pull request records its new head, a
+    // human merge, or a close without merging. A failure never fails the
+    // delivery: Accept reads the pull request again at the press.
+    try {
+      await recordWorkOrderPullRequest({ body, installationId });
+    } catch (err) {
+      logger.error(
+        { err, eventName },
+        "GitHub App webhook: could not record the pull request on its work orders; Accept reads it again at the press",
       );
     }
   }

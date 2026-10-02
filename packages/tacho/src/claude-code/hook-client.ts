@@ -35,6 +35,8 @@ import {
   hostEnrollmentIdSchema,
   type TachoHarness,
   tachoHarnessSchema,
+  WORK_ORDER_ENV,
+  workOrderIdOf,
 } from "../wire";
 import {
   CODEX_HOOK_EVENTS,
@@ -1165,11 +1167,16 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   const elapsed = deps.elapsedMs ?? (() => 0);
   // Read at each post, so the time already spent comes off the budget.
   const responseBudget = (): number => responseBudgetMs(killMs, elapsed());
+  // The work order `oxagen work start` started this harness for (ADR-251).
+  // Passed on only when it is a work order id, so nothing else crosses under
+  // the name. The daemon names it on the session's `agent_start`.
+  const workOrder = workOrderIdOf(deps.env[WORK_ORDER_ENV]);
   const env: Record<string, string> = {
     ...snapshotEnv(deps.env, DEFAULT_SECRET_ENV_PATTERN),
     ...(harnessPid !== undefined
       ? { TACHO_HARNESS_PID: String(harnessPid) }
       : {}),
+    ...(workOrder !== undefined ? { [WORK_ORDER_ENV]: workOrder } : {}),
   };
   const post = deps.post ?? postUnix;
   const useTcp = platform === "win32";

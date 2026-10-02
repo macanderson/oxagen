@@ -1,0 +1,185 @@
+{
+  "name": "save_work_brief",
+  "domain": "work",
+  "description": "Save a new revision of a work item's acceptance brief: the repository the work changes and the criteria a reviewer checks.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "item_id": {
+        "type": "string"
+      },
+      "version": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "item_revision": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "repository": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 140
+      },
+      "criteria": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "tag": {
+              "type": "string",
+              "enum": [
+                "code",
+                "test",
+                "docs",
+                "review"
+              ]
+            },
+            "intent": {
+              "type": "string",
+              "enum": [
+                "check",
+                "review"
+              ]
+            },
+            "evidence": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "provenance": {
+              "type": "string",
+              "enum": [
+                "source",
+                "triage",
+                "person"
+              ]
+            }
+          },
+          "required": [
+            "text",
+            "tag",
+            "intent",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 1,
+        "maxItems": 40
+      }
+    },
+    "required": [
+      "item_id",
+      "version",
+      "item_revision",
+      "repository",
+      "criteria"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "item": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "held",
+              "triaged",
+              "needs_info",
+              "changed",
+              "ready",
+              "sent",
+              "running",
+              "review",
+              "done",
+              "closed"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "revision",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "repeat": {
+        "type": "boolean"
+      },
+      "brief": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "revision",
+          "digest"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "item",
+      "repeat",
+      "brief"
+    ],
+    "additionalProperties": false
+  }
+}

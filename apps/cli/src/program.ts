@@ -1987,6 +1987,36 @@ export function buildProgram(): Command {
       if (!(await handleAgentDetect(opts))) process.exitCode = 1;
     });
 
+  // ── work: work orders sent to this machine's agents (ADR-251) ──────────────
+  //
+  // A person sends an approved brief to an agent in the app. The agent's
+  // host keeps the work order until the person at the machine starts it
+  // here. `start` claims the order first, so nothing runs for an order the
+  // server refuses.
+
+  const work = program
+    .command("work")
+    .description(
+      "See and start the work orders Oxagen sent to the agents on this machine",
+    );
+  work
+    .command("list")
+    .description("List the work orders waiting on this machine")
+    .action(async () => {
+      const { handleWorkList } = await import("./commands/tacho.js");
+      process.exitCode = await handleWorkList();
+    });
+  work
+    .command("start")
+    .description(
+      "Claim a work order, then start the agent in this directory with the order's brief as its first prompt",
+    )
+    .argument("<work-order>", "The work order's id, which starts with wo_")
+    .action(async (workOrderId: string) => {
+      const { handleWorkStart } = await import("./commands/tacho.js");
+      process.exitCode = await handleWorkStart(workOrderId);
+    });
+
   // ── env: workspace environments ─────────────────────────────────────────────
 
   const env = program

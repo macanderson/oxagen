@@ -112,6 +112,11 @@ export const TACHO_COMMANDS = [
   "revoke",
   "refresh_bundle",
   "kill",
+  // A send of an approved work brief to the host that runs the target agent
+  // (P1-04, #5100; ADR-251). Drained only by a host that advertises the
+  // `work_orders` bundle feature, because an older host's parser refuses the
+  // whole poll over a command name it does not know.
+  "work_order",
 ] as const;
 /**
  * The closed command-status vocabulary of the Mission Control spec §7.4,
@@ -1002,8 +1007,21 @@ export const tachoControlCommands = tachoSchema.table(
     appliedAtSeq: bigint("applied_at_seq", { mode: "number" }),
     outcome: text("outcome").notNull().default("queued"),
     outcomeDetail: text("outcome_detail"),
+    /**
+     * Unique per workspace when set. A work order's command takes the order's
+     * key, so a retried send finds the command it wrote (ADR-251). Null on
+     * every other command.
+     */
+    idempotencyKey: text("idempotency_key"),
   },
   (t) => ({
+    keyUniq: uniqueIndex("tacho_control_commands_key_uniq")
+      .on(t.orgId, t.workspaceId, t.idempotencyKey)
+      .where(sql`${t.idempotencyKey} IS NOT NULL`),
+    idempotencyKeyCheck: check(
+      "tacho_control_commands_idempotency_key_check",
+      sql`${t.idempotencyKey} IS NULL OR length(${t.idempotencyKey}) BETWEEN 1 AND 256`,
+    ),
     hostPendingIdx: index("tacho_control_commands_host_pending_idx").on(
       t.hostId,
       t.outcome,

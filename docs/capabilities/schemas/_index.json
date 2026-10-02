@@ -13,6 +13,16 @@
       "consumes": []
     },
     {
+      "name": "accept_work_order",
+      "domain": "work",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "add_conversation_attachment",
       "domain": "conversation",
       "surfaces": [
@@ -85,6 +95,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "approve_work_brief",
+      "domain": "work",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -274,6 +294,16 @@
       "consumes": []
     },
     {
+      "name": "cancel_work_order",
+      "domain": "work",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "change_member_role",
       "domain": "org",
       "surfaces": [
@@ -308,12 +338,32 @@
       "consumes": []
     },
     {
+      "name": "claim_work_order",
+      "domain": "work",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "clone_toolbelt",
       "domain": "toolbelt",
       "surfaces": [
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "close_work_item",
+      "domain": "work",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -3729,6 +3779,16 @@
       "consumes": []
     },
     {
+      "name": "refresh_work_order_checks",
+      "domain": "work",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "register_agent",
       "domain": "agent",
       "surfaces": [
@@ -3755,6 +3815,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "reject_work_order",
+      "domain": "work",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -3831,6 +3901,16 @@
       "domain": "assistant",
       "surfaces": [
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "reopen_work_item",
+      "domain": "work",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -3945,6 +4025,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "return_work_order",
+      "domain": "work",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -4142,6 +4232,16 @@
       "consumes": []
     },
     {
+      "name": "save_work_brief",
+      "domain": "work",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "seal_run",
       "domain": "run",
       "surfaces": [
@@ -4236,6 +4336,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "send_work_order",
+      "domain": "work",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -4705,6 +4815,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "stop_work_order",
+      "domain": "work",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
