@@ -75,6 +75,18 @@ concurrency:
   # ci-superseded.yml reports that state on the pull request (ADR-218, #3257).
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# The token scopes for every job without a block of its own: preflight,
+# atlas-validate, test, rls-integration and rds-compatibility. They check out
+# the code, pull a CI image, and read the API (main's tip, a compare, and a
+# pull request's files). A job that needs more names its scopes in its own
+# block, which replaces this one. Without this block those jobs got the
+# repository's default token while `pnpm install` ran dependency install
+# scripts beside it.
+permissions:
+  contents: read
+  packages: read
+  pull-requests: read
+
 env:
   # Container jobs bind-mount the workspace with a uid that differs from the
   # container user, so every git invocation (ours, lefthook's prepare hook,
@@ -165,6 +177,14 @@ jobs:
   # those jobs runs unless `heavy` is the string `false`, so an empty output
   # runs them.
   #
+  # `proceed` follows the same rule. Every gated job carries `!cancelled()`
+  # and `proceed != 'false'` in its `if:`, so a preflight job that fails runs
+  # the gate. A lost runner, a failed checkout or a Node download that times
+  # out are all ways it can fail. Before this, a failed preflight skipped
+  # `checks`, `test` and every lane, and GitHub reads a skipped required
+  # check as passing. A pull request or a merge group could then merge with
+  # nothing tested. check-main-preflight.mjs --guard holds this shape.
+  #
   # It runs on ubuntu-slim (one vCPU, $0.002 a minute), because its work is a
   # sparse checkout and a few API calls.
   preflight:
@@ -223,8 +243,9 @@ jobs:
   checks:
     needs: [preflight]
     if: >-
+      !cancelled() &&
       github.event_name != 'workflow_dispatch' &&
-      needs.preflight.outputs.proceed == 'true'
+      needs.preflight.outputs.proceed != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
@@ -498,8 +519,9 @@ jobs:
   build:
     needs: [preflight]
     if: >-
+      !cancelled() &&
       github.event_name != 'workflow_dispatch' &&
-      needs.preflight.outputs.proceed == 'true' &&
+      needs.preflight.outputs.proceed != 'false' &&
       needs.preflight.outputs.heavy != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
@@ -592,8 +614,9 @@ jobs:
   unit:
     needs: [preflight]
     if: >-
+      !cancelled() &&
       github.event_name != 'workflow_dispatch' &&
-      needs.preflight.outputs.proceed == 'true' &&
+      needs.preflight.outputs.proceed != 'false' &&
       needs.preflight.outputs.heavy != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
@@ -791,10 +814,10 @@ jobs:
   test:
     needs: [preflight, build, unit]
     if: >-
+      !cancelled() &&
       github.event_name != 'workflow_dispatch' &&
-      needs.preflight.outputs.proceed == 'true' &&
-      needs.preflight.outputs.heavy != 'false' &&
-      !cancelled()
+      needs.preflight.outputs.proceed != 'false' &&
+      needs.preflight.outputs.heavy != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-slim' }}
     timeout-minutes: 5
     steps:
@@ -813,8 +836,9 @@ jobs:
   e2e:
     needs: [preflight]
     if: >-
+      !cancelled() &&
       github.event_name != 'workflow_dispatch' &&
-      needs.preflight.outputs.proceed == 'true' &&
+      needs.preflight.outputs.proceed != 'false' &&
       needs.preflight.outputs.heavy != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
@@ -1055,8 +1079,9 @@ jobs:
   rls-integration:
     needs: [preflight]
     if: >-
+      !cancelled() &&
       (github.event_name == 'pull_request' || github.event_name == 'merge_group' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) &&
-      needs.preflight.outputs.proceed == 'true' &&
+      needs.preflight.outputs.proceed != 'false' &&
       needs.preflight.outputs.heavy != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
@@ -1142,8 +1167,9 @@ jobs:
   rds-compatibility:
     needs: [preflight]
     if: >-
+      !cancelled() &&
       (github.event_name == 'pull_request' || github.event_name == 'merge_group' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) &&
-      needs.preflight.outputs.proceed == 'true' &&
+      needs.preflight.outputs.proceed != 'false' &&
       needs.preflight.outputs.heavy != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
@@ -1168,14 +1194,15 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      # The toolchain image already carries Node and pnpm, and the runner
+      # image's pnpm store is mounted at /opt/pnpm-store. The shared action
+      # installs from that store, like every other container job here. The
+      # bare `pnpm install` this replaced used the container's empty default
+      # store and fetched every package from the registry on every run.
+      - uses: ./.github/actions/pnpm-install
+
       - name: Package the production platform seed
-        run: |
-          pnpm install --frozen-lockfile
-          node tools/scripts/build-platform-seed.mjs
+        run: node tools/scripts/build-platform-seed.mjs
 
       - name: Apply migrations and platform defaults without a superuser
         env:
@@ -1342,7 +1369,7 @@ jobs:
     if: >-
       !cancelled() &&
       github.event_name == 'push' && github.ref == 'refs/heads/main' &&
-      needs.preflight.outputs.proceed == 'true' &&
+      needs.preflight.outputs.proceed != 'false' &&
       needs.checks.result == 'success' && needs.test.result == 'success' &&
       needs.e2e.result == 'success' && needs.atlas-validate.result == 'success' &&
       needs.rls-integration.result == 'success' &&
@@ -1362,24 +1389,23 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
-        with:
-          role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
-          aws-region: us-east-1
-
       # Installed before either apply, because both need it. A Postgres apply
       # runs run-db-migrations.sh --apply, which bundles the platform seed with
       # tools/scripts/build-platform-seed.mjs, and that script imports esbuild.
       # db-migrate.ts needs the workspace too. The gate cannot know which store
       # is behind until it asks, so the install is unconditional.
-      - uses: actions/setup-node@v4
+      #
+      # The install runs before the deploy role is assumed, as in deploy-node.
+      # `pnpm install` runs the install scripts of the dependencies
+      # pnpm-workspace.yaml allows to build, and those scripts have no
+      # business seeing production credentials. The shared action also
+      # installs from the runner image's pnpm store instead of the registry.
+      - uses: ./.github/actions/pnpm-install
+
+      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
         with:
-          node-version-file: .node-version
-
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
+          role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
+          aws-region: us-east-1
 
       # Postgres first, and without the tunnels: it needs neither. Aurora is
       # reached by sending Atlas to the node over SSM, which
@@ -1608,14 +1634,16 @@ jobs:
           DEPLOY_SERVICE: web
         run: node tools/scripts/check-deploy-tip.mjs
 
+      # Install before the deploy role is assumed, as deploy-node does, so the
+      # dependency install scripts pnpm runs never see production credentials.
+      - uses: ./.github/actions/pnpm-install
+        if: steps.order.outputs.ship == 'true'
+
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         if: steps.order.outputs.ship == 'true'
         with:
           role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
           aws-region: us-east-1
-
-      - uses: ./.github/actions/pnpm-install
-        if: steps.order.outputs.ship == 'true'
 
       - name: Build the marketing site
         if: steps.order.outputs.ship == 'true'

@@ -21,9 +21,9 @@
  *
  * It fails open. Every event other than a pull request gets `true`, and so
  * does a pull request whose file list cannot be read in full. The script
- * exits 0 whatever happens, because the `preflight` job must always succeed
- * (check-main-preflight.mjs): a failed preflight skips `checks` and `test`,
- * and a skipped required check reads as passing.
+ * exits 0 whatever happens. A failed preflight job runs every gated job
+ * (check-main-preflight.mjs), so a crash here would still test the pull
+ * request, but it would also run the heavy lanes on a draft.
  */
 import { appendFileSync } from "node:fs";
 import { isEntrypoint } from "./lib/is-entrypoint.mjs";
