@@ -166,6 +166,9 @@ const ACTIONS = new Set([
   // baseline Oxagen applied. Not "reconcile" or "sync": those move records,
   // and this writes one repository's settings.
   "repair",
+  // revert_steering_pr: open a steering PR that undoes a merged one (#4449).
+  // Not "undo" or "rollback": git and the host both call this a revert.
+  "revert",
   "approve",
   // authorize_cli — the CLI consent mint (apps/app/ARCHITECTURE.md §3.7).
   "authorize",

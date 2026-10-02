@@ -1294,6 +1294,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./context.pr.merge_without_review"))
         .mergePrWithoutReviewHandler as CapabilityHandlerFn,
   );
+  // Open a steering PR that undoes a merged one (#4449).
+  registerHandler(
+    "revert_steering_pr",
+    async () =>
+      (await import("./context.pr.revert"))
+        .revertSteeringPrHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "set_governance_mode",
     async () =>

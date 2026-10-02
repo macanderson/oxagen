@@ -300,6 +300,16 @@ function restOver(api: FakeGitLabApi): GitLabRest {
         api.tags.set(name, sha);
         return answer<T>(201, { name, commit: { id: sha } });
       }
+      const commitRoute = /^GET \/repository\/commits\/([^/]+)$/.exec(route);
+      if (commitRoute) {
+        const sha = decodeURIComponent(commitRoute[1]!);
+        const commit = api.commits.get(sha);
+        if (!commit) throw new GitLabApiError(404, "404 Commit Not Found");
+        return answer<T>(200, {
+          id: sha,
+          parent_ids: commit.parent === null ? [] : [commit.parent],
+        });
+      }
       const tagRoute = /^GET \/repository\/tags\/(.+)$/.exec(route);
       if (tagRoute) {
         const name = decodeURIComponent(tagRoute[1]!);

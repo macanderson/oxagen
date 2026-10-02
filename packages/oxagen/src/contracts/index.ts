@@ -333,6 +333,7 @@ import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
 import { contextPrMerge } from "./context.pr.merge";
 import { contextPrMergeWithoutReview } from "./context.pr.merge_without_review";
+import { contextPrRevert } from "./context.pr.revert";
 import { contextSteeringDeliveries } from "./context.steering.deliveries";
 import { steeringRepoGet } from "./steering_repo.get";
 import { steeringRepoRepair } from "./steering_repo.repair";
@@ -1128,6 +1129,7 @@ export {
   contextPrGet,
   contextPrMerge,
   contextPrMergeWithoutReview,
+  contextPrRevert,
   contextGovernanceModeSet,
   connectionList,
   connectionCreate,
@@ -1588,6 +1590,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextPrGet,
   contextPrMerge,
   contextPrMergeWithoutReview,
+  contextPrRevert,
   contextGovernanceModeSet,
   agentExecutionList,
   agentExecutionRecord,
