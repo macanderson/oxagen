@@ -57,9 +57,10 @@ function repeatKey(
  * Add one counted request to its finding as one cited item per call it made
  * (#4506). The request's whole price and its claim ride the first call. Each
  * other call adds nothing to the price, on the same basis, so a priced
- * request covers every call it made and an unpriced one covers none.
+ * request covers every call it made and an unpriced one covers none. Spin
+ * loops and retry loops add their requests the same way (#5023).
  */
-function addRequest(
+export function addRequest(
   key: FindingKey,
   input: DetectInput,
   run: RunTotalsRecord,
