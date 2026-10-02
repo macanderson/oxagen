@@ -48,7 +48,7 @@ const STARTER_RULES = ["1", "2", "3", "4", "5", "6"] as const;
 type Rule = { key: number; text: string };
 
 /** The record as triage reads it: the instruction, a blank line, then one numbered line per rule. */
-export function prioritiesStatement(instruction: string, rules: readonly string[]): string {
+function prioritiesStatement(instruction: string, rules: readonly string[]): string {
   const lines = rules
     .map((rule) => rule.trim().replace(/\s*\n\s*/g, " "))
     .filter((rule) => rule !== "")
@@ -62,7 +62,7 @@ export function PrioritiesEditor({ org, ws }: { org: string; ws: string }) {
   const t = useTranslations("work.setup.priorities.editor");
   const failureText = useListActionFailure();
   const starters = STARTER_RULES.map((key) => t(`starterRules.${key}`));
-  const [instruction, setInstruction] = useState<string>(t("starterInstruction"));
+  const [instruction, setInstruction] = useState<string>(() => t("starterInstruction"));
   const [rules, setRules] = useState<Rule[]>(() =>
     starters.map((text, key) => ({ key, text })),
   );

@@ -111,7 +111,7 @@ export function AddCollector({
     : SUGGESTED_NAME;
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(suggested);
-  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
