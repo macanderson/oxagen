@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
   emitSecurityEvent: vi.fn(),
   resolveActorOrgRole: vi.fn(),
+  openAgentFile: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -26,6 +27,17 @@ vi.mock("./lib/api-key-authz", async (importOriginal) => {
 });
 vi.mock("./logger", () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+}));
+// The agent file PR (#5149) opens on the steering host. These cases assert
+// what enrollment hands it; steering-repo/agent-file.test.ts covers the PR.
+vi.mock("./steering-repo/agent-file", () => ({
+  openAgentFilePrQuietly: mocks.openAgentFile,
+  AGENT_FILE_PULL_REQUEST: {
+    reasonPrefix: "agent_file",
+    noun: "agent file steering PR",
+    refusal: () => null,
+    proposalKind: "agent_file",
+  },
 }));
 
 import { verifyBundle } from "./lib/tacho-bundle-signing";
@@ -126,6 +138,9 @@ let inserted: Array<{ table: string; values: Record<string, unknown> }> = [];
 /** The API key a bearer request presented, as the operator lookup reads it. */
 let keyRow: Record<string, unknown> | undefined;
 
+/** The enrolling member's public id the operator read answers, or none. */
+let operatorPublicId: string | null = null;
+
 function happyDb(clash = false, records: SteeringRow[] = []): void {
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
@@ -155,17 +170,23 @@ function happyDb(clash = false, records: SteeringRow[] = []): void {
             findFirst: async () => ({ containmentRequired: false }),
           },
         },
-        // The steering read: the ledger count over `context_promotions`
+        // The steering read: the ledger count over `steering_promotions`
         // (awaited straight off `.where()`) and `records` joined to their
         // pinned versions (`.leftJoin().where()`). The fake counts one
         // promotion per record, since a merge appends one. With no records
         // the first bundle carries no `context.system`. The runtime reads
         // (ADR-198) go on to `.orderBy()` / `.limit()` and find no runtime,
         // so the operator path creates the one the hostname names.
-        select: () => ({
+        select: (columns?: Record<string, unknown>) => ({
           from: () => {
+            // The operator read (#5149) selects the member's public id alone.
+            const operatorRead =
+              columns !== undefined &&
+              Object.keys(columns).length === 1 &&
+              "publicId" in columns;
             const chain: {
               where: () => typeof chain;
+              innerJoin: () => typeof chain;
               orderBy: () => typeof chain;
               limit: () => Promise<unknown[]>;
               leftJoin: () => { where: () => Promise<unknown[]> };
@@ -175,8 +196,12 @@ function happyDb(clash = false, records: SteeringRow[] = []): void {
               ) => Promise<unknown>;
             } = {
               where: () => chain,
+              innerJoin: () => chain,
               orderBy: () => chain,
-              limit: async () => [],
+              limit: async () =>
+                operatorRead && operatorPublicId !== null
+                  ? [{ publicId: operatorPublicId }]
+                  : [],
               leftJoin: () => ({ where: async () => records }),
               then: (resolve, reject) =>
                 Promise.resolve([
@@ -210,6 +235,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   clearSteeringCacheForTests();
   inserted = [];
+  operatorPublicId = null;
+  mocks.openAgentFile.mockResolvedValue(null);
   mocks.resolveActorOrgRole.mockResolvedValue("Owner");
   vi.stubEnv("TACHO_ENROLLMENT_SIGNING_SECRET", "test-secret");
   vi.stubEnv("TACHO_BUNDLE_SIGNING_PRIVATE_KEY", PEM.replace(/\n/g, "\\n"));
@@ -221,6 +248,78 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+});
+
+describe("create_tacho_enrollment: the agent file (#5149)", () => {
+  it("proposes the runtime's agent file once the host is enrolled, naming the member who enrolled it", async () => {
+    happyDb();
+    operatorPublicId = "usr_01k5qk7d0000000000000000";
+
+    const output = await tachoEnrollmentCreateHandler(INPUT, CONTEXT);
+
+    expect(output.hostEnrollmentId).toMatch(/^tch_[a-z0-9]{22}$/);
+    expect(mocks.openAgentFile).toHaveBeenCalledTimes(1);
+    expect(mocks.openAgentFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        opener: expect.any(Object),
+        host: expect.any(Function),
+        proposals: expect.any(Object),
+      }),
+      {
+        scope: { orgId: CONTEXT.orgId, workspaceId: CONTEXT.workspaceId },
+        operator: {
+          userId: CONTEXT.userId,
+          publicId: "usr_01k5qk7d0000000000000000",
+        },
+        runtime: { slug: "mac-studio", name: "Mac-Studio.local" },
+        hostname: "Mac-Studio.local",
+        harnesses: ["claude-code"],
+      },
+    );
+  });
+
+  it("proposes nothing when the operator is not a member the read finds", async () => {
+    happyDb();
+    await tachoEnrollmentCreateHandler(INPUT, CONTEXT);
+    expect(mocks.openAgentFile).not.toHaveBeenCalled();
+  });
+
+  it("answers once its wait runs out, while the agent file PR keeps opening", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      happyDb();
+      operatorPublicId = "usr_01k5qk7d0000000000000000";
+      // A steering host that never answers.
+      mocks.openAgentFile.mockReturnValue(new Promise(() => {}));
+
+      let output: Awaited<ReturnType<typeof tachoEnrollmentCreateHandler>> | null = null;
+      const pending = tachoEnrollmentCreateHandler(INPUT, CONTEXT).then((out) => {
+        output = out;
+      });
+      // Step the clock until enrollment answers: 20 seconds after the PR
+      // started, which is after the handler's own awaits.
+      for (let step = 0; step < 60 && output === null; step += 1) {
+        await vi.advanceTimersByTimeAsync(1000);
+      }
+      await pending;
+
+      expect(output).not.toBeNull();
+      expect(mocks.openAgentFile).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still enrolls the host when proposing the agent file throws", async () => {
+    happyDb();
+    operatorPublicId = "usr_01k5qk7d0000000000000000";
+    mocks.openAgentFile.mockRejectedValue(new Error("the steering host is down"));
+
+    const output = await tachoEnrollmentCreateHandler(INPUT, CONTEXT);
+
+    expect(output.apiKey).toMatch(/^ox_/);
+    expect(output.gatewayApiKey).toBeDefined();
+  });
 });
 
 describe("create_tacho_enrollment", () => {

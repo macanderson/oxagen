@@ -3,7 +3,7 @@
  * session-settings.tsx — the ONE SessionSettings component, rendered three
  * ways (`variant: "drawer" | "slide-over" | "rail"`) by `session-settings-host.tsx`.
  * Reads and writes ONLY through `useChatSession()` — there is no local copy of
- * agent/model/effort/budget state anywhere in this file, so a
+ * agent/model/effort state anywhere in this file, so a
  * settings-panel-vs-composer mismatch is structurally impossible (see
  * `session-state.ts`'s module doc).
  *
@@ -25,7 +25,6 @@ import {
 } from "lucide-react";
 import { cn, formatCentsCompact } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   SegmentedControl,
   SegmentedControlItem,
@@ -38,11 +37,6 @@ import {
   type ResolvedTierCatalog,
 } from "@oxagen/ai/catalog";
 import { useChatSession } from "./session-store";
-import {
-  BUDGET_PRESETS_USD,
-  BUDGET_MIN_USD,
-  BUDGET_STEP_USD,
-} from "./session-state";
 import { ModelPickerRows } from "./session-pickers";
 import { AgentAvatar } from "../agent-picker/agent-avatar";
 import type { AgentOption } from "../agent-picker/agent-picker-types";
@@ -63,15 +57,6 @@ const PICKER_TITLES: Record<PickerKind, string> = {
  *  footer row stays readable; small balances keep full cent precision. */
 function formatUsd(n: number): string {
   return formatCentsCompact(Math.round(n * 100));
-}
-
-/** Chip label: "$0.50", "$1", "$2", "$5" — whole dollars drop the cents. */
-function formatBudgetChip(n: number): string {
-  return Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`;
-}
-
-function isPresetBudget(v: number): boolean {
-  return (BUDGET_PRESETS_USD as readonly number[]).includes(v);
 }
 
 // ---------------------------------------------------------------------------
@@ -143,36 +128,6 @@ function AgentRow({
         className="size-4 shrink-0 text-muted-foreground"
         aria-hidden="true"
       />
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Budget preset chip
-// ---------------------------------------------------------------------------
-
-function BudgetChip({
-  label,
-  pressed,
-  onClick,
-}: {
-  label: string;
-  pressed: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={pressed}
-      onClick={onClick}
-      className={cn(
-        "min-h-11 rounded-full border px-3 text-xs font-medium transition-colors sm:min-h-8",
-        pressed
-          ? "border-primary bg-primary/10 text-primary"
-          : "border-border bg-background text-foreground hover:bg-accent/60",
-      )}
-    >
-      {label}
     </button>
   );
 }
@@ -317,7 +272,6 @@ export function SessionSettings({
 }: SessionSettingsProps) {
   const { state, locks, updateSession, resetToDefaults } = useChatSession();
   const [pushed, setPushed] = React.useState<PickerKind | null>(null);
-  const [customBudgetOpen, setCustomBudgetOpen] = React.useState(false);
 
   const currentAgent = agents.find((a) => a.agentId === state.agentId) ?? null;
 
@@ -335,10 +289,6 @@ export function SessionSettings({
       : state.effort === "medium"
         ? "medium"
         : "high";
-
-  const showCustomBudget =
-    customBudgetOpen ||
-    (state.budgetUsd !== null && !isPresetBudget(state.budgetUsd));
 
   /** Shared list content for a picker kind. `onSelected` fires after a pick
    * (used to pop the drawer's pushed page back to the main list); the
@@ -426,67 +376,6 @@ export function SessionSettings({
             <SegmentedControlItem value="medium">Medium</SegmentedControlItem>
             <SegmentedControlItem value="high">High</SegmentedControlItem>
           </SegmentedControl>
-        </div>
-        <div className="flex flex-col gap-1.5 px-2 py-1.5">
-          <span className="text-xs text-muted-foreground">Per-turn budget</span>
-          <div
-            className="flex flex-wrap gap-1.5"
-            role="group"
-            aria-label="Per-turn budget"
-          >
-            <BudgetChip
-              label="No cap"
-              pressed={state.budgetUsd === null}
-              onClick={() => {
-                setCustomBudgetOpen(false);
-                updateSession({ budgetUsd: null });
-              }}
-            />
-            {BUDGET_PRESETS_USD.map((amount) => (
-              <BudgetChip
-                key={amount}
-                label={formatBudgetChip(amount)}
-                pressed={state.budgetUsd === amount}
-                onClick={() => {
-                  setCustomBudgetOpen(false);
-                  updateSession({ budgetUsd: amount });
-                }}
-              />
-            ))}
-            <BudgetChip
-              label="Custom"
-              pressed={showCustomBudget}
-              onClick={() => {
-                setCustomBudgetOpen(true);
-                if (
-                  state.budgetUsd === null ||
-                  isPresetBudget(state.budgetUsd)
-                ) {
-                  updateSession({
-                    budgetUsd: Math.max(BUDGET_MIN_USD, state.budgetUsd ?? 3),
-                  });
-                }
-              }}
-            />
-          </div>
-          {showCustomBudget ? (
-            <Input
-              type="number"
-              min={BUDGET_MIN_USD}
-              step={BUDGET_STEP_USD}
-              value={state.budgetUsd ?? BUDGET_MIN_USD}
-              onChange={(e) => {
-                const v = Number.parseFloat(e.target.value);
-                if (Number.isNaN(v)) return;
-                updateSession({ budgetUsd: Math.max(BUDGET_MIN_USD, v) });
-              }}
-              aria-label="Custom per-turn budget in dollars"
-              className="w-28"
-            />
-          ) : null}
-          <p className="text-xs text-muted-foreground">
-            Pauses and asks before a reply exceeds the cap.
-          </p>
         </div>
       </section>
 

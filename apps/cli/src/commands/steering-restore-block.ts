@@ -14,7 +14,7 @@
  * block in the file (`no_managed_block`), when the repository is not a
  * steering repo (`no_managed_blocks`), and when the PR is not open.
  *
- * The call is POST `context/prs/restore-block` on the org-scoped API, through
+ * The call is POST `steering/prs/restore-block` on the org-scoped API, through
  * the shared client in lib/api.ts.
  *
  * Output discipline (ADR-023 §4): `--json` prints the contract's answer as
@@ -22,9 +22,9 @@
  * an API failure prints on stderr and exits 1.
  */
 import type {
-  ContextPrRestoreManagedBlockInput,
-  ContextPrRestoreManagedBlockOutput,
-} from "@oxagen/oxagen/contracts/context.pr.restore_managed_block";
+  SteeringPrRestoreManagedBlockInput,
+  SteeringPrRestoreManagedBlockOutput,
+} from "@oxagen/oxagen/contracts/steering.pr.restore_managed_block";
 import { apiPostOrThrow } from "../lib/api.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 import { createOutput } from "../lib/output.js";
@@ -42,7 +42,7 @@ export const STEERING_RESTORE_BLOCK_CAPABILITIES = [
   "restore_managed_block",
 ] as const;
 
-type ManagedBlockFile = ContextPrRestoreManagedBlockInput["path"];
+type ManagedBlockFile = SteeringPrRestoreManagedBlockInput["path"];
 
 /**
  * The files that hold a managed block. The CLI reads only types from a
@@ -103,10 +103,10 @@ export async function steeringRestoreBlock(
     return;
   }
   const out = createOutput({ json: opts.json }, writer);
-  let result: ContextPrRestoreManagedBlockOutput;
+  let result: SteeringPrRestoreManagedBlockOutput;
   try {
-    result = await apiPostOrThrow<ContextPrRestoreManagedBlockOutput>(
-      "context/prs/restore-block",
+    result = await apiPostOrThrow<SteeringPrRestoreManagedBlockOutput>(
+      "steering/prs/restore-block",
       { proposalId: id, path: file },
     );
   } catch (err) {

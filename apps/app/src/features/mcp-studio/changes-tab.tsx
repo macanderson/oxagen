@@ -442,7 +442,7 @@ export function ChangesTab({
   tools: readonly Pick<StudioTool, "name" | "imported" | "tokens">[];
   /** The tool checks' findings on the folder; null when none could be read. */
   findings: readonly StudioFinding[] | null;
-  /** An org Owner or Admin, who can open the steering PR and discard edits. */
+  /** An org or workspace Owner or Admin, who can open the steering PR. */
   canEdit: boolean;
   /** Test seams; the tab calls lane M11's capabilities otherwise. */
   save?: SaveStudioDraft;

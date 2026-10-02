@@ -98,7 +98,7 @@ describe("holdsCapability", () => {
   it("does not hold when no grant names the capability, because its default is deny", async () => {
     mocks.authz.roles = [role("rol-reviewers")];
     mocks.authz.roleGrants = [
-      { roleId: "rol-reviewers", capabilityId: "merge_context_pr", effect: "allow" },
+      { roleId: "rol-reviewers", capabilityId: "merge_steering_pr", effect: "allow" },
     ];
 
     await expect(holds()).resolves.toBe(false);
@@ -161,5 +161,50 @@ describe("holdsCapability", () => {
         USER,
       ),
     ).resolves.toBe(true);
+  });
+
+  describe("the workspace's Owner and Admin (#5228)", () => {
+    const REAL_WS = "00000000-0000-4000-8000-00000000b001";
+    const onWorkspace = (name: string, over: Record<string, unknown> = {}) => {
+      mocks.authz.roles = [
+        role("rol-ws", {
+          name,
+          scopeKind: "workspace",
+          isSystemDefault: true,
+          ...over,
+        }),
+      ];
+      (mocks.authz as Record<string, unknown>)["workspaceRoleIds"] = ["rol-ws"];
+    };
+    const holdsOn = (
+      capability: Parameters<typeof holdsCapability>[0] = CAPABILITY,
+    ) =>
+      holdsCapability(capability, { orgId: ORG, workspaceId: REAL_WS }, USER);
+
+    it.each(["Owner", "Admin"])(
+      "holds a workspace capability for the workspace %s, by rule 7.6",
+      async (name) => {
+        onWorkspace(name);
+        await expect(holdsOn()).resolves.toBe(true);
+      },
+    );
+
+    it("does not hold for a workspace Member (negative)", async () => {
+      onWorkspace("Member");
+      await expect(holdsOn()).resolves.toBe(false);
+    });
+
+    it("does not hold an org-level capability (negative)", async () => {
+      onWorkspace("Owner");
+      await expect(holdsOn({ ...CAPABILITY, orgLevel: true })).resolves.toBe(
+        false,
+      );
+    });
+
+    it("does not hold when the role is not assigned on this workspace (negative)", async () => {
+      onWorkspace("Owner");
+      (mocks.authz as Record<string, unknown>)["workspaceRoleIds"] = [];
+      await expect(holdsOn()).resolves.toBe(false);
+    });
   });
 });

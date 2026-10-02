@@ -57,8 +57,13 @@ function provisioning(
   view: SteeringRepoView,
   {
     canAct = true,
+    canChangeConnection = canAct,
     ws = "core-platform",
-  }: { canAct?: boolean; ws?: string | null } = {},
+  }: {
+    canAct?: boolean;
+    canChangeConnection?: boolean;
+    ws?: string | null;
+  } = {},
 ) {
   render(
     <IntlProvider>
@@ -67,6 +72,7 @@ function provisioning(
         ws={ws}
         view={view}
         canAct={canAct}
+        canChangeConnection={canChangeConnection}
         returnTo={RETURN_TO}
       />
     </IntlProvider>,
@@ -306,6 +312,20 @@ describe("the steering repo provisioning", () => {
     expect(screen.queryByTestId("steering-repo-retry")).toBeNull();
   });
 
+  it("offers the workspace's Owner or Admin Retry and no Re-authorize, which writes the organization's connection (#5228)", () => {
+    provisioning(
+      failedSteeringRepo("add_to_installation", REAUTHORIZE, {
+        status: "blocked",
+      }),
+      { canAct: true, canChangeConnection: false },
+    );
+    expect(screen.getByTestId("steering-repo-reauthorize")).toHaveTextContent(
+      "Authorization needed",
+    );
+    expect(screen.queryByTestId("steering-repo-reauthorize-link")).toBeNull();
+    expect(screen.getByTestId("steering-repo-retry")).toBeInTheDocument();
+  });
+
   it("sends a GitLab owner to the connect step to paste the group token again", () => {
     provisioning(
       failedSteeringRepo("create_repository", REAUTHORIZE, {
@@ -431,7 +451,7 @@ describe("the steering repo provisioning", () => {
       expect(actions.retrySteeringRepoProvision).not.toHaveBeenCalled();
       const outcome = await screen.findByTestId("steering-repo-import-outcome");
       expect(outcome).toHaveTextContent(
-        "Oxagen created acme/oxagen-core-platform and opened 2 steering PRs. Merge them in order, then the cleanup PR.",
+        "Oxagen created acme/oxagen-core-platform and opened 2 steering PRs. Merge them in order from the Steering page, then merge the cleanup PR on the old repository.",
       );
       expect(
         within(outcome).getByRole("link", { name: "Cleanup PR #7" }),
@@ -442,6 +462,13 @@ describe("the steering repo provisioning", () => {
       provisioning(choosing(), { canAct: false });
       expect(screen.getByTestId("steering-repo-step-error")).toBeInTheDocument();
       expect(screen.queryByTestId("steering-repo-choose")).toBeNull();
+    });
+
+    it("shows the workspace's Owner or Admin no picker, because the connection is the organization's (negative)", () => {
+      provisioning(choosing(), { canAct: true, canChangeConnection: false });
+      expect(screen.getByTestId("steering-repo-step-error")).toBeInTheDocument();
+      expect(screen.queryByTestId("steering-repo-choose")).toBeNull();
+      expect(screen.queryByTestId("steering-repo-retry")).toBeNull();
     });
 
     it("offers Install and Authorize on GitHub when setup found no organization", () => {
@@ -610,6 +637,15 @@ describe("the steering repo provisioning", () => {
       cleanup();
       provisioning(REFUSED(), { canAct: false });
       expect(screen.queryByTestId("steering-repo-change-connection")).toBeNull();
+    });
+
+    it("offers the workspace's Owner or Admin a retry under a new name and no change of organization (#5228)", () => {
+      provisioning(REFUSED(), { canAct: true, canChangeConnection: false });
+      expect(screen.queryByTestId("steering-repo-change-connection")).toBeNull();
+      expect(screen.getByLabelText("Repository name")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Organization")).toBeNull();
+      expect(actions.readSteeringRepoDestinations).not.toHaveBeenCalled();
+      expect(screen.getByTestId("steering-repo-retry")).toBeInTheDocument();
     });
   });
 

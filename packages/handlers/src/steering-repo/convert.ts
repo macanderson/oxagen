@@ -31,7 +31,7 @@ import { isDeepStrictEqual } from "node:util";
 import { parse as parseToml } from "smol-toml";
 import { stringify } from "yaml";
 import type { GovernanceMode } from "@oxagen/oxagen/contracts/context.steering.shared";
-import { fitContextRecordLabel } from "@oxagen/oxagen/context-record-label";
+import { fitSteeringRecordLabel } from "@oxagen/oxagen/steering-record-label";
 import { readSkillFrontmatter } from "@oxagen/oxagen/skill-frontmatter";
 import { agentSchema } from "@oxagen/oxagen/steering-repo/agent";
 import {
@@ -46,6 +46,7 @@ import {
   LEGACY_GOVERNANCE_PATH,
   LEGACY_KEEP_FILES,
   LEGACY_OXAGEN_DIR,
+  LEGACY_RECORD_SCHEMA,
   LEGACY_RULES_DIR,
   LEGACY_SKILLS_DIR,
   LEGACY_WORKSPACE_TOML_PATH,
@@ -106,7 +107,6 @@ const MACHINE_LOCAL_FILES: ReadonlySet<string> = new Set([
 /** Agent files from before ADR-198. Nothing reads them, so the cleanup removes them. */
 const LEGACY_AGENTS_DIR = `${LEGACY_OXAGEN_DIR}/agents`;
 
-const LEGACY_RECORD_SCHEMA = "context-record/v0.1";
 const LEGACY_LINEAGE = /^ctx\.[^.]+\.(.+)$/;
 const SKILL_NAME = /^[a-z0-9][a-z0-9-]*$/;
 const SKILL_DESCRIPTION_MAX = 1024;
@@ -434,7 +434,7 @@ function convertRecord(
   const fields: Record<string, unknown> = {
     schema: "steering-record/v1",
     lineage,
-    label: label ? fitContextRecordLabel(label) : memoryLabel(statement),
+    label: label ? fitSteeringRecordLabel(label) : memoryLabel(statement),
     kind: recordKind,
     effect,
     force: force.data,
@@ -499,7 +499,7 @@ function looksBinary(content: string): boolean {
 /** A skill's name as a label: `write-migration` reads "Write migration". */
 function skillLabel(name: string): string {
   const words = name.replace(/-+/g, " ").trim();
-  return fitContextRecordLabel(
+  return fitSteeringRecordLabel(
     words.charAt(0).toUpperCase() + words.slice(1),
   );
 }
@@ -1111,6 +1111,8 @@ export function importPullRequestBody(
     `- ${batches === 1 ? "one import batch" : `${batches} import batches`} of at most ${STEERING_PR_MAX_FILES} files each, on \`${IMPORT_BRANCH}\`${batches > 1 ? ` through \`${importBranch(batches)}\`` : ""}, for records, skills, and \`${GOVERNANCE_TOML_PATH}\`;`,
     `- \`${IMPORT_WORKSPACE_BRANCH}\` for \`${WORKSPACE_TOML_PATH}\`;`,
     "- one `agents/` PR for each agent Oxagen can write.",
+    "",
+    "Merge each of them from Oxagen, on the workspace's Steering page, in the order above. Oxagen lands each one through its merge queue with the stamp and the ledger line. A merge on GitHub leaves the steering repo diverged.",
   ];
   if (isImportBranch(branch.branch)) {
     if (branch.records.length > 0) {

@@ -271,7 +271,7 @@ describe("askAssistantStream", () => {
     });
   });
 
-  it("names each parked write as it parks, and leaves a budget pause out", async () => {
+  it("names each parked write as it parks", async () => {
     const parked = {
       approvalId: "apr_01",
       capability: "rotate_api_key",
@@ -280,13 +280,6 @@ describe("askAssistantStream", () => {
     respond(
       sse([
         data({ type: "approval-required", ...parked, riskLevel: "high" }),
-        data({
-          type: "approval-required",
-          approvalId: "apr_02",
-          capability: "budget.turn.continue",
-          expiresAt: "2026-09-25T10:05:00.000Z",
-          riskLevel: "low",
-        }),
         done({ ...TURN, parkedCards: [parked] }),
       ]),
     );

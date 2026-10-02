@@ -11,6 +11,11 @@
 //      (ADR-024) and the hostname.
 //   4. Mint the key and the host row in one transaction, sign the claims and
 //      the initial bundle, and return everything once.
+//   5. Propose the runtime's agent file (#5149, ADR-266): a steering PR that
+//      adds agents/<runtime>.toml naming the enrolling member as operator, so
+//      the MCP gateway can match the host's runs once a person merges it.
+//      The host is enrolled either way: a PR that does not open is logged
+//      and never fails the enrollment.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
@@ -26,6 +31,7 @@ import {
   noOperatorMessage,
   resolveOperatorUserId,
 } from "./lib/api-key-authz";
+import { workspaceAuthorityRole } from "@oxagen/iam/org-role";
 import {
   enrollmentDocument,
   mintHostEnrollment,
@@ -51,6 +57,9 @@ export function agentSlugFor(hostname: string): string {
   return `cc-${slug.length > 0 ? slug : "host"}`;
 }
 
+/** How long enrollment waits for the agent file PR before it answers. */
+const AGENT_FILE_WAIT_MS = 20_000;
+
 export const tachoEnrollmentCreateHandler: CapabilityHandler<
   typeof tachoEnrollmentCreate
 > = async (input, ctx) => {
@@ -62,18 +71,27 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
   if (!operatorUserId) throw denied(noOperatorMessage(ctx));
 
   const actorRole = await resolveActorRole(ctx.orgId, operatorUserId);
-  if (!actorRole || !AUTHORIZED_ROLES.has(actorRole)) {
+  // A workspace's Owner or Admin enrols hosts in that workspace too (#5228).
+  if (
+    (!actorRole || !AUTHORIZED_ROLES.has(actorRole)) &&
+    (await workspaceAuthorityRole(
+      { ...ctx, userId: operatorUserId },
+      operatorUserId,
+    )) === null
+  ) {
     logger.warn(
       { orgId: ctx.orgId, actorRole },
       "tacho.enrollment.create: rejected — insufficient org role",
     );
-    throw denied("Forbidden: only org Owners and Admins can enrol Tacho hosts");
+    throw denied(
+      "Forbidden: only org Owners and Admins, or the workspace's Owner or Admin, can enrol Tacho hosts",
+    );
   }
 
   const signing = requireEnrollmentSigning("create_tacho_enrollment");
   const issuedAt = new Date();
 
-  const minted = await withTenantDb(async (tx) => {
+  const { minted, operatorPublicId } = await withTenantDb(async (tx) => {
     const org = await tx.query.organizations.findFirst({
       where: eq(schema.organizations.id, ctx.orgId),
       columns: { namespace: true },
@@ -101,7 +119,7 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
     if (clash) {
       agentKey = `${org.namespace}.${workspace.namespace}.${baseSlug.slice(0, 13)}-${cryptoRandom(4)}`;
     }
-    return mintHostEnrollment(tx, {
+    const enrolled = await mintHostEnrollment(tx, {
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       userId: operatorUserId,
@@ -111,6 +129,21 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
       signing,
       issuedAt,
     });
+    // The agent file names its operator by the member's public id, which
+    // only a member of this organization has (ADR-266).
+    const [operator] = await tx
+      .select({ publicId: schema.users.publicId })
+      .from(schema.users)
+      .innerJoin(
+        schema.orgUsers,
+        and(
+          eq(schema.orgUsers.userId, schema.users.id),
+          eq(schema.orgUsers.orgId, ctx.orgId),
+        ),
+      )
+      .where(eq(schema.users.id, operatorUserId))
+      .limit(1);
+    return { minted: enrolled, operatorPublicId: operator?.publicId ?? null };
   });
 
   emitSecurityEvent({
@@ -134,5 +167,83 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
     "tacho.enrollment.create: host enrolled",
   );
 
+  if (minted.runtime !== null && operatorPublicId !== null) {
+    try {
+      const { openAgentFilePrQuietly } = await import(
+        "./steering-repo/agent-file"
+      );
+      const proposing = openAgentFilePrQuietly(await agentFileDeps(), {
+        scope: { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+        operator: { userId: operatorUserId, publicId: operatorPublicId },
+        runtime: { slug: minted.runtime.slug, name: minted.runtime.name },
+        hostname: input.hostname,
+        harnesses: input.harnesses,
+      }).catch((err: unknown) => {
+        // Caught here rather than below, so a failure after enrollment
+        // stopped waiting is still logged and never goes unhandled.
+        logger.warn(
+          { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+          "tacho.enrollment.create: the host enrolled, but its agent file was not proposed",
+        );
+      });
+      // The PR runs the steering checks before it opens, so a slow steering
+      // host would hold the enrollment's answer. Past the wait, enrollment
+      // answers and the PR keeps opening; openAgentFilePrQuietly logs how it
+      // ends.
+      if ((await settledWithin(proposing, AGENT_FILE_WAIT_MS)) === "waiting") {
+        logger.warn(
+          { orgId: ctx.orgId, workspaceId: ctx.workspaceId, runtime: minted.runtime.slug },
+          "tacho.enrollment.create: the agent file PR is still opening, so enrollment answers without waiting for it",
+        );
+      }
+    } catch (err) {
+      // The host is enrolled. A person can add the agent file by hand.
+      logger.warn(
+        { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+        "tacho.enrollment.create: the host enrolled, but its agent file was not proposed",
+      );
+    }
+  }
+
   return enrollmentDocument(minted, signing, issuedAt);
 };
+
+/** "settled" once `work` ends, or "waiting" when `ms` pass first. `work` runs on either way. */
+async function settledWithin(
+  work: Promise<unknown>,
+  ms: number,
+): Promise<"settled" | "waiting"> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const wait = new Promise<"waiting">((resolve) => {
+    timer = setTimeout(() => resolve("waiting"), ms);
+  });
+  try {
+    return await Promise.race([work.then(() => "settled" as const), wait]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * The agent file PR's opener, host, and proposal store, loaded on the first
+ * enrollment so importing this handler opens no steering host.
+ */
+async function agentFileDeps() {
+  const [
+    { AGENT_FILE_PULL_REQUEST },
+    { createSteeringPullRequestOpener, toolsSteeringHost, workspaceSteeringPullRequestDeps },
+    { postgresSteeringStore },
+  ] = await Promise.all([
+    import("./steering-repo/agent-file"),
+    import("./tools.pr.open"),
+    import("./context.steering.store"),
+  ]);
+  return {
+    opener: createSteeringPullRequestOpener(
+      workspaceSteeringPullRequestDeps,
+      AGENT_FILE_PULL_REQUEST,
+    ),
+    host: toolsSteeringHost,
+    proposals: postgresSteeringStore,
+  };
+}

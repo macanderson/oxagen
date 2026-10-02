@@ -4,10 +4,10 @@
 // segments, the Library's shelf row and its All shelf, the empty, error,
 // denied and loading states, and each tab and shelf making only its own
 // reads: Records in its ok, filtered, empty and paged states, the Proposals
-// list with its Open, Merged and Closed filters, rows that open each Context
+// list with its Open, Merged and Closed filters, rows that open each steering
 // PR's page and the page size Rows per page picks (#4693, #5077), and
 // Assignments with the delivery report. An axe check runs in every one. The
-// Context PR page's own states are in context-pr-page.test.tsx and the
+// steering PR page's own states are in steering-pr-page.test.tsx and the
 // dialog's in governance.test.tsx.
 import {
   cleanup,
@@ -47,10 +47,10 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn(), refresh: vi.fn() }),
 }));
 vi.mock("./actions", () => ({
-  openContextPr: vi.fn(),
-  mergeContextPr: vi.fn(),
+  openSteeringPr: vi.fn(),
+  mergeSteeringPr: vi.fn(),
   dismissProposal: vi.fn(),
-  approveContextPr: vi.fn(),
+  approveSteeringPr: vi.fn(),
   mergePrWithoutReview: vi.fn(),
   revertSteeringPr: vi.fn(),
   restoreManagedBlock: vi.fn(),
@@ -228,7 +228,7 @@ describe("the hub", () => {
     );
     expect(document.querySelectorAll("[data-create]")).toHaveLength(1);
     expect(
-      within(header).getByRole("button", { name: "Write a context record" }),
+      within(header).getByRole("button", { name: "Write a steering record" }),
     ).toHaveAttribute("data-create", "record");
   });
 
@@ -241,18 +241,18 @@ describe("the hub", () => {
     expect(buttons).toEqual([
       "Governance: team",
       "Import Markdown",
-      "Write a context record",
+      "Write a steering record",
     ]);
     expect(
       within(header).getByRole("button", { name: "Import Markdown" }).className,
     ).not.toMatch(/button-primary/);
   });
 
-  it("keeps the gold in the header on the Proposals list, whose rows open each Context PR (#5077)", async () => {
+  it("keeps the gold in the header on the Proposals list, whose rows open each steering PR (#5077)", async () => {
     await renderSteering("/proposals");
     expect(
       within(screen.getByTestId("hub-header")).getByRole("button", {
-        name: "Write a context record",
+        name: "Write a steering record",
       }).className,
     ).toMatch(/button-primary/);
     expect(
@@ -398,7 +398,7 @@ describe("the hub", () => {
     );
     expect(
       within(screen.getByTestId("hub-header")).queryByRole("button", {
-        name: "Write a context record",
+        name: "Write a steering record",
       }),
     ).toBeNull();
   });
@@ -469,7 +469,7 @@ describe("the hub", () => {
     });
   });
 
-  // #5077: the Candidates and Context PRs buttons are gone; the state
+  // #5077: the Candidates and steering PRs buttons are gone; the state
   // filters are the one row above the list.
   it("draws the state filters, Open pressed, and no segment buttons", async () => {
     await renderSteering("/proposals");
@@ -488,7 +488,7 @@ describe("the hub", () => {
       ["Closed1", `${BASE}/proposals?state=closed`, "false"],
     ]);
     expect(screen.queryByRole("button", { name: "Candidates" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Context PRs" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Steering PRs" })).toBeNull();
   });
 
   it("prints no mode and no waiting count when the hub read fails, and keeps the library (negative)", async () => {
@@ -837,7 +837,7 @@ describe("states", () => {
         "Published records live in .oxagen/rules/ on acme/platform. A record is published when its pull request merges.",
       );
       expect(
-        within(empty).getByRole("button", { name: "Write a context record" }),
+        within(empty).getByRole("button", { name: "Write a steering record" }),
       ).toBeVisible();
       expect(document.querySelectorAll("[data-create]")).toHaveLength(1);
       expect(screen.getByTestId("governance-chip")).toBeVisible();
@@ -851,7 +851,7 @@ describe("states", () => {
     expect(screen.queryByTestId("steering-empty")).toBeNull();
     expect(
       within(screen.getByTestId("hub-header")).getByRole("button", {
-        name: "Write a context record",
+        name: "Write a steering record",
       }),
     ).toBeVisible();
   });
@@ -1132,7 +1132,7 @@ describe("Records", () => {
     expect(labels()).toEqual(["Gamma", "Beta", "Alpha"]);
   });
 
-  it("prints unclassified and the title for a record no Context PR wrote, with no fact it lacks", async () => {
+  it("prints unclassified and the title for a record no steering PR wrote, with no fact it lacks", async () => {
     await renderSteering("/records", {
       records: readOk({
         records: [
@@ -1340,7 +1340,7 @@ describe("Proposals", () => {
         [ctx, { offset: 0, limit: 50, state: "open" }],
         [ctx, { offset: 0, limit: 50, state: "open" }],
       ],
-      contextPr: [],
+      steeringPr: [],
       freshness: [],
       layout: [],
       deliveries: [],
@@ -1378,12 +1378,12 @@ describe("Proposals", () => {
     ).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("makes the whole row a link to the Context PR's page, carrying the list it came from", async () => {
+  it("makes the whole row a link to the steering PR's page, carrying the list it came from", async () => {
     await renderSteering("/proposals?state=merged&rows=25");
     const row = screen.getByTestId("proposal-row");
     expect(row).toHaveClass("relative", "cursor-pointer");
     const link = within(row).getByRole("link", {
-      name: "Open the Context PR for ctx.release.no-reread-changelog",
+      name: "Open the steering PR for ctx.release.no-reread-changelog",
     });
     expect(link).toHaveAttribute(
       "href",
@@ -1424,13 +1424,13 @@ describe("Proposals", () => {
 
   it("renders no pane under the list (negative)", async () => {
     const calls = await renderSteering("/proposals");
-    expect(calls.contextPr).toEqual([]);
+    expect(calls.steeringPr).toEqual([]);
     expect(screen.queryByRole("region", { name: "Pull request" })).toBeNull();
   });
 
   it.each([
     ["open", "No open proposals", "oxagen context propose"],
-    ["merged", "No merged proposals", "once its Context PR merges"],
+    ["merged", "No merged proposals", "once its steering PR merges"],
     ["closed", "No closed proposals", "closed on the host"],
   ] as const)("says the %s list is empty", async (state, title, body) => {
     await renderSteering(`/proposals?state=${state}`, {
@@ -1466,7 +1466,7 @@ describe("Proposals", () => {
     );
     expect(
       screen.getByRole("link", {
-        name: "Open the Context PR for ctx.page.0",
+        name: "Open the steering PR for ctx.page.0",
       }),
     ).toHaveAttribute(
       "href",

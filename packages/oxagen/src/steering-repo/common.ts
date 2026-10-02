@@ -1,7 +1,7 @@
 // common.ts: the zod shapes the steering repo schemas share. Each one checks
 // a name the Shared contract fixes, with the pattern from names.ts.
 import { z } from "zod";
-import { CONTEXT_RECORD_LINEAGE } from "../context-record-label";
+import { STEERING_RECORD_LINEAGE } from "../steering-record-label";
 import { RESERVED_WORKSPACE_SLUGS, workspaceSlug } from "../workspace-slug";
 import { withJsonSchema } from "./json-schema";
 import {
@@ -17,7 +17,7 @@ import {
 export const lineageSchema = z
   .string()
   .regex(
-    CONTEXT_RECORD_LINEAGE,
+    STEERING_RECORD_LINEAGE,
     "a lineage is lowercase letters, digits, dots, and hyphens, and starts and ends with a letter or digit",
   );
 

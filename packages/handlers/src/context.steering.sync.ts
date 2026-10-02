@@ -13,7 +13,7 @@
 //
 // Flow:
 //   1. The workspace's steering repository. No repository, no sync.
-//   2. Every open Context PR, read from the host before the branch, so a merge
+//   2. Every open steering PR, read from the host before the branch, so a merge
 //      seen here is already on the head read next.
 //   3. The production branch's head and its provenance. A missing or refused
 //      verifier on a provisioned GitHub repository stops all live writes.
@@ -25,11 +25,12 @@
 //      head is linked, and one that goes away is unlinked. This runs once per
 //      synced head, here and never in step 8. A problem with the file, or a
 //      repository the sync cannot link, is a warning.
-//   6. The Context PRs: a merged one points at its published record, a closed
+//   6. The steering PRs: a merged one points at its published record, a closed
 //      one is rejected, and one whose head moved has its checks reset. A
 //      proposal a merge from Oxagen has claimed is left to that merge. A
-//      merged governance PR publishes no record, so its row reads merged with
-//      its merge commit and nothing else (#4795).
+//      merged governance or steering PR publishes no single record, so its
+//      row reads merged with its merge commit and nothing else (#4795,
+//      #5122).
 //   7. The sync state, and a check on the head commit naming every problem.
 //      Then the governance change, when the head moved: a governance mode in
 //      steering/governance.toml that differs from the last synced head's, on
@@ -48,7 +49,10 @@
 //      branch, and the next sync tries again.
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { HandlerError } from "@oxagen/oxagen";
-import type { GovernanceMode } from "@oxagen/oxagen/contracts/context.steering.shared";
+import {
+  isRecordKind,
+  type GovernanceMode,
+} from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
   type FileIssue,
   readTomlFile,
@@ -86,11 +90,11 @@ import {
   type SyncStore,
 } from "./context.steering.sync.store";
 import {
+  checksAfterMove,
   closedOnHostReason,
   hostName,
   OPEN_PR,
-  pendingChecks,
-  STALE_FROM,
+  resetsOnMove,
 } from "./context.steering.pr-state";
 import { logger } from "./logger";
 import {
@@ -183,7 +187,7 @@ export function syncDeps(): SyncDeps {
     emit: emitSecurityEvent,
     steeringVersionAt: (scope, repo, commitSha) =>
       postgresVersionStore(scope).versionAt(steeringRepositoryKey(repo), commitSha),
-    // The same publisher merge_context_pr calls, over the same host, so a
+    // The same publisher merge_steering_pr calls, over the same host, so a
     // verified GitHub merge reaches the same version sequence.
     // The publish refuses while the steering repo is not healthy (S2).
     // Each version the sync publishes is recorded as a deployment, as a
@@ -207,8 +211,8 @@ export interface SyncOutcome {
   proposals: { merged: number; rejected: number; stale: number };
   findings: SyncFinding[];
   /**
-   * Seconds to wait before syncing again, or null. Set while a Context PR
-   * Oxagen merged is still inside its grace window: `merge_context_pr`
+   * Seconds to wait before syncing again, or null. Set while a steering PR
+   * Oxagen merged is still inside its grace window: `merge_steering_pr`
    * publishes it with its reviewer on the ledger, and the sync leaves it alone
    * until the window passes.
    */
@@ -233,7 +237,7 @@ interface GovernanceChange {
   pullRequest: string | null;
 }
 
-/** How long a merge Oxagen made is left to `merge_context_pr` to publish. */
+/** How long a merge Oxagen made is left to `merge_steering_pr` to publish. */
 export const MERGE_GRACE_SECONDS = 90;
 
 /** The most record files one sync reads. Past it the sync refuses rather than cut. */
@@ -473,7 +477,7 @@ export async function syncWorkspaceSteering(
 
   const prior = await deps.store.readState(scope);
   try {
-    // 2. The open Context PRs, before the branch.
+    // 2. The open steering PRs, before the branch.
     const pulls: { row: ProposalRow; pr: PullState }[] = [];
     for (const row of await deps.store.openProposals(scope)) {
       if (row.prNumber === null || (row.provider ?? "github") !== repo.provider)
@@ -486,7 +490,7 @@ export async function syncWorkspaceSteering(
       } catch (err) {
         logger.warn(
           { err, proposal: row.publicId, pr: row.prNumber },
-          "context.sync: could not read a Context PR; the next sync reads it again",
+          "context.sync: could not read a steering PR; the next sync reads it again",
         );
       }
     }
@@ -602,7 +606,7 @@ export async function syncWorkspaceSteering(
     ];
     outcome.findings = findings;
 
-    // 6. The Context PRs.
+    // 6. The steering PRs.
     const noClaimSince = claimCutoff(now);
     for (const { row, pr } of pulls) {
       // A merge from Oxagen is landing this PR. It moves the proposal itself,
@@ -637,22 +641,23 @@ export async function syncWorkspaceSteering(
         pr.headSha !== null &&
         row.headSha !== null &&
         pr.headSha !== row.headSha &&
-        (STALE_FROM as readonly string[]).includes(row.status)
+        resetsOnMove(row)
       ) {
         // The branch moved on the host after the checks ran. The checks no
         // longer describe what would merge, so they go back to pending and
-        // the page asks for a new run.
+        // the page asks for a new run. Only a record proposal runs the six
+        // record checks. A governance or steering PR proposal runs the
+        // steering checks: setting the mode again, or the merge, runs them
+        // (#4795, #5122).
         try {
           await deps.steering.updateProposal(
             row.id,
             {
               status: "pr_open",
               headSha: pr.headSha,
-              // A governance proposal runs the steering checks, not the six
-              // record checks. Setting the mode again runs them (#4795).
-              checks: row.kind === "governance" ? [] : pendingChecks(),
+              checks: checksAfterMove(row.kind),
             },
-            [row.status as (typeof STALE_FROM)[number]],
+            [row.status],
             { headSha: row.headSha, noClaimSince },
           );
           outcome.proposals.stale += 1;
@@ -663,11 +668,11 @@ export async function syncWorkspaceSteering(
       }
     }
     for (const { row, pr } of merged) {
-      // A governance PR publishes no record, so there is none to link. The
-      // row reads merged with its commit, and no approver, because nobody
-      // approved it in Oxagen (#4795).
-      if (row.kind === "governance") {
-        const linked = await deps.store.linkMergedGovernance(scope, row.id, {
+      // A governance or steering PR publishes no single record, so there is
+      // none to link. The row reads merged with its commit, and no approver,
+      // because nobody approved it in Oxagen (#4795, #5122).
+      if (!isRecordKind(row.kind)) {
+        const linked = await deps.store.linkMergedWithoutRecord(scope, row.id, {
           mergedCommit: pr.mergeCommitSha ?? head,
           mergedAt: pr.mergedAt ?? now,
           noClaimSince,
@@ -822,7 +827,7 @@ async function governanceModeAt(
  * setting changes nothing here. A file missing or unreadable at either head is
  * a layout change or a file problem, which the checks and health report, and
  * not a mode change. A change whose commit carries `Oxagen-Version` came
- * through landSteeringPr, which merge_context_pr and set_governance_mode both
+ * through landSteeringPr, which merge_steering_pr and set_governance_mode both
  * use, and each of them records its own event. Anyone who can push can write
  * that trailer too, so it counts only when Oxagen's records hold the commit
  * (oxagenMerged).
@@ -974,8 +979,8 @@ async function reject(
 }
 
 /**
- * Delete a settled Context PR's branch, as `dismiss_proposal` and
- * `merge_context_pr` do. The next proposal on the lineage branches from the
+ * Delete a settled steering PR's branch, as `dismiss_proposal` and
+ * `merge_steering_pr` do. The next proposal on the lineage branches from the
  * production branch; a stale branch left behind on the lineage would carry
  * the old PR's commits into it. Best effort: a branch already gone is fine, and a
  * refusal is logged rather than failing the sync.
@@ -991,7 +996,7 @@ async function dropBranch(
   } catch (err) {
     logger.warn(
       { err, proposal: row.publicId, branch: row.branch },
-      "context.sync: could not delete a settled Context PR's branch",
+      "context.sync: could not delete a settled steering PR's branch",
     );
   }
 }

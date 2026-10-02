@@ -12,11 +12,11 @@
  */
 import { setTimeout as sleep } from "node:timers/promises";
 import { z } from "zod";
-import type { ContextPrGetOutput } from "@oxagen/oxagen/contracts/context.pr.get";
-import type { ContextPrMergeOutput } from "@oxagen/oxagen/contracts/context.pr.merge";
-import type { ContextPrOpenOutput } from "@oxagen/oxagen/contracts/context.pr.open";
-import type { ContextProposalCreateOutput } from "@oxagen/oxagen/contracts/context.proposal.create";
-import type { ContextProposalListOutput } from "@oxagen/oxagen/contracts/context.proposal.list";
+import type { SteeringPrGetOutput } from "@oxagen/oxagen/contracts/steering.pr.get";
+import type { SteeringPrMergeOutput } from "@oxagen/oxagen/contracts/steering.pr.merge";
+import type { SteeringPrOpenOutput } from "@oxagen/oxagen/contracts/steering.pr.open";
+import type { SteeringProposalCreateOutput } from "@oxagen/oxagen/contracts/steering.proposal.create";
+import type { SteeringProposalListOutput } from "@oxagen/oxagen/contracts/steering.proposal.list";
 import type { SteeringRepoGetOutput } from "@oxagen/oxagen/contracts/steering_repo.get";
 import type { SteeringRepoRepairOutput } from "@oxagen/oxagen/contracts/steering_repo.repair";
 import type { WorkspaceArchiveOutput } from "@oxagen/oxagen/contracts/workspace.archive";
@@ -336,7 +336,8 @@ const mergeFacts = {
 };
 
 // The merge answers a union on `kind`: a governance proposal carries the mode
-// it landed, and every record kind carries its record (#4795, ADR-232).
+// it landed, every record kind carries its record (#4795, ADR-232), and a
+// steering PR proposal carries its pull request (#5122, ADR-265).
 const mergeResult = z.union([
   z.object({
     ...mergeFacts,
@@ -347,6 +348,12 @@ const mergeResult = z.union([
     ...mergeFacts,
     kind: z.string(),
     record: z.object({ lineageId: z.string(), version: z.number().int(), path: z.string() }),
+  }),
+  z.object({
+    ...mergeFacts,
+    kind: z.string(),
+    pullRequest: z.object({ number: z.number().int(), branch: z.string() }),
+    retired: z.array(z.string()),
   }),
 ]);
 
@@ -379,11 +386,11 @@ type Assert<T extends true> = T;
 export type ContractFit = [
   Assert<Fits<SteeringRepoGetOutput, SteeringRepoView>>,
   Assert<Fits<SteeringRepoRepairOutput, z.output<typeof repairResult>>>,
-  Assert<Fits<ContextPrOpenOutput, SteeringPrView>>,
-  Assert<Fits<ContextPrGetOutput, SteeringPrView>>,
-  Assert<Fits<ContextPrMergeOutput, z.output<typeof mergeResult>>>,
-  Assert<Fits<ContextProposalCreateOutput, z.output<typeof proposalCreated>>>,
-  Assert<Fits<ContextProposalListOutput, z.output<typeof proposalList>>>,
+  Assert<Fits<SteeringPrOpenOutput, SteeringPrView>>,
+  Assert<Fits<SteeringPrGetOutput, SteeringPrView>>,
+  Assert<Fits<SteeringPrMergeOutput, z.output<typeof mergeResult>>>,
+  Assert<Fits<SteeringProposalCreateOutput, z.output<typeof proposalCreated>>>,
+  Assert<Fits<SteeringProposalListOutput, z.output<typeof proposalList>>>,
   Assert<Fits<WorkspaceCreateOutput, z.output<typeof workspaceCreated>>>,
   Assert<Fits<WorkspaceListOutput, z.output<typeof workspaceList>>>,
   Assert<Fits<WorkspaceArchiveOutput, z.output<typeof workspaceArchived>>>,
@@ -434,7 +441,7 @@ export function proposeRecord(
 ) {
   return ox.call(
     "POST",
-    workspacePath(settings, settings.runSlug, "/context/proposals/create"),
+    workspacePath(settings, settings.runSlug, "/steering/proposals/create"),
     {
       record: {
         lineageId,
@@ -459,7 +466,7 @@ export async function findProposal(
 ): Promise<string | null> {
   const listed = await ox.call(
     "POST",
-    workspacePath(settings, settings.runSlug, "/context/proposals"),
+    workspacePath(settings, settings.runSlug, "/steering/proposals"),
     { lineageId, limit: 1 },
     proposalList,
   );
@@ -469,7 +476,7 @@ export async function findProposal(
 export function openSteeringPr(ox: Oxagen, settings: Settings, proposalId: string) {
   return ox.call(
     "POST",
-    workspacePath(settings, settings.runSlug, "/context/prs/open"),
+    workspacePath(settings, settings.runSlug, "/steering/prs/open"),
     { proposalId },
     steeringPrView,
   );
@@ -478,7 +485,7 @@ export function openSteeringPr(ox: Oxagen, settings: Settings, proposalId: strin
 export function readSteeringPr(ox: Oxagen, settings: Settings, proposalId: string) {
   return ox.call(
     "POST",
-    workspacePath(settings, settings.runSlug, "/context/prs/get"),
+    workspacePath(settings, settings.runSlug, "/steering/prs/get"),
     { proposalId },
     steeringPrView,
   );
@@ -487,7 +494,7 @@ export function readSteeringPr(ox: Oxagen, settings: Settings, proposalId: strin
 export function mergeSteeringPr(ox: Oxagen, settings: Settings, proposalId: string) {
   return ox.call(
     "POST",
-    workspacePath(settings, settings.runSlug, "/context/prs/merge"),
+    workspacePath(settings, settings.runSlug, "/steering/prs/merge"),
     { proposalId },
     mergeResult,
   );

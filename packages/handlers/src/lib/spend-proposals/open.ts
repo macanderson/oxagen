@@ -16,7 +16,7 @@
  * the kernel writes no `capability.invoke_*` row. Its authority is fixed here
  * instead: one workspace, a `should` rule shared with that workspace, and a
  * new lineage only. The proposal steers nothing until a person with a
- * workspace role merges it as a Context PR, and `merge_context_pr` checks that
+ * workspace role merges it as a steering PR, and `merge_steering_pr` checks that
  * role. Each write records the audit row the kernel would have written, with
  * a null actor and `findings_job` in its detail.
  */
@@ -27,8 +27,8 @@ import type {
 } from "@oxagen/billing/proposal-opener";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { isHandlerError, type CapabilityContext } from "@oxagen/oxagen";
-import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
-import { createProposal } from "../../context.proposal.shared";
+import { steeringProposalCreate } from "@oxagen/oxagen/contracts/steering.proposal.create";
+import { createProposal } from "../../steering.proposal.shared";
 import {
   postgresSteeringStore,
   type SteeringStore,
@@ -98,7 +98,7 @@ export async function openProposals(
         actorUserId: null,
         orgId: scope.orgId,
         workspaceId: scope.workspaceId,
-        capability: contextProposalCreate.name,
+        capability: steeringProposalCreate.name,
         outcome: proposalId === null ? "error" : "allow",
         ip: null,
         userAgent: null,

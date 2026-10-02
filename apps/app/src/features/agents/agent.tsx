@@ -25,6 +25,7 @@ import type { DataSource } from "@/data/ports";
 import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
+import { mayActInWorkspace } from "@/shared/workspace-authority";
 import { RouteTabPanel } from "@/ui/route-tabs";
 import { ActivitySection } from "./activity";
 import {
@@ -144,6 +145,7 @@ export async function Agent({
         identity={identity}
         lastRun={lastRun}
         orgRole={ctx.orgRole}
+        wsRole={ctx.wsRole}
         org={place.org}
         ws={place.ws}
       />
@@ -262,7 +264,8 @@ function tabBody({
               place={place}
               current={detail.toolbelt}
               belts={reads.belts}
-              // assign_agent_toolbelt admits an org Owner or Admin (ADR-198).
+              // assign_agent_toolbelt admits an org Owner or Admin (ADR-198),
+              // and the workspace's Owner or Admin (#5228).
               canChange={mayRebind(ctx) && identity.status !== "retired"}
             />
           )}
@@ -279,7 +282,8 @@ function tabBody({
               harness={identity.harness}
               current={detail.runtime}
               runtimes={reads.runtimes}
-              // move_agent admits an org Owner or Admin (ADR-198).
+              // move_agent admits an org Owner or Admin (ADR-198), and the
+              // workspace's Owner or Admin (#5228).
               canMove={mayRebind(ctx) && identity.status !== "retired"}
             />
           )}
@@ -292,7 +296,7 @@ function tabBody({
               tab: "runtime",
             })}
             // create_enrollment_token and revoke_host_enrollment admit an org
-            // Owner or Admin only.
+            // Owner or Admin, or the workspace's Owner or Admin (#5228).
             canManageHosts={mayRebind(ctx)}
           />
         </div>
@@ -308,6 +312,7 @@ function tabBody({
           runs={runs.ok ? runs.value : []}
           operatorName={operatorName}
           orgRole={ctx.orgRole}
+          wsRole={ctx.wsRole}
           place={place}
         />
       );
@@ -328,7 +333,10 @@ function tabBody({
   }
 }
 
-/** The org roles that may move an agent, change its toolbelt, or manage its hosts. */
+/**
+ * Who may move an agent, change its toolbelt, or manage its hosts: an org
+ * Owner or Admin, or the workspace's Owner or Admin (#5228).
+ */
 function mayRebind(ctx: WsCtx): boolean {
-  return ctx.orgRole === "owner" || ctx.orgRole === "admin";
+  return mayActInWorkspace(ctx.orgRole, ctx.wsRole, ["owner", "admin"]);
 }

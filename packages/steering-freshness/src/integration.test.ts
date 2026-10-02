@@ -108,8 +108,8 @@ afterAll(async () => {
   await rm(tmp, { recursive: true, force: true });
 });
 
-/** Merge a new record onto the production branch, as a Context PR does. */
-async function mergeContextPr(
+/** Merge a new record onto the production branch, as a steering PR does. */
+async function mergeSteeringPr(
   lineage: string,
   statement: string,
 ): Promise<void> {
@@ -173,13 +173,13 @@ describe("a checkout on the production branch", () => {
   });
 });
 
-describe("a feature branch while Context PRs keep merging", () => {
+describe("a feature branch while steering PRs keep merging", () => {
   beforeAll(async () => {
     await g(work, "checkout", "--quiet", "-b", "feature/widget");
     await write(work, "src.txt", "work in progress\n");
     await g(work, "add", "-A");
     await g(work, "commit", "--quiet", "-m", "wip");
-    await mergeContextPr(
+    await mergeSteeringPr(
       "ctx.release.pin-schema",
       "Pin the schema before a release.",
     );
@@ -297,7 +297,7 @@ describe("a branch that is authoring its own record", () => {
   });
 
   it("is diverged once the production branch also moves", async () => {
-    await mergeContextPr(
+    await mergeSteeringPr(
       "ctx.audit.seal",
       "Seal the run before you export it.",
     );
@@ -347,7 +347,7 @@ describe("uncommitted work under .oxagen", () => {
       ".oxagen/rules/ctx.base.always.toml",
       recordToml("ctx.base.always", "Edited, not saved."),
     );
-    await mergeContextPr("ctx.spend.ceiling", "Stop at the ceiling.");
+    await mergeSteeringPr("ctx.spend.ceiling", "Stop at the ceiling.");
   });
 
   it("reports the edit and refuses to overwrite it", async () => {
@@ -426,7 +426,7 @@ describe("the fetch throttle", () => {
 // dirt at all and auto-sync replaced it with `force` false.
 describe("an ignored local file where production added a record", () => {
   it("counts as dirt, so the sync refuses", async () => {
-    await mergeContextPr("ctx.ignored.case", "Production's version");
+    await mergeSteeringPr("ctx.ignored.case", "Production's version");
     const path = ".oxagen/rules/ctx.ignored.case.toml";
     await write(work, path, "# the developer's own, ignored, copy\n");
     await write(work, ".git/info/exclude", `${path}\n`);
@@ -467,7 +467,7 @@ describe("a shallow feature clone", () => {
     await g(author, "commit", "--quiet", "-m", "two");
     await g(author, "push", "--quiet", "origin", "feature/shallow");
     // Then production gains a record the branch does not have.
-    await mergeContextPr("ctx.shallow.case", "Published after the branch");
+    await mergeSteeringPr("ctx.shallow.case", "Published after the branch");
 
     const shallow = join(tmp, "shallow");
     await g(
@@ -627,7 +627,7 @@ describe("a retired record whose ignored copy is still on disk", () => {
 // over the edit with `force` false.
 describe("a materialised skip-worktree record with a local edit", () => {
   it("is dirt, and the sync refuses to overwrite it", async () => {
-    await mergeContextPr("ctx.skipped.edit", "Production's first version");
+    await mergeSteeringPr("ctx.skipped.edit", "Production's first version");
     const skipped = join(tmp, "skipped");
     await g(tmp, "clone", "--quiet", origin, skipped);
     await g(skipped, "config", "user.name", "Test");

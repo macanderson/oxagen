@@ -40,7 +40,10 @@ export function RuntimesEmpty({
 }: {
   org: string;
   ws: string;
-  /** Whether the viewer may name a runtime (an org Owner or Admin). */
+  /**
+   * Whether the viewer may name a runtime: an org or workspace Owner or
+   * Admin.
+   */
   canAdd: boolean;
 }) {
   const t = useTranslations("runtimes.empty");

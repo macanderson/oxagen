@@ -36,7 +36,7 @@ type Messages = {
     agent: string;
     mandate: string;
     record: string;
-    contextPr: string;
+    steeringPr: string;
     work: string;
     workItem: string;
     workSetup: string;
@@ -2569,7 +2569,7 @@ type Messages = {
       passed: string;
       failed: string;
       running: string;
-      onContextPrs: string;
+      onSteeringPrs: string;
     };
     failure: {
       orgRoleRequired: string;
@@ -6056,10 +6056,11 @@ type Messages = {
         openedBy: string;
       };
       kinds: {
-        context_record: string;
+        steering_record: string;
+        steering_pr: string;
       };
       kindPaths: {
-        context_record: string;
+        steering_record: string;
       };
       states: {
         pr_open: string;
@@ -10491,6 +10492,8 @@ type Messages = {
         head: string;
         headUnknown: string;
         path: string;
+        folder: string;
+        root: string;
         governance: string;
         approvals: string;
       };
@@ -10518,6 +10521,10 @@ type Messages = {
         governance: string;
         version: string;
         promotion: string;
+        steeringChecks: string;
+        lands: string;
+        retires: string;
+        steeringVersion: string;
         review: string;
       };
       merged: {
@@ -10550,6 +10557,7 @@ type Messages = {
       };
       record: {
         title: string;
+        proposalTitle: string;
         kind: string;
         force: string;
         effect: string;
@@ -10647,6 +10655,7 @@ type Messages = {
         confirm: string;
         title: string;
         body: string;
+        filesBody: string;
         dialogConfirm: string;
         pending: string;
         blocked: string;
@@ -10682,6 +10691,8 @@ type Messages = {
         productionBranchMissing: string;
         productionBranchMoving: string;
         checksFailed: string;
+        steeringPrProposal: string;
+        steeringRepoRequired: string;
         notMerged: string;
         governanceProposal: string;
         prNotRecorded: string;
@@ -10711,6 +10722,7 @@ type Messages = {
         pending: string;
         opened: string;
         goToPr: string;
+        goToProposal: string;
         checkFailed: string;
       };
       restore: {
@@ -12298,6 +12310,13 @@ type Messages = {
         memory: string;
         preference: string;
         governance: string;
+        revert: string;
+        tools: string;
+        import: string;
+        memory_pr: string;
+        agent_file: string;
+        agent_proposal: string;
+        workspace: string;
       };
       unclassified: string;
       force: string;

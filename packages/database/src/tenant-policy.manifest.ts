@@ -51,16 +51,16 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // The named runtimes agents run on (ADR-198).
   { table: "agent.runtimes", policyClass: "standard" },
   // Workspace agent-asset registry (20260831120000_agent_asset_registry.sql):
-  // tool declarations + context records + the append-only promotions ledger.
+  // tool declarations + steering records + the append-only promotions ledger.
   // All tenant-authored (no builtin sentinel rows), so plain standard.
   { table: "agent.tools", policyClass: "standard" },
   { table: "agent.tool_versions", policyClass: "standard" },
-  { table: "agent.context_records", policyClass: "standard" },
-  { table: "agent.context_record_versions", policyClass: "standard" },
-  { table: "agent.context_promotions", policyClass: "standard" },
-  // Steering proposals and the Context PR state machine, and the records
+  { table: "agent.steering_records", policyClass: "standard" },
+  { table: "agent.steering_record_versions", policyClass: "standard" },
+  { table: "agent.steering_promotions", policyClass: "standard" },
+  // Steering proposals and the steering PR state machine, and the records
   // agents append through append_record (ADR-061); org_id + workspace_id NOT NULL.
-  { table: "agent.context_proposals", policyClass: "standard" },
+  { table: "agent.steering_proposals", policyClass: "standard" },
   { table: "agent.context_appends", policyClass: "standard" },
   // The repository sync's per-workspace state (ADR-184).
   { table: "agent.context_sync_state", policyClass: "standard" },
@@ -357,9 +357,6 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Agent-memory decay policy. org_id + workspace_id both NOT NULL
   // → standard tenant_isolation RLS.
   { table: "workspace.workspace_memory_policy", policyClass: "standard" },
-  // Per-turn budget governance. org_id + workspace_id both NOT NULL
-  // → standard tenant_isolation RLS.
-  { table: "workspace.workspace_budget_policy", policyClass: "standard" },
   // Wrapped-harness session governance: what the loopback model gateway
   // refuses for a Claude Code or Codex session. org_id + workspace_id both
   // NOT NULL → standard tenant_isolation RLS.

@@ -21,6 +21,7 @@ export const orgSlackChannelSet = registerCapability({
   surfaces: [],
   layers: ["schema", "app", "unit", "docs"],
   scoped: false,
+  orgLevel: true,
   noBillingGate: true,
   mutates: true,
   sensitivity: "high",

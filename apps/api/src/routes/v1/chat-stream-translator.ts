@@ -10,10 +10,9 @@
 // reply and the usage, so this translator keeps no copy of either.
 
 // Minimal typed stream events emitted over SSE. UNCHANGED wire shapes — every
-// field name and event `type` matches the pre-engine chat.stream output. The
-// `budget-notice` variant is additive: it fires ONLY when a per-turn USD budget
-// policy is active (off by default), so a budget-less turn's byte output is
-// unchanged.
+// field name and event `type` matches the pre-engine chat.stream output. No
+// customer-configured budget applies to the assistant (ADR-235), so no event
+// reports one.
 export type ApiStreamEvent =
   | { type: "text"; text: string }
   | { type: "reasoning-start"; reasoningId: string }
@@ -53,13 +52,6 @@ export type ApiStreamEvent =
         completionTokens: number;
         totalTokens: number;
       };
-    }
-  | {
-      type: "budget-notice";
-      state: "within_grace" | "stopped";
-      costUsd: number;
-      limitUsd: number;
-      mode: string;
     }
   | { type: "run"; runId: string }
   | {

@@ -170,34 +170,34 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - commit_markdown_import
 - dismiss_memories
 - dismiss_proposal
-- get_context_pr
-- get_context_pr_diff
 - get_published_steering
 - get_record
 - get_steering_deliveries
 - get_steering_freshness
 - get_steering_index
 - get_steering_layout
+- get_steering_pr
+- get_steering_pr_diff
 - get_workspace_memory
-- list_context_records
 - list_memory_pr_records
 - list_proposals
 - list_records
+- list_steering_records
 - list_workspace_memories
-- merge_context_pr
 - merge_pr_without_review
-- open_context_pr
+- merge_steering_pr
+- open_steering_pr
 - parse_markdown_import
-- promote_context_record
 - promote_memories
+- promote_steering_record
 - propose_record
 - propose_steering
-- publish_context_record
+- publish_steering_record
 - read_steering
-- refresh_context_pr
+- refresh_steering_pr
 - restore_managed_block
 - revert_steering_pr
-- revise_context_record
+- revise_steering_record
 - search_steering
 
 ## control
@@ -597,12 +597,10 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 
 ## user
 
-- get_user_budget
 - get_user_preferences
 - get_workspace_user_preferences
 - set_preferences
 - update_profile
-- update_user_budget
 - update_workspace_user_preferences
 
 ## work
@@ -635,14 +633,12 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 
 - archive_workspace
 - create_workspace
-- get_budget_policy
 - get_model_settings
 - get_prompt_settings
 - get_workspace_settings
 - list_workspaces
 - send_workspace_invite
 - set_governance_mode
-- update_budget_policy
 - update_model_settings
 - update_prompt_settings
 - update_workspace_settings

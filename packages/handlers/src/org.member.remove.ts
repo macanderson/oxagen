@@ -42,7 +42,7 @@
 // shared for every table touched here. ADR-042 §2 names `iam`, `org` and `auth`
 // among the platform tables that always live on the shared plane; the two
 // `workspace.*` tables are org structure rather than tenant data — that list is
-// traces, evidence, graph, memory, context records, conversations and ingestion
+// traces, evidence, graph, memory, steering records, conversations and ingestion
 // state — and the app's own new-workspace action creates both through
 // withSystemDb. So the data-plane resolution and assertDataPlaneUsable that
 // withTenantDb was doing guarded a binding none of these tables follow, and

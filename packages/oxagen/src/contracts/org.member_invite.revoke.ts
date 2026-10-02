@@ -9,6 +9,7 @@ export const revokeMemberInvite = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
+  orgLevel: true,
   mutates: true,
   noBillingGate: true,
   sensitivity: "high",

@@ -4,9 +4,9 @@
 // such as a-intel.docs.release-checklist.tag-the-release. A label fits the
 // 36-character cap, and a description is the statement's first sentence.
 import {
-  CONTEXT_RECORD_LINEAGE,
-  fitContextRecordLabel,
-} from "@oxagen/oxagen/context-record-label";
+  STEERING_RECORD_LINEAGE,
+  fitSteeringRecordLabel,
+} from "@oxagen/oxagen/steering-record-label";
 import { DESCRIPTION_MAX } from "@oxagen/oxagen/steering-repo/tokens";
 
 /** The longest lineage the import writes, so a file name stays well inside a host's 255-byte limit. */
@@ -60,7 +60,7 @@ export function lineageOf(parts: readonly string[]): string {
     if (next.length > LINEAGE_MAX) break;
     lineage = next;
   }
-  if (CONTEXT_RECORD_LINEAGE.test(lineage) && lineage.includes(".")) return lineage;
+  if (STEERING_RECORD_LINEAGE.test(lineage) && lineage.includes(".")) return lineage;
   return `${kept[0] || "import"}.imported`;
 }
 
@@ -77,10 +77,10 @@ export function uniqueLineage(base: string, taken: Set<string>): string {
 
 /** A label from a proposed name or, failing that, the statement's first words. */
 export function labelOf(proposed: string | null, statement: string): string {
-  const fitted = fitContextRecordLabel(proposed ?? "");
+  const fitted = fitSteeringRecordLabel(proposed ?? "");
   if (fitted !== "") return fitted;
   const words = statement.replace(/[#*_`>]+/g, " ").trim();
-  return fitContextRecordLabel(words) || "Imported record";
+  return fitSteeringRecordLabel(words) || "Imported record";
 }
 
 /** The statement's first sentence, at most `max` characters, cut at a word. */

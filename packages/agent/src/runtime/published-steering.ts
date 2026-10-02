@@ -18,7 +18,7 @@
  * What a record says is read from the version it pins, not from the record
  * row (#3312). The row carries a copy of the classification for listing, but
  * the copy is what the last write left there; the version is what the body
- * says. A version the legacy `publish_context_record` path wrote has no
+ * says. A version the legacy `publish_steering_record` path wrote has no
  * classification of its own, and for that one the row's copy is the answer.
  * When a record took effect is the row's `activated_at`, which both publish
  * paths write when they pin a version.
@@ -31,7 +31,7 @@
  */
 import {
   ambientPlaneKey,
-  CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+  STEERING_VERSION_CLASSIFICATION_COLUMN,
   hasColumn,
   type ProbeTx,
   schema,
@@ -87,8 +87,8 @@ export interface SteeringVersionRow {
 
 /**
  * The transaction shape the read needs; kept narrow so tests can fake it.
- * Two statements: one over `context_promotions` that answers the cache key,
- * one over `context_records` joined to the pinned version that answers the
+ * Two statements: one over `steering_promotions` that answers the cache key,
+ * one over `steering_records` joined to the pinned version that answers the
  * rows.
  */
 export interface SteeringTx extends ProbeTx {
@@ -112,7 +112,7 @@ function instant(value: Date | string | null): string {
  * The record-registry adapter (ADR-093 §3): a record as a candidate, or
  * `null` for a row that cannot steer. A row with no force cannot be ranked
  * and a row with no statement has nothing to say; both are what the schema
- * comment on `context_records` warns the legacy publish path could leave,
+ * comment on `steering_records` warns the legacy publish path could leave,
  * and neither can be delivered.
  *
  * The body is the line the agent reads: the statement, then the kind (with a
@@ -172,18 +172,18 @@ export function classificationOf(row: SteeringRow): SteeringRecord {
 /** The predicates a record row must meet to be read at all. */
 function activePinnedIn(orgId: string, workspaceId: string) {
   return and(
-    eq(schema.contextRecords.orgId, orgId),
-    eq(schema.contextRecords.workspaceId, workspaceId),
-    eq(schema.contextRecords.status, "active"),
-    isNull(schema.contextRecords.deletedAt),
-    isNotNull(schema.contextRecords.activeVersionId),
+    eq(schema.steeringRecords.orgId, orgId),
+    eq(schema.steeringRecords.workspaceId, workspaceId),
+    eq(schema.steeringRecords.status, "active"),
+    isNull(schema.steeringRecords.deletedAt),
+    isNotNull(schema.steeringRecords.activeVersionId),
   );
 }
 
 /** The pinned version, joined to its record. */
 const pinnedVersion = eq(
-  schema.contextRecordVersions.id,
-  schema.contextRecords.activeVersionId,
+  schema.steeringRecordVersions.id,
+  schema.steeringRecords.activeVersionId,
 );
 
 /**
@@ -194,8 +194,8 @@ const pinnedVersion = eq(
  */
 const effectiveForceWhen = (ready: boolean) =>
   ready
-    ? sql`coalesce(${schema.contextRecordVersions.force}, ${schema.contextRecords.force})`
-    : sql`${schema.contextRecords.force}`;
+    ? sql`coalesce(${schema.steeringRecordVersions.force}, ${schema.steeringRecords.force})`
+    : sql`${schema.steeringRecords.force}`;
 
 /**
  * Whether this database has the version classification columns yet.
@@ -209,7 +209,7 @@ export async function versionClassificationReady(
   tx: SteeringTx,
   planeKey: string,
 ): Promise<boolean> {
-  return hasColumn(tx, CONTEXT_VERSION_CLASSIFICATION_COLUMN, planeKey);
+  return hasColumn(tx, STEERING_VERSION_CLASSIFICATION_COLUMN, planeKey);
 }
 
 /**
@@ -229,25 +229,25 @@ export async function readSteeringVersion(
 ): Promise<string> {
   const force = effectiveForceWhen(ready);
   const join = ready
-    ? sql`left join ${schema.contextRecordVersions} on ${pinnedVersion}`
+    ? sql`left join ${schema.steeringRecordVersions} on ${pinnedVersion}`
     : sql``;
   // Nest every column reference so Drizzle keeps its table qualifier in the
   // scalar subquery. Pins name immutable versions. The record fields cover
   // legacy versions whose classification falls back to the record row.
-  const identity = sql`jsonb_build_array(${schema.contextRecords.id}, ${schema.contextRecords.activeVersionId}, ${schema.contextRecords.slug}, ${schema.contextRecords.kind}, ${schema.contextRecords.force}, ${schema.contextRecords.constraintEffect}, ${schema.contextRecords.statement}, ${schema.contextRecords.activatedAt})`;
-  const order = sql`${schema.contextRecords.id}`;
+  const identity = sql`jsonb_build_array(${schema.steeringRecords.id}, ${schema.steeringRecords.activeVersionId}, ${schema.steeringRecords.slug}, ${schema.steeringRecords.kind}, ${schema.steeringRecords.force}, ${schema.steeringRecords.constraintEffect}, ${schema.steeringRecords.statement}, ${schema.steeringRecords.activatedAt})`;
+  const order = sql`${schema.steeringRecords.id}`;
   const forces = sql`('must', 'should', 'may', 'info')`;
   const rows = (await tx
     .select({
       ledger: count(),
-      steering: sql`(select count(*) from ${schema.contextRecords} ${join} where ${activePinnedIn(orgId, workspaceId)} and ${force} in ${forces})`,
-      revisions: sql`(select md5(string_agg(md5(${identity}::text), '' order by ${order})) from ${schema.contextRecords} ${join} where ${activePinnedIn(orgId, workspaceId)} and ${force} in ${forces})`,
+      steering: sql`(select count(*) from ${schema.steeringRecords} ${join} where ${activePinnedIn(orgId, workspaceId)} and ${force} in ${forces})`,
+      revisions: sql`(select md5(string_agg(md5(${identity}::text), '' order by ${order})) from ${schema.steeringRecords} ${join} where ${activePinnedIn(orgId, workspaceId)} and ${force} in ${forces})`,
     })
-    .from(schema.contextPromotions)
+    .from(schema.steeringPromotions)
     .where(
       and(
-        eq(schema.contextPromotions.orgId, orgId),
-        eq(schema.contextPromotions.workspaceId, workspaceId),
+        eq(schema.steeringPromotions.orgId, orgId),
+        eq(schema.steeringPromotions.workspaceId, workspaceId),
       ),
     )) as SteeringVersionRow[];
   const row = rows[0];
@@ -266,13 +266,13 @@ export async function readSteeringRows(
   ready: boolean,
 ): Promise<SteeringRow[]> {
   const recordFields = {
-    slug: schema.contextRecords.slug,
-    activatedAt: schema.contextRecords.activatedAt,
-    createdAt: schema.contextRecords.createdAt,
-    recordKind: schema.contextRecords.kind,
-    recordForce: schema.contextRecords.force,
-    recordConstraintEffect: schema.contextRecords.constraintEffect,
-    recordStatement: schema.contextRecords.statement,
+    slug: schema.steeringRecords.slug,
+    activatedAt: schema.steeringRecords.activatedAt,
+    createdAt: schema.steeringRecords.createdAt,
+    recordKind: schema.steeringRecords.kind,
+    recordForce: schema.steeringRecords.force,
+    recordConstraintEffect: schema.steeringRecords.constraintEffect,
+    recordStatement: schema.steeringRecords.statement,
   };
   const where = and(
     activePinnedIn(orgId, workspaceId),
@@ -285,19 +285,19 @@ export async function readSteeringRows(
   if (!ready) {
     return (await tx
       .select(recordFields)
-      .from(schema.contextRecords)
+      .from(schema.steeringRecords)
       .where(where)) as SteeringRow[];
   }
   return (await tx
     .select({
       ...recordFields,
-      versionKind: schema.contextRecordVersions.kind,
-      versionForce: schema.contextRecordVersions.force,
-      versionConstraintEffect: schema.contextRecordVersions.constraintEffect,
-      versionStatement: schema.contextRecordVersions.statement,
+      versionKind: schema.steeringRecordVersions.kind,
+      versionForce: schema.steeringRecordVersions.force,
+      versionConstraintEffect: schema.steeringRecordVersions.constraintEffect,
+      versionStatement: schema.steeringRecordVersions.statement,
     })
-    .from(schema.contextRecords)
-    .leftJoin(schema.contextRecordVersions, pinnedVersion)
+    .from(schema.steeringRecords)
+    .leftJoin(schema.steeringRecordVersions, pinnedVersion)
     .where(where)) as SteeringRow[];
 }
 

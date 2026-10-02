@@ -41,9 +41,10 @@ import {
   type Effect,
 } from "@oxagen/handlers/lib/agent-role-defaults";
 
-// System role names seeded in 0008_iam_seed_defaults.sql.
+// System role names seeded in 0008_iam_seed_defaults.sql. The workspace Admin
+// role was added by 20261003030000_workspace_admin_role.sql (#5228).
 const ORG_ROLES = ["Owner", "Admin", "Compliance", "Billing"] as const;
-const WORKSPACE_ROLES = ["Owner", "Member", "Viewer"] as const;
+const WORKSPACE_ROLES = ["Owner", "Admin", "Member", "Viewer"] as const;
 
 type OrgRoleName = (typeof ORG_ROLES)[number];
 type WorkspaceRoleName = (typeof WORKSPACE_ROLES)[number];

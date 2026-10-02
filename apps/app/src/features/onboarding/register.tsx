@@ -33,6 +33,7 @@ import type { Read } from "@/data/read";
 import { getAuthUser } from "@/server/session";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
+import { mayActInWorkspace } from "@/shared/workspace-authority";
 import { AgentAvatar } from "@/ui/agent-avatar";
 import { Badge } from "@/ui/badge";
 import {
@@ -66,10 +67,7 @@ import { WrapAgent } from "./ui/wrap-agent";
 const FIRST_FRAME_WAIT_MS = 20_000;
 
 /** The organization roles `register_agent` admits (its `defaultRoles`, checked in the handler). */
-const REGISTERING_ROLES: ReadonlySet<WsCtx["orgRole"]> = new Set([
-  "owner",
-  "admin",
-]);
+const REGISTERING_ROLES: readonly WsCtx["orgRole"][] = ["owner", "admin"];
 
 /** Where each hook-based harness writes its hooks, for the log line the collector's report backs. */
 const HOOK_FILE: Partial<Record<Harness, string>> = {
@@ -84,9 +82,12 @@ const column = "mx-auto flex w-full max-w-[772px] flex-col";
 const footer = "flex flex-col gap-2 md:flex-row md:items-center";
 const phoneWide = "max-md:w-full";
 
-/** A viewer the page lets register: the same rule the handler applies to every write. */
+/**
+ * A viewer the page lets register: the same rule the handler applies to every
+ * write, which admits the workspace's Owner and Admin too (#5228).
+ */
 function mayRegister(ctx: WsCtx): boolean {
-  return REGISTERING_ROLES.has(ctx.orgRole);
+  return mayActInWorkspace(ctx.orgRole, ctx.wsRole, REGISTERING_ROLES);
 }
 
 function Rail({

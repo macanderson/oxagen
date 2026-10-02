@@ -291,4 +291,7 @@ The maintainer ruled on 2026-10-02, in two parts.
   off, for every customer role (`kill_switch.set.ts`), and so do
   `agent.suspend` and `agent.retire`. The PR that ships this amendment lists
   every other control it found and what it did with each.
+- **Per-turn budgets.** `get_user_budget`, `update_user_budget`,
+  `get_budget_policy`, and `update_budget_policy` are deleted with the storage
+  they wrote (ADR-277, #5102).
 

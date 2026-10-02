@@ -1,5 +1,5 @@
 // context.steering.gitlab.ts: the GitLab implementation of the steering port
-// (#3762; ADR-061). A Context PR on GitLab is a merge request, a check is a
+// (#3762; ADR-061). A steering PR on GitLab is a merge request, a check is a
 // commit status, and every call authenticates with the project access token
 // the workspace connected. A steering project the provisioner created is the
 // one exception: it hangs from a `gitlab_steering` connection with no token of
@@ -14,7 +14,7 @@
 // - A merge request's IID is unique within its project, and is the number a
 //   person sees. It fills the port's `number`, which on GitHub is also scoped
 //   to one repository. It is never a global id, and a proposal records which
-//   host its number belongs to (`context_proposals.provider`).
+//   host its number belongs to (`steering_proposals.provider`).
 // - The merge is pinned with `sha`, so GitLab refuses when the head moved past
 //   the commit the checks ran on. GitHub gives the same guarantee.
 import { schema, withTenantDb } from "@oxagen/database";
@@ -546,7 +546,7 @@ export function createSteeringGitLab(
           code: "not_found",
           reason: "workspace_repository_missing",
           message:
-            "This workspace has no connected GitLab project; a Context PR needs the main repository (MC spec §10.1)",
+            "This workspace has no connected GitLab project; a steering PR needs the main repository (MC spec §10.1)",
         });
       }
       let token: string;

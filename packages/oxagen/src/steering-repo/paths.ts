@@ -299,7 +299,12 @@ export function recordLineageFromPath(path: string): string | null {
 
 /** The steering tree in a main repository. */
 export const LEGACY_OXAGEN_DIR = ".oxagen";
-/** v0.1 record files (`context-record/v0.1`). */
+/**
+ * The schema tag of a v0.1 record file. It is Stella's record file format,
+ * so Stella names it and renames it in its own repository (#4325).
+ */
+export const LEGACY_RECORD_SCHEMA = "context-record/v0.1";
+/** v0.1 record files (`LEGACY_RECORD_SCHEMA`). */
 export const LEGACY_RULES_DIR = ".oxagen/rules";
 /** The governance file in a main repository. */
 export const LEGACY_GOVERNANCE_PATH = ".oxagen/rules/governance.toml";

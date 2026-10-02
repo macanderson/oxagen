@@ -2,7 +2,7 @@
 // workspace and the user the resolver returns, which is null for every key but
 // one minted by the CLI authorize flow. A handler that gates on the caller's
 // role resolves the key's creator (`resolveActingUserId`) and passes that user
-// to `assertOrgRole`; `merge_context_pr` needs a signed-in reviewer and
+// to `assertOrgRole`; `merge_steering_pr` needs a signed-in reviewer and
 // refuses a null user with `no_principal`.
 import { Hono } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";

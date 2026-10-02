@@ -3,11 +3,11 @@
 // the contracts file-coverage guard sees it, like spend.shared.ts.
 import { z } from "zod";
 import {
-  CONTEXT_RECORD_LABEL_MAX,
-  CONTEXT_RECORD_LINEAGE,
-} from "../context-record-label";
+  STEERING_RECORD_LABEL_MAX,
+  STEERING_RECORD_LINEAGE,
+} from "../steering-record-label";
 
-/** The six kinds of context-record/v0.1, Stella's file surface (spec §10.2). */
+/** The six kinds of a v0.1 record file, Stella's file surface (spec §10.2). */
 export const recordKindSchema = z.enum([
   "rule",
   "constraint",
@@ -19,17 +19,65 @@ export const recordKindSchema = z.enum([
 export type RecordKind = z.infer<typeof recordKindSchema>;
 
 /**
- * What a proposal asks to change: a record of one of the six kinds, or the
- * steering repository's governance mode (#4795). A governance proposal is the
- * review-route PR `set_governance_mode` opens on `steering/governance`. It
- * changes `steering/governance.toml` and publishes no record, so every reader
- * of a record keeps `RecordKind` and never sees `governance`.
+ * The steering PRs Oxagen opens that change files rather than one record
+ * (#5122, ADR-265). Each one carries a proposal row of its kind, so
+ * merge_steering_pr lands it through the merge queue like a record PR.
+ *
+ * - `revert`: the PR revert_steering_pr opens to undo a merged steering PR.
+ * - `tools`: a tools/ PR from Studio's Review, the server sync (M10), or the
+ *   server folder writer (M13).
+ * - `import`: an import's PR (see below).
+ * - `memory_pr`: the memory PR on memory/<date>, from the curator or from a
+ *   person promoting memories. `memory` alone is the record kind.
+ * - `agent_file`: the PR that adds agents/<name>.toml when a host enrolls (#5149).
+ * - `agent_proposal`: the PR an agent opens with propose_steering (#5134).
+ * - `workspace`: the PR link_repository or unlink_repository opens to change
+ *   which code repositories workspace.toml lists.
+ *
+ * `import` covers both imports: the Markdown import's PR, and each PR
+ * import_workspace_steering opens when it moves `.oxagen/` to a steering repo.
+ */
+export const steeringPrKindSchema = z.enum([
+  "revert",
+  "tools",
+  "import",
+  "memory_pr",
+  "agent_file",
+  "agent_proposal",
+  "workspace",
+]);
+export type SteeringPrKind = z.infer<typeof steeringPrKindSchema>;
+
+/**
+ * What a proposal asks to change: a record of one of the six kinds, the
+ * steering repository's governance mode (#4795), or the files of one steering
+ * PR (#5122). A governance proposal is the review-route PR
+ * `set_governance_mode` opens on `steering/governance`. It changes
+ * `steering/governance.toml` and publishes no record. A steering PR proposal
+ * publishes no single record either. Every reader of a record keeps
+ * `RecordKind`, and `isRecordKind` tells a record proposal from the rest.
  */
 export const proposalKindSchema = z.enum([
   ...recordKindSchema.options,
   "governance",
+  ...steeringPrKindSchema.options,
 ]);
 export type ProposalKind = z.infer<typeof proposalKindSchema>;
+
+const RECORD_KINDS: ReadonlySet<string> = new Set(recordKindSchema.options);
+const STEERING_PR_KINDS: ReadonlySet<string> = new Set(
+  steeringPrKindSchema.options,
+);
+
+/** True for a proposal that publishes one record: one of the six record kinds. */
+export function isRecordKind(kind: string): kind is RecordKind {
+  return RECORD_KINDS.has(kind);
+}
+
+/** True for a proposal that carries a steering PR's files rather than one record. */
+export function isSteeringPrKind(kind: string): kind is SteeringPrKind {
+  return STEERING_PR_KINDS.has(kind);
+}
 
 /**
  * The lineage every governance proposal shares. The open-PR index allows one
@@ -73,7 +121,7 @@ export type AppendKind = z.infer<typeof appendKindSchema>;
 
 /**
  * The proposal's state machine (spec §10.3). `checks_failed` is the state a
- * failed §10.3 check leaves the PR in; a re-run through open_context_pr moves
+ * failed §10.3 check leaves the PR in; a re-run through open_steering_pr moves
  * it back to `checks_running`. `rejected` is dismiss_proposal's terminal state.
  */
 export const proposalStatusSchema = z.enum([
@@ -90,7 +138,7 @@ export type ProposalStatus = z.infer<typeof proposalStatusSchema>;
 /**
  * The three states a person filters proposals by, as a pull request list
  * names them. `open` is every proposal a person can still act on: a candidate
- * with no pull request yet, and a Context PR still open on the host. `closed`
+ * with no pull request yet, and a steering PR still open on the host. `closed`
  * is a dismissal, from Oxagen or from the host closing the pull request.
  */
 export const proposalStateSchema = z.enum(["open", "merged", "closed"]);
@@ -121,7 +169,7 @@ export function proposalStateOf(status: ProposalStatus): ProposalState {
 }
 
 /**
- * The repository hosts steering publishes through (#3762). A Context PR on
+ * The repository hosts steering publishes through (#3762). A steering PR on
  * GitLab is a merge request; its number is the merge request's IID.
  */
 export const repositoryProviderSchema = z.enum(["github", "gitlab"]);
@@ -140,7 +188,7 @@ export const GOVERNANCE_MODES = governanceModeSchema.options;
  * parser of it (`parseGovernanceMode`): `open_init_pr` refuses a draft whose
  * declared mode differs from the mode chosen, and `set_governance_mode`
  * commits this text straight to a production branch, where the next
- * `open_context_pr` reads it back. It lived twice — the init wizard
+ * `open_steering_pr` reads it back. It lived twice — the init wizard
  * (apps/app) and `oxagen repo init` (apps/cli) held byte-identical copies —
  * and a third copy in the handler is what moved it here instead.
  *
@@ -173,7 +221,7 @@ export const CHECK_NAMES = checkNameSchema.options;
 /**
  * The eleven checks a steering PR runs, in the order they run
  * (steering-repo-spec, Steering PR flow). `@oxagen/steering-check` runs them
- * for the server and the CLI. The six names above stay for the v0.1 Context
+ * for the server and the CLI. The six names above stay for the v0.1 steering
  * PR until lane S10 moves every workspace.
  */
 export const steeringCheckNameSchema = z.enum([
@@ -218,7 +266,7 @@ export type CheckResult = z.infer<typeof checkResultSchema>;
  * its description.
  */
 const RECORD_LINEAGE_ID = new RegExp(
-  `^(?!${GOVERNANCE_LINEAGE}$)${CONTEXT_RECORD_LINEAGE.source.replace(/^\^/, "")}`,
+  `^(?!${GOVERNANCE_LINEAGE}$)${STEERING_RECORD_LINEAGE.source.replace(/^\^/, "")}`,
 );
 
 export const lineageIdSchema = z
@@ -241,7 +289,7 @@ export const proposedRecordSchema = z
       .string()
       .trim()
       .min(1)
-      .max(CONTEXT_RECORD_LABEL_MAX)
+      .max(STEERING_RECORD_LABEL_MAX)
       .optional()
       .describe(
         "The record's name, at most 36 characters. Omit it to keep the current label. A rename never creates a version and never changes the lineage.",
@@ -251,7 +299,7 @@ export const proposedRecordSchema = z
     /** Required on a constraint, refused on every other kind. */
     constraintEffect: constraintEffectSchema.optional(),
     sharingScope: publishedSharingScopeSchema.describe(
-      "Decides which repo the Context PR targets (spec §10.3 step 1)",
+      "Decides which repo the steering PR targets (spec §10.3 step 1)",
     ),
     statement: z
       .string()
@@ -342,13 +390,13 @@ export const publishedRecordSchema = z
     title: z.string(),
     label: z.string().optional(),
     /**
-     * Every write path has required agent.context_records.kind since #3302,
+     * Every write path has required agent.steering_records.kind since #3302,
      * but the DB-level NOT NULL is a deliberate follow-up migration (see
      * `20260920150000`'s comment) rather than shipped with the write
      * requirement itself, so a genuinely unclassified row can still exist.
      * Nullable here for that reason, and because
-     * context_record_versions.kind still is (a legacy version
-     * merge_context_pr never wrote): a record's active version can, in
+     * steering_record_versions.kind still is (a legacy version
+     * merge_steering_pr never wrote): a record's active version can, in
      * principle, be one of those on a database this old.
      */
     kind: recordKindSchema.nullable(),
@@ -359,9 +407,9 @@ export const publishedRecordSchema = z
     status: z.enum(["active", "retired", "superseded"]),
     version: z.number().int().nullable(),
     checksum: z.string().nullable(),
-    /** The merge commit that published it; null when no Context PR did. */
+    /** The merge commit that published it; null when no steering PR did. */
     commit: z.string().nullable(),
-    /** The file's path in the repository; null when no Context PR wrote it. */
+    /** The file's path in the repository; null when no steering PR wrote it. */
     path: z.string().nullable(),
     publishedAt: instant.nullable(),
     updatedAt: instant,

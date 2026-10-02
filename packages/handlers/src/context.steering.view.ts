@@ -1,9 +1,10 @@
 // context.steering.view.ts — rows to contract views (ADR-061). Every field a
 // view carries comes from a column or is null; nothing is invented here.
-import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
-import type { ContextPr } from "@oxagen/oxagen/contracts/context.pr.open";
+import { steeringRecordLabel } from "@oxagen/oxagen/steering-record-label";
+import type { SteeringPr } from "@oxagen/oxagen/contracts/steering.pr.open";
 import {
   CHECK_NAMES,
+  isRecordKind,
   type ConstraintEffect,
   type GovernanceMode,
   type ProposalKind,
@@ -22,7 +23,7 @@ import { STEERING_GOVERNANCE_PR_BODY } from "./steering-repo/governance-pr";
 
 /**
  * The host a proposal's PR lives on. The store's
- * `context_proposals_pr_provider_check` means a row with a PR number always
+ * `steering_proposals_pr_provider_check` means a row with a PR number always
  * names one; the fallback covers only a row read before that column existed.
  */
 function prProvider(row: ProposalRow): RepositoryProvider {
@@ -76,7 +77,7 @@ export function publishedRecordView(
     id: row.publicId,
     lineageId: row.slug,
     title: row.title,
-    label: row.label ?? contextRecordLabel(row.slug),
+    label: row.label ?? steeringRecordLabel(row.slug),
     kind: (row.kind as RecordKind | null) ?? null,
     force: (row.force as RecordForce | null) ?? null,
     constraintEffect: (row.constraintEffect as ConstraintEffect | null) ?? null,
@@ -92,11 +93,6 @@ export function publishedRecordView(
   };
 }
 
-/**
- * The Context PR panel's view of a proposal, before, during and after its PR.
- * A governance proposal (#4795) publishes no record and appends no promotion
- * event, so its merge leaves the ledger length as it was and names neither.
- */
 /** A UUID in its canonical 8-4-4-4-12 form. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -134,8 +130,8 @@ export function closedOnHost(row: ProposalRow): boolean {
   );
 }
 
-/** The users a Context PR view names, for the store's display-name read. */
-export function contextPrUserIds(row: ProposalRow): string[] {
+/** The users a steering PR view names, for the store's display-name read. */
+export function steeringPrUserIds(row: ProposalRow): string[] {
   return [
     sourceUserId(row),
     row.mergedByUserId,
@@ -143,12 +139,18 @@ export function contextPrUserIds(row: ProposalRow): string[] {
   ].filter((id): id is string => id !== null);
 }
 
-export function contextPrView(
+/**
+ * The steering PR panel's view of a proposal, before, during and after its PR.
+ * A governance proposal (#4795) and a steering PR proposal (#5122) publish no
+ * record and append no promotion event of their own, so the view names
+ * neither and expects the ledger length to stay as it was.
+ */
+export function steeringPrView(
   row: ProposalRow,
   ledgerLength: number,
   merged: { promotionEventPublicId: string; recordPublicId: string } | null,
   names: ReadonlyMap<string, string> = new Map(),
-): ContextPr {
+): SteeringPr {
   const nameOf = (id: string | null) =>
     id === null ? null : (names.get(id) ?? null);
   const sourceUser = sourceUserId(row);
@@ -159,6 +161,9 @@ export function contextPrView(
   const path = row.path ?? recordFilePath(row.lineageId);
   const isMerged = row.status === "merged";
   const governance = row.kind === "governance";
+  // A governance or steering PR proposal publishes no record and appends no
+  // promotion event of its own (#4795, #5122).
+  const record = isRecordKind(row.kind);
   return {
     proposalId: row.publicId,
     lineageId: row.lineageId,
@@ -183,7 +188,7 @@ export function contextPrView(
           }
         : null,
     record:
-      row.stampedRecordId && row.recordHash
+      record && row.stampedRecordId && row.recordHash
         ? {
             recordId: row.stampedRecordId,
             recordHash: row.recordHash,
@@ -212,23 +217,26 @@ export function contextPrView(
       },
       at: row.createdAt.toISOString(),
     },
+    // A steering PR's opener wrote its own body, which no column holds.
     body:
       row.prNumber === null
         ? null
         : governance
           ? STEERING_GOVERNANCE_PR_BODY
-          : prBody(row),
+          : record
+            ? prBody(row)
+            : null,
     checks: row.checks,
     onMerge: {
       publishes: { lineageId: row.lineageId, path },
       bundleVersion: {
         current: ledgerLength,
-        afterMerge: isMerged || governance ? ledgerLength : ledgerLength + 1,
+        afterMerge: isMerged || !record ? ledgerLength : ledgerLength + 1,
       },
       review: mode ? REVIEW_BY_MODE[mode] : null,
     },
     merged:
-      isMerged && row.mergedCommit && row.mergedAt && (merged || governance)
+      isMerged && row.mergedCommit && row.mergedAt && (merged || !record)
         ? {
             commit: row.mergedCommit,
             at: row.mergedAt.toISOString(),
@@ -268,7 +276,7 @@ const proposalLine = (publicId: string) => `Proposal \`${publicId}\``;
  * Whether a PR body names this proposal. Every proposal on a lineage shares
  * one branch, `steering/<lineage>` or `memory/<lineage>` for a memory, so an
  * open PR found on it belongs to a proposal only when the body
- * open_context_pr wrote for that proposal says so.
+ * open_steering_pr wrote for that proposal says so.
  */
 export function bodyNamesProposal(body: string, publicId: string): boolean {
   return body.includes(proposalLine(publicId));
@@ -280,7 +288,7 @@ export function prBody(row: ProposalRow): string {
     ? ` · constraint_effect \`${row.constraintEffect}\``
     : "";
   return [
-    `## Context PR · \`${row.lineageId}\``,
+    `## Steering PR · \`${row.lineageId}\``,
     "",
     `**kind** \`${row.kind}\` · **force** \`${row.force}\`${effect} · **scope** \`${row.sharingScope}\``,
     "",

@@ -51,6 +51,12 @@ The site bootstraps no kernel gate and exposes no capability.
   port 5500, rebuild on change.
 - `pnpm --filter @oxagen/web-v2 check:links` → `scripts/check-links.mjs`:
   resolves every URL the posts cite. It needs the network.
+- `node apps/web/scripts/unpack-aeonik.mjs`, from the repo root: unpacks
+  `fonts/aeonik-wght.woff2` into `scripts/fonts/aeonik-wght.ttf`, the font
+  the generated images draw their text from, and rewrites the stamp beside
+  it. It needs Python 3 with fontTools (`pip install fonttools brotli`).
+  With `--check` it writes nothing, and `pnpm check:aeonik-ttf` runs it that
+  way in CI.
 
 ## Rules
 
@@ -176,9 +182,17 @@ Never put `--` before the filename. Each build module has a co-located
 - `assets/blog.css`: the blog's own rules (index, pillar and post layouts,
   the reading measure, references, callouts). Semantic tokens only, same four
   rules as `oxagen.css`.
-- Generated images set their text as outlines from `fonts/aeonik-wght.woff2`
+- Generated images set their text as outlines from `scripts/fonts/aeonik-wght.ttf`
   at build time (`scripts/lib/text.mjs`), so a render never depends on the
-  fonts a machine has installed.
+  fonts a machine has installed. That file is the site's `fonts/aeonik-wght.woff2`
+  unpacked to a TTF, because fontkit can't make a weight from a WOFF2.
+  `scripts/fonts/aeonik-wght.sha256` holds the sha256 of both files, and
+  `pnpm check:aeonik-ttf` (part of `pnpm check:contracts`) fails when either
+  file no longer matches it. The brand sync rewrites the WOFF2 when the kit's
+  Aeonik changes, and it can't write the TTF. So after a sync that changes
+  the WOFF2, run `node apps/web/scripts/unpack-aeonik.mjs` from the repo root
+  and commit the TTF and the stamp. Don't write the stamp by hand: it would
+  pass a TTF that no unpack made.
 
 ## The palette, and the four rules
 
@@ -307,9 +321,9 @@ are the YAML.**
   carries the title itself. Everything is a pure function of slug and text
   (`scripts/lib/images.mjs`), so a rebuild reproduces every pixel and
   nothing binary is committed. The share card carries the title, the
-  description, the wordmark and the post's date and reading time, set in
-  Space Grotesk as outlines, so the build needs no fonts or tools installed
-  beyond `pnpm install`.
+  description, and the post's date and reading time, set in Aeonik as
+  outlines, and the wordmark from the kit's SVG. So the build needs no fonts
+  or tools installed beyond `pnpm install`.
 - The body is Markdown with GFM (tables, footnotes) and two components:
   `<Callout kind="note|warn" title="…">` and `<Figure src alt caption />`.
 - **Figures are drawn, not stored.** Eight more components render a figure

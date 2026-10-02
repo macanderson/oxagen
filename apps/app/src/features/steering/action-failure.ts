@@ -1,7 +1,8 @@
 // The sentence a refused steering PR write shows. The kernel classified the
 // refusal and put the handler's HandlerError reason in `code` (§3.2). Each
-// reason open_context_pr, merge_context_pr, dismiss_proposal,
-// revert_steering_pr and the merge queue throw has its own sentence. A write
+// reason open_steering_pr, merge_steering_pr, dismiss_proposal,
+// revert_steering_pr and the merge queue throw has its own sentence, the
+// steering PR proposal refusals (#5122) among them. A write
 // the platform has not registered yet answers `tool_not_registered` and says
 // so. Any other code is printed as recorded.
 import { useTranslations } from "next-intl";
@@ -67,8 +68,14 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("productionBranchMissing");
           case "production_branch_moving":
             return t("productionBranchMoving");
+          // The merge queue's re-check after it updated the branch, or a
+          // steering PR's own checks before its merge (#5122).
           case "checks_failed":
             return t("checksFailed");
+          case "steering_pr_proposal":
+            return t("steeringPrProposal");
+          case "steering_repo_required":
+            return t("steeringRepoRequired");
           case "not_merged":
             return t("notMerged");
           case "governance_proposal":

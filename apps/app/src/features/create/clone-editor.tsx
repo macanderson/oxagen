@@ -10,7 +10,7 @@ import {
   mono,
   textareaBase,
 } from "@/ui/control-styles";
-import { CONTEXT_RECORD_LABEL_MAX } from "@oxagen/oxagen/context-record-label";
+import { STEERING_RECORD_LABEL_MAX } from "@oxagen/oxagen/steering-record-label";
 import { FormAlert } from "@/ui/form-feedback";
 import { SafeLink, PullRequestLink } from "@/ui/navigation";
 import { routes } from "@/shared/safe-path";
@@ -146,7 +146,7 @@ export function CloneEditor({
               {t("label")}
               <input
                 className={inputBase}
-                maxLength={CONTEXT_RECORD_LABEL_MAX}
+                maxLength={STEERING_RECORD_LABEL_MAX}
                 value={draft.name}
                 disabled={pending}
                 onChange={(e) => {

@@ -237,7 +237,7 @@ describe("tenant policy manifest", () => {
     // evidence.witnesses, evidence.verdicts, evidence.disclosure_policies and
     // mcp.credential_grants. Was 102 as of cost.findings (ADR-062, G2963). Was
     // 101 as of
-    // agent.context_proposals and agent.context_appends (ADR-061, #2961).
+    // agent.steering_proposals and agent.context_appends (ADR-061, #2961).
     // Was 99 as of evidence.run_exports (ADR-058, #2952).
     // Was 98 as of billing.spend_counters, cost.price_entries, cost.run_totals
     // and cost.daily_totals (ADR-060, G2962) over WL-27's 94, which dropped
@@ -297,7 +297,9 @@ describe("tenant policy manifest", () => {
     // cost.run_pr_delivered_states, the newest state a GitHub delivery carried
     // for each pull request (R2, #4511). 174 adds agent.code_repository_findings
     // (S7, #4518, ADR-263). All three landed 2026-10-02.
-    expect(POLICY_MANIFEST.length).toBe(174);
+    // 173 after #5102 drops workspace.workspace_budget_policy (ADR-277,
+    // 2026-10-02).
+    expect(POLICY_MANIFEST.length).toBe(173);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

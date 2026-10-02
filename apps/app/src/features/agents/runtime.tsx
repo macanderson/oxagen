@@ -12,9 +12,10 @@
 // Runtimes tab, and All runtimes opens that tab. Unenroll is `revoke_host_enrollment`, and Show the
 // CLI path mints the single-use token and prints the enroll command
 // (`create_enrollment_token`); a retired identity is archived, so it is
-// offered neither. Both writes admit only an organization Owner or Admin, so
-// any other viewer sees neither control and reads a line that names the role
-// instead of a dialog that ends in a refusal.
+// offered neither. Both writes admit only an organization Owner or Admin, or
+// the workspace's Owner or Admin (#5228), so any other viewer sees neither
+// control and reads a line that names the role instead of a dialog that ends
+// in a refusal.
 import { useLocale, useTranslations } from "next-intl";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { EnforcementTier, RunRow } from "@/data/contracts/runs";
@@ -374,8 +375,8 @@ export function RuntimeSection({
   /** This tab, re-read after an unenroll. */
   here: SafePath;
   /**
-   * The viewer holds an organization Owner or Admin role, the only roles
-   * `create_enrollment_token` and `revoke_host_enrollment` admit.
+   * The viewer holds an organization or workspace Owner or Admin role, the
+   * only roles `create_enrollment_token` and `revoke_host_enrollment` admit.
    */
   canManageHosts: boolean;
 }) {

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { LEGACY_RECORD_SCHEMA } from "@oxagen/oxagen/steering-repo/paths";
 import {
   FIXTURE_ROOT,
   readFixtureTree,
@@ -86,7 +87,7 @@ function replacesOf(branch: ImportBranch): Map<string, string> | null {
 function legacyFact(n: number): [string, string] {
   const slug = `fact-${String(n).padStart(3, "0")}`;
   const text = [
-    'schema = "context-record/v0.1"',
+    `schema = "${LEGACY_RECORD_SCHEMA}"`,
     'set_id = "a-intel.core-platform"',
     "",
     "[[record]]",
@@ -440,6 +441,8 @@ describe("importPullRequestBody", () => {
     const [first, second] = importBatches(conversion);
     const body = importPullRequestBody(conversion, first!, RELINKED);
     expect(body).toContain("2 import batches");
+    // The PR says to merge from Oxagen: a merge on GitHub leaves the repo diverged (#5122).
+    expect(body).toContain("Merge each of them from Oxagen");
     expect(body).toContain("through `steering/import-oxagen-2`");
     expect(body).toContain(IMPORT_REPLACES_PATH);
     expect(body).toContain(renderIdTable(first!.records));

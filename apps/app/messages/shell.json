@@ -78,7 +78,7 @@
         "any": "Create anything",
         "tool": "New tool",
         "skill": "Add a skill",
-        "record": "Write a context record"
+        "record": "Write a steering record"
       },
       "footer": {
         "move": "move",
@@ -328,7 +328,7 @@
         "failure": {
           "noteRequired": "Write a reason before you deny this call.",
           "invalid": "The decision was refused as invalid ({code}).",
-          "refused": "Your decision was refused ({code}). An organization owner or admin, or a workspace owner or member, can answer this approval.",
+          "refused": "Your decision was refused ({code}). An organization owner or admin, or a workspace owner, admin or member, can answer this approval.",
           "pendingApproval": "Your access to answer this approval waits on request {accessRequestId}.",
           "exhausted": "The decision was refused because this organization is out of credit ({code}).",
           "billingLink": "Add credit on Billing",
@@ -593,7 +593,7 @@
       "ledger": "Ledger runs are not paused. Pause one from its row on Fleet.",
       "reasonLabel": "Reason",
       "reasonHelp": "Recorded on every command and on the audit event. Each run reads it when it resumes.",
-      "roles": "Pausing every run needs an organization Owner or Admin role, or the workspace Owner role.",
+      "roles": "Pausing every run needs an organization Owner or Admin role, or the workspace Owner or Admin role.",
       "cancel": "Cancel",
       "confirm": "Pause every live run",
       "pending": "Pausing",

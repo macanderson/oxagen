@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
+import { LEGACY_RECORD_SCHEMA } from "../steering-repo/paths";
 import {
   CHECK_NAMES,
   checkResultSchema,
   constraintEffectSchema,
   GOVERNANCE_LINEAGE,
+  isRecordKind,
+  isSteeringPrKind,
+  proposalKindSchema,
   proposalStatusSchema,
   proposedRecordSchema,
+  recordKindSchema,
+  steeringPrKindSchema,
 } from "./context.steering.shared";
 
 const base = {
@@ -102,7 +108,7 @@ describe("steering vocabulary", () => {
       checkResultSchema.safeParse({
         name: "schema",
         status: "passed",
-        summary: "context-record/v0.1 valid",
+        summary: `${LEGACY_RECORD_SCHEMA} valid`,
         detailsUrl: null,
         startedAt: "2026-09-15T00:00:00.000Z",
         completedAt: "2026-09-15T00:00:01.000Z",
@@ -110,7 +116,7 @@ describe("steering vocabulary", () => {
     ).toBe(true);
   });
 
-  it("names every state of the Context PR state machine and no candidate state", () => {
+  it("names every state of the steering PR state machine and no candidate state", () => {
     expect(proposalStatusSchema.options).toEqual([
       "proposed",
       "pr_open",
@@ -120,5 +126,33 @@ describe("steering vocabulary", () => {
       "merged",
       "rejected",
     ]);
+  });
+});
+
+describe("proposal kinds (#5122)", () => {
+  it("tells a record proposal from a governance or steering PR proposal", () => {
+    for (const kind of recordKindSchema.options) {
+      expect(isRecordKind(kind)).toBe(true);
+      expect(isSteeringPrKind(kind)).toBe(false);
+    }
+    for (const kind of steeringPrKindSchema.options) {
+      expect(isRecordKind(kind)).toBe(false);
+      expect(isSteeringPrKind(kind)).toBe(true);
+    }
+    expect(isRecordKind("governance")).toBe(false);
+    expect(isSteeringPrKind("governance")).toBe(false);
+  });
+
+  it("lists every record kind, governance, and every steering PR kind, once each", () => {
+    const all = proposalKindSchema.options;
+    expect(new Set(all).size).toBe(all.length);
+    expect(all).toEqual([
+      ...recordKindSchema.options,
+      "governance",
+      ...steeringPrKindSchema.options,
+    ]);
+    // The memory PR's kind is never the memory record's.
+    expect(all).toContain("memory");
+    expect(all).toContain("memory_pr");
   });
 });

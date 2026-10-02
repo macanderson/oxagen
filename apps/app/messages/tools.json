@@ -168,7 +168,7 @@
         "reasonHint": "Recorded on the version. The security event omits the reason.",
         "confirm": "Reclassify this version",
         "pending": "Reclassifying…",
-        "denied": "Reclassifying a tool version needs an organization Owner or Admin.",
+        "denied": "Reclassifying a tool version needs an organization Owner or Admin, or the workspace Owner or Admin.",
         "tagsPlaceholder": "moves_money destroys_data"
       }
     },
@@ -301,7 +301,7 @@
           "endpoint_not_public": "The endpoint must be a public https address.",
           "redirect_url_invalid": "The redirect URL was refused. Reload the page and try again.",
           "server_not_found": "That provider is no longer in this workspace.",
-          "org_role_required": "Authorizing a provider needs an org Owner or Admin, or a workspace Owner."
+          "org_role_required": "Authorizing a provider needs an org Owner or Admin, or a workspace Owner or Admin."
         }
       },
       "another": "Add another provider"
@@ -1092,7 +1092,7 @@
       "versions": {
         "title": "Policy versions",
         "notBacked": "Policy versions are not stored yet. No version, rule or test is recorded, so none can be opened, drafted, activated or restored.",
-        "note": "A governed action with approval activates a version, or a Context PR does in regulated mode. Only a draft can be edited or discarded, because every decision cites the version that made it.",
+        "note": "A governed action with approval activates a version, or a steering PR does in regulated mode. Only a draft can be edited or discarded, because every decision cites the version that made it.",
         "draft": {
           "open": "Draft a version",
           "title": "Draft a version",
@@ -1113,8 +1113,8 @@
           "writes": "Output"
         },
         "values": {
-          "store": "One row in Postgres, <code>tools.policy_versions</code>, holding the rules, the tests and the version string. A policy version is not a context record and never reaches a model.",
-          "regulated": "The rules are a file in <code>.oxagen/policy/</code> in the main repo, and a change is a Context PR. Postgres holds the compiled copy the gateway reads.",
+          "store": "One row in Postgres, <code>tools.policy_versions</code>, holding the rules, the tests and the version string. A policy version is not a steering record and never reaches a model.",
+          "regulated": "The rules are a file in <code>.oxagen/policy/</code> in the main repo, and a change is a steering PR. Postgres holds the compiled copy the gateway reads.",
           "compiledFrom": "The rules you write here, plus the enforcement grants on each agent and the role grants on each operator. A rule can read those, so you do not restate a grant as a rule.",
           "readBy": "The gateway, on every tool call, before the call leaves. No model is in the decision path, so the same call and the same version always decide the same way.",
           "writes": "One <code>policy.decision</code> frame per call, naming the version and the rules that fired. A replay reads the decision back without re-running it."

@@ -7,7 +7,7 @@
 // reaches GitHub — never the shape of a fixture.
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type { SecurityEventInput } from "@oxagen/telemetry";
-import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
+import { steeringRecordLabel } from "@oxagen/oxagen/steering-record-label";
 import { gitBlobId } from "@oxagen/steering-bundle";
 import type { SteeringDeps } from "./context.steering.deps";
 import {
@@ -17,7 +17,10 @@ import {
   type SteeringGitHub,
   type SteeringRepository,
 } from "./context.steering.github";
-import type { ProposalStatus } from "@oxagen/oxagen/contracts/context.steering.shared";
+import {
+  isRecordKind,
+  type ProposalStatus,
+} from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
   alreadyMerged,
   refusedWrite,
@@ -300,7 +303,7 @@ export class MemoryStore implements SteeringStore {
           OPEN.has(p.status),
       )
     ) {
-      throw new Error("context_proposals_open_pr_idx: one open PR per lineage");
+      throw new Error("steering_proposals_open_pr_idx: one open PR per lineage");
     }
     this.proposals[i] = next;
     return next;
@@ -390,7 +393,7 @@ export class MemoryStore implements SteeringStore {
         scope.workspaceId,
     ).length;
   }
-  /** The newest record in this workspace that a Context PR actually merged. */
+  /** The newest record in this workspace that a steering PR actually merged. */
   async latestPublication(scope: { workspaceId: string }) {
     // Newest publication wins. Publications that share an instant (GitHub
     // reports `merged_at` to the second) are all returned: the store cannot
@@ -467,7 +470,7 @@ export class MemoryStore implements SteeringStore {
         readRecordFile(input.body)?.label ??
         proposal.label ??
         existing?.label ??
-        contextRecordLabel(proposal.lineageId),
+        steeringRecordLabel(proposal.lineageId),
       status: "active",
       kind: proposal.kind,
       force: proposal.force,
@@ -609,6 +612,74 @@ export class MemoryStore implements SteeringStore {
       mergedByUserId: input.mergedByUserId,
     });
     return merged;
+  }
+  async mergeSteeringPr(input: Parameters<SteeringStore["mergeSteeringPr"]>[0]) {
+    const { scope, proposal } = input;
+    // One transaction in Postgres: nothing retires unless the proposal is
+    // still at `checks_passed`.
+    const current = this.proposals.find((p) => p.id === proposal.id);
+    if (current?.status !== "checks_passed" || current.kind !== proposal.kind)
+      throw alreadyMerged(proposal.publicId);
+    const retired: string[] = [];
+    for (const lineageId of input.retire) {
+      const record = this.records.find(
+        (r) =>
+          r.workspaceId === scope.workspaceId &&
+          r.slug === lineageId &&
+          r.status === "active" &&
+          r.deletedAt === null,
+      );
+      if (!record) continue;
+      Object.assign(record, {
+        status: "retired",
+        commitSha: input.commitSha,
+        publishedAt: input.mergedAt,
+        updatedById: input.mergedByUserId,
+        updatedAt: input.mergedAt,
+      });
+      const head = this.ledger
+        .filter((l) => l.recordId === record.id)
+        .sort((a, b) => b.seq - a.seq)[0];
+      const seqNo = (head?.seq ?? 0) + 1;
+      const prev = head?.chainDigest ?? null;
+      this.ledger.push({
+        id: uuid(),
+        publicId: nextId("ctp"),
+        recordId: record.id,
+        seq: seqNo,
+        chainDigest: sha256Hex(
+          (prev ?? "") +
+            canonicalJson({
+              action: "retire",
+              approver_user_id: input.mergedByUserId,
+              policy_version: input.policyVersion,
+              record_id: record.id,
+              seq: seqNo,
+              version_id: null,
+            }),
+        ),
+        prev,
+        policyVersion: input.policyVersion,
+        approverUserId: input.mergedByUserId,
+        action: "retire",
+      });
+      retired.push(lineageId);
+    }
+    const merged = await this.updateProposal(
+      proposal.id,
+      {
+        status: "merged",
+        mergeClaimedAt: null,
+        updatedById: input.mergedByUserId,
+      },
+      ["checks_passed"],
+    );
+    Object.assign(merged, {
+      mergedCommit: input.commitSha,
+      mergedAt: input.mergedAt,
+      mergedByUserId: input.mergedByUserId,
+    });
+    return { proposal: merged, retired };
   }
 }
 
@@ -1332,7 +1403,7 @@ export function harness(files: Record<string, string> = {}): Harness {
 
 /**
  * The repository sync's store (ADR-184) over a `MemoryStore`'s own arrays, so
- * a test can run `merge_context_pr` and the sync against one registry and see
+ * a test can run `merge_steering_pr` and the sync against one registry and see
  * whether they agree. `apply` writes versions and ledger links the way the
  * Postgres store does: one version per publication, the chain digest over the
  * same canonical fields, and a `retire` link with no version.
@@ -1445,7 +1516,7 @@ export class MemorySyncStore implements SyncStore {
           workspaceId: scope.workspaceId,
           slug: p.lineageId,
           title: p.content.statement,
-          label: p.content.label ?? contextRecordLabel(p.lineageId),
+          label: p.content.label ?? steeringRecordLabel(p.lineageId),
           status: "active",
           kind: p.content.kind,
           force: p.content.force,
@@ -1589,7 +1660,7 @@ export class MemorySyncStore implements SyncStore {
     );
   }
 
-  async linkMergedGovernance(
+  async linkMergedWithoutRecord(
     scope: SyncScope,
     proposalId: string,
     args: { mergedCommit: string; mergedAt: Date; noClaimSince: Date },
@@ -1598,7 +1669,7 @@ export class MemorySyncStore implements SyncStore {
     if (
       !proposal ||
       proposal.workspaceId !== scope.workspaceId ||
-      proposal.kind !== "governance" ||
+      isRecordKind(proposal.kind) ||
       !OPEN.has(proposal.status)
     )
       return false;

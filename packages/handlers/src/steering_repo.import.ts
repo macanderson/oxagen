@@ -32,13 +32,14 @@ export const importWorkspaceSteeringHandler: CapabilityHandler<
   // A reset clears the stored connection, and a setup that stopped with
   // choose_connection takes the person's pick, both before the run
   // provisions (#4875, #4899).
-  // The connection belongs to the whole organization, so clearing it takes an
-  // org Owner or Admin even though a workspace Owner may run the import
-  // (#4900).
-  if (input.resetConnection === true)
+  // The connection belongs to the whole organization, so clearing it or
+  // picking it takes an org Owner or Admin even though a workspace Owner or
+  // Admin may run the import (#4900, #5228). A pick stores the org's
+  // connection when it has none, so it is an org write too.
+  if (input.resetConnection === true || input.connection)
     await assertOrgRole(
       { ...ctx, userId: actorUserId },
-      { org: ["Owner", "Admin"] },
+      { org: ["Owner", "Admin"], namedRolesOnly: true },
     );
   if (input.resetConnection === true || input.connection) {
     const { applyWorkspaceConnectionPick, resetOrganizationConnection } =

@@ -1,5 +1,5 @@
 "use client";
-// Review a recommendation, draft a Context PR or a Stella request, then
+// Review a recommendation, draft a steering PR or a Stella request, then
 // record or dismiss the finding separately. Draft handoffs never submit a
 // write or claim realised savings. Only the explicit record/dismiss actions
 // change the finding, through the kernel's existing role checks.

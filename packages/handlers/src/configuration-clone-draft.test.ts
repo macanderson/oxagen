@@ -6,6 +6,7 @@ import {
   clonedConfigurationText,
 } from "./configuration-clone-draft";
 import { readSkillFrontmatter } from "./skill-validation";
+import { LEGACY_RECORD_SCHEMA } from "@oxagen/oxagen/steering-repo/paths";
 import { buildRecordFile } from "./context.steering.file";
 import { stringify } from "smol-toml";
 const source = (
@@ -81,7 +82,7 @@ describe("configuration clone source projection", () => {
     ).toThrow();
     expect(() =>
       clonedConfigurationText(
-        source("record", 'schema="context-record/v0.1"\nrecord=[]'),
+        source("record", `schema="${LEGACY_RECORD_SCHEMA}"\nrecord=[]`),
         "review-cloned",
         "Review-cloned",
       ),

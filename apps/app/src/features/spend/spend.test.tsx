@@ -239,8 +239,8 @@ const source: DataSource = {
     records: vi.fn(),
     record: vi.fn(),
     proposals: vi.fn(),
-    contextPr: vi.fn(),
-    contextPrDiff: vi.fn(),
+    steeringPr: vi.fn(),
+    steeringPrDiff: vi.fn(),
     freshness: vi.fn(),
     layout: vi.fn(),
     hub: vi.fn(),
@@ -1762,10 +1762,10 @@ describe("Spend › Findings › Operator ranking", () => {
     ).toBeInTheDocument();
   });
 
-  // #5182: a workspace's creator holds the workspace Owner role in IAM, so
-  // the page asks for the ranking for that Owner too. The pseudonym switch
-  // stays with the org Owner and Admin.
-  it("reads the ranking for a workspace Owner who holds no org manager role, with no pseudonym switch", async () => {
+  // #5228: a workspace's Owner and Admin pass every gate in their workspace,
+  // so the page asks for the ranking for that Owner and offers the
+  // pseudonym switch too.
+  it("reads the ranking for a workspace Owner who holds no org manager role, with the pseudonym switch", async () => {
     const wsOwner = ctxAs("owner");
     loaded({
       operator: report([row("prn_marcusbell", { operator: MARCUS })]),
@@ -1806,7 +1806,9 @@ describe("Spend › Findings › Operator ranking", () => {
     expect(
       screen.getByRole("table", { name: "Operator ranking" }),
     ).toHaveTextContent("Marcus Bell");
-    expect(screen.queryByRole("button", { name: /pseudonyms/ })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Turn on pseudonyms" }),
+    ).toBeInTheDocument();
   });
 
   it("asks no ranking for a member and says who can read it (negative)", async () => {
@@ -1820,7 +1822,7 @@ describe("Spend › Findings › Operator ranking", () => {
     ).toBeNull();
     expect(
       screen.getByText(
-        /An org Owner or Admin, or this workspace's Owner, can read the operator ranking/,
+        /An org Owner or Admin, or this workspace's Owner or Admin, can read the operator ranking/,
       ),
     ).toBeInTheDocument();
     expect(
@@ -2580,5 +2582,64 @@ describe("Spend › what a read did not record", () => {
       "href",
       "/acme/core-platform/agents/idle",
     );
+  });
+});
+
+// The Definition of done of #5228: the Spend pages show every workspace
+// action to the workspace's Owner and Admin, whatever their org role. The
+// role-gated ones are the operator ranking and its pseudonym switch on
+// Findings, and the gateway policy form on Budgets. A workspace Member whose
+// org role is Member is offered none of them.
+describe("Spend › workspace Owner or Admin (#5228)", () => {
+  const RANKING = {
+    period: PERIOD,
+    pseudonyms: false,
+    unproductive: HEADLINE.unproductive,
+    unattributed: {
+      unproductive: { micros: "0", currency: "USD" },
+      runs: 0,
+    },
+    operators: [],
+  };
+  const POLICY = {
+    mode: "observed" as const,
+    sessionLimit: null,
+    sessionLimitUsd: null,
+    modelAllow: null,
+    modelDeny: [],
+  };
+
+  /** Which workspace actions the two tabs offer this viewer. */
+  async function offered(as: typeof ctx) {
+    loaded();
+    operatorRanking.mockResolvedValue(readOk(RANKING));
+    gatewayPolicy.mockResolvedValue(readOk(POLICY));
+    const findingsTab = await renderSpend(["findings"], undefined, as);
+    const ranking = operatorRanking.mock.calls.length > 0;
+    const pseudonyms =
+      screen.queryByRole("button", { name: "Turn on pseudonyms" }) !== null;
+    findingsTab.unmount();
+    await renderSpend(["budgets"], undefined, as);
+    const gateway = document.querySelector("#gateway-mode") !== null;
+    return { ranking, pseudonyms, gateway };
+  }
+
+  it.each(["owner", "admin"] as const)(
+    "offers every workspace action to the workspace's %s whose org role is Member",
+    async (wsRole) => {
+      expect(await offered(ctxAs(wsRole))).toEqual({
+        ranking: true,
+        pseudonyms: true,
+        gateway: true,
+      });
+    },
+  );
+
+  it("offers none of them to a workspace Member whose org role is Member (negative)", async () => {
+    expect(await offered(ctxAs("member"))).toEqual({
+      ranking: false,
+      pseudonyms: false,
+      gateway: false,
+    });
   });
 });

@@ -293,9 +293,9 @@ no stored AWS key. (`578673726240` was the pre-cutover account; the 2026-08-27
 migration to `916294258235` is what #2542 traced the deploy pipeline's
 contradictory database comments back to.)
 
-This replaced Vercel, whose account was suspended over an unpaid balance —
-every site behind it answers `402`. Vercel is not a fallback and nothing here
-may depend on it.
+Production moved here from Vercel. No host or vendor is ruled out, and Mac
+reviews every infrastructure change before it merges (SCR-007 in
+[`AGENTS.md`](AGENTS.md)).
 
 | App | Where it runs | Hostname |
 | --- | --- | --- |

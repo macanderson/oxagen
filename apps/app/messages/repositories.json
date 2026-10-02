@@ -40,7 +40,7 @@
       }
     },
     "failure": {
-      "denied": "Only an organization Owner or Admin, or this workspace’s Owner, can read or change this workspace’s repositories.",
+      "denied": "Only an organization Owner or Admin, or this workspace’s Owner or Admin, can read or change this workspace’s repositories.",
       "githubNotConnected": "No GitHub App installation is attached to this workspace, so Oxagen cannot reach a repository. Install the App first.",
       "repositoryNotInstalled": "The installation cannot read that repository. Grant it access on GitHub, then try again.",
       "mainRepoBound": "This workspace already binds a different main repository. Changing it is an org owner's decision, recorded as a security event.",
@@ -70,7 +70,7 @@
       "gitlabRefused": "GitLab refused the write. Nothing was published. Check that the project access token still has the api scope and the Developer role, then try again.",
       "gitlabCredentialRejected": "GitLab no longer accepts the access token stored for this project. Nothing was changed. Connect the project again with a new token. If Oxagen created this steering project, an organization owner or admin must connect its group again with a new group access token.",
       "gitlabNotConnected": "This workspace has no GitLab project connected. Connect the project with a project access token first.",
-      "repositoryHostUnsupported": "This is a GitLab project. This action works on GitHub repositories only today. Context PRs and steering publication work on GitLab.",
+      "repositoryHostUnsupported": "This is a GitLab project. This action works on GitHub repositories only today. Steering PRs and steering publication work on GitLab.",
       "toolNotRegistered": "This deployment does not run {capability} yet, so Oxagen changed nothing.",
       "findingNotFound": "This finding is gone. Its pull request may have closed. Reload the page.",
       "findingResolved": "This line no longer differs from a steering record, so there is nothing to promote.",
@@ -281,7 +281,7 @@
         "init": "Links this directory to the workspace. Writes <code>.oxagen/workspace.json</code>, adds it to <code>.gitignore</code>, and reports the directory here.",
         "pull": "Writes the steering published on the main repository’s production branch into <code>.oxagen/</code>. Refuses to overwrite a local edit unless you pass <code>--force</code>, and records the commit it pulled here.",
         "steeringStatus": "Compares <code>.oxagen/</code> in this directory against the production branch: the files that are behind or changed here.",
-        "contextPropose": "Records a proposal for a record under <code>.oxagen/rules/</code>: what it should say, and why. Its Context PR is opened and merged here, on the Changes tab, because a merge gates on a role only a signed-in person holds."
+        "contextPropose": "Records a proposal for a record under <code>.oxagen/rules/</code>: what it should say, and why. Its steering PR is opened and merged here, on the Changes tab, because a merge gates on a role only a signed-in person holds."
       },
       "syncNote": "<code>oxagen init</code> does not create stella’s links. It reports whether they exist. A copy whose symlinks read <code>missing</code> is one where stella loads nothing from <code>.oxagen/</code>, and <code>none</code> means the directory has no <code>.stella/</code>.",
       "stale": "A copy that is behind is not a run that is behind. Steering reaches a run from the merged commit, whatever a directory on a laptop holds.",
@@ -328,12 +328,12 @@
       "copyFailed": "Copying did not work. Select the commands and copy them."
     },
     "changes": {
-      "title": "Open Context PRs",
+      "title": "Open steering PRs",
       "subtitle": "Four kinds of file and one lifecycle. Whoever opened it (a person, the promoter, or the reconciler), the checks, the merge and the publication are the same.",
       "label": "Pull requests Oxagen opened",
       "loading": "Reading the pull requests Oxagen has open",
       "empty": "Oxagen has no pull request open or merged on this workspace’s repositories.",
-      "otherKinds": "Context records are the only kind listed here today. Init, skill, agent, tool and configuration pull requests have no list yet.",
+      "otherKinds": "Steering records are the only kind listed here today. Init, skill, agent, tool and configuration pull requests have no list yet.",
       "search": "Search this list",
       "columns": {
         "change": "Change",
@@ -350,10 +350,11 @@
         "openedBy": "Opened by"
       },
       "kinds": {
-        "context_record": "context record"
+        "steering_record": "steering record",
+        "steering_pr": "steering PR"
       },
       "kindPaths": {
-        "context_record": ".oxagen/rules/'<lineage>'.toml"
+        "steering_record": ".oxagen/rules/'<lineage>'.toml"
       },
       "states": {
         "pr_open": "open",
@@ -467,7 +468,7 @@
       "governanceMissing": "No governance.toml on the production branch. Pull requests are reviewed as team.",
       "modes": {
         "solo": "The author may merge their own.",
-        "team": "A reviewer other than the author merges: an org Owner or Admin, or a workspace Owner. This is what a missing file means.",
+        "team": "A reviewer other than the author merges: an org Owner or Admin, or a workspace Owner or Admin. This is what a missing file means.",
         "regulated": "An org Owner or Admin other than the author merges, recorded as the accountable approver."
       },
       "mode": {
@@ -698,7 +699,7 @@
           "authorize": "Authorize on GitHub"
         },
         "imported": {
-          "imported": "Oxagen created {repository} and opened {count, plural, one {# steering PR} other {# steering PRs}}. Merge them in order, then the cleanup PR.",
+          "imported": "Oxagen created {repository} and opened {count, plural, one {# steering PR} other {# steering PRs}}. Merge them in order from the Steering page, then merge the cleanup PR on the old repository.",
           "provisioned": "Oxagen created {repository}.",
           "nothingToImport": "This workspace already has its steering repo, {repository}.",
           "needsChoices": "{rules, plural, one {# rule needs} other {# rules need}} a kind and {constraints, plural, one {# constraint needs} other {# constraints need}} an effect before Oxagen can move them. Nothing changed. Send the choices to import_workspace_steering.",

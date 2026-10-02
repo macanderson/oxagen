@@ -139,8 +139,10 @@ jobs:
             // comment per push. Re-labelling after a manual removal does
             // comment again, which is intended: that is a new decision to
             // argue with.
+            // A fork chooses its filenames. Strip backticks and @ so a crafted
+            // name cannot break out of the code span or mention anyone.
             const list = hits
-              .map(h => `- \`${h.filename}\` — ${h.store}`)
+              .map(h => `- \`${h.filename.replace(/[`@]/g, '')}\` — ${h.store}`)
               .sort()
               .join('\n')
 

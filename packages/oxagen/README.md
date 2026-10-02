@@ -98,7 +98,7 @@ handlers and installs no gate.
 - `./oxagen-assistant` (`src/oxagen-assistant.ts`): the binding that marks a
   call as Stella's, so the kernel skips the workspace's decision rules for it
   (ADR-235). Only Stella's turn and its approval resume mint one.
-- Settings vocabularies: `./run-enrichment` and `./context-record-label`.
+- Settings vocabularies: `./run-enrichment` and `./steering-record-label`.
 - `./interactive-agent` (`src/interactive-agent.ts`): the `qa-chat` agent
   definition shared by the MCP server and the in-app Q&A surface.
 

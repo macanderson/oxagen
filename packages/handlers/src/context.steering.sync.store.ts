@@ -4,12 +4,13 @@
 // publication lock, so a merge from Oxagen and a sync never interleave.
 import {
   ambientPlaneKey,
-  CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+  STEERING_VERSION_CLASSIFICATION_COLUMN,
   hasColumnFresh,
   schema,
   withTenantDb,
 } from "@oxagen/database";
-import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
+import { steeringRecordLabel } from "@oxagen/oxagen/steering-record-label";
+import { recordKindSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
   EMBEDDINGS_SETTING,
   STELLA_ARCHIVE_AFTER_DAYS_SETTING,
@@ -24,6 +25,7 @@ import {
   isNull,
   lte,
   max,
+  notInArray,
   or,
   sql,
   type SQL,
@@ -110,10 +112,10 @@ export interface SyncStore {
     input: ApplyInput,
     plan: (records: RegistryRecord[]) => SyncPlan,
   ): Promise<AppliedSync>;
-  /** Every proposal whose Context PR is open in Oxagen's view. */
+  /** Every proposal whose steering PR is open in Oxagen's view. */
   openProposals(scope: Scope): Promise<ProposalRow[]>;
   /**
-   * Record a Context PR the host merged: the proposal points at its lineage's
+   * Record a steering PR the host merged: the proposal points at its lineage's
    * record and newest promotion. False when the lineage has no active record,
    * the proposal already left the open states, or a merge claimed it after
    * `noClaimSince` and is still landing it (#4504).
@@ -129,20 +131,20 @@ export interface SyncStore {
     },
   ): Promise<boolean>;
   /**
-   * Record a governance PR the host merged (#4795). A governance proposal
-   * publishes no record, so it points at none: the row moves to `merged` with
-   * its merge commit and no approver. False when the row is not a governance
-   * proposal, already left the open states, or a merge claimed it after
-   * `noClaimSince` and is still landing it.
+   * Record a governance or steering PR the host merged (#4795, #5122). Such
+   * a proposal publishes no single record, so it points at none: the row
+   * moves to `merged` with its merge commit and no approver. False when the
+   * row is a record proposal, already left the open states, or a merge
+   * claimed it after `noClaimSince` and is still landing it.
    */
-  linkMergedGovernance(
+  linkMergedWithoutRecord(
     scope: Scope,
     proposalId: string,
     args: { mergedCommit: string; mergedAt: Date; noClaimSince: Date },
   ): Promise<boolean>;
   /**
    * True when a governance proposal Oxagen merged names `commitSha` as its
-   * merge commit: merge_context_pr landed it for an approver (#4795).
+   * merge commit: merge_steering_pr landed it for an approver (#4795).
    */
   governanceMergedAt(scope: Scope, commitSha: string): Promise<boolean>;
   /**
@@ -249,36 +251,36 @@ export const postgresSyncStore: SyncStore = {
       // The same early table lock `publishMerge` takes, for the same reason:
       // the classification probe below must not race the migration's DDL.
       await tx.execute(
-        sql`lock table ${schema.contextRecordVersions} in row exclusive mode`,
+        sql`lock table ${schema.steeringRecordVersions} in row exclusive mode`,
       );
       const classificationReady = await hasColumnFresh(
         tx,
-        CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+        STEERING_VERSION_CLASSIFICATION_COLUMN,
         await ambientPlaneKey(),
       );
       const rows = await tx
         .select({
-          id: schema.contextRecords.id,
-          slug: schema.contextRecords.slug,
-          path: schema.contextRecords.path,
-          status: schema.contextRecords.status,
-          deletedAt: schema.contextRecords.deletedAt,
-          title: schema.contextRecords.title,
-          label: schema.contextRecords.label,
-          kind: schema.contextRecords.kind,
-          constraintEffect: schema.contextRecords.constraintEffect,
-          statement: schema.contextRecords.statement,
-          body: schema.contextRecordVersions.body,
+          id: schema.steeringRecords.id,
+          slug: schema.steeringRecords.slug,
+          path: schema.steeringRecords.path,
+          status: schema.steeringRecords.status,
+          deletedAt: schema.steeringRecords.deletedAt,
+          title: schema.steeringRecords.title,
+          label: schema.steeringRecords.label,
+          kind: schema.steeringRecords.kind,
+          constraintEffect: schema.steeringRecords.constraintEffect,
+          statement: schema.steeringRecords.statement,
+          body: schema.steeringRecordVersions.body,
         })
-        .from(schema.contextRecords)
+        .from(schema.steeringRecords)
         .leftJoin(
-          schema.contextRecordVersions,
+          schema.steeringRecordVersions,
           eq(
-            schema.contextRecordVersions.id,
-            schema.contextRecords.activeVersionId,
+            schema.steeringRecordVersions.id,
+            schema.steeringRecords.activeVersionId,
           ),
         )
-        .where(scoped(schema.contextRecords, scope));
+        .where(scoped(schema.steeringRecords, scope));
       const byId = new Map(rows.map((r) => [r.id, r]));
       const plan = planFor(
         rows.map((r) => ({
@@ -303,12 +305,12 @@ export const postgresSyncStore: SyncStore = {
       // ancestor as the commit a checkout must reach. A tie is safe, because
       // the freshness read requires every commit at the newest instant.
       const [newest] = await tx
-        .select({ at: max(schema.contextRecords.publishedAt) })
-        .from(schema.contextRecords)
+        .select({ at: max(schema.steeringRecords.publishedAt) })
+        .from(schema.steeringRecords)
         .where(
           and(
-            scoped(schema.contextRecords, scope),
-            isNotNull(schema.contextRecords.commitSha),
+            scoped(schema.steeringRecords, scope),
+            isNotNull(schema.steeringRecords.commitSha),
           ),
         );
       const publishedAt =
@@ -325,7 +327,7 @@ export const postgresSyncStore: SyncStore = {
           // The record's name when the file gives none: its own, then one
           // derived from the lineage (ADR-178).
           label:
-            p.content.label ?? before?.label ?? contextRecordLabel(p.lineageId),
+            p.content.label ?? before?.label ?? steeringRecordLabel(p.lineageId),
           // A title that was the old statement follows the new one; a title a
           // proposal wrote stays.
           title:
@@ -349,9 +351,9 @@ export const postgresSyncStore: SyncStore = {
         let recordId = p.recordId;
         if (!recordId) {
           const [row] = await tx
-            .insert(schema.contextRecords)
+            .insert(schema.steeringRecords)
             .values({ ...scope, ...fields })
-            .returning({ id: schema.contextRecords.id });
+            .returning({ id: schema.steeringRecords.id });
           if (!row)
             throw new Error("[context.sync] record insert returned no row");
           recordId = row.id;
@@ -382,9 +384,9 @@ export const postgresSyncStore: SyncStore = {
           byUserId: null,
         });
         await tx
-          .update(schema.contextRecords)
+          .update(schema.steeringRecords)
           .set({ ...fields, activeVersionId: version.id })
-          .where(eq(schema.contextRecords.id, recordId));
+          .where(eq(schema.steeringRecords.id, recordId));
         await appendPromotion(tx, {
           scope,
           recordId,
@@ -397,28 +399,28 @@ export const postgresSyncStore: SyncStore = {
 
       for (const u of plan.update) {
         await tx
-          .update(schema.contextRecords)
+          .update(schema.steeringRecords)
           .set({
             ...(u.slug !== undefined ? { slug: u.slug } : {}),
             ...(u.path !== undefined ? { path: u.path } : {}),
             ...(u.label !== undefined ? { label: u.label } : {}),
             updatedAt: input.now,
           })
-          .where(eq(schema.contextRecords.id, u.recordId));
+          .where(eq(schema.steeringRecords.id, u.recordId));
       }
 
       for (const r of plan.retire) {
         // A retirement is a publication too: a checkout that still holds the
         // file is behind, so the freshness read must name this commit.
         await tx
-          .update(schema.contextRecords)
+          .update(schema.steeringRecords)
           .set({
             status: "retired",
             commitSha: input.commitSha,
             publishedAt,
             updatedAt: input.now,
           })
-          .where(eq(schema.contextRecords.id, r.recordId));
+          .where(eq(schema.steeringRecords.id, r.recordId));
         await appendPromotion(tx, {
           scope,
           recordId: r.recordId,
@@ -443,11 +445,11 @@ export const postgresSyncStore: SyncStore = {
     const rows = await withTenantDb((tx) =>
       tx
         .select()
-        .from(schema.contextProposals)
+        .from(schema.steeringProposals)
         .where(
           and(
-            scoped(schema.contextProposals, scope),
-            inArray(schema.contextProposals.status, [...OPEN_PR]),
+            scoped(schema.steeringProposals, scope),
+            inArray(schema.steeringProposals.status, [...OPEN_PR]),
           ),
         ),
     );
@@ -463,32 +465,32 @@ export const postgresSyncStore: SyncStore = {
     return withTenantDb(async (tx) => {
       await lockWorkspacePublication(tx, scope.workspaceId);
       const [record] = await tx
-        .select({ id: schema.contextRecords.id })
-        .from(schema.contextRecords)
+        .select({ id: schema.steeringRecords.id })
+        .from(schema.steeringRecords)
         .where(
           and(
-            scoped(schema.contextRecords, scope),
-            eq(schema.contextRecords.slug, args.lineageId),
-            eq(schema.contextRecords.status, "active"),
-            sql`${schema.contextRecords.deletedAt} is null`,
+            scoped(schema.steeringRecords, scope),
+            eq(schema.steeringRecords.slug, args.lineageId),
+            eq(schema.steeringRecords.status, "active"),
+            sql`${schema.steeringRecords.deletedAt} is null`,
           ),
         )
         .limit(1);
       if (!record) return false;
       const [promotion] = await tx
-        .select({ id: schema.contextPromotions.id })
-        .from(schema.contextPromotions)
+        .select({ id: schema.steeringPromotions.id })
+        .from(schema.steeringPromotions)
         .where(
           and(
-            eq(schema.contextPromotions.recordId, record.id),
-            eq(schema.contextPromotions.action, "promote"),
+            eq(schema.steeringPromotions.recordId, record.id),
+            eq(schema.steeringPromotions.action, "promote"),
           ),
         )
-        .orderBy(desc(schema.contextPromotions.seq))
+        .orderBy(desc(schema.steeringPromotions.seq))
         .limit(1);
       if (!promotion) return false;
       const [row] = await tx
-        .update(schema.contextProposals)
+        .update(schema.steeringProposals)
         .set({
           status: "merged",
           mergedCommit: args.mergedCommit,
@@ -501,24 +503,24 @@ export const postgresSyncStore: SyncStore = {
         })
         .where(
           and(
-            eq(schema.contextProposals.id, proposalId),
-            inArray(schema.contextProposals.status, [...OPEN_PR]),
+            eq(schema.steeringProposals.id, proposalId),
+            inArray(schema.steeringProposals.status, [...OPEN_PR]),
             or(
-              isNull(schema.contextProposals.mergeClaimedAt),
-              lte(schema.contextProposals.mergeClaimedAt, args.noClaimSince),
+              isNull(schema.steeringProposals.mergeClaimedAt),
+              lte(schema.steeringProposals.mergeClaimedAt, args.noClaimSince),
             ),
           ),
         )
-        .returning({ id: schema.contextProposals.id });
+        .returning({ id: schema.steeringProposals.id });
       return row !== undefined;
     });
   },
 
-  async linkMergedGovernance(scope, proposalId, args) {
+  async linkMergedWithoutRecord(scope, proposalId, args) {
     return withTenantDb(async (tx) => {
       await lockWorkspacePublication(tx, scope.workspaceId);
       const [row] = await tx
-        .update(schema.contextProposals)
+        .update(schema.steeringProposals)
         .set({
           status: "merged",
           mergedCommit: args.mergedCommit,
@@ -529,17 +531,17 @@ export const postgresSyncStore: SyncStore = {
         })
         .where(
           and(
-            eq(schema.contextProposals.id, proposalId),
-            scoped(schema.contextProposals, scope),
-            eq(schema.contextProposals.kind, "governance"),
-            inArray(schema.contextProposals.status, [...OPEN_PR]),
+            eq(schema.steeringProposals.id, proposalId),
+            scoped(schema.steeringProposals, scope),
+            notInArray(schema.steeringProposals.kind, [...recordKindSchema.options]),
+            inArray(schema.steeringProposals.status, [...OPEN_PR]),
             or(
-              isNull(schema.contextProposals.mergeClaimedAt),
-              lte(schema.contextProposals.mergeClaimedAt, args.noClaimSince),
+              isNull(schema.steeringProposals.mergeClaimedAt),
+              lte(schema.steeringProposals.mergeClaimedAt, args.noClaimSince),
             ),
           ),
         )
-        .returning({ id: schema.contextProposals.id });
+        .returning({ id: schema.steeringProposals.id });
       return row !== undefined;
     });
   },
@@ -547,15 +549,15 @@ export const postgresSyncStore: SyncStore = {
   async governanceMergedAt(scope, commitSha) {
     const [row] = await withTenantDb((tx) =>
       tx
-        .select({ id: schema.contextProposals.id })
-        .from(schema.contextProposals)
+        .select({ id: schema.steeringProposals.id })
+        .from(schema.steeringProposals)
         .where(
           and(
-            scoped(schema.contextProposals, scope),
-            eq(schema.contextProposals.kind, "governance"),
-            eq(schema.contextProposals.status, "merged"),
-            eq(schema.contextProposals.mergedCommit, commitSha),
-            isNotNull(schema.contextProposals.mergedByUserId),
+            scoped(schema.steeringProposals, scope),
+            eq(schema.steeringProposals.kind, "governance"),
+            eq(schema.steeringProposals.status, "merged"),
+            eq(schema.steeringProposals.mergedCommit, commitSha),
+            isNotNull(schema.steeringProposals.mergedByUserId),
           ),
         )
         .limit(1),

@@ -1,4 +1,4 @@
-// One published context record (#3395; ADR-061; MC spec §10.2;
+// One published steering record (#3395; ADR-061; MC spec §10.2;
 // mockups/pages/record.md), presented by its kind.
 //
 // The label is the headline and the breadcrumb's last step, the slug under it
@@ -22,6 +22,7 @@ import { PageRecord } from "@/features/shell";
 import { getSession } from "@/server/session";
 import { branchFor, recordPathFor } from "@/features/create";
 import type { WsCtx } from "@/server/viewer";
+import { mayActInWorkspace } from "@/shared/workspace-authority";
 import { panel, panelBody, panelHeader } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { KindPanel } from "./kind-panel";
@@ -42,14 +43,15 @@ const OPEN_STATUSES = new Set([
 
 /**
  * Whether this viewer's role may revise at all. It mirrors the gate
- * `revise_context_record` enforces (INV-29), so the proposal dialog says so
+ * `revise_steering_record` enforces (INV-29), so the proposal dialog says so
  * rather than offering a submit that is refused. The handler remains the
  * authority: this only decides what the page shows.
  */
 function canRevise(ctx: WsCtx): boolean {
-  const orgAdmin = ctx.orgRole === "owner" || ctx.orgRole === "admin";
-  const wsWriter = ctx.wsRole === "owner" || ctx.wsRole === "member";
-  return orgAdmin || wsWriter;
+  return (
+    mayActInWorkspace(ctx.orgRole, ctx.wsRole, ["owner", "admin"]) ||
+    ctx.wsRole === "member"
+  );
 }
 
 /** The design's `.sk` shimmer (globals.css), the one every skeleton draws. */
@@ -186,7 +188,7 @@ export async function Record({
     : null;
   const fresh = valueOf(freshness);
   const repository = fresh?.repository ?? null;
-  // The file and branch open_context_pr writes (#4765). The record's own path
+  // The file and branch open_steering_pr writes (#4765). The record's own path
   // wins. Without one, the layout decides, and an unread layout or an unknown
   // kind leaves both null: the page shows a placeholder rather than a guess.
   const layout = valueOf(layoutRead)?.layout ?? null;

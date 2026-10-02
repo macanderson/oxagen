@@ -46,7 +46,7 @@
         "file": ".oxagen/skills/*/SKILL.md"
       },
       "record": {
-        "label": "Context record",
+        "label": "Steering record",
         "body": "One statement that steers every agent it reaches.",
         "file": ".oxagen/rules/*.toml"
       }

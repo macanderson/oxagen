@@ -11,9 +11,24 @@
 // carries occurred_at as Postgres renders it, microseconds included: a JS Date
 // holds milliseconds, and a cursor rounded to them would skip every row that
 // shares the millisecond of a page's last row.
+//
+// A rename retires a capability name and keeps no alias (#4325), but a row
+// recorded before the rename keeps the name it recorded. So the read shows
+// every capability under its current name, through iam.capability_renames:
+// an old row and a new one carry one label, and a filter on either name
+// finds both.
 import type { AuditEvent } from "@oxagen/oxagen/contracts/audit.log.query";
 import { schema, type Tx } from "@oxagen/database";
-import { and, desc, eq, gte, lt, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  lt,
+  sql,
+  type AnyColumn,
+  type SQL,
+} from "drizzle-orm";
 
 /**
  * The workspace id an organization-level invoke carries (apps/app
@@ -39,6 +54,22 @@ export type AuditEventFilter = {
 export type AuditCursor = { at: string; id: string };
 
 const se = schema.securityEvents;
+const renames = schema.capabilityRenames;
+
+/**
+ * A capability name under its current label: the name that replaced it when a
+ * rename retired it, and the name itself otherwise.
+ */
+export function currentCapabilityName(
+  name: AnyColumn | string,
+): SQL<string | null> {
+  return sql<string | null>`coalesce((select ${renames.currentName} from ${renames} where ${renames.retiredName} = ${name}), ${name})`;
+}
+
+/** Rows whose capability carries the same current label as `name`. */
+export function capabilityIs(name: string): SQL {
+  return sql`${currentCapabilityName(se.capability)} = ${currentCapabilityName(name)}`;
+}
 
 /** The WHERE clause: the org always, the workspace when one is given, then each filter. */
 export function auditConditions(
@@ -51,7 +82,7 @@ export function auditConditions(
   if (f.eventType) conds.push(eq(se.eventType, f.eventType));
   if (f.actorUserId) conds.push(eq(se.actorUserId, f.actorUserId));
   if (f.actorPublicId) conds.push(eq(schema.users.publicId, f.actorPublicId));
-  if (f.capability) conds.push(eq(se.capability, f.capability));
+  if (f.capability) conds.push(capabilityIs(f.capability));
   if (f.outcome) conds.push(eq(se.outcome, f.outcome));
   if (f.from) conds.push(gte(se.occurredAt, new Date(f.from)));
   if (f.to) conds.push(lt(se.occurredAt, new Date(f.to)));
@@ -81,7 +112,7 @@ export async function readAuditEvents(
       actorPublicId: schema.users.publicId,
       workspaceId: se.workspaceId,
       workspaceSlug: schema.workspaces.slug,
-      capability: se.capability,
+      capability: currentCapabilityName(se.capability),
       outcome: se.outcome,
       ip: se.ip,
       userAgent: se.userAgent,

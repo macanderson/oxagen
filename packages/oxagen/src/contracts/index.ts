@@ -255,10 +255,6 @@ import { systemInstallInstructions } from "./system.install.instructions";
 import { userPreferencesRead } from "./user.preferences.read";
 import { userWorkspacePreferencesRead } from "./user.workspace_preferences.read";
 import { userWorkspacePreferencesWrite } from "./user.workspace_preferences.write";
-import { budgetPolicyRead } from "./budget.policy.read";
-import { budgetPolicyWrite } from "./budget.policy.write";
-import { workspaceBudgetPolicyRead } from "./workspace.budget_policy.read";
-import { workspaceBudgetPolicyWrite } from "./workspace.budget_policy.write";
 import { billingBudgetGet } from "./billing.budget.get";
 import { billingBudgetSet } from "./billing.budget.set";
 import { workspaceModelSettingsRead } from "./workspace.model_settings.read";
@@ -318,16 +314,16 @@ import { toolRelayRevoke } from "./tool.relay.revoke";
 import { credentialGrantList } from "./credential.grant.list";
 import { killSwitchSet } from "./kill_switch.set";
 import { killSwitchList } from "./kill_switch.list";
-import { contextRecordPublish } from "./context.record.publish";
-import { contextRecordList } from "./context.record.list";
-import { contextRecordPromote } from "./context.record.promote";
-import { contextRecordRevise } from "./context.record.revise";
-import { contextRecordsList } from "./context.records.list";
-import { contextRecordsGet } from "./context.records.get";
-import { contextRecordsAppend } from "./context.records.append";
-import { contextProposalCreate } from "./context.proposal.create";
-import { contextProposalList } from "./context.proposal.list";
-import { contextProposalDismiss } from "./context.proposal.dismiss";
+import { steeringRecordPublish } from "./steering.record.publish";
+import { steeringRecordList } from "./steering.record.list";
+import { steeringRecordPromote } from "./steering.record.promote";
+import { steeringRecordRevise } from "./steering.record.revise";
+import { steeringRecordsList } from "./steering.records.list";
+import { steeringRecordsGet } from "./steering.records.get";
+import { steeringRecordsAppend } from "./steering.records.append";
+import { steeringProposalCreate } from "./steering.proposal.create";
+import { steeringProposalList } from "./steering.proposal.list";
+import { steeringProposalDismiss } from "./steering.proposal.dismiss";
 import { steeringMemoriesList } from "./steering.memories.list";
 import { steeringMemoriesGet } from "./steering.memories.get";
 import { steeringMemoriesPromote } from "./steering.memories.promote";
@@ -370,18 +366,18 @@ export {
   workPrioritySchema,
 } from "./work.intake.shared";
 export type { TriageViewOutput, WorkCollectorView } from "./work.intake.shared";
-import { contextPrOpen } from "./context.pr.open";
-import { contextPrGet } from "./context.pr.get";
-import { contextPrRefresh } from "./context.pr.refresh";
-import { contextPrDiffGet } from "./context.pr.diff.get";
-import { contextPrMerge } from "./context.pr.merge";
-import { contextPrMergeWithoutReview } from "./context.pr.merge_without_review";
-import { contextPrRevert } from "./context.pr.revert";
+import { steeringPrOpen } from "./steering.pr.open";
+import { steeringPrGet } from "./steering.pr.get";
+import { steeringPrRefresh } from "./steering.pr.refresh";
+import { steeringPrDiffGet } from "./steering.pr.diff.get";
+import { steeringPrMerge } from "./steering.pr.merge";
+import { steeringPrMergeWithoutReview } from "./steering.pr.merge_without_review";
+import { steeringPrRevert } from "./steering.pr.revert";
 // Instruction files in linked code repositories, and the managed blocks of a
 // steering PR (#4518, ADR-263).
 import { codeRepositoryFindingsList } from "./repository.findings.list";
 import { instructionPromote } from "./repository.instruction.promote";
-import { contextPrRestoreManagedBlock } from "./context.pr.restore_managed_block";
+import { steeringPrRestoreManagedBlock } from "./steering.pr.restore_managed_block";
 import { contextSteeringDeliveries } from "./context.steering.deliveries";
 import { steeringRepoGet } from "./steering_repo.get";
 import { steeringRepoRepair } from "./steering_repo.repair";
@@ -644,7 +640,7 @@ export type {
   ProposalView,
   PublishedRecordView,
 } from "./context.steering.shared";
-export { contextPrSchema } from "./context.pr.open";
+export { steeringPrSchema } from "./steering.pr.open";
 // The Markdown import's rows (#4907). The shared file is not a capability, so
 // it is exported here to satisfy the check-contracts file-coverage guard.
 export {
@@ -686,7 +682,7 @@ export type {
   SteeringMarkdownImportCommitInput,
   SteeringMarkdownImportCommitOutput,
 } from "./steering.markdown_import.commit";
-export type { ContextPr } from "./context.pr.open";
+export type { SteeringPr } from "./steering.pr.open";
 // The shapes the workspace memory contracts share (memory-collection spec).
 // Not a capability, so exported here to satisfy the file-coverage guard.
 export {
@@ -1140,12 +1136,8 @@ export {
   userPreferencesRead,
   userWorkspacePreferencesRead,
   userWorkspacePreferencesWrite,
-  budgetPolicyRead,
-  budgetPolicyWrite,
   billingBudgetGet,
   billingBudgetSet,
-  workspaceBudgetPolicyRead,
-  workspaceBudgetPolicyWrite,
   workspaceModelSettingsRead,
   workspaceModelSettingsWrite,
   promptSettingsRead,
@@ -1203,12 +1195,12 @@ export {
   killSwitchSet,
   killSwitchList,
   toolClassificationSchema,
-  contextRecordPublish,
-  contextRecordList,
-  contextRecordPromote,
-  contextRecordRevise,
-  contextRecordsList,
-  contextRecordsGet,
+  steeringRecordPublish,
+  steeringRecordList,
+  steeringRecordPromote,
+  steeringRecordRevise,
+  steeringRecordsList,
+  steeringRecordsGet,
   contextSteeringFreshness,
   contextSteeringLayout,
   contextSteeringDeliveries,
@@ -1220,10 +1212,10 @@ export {
   steeringMarkdownImportParse,
   steeringMarkdownImportCommit,
   steeringPropose,
-  contextRecordsAppend,
-  contextProposalCreate,
-  contextProposalList,
-  contextProposalDismiss,
+  steeringRecordsAppend,
+  steeringProposalCreate,
+  steeringProposalList,
+  steeringProposalDismiss,
   steeringMemoriesList,
   steeringMemoriesGet,
   steeringMemoriesPromote,
@@ -1252,16 +1244,16 @@ export {
   workItemGet,
   workTargetsList,
   workOutcomesGet,
-  contextPrOpen,
-  contextPrGet,
-  contextPrRefresh,
-  contextPrDiffGet,
-  contextPrMerge,
-  contextPrMergeWithoutReview,
-  contextPrRevert,
+  steeringPrOpen,
+  steeringPrGet,
+  steeringPrRefresh,
+  steeringPrDiffGet,
+  steeringPrMerge,
+  steeringPrMergeWithoutReview,
+  steeringPrRevert,
   codeRepositoryFindingsList,
   instructionPromote,
-  contextPrRestoreManagedBlock,
+  steeringPrRestoreManagedBlock,
   contextGovernanceModeSet,
   connectionList,
   connectionCreate,
@@ -1636,12 +1628,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   userPreferencesRead,
   userWorkspacePreferencesRead,
   userWorkspacePreferencesWrite,
-  budgetPolicyRead,
-  budgetPolicyWrite,
   billingBudgetGet,
   billingBudgetSet,
-  workspaceBudgetPolicyRead,
-  workspaceBudgetPolicyWrite,
   workspaceModelSettingsRead,
   workspaceModelSettingsWrite,
   promptSettingsRead,
@@ -1698,12 +1686,12 @@ export const contracts: readonly CapabilityDeclaration[] = [
   credentialGrantList,
   killSwitchSet,
   killSwitchList,
-  contextRecordPublish,
-  contextRecordList,
-  contextRecordPromote,
-  contextRecordRevise,
-  contextRecordsList,
-  contextRecordsGet,
+  steeringRecordPublish,
+  steeringRecordList,
+  steeringRecordPromote,
+  steeringRecordRevise,
+  steeringRecordsList,
+  steeringRecordsGet,
   contextSteeringFreshness,
   contextSteeringLayout,
   contextSteeringDeliveries,
@@ -1715,10 +1703,10 @@ export const contracts: readonly CapabilityDeclaration[] = [
   steeringMarkdownImportParse,
   steeringMarkdownImportCommit,
   steeringPropose,
-  contextRecordsAppend,
-  contextProposalCreate,
-  contextProposalList,
-  contextProposalDismiss,
+  steeringRecordsAppend,
+  steeringProposalCreate,
+  steeringProposalList,
+  steeringProposalDismiss,
   steeringMemoriesList,
   steeringMemoriesGet,
   steeringMemoriesPromote,
@@ -1747,16 +1735,16 @@ export const contracts: readonly CapabilityDeclaration[] = [
   workItemGet,
   workTargetsList,
   workOutcomesGet,
-  contextPrOpen,
-  contextPrGet,
-  contextPrRefresh,
-  contextPrDiffGet,
-  contextPrMerge,
-  contextPrMergeWithoutReview,
-  contextPrRevert,
+  steeringPrOpen,
+  steeringPrGet,
+  steeringPrRefresh,
+  steeringPrDiffGet,
+  steeringPrMerge,
+  steeringPrMergeWithoutReview,
+  steeringPrRevert,
   codeRepositoryFindingsList,
   instructionPromote,
-  contextPrRestoreManagedBlock,
+  steeringPrRestoreManagedBlock,
   contextGovernanceModeSet,
   agentExecutionList,
   agentExecutionRecord,

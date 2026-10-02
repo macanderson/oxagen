@@ -441,14 +441,19 @@ export function createKillSwitchSetHandler(
 ): CapabilityHandler<typeof killSwitchSet> {
   return async (input, ctx) => {
     const actingUserId = await resolveActingUserId(ctx);
-    await assertOrgRole(
-      { ...ctx, userId: actingUserId },
-      { org: ["Owner", "Admin"] },
-    );
-
     const switchWorkspaceId = switchWorkspaceOf(
       input.target.kind,
       ctx.workspaceId,
+    );
+    // A switch on the caller's workspace admits its Owner and Admin, as every
+    // workspace capability does (#5228). An org-wide switch (an operator, a
+    // workspace, the org, a class) stops calls outside this workspace, so
+    // only the org roles turn it.
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      switchWorkspaceId === null
+        ? { org: ["Owner", "Admin"], namedRolesOnly: true }
+        : { org: ["Owner", "Admin"] },
     );
     // Off reads no target, so a switch whose target was deleted still clears.
     // The one exception is an agent switch: a customer may not clear the

@@ -167,7 +167,7 @@ describe("the governance dialog", () => {
       within(dialog).getByRole("button", { name: "Cancel" }),
     ).toBeVisible();
     expect(
-      within(dialog).getByRole("button", { name: "Open the Context PR" }),
+      within(dialog).getByRole("button", { name: "Open the steering PR" }),
     ).toBeVisible();
   });
 
@@ -183,7 +183,7 @@ describe("the governance dialog", () => {
     );
   });
 
-  it("opens the Context PR for the pick and reports it", async () => {
+  it("opens the steering PR for the pick and reports it", async () => {
     setGovernanceMode.mockResolvedValue({
       ok: true,
       value: {
@@ -203,15 +203,15 @@ describe("the governance dialog", () => {
     const dialog = openDialog();
     fireEvent.click(within(dialog).getByRole("radio", { name: /^regulated/ }));
     fireEvent.click(
-      within(dialog).getByRole("button", { name: "Open the Context PR" }),
+      within(dialog).getByRole("button", { name: "Open the steering PR" }),
     );
     await waitFor(() => {
       expect(within(dialog).getByRole("status")).toHaveTextContent(
         "Pull request opened on acme/platform: .oxagen/rules/governance.toml sets mode = regulated. It takes effect on merge for everything already in flight; nothing else in Oxagen writes that file.",
       );
-      // set_governance_mode opens an ordinary pull request, not a Context PR.
+      // set_governance_mode opens an ordinary pull request, not a steering PR.
       expect(within(dialog).getByRole("status")).not.toHaveTextContent(
-        "Context PR",
+        "Steering PR",
       );
     });
     expect(setGovernanceMode).toHaveBeenCalledExactlyOnceWith(
@@ -224,7 +224,7 @@ describe("the governance dialog", () => {
     ).toHaveAttribute("href", "https://github.com/acme/platform/pull/42");
     expect(router.refresh).not.toHaveBeenCalled();
     expect(
-      within(dialog).queryByRole("button", { name: "Open the Context PR" }),
+      within(dialog).queryByRole("button", { name: "Open the steering PR" }),
     ).toBeNull();
     // A legacy pull request has no governance proposal to land in Oxagen.
     expect(within(dialog).queryByTestId("governance-review")).toBeNull();
@@ -255,7 +255,7 @@ describe("the governance dialog", () => {
     const dialog = openDialog();
     fireEvent.click(within(dialog).getByRole("radio", { name: /^solo/ }));
     fireEvent.click(
-      within(dialog).getByRole("button", { name: "Open the Context PR" }),
+      within(dialog).getByRole("button", { name: "Open the steering PR" }),
     );
     const review = await within(dialog).findByRole("link", {
       name: "Open the change for review",
@@ -301,7 +301,7 @@ describe("the governance dialog", () => {
     fireEvent.click(within(dialog).getByRole("radio", { name: /^team/ }));
     // Under solo the change is a commit, and the button says so.
     expect(
-      within(dialog).queryByRole("button", { name: "Open the Context PR" }),
+      within(dialog).queryByRole("button", { name: "Open the steering PR" }),
     ).toBeNull();
     fireEvent.click(
       within(dialog).getByRole("button", { name: "Commit the change" }),
@@ -318,7 +318,7 @@ describe("the governance dialog", () => {
     renderChip();
     const dialog = openDialog();
     fireEvent.click(
-      within(dialog).getByRole("button", { name: "Open the Context PR" }),
+      within(dialog).getByRole("button", { name: "Open the steering PR" }),
     );
     expect(within(dialog).getByRole("status")).toHaveTextContent(
       "Governance mode is already team; nothing to change.",
@@ -355,7 +355,7 @@ describe("the governance dialog", () => {
       const dialog = openDialog();
       fireEvent.click(within(dialog).getByRole("radio", { name: /^solo/ }));
       fireEvent.click(
-        within(dialog).getByRole("button", { name: "Open the Context PR" }),
+        within(dialog).getByRole("button", { name: "Open the steering PR" }),
       );
       await waitFor(() => {
         expect(within(dialog).getByRole("alert")).toHaveTextContent(text);

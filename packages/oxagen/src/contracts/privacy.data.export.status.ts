@@ -67,6 +67,7 @@ export const privacyDataExportStatus = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
+  orgLevel: true,
   mutates: false,
   noBillingGate: true,
   sensitivity: "low",

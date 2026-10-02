@@ -161,8 +161,15 @@ jobs:
 
             for (const stack of [...drifted, ...failed]) {
               let plan = ''
+              // The issue body must never carry a credential, as in
+              // store-migrate-drift.yml: drop workflow command lines, which
+              // `::add-mask::` writes in the clear, and blank the user and
+              // password in any URL.
               try {
-                plan = fs.readFileSync(`/tmp/plan-${stack}.txt`, 'utf8').slice(-6000)
+                plan = fs.readFileSync(`/tmp/plan-${stack}.txt`, 'utf8')
+                  .split('\n').filter((line) => !line.startsWith('::')).join('\n')
+                  .replace(/:\/\/[^/:@\s]+:[^@\s]+@/g, '://***:***@')
+                  .slice(-6000)
               } catch { plan = '(plan output unavailable)' }
               body += `\n<details><summary><code>${stack}</code></summary>\n\n`
                 + '```terraform\n' + plan + '\n```\n\n</details>\n'

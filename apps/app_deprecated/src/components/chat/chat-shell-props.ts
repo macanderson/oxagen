@@ -9,10 +9,7 @@
  */
 import type { ChatMessage } from "./message-bubble";
 import type { ComposerAction } from "./message-composer";
-import type {
-  ComposerModelState,
-  WorkspaceBudgetGovernance,
-} from "./model-picker";
+import type { ComposerModelState } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
 import type { AgentOption } from "./agent-picker/agent-picker-types";
 
@@ -51,9 +48,6 @@ export interface ChatShellProps {
   setDefaultAgentAction?: (
     agentId: string | null,
   ) => Promise<{ ok: boolean; error?: string }>;
-  /** Workspace-level per-turn budget governance. Null/omitted ⇒
-   * no governance active for this workspace. */
-  workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
   /** Bound published agent's public id (from the Ask page's ?agent=… param).
    * Seeds the initial agent selection so the composer chip reflects the binding;
    * the composer then carries it in each stream request as `agentId`.

@@ -756,6 +756,12 @@ export const workItemFacts = workSchema.table(
     orderIdx: index("item_facts_order_idx")
       .on(t.orderId)
       .where(sql`${t.orderId} IS NOT NULL`),
+    // The Work list reads only the checks on each send's current head
+    // (listFactsByItem, #5181). A busy send holds checks for every head its
+    // pull request had, so this index skips the rest.
+    checkHeadIdx: index("item_facts_check_head_idx")
+      .on(t.orderId, t.headSha)
+      .where(sql`${t.kind} = 'check_observed'`),
     // The spend rollup finds the send a run belongs to by its run_linked
     // fact (F13, #4638).
     runLinkedIdx: index("item_facts_run_linked_idx")

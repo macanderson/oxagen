@@ -1,5 +1,5 @@
 // context.steering.publication.ts: the two writes every publication makes,
-// shared by `merge_context_pr` and the repository sync (ADR-061, ADR-184). A
+// shared by `merge_steering_pr` and the repository sync (ADR-061, ADR-184). A
 // new version of a record, and the next link in the record's promotion chain.
 // Both callers run these inside one transaction that holds the workspace's
 // publication lock, so a merge from Oxagen and a sync triggered by the same
@@ -57,26 +57,26 @@ export async function appendVersion(
 ): Promise<{ id: string; version: number }> {
   const [latest] = await tx
     .select({
-      id: schema.contextRecordVersions.id,
-      versionNumber: schema.contextRecordVersions.versionNumber,
+      id: schema.steeringRecordVersions.id,
+      versionNumber: schema.steeringRecordVersions.versionNumber,
     })
-    .from(schema.contextRecordVersions)
+    .from(schema.steeringRecordVersions)
     .where(
       and(
-        eq(schema.contextRecordVersions.recordId, args.recordId),
-        eq(schema.contextRecordVersions.isLatest, true),
+        eq(schema.steeringRecordVersions.recordId, args.recordId),
+        eq(schema.steeringRecordVersions.isLatest, true),
       ),
     )
     .limit(1);
   if (latest) {
     await tx
-      .update(schema.contextRecordVersions)
+      .update(schema.steeringRecordVersions)
       .set({ isLatest: false, updatedAt: args.publishedAt })
-      .where(eq(schema.contextRecordVersions.id, latest.id));
+      .where(eq(schema.steeringRecordVersions.id, latest.id));
   }
   const version = (latest?.versionNumber ?? 0) + 1;
   const [row] = await tx
-    .insert(schema.contextRecordVersions)
+    .insert(schema.steeringRecordVersions)
     .values({
       orgId: args.scope.orgId,
       workspaceId: args.scope.workspaceId,
@@ -95,7 +95,7 @@ export async function appendVersion(
       createdById: args.byUserId ?? undefined,
       updatedById: args.byUserId ?? undefined,
     })
-    .returning({ id: schema.contextRecordVersions.id });
+    .returning({ id: schema.steeringRecordVersions.id });
   if (!row)
     throw new Error("[context.steering] version insert returned no row");
   return { id: row.id, version };
@@ -125,21 +125,21 @@ export async function appendPromotion(
 }> {
   const [ledger] = await tx
     .select({ total: count() })
-    .from(schema.contextPromotions)
+    .from(schema.steeringPromotions)
     .where(
       and(
-        eq(schema.contextPromotions.orgId, args.scope.orgId),
-        eq(schema.contextPromotions.workspaceId, args.scope.workspaceId),
+        eq(schema.steeringPromotions.orgId, args.scope.orgId),
+        eq(schema.steeringPromotions.workspaceId, args.scope.workspaceId),
       ),
     );
   const [head] = await tx
     .select({
-      seq: schema.contextPromotions.seq,
-      chainDigest: schema.contextPromotions.chainDigest,
+      seq: schema.steeringPromotions.seq,
+      chainDigest: schema.steeringPromotions.chainDigest,
     })
-    .from(schema.contextPromotions)
-    .where(eq(schema.contextPromotions.recordId, args.recordId))
-    .orderBy(desc(schema.contextPromotions.seq))
+    .from(schema.steeringPromotions)
+    .where(eq(schema.steeringPromotions.recordId, args.recordId))
+    .orderBy(desc(schema.steeringPromotions.seq))
     .limit(1);
   const seq = (head?.seq ?? 0) + 1;
   const prevChainDigest = head?.chainDigest ?? null;
@@ -155,7 +155,7 @@ export async function appendPromotion(
       }),
   );
   const [row] = await tx
-    .insert(schema.contextPromotions)
+    .insert(schema.steeringPromotions)
     .values({
       orgId: args.scope.orgId,
       workspaceId: args.scope.workspaceId,
@@ -170,8 +170,8 @@ export async function appendPromotion(
       createdById: args.approverUserId ?? undefined,
     })
     .returning({
-      id: schema.contextPromotions.id,
-      publicId: schema.contextPromotions.publicId,
+      id: schema.steeringPromotions.id,
+      publicId: schema.steeringPromotions.publicId,
     });
   if (!row)
     throw new Error("[context.steering] promotion insert returned no row");

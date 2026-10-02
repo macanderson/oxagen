@@ -24,7 +24,6 @@ const SEED: SessionSeed = {
   defaultAgentId: null,
   textModel: null,
   textTier: "fast",
-  budgetUsd: null,
 };
 
 function SelectionProbe() {
@@ -47,16 +46,17 @@ function SelectionProbe() {
   );
 }
 
+const PICKED_MODEL = "anthropic/claude-sonnet-5";
+
 function ModelProbe() {
-  const [model, setModel] = useSessionModelState(defaultModelState, null);
+  const [model, setModel] = useSessionModelState(defaultModelState);
   return (
     <div>
       <output data-testid="model">
         {JSON.stringify({
           tier: model.tier,
+          model: model.model,
           effort: model.effort,
-          budgetEnabled: model.budgetEnabled,
-          budgetUsd: model.budgetUsd,
         })}
       </output>
       <button onClick={() => setModel((s) => ({ ...s, effort: "high" }))}>
@@ -64,10 +64,10 @@ function ModelProbe() {
       </button>
       <button
         onClick={() =>
-          setModel((s) => ({ ...s, budgetEnabled: true, budgetUsd: 2 }))
+          setModel((s) => ({ ...s, tier: null, model: PICKED_MODEL }))
         }
       >
-        set-budget
+        set-model
       </button>
     </div>
   );
@@ -138,37 +138,44 @@ describe("selection bridge (flag off)", () => {
 });
 
 describe("model bridge (flag on)", () => {
-  it("effort and budget writes land in the unified store and read back", () => {
+  it("effort and model writes land in the unified store and read back", () => {
     providerWrap(<ModelProbe />);
     fireEvent.click(screen.getByText("set-effort"));
     expect(sessionState().effort).toBe("high");
-    fireEvent.click(screen.getByText("set-budget"));
-    expect(sessionState().budgetUsd).toBe(2);
+    fireEvent.click(screen.getByText("set-model"));
+    expect(sessionState().model).toBe(PICKED_MODEL);
+    expect(sessionState().tier).toBeNull();
     const model = JSON.parse(
       screen.getByTestId("model").textContent ?? "{}",
     ) as Record<string, unknown>;
     expect(model.effort).toBe("high");
-    expect(model.budgetEnabled).toBe(true);
-    expect(model.budgetUsd).toBe(2);
+    expect(model.model).toBe(PICKED_MODEL);
+    expect(model.tier).toBeNull();
+  });
+
+  it("writes no per-turn budget into the store (ADR-235)", () => {
+    providerWrap(<ModelProbe />);
+    fireEvent.click(screen.getByText("set-effort"));
+    expect(sessionState()).not.toHaveProperty("budgetUsd");
   });
 });
 
 describe("model bridge — two writes in one handler (composedRef race)", () => {
   function DoubleWriteProbe() {
-    const [model, setModel] = useSessionModelState(defaultModelState, null);
+    const [model, setModel] = useSessionModelState(defaultModelState);
     return (
       <div>
         <output data-testid="model2">
-          {JSON.stringify({ effort: model.effort, budgetUsd: model.budgetUsd })}
+          {JSON.stringify({ effort: model.effort, model: model.model })}
         </output>
         <button
           onClick={() => {
             // Two functional updates in ONE handler, no re-render between
             // them. The second must see the first's result — a stale
-            // composedRef would clobber the effort write with the budget
+            // composedRef would clobber the effort write with the model
             // write's full-replacement patch.
             setModel((s) => ({ ...s, effort: "high" }));
-            setModel((s) => ({ ...s, budgetEnabled: true, budgetUsd: 2 }));
+            setModel((s) => ({ ...s, tier: null, model: PICKED_MODEL }));
           }}
         >
           double-write
@@ -181,12 +188,12 @@ describe("model bridge — two writes in one handler (composedRef race)", () => 
     providerWrap(<DoubleWriteProbe />);
     fireEvent.click(screen.getByText("double-write"));
     expect(sessionState().effort).toBe("high");
-    expect(sessionState().budgetUsd).toBe(2);
+    expect(sessionState().model).toBe(PICKED_MODEL);
     const model = JSON.parse(
       screen.getByTestId("model2").textContent ?? "{}",
     ) as Record<string, unknown>;
     expect(model.effort).toBe("high");
-    expect(model.budgetUsd).toBe(2);
+    expect(model.model).toBe(PICKED_MODEL);
   });
 });
 

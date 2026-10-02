@@ -3,7 +3,7 @@
 // Oxagen has open or merged on this workspace's repositories, and the
 // automatic proposers behind them.
 //
-// Today every row is a context record's Context PR, read through
+// Today every row is a steering record's steering PR, read through
 // `list_proposals`: the other kinds the design names (Oxagen init, skill,
 // agent, tool, configuration) have no list read yet (#3241), and the tab says
 // so rather than drawing rows it would have to invent. Selecting a row opens
@@ -182,7 +182,10 @@ function ChangeTable({
     {
       key: "kind",
       label: t("filters.kind"),
-      options: [{ value: "context_record", label: t("kinds.context_record") }],
+      options: [
+        { value: "steering_record", label: t("kinds.steering_record") },
+        { value: "steering_pr", label: t("kinds.steering_pr") },
+      ],
       get: (row) => row.kind,
     },
     {

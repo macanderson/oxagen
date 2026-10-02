@@ -218,6 +218,8 @@ Fix defects in the task's PR when the fix can responsibly ride it. File an issue
 
 One issue carries one full change. Include context, paths, reproduction steps where relevant, a proposed approach, and a `- [ ]` definition of done. Do not create sub-issues, parents, or epics. Use the templates in `.github/ISSUE_TEMPLATE/`.
 
+**A definition of done never lists CI.** Mac set this on 2026-10-02: green CI is implied, because branch protection refuses a merge while CI is red. Do not write "CI is green", "CI passes on the PR", or a box that pairs either with the rule that nothing runs on this machine. List the work and how it is verified. The `dod` gate skips a box that only restates CI status (`restatesCiStatus` in `tools/scripts/scr-dod-check.mjs`).
+
 - A PR uses `Closes #N` only when it finishes every item in that issue's definition of done. Otherwise use `Refs #N`.
 - A PR that closes no issue, such as a chore, uses `NO-ISSUE` for a trivial change or `CLOSES-NOTHING` for a substantial change. These are PR labels, not substitute text in the body.
 - A PR that changes a schema carries `MIGRATION-REQUIRED` (SCR-006). `migration-label.yml` applies it from the diff. Add it yourself only if the workflow has not, and never remove it while the diff still changes a schema, because the workflow puts it back. Nothing else about the PR changes: `migration-gate` applies the migration on merge.

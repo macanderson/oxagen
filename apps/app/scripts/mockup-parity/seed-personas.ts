@@ -46,7 +46,7 @@ import { auth } from "@oxagen/auth/server";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { type CapabilityContext, ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 import { agentMcpRegister } from "@oxagen/oxagen/contracts/agent.mcp.register";
-import { contextRecordsAppend } from "@oxagen/oxagen/contracts/context.records.append";
+import { steeringRecordsAppend } from "@oxagen/oxagen/contracts/steering.records.append";
 import { organizationCreate } from "@oxagen/oxagen/contracts/org.create";
 import { orgMemberInviteAccept } from "@oxagen/oxagen/contracts/org.member_invite.accept";
 import { orgMemberInviteDecline } from "@oxagen/oxagen/contracts/org.member_invite.decline";
@@ -95,7 +95,7 @@ const MANDATE_MISSING =
 
 /** Why no steering record is seeded. The capture cites it for `{record}`. */
 const RECORD_MISSING =
-  "No published steering record is seeded. A record is published through a Context PR on the workspace's steering repository, which CI cannot reach.";
+  "No published steering record is seeded. A record is published through a steering PR on the workspace's steering repository, which CI cannot reach.";
 
 /** Why no tool key is seeded. The capture cites it for `{tool}`. */
 const TOOL_MISSING =
@@ -565,9 +565,9 @@ async function seedProposal(
   core: Scope,
   ownerId: string,
 ): Promise<string | null> {
-  const appended = contextRecordsAppend.output.parse(
+  const appended = steeringRecordsAppend.output.parse(
     await invoke(
-      contextRecordsAppend.name,
+      steeringRecordsAppend.name,
       {
         kind: "record_proposal",
         lineageId: PROPOSAL.lineageId,

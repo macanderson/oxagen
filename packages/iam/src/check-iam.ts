@@ -140,6 +140,14 @@ export interface CheckIAMArgs {
    * "agent" runs the full delegation-ceiling resolution at every org tier.
    */
   principalKind?: "human" | "agent" | "service";
+  /**
+   * Whether the capability acts inside the call's workspace, read from its
+   * contract by the kernel (`actsInWorkspace`, #5228). Rule 7.6 of the
+   * resolver admits the workspace's Owner or Admin only when this is true.
+   * Absent is false: a caller that did not read a contract, such as the
+   * external-tool check, gets no workspace rule. The agent path ignores it.
+   */
+  actsInWorkspace?: boolean;
 }
 
 export interface CheckIAMResult {
@@ -169,7 +177,9 @@ export interface CheckIAMResult {
  * of the contract's own `defaultEffect`. Any capability that must stay
  * Owner/Admin-only on those tiers therefore needs its own gate at the call
  * site; IAM will not supply one. Enterprise orgs run the full resolver, where
- * role grants and defaultEffect are enforced.
+ * role grants and defaultEffect are enforced, and where a workspace's Owner
+ * and Admin pass every capability that acts inside that workspace (rule 7.6,
+ * #5228).
  */
 export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
   const { capability, ctx, defaultEffect, rawInputJson, target } = args;
@@ -300,6 +310,11 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
     // can enforce time_window and ip_ranges/ip_allow conditions.
     now: new Date(),
     clientIp: ctx.clientIp ?? null,
+    // Rule 7.6 (#5228): a workspace's Owner or Admin passes every capability
+    // that acts inside that workspace. Only this human path supplies these two
+    // inputs; the agent branch above never does.
+    actsInWorkspace: args.actsInWorkspace === true,
+    workspaceRoleIds: authz.workspaceRoleIds ?? [],
   };
 
   const result = resolve(resolveInput);

@@ -20,6 +20,10 @@ import { agentApprovalList } from "@oxagen/oxagen/contracts/agent.approval.list"
 import { agentList } from "@oxagen/oxagen/contracts/agent.list";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
 import type { SearchKind } from "@oxagen/oxagen/contracts/tools.search";
+import {
+  actsInWorkspace,
+  workspaceFullAccessRole,
+} from "@oxagen/oxagen/iam";
 
 /** The org and workspace roles a capability's contract grants `allow`. */
 export interface KindRoles {
@@ -52,25 +56,49 @@ function rolesOf(contract: {
  * workspace table, it is the capability registry filtered by the org's plugin
  * entitlements, and `search_tools`' own roles are the right gate for it.
  */
+const SEARCH_KIND_SOURCES = {
+  run: runList,
+  agent: agentList,
+  approval: agentApprovalList,
+} as const satisfies Partial<Record<SearchKind, unknown>>;
+
 export const SEARCH_KIND_ROLES: Readonly<
   Partial<Record<SearchKind, KindRoles>>
 > = {
-  run: rolesOf(runList),
-  agent: rolesOf(agentList),
-  approval: rolesOf(agentApprovalList),
+  run: rolesOf(SEARCH_KIND_SOURCES.run),
+  agent: rolesOf(SEARCH_KIND_SOURCES.agent),
+  approval: rolesOf(SEARCH_KIND_SOURCES.approval),
 };
 
 /**
  * Whether an actor holding these roles may see this kind. A kind with no
  * source capability (`tool`) is always allowed — `search_tools`' own gate has
  * already run in the kernel by the time a handler executes.
+ *
+ * A workspace's Owner or Admin sees every kind whose source capability acts
+ * inside the workspace, as that capability's own gate would admit them
+ * (#5228). An agent run gets no such pass: `agentRun` says the call is one.
  */
 export function maySeeKind(
   kind: SearchKind,
-  actor: { orgRoles: readonly string[]; workspaceRoles: readonly string[] },
+  actor: {
+    orgRoles: readonly string[];
+    workspaceRoles: readonly string[];
+    agentRun?: boolean;
+  },
 ): boolean {
   const required = SEARCH_KIND_ROLES[kind];
   if (!required) return true;
   if (actor.orgRoles.some((r) => required.org.includes(r))) return true;
-  return actor.workspaceRoles.some((r) => required.workspace.includes(r));
+  if (actor.workspaceRoles.some((r) => required.workspace.includes(r))) {
+    return true;
+  }
+  const source =
+    SEARCH_KIND_SOURCES[kind as keyof typeof SEARCH_KIND_SOURCES];
+  return (
+    actor.agentRun !== true &&
+    source !== undefined &&
+    actsInWorkspace(source) &&
+    workspaceFullAccessRole(actor.workspaceRoles) !== null
+  );
 }

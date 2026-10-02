@@ -7,7 +7,11 @@ import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import { fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
 import { readSteeringRecord } from "@oxagen/oxagen/steering-repo/record";
 import { describe, expect, it } from "vitest";
-import { FakeGitHub, REPO } from "../context.steering.test-support";
+import {
+  FakeGitHub,
+  MemoryStore as SteeringProposalStore,
+  REPO,
+} from "../context.steering.test-support";
 import { memoryLineage, memoryRecordPath } from "./naming";
 import { promoteMemories, type PromoteDeps } from "./promote";
 import { statementHash } from "./statement";
@@ -21,6 +25,8 @@ const SCOPE: MemoryScope = {
 const NOW = new Date("2026-10-01T15:00:00.000Z");
 const TODAY = "memory/2026-10-01";
 const STATEMENT = "Use pnpm, never npm, in this repository.";
+/** The person who promotes memories in the row tests. */
+const PERSON = "0192d4a8-7c1e-7a00-8000-0000000005e1";
 
 let n = 0;
 function memory(
@@ -120,13 +126,15 @@ function steeringRepo(extra: Record<string, string> = {}): FakeGitHub {
 
 function harness(gh: FakeGitHub = steeringRepo()) {
   const fakes = new FakeStores();
+  const proposals = new SteeringProposalStore();
   const deps: PromoteDeps = {
     host: gh,
     store: fakes.store,
     workspace: fakes.workspace,
+    proposals,
     now: () => NOW,
   };
-  return { gh, fakes, deps };
+  return { gh, fakes, deps, proposals };
 }
 
 /** The file a stamp wrote at `path`. */
@@ -209,6 +217,31 @@ describe("promoteMemories opening a memory PR", () => {
     expect(m.state).toBe("in_pr");
   });
 
+  it("writes the memory PR's proposal row, so Oxagen can merge it (#5122)", async () => {
+    const { gh, fakes, deps, proposals } = harness();
+    const m = memory(STATEMENT);
+    fakes.memories.push(m);
+
+    await promoteMemories(deps, SCOPE, {
+      drafts: [{ memory_ids: [m.publicId] }],
+      sameText: true,
+      author: { userId: PERSON, source: `user:${PERSON}` },
+    });
+
+    expect(proposals.proposals).toHaveLength(1);
+    expect(proposals.proposals[0]).toMatchObject({
+      kind: "memory_pr",
+      lineageId: TODAY,
+      status: "pr_open",
+      branch: TODAY,
+      prNumber: gh.pulls[0]?.number,
+      headSha: gh.heads.get(TODAY),
+      statement: "Memory PR 2026-10-01",
+      createdById: PERSON,
+      checks: [],
+    });
+  });
+
   it("writes the person's kind, force, effect, statement, and repositories", async () => {
     const { gh, fakes, deps } = harness();
     const m = memory("The billing tables are migration-free.");
@@ -230,7 +263,7 @@ describe("promoteMemories opening a memory PR", () => {
     });
 
     const lineage = memoryLineage(statement, new Set());
-    // A constraint goes to its kind's folder, as open_context_pr writes one,
+    // A constraint goes to its kind's folder, as open_steering_pr writes one,
     // and its repository scope lives in its frontmatter.
     const path = `steering/constraints/${lineage}.md`;
     expect(result.records).toEqual([
@@ -383,6 +416,29 @@ describe("promoteMemories joining an open memory PR", () => {
       memoryLineage(STATEMENT, new Set()),
     ]);
     expect(m.state).toBe("in_pr");
+  });
+
+  it("moves the joined memory PR's proposal row to the commit it added (#5122)", async () => {
+    const { gh, fakes, deps, proposals } = harness();
+    const curated = memory("Key the CI cache on the lockfile.", { state: "in_pr" });
+    const m = memory(STATEMENT);
+    fakes.memories.push(curated, m);
+    const { branch, pr } = await openPr(gh, fakes, curated);
+
+    await promoteMemories(deps, SCOPE, {
+      drafts: [{ memory_ids: [m.publicId] }],
+      sameText: true,
+    });
+
+    // The curator's PR opened before its row existed, so the join writes it.
+    expect(proposals.proposals).toHaveLength(1);
+    expect(proposals.proposals[0]).toMatchObject({
+      kind: "memory_pr",
+      lineageId: branch,
+      prNumber: pr.number,
+      headSha: gh.heads.get(branch),
+      source: "memory-promote",
+    });
   });
 
   it("skips a memory whose statement the open PR already proposes", async () => {

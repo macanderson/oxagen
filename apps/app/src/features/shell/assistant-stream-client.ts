@@ -124,14 +124,6 @@ export type AssistantStreamHandlers = {
   onParked?: (card: ParkedCard) => void;
 };
 
-/**
- * The capability a per-turn budget pause is filed under
- * (`BUDGET_CONTINUE_CAPABILITY`, packages/agent assistant-turn.ts). The turn
- * waits on it before it goes on, and the handler leaves it out of
- * `parkedCards`, so it is not a parked write here either.
- */
-const BUDGET_CONTINUE_CAPABILITY = "budget.turn.continue";
-
 type ExhaustedCode = Extract<AssistantRefusal, { reason: "exhausted" }>["code"];
 
 /** The kernel seam's exhausted codes (server/kernel.ts `EXHAUSTED_CODES`). */
@@ -472,13 +464,11 @@ export async function askAssistantStream(
           on.onToolEnd?.({ id: e.toolCallId, status: e.status });
           break;
         case "approval-required":
-          if (e.capability !== BUDGET_CONTINUE_CAPABILITY) {
-            on.onParked?.({
-              approvalId: e.approvalId,
-              capability: e.capability,
-              expiresAt: e.expiresAt,
-            });
-          }
+          on.onParked?.({
+            approvalId: e.approvalId,
+            capability: e.capability,
+            expiresAt: e.expiresAt,
+          });
           break;
         case "error":
           failure ??= refusalOfCode(e.code, e.reason);

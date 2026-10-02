@@ -1,8 +1,17 @@
 // Text for generated images, set as glyph outlines rather than <text>, so the
 // raster never depends on which fonts a machine has installed. Aeonik is
-// the house face for text, read from the kit's file in apps/web/fonts/. Space Grotesk sets the wordmark only, and the card
+// the house face for text. Space Grotesk sets the wordmark only, and the card
 // draws the wordmark from its SVG. A weight is instanced from the variable file on
 // demand, the same way the kit's glyphs.py does it.
+//
+// The outlines come from scripts/fonts/aeonik-wght.ttf, the kit's
+// fonts/aeonik-wght.woff2 unpacked to a TTF the way glyphs.py unpacks it.
+// fontkit 2.0.4 can't instance a weight from the WOFF2 itself: getVariation
+// reads the file again as a plain TrueType font, which finds no cmap, and
+// fontkit never applies a weight to the outlines it decodes from a WOFF2.
+// When the brand sync changes the site's WOFF2, unpack it again with
+// `node apps/web/scripts/unpack-aeonik.mjs`. Until someone does,
+// `pnpm check:contracts` fails (lib/aeonik-ttf.mjs).
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,7 +19,7 @@ import * as fontkit from "fontkit";
 
 const FONT_FILE = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../../fonts/aeonik-wght.woff2",
+  "../fonts/aeonik-wght.ttf",
 );
 
 let base = null;

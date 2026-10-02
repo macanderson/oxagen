@@ -9,7 +9,7 @@
 // and one ledger line. The squash merge is pinned to the commit that was
 // checked (or stamped), and its message ends with the Oxagen-* trailers.
 //
-// The queue has two locks. merge_context_pr merges on the api surface, and
+// The queue has two locks. merge_steering_pr merges on the api surface, and
 // set_governance_mode merges on the mcp surface too, so two processes can
 // merge the same repository at once.
 //
@@ -863,7 +863,13 @@ export interface RevertInput {
  */
 export async function openRevertPr(
   input: RevertInput,
-): Promise<{ number: number; htmlUrl: string; branch: string }> {
+): Promise<{
+  number: number;
+  htmlUrl: string;
+  branch: string;
+  /** Every path the revert changes. */
+  paths: string[];
+}> {
   const { host, repo } = input;
   const changed = (
     await host.changedFiles(repo, input.before, input.mergeCommit)
@@ -912,5 +918,5 @@ export async function openRevertPr(
     base: repo.defaultBranch,
     body: `This steering PR undoes #${input.number} (${input.mergeCommit}). It merges through the queue like any other steering PR.`,
   });
-  return { ...pr, branch };
+  return { ...pr, branch, paths: files.map((file) => file.path) };
 }

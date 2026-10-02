@@ -248,7 +248,24 @@ export interface GithubHistoryTarget {
   repo: RepoAddress & { id?: number };
   app: SteeringApp;
   defaultBranch?: string;
+  /** The clock a fresh merge is judged by. Defaults to `Date.now`. */
+  now?: () => number;
+  /** Waits between re-checks of a fresh merge. Defaults to a timer. */
+  sleep?: (ms: number) => Promise<void>;
 }
+
+/**
+ * GitHub's API does not prove a merge the moment it lands. For a few seconds
+ * a read can miss the pull request behind a commit Oxagen merged moments
+ * earlier, so the same check on the same commit passed and then failed within
+ * one merge on 2026-10-02, and in a second run failed first (#5157). An exact
+ * commit committed less than FRESH_MERGE_MS ago is therefore checked up to
+ * RECHECK_READS times, RECHECK_INTERVAL_MS apart, before Oxagen refuses it.
+ * An older commit is refused on the first read.
+ */
+const FRESH_MERGE_MS = 60_000;
+const RECHECK_READS = 6;
+const RECHECK_INTERVAL_MS = 1_500;
 
 interface GithubDeployment {
   sha: string;
@@ -288,6 +305,7 @@ interface GithubGitCommit {
   sha: string;
   tree: { sha: string };
   parents: { sha: string }[];
+  committer?: { date?: string } | null;
 }
 
 interface GithubPull {
@@ -506,9 +524,24 @@ export async function githubDiverged(
 }
 
 /**
+ * Whether GitHub records `sha` as committed less than FRESH_MERGE_MS ago. A
+ * commit GitHub cannot date counts as old, so its refusal is not delayed.
+ */
+async function committedMomentsAgo(
+  t: GithubHistoryTarget,
+  sha: string,
+): Promise<boolean> {
+  const at = Date.parse((await githubCommit(t, sha)).committer?.date ?? "");
+  if (Number.isNaN(at)) return false;
+  return (t.now ?? Date.now)() - at < FRESH_MERGE_MS;
+}
+
+/**
  * Refuse an exact commit unless it descends safely from an app deployment.
  * Both refusals are `conflict`s the caller can show, not a server error: a
  * repository Oxagen cannot vouch for is a state of the repository (#5157).
+ * A commit made moments ago is checked again a few times first, because
+ * GitHub can take a few seconds to prove a merge it just made.
  */
 export async function assertGithubSteeringCommit(
   t: GithubHistoryTarget,
@@ -521,7 +554,20 @@ export async function assertGithubSteeringCommit(
       reason: "steering_publication_missing",
       message: `Oxagen found no steering version its GitHub App published in ${t.repo.owner}/${t.repo.name}, so it cannot check who merged steering commit ${short(commit)}. Oxagen publishes nothing from that commit.`,
     });
-  const divergence = await githubDiverged(t, published, commit);
+  let divergence = await githubDiverged(t, published, commit);
+  if (divergence !== null && (await committedMomentsAgo(t, commit))) {
+    const sleep =
+      t.sleep ??
+      ((ms: number) => new Promise<void>((done) => setTimeout(done, ms)));
+    for (
+      let read = 1;
+      divergence !== null && read < RECHECK_READS;
+      read += 1
+    ) {
+      await sleep(RECHECK_INTERVAL_MS);
+      divergence = await githubDiverged(t, published, commit);
+    }
+  }
   if (divergence !== null)
     throw new HandlerError({
       code: "conflict",

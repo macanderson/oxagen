@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { billingBudgetSet } from "../billing.budget.set";
 import { billingUsageBreakdown } from "../billing.usage.breakdown";
-import { contextRecordPublish } from "../context.record.publish";
+import { steeringRecordPublish } from "../steering.record.publish";
 import { changeSubscription } from "./change-subscription";
 import { eraseData } from "./erase-data";
 import { getSpend } from "./get-spend";
-import { openContextPr } from "./open-context-pr";
+import { openSteeringPr } from "./open-steering-pr";
 import { setBudget } from "./set-budget";
 import { setConnection } from "./set-connection";
 
@@ -290,11 +290,11 @@ describe("set_budget input", () => {
     ).toBe(true);
   });
 
-  it("applies the windowDays rule to the new daily and turn periods", () => {
+  it("applies the windowDays rule to the new daily period", () => {
     expect(
       messagesAt(
         setBudget.input,
-        { ...base, scope: "org", period: "turn", windowDays: 1 },
+        { ...base, scope: "org", period: "daily", windowDays: 1 },
         "windowDays",
       ),
     ).toHaveLength(1);
@@ -302,6 +302,15 @@ describe("set_budget input", () => {
       setBudget.input.safeParse({ ...base, scope: "org", period: "daily" })
         .success,
     ).toBe(true);
+  });
+
+  // ADR-277: no customer sets a per-turn budget for the in-app assistant, so
+  // set_budget has no turn period.
+  it("refuses a turn period", () => {
+    expect(
+      setBudget.input.safeParse({ ...base, scope: "org", period: "turn" })
+        .success,
+    ).toBe(false);
   });
 
   it("requires a non-empty scopeId for operator and agent budgets", () => {
@@ -329,7 +338,7 @@ describe("set_budget input", () => {
   });
 });
 
-describe("open_context_pr input", () => {
+describe("open_steering_pr input", () => {
   const base = {
     lineageId: "ctx.review.no-force-push",
     title: "Never force-push a shared branch",
@@ -347,7 +356,7 @@ describe("open_context_pr input", () => {
 
   it("accepts a constraint that declares its effect", () => {
     expect(
-      openContextPr.input.safeParse({
+      openSteeringPr.input.safeParse({
         ...base,
         kind: "constraint",
         force: "must",
@@ -356,7 +365,7 @@ describe("open_context_pr input", () => {
     ).toBe(true);
   });
 
-  it("carries the constraint-effect rule verbatim from publish_context_record", () => {
+  it("carries the constraint-effect rule verbatim from publish_steering_record", () => {
     const constraintWithoutEffect = {
       ...base,
       kind: "constraint",
@@ -371,13 +380,13 @@ describe("open_context_pr input", () => {
 
     for (const input of [constraintWithoutEffect, patternWithEffect]) {
       const v1 = messagesAt(
-        contextRecordPublish.input,
+        steeringRecordPublish.input,
         asV1(input),
         "constraintEffect",
       );
       expect(v1.length).toBeGreaterThan(0);
       expect(
-        messagesAt(openContextPr.input, input, "constraintEffect"),
+        messagesAt(openSteeringPr.input, input, "constraintEffect"),
       ).toEqual(v1);
     }
   });
@@ -392,7 +401,7 @@ describe("open_context_pr input", () => {
         force: "should",
       };
       expect(
-        messagesAt(openContextPr.input, without, field).length,
+        messagesAt(openSteeringPr.input, without, field).length,
       ).toBeGreaterThan(0);
     }
   });

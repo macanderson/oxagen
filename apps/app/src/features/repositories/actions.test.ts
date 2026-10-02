@@ -934,7 +934,7 @@ describe("readRepositoryChanges", () => {
     ]);
     expect(result.value.open).toBe(1);
     expect(result.value.changes[0]).toMatchObject({
-      kind: "context_record",
+      kind: "steering_record",
       openedBy: "the promoter",
       status: "checks_failed",
     });
@@ -943,6 +943,23 @@ describe("readRepositoryChanges", () => {
       { limit: 50, offset: 0 },
       expect.objectContaining({ surface: "app" }),
     );
+  });
+
+  it("marks a steering PR proposal's row a steering PR (#5122)", async () => {
+    invoke.mockResolvedValue({
+      proposals: [
+        { ...proposal("prp_4", "pr_open", true), kind: "tools", checks: null },
+      ],
+      total: 1,
+    });
+    const result = await readRepositoryChanges("acme", "core-platform");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.changes[0]).toMatchObject({
+      proposalId: "prp_4",
+      kind: "steering_pr",
+      status: "pr_open",
+    });
   });
 
   it("carries a denial across as denied (negative)", async () => {
@@ -1062,7 +1079,7 @@ describe("promoteInstructionToSteering", () => {
 });
 
 describe("readRepositoryChange", () => {
-  const CONTEXT_PR = {
+  const STEERING_PR = {
     proposalId: "prp_1",
     lineageId: "ctx.scr.001-never-push-to-main",
     kind: "rule",
@@ -1121,11 +1138,11 @@ describe("readRepositoryChange", () => {
     closed: null,
   };
 
-  it("maps get_context_pr onto what the detail draws, the merge included", async () => {
-    invoke.mockResolvedValue(CONTEXT_PR);
+  it("maps get_steering_pr onto what the detail draws, the merge included", async () => {
+    invoke.mockResolvedValue(STEERING_PR);
     const result = await readRepositoryChange("acme", "core-platform", "prp_1");
     expect(invoke).toHaveBeenCalledWith(
-      "get_context_pr",
+      "get_steering_pr",
       { proposalId: "prp_1" },
       expect.objectContaining({ surface: "app" }),
     );
@@ -1187,7 +1204,7 @@ describe("readRepositoryChange", () => {
 
   it("keeps a proposal with no pull request and no merge as nulls", async () => {
     invoke.mockResolvedValue({
-      ...CONTEXT_PR,
+      ...STEERING_PR,
       status: "proposed",
       governanceMode: null,
       pr: null,
@@ -1206,7 +1223,7 @@ describe("readRepositoryChange", () => {
 });
 
 describe("mergeRepositoryChange and closeRepositoryChange", () => {
-  it("merges through merge_context_pr and answers the merged commit", async () => {
+  it("merges through merge_steering_pr and answers the merged commit", async () => {
     invoke.mockResolvedValue({
       proposalId: "prp_1",
       status: "merged",
@@ -1226,7 +1243,7 @@ describe("mergeRepositoryChange and closeRepositoryChange", () => {
       await mergeRepositoryChange("acme", "core-platform", "prp_1"),
     ).toEqual({ ok: true, value: { commit: "fedcba9876543210" } });
     expect(invoke).toHaveBeenCalledWith(
-      "merge_context_pr",
+      "merge_steering_pr",
       { proposalId: "prp_1" },
       expect.objectContaining({ surface: "app" }),
     );

@@ -212,7 +212,6 @@ const V2_SEED: SessionSeed = {
   defaultAgentId: null,
   textModel: null,
   textTier: "fast",
-  budgetUsd: null,
 };
 
 function renderPanelV2(

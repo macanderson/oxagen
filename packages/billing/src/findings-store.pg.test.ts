@@ -520,7 +520,7 @@ describe.skipIf(!enabled)("writeFindings against Postgres", () => {
     });
     try {
       await withSystemDb(async (tx) => {
-        await tx.insert(schema.contextRecords).values([
+        await tx.insert(schema.steeringRecords).values([
           // The column ignores case, as the opener's own check does.
           { ...own, slug: recorded.toUpperCase(), title: "Run the tests" },
           {
@@ -535,7 +535,7 @@ describe.skipIf(!enabled)("writeFindings against Postgres", () => {
           { ...own, slug: `x.${recorded}`, title: "Not a lineage" },
         ]);
         await tx
-          .insert(schema.contextProposals)
+          .insert(schema.steeringProposals)
           .values([
             proposal(own, proposed),
             proposal(own, rejected, "rejected"),
@@ -550,11 +550,11 @@ describe.skipIf(!enabled)("writeFindings against Postgres", () => {
       await withSystemDb(async (tx) => {
         const workspaces = [own.workspaceId, other.workspaceId];
         await tx
-          .delete(schema.contextRecords)
-          .where(inArray(schema.contextRecords.workspaceId, workspaces));
+          .delete(schema.steeringRecords)
+          .where(inArray(schema.steeringRecords.workspaceId, workspaces));
         await tx
-          .delete(schema.contextProposals)
-          .where(inArray(schema.contextProposals.workspaceId, workspaces));
+          .delete(schema.steeringProposals)
+          .where(inArray(schema.steeringProposals.workspaceId, workspaces));
       });
     }
   });

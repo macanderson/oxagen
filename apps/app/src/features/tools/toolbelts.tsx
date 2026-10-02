@@ -104,7 +104,10 @@ export function Toolbelts({
   agentHarnesses = {},
 }: {
   at: ToolsAt;
-  /** An org Owner or Admin: who the toolbelt writes admit (see `canAdministerOrg`). */
+  /**
+   * An org Owner or Admin, or the workspace's Owner or Admin: who the toolbelt
+   * writes admit (see `canAdministerWorkspace`).
+   */
   canEdit: boolean;
   /** `list_toolbelts`. */
   list: Read<ToolbeltList>;

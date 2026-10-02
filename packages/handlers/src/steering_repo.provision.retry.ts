@@ -30,7 +30,7 @@
 // The job's pick_connection checks the place against the stored tokens, so
 // this handler calls no host.
 import { schema, withSystemDb } from "@oxagen/database";
-import { resolveActingUserId } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { HandlerError, type CapabilityContext, type CapabilityHandler } from "@oxagen/oxagen";
 import { steeringRepoProvisionRetry } from "@oxagen/oxagen/contracts/steering_repo.provision.retry";
 import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/types";
@@ -148,6 +148,17 @@ export function createRetrySteeringRepoProvisionHandler(
         reason: "no_principal",
         message: "retry_steering_repo_provision: no signed-in user or API key creator behind this call",
       });
+    }
+
+    // Clearing or saving the stored connection writes the organization's
+    // connection, which every workspace's setup reads. A workspace Owner or
+    // Admin may retry their own setup (#5228), but only an org Owner or Admin
+    // changes the connection.
+    if (input.resetConnection === true || recorded !== null) {
+      await assertOrgRole(
+        { ...ctx, userId: actorUserId },
+        { org: ["Owner", "Admin"], namedRolesOnly: true },
+      );
     }
 
     if (input.resetConnection === true) await deps.resetConnection(ctx.orgId);

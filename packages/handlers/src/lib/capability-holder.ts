@@ -2,7 +2,7 @@
 // as the organization's IAM data grants it?
 //
 // A handler asks this when a second capability widens what the invoked one
-// may do. merge_context_pr asks it for merge_pr_without_review: the merge
+// may do. merge_steering_pr asks it for merge_pr_without_review: the merge
 // needs no approval when the merger holds that capability (ADR-213).
 //
 // It asks the resolver directly (`fetchAuthz`, then the pure `resolve`) and
@@ -17,8 +17,9 @@
 // the capability at all, so it passes the contract's own `defaultEffect`.
 // A caller no role grant names falls to that default, which is `deny` for
 // merge_pr_without_review. The system org Owner is allowed by the resolver's
-// rule 7.5, and an explicit deny on one of the caller's roles wins over an
-// allow on another.
+// rule 7.5, and the workspace's Owner or Admin by rule 7.6 for a capability
+// that acts inside the workspace (#5228). An explicit deny on one of the
+// caller's roles wins over an allow on another.
 //
 // Only `allow` holds. A role grant of `require_approval` reads as not held,
 // because no approval step runs inside a handler.
@@ -30,12 +31,13 @@ import {
   ORG_ONLY_WORKSPACE_ID,
   type CapabilityDeclaration,
 } from "@oxagen/oxagen";
-import { resolve } from "@oxagen/oxagen/iam";
+import { actsInWorkspace, resolve } from "@oxagen/oxagen/iam";
 import { fetchAuthz } from "@oxagen/iam";
 import { runInTenantScope } from "@oxagen/tenancy";
 
 /** The fields of a contract this reads. */
-type HeldCapability = Pick<CapabilityDeclaration, "name" | "defaultEffect">;
+type HeldCapability = Pick<CapabilityDeclaration, "name" | "defaultEffect"> &
+  Partial<Pick<CapabilityDeclaration, "orgLevel" | "platformOnly">>;
 
 /**
  * The principal the resolver evaluates when the caller has no IAM principal
@@ -83,6 +85,8 @@ export async function holdsCapability(
     defaultEffect: capability.defaultEffect,
     now: new Date(),
     clientIp: null,
+    actsInWorkspace: actsInWorkspace(capability),
+    workspaceRoleIds: authz.workspaceRoleIds ?? [],
   });
   return result.outcome === "allow";
 }

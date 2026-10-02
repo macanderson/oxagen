@@ -153,7 +153,7 @@ CI runs the gate, build, lint, typecheck, and test commands in this table. None 
 | `pnpm check:mobile-parity` | Enforces mobile feature parity (ADR-026) — no desktop-only features without registered reflow/hidden justification |
 | `pnpm check:connector-schemas` | Verifies every built-in plugin connector schema is registered |
 | `pnpm check:deregistered` | Asserts every path in `DEREGISTERED.md` §14 still exists — de-registered features must not be deleted without an ADR |
-| `pnpm check:contracts` | Ensures every contract file is in the barrel index, every `docs/capabilities` `**Surfaces:**` line matches its contract, and naming compliance, among 27 guards. Each guard is its own root script, and `tools/scripts/run-checks.mjs` runs them all and names every one that failed. Add a new guard as a root script and add its name to the list |
+| `pnpm check:contracts` | Ensures every contract file is in the barrel index, every `docs/capabilities` `**Surfaces:**` line matches its contract, and naming compliance, among 28 guards. Each guard is its own root script, and `tools/scripts/run-checks.mjs` runs them all and names every one that failed. Add a new guard as a root script and add its name to the list |
 | `pnpm check:vision` | LLM-judges PR diff against `docs/VISION.md` |
 | `pnpm env:check` | Validates `.env.local` against the env registry |
 | `pnpm db:migrate` | Apply pending Postgres migrations + seed platform data |
@@ -162,6 +162,7 @@ CI runs the gate, build, lint, typecheck, and test commands in this table. None 
 | `pnpm db:seed-iam` | Seed IAM roles and permissions |
 | `pnpm db:seed-platform` | Seed platform defaults (also runs at the end of `db:migrate`) |
 | `pnpm check:brand` | Runs `node tools/scripts/sync-brand-assets.mjs --check`: every brand file is a byte copy of the house kit, `oxageninc/brand`, read from `--brand <dir>`, `$OXAGEN_BRAND_KIT`, or `../oxagen-brand`. It lists each file that differs, is missing, or should not be there, and fails when the kit is missing. It also fails when the desktop icons were cut from an older avatar, and `pnpm --filter @oxagen/desktop icons` cuts them again. Its literal guard (`tools/scripts/lib/brand-literals.mjs`) fails on a hard-coded radius, shadow, font size, or page wrap in the stylesheets it lists (`packages/ui`, `apps/app`, `apps/docs`, `apps/web`) and on a fixed Tailwind size class or a bracketed length in the docs chrome's markup (`GUARDED_MARKUP`), names the line and the kit token to use, and keeps each allowed literal in an allowlist with its reason (oxageninc/brand#63, #5104). CI runs the same check against the kit's `main` in `brand-drift.yml` and in the `checks` job (Mac, 2026-09-29, #4804). The `main` ruleset requires `brand-drift.yml`'s `Brand drift` job, and the `checks` step is advisory (#5131). The sync without `--check` writes the files, and the kit's fan-out workflow runs it after each kit merge |
+| `pnpm check:aeonik-ttf` | Fails when `apps/web/scripts/fonts/aeonik-wght.ttf`, the font oxagen.sh's generated images draw their text from, no longer matches the Aeonik WOFF2 the site serves. A sha256 stamp beside the TTF records both files, so a brand sync that changes the WOFF2 fails this check. `node apps/web/scripts/unpack-aeonik.mjs` unpacks the WOFF2 again and rewrites the stamp. It needs Python 3 with fontTools (#5237). Part of `check:contracts` |
 | `pnpm check:naming` | ADR-025 naming compliance |
 | `pnpm check:audit-coverage` | SOC 2 audit-event coverage (runs on every PR in CI) |
 | `pnpm check:tree-guards` | Runs the `tools/scripts` tests that read files outside that package (`*.tree.test.ts`) with vitest, outside turbo, so no cached result stands in for them (#4664). Turbo hashes a test task over its own package, so these tests could pass on a stale cache. A cached `tools/scripts` test that reads an outside file must declare it in `tools/scripts/turbo.json`, and `lib/outside-reads.test.ts` fails one that does not |
@@ -383,7 +384,7 @@ Four harnesses are first-class here: Claude Code, Codex, Cursor and Stella (ADR-
 ## Standing decisions — apply without asking
 
 This block is the record of each standing decision in this repository. A
-workspace linked to it holds the same decisions as context records and
+workspace linked to it holds the same decisions as steering records and
 steers every connected repository from them. A connected repository does
 not carry a copy.
 
@@ -403,8 +404,10 @@ not carry a copy.
   decision as an ADR in `docs/adr/`; the ADR replaces the question.
 - **SCR-003 — Definition of
   done:** An issue closes only when every DoD checklist item is satisfied
-  and verified. Reference-grade includes tests, code comments, docs, and
-  CI — not just the implementation. A PR that advances an issue without
+  and verified. Reference-grade includes tests, code comments, and docs,
+  not just the implementation. Green CI is implied: branch protection
+  requires it, so a DoD never lists it, and the `dod` gate skips a box
+  that only says CI passes (Mac, 2026-10-02). A PR that advances an issue without
   finishing it links it with `Refs #N` rather than `Closes #N`: `Refs`
   does not close, so the merge gate does not hold that PR against the
   issue's DoD. A PR may carry both, and is gated only on what it closes. A
@@ -440,3 +443,12 @@ not carry a copy.
   carry the schema. `migration-gate` also applies the pending migrations on
   merge (decided 2026-09-23, #3653), so the label is the only thing a
   schema-changing PR adds. Write no apply steps and apply nothing by hand.
+- **SCR-007 — Infrastructure
+  changes:** Mac reviews every infrastructure change before it merges
+  (decided 2026-10-02). An infrastructure change edits `infra/`,
+  `.github/workflows/`, `.github/actions/`, `.github/docker/`, or a
+  Dockerfile, or it adds, removes, or moves a hosted service, a vendor, or a
+  cloud resource. Open it as usual, request Mac's review with
+  `gh pr edit <n> --add-reviewer macanderson`, and do not merge it until Mac
+  approves. No host or vendor is ruled out. The old rule that nothing
+  may depend on Vercel is lifted.

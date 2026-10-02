@@ -87,6 +87,7 @@ async function queueExport() {
         runId={RUN}
         sealed
         orgRole="owner"
+        wsRole="member"
       />
     </IntlProvider>,
   );
@@ -337,7 +338,7 @@ describe("export status", () => {
     [
       "a denied read",
       { ok: false, reason: "denied", code: "run.export.read" },
-      "Reading an export needs an organization Owner or Admin role.",
+      "Reading an export needs an organization Owner or Admin role, or the workspace Owner or Admin role.",
     ],
     [
       "a read parked for approval",
@@ -397,6 +398,7 @@ describe("the record dialog", () => {
           runId={RUN}
           sealed
           orgRole="admin"
+          wsRole="member"
         />
       </IntlProvider>,
     );
@@ -418,6 +420,7 @@ describe("the record dialog", () => {
           runId={RUN}
           sealed
           orgRole="owner"
+          wsRole="member"
         />
       </IntlProvider>,
     );
@@ -440,6 +443,7 @@ describe("SummarizeAction", () => {
           hasSummary={false}
           summarizable={false}
           orgRole="owner"
+          wsRole="member"
         />
       </IntlProvider>,
     );
@@ -462,6 +466,7 @@ describe("SummarizeAction", () => {
           hasSummary={false}
           summarizable
           orgRole="owner"
+          wsRole="member"
         />
       </IntlProvider>,
     );
@@ -481,6 +486,7 @@ describe("SummarizeAction", () => {
           hasSummary
           summarizable
           orgRole="member"
+          wsRole="member"
         />
       </IntlProvider>,
     );
@@ -488,5 +494,67 @@ describe("SummarizeAction", () => {
     await user.click(screen.getByRole("button", { name: "Queue the summary" }));
     expect(summarizeRun).toHaveBeenCalledWith("acme", "core-platform", RUN);
     expect(await screen.findByTestId("queued-receipt")).toHaveTextContent(RUN);
+  });
+  it.each(["owner", "admin"] as const)(
+    "offers Summarize and Export to the workspace's %s whose organization role is only Viewer (#5228)",
+    (wsRole) => {
+      render(
+        <IntlProvider>
+          <SummarizeAction
+            org="acme"
+            ws="core-platform"
+            runId={RUN}
+            sealed
+            hasSummary={false}
+            summarizable
+            orgRole="viewer"
+            wsRole={wsRole}
+          />
+          <ExportAction
+            org="acme"
+            ws="core-platform"
+            runId={RUN}
+            sealed
+            orgRole="viewer"
+            wsRole={wsRole}
+          />
+        </IntlProvider>,
+      );
+      expect(screen.getByTestId("run-summarize")).toBeEnabled();
+      expect(screen.getByTestId("run-export")).toBeEnabled();
+    },
+  );
+
+  it("refuses Summarize and Export to a workspace Member whose organization role is Viewer, with the roles as the reason (negative)", () => {
+    render(
+      <IntlProvider>
+        <SummarizeAction
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          sealed
+          hasSummary={false}
+          summarizable
+          orgRole="viewer"
+          wsRole="member"
+        />
+        <ExportAction
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          sealed
+          orgRole="viewer"
+          wsRole="member"
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("run-summarize")).toBeDisabled();
+    expect(screen.getByTestId("run-summarize").getAttribute("title")).toBe(
+      "Summarizing needs an organization Owner, Admin or Member role, or the workspace Owner or Admin role.",
+    );
+    expect(screen.getByTestId("run-export")).toBeDisabled();
+    expect(screen.getByTestId("export-no-role")).toHaveTextContent(
+      "Exporting a signed bundle needs an organization Owner or Admin role, or the workspace Owner or Admin role.",
+    );
   });
 });

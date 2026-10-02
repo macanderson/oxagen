@@ -390,25 +390,49 @@ const HEADING_PREFIX = /^\s*(?:#{1,6}\s*|\*\*)\s*/;
  * the issues filed before that: `dodStatus` skips a matching item, so it counts
  * as neither ticked nor open.
  *
- * The pattern must match the whole item. An item that pairs CI with other work,
- * such as "`pnpm gate` green; CI green on the PR", still gates, because the
- * other half is a real condition.
+ * Mac widened the rule on 2026-10-02 (#5224): green CI is implied, so no box
+ * that only restates it gates. An item is read clause by clause, split at a
+ * sentence end or a semicolon. It is skipped when every clause either says CI
+ * passes (CI_STATUS_ONLY, which also takes "on the final head commit" and a
+ * trailing "including ..." list of checks) or repeats the rule that nothing
+ * runs on the local machine (LOCAL_RUN_RULE), and at least one says CI passes.
+ * "CI is green on the PR. No build, lint, or test is run on the laptop" sat
+ * unticked on a dozen open issues on that date.
+ *
+ * An item that pairs CI with other work, such as "`pnpm gate` green; CI green
+ * on the PR" or "Full CI green, and one main run observed through staging",
+ * still gates, because the other half is a real condition.
  */
 const CI_STATUS_ONLY = new RegExp(
-  String.raw`^(?:(?:full|all|relevant)\s+)?ci(?:\s+checks?)?(?:\s*\([^)]*\))?` +
+  String.raw`^(?:(?:full|all|relevant|required)\s+)?ci(?:\s+checks?)?(?:\s*\([^)]*\))?` +
     String.raw`\s+(?:is\s+|are\s+)?(?:green|pass(?:es|ing)?)` +
-    String.raw`(?:\s+on\s+(?:the\s+)?(?:pr|pull request|branch)` +
-    String.raw`(?:\s+that\s+(?:closes|fixes|lands|adds)\s+this(?:\s+check)?)?)?$`,
+    String.raw`(?:\s+on\s+(?:the\s+)?(?:final\s+head\s+commit|(?:closing\s+)?(?:pr|pull request)|branch)` +
+    String.raw`(?:\s+that\s+(?:closes|fixes|lands|adds)\s+this(?:\s+check)?)?)?` +
+    String.raw`(?:,?\s+including\s+[^;]+)?$`,
+  "i",
+);
+
+/** A clause that only repeats that no build, lint, or test runs locally. */
+const LOCAL_RUN_RULE = new RegExp(
+  String.raw`^(?:no\s+(?:build|lint|test)(?:,?\s+(?:or\s+)?(?:build|lint|test))*` +
+    String.raw`|nothing)\s+(?:is\s+run|runs?)\s+on\s+(?:the|this)\s+` +
+    String.raw`(?:laptop|local\s+machine|machine)$`,
   "i",
 );
 
 /** Whether a DoD item's text says nothing except that CI passes. */
 export function restatesCiStatus(item) {
-  const text = item
+  const clauses = item
     .replace(/`/g, "")
-    .replace(/[.\s]+$/, "")
-    .trim();
-  return CI_STATUS_ONLY.test(text);
+    .split(/(?<=\.)\s+|;\s*/)
+    .map((clause) => clause.replace(/[.\s]+$/, "").trim())
+    .filter(Boolean);
+  return (
+    clauses.some((clause) => CI_STATUS_ONLY.test(clause)) &&
+    clauses.every(
+      (clause) => CI_STATUS_ONLY.test(clause) || LOCAL_RUN_RULE.test(clause),
+    )
+  );
 }
 
 /**

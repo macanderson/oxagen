@@ -659,18 +659,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .userWorkspacePreferencesWriteHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "get_user_budget",
-    async () =>
-      (await import("./budget.policy.read"))
-        .budgetPolicyReadHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "update_user_budget",
-    async () =>
-      (await import("./budget.policy.write"))
-        .budgetPolicyWriteHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "get_spend_budget",
     async () =>
       (await import("./billing.budget.get"))
@@ -1058,18 +1046,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .listMembersHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "get_budget_policy",
-    async () =>
-      (await import("./workspace.budget_policy.read"))
-        .workspaceBudgetPolicyReadHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "update_budget_policy",
-    async () =>
-      (await import("./workspace.budget_policy.write"))
-        .workspaceBudgetPolicyWriteHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "send_workspace_invite",
     async () =>
       (await import("./workspace.invite.send"))
@@ -1206,40 +1182,40 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .assistantSwitchSetHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "publish_context_record",
+    "publish_steering_record",
     async () =>
-      (await import("./context.record.publish"))
-        .contextRecordPublishHandler as CapabilityHandlerFn,
+      (await import("./steering.record.publish"))
+        .steeringRecordPublishHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "list_context_records",
+    "list_steering_records",
     async () =>
-      (await import("./context.record.list"))
-        .contextRecordListHandler as CapabilityHandlerFn,
+      (await import("./steering.record.list"))
+        .steeringRecordListHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "promote_context_record",
+    "promote_steering_record",
     async () =>
-      (await import("./context.record.promote"))
-        .contextRecordPromoteHandler as CapabilityHandlerFn,
+      (await import("./steering.record.promote"))
+        .steeringRecordPromoteHandler as CapabilityHandlerFn,
   );
-  // Steering: records → proposals → Context PR (ADR-061).
+  // Steering: records → proposals → Steering PR (ADR-061).
   registerHandler(
     "list_records",
     async () =>
-      (await import("./context.records.list"))
+      (await import("./steering.records.list"))
         .listRecordsHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_record",
     async () =>
-      (await import("./context.records.get"))
+      (await import("./steering.records.get"))
         .getRecordHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "append_record",
     async () =>
-      (await import("./context.records.append"))
+      (await import("./steering.records.append"))
         .appendRecordHandler as CapabilityHandlerFn,
   );
   registerHandler(
@@ -1324,19 +1300,19 @@ registerHandlersOnce("@oxagen/handlers", () => {
   registerHandler(
     "propose_record",
     async () =>
-      (await import("./context.proposal.create"))
+      (await import("./steering.proposal.create"))
         .proposeRecordHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "list_proposals",
     async () =>
-      (await import("./context.proposal.list"))
+      (await import("./steering.proposal.list"))
         .listProposalsHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "dismiss_proposal",
     async () =>
-      (await import("./context.proposal.dismiss"))
+      (await import("./steering.proposal.dismiss"))
         .dismissProposalHandler as CapabilityHandlerFn,
   );
   // Workspace memories (memory-collection spec, lane MEM5, #4912): the
@@ -1435,54 +1411,54 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .steeringMemoryPrRecordsListHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "open_context_pr",
+    "open_steering_pr",
     async () =>
-      (await import("./context.pr.open"))
-        .openContextPrHandler as CapabilityHandlerFn,
+      (await import("./steering.pr.open"))
+        .openSteeringPrHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "revise_context_record",
+    "revise_steering_record",
     async () =>
-      (await import("./context.record.revise"))
+      (await import("./steering.record.revise"))
         .reviseRecordHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "get_context_pr",
+    "get_steering_pr",
     async () =>
-      (await import("./context.pr.get"))
-        .getContextPrHandler as CapabilityHandlerFn,
+      (await import("./steering.pr.get"))
+        .getSteeringPrHandler as CapabilityHandlerFn,
   );
-  // The Context PR page (#5077): the host's state for one PR now, and the
+  // The steering PR page (#5077): the host's state for one PR now, and the
   // files its branch changes.
   registerHandler(
-    "refresh_context_pr",
+    "refresh_steering_pr",
     async () =>
-      (await import("./context.pr.refresh"))
-        .refreshContextPrHandler as CapabilityHandlerFn,
+      (await import("./steering.pr.refresh"))
+        .refreshSteeringPrHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "get_context_pr_diff",
+    "get_steering_pr_diff",
     async () =>
-      (await import("./context.pr.diff.get"))
-        .getContextPrDiffHandler as CapabilityHandlerFn,
+      (await import("./steering.pr.diff.get"))
+        .getSteeringPrDiffHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "merge_context_pr",
+    "merge_steering_pr",
     async () =>
-      (await import("./context.pr.merge"))
-        .mergeContextPrHandler as CapabilityHandlerFn,
+      (await import("./steering.pr.merge"))
+        .mergeSteeringPrHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "merge_pr_without_review",
     async () =>
-      (await import("./context.pr.merge_without_review"))
+      (await import("./steering.pr.merge_without_review"))
         .mergePrWithoutReviewHandler as CapabilityHandlerFn,
   );
   // Open a steering PR that undoes a merged one (#4449).
   registerHandler(
     "revert_steering_pr",
     async () =>
-      (await import("./context.pr.revert"))
+      (await import("./steering.pr.revert"))
         .revertSteeringPrHandler as CapabilityHandlerFn,
   );
   // Restore the managed block on a steering PR's branch, and list or promote
@@ -1490,7 +1466,7 @@ registerHandlersOnce("@oxagen/handlers", () => {
   registerHandler(
     "restore_managed_block",
     async () =>
-      (await import("./context.pr.restore_managed_block"))
+      (await import("./steering.pr.restore_managed_block"))
         .restoreManagedBlockHandler as CapabilityHandlerFn,
   );
   registerHandler(

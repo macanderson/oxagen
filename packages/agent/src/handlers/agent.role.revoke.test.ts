@@ -33,7 +33,17 @@ vi.mock("@oxagen/iam", () => ({
 const gate = vi.hoisted(() => ({
   keyCreator: "u_creator" as string | null,
   orgRole: "Owner" as string | null,
-  calls: [] as { userId: string | null; org: readonly string[] }[],
+  /**
+   * The caller is the workspace's Owner or Admin and holds no org role. The
+   * real gate admits them unless the handler asks for its named roles only
+   * (#5228).
+   */
+  workspaceOwnerOnly: false,
+  calls: [] as {
+    userId: string | null;
+    org: readonly string[];
+    namedRolesOnly?: true;
+  }[],
 }));
 vi.mock("@oxagen/iam/org-role", async () => {
   const { HandlerError } = await import("@oxagen/oxagen");
@@ -44,9 +54,21 @@ vi.mock("@oxagen/iam/org-role", async () => {
     }) => c.userId ?? (c.apiKeyId ? gate.keyCreator : null),
     assertOrgRole: async (
       actor: { userId: string | null },
-      required: { org: readonly string[] },
+      required: { org: readonly string[]; namedRolesOnly?: boolean },
     ) => {
-      gate.calls.push({ userId: actor.userId, org: required.org });
+      gate.calls.push({
+        userId: actor.userId,
+        org: required.org,
+        ...(required.namedRolesOnly ? { namedRolesOnly: true as const } : {}),
+      });
+      if (actor.userId && gate.workspaceOwnerOnly) {
+        if (!required.namedRolesOnly) return "Owner";
+        throw new HandlerError({
+          code: "forbidden",
+          reason: "org_role_required",
+          message: `Requires one of the org roles ${required.org.join(", ")}`,
+        });
+      }
       if (!actor.userId) {
         throw new HandlerError({
           code: "forbidden",
@@ -172,7 +194,27 @@ describe("agent.role.revoke — role gate (org Owner or Admin)", () => {
   it("gates the signed-in user on org Owner or Admin", async () => {
     fake.enqueue([AGENT_ROW], [ROLE_ROW], [{ id: "pra-1" }]);
     await agentRoleRevokeHandler(INPUT, CTX);
-    expect(gate.calls).toEqual([{ userId: "u_1", org: ["Owner", "Admin"] }]);
+    expect(gate.calls).toEqual([
+      { userId: "u_1", org: ["Owner", "Admin"] },
+      // The fixture role is org-scoped, assigned org-wide: org roles only.
+      { userId: "u_1", org: ["Owner", "Admin"], namedRolesOnly: true },
+    ]);
+  });
+
+  it("refuses a workspace Owner or Admin an org-scoped role, which reaches outside the workspace (negative)", async () => {
+    // The rule admits them to the first gate (#5228); the org-scoped role's
+    // own gate names org roles only.
+    gate.workspaceOwnerOnly = true;
+    try {
+      fake.enqueue([AGENT_ROW], [ROLE_ROW], [{ id: "pra-1" }]);
+      await expect(agentRoleRevokeHandler(INPUT, CTX)).rejects.toMatchObject(
+        forbidden("org_role_required"),
+      );
+      expect(fake.mutations.update).toBe(0);
+      expect(mocks.emitAudit).not.toHaveBeenCalled();
+    } finally {
+      gate.workspaceOwnerOnly = false;
+    }
   });
 
   it("refuses an org Member before any query, and writes and audits nothing (negative)", async () => {
@@ -201,6 +243,7 @@ describe("agent.role.revoke — role gate (org Owner or Admin)", () => {
       expect(out.revoked).toBe(true);
       expect(gate.calls).toEqual([
         { userId: "u_creator", org: ["Owner", "Admin"] },
+        { userId: "u_creator", org: ["Owner", "Admin"], namedRolesOnly: true },
       ]);
     });
 

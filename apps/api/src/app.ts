@@ -106,10 +106,6 @@ import { orgMemberInviteDeclineRoute } from "./routes/v1/org.member_invite.decli
 import { orgMemberRemoveRoute } from "./routes/v1/org.member.remove";
 import { orgMemberRoleChangeRoute } from "./routes/v1/org.member_role.change";
 import { userPreferencesReadRoute } from "./routes/v1/user.preferences.read";
-import { budgetPolicyReadRoute } from "./routes/v1/budget.policy.read";
-import { budgetPolicyWriteRoute } from "./routes/v1/budget.policy.write";
-import { workspaceBudgetPolicyReadRoute } from "./routes/v1/workspace.budget_policy.read";
-import { workspaceBudgetPolicyWriteRoute } from "./routes/v1/workspace.budget_policy.write";
 import { billingBudgetGetRoute } from "./routes/v1/billing.budget.get";
 import { billingBudgetSetRoute } from "./routes/v1/billing.budget.set";
 import { userWorkspacePreferencesReadRoute } from "./routes/v1/user.workspace_preferences.read";
@@ -223,13 +219,13 @@ import { toolRelayRevokeRoute } from "./routes/v1/tool.relay.revoke";
 import { credentialGrantListRoute } from "./routes/v1/credential.grant.list";
 import { killSwitchSetRoute } from "./routes/v1/kill_switch.set";
 import { killSwitchListRoute } from "./routes/v1/kill_switch.list";
-import { contextRecordPublishRoute } from "./routes/v1/context.record.publish";
-import { contextRecordListRoute } from "./routes/v1/context.record.list";
-import { contextRecordReviseRoute } from "./routes/v1/context.record.revise";
-import { contextRecordPromoteRoute } from "./routes/v1/context.record.promote";
-import { contextRecordsListRoute } from "./routes/v1/context.records.list";
-import { contextRecordsGetRoute } from "./routes/v1/context.records.get";
-import { contextRecordsAppendRoute } from "./routes/v1/context.records.append";
+import { steeringRecordPublishRoute } from "./routes/v1/steering.record.publish";
+import { steeringRecordListRoute } from "./routes/v1/steering.record.list";
+import { steeringRecordReviseRoute } from "./routes/v1/steering.record.revise";
+import { steeringRecordPromoteRoute } from "./routes/v1/steering.record.promote";
+import { steeringRecordsListRoute } from "./routes/v1/steering.records.list";
+import { steeringRecordsGetRoute } from "./routes/v1/steering.records.get";
+import { steeringRecordsAppendRoute } from "./routes/v1/steering.records.append";
 import { contextSteeringDeliveriesRoute } from "./routes/v1/context.steering.deliveries";
 import { contextSteeringFreshnessRoute } from "./routes/v1/context.steering.freshness";
 import { contextSteeringLayoutRoute } from "./routes/v1/context.steering.layout";
@@ -258,17 +254,17 @@ import { workOutcomesGetRoute } from "./routes/v1/work.outcomes.get";
 import { steeringMarkdownImportParseRoute } from "./routes/v1/steering.markdown_import.parse";
 import { steeringMarkdownImportCommitRoute } from "./routes/v1/steering.markdown_import.commit";
 import { steeringRepoImportRoute } from "./routes/v1/steering_repo.import";
-import { contextProposalCreateRoute } from "./routes/v1/context.proposal.create";
-import { contextProposalListRoute } from "./routes/v1/context.proposal.list";
-import { contextProposalDismissRoute } from "./routes/v1/context.proposal.dismiss";
-import { contextPrOpenRoute } from "./routes/v1/context.pr.open";
-import { contextPrGetRoute } from "./routes/v1/context.pr.get";
-import { contextPrRefreshRoute } from "./routes/v1/context.pr.refresh";
-import { contextPrDiffGetRoute } from "./routes/v1/context.pr.diff.get";
-import { contextPrMergeRoute } from "./routes/v1/context.pr.merge";
-import { contextPrMergeWithoutReviewRoute } from "./routes/v1/context.pr.merge_without_review";
-import { contextPrRevertRoute } from "./routes/v1/context.pr.revert";
-import { contextPrRestoreManagedBlockRoute } from "./routes/v1/context.pr.restore_managed_block";
+import { steeringProposalCreateRoute } from "./routes/v1/steering.proposal.create";
+import { steeringProposalListRoute } from "./routes/v1/steering.proposal.list";
+import { steeringProposalDismissRoute } from "./routes/v1/steering.proposal.dismiss";
+import { steeringPrOpenRoute } from "./routes/v1/steering.pr.open";
+import { steeringPrGetRoute } from "./routes/v1/steering.pr.get";
+import { steeringPrRefreshRoute } from "./routes/v1/steering.pr.refresh";
+import { steeringPrDiffGetRoute } from "./routes/v1/steering.pr.diff.get";
+import { steeringPrMergeRoute } from "./routes/v1/steering.pr.merge";
+import { steeringPrMergeWithoutReviewRoute } from "./routes/v1/steering.pr.merge_without_review";
+import { steeringPrRevertRoute } from "./routes/v1/steering.pr.revert";
+import { steeringPrRestoreManagedBlockRoute } from "./routes/v1/steering.pr.restore_managed_block";
 import { agentRoleAssignRoute } from "./routes/v1/agent.role.assign";
 import { agentRoleRevokeRoute } from "./routes/v1/agent.role.revoke";
 import { agentRoleListRoute } from "./routes/v1/agent.role.list";
@@ -713,9 +709,6 @@ userScoped.route("/user/workspaces", workspaceListRoute);
 userScoped.route("/user/preferences/read", userPreferencesReadRoute);
 userScoped.route("/user/preferences", userPreferencesSetRoute);
 userScoped.route("/user/profile", userProfileUpdateRoute);
-// Per-turn dollar budget (user-scoped default).
-userScoped.route("/user/budget/read", budgetPolicyReadRoute);
-userScoped.route("/user/budget/write", budgetPolicyWriteRoute);
 // The onboarding gate before an organization exists (#2967): `organization`.
 userScoped.route("/onboarding/state", onboardingStateGetRoute);
 app.route("/v1", userScoped);
@@ -1208,8 +1201,6 @@ orgScoped.route("/org/invitations/accept", orgMemberInviteAcceptRoute);
 orgScoped.route("/org/invitations/decline", orgMemberInviteDeclineRoute);
 orgScoped.route("/org/invitations/revoke", revokeMemberInviteRoute);
 orgScoped.route("/org/invitations/resend", resendMemberInviteRoute);
-orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyReadRoute);
-orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyWriteRoute);
 // Hard period-to-date spend ceilings (org + workspace, OXA-1079).
 orgScoped.route("/billing/budget", billingBudgetGetRoute);
 orgScoped.route("/billing/budget", billingBudgetSetRoute);
@@ -1344,14 +1335,14 @@ orgScoped.route("/tools/relays/revoke", toolRelayRevokeRoute);
 orgScoped.route("/credential-grants", credentialGrantListRoute);
 orgScoped.route("/kill-switches", killSwitchSetRoute);
 orgScoped.route("/kill-switches/list", killSwitchListRoute);
-orgScoped.route("/context/record/publish", contextRecordPublishRoute);
-orgScoped.route("/context/record/list", contextRecordListRoute);
-orgScoped.route("/context/record/promote", contextRecordPromoteRoute);
-orgScoped.route("/context/record/revise", contextRecordReviseRoute);
-// Steering (ADR-061): published records, proposals, the Context PR.
-orgScoped.route("/context/records", contextRecordsListRoute);
-orgScoped.route("/context/records/get", contextRecordsGetRoute);
-orgScoped.route("/context/records/append", contextRecordsAppendRoute);
+orgScoped.route("/steering/record/publish", steeringRecordPublishRoute);
+orgScoped.route("/steering/record/list", steeringRecordListRoute);
+orgScoped.route("/steering/record/promote", steeringRecordPromoteRoute);
+orgScoped.route("/steering/record/revise", steeringRecordReviseRoute);
+// Steering (ADR-061): published records, proposals, the steering PR.
+orgScoped.route("/steering/records", steeringRecordsListRoute);
+orgScoped.route("/steering/records/get", steeringRecordsGetRoute);
+orgScoped.route("/steering/records/append", steeringRecordsAppendRoute);
 orgScoped.route("/context/steering/freshness", contextSteeringFreshnessRoute);
 orgScoped.route("/context/steering/layout", contextSteeringLayoutRoute);
 orgScoped.route("/context/steering/deliveries", contextSteeringDeliveriesRoute);
@@ -1404,22 +1395,22 @@ orgScoped.route("/context/steering/import/parse", steeringMarkdownImportParseRou
 orgScoped.route("/context/steering/import/commit", steeringMarkdownImportCommitRoute);
 // The move from .oxagen/ to a steering repo, once per workspace (lane S10, #4620).
 orgScoped.route("/context/steering/repo/import", steeringRepoImportRoute);
-orgScoped.route("/context/proposals", contextProposalListRoute);
-orgScoped.route("/context/proposals/create", contextProposalCreateRoute);
-orgScoped.route("/context/proposals/dismiss", contextProposalDismissRoute);
-orgScoped.route("/context/prs/open", contextPrOpenRoute);
-orgScoped.route("/context/prs/get", contextPrGetRoute);
-orgScoped.route("/context/prs/refresh", contextPrRefreshRoute);
-orgScoped.route("/context/prs/diff", contextPrDiffGetRoute);
-orgScoped.route("/context/prs/merge", contextPrMergeRoute);
+orgScoped.route("/steering/proposals", steeringProposalListRoute);
+orgScoped.route("/steering/proposals/create", steeringProposalCreateRoute);
+orgScoped.route("/steering/proposals/dismiss", steeringProposalDismissRoute);
+orgScoped.route("/steering/prs/open", steeringPrOpenRoute);
+orgScoped.route("/steering/prs/get", steeringPrGetRoute);
+orgScoped.route("/steering/prs/refresh", steeringPrRefreshRoute);
+orgScoped.route("/steering/prs/diff", steeringPrDiffGetRoute);
+orgScoped.route("/steering/prs/merge", steeringPrMergeRoute);
 orgScoped.route(
-  "/context/prs/merge-without-review",
-  contextPrMergeWithoutReviewRoute,
+  "/steering/prs/merge-without-review",
+  steeringPrMergeWithoutReviewRoute,
 );
 // Open a steering PR that undoes a merged one (#4449).
-orgScoped.route("/context/prs/revert", contextPrRevertRoute);
+orgScoped.route("/steering/prs/revert", steeringPrRevertRoute);
 // Put the managed block back in one file of an open steering PR (#4518).
-orgScoped.route("/context/prs/restore-block", contextPrRestoreManagedBlockRoute);
+orgScoped.route("/steering/prs/restore-block", steeringPrRestoreManagedBlockRoute);
 orgScoped.route("/privacy/export", privacyDataExportRoute);
 orgScoped.route("/privacy/erase", privacyDataEraseRoute);
 orgScoped.route("/connections", connectionRoute);

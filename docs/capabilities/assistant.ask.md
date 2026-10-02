@@ -98,7 +98,7 @@ Images and PDFs reach the model as parts of the person's message. Text files are
 
 ## Steering
 
-The system prompt is Oxagen's baseline alone. The turn reads neither the workspace's published context records nor its configured instructions, because the workspace does not govern Stella (ADR-235, which amends ADR-093 §7). Before the engine is contacted, the run still records a `steering.manifest` frame, and the frame names no item.
+The system prompt is Oxagen's baseline alone. The turn reads neither the workspace's published steering records nor its configured instructions, because the workspace does not govern Stella (ADR-235, which amends ADR-093 §7). Before the engine is contacted, the run still records a `steering.manifest` frame, and the frame names no item.
 
 ## Tools
 

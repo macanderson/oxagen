@@ -146,6 +146,7 @@ export const organizationCreate = registerCapability({
   // and the recorder for an unscoped invoke, and the app reaches it with a
   // PretenantCtx.
   scoped: false,
+  orgLevel: true,
   agent: {
     requiresApproval: true,
     riskLevel: "medium",

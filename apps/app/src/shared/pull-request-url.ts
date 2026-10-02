@@ -1,4 +1,4 @@
-// A pull request page (ARCHITECTURE.md §3.8): the external target a Context PR
+// A pull request page (ARCHITECTURE.md §3.8): the external target a steering PR
 // links to (#2961). A PullRequestUrl is an https URL with no credentials, port,
 // query or fragment, written exactly as the URL parser writes it back, naming
 // either a GitHub pull request, /<owner>/<repository>/pull/<number> on

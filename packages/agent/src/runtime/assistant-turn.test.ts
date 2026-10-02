@@ -107,10 +107,6 @@ vi.mock("@oxagen/billing", () => ({
   evaluateTurnCreditGate: mocks.evaluateTurnCreditGate,
   createTurnBudgetGuard: mocks.createTurnBudgetGuard,
   formatBudgetUsd: (n: number) => `$${n}`,
-  governedBudgetFromRead: () => null,
-  resolveEffectiveTurnBudget: (p: unknown) => p,
-  resolveTurnBudgetPolicy: (p: unknown) => p,
-  turnBudgetPolicyFromSaved: (p: unknown) => p,
   TURN_BUDGET_OFF: { enabled: false, limitUsd: 0 },
 }));
 vi.mock("@oxagen/database", async (importOriginal) => {

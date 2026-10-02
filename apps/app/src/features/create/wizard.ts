@@ -11,7 +11,7 @@ import type { CreateKind, CreatePrefill } from "@/shared/create";
 /**
  * Every step label a wizard may show, one catalog key each under
  * `create.steps`. The list covers the five step lists of creation-spec §2
- * (tool, both of its paths, skill, agent, context record), so a kind module
+ * (tool, both of its paths, skill, agent, steering record), so a kind module
  * names its steps without adding catalog keys the shell has to know about.
  */
 export type StepId =

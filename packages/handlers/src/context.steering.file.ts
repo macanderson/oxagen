@@ -1,5 +1,5 @@
-// context.steering.file.ts — the record file a Context PR commits (ADR-061;
-// MC spec §10.2): one `.oxagen/rules/<lineage>.toml` in the context-record/v0.1
+// context.steering.file.ts — the record file a steering PR commits (ADR-061;
+// MC spec §10.2): one `.oxagen/rules/<lineage>.toml` in the v0.1 record
 // format Stella's loader reads (stella-records/src/ingest/record.rs). The
 // record's identity is derived from its content the way Stella derives it:
 // pass 1 hashes the record with `record_id` and `record_hash` absent to mint
@@ -16,9 +16,12 @@ import type {
   RecordForce,
   RecordKind,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
-import { LEGACY_RULES_DIR } from "@oxagen/oxagen/steering-repo/paths";
+import {
+  LEGACY_RECORD_SCHEMA,
+  LEGACY_RULES_DIR,
+} from "@oxagen/oxagen/steering-repo/paths";
 
-export const RECORD_SCHEMA_TAG = "context-record/v0.1";
+export const RECORD_SCHEMA_TAG = LEGACY_RECORD_SCHEMA;
 export const RULES_DIR = LEGACY_RULES_DIR;
 
 interface RecordFileInput {
@@ -190,7 +193,7 @@ function oneOf<T extends string>(
 
 /**
  * The first record in a file, typed, or null when the text is not a
- * context-record/v0.1 file with at least one complete record in it.
+ * v0.1 record file with at least one complete record in it.
  *
  * Null rather than a throw: a file that does not parse is a lineage this
  * workspace cannot answer for, which is the same answer as a lineage nothing

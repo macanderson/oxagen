@@ -497,7 +497,7 @@ describe("Toolbelt and Runtime controls (ADR-198)", () => {
     const choice = region("Assigned toolbelt");
     expect(within(choice).queryByRole("radiogroup")).toBeNull();
     expect(choice).toHaveTextContent(
-      "An organization owner or admin can change it.",
+      "An organization or workspace owner or admin can change it.",
     );
   });
 

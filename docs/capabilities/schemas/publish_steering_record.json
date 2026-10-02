@@ -1,0 +1,158 @@
+{
+  "name": "publish_steering_record",
+  "domain": "context",
+  "description": "Publish a steering record into the workspace agent-asset registry. Upserts the agent.steering_records row by (workspace, record_id) and writes a new immutable version row whenever the body checksum or the classification (kind, force, constraintEffect, statement) differs from the latest version. A publish that repeats all five writes no version and answers published: false; if it carries a new label, it updates only the label. The checksum alone is not the key: a record whose classification was wrong is corrected by republishing the same body under the right kind and force, and that correction has to land as a new version or the record never reaches readWorkspaceSteering. Mirrors Stella's one-record-per-file .stella/rules/*.toml layout. Requires the same classification a merged steering PR carries (#3302), because readWorkspaceSteering only ever delivers a must or should record to an agent: a record with no force sits in the registry and never steers anything.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "record_id": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The record's stable id — the .stella/rules/<record_id>.toml file stem; the workspace-unique key"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Human-readable record title"
+      },
+      "label": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 36
+      },
+      "body": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The canonical record body (one TOML record per file)"
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "rule",
+          "constraint",
+          "procedure",
+          "fact",
+          "memory",
+          "preference"
+        ],
+        "description": "The kind this version's body declares"
+      },
+      "force": {
+        "type": "string",
+        "enum": [
+          "must",
+          "should",
+          "may",
+          "info"
+        ],
+        "description": "How hard the record steers: must, should, may, or info — only must/should ever reach an agent"
+      },
+      "constraintEffect": {
+        "type": "string",
+        "enum": [
+          "require",
+          "forbid"
+        ]
+      },
+      "statement": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000,
+        "description": "The single-sentence claim the record makes"
+      },
+      "provenance": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Provenance kind (e.g. file, commit, review)"
+            },
+            "uri": {
+              "type": "string"
+            },
+            "range": {
+              "type": "string"
+            },
+            "digest": {
+              "type": "string"
+            },
+            "method": {
+              "type": "string"
+            },
+            "by": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "record_id",
+      "title",
+      "body",
+      "kind",
+      "force",
+      "statement"
+    ],
+    "additionalProperties": false,
+    "x-server-validated": true,
+    "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "publicId": {
+        "type": "string",
+        "description": "Public record ID (ctr_…)"
+      },
+      "recordId": {
+        "type": "string",
+        "description": "The record's stable id (slug)"
+      },
+      "version": {
+        "type": "integer",
+        "exclusiveMinimum": 0
+      },
+      "checksum": {
+        "type": "string",
+        "description": "SHA-256 hex over the body"
+      },
+      "published": {
+        "type": "boolean",
+        "description": "false when the latest version already carries this body checksum AND this classification (kind, force, constraintEffect, statement); true when either changed and a new version was written"
+      }
+    },
+    "required": [
+      "publicId",
+      "recordId",
+      "version",
+      "checksum",
+      "published"
+    ],
+    "additionalProperties": false
+  }
+}

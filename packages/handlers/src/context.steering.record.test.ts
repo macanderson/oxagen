@@ -1,6 +1,6 @@
-// Unit tests for the steering record a Context PR writes in a steering repo
+// Unit tests for the steering record a steering PR writes in a steering repo
 // (#4731), and for the four checks that read it. The handler tests in
-// context.pr.test.ts cover the same file end to end through the fake host.
+// steering.pr.test.ts cover the same file end to end through the fake host.
 import { describe, expect, it } from "vitest";
 import { HandlerError } from "@oxagen/oxagen";
 import { recordLineageFromPath } from "@oxagen/oxagen/steering-repo/paths";

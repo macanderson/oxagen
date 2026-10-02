@@ -10,9 +10,9 @@
  *   - a client for the MCP gateway, which calls tools as an enrolled agent
  *   - a client for the sample servers' control port (mcp-studio-servers.ts)
  *
- * Two steps have no Oxagen capability yet. `mergeSteeringPullRequest` (#5122)
- * and `publishAgentFile` (#5149) fail with the issue's number, so the run
- * stops there and says why. Neither works around the gap.
+ * `mergeSteeringPullRequest` merges a steering PR through the proposal row its
+ * opener wrote (#5122). `publishAgentFile` finds the agent file PR the host's
+ * enrollment opened (#5149), which the suite then merges the same way.
  *
  * Like the steering rig, it never prints a secret: the upstream token, the
  * relay token, and the gateway key stay out of every error message.
@@ -21,6 +21,8 @@ import { generateKeyPairSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 import type { AgentApprovalListOutput } from "@oxagen/oxagen/contracts/agent.approval.list";
+import { agentNameForRuntime } from "@oxagen/oxagen/steering-repo/agent";
+import type { SteeringProposalListOutput } from "@oxagen/oxagen/contracts/steering.proposal.list";
 import type { RuntimeListItem } from "@oxagen/oxagen/contracts/runtime.list";
 import type { SteeringMarkdownImportCommitOutput } from "@oxagen/oxagen/contracts/steering.markdown_import.commit";
 import type { SteeringMarkdownImportParseOutput } from "@oxagen/oxagen/contracts/steering.markdown_import.parse";
@@ -38,6 +40,7 @@ import {
   type GithubRig,
   HttpError,
   MCP_STUDIO_SUITE,
+  mergeSteeringPr,
   MINUTE,
   newestRun,
   type Oxagen,
@@ -45,6 +48,7 @@ import {
   poll,
   reached,
   readSettings,
+  readSteeringPr,
   SECOND,
   type Settings,
   waiting,
@@ -114,8 +118,6 @@ export function readStudioSettings(env: NodeJS.ProcessEnv = process.env): Studio
 
 /** The workspace credential that holds the sample upstreams' bearer token. */
 export const UPSTREAM_CREDENTIAL = "mcp-live-upstream";
-/** The agent file the suite publishes for its enrolled host. */
-export const AGENT_NAME = "mcp-live-agent";
 
 export type SideEffect = "read" | "write" | "irreversible";
 
@@ -304,9 +306,10 @@ export function draftOps(server: StudioServer): Record<string, unknown>[] {
  * The Cedar policies the suite publishes after the tools. The first parks
  * every irreversible call until a person approves it. The second forbids the
  * test agent the MCP server's create_issue in every case, so the gateway also
- * leaves that tool out of the agent's tools/list.
+ * leaves that tool out of the agent's tools/list. `agent` is the name of the
+ * agent file enrollment proposed: the runtime's slug (ADR-266).
  */
-export function policyMarkdown(): string {
+export function policyMarkdown(agent: string): string {
   return [
     "# MCP Studio live test policies",
     "",
@@ -324,7 +327,7 @@ export function policyMarkdown(): string {
     "",
     "```cedar",
     '@id("live.deny-create-issue")',
-    `forbid (principal == Agent::${toml(AGENT_NAME)}, action == Action::"live_mcp__create_issue", resource);`,
+    `forbid (principal == Agent::${toml(agent)}, action == Action::"live_mcp__create_issue", resource);`,
     "```",
     "",
   ].join("\n");
@@ -399,6 +402,29 @@ const policyRow = z.looseObject({
 
 const importParsed = z.object({ policies: z.array(policyRow) });
 
+/** The proposals on one lineage, each with its kind and the steering PR it carries. */
+const agentProposals = z.object({
+  proposals: z.array(
+    z.object({
+      id: z.string(),
+      kind: z.string(),
+      status: z.string(),
+      pr: z.object({ number: z.number().int(), branch: z.string() }).nullable(),
+    }),
+  ),
+});
+
+/** The open proposals, each with the steering PR it carries. */
+const openProposals = z.object({
+  proposals: z.array(
+    z.object({
+      id: z.string(),
+      kind: z.string(),
+      pr: z.object({ number: z.number().int(), branch: z.string() }).nullable(),
+    }),
+  ),
+});
+
 const importCommitted = z.object({
   pullRequest: z
     .object({ number: z.number().int(), url: z.string(), branch: z.string(), headSha: z.string() })
@@ -423,6 +449,8 @@ export type StudioContractFit = [
   Assert<Fits<AgentApprovalListOutput, z.output<typeof approvalsListed>>>,
   Assert<Fits<SteeringMarkdownImportParseOutput, z.output<typeof importParsed>>>,
   Assert<Fits<SteeringMarkdownImportCommitOutput, z.output<typeof importCommitted>>>,
+  Assert<Fits<SteeringProposalListOutput, z.output<typeof openProposals>>>,
+  Assert<Fits<SteeringProposalListOutput, z.output<typeof agentProposals>>>,
 ];
 
 function path(settings: Settings, rest: string): string {
@@ -532,10 +560,11 @@ export async function listApprovals(ox: Oxagen, settings: Settings) {
  * and commit opens one steering PR with every row marked add.
  */
 export async function openPolicyPr(ox: Oxagen, settings: Settings) {
+  const agent = agentNameFor(await hostRuntime(ox, settings));
   const parsed = await ox.call(
     "POST",
     path(settings, "/context/steering/import/parse"),
-    { documents: [{ filename: "mcp-live-policies.md", content: policyMarkdown(), target: "policies" }] },
+    { documents: [{ filename: "mcp-live-policies.md", content: policyMarkdown(agent), target: "policies" }] },
     importParsed,
   );
   const problems = parsed.policies.flatMap((row) => row.issues.map((issue) => `${row.path}: ${issue.message}`));
@@ -556,53 +585,83 @@ export async function openPolicyPr(ox: Oxagen, settings: Settings) {
   return committed.pullRequest;
 }
 
-// ── Steps with no capability yet ─────────────────────────────────────────────
+// ── Steering PRs ─────────────────────────────────────────────────────────────
 
-/** A steering PR that has no proposal row: a Studio Review, a sync, or a Markdown import. */
+/** A steering PR the suite merges: a Studio Review, a sync, a Markdown import, or an agent file. */
 export interface BarePullRequest {
   number: number;
   headSha: string;
 }
 
-/**
- * Merges a steering PR that has no proposal row. Oxagen has no capability for
- * this yet: `merge_context_pr` takes only a proposal id (#5122). A merge made
- * on GitHub leaves `main` with a commit Oxagen did not merge, so the steering
- * repo reads diverged and nothing publishes. The suite stops here instead.
- * When #5122 lands, call its capability here and return the version it
- * published.
- */
-export function mergeSteeringPullRequest(
-  _ox: Oxagen,
-  _settings: Settings,
-  pr: BarePullRequest,
-): Promise<{ publishedVersion: number | null }> {
-  return Promise.reject(
-    new Error(
-      `Oxagen cannot merge steering PR #${String(pr.number)} yet: no capability merges a steering PR that has no proposal (#5122). A merge on GitHub would leave the steering repo diverged, so the suite stops here.`,
-    ),
+/** The open proposal that carries steering PR `number`, or null when none does. */
+async function openProposalFor(ox: Oxagen, settings: Settings, number: number) {
+  const listed = await ox.call(
+    "POST",
+    path(settings, "/steering/proposals"),
+    { state: "open", limit: 200 },
+    openProposals,
   );
+  return listed.proposals.find((p) => p.pr?.number === number) ?? null;
 }
 
 /**
- * Publishes `agents/<AGENT_NAME>.toml` for the run's runtime, which the MCP
- * gateway needs before it serves any tool to the host. Nothing in Oxagen
- * writes an agent file yet (#5149). When it lands, propose this file through
- * it, merge the steering PR, and return the PR:
- *
- *   schema = "agent/v1"
- *   name = "<AGENT_NAME>"
- *   label = "MCP Studio live test agent"
- *   operator = "<the test account's member handle>"
- *   runtime = "<runtime>"
- *   harness = "claude-code"
+ * Merges a steering PR through Oxagen. Each opener writes a proposal row for
+ * the PR it opens (#5122), so the suite finds the row by the PR's number and
+ * calls `merge_steering_pr` with it. The merge runs the steering checks on the
+ * PR's head, lands it through the merge queue, and answers the steering
+ * version it published.
  */
-export function publishAgentFile(_ox: Oxagen, _settings: Settings, runtime: string): Promise<BarePullRequest> {
-  return Promise.reject(
-    new Error(
-      `Oxagen cannot publish the agent file for runtime ${runtime} yet (#5149). Without it the gateway matches no agent to the run and serves no tool.`,
-    ),
+export async function mergeSteeringPullRequest(
+  ox: Oxagen,
+  settings: Settings,
+  pr: BarePullRequest,
+): Promise<{ publishedVersion: number | null }> {
+  const proposal = await openProposalFor(ox, settings, pr.number);
+  if (proposal === null) {
+    throw new Error(
+      `No open proposal in workspace ${settings.runSlug} carries steering PR #${String(pr.number)}. Its opener writes one when it opens the PR, so read the API log for a "proposal row was not written" error.`,
+    );
+  }
+  const merged = await mergeSteeringPr(ox, settings, proposal.id);
+  return { publishedVersion: merged.publishedVersion };
+}
+
+// ── The agent file ───────────────────────────────────────────────────────────
+
+/** The name of the agent file enrollment proposes for a runtime: its slug (ADR-266). */
+function agentNameFor(runtime: string): string {
+  const name = agentNameForRuntime(runtime);
+  if (name === null) {
+    throw new Error(`Runtime ${runtime} has a slug no agent file can be named after, so enrollment proposed none.`);
+  }
+  return name;
+}
+
+/**
+ * The steering PR that adds `agents/<runtime>.toml`, which the host's
+ * enrollment opened (#5149). The MCP gateway needs the file before it serves
+ * any tool to the host. The file names the enrolling member as operator, the
+ * runtime, and the harness the host reported. The suite merges it through
+ * `mergeSteeringPullRequest`.
+ */
+export async function publishAgentFile(ox: Oxagen, settings: Settings, runtime: string): Promise<BarePullRequest> {
+  const branch = `agents/${agentNameFor(runtime)}`;
+  const listed = await ox.call(
+    "POST",
+    path(settings, "/steering/proposals"),
+    { lineageId: branch, limit: 20 },
+    agentProposals,
   );
+  const proposal = listed.proposals.find(
+    (p) => p.kind === "agent_file" && p.status !== "rejected" && p.pr !== null,
+  );
+  if (proposal === undefined || proposal.pr === null) {
+    throw new Error(
+      `Enrollment opened no agent file PR on ${branch} in workspace ${settings.runSlug}. Read the API log for the enrollment's "agent file:" line, which says why.`,
+    );
+  }
+  const view = await readSteeringPr(ox, settings, proposal.id);
+  return { number: proposal.pr.number, headSha: view.pr?.headSha ?? "" };
 }
 
 // ── GitHub ───────────────────────────────────────────────────────────────────

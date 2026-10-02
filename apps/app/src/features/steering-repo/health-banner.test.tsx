@@ -317,7 +317,8 @@ describe("the steering repo health banner", () => {
 });
 
 describe("the workspace layout's health banner", () => {
-  function ctx(orgRole: "owner" | "admin" | "member" | "viewer" = "owner") {
+  type Role = "owner" | "admin" | "member" | "viewer";
+  function ctx(orgRole: Role = "owner", wsRole: Role = "member") {
     return unsafeMint(WsCtx, {
       userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
       orgId: "7a000000-0000-4000-8000-0000000000a1",
@@ -327,16 +328,17 @@ describe("the workspace layout's health banner", () => {
       workspaceId: "7b000000-0000-4000-8000-000000000001",
       wsSlug: "core-platform",
       wsName: "Core platform",
-      wsRole: "member",
+      wsRole,
     });
   }
 
   async function layoutBanner(
     answer: SteeringRepoRead,
-    orgRole?: Parameters<typeof ctx>[0],
+    orgRole?: Role,
+    wsRole?: Role,
   ) {
     read.readSteeringRepo.mockResolvedValue(answer);
-    const viewer = ctx(orgRole);
+    const viewer = ctx(orgRole, wsRole);
     const { source } = steeringRepoSource(readOk(steeringRepoView()));
     const element = await SteeringRepoHealthBanner({ ctx: viewer, source });
     expect(read.readSteeringRepo).toHaveBeenCalledWith(source, viewer);
@@ -404,6 +406,31 @@ describe("the workspace layout's health banner", () => {
         screen.getByTestId("steering-repo-differences"),
       ).toBeInTheDocument();
       expect(screen.queryByTestId("steering-repo-repair")).toBeNull();
+    },
+  );
+
+  it.each(["owner", "admin"] as const)(
+    "offers the workspace's %s Repair, whose org role is only Member (#5228)",
+    async (wsRole) => {
+      await layoutBanner(DRIFTED, "member", wsRole);
+      expect(screen.getByTestId("steering-repo-repair")).toBeInTheDocument();
+    },
+  );
+
+  it.each(["owner", "admin"] as const)(
+    "shows the workspace's %s a lost grant and no Re-authorize, which writes the organization's connection (negative)",
+    async (wsRole) => {
+      await layoutBanner(
+        { kind: "ok", view: steeringRepoView({ health: "disconnected" }) },
+        "member",
+        wsRole,
+      );
+      expect(
+        screen.getByRole("heading", { name: "Repository disconnected" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("steering-repo-banner-reauthorize"),
+      ).toBeNull();
     },
   );
 

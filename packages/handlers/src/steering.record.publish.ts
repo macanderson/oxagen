@@ -1,0 +1,479 @@
+import { steeringRecordLabel } from "@oxagen/oxagen/steering-record-label";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
+import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
+import { steeringRecordPublish } from "@oxagen/oxagen/contracts/steering.record.publish";
+import {
+  ambientPlaneKey,
+  STEERING_VERSION_CLASSIFICATION_COLUMN,
+  hasColumnFresh,
+  schema,
+  withTenantDb,
+  isUniqueViolation,
+} from "@oxagen/database";
+import { and, eq, isNull, sql } from "drizzle-orm";
+import { logger } from "./logger";
+import { sha256Hex } from "./registry-digest";
+
+/**
+ * How many times a version publish re-reads the latest version and tries
+ * again after losing a race to a concurrent publish (#3511).
+ *
+ * The comparison that decides idempotency and the insert that acts on it are
+ * two transactions, so two publishes of the same correction both read version
+ * N and both insert version N+1. The loser is refused by
+ * `steering_record_versions_record_version_idx`, and its whole transaction
+ * rolls back, which leaves nothing to clean up and makes a retry against the
+ * winner's version the honest answer: either the winner already published
+ * what this call asked for, and the call is idempotent, or it published
+ * something else, and this correction is still outstanding.
+ *
+ * Three attempts, not one retry: two publishers can lose to each other in
+ * turn. Past that the contention is sustained rather than a race that
+ * settles, and a refusal the caller can read beats a retry loop with no
+ * bound.
+ */
+const PUBLISH_VERSION_ATTEMPTS = 3;
+
+/**
+ * Publish one steering record into the workspace agent-asset
+ * registry — the platform mirror of adding a .stella/rules/<record_id>.toml
+ * file. Upserts agent.steering_records by (workspace, record_id) and creates
+ * a new immutable version row only when the version content changed: the
+ * body checksum or any of kind, force, constraintEffect, statement. A publish
+ * that repeats all of them is idempotent (published: false). Same shape as
+ * tool.declaration.publish.
+ *
+ * Writes the caller's classification (kind, force, constraintEffect,
+ * statement) onto both the record row and the version row, mirroring
+ * `publishMerge` (context.steering.store.ts). Before #3302 this handler wrote
+ * only the body, leaving all four NULL: `readWorkspaceSteering` only ever
+ * delivers a record whose force is `must` or `should`, so a record published
+ * this way sat active in the registry and never reached an agent.
+ */
+export const steeringRecordPublishHandler: CapabilityHandler<
+  typeof steeringRecordPublish
+> = async (input, ctx) => {
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { org: ["Owner", "Admin"], workspace: ["Owner", "Admin"] },
+  );
+
+  if (!ctx.workspaceId) {
+    throw new Error(
+      "[steering.record.publish] workspaceId is required (scoped capability)",
+    );
+  }
+
+  const slug = input.record_id.trim().toLowerCase();
+  const checksum = sha256Hex(input.body);
+  const provenance = input.provenance ?? [];
+
+  const orgId = ctx.orgId;
+  const workspaceId = ctx.workspaceId;
+
+  const findExisting = async () => {
+    const rows = await withTenantDb((tx) =>
+      tx
+        .select({
+          id: schema.steeringRecords.id,
+          publicId: schema.steeringRecords.publicId,
+          slug: schema.steeringRecords.slug,
+          label: schema.steeringRecords.label,
+        })
+        .from(schema.steeringRecords)
+        .where(
+          and(
+            eq(schema.steeringRecords.orgId, orgId),
+            eq(schema.steeringRecords.workspaceId, workspaceId),
+            eq(schema.steeringRecords.slug, slug),
+            isNull(schema.steeringRecords.deletedAt),
+          ),
+        )
+        .limit(1),
+    );
+    return rows[0] ?? null;
+  };
+
+  // The classification a caller must now supply (#3302): a record with no
+  // force never reaches `readWorkspaceSteering`'s must/should filter, so a
+  // record published without one sat in the registry and never steered
+  // anything. Written onto both the version (what this body says) and the
+  // record row (what `list_records`, `listActiveRecords` and the steering
+  // page filter and display), the same split `merge_steering_pr` keeps.
+  const classification = {
+    kind: input.kind,
+    force: input.force,
+    constraintEffect: input.constraintEffect ?? null,
+    statement: input.statement,
+  };
+
+  const versionValuesBase = {
+    orgId,
+    workspaceId,
+    body: input.body,
+    checksum,
+    provenance,
+    isLatest: true,
+    publishedAt: sql`now()`,
+    createdById: ctx.userId ?? undefined,
+    updatedById: ctx.userId ?? undefined,
+  };
+
+  // Codex P1 on #3486: `steering_record_versions.kind/force/constraintEffect/
+  // statement` were added by migration `20260918160000`, which -- like every
+  // Postgres migration in this repo -- is applied by the manual
+  // `db-migrate.yml` workflow, never automatically alongside a deploy
+  // (`pipeline.yml`'s `deploy-node` runs right after `test`, with no
+  // ordering against a migration run). A deployment can therefore run this
+  // handler's code before that migration has been applied, and an
+  // unconditional SELECT/INSERT naming those columns fails every publish
+  // with Postgres 42703 in that window. `publishMerge`
+  // (`context.steering.store.ts`) and `steering.record.promote.ts` already
+  // guard the exact same columns with `hasColumnFresh` +
+  // `STEERING_VERSION_CLASSIFICATION_COLUMN`; this handler follows the same
+  // pattern rather than inventing a second one.
+
+  // Version-publish path against an existing record row: idempotent when the
+  // latest version already carries this checksum AND this classification,
+  // otherwise latest+1. The checksum alone is not the key: a record backfilled
+  // to memory/info (or one whose classification was wrong) is corrected by
+  // republishing the unchanged body with the right kind/force, and that
+  // correction must land as a new version or the record never reaches
+  // `readWorkspaceSteering`.
+  const publishVersionFor = async (
+    existing: {
+      id: string;
+      publicId: string;
+      slug: string;
+      label: string | null;
+    },
+    attempt = 1,
+  ): Promise<{
+    publicId: string;
+    recordId: string;
+    version: number;
+    checksum: string;
+    published: boolean;
+  }> => {
+    const { latest, readAtLookup } = await withTenantDb(async (tx) => {
+      // ACCESS SHARE, same as steering.record.promote.ts's read of these
+      // columns: information_schema locks nothing on its own, so without
+      // this the migration's ALTER TABLE (ACCESS EXCLUSIVE) could commit
+      // between a `false` readiness answer and this SELECT reading a
+      // column that no longer -- or not yet -- matches that answer.
+      await tx.execute(
+        sql`lock table ${schema.steeringRecordVersions} in access share mode`,
+      );
+      const ready = await hasColumnFresh(
+        tx,
+        STEERING_VERSION_CLASSIFICATION_COLUMN,
+        await ambientPlaneKey(),
+      );
+      // Two concrete `.select()` calls rather than one with a ternary column
+      // object: drizzle cannot narrow a select() argument chosen at runtime
+      // into one clean row type, and the resulting `{}` fields broke every
+      // downstream read of `latest.id` / `latest.versionNumber`. Each branch
+      // is typed on its own, then normalized to one shape below.
+      if (ready) {
+        const [full] = await tx
+          .select({
+            id: schema.steeringRecordVersions.id,
+            versionNumber: schema.steeringRecordVersions.versionNumber,
+            checksum: schema.steeringRecordVersions.checksum,
+            kind: schema.steeringRecordVersions.kind,
+            force: schema.steeringRecordVersions.force,
+            constraintEffect: schema.steeringRecordVersions.constraintEffect,
+            statement: schema.steeringRecordVersions.statement,
+          })
+          .from(schema.steeringRecordVersions)
+          .where(
+            and(
+              eq(schema.steeringRecordVersions.recordId, existing.id),
+              eq(schema.steeringRecordVersions.isLatest, true),
+            ),
+          )
+          .limit(1);
+        return { latest: full, readAtLookup: ready };
+      }
+      const [partial] = await tx
+        .select({
+          id: schema.steeringRecordVersions.id,
+          versionNumber: schema.steeringRecordVersions.versionNumber,
+          checksum: schema.steeringRecordVersions.checksum,
+        })
+        .from(schema.steeringRecordVersions)
+        .where(
+          and(
+            eq(schema.steeringRecordVersions.recordId, existing.id),
+            eq(schema.steeringRecordVersions.isLatest, true),
+          ),
+        )
+        .limit(1);
+      const latest = partial
+        ? {
+            ...partial,
+            kind: null,
+            force: null,
+            constraintEffect: null,
+            statement: null,
+          }
+        : undefined;
+      return { latest, readAtLookup: ready };
+    });
+
+    // Codex P1 on #3486 (round 3): before the migration lands, this handler
+    // cannot compare a classification the version row has no columns for.
+    // Treating that as "unchanged" (the earlier, checksum-only fallback)
+    // let a genuine correction -- an unchanged body republished under a
+    // fixed kind/force -- return published: false without ever updating the
+    // record row, silently discarding the correction for the rest of the
+    // compatibility window. Unreadable therefore means CHANGED: this always
+    // takes the publish-new-version path below, which updates the record
+    // row's classification unconditionally (those columns predate the
+    // migration and always exist) even though the version row itself is
+    // written without the four columns until the migration lands.
+    const unchanged =
+      latest !== undefined &&
+      latest.checksum === checksum &&
+      readAtLookup &&
+      "kind" in latest &&
+      latest.kind === classification.kind &&
+      latest.force === classification.force &&
+      (latest.constraintEffect ?? null) === classification.constraintEffect &&
+      (latest.statement ?? null) === classification.statement;
+
+    if (latest && unchanged) {
+      const label = input.label ?? existing.label ?? steeringRecordLabel(slug);
+      if (label !== existing.label) {
+        await withTenantDb((tx) =>
+          tx
+            .update(schema.steeringRecords)
+            .set({
+              label,
+              updatedAt: sql`now()`,
+              updatedById: ctx.userId ?? undefined,
+            })
+            .where(
+              and(
+                eq(schema.steeringRecords.id, existing.id),
+                eq(schema.steeringRecords.orgId, orgId),
+                eq(schema.steeringRecords.workspaceId, workspaceId),
+                input.label === undefined
+                  ? isNull(schema.steeringRecords.label)
+                  : undefined,
+              ),
+            ),
+        );
+      }
+      logger.info(
+        { slug, publicId: existing.publicId, workspaceId },
+        "steering.record.publish: idempotent — body and classification unchanged",
+      );
+      return {
+        publicId: existing.publicId,
+        recordId: existing.slug,
+        version: latest.versionNumber,
+        checksum,
+        published: false,
+      };
+    }
+
+    const nextVersion = (latest?.versionNumber ?? 0) + 1;
+    const write = () =>
+      withTenantDb(async (tx) => {
+        if (latest) {
+          await tx
+            .update(schema.steeringRecordVersions)
+            .set({ isLatest: false, updatedAt: sql`now()` })
+            .where(eq(schema.steeringRecordVersions.id, latest.id));
+        }
+        // ROW EXCLUSIVE, same as publishMerge: this is what the INSERT below
+        // acquires anyway, and taking it before the readiness probe closes the
+        // same window -- the migration's ALTER TABLE committing between a
+        // `false` answer and a write that would otherwise name the four
+        // columns regardless.
+        await tx.execute(
+          sql`lock table ${schema.steeringRecordVersions} in row exclusive mode`,
+        );
+        const ready = await hasColumnFresh(
+          tx,
+          STEERING_VERSION_CLASSIFICATION_COLUMN,
+          await ambientPlaneKey(),
+        );
+        const [versionRow] = await tx
+          .insert(schema.steeringRecordVersions)
+          .values({
+            ...versionValuesBase,
+            ...(ready ? classification : {}),
+            recordId: existing.id,
+            versionNumber: nextVersion,
+            parentVersionId: latest?.id ?? undefined,
+          })
+          .returning({ id: schema.steeringRecordVersions.id });
+        if (!versionRow) {
+          throw new Error(
+            "[steering.record.publish] Version insert returned no row.",
+          );
+        }
+        await tx
+          .update(schema.steeringRecords)
+          .set({
+            title: input.title,
+            label:
+              input.label ??
+              sql`coalesce(${schema.steeringRecords.label}, ${steeringRecordLabel(slug)})`,
+            activeVersionId: versionRow.id,
+            activatedByUserId: ctx.userId ?? undefined,
+            activatedAt: sql`now()`,
+            ...classification,
+            updatedById: ctx.userId ?? undefined,
+            updatedAt: sql`now()`,
+          })
+          .where(eq(schema.steeringRecords.id, existing.id));
+      });
+
+    try {
+      await write();
+    } catch (err) {
+      // A concurrent publish took this version number (or the one
+      // `is_latest` row) first. The transaction above rolled back whole, so
+      // there is no half-written version to repair: re-read the latest
+      // version and answer against what the winner actually published.
+      if (!isUniqueViolation(err)) throw err;
+      if (attempt >= PUBLISH_VERSION_ATTEMPTS) {
+        throw new HandlerError({
+          code: "conflict",
+          reason: "concurrent_publish",
+          message: `Record "${slug}" is being published by another request. Try again.`,
+        });
+      }
+      logger.info(
+        {
+          slug,
+          publicId: existing.publicId,
+          version: nextVersion,
+          attempt,
+          workspaceId,
+        },
+        "steering.record.publish: lost version race, rereading the latest version",
+      );
+      return publishVersionFor(existing, attempt + 1);
+    }
+
+    logger.info(
+      { slug, publicId: existing.publicId, version: nextVersion, workspaceId },
+      "steering.record.publish: published new version",
+    );
+    return {
+      publicId: existing.publicId,
+      recordId: existing.slug,
+      version: nextVersion,
+      checksum,
+      published: true,
+    };
+  };
+
+  const existing = await findExisting();
+  if (existing) {
+    return publishVersionFor(existing);
+  }
+
+  // Fresh record: identity row + version 1 in one transaction. Two concurrent
+  // publishes can both pass the existence check; the workspace-slug unique
+  // index throws 23505 for the loser and we fall back to the version path.
+  try {
+    const result = await withTenantDb(async (tx) => {
+      const [recordRow] = await tx
+        .insert(schema.steeringRecords)
+        .values({
+          orgId,
+          workspaceId,
+          slug,
+          title: input.title,
+          label: input.label ?? steeringRecordLabel(slug),
+          status: "active",
+          ...classification,
+          createdById: ctx.userId ?? undefined,
+          updatedById: ctx.userId ?? undefined,
+        })
+        .returning({
+          id: schema.steeringRecords.id,
+          publicId: schema.steeringRecords.publicId,
+          slug: schema.steeringRecords.slug,
+          label: schema.steeringRecords.label,
+        });
+      if (!recordRow) {
+        throw new Error(
+          "[steering.record.publish] Record insert returned no row.",
+        );
+      }
+      // Codex P1 on #3486 (round 5): same ROW EXCLUSIVE lock as the
+      // existing-record path takes before its probe, and for the same
+      // reason. Without it, migration 20260918160000's ACCESS EXCLUSIVE
+      // ALTER TABLE can commit between a `false` answer and this INSERT,
+      // permanently leaving a fresh version unclassified even though the
+      // columns and their backfill finished before the insert lands.
+      await tx.execute(
+        sql`lock table ${schema.steeringRecordVersions} in row exclusive mode`,
+      );
+      const versionReady = await hasColumnFresh(
+        tx,
+        STEERING_VERSION_CLASSIFICATION_COLUMN,
+        await ambientPlaneKey(),
+      );
+      const [versionRow] = await tx
+        .insert(schema.steeringRecordVersions)
+        .values({
+          ...versionValuesBase,
+          ...(versionReady ? classification : {}),
+          recordId: recordRow.id,
+          versionNumber: 1,
+        })
+        .returning({ id: schema.steeringRecordVersions.id });
+      if (!versionRow) {
+        throw new Error(
+          "[steering.record.publish] Version insert returned no row.",
+        );
+      }
+      await tx
+        .update(schema.steeringRecords)
+        .set({
+          activeVersionId: versionRow.id,
+          activatedByUserId: ctx.userId ?? undefined,
+          activatedAt: sql`now()`,
+          updatedAt: sql`now()`,
+        })
+        .where(eq(schema.steeringRecords.id, recordRow.id));
+      // classification was already written on the insert above; the pin
+      // update is the same as merge_steering_pr's version-1 path.
+      return { publicId: recordRow.publicId, slug: recordRow.slug };
+    });
+
+    logger.info(
+      { slug, publicId: result.publicId, workspaceId },
+      "steering.record.publish: registered new record",
+    );
+    return {
+      publicId: result.publicId,
+      recordId: result.slug,
+      version: 1,
+      checksum,
+      published: true,
+    };
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      const winner = await findExisting();
+      if (winner) {
+        logger.info(
+          { slug, workspaceId },
+          "steering.record.publish: lost insert race — publishing onto winner",
+        );
+        return publishVersionFor(winner);
+      }
+      throw new Error(
+        `[steering.record.publish] Record id "${slug}" is reserved by a deleted record in this workspace.`,
+      );
+    }
+    throw err;
+  }
+};
