@@ -149,11 +149,16 @@ export interface CollectorStore {
   getInboundEvent(id: string): Promise<InboundEventRecord | null>;
   /** Set processed_at to now and record the outcome. */
   markInboundEvent(id: string, outcome: string): Promise<void>;
-  /** The item on (collector_id, provider_id), soft-deleted or not. */
+  /**
+   * The workspace's item for this provider id, soft-deleted or not. One
+   * provider item is one work item in a workspace, whichever collector heard
+   * it (ADR-244), so a store bound to one workspace matches on the provider id
+   * alone. The collector id names the caller.
+   */
   findItem(collectorId: string, providerId: string): Promise<StoredWorkItem | null>;
   /**
-   * Insert or update the item on (collector_id, provider_id). A new item gets
-   * the workspace's next number. The input is already screened.
+   * Insert or update the workspace's item for this provider id. A new item
+   * gets the workspace's next number. The input is already screened.
    */
   upsertItem(
     collector: CollectorRecord,
@@ -175,8 +180,12 @@ export interface CollectorPorts {
   store: CollectorStore;
   /** The sensitive-data screen. Returns the value with every finding redacted. */
   screen<T>(value: T): Promise<{ value: T; redactions: number }>;
-  /** Keep bytes in private object storage. Returns the stored key. */
-  putRaw(key: string, body: Uint8Array, contentType: string): Promise<string>;
+  /**
+   * Keep the raw bytes in private object storage, and return the stored key.
+   * Optional: a deployment that keeps no unscreened bytes leaves it out, and
+   * the row's raw_ref stays null.
+   */
+  putRaw?(key: string, body: Uint8Array, contentType: string): Promise<string>;
   /** The collector's connection with its credential. Throws when none is usable. */
   connection(collector: CollectorRecord): Promise<Connection>;
   now(): Date;
@@ -260,11 +269,9 @@ export async function receiveDelivery(
   if (await ports.store.hasDelivery(collector.id, deliveryId))
     return { kind: "duplicate", deliveryId };
   const contentType = request.headers["content-type"] ?? "application/octet-stream";
-  const rawRef = await ports.putRaw(
-    rawBodyKey(collector.orgId, request.body),
-    request.body,
-    contentType,
-  );
+  const rawRef = ports.putRaw
+    ? await ports.putRaw(rawBodyKey(collector.orgId, request.body), request.body, contentType)
+    : null;
   const cloudevent = await screenEnvelope(
     ports,
     deliveryCloudEvent({ collectorId: collector.id, deliveryId, request }),
@@ -551,7 +558,7 @@ export async function reconcilePage(
   const listeningSince = Date.parse(collector.createdAt);
   try {
     const conn = await ports.connection(collector);
-    const page = await definition.listChangedSince(collector.cursor, conn);
+    const page = await definition.listChangedSince(collector.cursor, conn, config.data);
     const changes: ItemChange[] = [];
     let missed = 0;
     for (const item of page.items) {
@@ -765,7 +772,7 @@ export async function nightlyCount(
     let cursor: string | null = null;
     let finished = false;
     for (let i = 0; i < maxPages; i += 1) {
-      const page = await definition.listChangedSince(cursor, conn);
+      const page = await definition.listChangedSince(cursor, conn, config.data);
       for (const item of page.items) {
         if (seen.has(item.ref.providerId)) continue;
         seen.add(item.ref.providerId);

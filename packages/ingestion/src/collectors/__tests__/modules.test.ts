@@ -1,5 +1,6 @@
 // modules.ts registers the collector modules a build ships.
 import { afterEach, describe, expect, it } from "vitest";
+import { githubCollector } from "../github";
 import { registerCollectorModules } from "../modules";
 import { getCollector, listCollectorTypes, unregisterCollector } from "../registry";
 import type { CollectorType } from "../types";
@@ -19,6 +20,11 @@ describe("registerCollectorModules", () => {
     registerCollectorModules([{ github: github.definition }, { jira: jira.definition }]);
     expect(getCollector("github")).toBe(erased(github));
     expect(getCollector("jira")).toBe(erased(jira));
+  });
+
+  it("ships the GitHub Issues collector", () => {
+    registerCollectorModules();
+    expect(getCollector("github")).toBe(githubCollector);
   });
 
   it("registers the shipped list without throwing, and a second call changes nothing", () => {

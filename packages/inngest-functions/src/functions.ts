@@ -1,4 +1,13 @@
 import { contextLabelsBackfill } from "./functions/context.labels-backfill";
+import {
+  workIntakeCheck,
+  workIntakeCollect,
+  workIntakeCountSweep,
+  workIntakePrune,
+  workIntakeSweep,
+  workIntakeTriage,
+  workIntakeTriageOnFailure,
+} from "./functions/work.intake";
 import { steeringSync, steeringSyncSweep } from "./functions/steering.sync";
 import { mcpServerDiscover } from "./functions/mcp-server.discover";
 import { mcpServerSync } from "./functions/mcp-server.sync";
@@ -91,6 +100,14 @@ import { codeRepoCheck } from "./functions/code-repo.check";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const functions: any[] = [
   contextLabelsBackfill,
+  // Work intake and triage (P1-03, #5103).
+  workIntakeCollect,
+  workIntakeSweep,
+  workIntakeCountSweep,
+  workIntakeCheck,
+  workIntakeTriage,
+  workIntakeTriageOnFailure,
+  workIntakePrune,
   steeringSync,
   steeringSyncSweep,
   steeringRepoProvision,

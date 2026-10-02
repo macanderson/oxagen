@@ -186,6 +186,51 @@ describe("published", () => {
     ).resolves.toEqual({ workspace: null, organization: null });
   });
 
+  it("answers concurrent reads of one workspace with one read, and reads again after", async () => {
+    // A host route reads the skills and the Cedar policies at once.
+    const t = setup();
+    const [skills, cedar] = await Promise.all([
+      t.published.published({ ...SCOPE, runId: null }),
+      t.published.published({ ...SCOPE, runId: null }),
+    ]);
+    expect(t.readConnection).toHaveBeenCalledTimes(1);
+    expect(t.current).toHaveBeenCalledTimes(1);
+    expect(cedar).toBe(skills);
+    expect(skills.workspace?.version).toBe(3);
+
+    // A read that starts after the first settled goes to the store again, so
+    // a newly published version is seen on the next poll.
+    await t.published.published({ ...SCOPE, runId: null });
+    expect(t.current).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not join reads of two workspaces", async () => {
+    const t = setup();
+    await Promise.all([
+      t.published.published({ ...SCOPE, runId: null }),
+      t.published.published({ ...OTHER_WORKSPACE, runId: null }),
+    ]);
+    expect(t.readConnection).toHaveBeenCalledTimes(2);
+    expect(t.readConnection.mock.calls.map(([scope]) => scope)).toEqual([
+      SCOPE,
+      OTHER_WORKSPACE,
+    ]);
+  });
+
+  it("lets a failed read fail every caller that joined it, and reads again after", async () => {
+    const t = setup();
+    t.current.mockRejectedValueOnce(new Error("the store is down"));
+    const reads = [
+      t.published.published({ ...SCOPE, runId: null }),
+      t.published.published({ ...SCOPE, runId: null }),
+    ];
+    await expect(reads[0]).rejects.toThrow("the store is down");
+    await expect(reads[1]).rejects.toThrow("the store is down");
+    await expect(
+      t.published.published({ ...SCOPE, runId: null }),
+    ).resolves.toMatchObject({ workspace: { version: 3 } });
+  });
+
   it("is null for a workspace with no steering binding", async () => {
     const t = setup({ connection: null });
     await expect(

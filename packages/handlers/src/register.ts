@@ -17,6 +17,10 @@ import { setSteeringRepoHealthRunner } from "@oxagen/inngest-functions/steering-
 import { setSteeringRepoProvisionRunner } from "@oxagen/inngest-functions/steering-repo-provision-runner";
 import { setSteeringSyncRunner } from "@oxagen/inngest-functions/steering-sync-runner";
 import {
+  setWorkIntakeRunner,
+  type WorkIntakeRunner,
+} from "@oxagen/inngest-functions/work-intake-runner";
+import {
   registerHandler,
   registerHandlersOnce,
   type CapabilityHandlerFn,
@@ -286,6 +290,44 @@ registerHandlersOnce("@oxagen/handlers", () => {
       );
     },
   });
+  // Work intake and triage (P1-03, #5103) read GitHub and write the work
+  // records through this package, which @oxagen/inngest-functions cannot
+  // import. Each call loads the runner on its first use.
+  const workIntake = async (): Promise<WorkIntakeRunner> =>
+    (await import("./lib/work-intake/runner")).createWorkIntakeRunner();
+  setWorkIntakeRunner({
+    openDelivery: async (scope, id) => (await workIntake()).openDelivery(scope, id),
+    collectRef: async (scope, collectorId, ref) => (await workIntake()).collectRef(scope, collectorId, ref),
+    closeDelivery: async (scope, id) => (await workIntake()).closeDelivery(scope, id),
+    collectorTargets: async () => (await workIntake()).collectorTargets(),
+    reconcilePage: async (scope, collectorId, force) => (await workIntake()).reconcilePage(scope, collectorId, force),
+    finishReconcile: async (scope, collectorId, summary) => (await workIntake()).finishReconcile(scope, collectorId, summary),
+    count: async (scope, collectorId) => (await workIntake()).count(scope, collectorId),
+    triage: async (scope, item, retry) => (await workIntake()).triage(scope, item, retry),
+    recordTriageFailure: async (scope, item, reason) => (await workIntake()).recordTriageFailure(scope, item, reason),
+    prune: async (now) => (await workIntake()).prune(now),
+  });
+  registerHandler("create_work_item", () =>
+    import("./work.item.create").then((m) => m.workItemCreateHandler as CapabilityHandlerFn),
+  );
+  registerHandler("revise_work_triage", () =>
+    import("./work.triage.revise").then((m) => m.workTriageReviseHandler as CapabilityHandlerFn),
+  );
+  registerHandler("retry_work_triage", () =>
+    import("./work.triage.retry").then((m) => m.workTriageRetryHandler as CapabilityHandlerFn),
+  );
+  registerHandler("list_work_collectors", () =>
+    import("./work.collectors.list").then((m) => m.workCollectorsListHandler as CapabilityHandlerFn),
+  );
+  registerHandler("set_work_collector", () =>
+    import("./work.collector.set").then((m) => m.workCollectorSetHandler as CapabilityHandlerFn),
+  );
+  registerHandler("sync_work_collector", () =>
+    import("./work.collector.sync").then((m) => m.workCollectorSyncHandler as CapabilityHandlerFn),
+  );
+  registerHandler("get_work_priorities", () =>
+    import("./work.priorities.get").then((m) => m.workPrioritiesGetHandler as CapabilityHandlerFn),
+  );
   registerHandler("get_run_issue_providers", () =>
     import("./run.issue.providers.get").then(
       (m) => m.handler as CapabilityHandlerFn,

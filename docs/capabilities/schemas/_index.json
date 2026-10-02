@@ -552,6 +552,17 @@
       "consumes": []
     },
     {
+      "name": "create_work_item",
+      "domain": "work",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "create_workspace",
       "domain": "workspace",
       "surfaces": [
@@ -2178,6 +2189,17 @@
       "consumes": []
     },
     {
+      "name": "get_work_priorities",
+      "domain": "work",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_workspace_memory",
       "domain": "context",
       "surfaces": [
@@ -3165,6 +3187,17 @@
       "consumes": []
     },
     {
+      "name": "list_work_collectors",
+      "domain": "work",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_working_copies",
       "domain": "repository",
       "surfaces": [
@@ -3907,6 +3940,17 @@
       "consumes": []
     },
     {
+      "name": "retry_work_triage",
+      "domain": "work",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "reveal_secret",
       "domain": "secret",
       "surfaces": [
@@ -3923,6 +3967,17 @@
       "surfaces": [
         "api",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "revise_work_triage",
+      "domain": "work",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -4569,6 +4624,17 @@
       "consumes": []
     },
     {
+      "name": "set_work_collector",
+      "domain": "work",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "setup_schema",
       "domain": "schema",
       "surfaces": [
@@ -4743,6 +4809,17 @@
         "mcp",
         "cli",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "sync_work_collector",
+      "domain": "work",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

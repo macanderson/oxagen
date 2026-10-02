@@ -38,7 +38,12 @@
  *   2d. `pull_request` → store the state the delivery reports on every run
  *      row that names the pull request, in the workspaces connected to this
  *      installation (ADR-192).
- *   2e. `pull_request` → ask for the Oxagen check once per workspace that
+ *   2e. `issues` / `issue_comment` → hand the delivery to every work
+ *      collector that reads the repository (P1-03, #5103). Each verifies it
+ *      again, stores it once by delivery id, and a durable job fetches the
+ *      issue. A failure never fails the delivery: the 15-minute reconcile
+ *      reads the issue anyway.
+ *   2f. `pull_request` → ask for the Oxagen check once per workspace that
  *      links the repository (S2b, #5058). A steering repo's pull requests
  *      are left to the steering check.
  *   3. Resolve connected GitHub connection(s) for this installation + repo.
@@ -70,6 +75,10 @@ import {
   githubCodeCheckRequests,
   requestCodeRepoChecks,
 } from "@oxagen/handlers/code-repo-check/request";
+import {
+  WORK_DELIVERY_EVENTS,
+  routeGithubWorkDelivery,
+} from "@oxagen/handlers/lib/work-intake/delivery";
 import { eventClient } from "../../event-client";
 import { getConnector } from "@oxagen/ingestion/connectors";
 import { requireEnv } from "@oxagen/config/env";
@@ -403,6 +412,34 @@ githubAppWebhookRoute.post("/", async (c) => {
   // requests, and this asks nothing for them.
   if (eventName === "pull_request" && installationId)
     await requestCodeRepoCheck(body, installationId);
+
+  // ── Work intake (P1-03, #5103) ──────────────────────────────────────────
+  // An issue delivery reaches every work collector that reads its
+  // repository. GitHub does not redeliver a failed delivery on its own, so a
+  // failure here is logged, never answered with an error: the collector's
+  // 15-minute reconcile reads the issue and counts it as missed.
+  if (WORK_DELIVERY_EVENTS.has(eventName) && installationId) {
+    const workRepository = (body["repository"] as { full_name?: unknown } | null | undefined)?.full_name;
+    if (typeof workRepository === "string" && workRepository !== "") {
+      try {
+        await routeGithubWorkDelivery({
+          installationId,
+          repository: workRepository,
+          request: {
+            headers: c.req.header(),
+            body: payload,
+            receivedAt: new Date().toISOString(),
+          },
+          secret,
+        });
+      } catch (err) {
+        logger.error(
+          { err, eventName },
+          "GitHub App webhook: could not store an issue delivery for work intake; the collector's reconcile reads the issue",
+        );
+      }
+    }
+  }
 
   if (!installationId) {
     // No installation context to route on — ack so GitHub does not retry.

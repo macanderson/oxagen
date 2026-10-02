@@ -23,7 +23,8 @@
     "./run-pr-outcomes-runner": "./src/lib/run-pr-outcomes-runner.ts",
     "./interjection-timeout-runner": "./src/lib/interjection-timeout-runner.ts",
     "./no-progress-pause-runner": "./src/lib/no-progress-pause-runner.ts",
-    "./code-repo-check-runner": "./src/lib/code-repo-check-runner.ts"
+    "./code-repo-check-runner": "./src/lib/code-repo-check-runner.ts",
+    "./work-intake-runner": "./src/lib/work-intake-runner.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

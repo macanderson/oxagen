@@ -15,9 +15,12 @@
 // with one GraphQL query. A transferred issue gets a new node id, so it
 // arrives as a new work item.
 //
-// Scope. The contract passes no config to doorbell, fetchById, or
-// listChangedSince. listChangedSince reads every repository the connection
-// reaches, and the doorbell and fetchById take an issue from any of them.
+// Scope. The contract passes no config to doorbell or fetchById, so they take
+// an issue from any repository the connection reaches. The pipeline passes the
+// [scope] table to listChangedSince, which then reads only the repositories it
+// names, and fails when the connection cannot read one of them, so a lost
+// grant shows as a failing reconcile instead of an empty one. Called with no
+// config, it reads every repository the connection reaches.
 // githubItemInScope says whether an item sits in the repositories a collector
 // file names. toWorkItem gets the config, so it applies it and answers null
 // for an issue outside them, which the pipeline counts as skipped.
@@ -682,14 +685,36 @@ async function lastActors(token: string, nodeIds: string[]): Promise<Map<string,
   return out;
 }
 
-async function listChangedSince(cursor: Cursor, conn: Connection): Promise<Page<ProviderItem>> {
+/**
+ * The repositories a reconcile reads: the ones the scope names, spelled as
+ * GitHub spells them, or every reachable one when there is no scope. Throws
+ * when the connection cannot read a repository the scope names.
+ */
+async function reposToRead(token: string, config: GitHubCollectorConfig | undefined): Promise<string[]> {
+  const reachable = await reachableRepos(token);
+  if (config === undefined) return reachable;
+  const byName = new Map(reachable.map((name) => [name.toLowerCase(), name]));
+  const missing = config.repos.filter((name) => !byName.has(name.toLowerCase()));
+  if (missing.length > 0) {
+    throw new Error(
+      `The GitHub connection cannot read ${missing.join(", ")}. Give the Oxagen GitHub App access to each repository the collector names, or reconnect GitHub.`,
+    );
+  }
+  return [...new Set(config.repos.map((name) => byName.get(name.toLowerCase()) as string))];
+}
+
+async function listChangedSince(
+  cursor: Cursor,
+  conn: Connection,
+  config?: GitHubCollectorConfig,
+): Promise<Page<ProviderItem>> {
   const token = tokenOf(conn);
   const startedMs = Date.now();
   const cursorMs = cursor === null ? null : parseTime(cursor, "reconcile cursor");
   const collected = new Map<string, { raw: unknown; issue: Issue }>();
   let maxUpdatedMs: number | null = null;
   let minBoundaryMs: number | null = null;
-  for (const repo of await reachableRepos(token)) {
+  for (const repo of await reposToRead(token, config)) {
     const read = await readRepoIssues(token, repo, cursorMs);
     for (const entry of read.issues) collected.set(entry.issue.node_id, entry);
     if (read.maxUpdatedMs !== null) {
@@ -746,6 +771,7 @@ function toWorkItem(item: ProviderItem, config: GitHubCollectorConfig): WorkItem
     priorityRaw: priority?.raw ?? null,
     estimateMinutes: null,
     tainted: ["subject", "description"],
+    sourceRepository: repositoryOf(issue.repository_url),
   };
 }
 
