@@ -6,7 +6,7 @@
 - **Related:** issue #4897 (lane P1-02), `agent-work-phase-1.html` in
   `macanderson/oxagen-roadmap` (Data contract, Work lifecycle, Delivery and
   review), the P1-01 inventory on oxagen-roadmap#272, the decision on
-  oxagen-roadmap#279, migration `20261002010000_work_records.sql`,
+  oxagen-roadmap#279, migration `20261002020000_work_records.sql`,
   `packages/work/src/records/`, `packages/handlers/src/lib/work-records/store.ts`.
 
 ## Context

@@ -1,8 +1,8 @@
 "use client";
 // The repository dialog (mockup `DLG_EXT.repo`): one repository's production
 // branch and its head, its visibility, what it holds under `.oxagen/`, its
-// events, and the facts no store records yet, each said as such; then what
-// records published there steer, or that there is nowhere to publish one.
+// events, and the facts no store records yet, each said as such; then where
+// its records live. Every record lives in the steering repository (ADR-212).
 //
 // The footer carries the role's one move. A linked repository offers Unlink
 // (red; opens the confirm), one that is not linked offers Link to this

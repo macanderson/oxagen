@@ -20,7 +20,7 @@ with a record already published.
 - API: `POST /v1/:org_slug/:workspace_slug/context/steering/import/parse`, returns 200
 - MCP: `parse_markdown_import`
 - Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It needs no approval (`riskLevel: low`).
-- CLI: `oxagen memory import <files...>` reads every file as `records` and prints the rows
+- CLI: `oxagen steering import <paths...>` reads files and the Markdown files under folders, each with the target its text implies or the one `--as` names. `oxagen memory import <files...>` reads every file as `records`. Both print the rows.
 - Authentication: org Owner or Admin, or workspace Owner or Member, checked by the handler
 - Billed: one balanced-tier model call per file it splits, counted as in-app agent spend
 

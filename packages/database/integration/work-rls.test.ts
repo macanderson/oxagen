@@ -3,7 +3,7 @@
  *
  * 20260929000000_work_schema.sql creates ten tables in the work schema, from
  * collectors and work items to done records and training exports, and
- * 20261002010000_work_records.sql adds the Phase 1 work records: briefs,
+ * 20261002020000_work_records.sql adds the Phase 1 work records: briefs,
  * orders, and item facts (P1-02, #4897). Each one forces RLS and carries two
  * policies: tenant_isolation (org and workspace must match the GUCs) and
  * tenant_org_wide_read (org must match when app.org_wide is on).

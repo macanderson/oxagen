@@ -284,9 +284,11 @@ describe("tenant policy manifest", () => {
     // done_verdicts, autonomy_events and training_exports (C0, #4735,
     // 2026-09-29).
     // 163 adds mcp.studio_listings (ADR-233, #4756, 2026-09-30).
-    // 166 adds the Phase 1 work records: work.briefs, work.orders and
+    // 164 adds billing.gau_signup_grants, one org_only row per organization
+    // (ADR-241 signup grant, #4886, 2026-10-01).
+    // 167 adds the Phase 1 work records: work.briefs, work.orders and
     // work.item_facts (P1-02, #4897, 2026-10-01).
-    expect(POLICY_MANIFEST.length).toBe(166);
+    expect(POLICY_MANIFEST.length).toBe(167);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

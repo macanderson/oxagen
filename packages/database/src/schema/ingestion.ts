@@ -596,6 +596,16 @@ export const repositoryBindingHeads = ingestionSchema.table(
       t.orgId,
       t.workspaceId,
     ),
+    // The trigger's cross-tenant lookup: every head for one repository, in
+    // every workspace and of either role (#3340 finding 4). It runs on every
+    // head insert and relevant update while the writer holds the
+    // repository's advisory lock. The two indexes above cannot serve it: one
+    // leads with the connection, the other is partial on the steering role.
+    // Without this one each head write scans the table under that lock.
+    repositoryLookupIdx: index("repository_binding_heads_repository_idx").on(
+      t.provider,
+      t.providerRepositoryId,
+    ),
     roleCheck: check(
       "repository_binding_heads_role_check",
       sql`${t.role} IN ('linked', 'steering')`,

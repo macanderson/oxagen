@@ -29,6 +29,7 @@ import { PAGE_FAILURES, readError } from "@/data/read";
 import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
 import { Money } from "@/ui/money";
+import { RouteTabPanel } from "@/ui/route-tabs";
 import { GovernedActionsTab } from "./actions-tab";
 import { ChainTab } from "./chain";
 import { CostTab } from "./cost";
@@ -44,7 +45,6 @@ import type { FrameTabProps, RunTabProps } from "./tab-props";
 import {
   RUN_TAB_PANEL,
   RunTabs,
-  runTabId,
   type Tab,
   type TabFigure,
   tabOf,
@@ -416,15 +416,13 @@ export async function Run({
           />
           <StatRow run={run} metrics={metrics} />
           <Tabs props={props} parked={parked} selected={selected} />
-          <div
-            id={RUN_TAB_PANEL}
-            role="tabpanel"
-            aria-labelledby={runTabId(selected)}
+          <RouteTabPanel
+            panel={RUN_TAB_PANEL}
             data-testid={`run-tab-${selected}`}
             className="flex flex-col gap-3.5"
           >
             {section}
-          </div>
+          </RouteTabPanel>
         </div>
         <RunSide>
           <Suspense fallback={<ChangesLoading />}>

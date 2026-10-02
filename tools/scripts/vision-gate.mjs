@@ -8,6 +8,10 @@
  * run")? The verdict is advisory — it posts a sticky PR comment + step summary and never fails the
  * build unless VISION_GATE_STRICT=1.
  *
+ * It asks a second question of the same diff (#3202): does a doc or runbook in
+ * the diff claim a control is on while the code leaves it off? A doc-drift
+ * finding is a warning. It never fails the build, in strict mode or out of it.
+ *
  * Usage:  pnpm check:vision                 (reads AI_GATEWAY_API_KEY)
  *         VISION_GATE_BASE=origin/main node tools/scripts/vision-gate.mjs
  *
@@ -22,10 +26,34 @@ import { pathToFileURL } from "node:url";
 
 export const COMMENT_MARKER = "<!-- oxagen:vision-gate v1 -->";
 export const MAX_DIFF_CHARS = 60_000;
+/** The doc and runbook files' own budget, apart from {@link MAX_DIFF_CHARS}. */
+export const MAX_DOC_DIFF_CHARS = 40_000;
 export const VERDICTS = ["advances", "neutral", "drifts"];
 
 const GATEWAY_ENDPOINT = "https://ai-gateway.vercel.sh/v1/chat/completions";
 const DEFAULT_MODEL = "anthropic/claude-sonnet-5";
+
+/**
+ * The doc-drift question (#3202). It is judged apart from the verdict, and its
+ * answer is advisory only: a finding warns and never fails the build.
+ */
+export const DOC_DRIFT_QUESTION = [
+  "=== DOC-DRIFT QUESTION (separate from the verdict) ===",
+  "Does a doc or runbook in the diff claim a control is on while the code in",
+  "the diff leaves it off? Read every changed file a person follows to run or",
+  "judge the system: docs/capabilities/**, other Markdown, and operator",
+  "guidance under infra/**, including comments in a Caddyfile, a Terraform",
+  "template, or a deploy script. A control is a check, a limit, a refusal, a",
+  "signature, an encryption, or an allow list. Report a claim when the doc says",
+  "a setting turns the control on and the code reads a different setting,",
+  "ignores the one named, or no longer has it, or when the doc says the control",
+  "runs and the code skips or removed it. Each finding names the file, quotes",
+  "the claim, and says what the code does instead. Report only what the diff",
+  "shows. When nothing qualifies, or the diff changes no doc, return",
+  '"doc_drift": []. A doc-drift finding does not change the verdict.',
+  "The changed docs and runbooks are in the DOC AND RUNBOOK DIFF section,",
+  "and the code they describe is in the DIFF section.",
+].join("\n");
 
 /** Paths whose churn says nothing about product direction. */
 const DIFF_EXCLUDES = [
@@ -37,6 +65,35 @@ const DIFF_EXCLUDES = [
 
 function log(...a) {
   console.log("[vision-gate]", ...a);
+}
+
+/**
+ * Whether a changed path is a doc or runbook the doc-drift question reads:
+ * Markdown anywhere, everything under docs/, and operator guidance under
+ * infra/.
+ */
+export function isDocPath(path) {
+  return (
+    /\.mdx?$/i.test(path) ||
+    path.startsWith("docs/") ||
+    path.startsWith("infra/")
+  );
+}
+
+/**
+ * Split a patch into its doc and runbook files and everything else, so each
+ * part gets its own budget. On a large change the product files fill
+ * {@link MAX_DIFF_CHARS} first, and the doc-drift question would read no doc
+ * at all (Codex review on #4936).
+ */
+export function partitionDiff(patch) {
+  const docs = [];
+  const product = [];
+  for (const file of patch.split(/^(?=diff --git )/m)) {
+    const header = /^diff --git a\/(\S+) b\//.exec(file);
+    (header !== null && isDocPath(header[1]) ? docs : product).push(file);
+  }
+  return { product: product.join(""), docs: docs.join("") };
 }
 
 /** Truncate a patch to `limit` chars, noting how much was omitted. */
@@ -80,13 +137,17 @@ export function buildPrompt(vision, pr, stat, patch) {
     '  "summary": "<one sentence: what the change does and why the verdict>",',
     '  "reasons": ["<specific evidence from the diff>", ...],',
     '  "drift_flags": ["<only when drifting: which vision rule it breaks>", ...],',
-    '  "recommendation": "<how to realign or deepen alignment, one sentence>"',
+    '  "recommendation": "<how to realign or deepen alignment, one sentence>",',
+    '  "doc_drift": [{ "file": "<path>", "claim": "<what the doc says>", "code": "<what the code does>" }, ...]',
     "}",
+    "",
+    DOC_DRIFT_QUESTION,
     "",
     "=== VISION DOCUMENT (docs/VISION.md) ===",
     vision,
   ].join("\n");
 
+  const { product, docs } = partitionDiff(patch);
   const user = [
     `PR title: ${pr.title || "(none)"}`,
     `PR description: ${pr.body || "(none)"}`,
@@ -95,7 +156,12 @@ export function buildPrompt(vision, pr, stat, patch) {
     stat,
     "",
     "=== DIFF ===",
-    truncateDiff(patch),
+    truncateDiff(product),
+    "",
+    "=== DOC AND RUNBOOK DIFF ===",
+    docs
+      ? truncateDiff(docs, MAX_DOC_DIFF_CHARS)
+      : "(no doc or runbook changed)",
   ].join("\n");
 
   return { system, user };
@@ -114,6 +180,7 @@ export function parseVerdict(text) {
     reasons: [],
     drift_flags: [],
     recommendation: "Re-run the gate or judge manually against docs/VISION.md.",
+    doc_drift: [],
   };
   if (typeof text !== "string") return inconclusive;
   const start = text.indexOf("{");
@@ -134,10 +201,48 @@ export function parseVerdict(text) {
         : [],
       recommendation:
         typeof parsed.recommendation === "string" ? parsed.recommendation : "",
+      doc_drift: parseDocDrift(parsed.doc_drift),
     };
   } catch {
     return inconclusive;
   }
+}
+
+/**
+ * The doc-drift findings in a reply, each `{ file, claim, code }`. A finding
+ * with no claim is dropped, and anything that is not a list reads as none, so
+ * a malformed answer can never invent a warning.
+ */
+export function parseDocDrift(raw) {
+  if (!Array.isArray(raw)) return [];
+  const text = (value) => (typeof value === "string" ? value.trim() : "");
+  return raw
+    .filter((item) => item !== null && typeof item === "object")
+    .map((item) => ({
+      file: text(item.file),
+      claim: text(item.claim),
+      code: text(item.code),
+    }))
+    .filter((item) => item.claim !== "");
+}
+
+/** One line per finding, for the log and the annotation. */
+export function docDriftLine(finding) {
+  const where = finding.file === "" ? "" : `${finding.file}: `;
+  const code = finding.code === "" ? "" : ` The code: ${finding.code}`;
+  return `${where}${finding.claim}${code}`;
+}
+
+/**
+ * A GitHub warning annotation for one finding. The workflow command ends at a
+ * newline, so a newline in the text is escaped the way GitHub reads it back.
+ */
+export function docDriftAnnotation(finding) {
+  const message = docDriftLine(finding)
+    .replaceAll("%", "%25")
+    .replaceAll("\r", "%0D")
+    .replaceAll("\n", "%0A");
+  return `::warning title=Vision Gate doc drift::${message}`;
 }
 
 const BADGE = {
@@ -168,15 +273,27 @@ export function renderComment(v, model) {
   if (v.recommendation) {
     lines.push("", `**Recommendation:** ${v.recommendation}`);
   }
+  const docDrift = v.doc_drift ?? [];
+  if (docDrift.length) {
+    lines.push(
+      "",
+      "**Doc drift (advisory):** a doc or runbook in this diff claims a control is on while the code leaves it off. Link the setting's `ENV_REGISTRY` entry instead of naming what turns it on (AGENTS.md).",
+      ...docDrift.map((f) => {
+        const where = f.file === "" ? "" : `\`${f.file}\`: `;
+        const code = f.code === "" ? "" : ` The code: ${f.code}`;
+        return `- ${where}${f.claim}${code}`;
+      }),
+    );
+  }
   lines.push(
     "",
     "---",
-    `<sub>Advisory verdict from \`${model}\` judging this diff against [docs/VISION.md](../blob/main/docs/VISION.md) — the agent control plane north star. A drift verdict never blocks merge; it asks for a stated justification or a redirect. Confidence: ${v.confidence.toFixed(2)}.</sub>`,
+    `<sub>Advisory verdict from \`${model}\` judging this diff against [docs/VISION.md](../blob/main/docs/VISION.md) — the agent control plane north star. A drift verdict never blocks merge; it asks for a stated justification or a redirect. A doc-drift finding never blocks either. Confidence: ${v.confidence.toFixed(2)}.</sub>`,
   );
   return lines.join("\n");
 }
 
-/** Strict mode is the only way the gate can fail a build. */
+/** Strict mode is the only way the gate can fail a build, and only on a drift verdict. Doc drift never fails it. */
 export function shouldFail(v, strict) {
   return Boolean(strict) && v.verdict === "drifts";
 }
@@ -207,7 +324,7 @@ async function callGateway(apiKey, model, prompt) {
     body: JSON.stringify({
       model,
       temperature: 0,
-      max_tokens: 1500,
+      max_tokens: 2000,
       messages: [
         { role: "system", content: prompt.system },
         { role: "user", content: prompt.user },
@@ -313,6 +430,7 @@ async function main() {
   for (const f of verdict.drift_flags) log(`  drift flag: ${f}`);
   if (verdict.recommendation)
     log(`  recommendation: ${verdict.recommendation}`);
+  for (const f of verdict.doc_drift) log(`  doc drift: ${docDriftLine(f)}`);
 
   if (process.env.GITHUB_STEP_SUMMARY) {
     appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${comment}\n`);
@@ -321,6 +439,8 @@ async function main() {
     // GitHub annotation — surfaces on the PR checks tab even without a comment.
     console.log(`::warning title=Vision Gate::${verdict.summary}`);
   }
+  // Doc drift warns on the checks tab too, and never sets the exit code.
+  for (const f of verdict.doc_drift) console.log(docDriftAnnotation(f));
 
   const token = process.env.GITHUB_TOKEN;
   const repo = process.env.GITHUB_REPOSITORY;

@@ -7,9 +7,14 @@
 // reload and a shared link. A count follows a tab only where the frame read its
 // rows, and it is the length of the table that tab draws.
 //
+// The row is a `RouteTabs` row (ADR-243): a tablist of
+// links with one tab stop and the arrow keys. The selected tab names the panel
+// the page draws under the row (`ORGANIZATION_PANEL`).
+//
 // Cost centers and Single sign-on are not in the design's row. Their pages
-// keep rendering under this row with no tab marked current: Single sign-on is
-// linked from the IdP group mappings on Roles, and Cost centers keeps its URL
+// keep rendering under this row with no tab selected, so their bodies are no
+// tab's panel (`inOrganizationRow`): Single sign-on is linked from the IdP
+// group mappings on Roles, and Cost centers keeps its URL
 // (`/{org}?tab=costCenters`) until the design gives it a home.
 import { useTranslations } from "next-intl";
 import { routes } from "@/shared/safe-path";
@@ -26,6 +31,14 @@ export type OrganizationTab =
   | "costCenters"
   | "sso"
   | "notifications";
+
+/** The id of the panel an Organization page draws under the row. */
+export const ORGANIZATION_PANEL = "organization-panel";
+
+/** Whether the row draws `tab`; Cost centers and Single sign-on render under it unselected. */
+export function inOrganizationRow(tab: OrganizationTab): boolean {
+  return tab !== "costCenters" && tab !== "sso";
+}
 
 /** The rows behind the four counted tabs; a count the frame did not read is left off. */
 type TabCounts = Partial<
@@ -50,12 +63,13 @@ export function OrganizationTabs({
     to,
     label: t(key),
     current: current === key,
+    name: key,
     ...(count === undefined ? {} : { count }),
   });
   return (
     <RouteTabs
       label={t("label")}
-      tablist
+      panel={ORGANIZATION_PANEL}
       tabs={[
         tab("people", routes.people(org), counts.people),
         tab("roles", routes.roles(org), counts.roles),

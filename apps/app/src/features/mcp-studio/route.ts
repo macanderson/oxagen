@@ -6,6 +6,9 @@
 import { pathOf, type SafePath } from "@/shared/safe-path";
 
 export const STUDIO_TABS = ["tools", "connection", "try", "changes"] as const;
+
+/** The id of the panel a server page draws under its tabs. */
+export const STUDIO_PANEL = "studio-panel";
 export type StudioTab = (typeof STUDIO_TABS)[number];
 
 /** The workspace a Studio link points into. */

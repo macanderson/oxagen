@@ -317,6 +317,14 @@ Load the `clear-prose` skill (`.claude/skills/clear-prose/SKILL.md`) before you 
 - **It pairs with `oxagen-branding`.** Branding owns positioning, vocabulary, and the visual system. `clear-prose` owns the sentences. Customer-facing copy needs both.
 - **Check before you ship.** `pnpm check:prose` scans `apps/web` and `apps/docs` and fails on em dashes, exclamation points, and the avoid list. Text outside those two apps has no scanner, so read it once against the skill's "Before shipping" questions.
 
+### Settings in docs and runbooks
+
+Mac set this on 2026-10-01 (#3202). A capability doc (`docs/capabilities/**`) or an operator runbook (anything under `infra/**`, comments in a Caddyfile or a deploy script included) does not say which setting, or which value of it, turns a control on or off. It says the control depends on a deployment setting and links that setting's `ENV_REGISTRY` entry instead. In Markdown, write the link as ``[`NAME`](<relative path>/packages/config/src/registry.ts)``. In a comment, give the name and that path. The entry's `description` in `packages/config/src/registry.ts` is the one place that says what a setting turns on, so a change to the control changes one line. When you change a description, regenerate `.env.example` from it (`pnpm env:check --write`).
+
+- **Why.** On #3169 four docs told an operator a control was on while the code had it off. An operator following `Caddyfile.alb` would have set a variable that turned nothing on and believed a limit against password guessing was running.
+- **What stays in the doc.** What the control does, its limits, and its error codes. A payload example, a test note, or a table of parameter names that claims nothing about what turns on is not a claim.
+- **The Vision Gate asks too.** Its doc-drift question warns on a PR whose diff has a doc or runbook claim a control is on while the code leaves it off. It never blocks a merge.
+
 ### UI Component Import Convention
 
 **Never import `@oxagen/ui/components/*` directly in app code.** Each app imports UI through its own local layer, and which layer that is differs per app. (`apps/admin` and `apps/website` do not exist in this monorepo — the 6 apps are `api`, `app`, `cli`, `docs`, `mcp`, `web`.)

@@ -561,7 +561,9 @@ export async function readGitHubConnection(scope: {
           eq(schema.repositoryBindingHeads.orgId, scope.orgId),
           eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
           // Only the steering head steers. Its role is 'steering', and
-          // 'linked' marks a repository that only receives PRs. A reader
+          // 'linked' marks a code repository the workspace's agents work in,
+          // which receives no Context PR, because every record lives in the
+          // steering repository (ADR-212). A reader
           // that ignores the column goes on resolving through a linked
           // head, so the cross-workspace steering collision the index
           // forbids would survive the reconciliation meant to end it.

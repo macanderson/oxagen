@@ -215,6 +215,11 @@ describe("Agent tabs", () => {
       ]),
     );
     expect(selected()).toEqual(["overview"]);
+    // The selected tab names the panel the page draws, and the panel takes
+    // that tab as its label (ADR-243).
+    const panel = screen.getByRole("tabpanel", { name: "Overview" });
+    expect(tabs()[0]).toHaveAttribute("aria-controls", panel.id);
+    expect(tabs()[0]).toHaveAttribute("tabindex", "0");
   });
 
   it("counts the belt width and the tamper incidents, and draws no badge for zero mandates", async () => {

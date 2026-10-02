@@ -146,9 +146,9 @@ async function unadmitted(view: ServedView, ports: ServedPorts, name: string): P
       return failure(
         `The organization has no governed actions left this period, so Oxagen did not send ${name}. Ask an organization admin to add units in Billing.`,
       );
-    case "no_payment_method":
+    case "subscription_required":
       return failure(
-        `The organization used this month's free governed actions, so Oxagen did not send ${name}. Ask an organization admin to add a payment method in Billing.`,
+        `The organization has used or outlived its signup grant, so Oxagen did not send ${name}. Ask an organization admin to add a card and choose a plan in Billing.`,
       );
     case "suspended":
       return failure(

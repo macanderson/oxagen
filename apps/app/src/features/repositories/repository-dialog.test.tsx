@@ -138,16 +138,22 @@ describe("the repository dialog", () => {
     ).toHaveTextContent("trunk is missing on GitHub");
   });
 
-  it("scopes a governed linked repository's records to runs bound to it, and links to its changes", async () => {
+  // #3340: every record lives in the steering repository (ADR-212), so the
+  // dialog promises a linked repository no records and no pull requests.
+  it("says a governed linked repository's records live in the steering repository, and links to its changes", async () => {
     const user = userEvent.setup();
     const root = dialog(LINKED);
-    expect(root).toHaveTextContent("Scope is repository.");
+    expect(root).toHaveTextContent(
+      "Every record lives in the steering repository",
+    );
+    expect(root).not.toHaveTextContent("Scope is repository");
+    expect(root).not.toHaveTextContent("Context PR");
     expect(root).toHaveTextContent("1 file at fedcba9");
     await user.click(within(root).getByTestId("repository-dialog-changes"));
     expect(handlers.onSeeChanges).toHaveBeenCalledTimes(1);
   });
 
-  it("says a linked repository with no tree is steered by itself when no main repository is bound", () => {
+  it("says a linked repository with no tree is steered by the repository it names when no main repository is bound", () => {
     const root = dialog(
       {
         ...LINKED,
@@ -160,7 +166,7 @@ describe("the repository dialog", () => {
     );
     expect(
       within(root).getByTestId("repository-dialog-ungoverned"),
-    ).toHaveTextContent("steered by acme/docs-site and by nothing of its own");
+    ).toHaveTextContent("steered by acme/docs-site, where every record lives");
   });
 
   it("points at the init pull request that is waiting to be merged", () => {
