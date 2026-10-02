@@ -14,7 +14,9 @@
 // server, once per parked call, alone and without the Fleet panel around it,
 // and handed to the drawer as an element: the
 // same component Fleet and Run draw, so a call reads the same wherever it is
-// decided, and its Approve and Deny are the same governed write.
+// decided, and its Approve and Deny are the same governed write. The card's
+// agent hop takes the harness its workspace's read resolved, as the drawer's
+// row does (#4871).
 import "server-only";
 import type { ReactNode } from "react";
 import type { DataSource } from "@/data/ports";
@@ -44,6 +46,7 @@ export async function ShellChrome({
           now={data.approvals.readAt}
           org={data.org.slug}
           ws={place.slug}
+          agentHarnesses={place.harnesses}
         />
       );
   }

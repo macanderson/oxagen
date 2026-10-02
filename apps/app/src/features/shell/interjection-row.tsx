@@ -11,9 +11,13 @@
 // #3941). A free-text question has no answer form in the app yet; it is
 // answered on the API, MCP, or CLI. The row never offers an answer it cannot
 // send.
+//
+// A row that names the agent leads with its avatar and the harness it
+// registered in the corner (#4871); a row with no agent keeps the speech mark.
 import { ChatCircleDotsIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import type { InterjectionItem } from "@/data/contracts/interjections";
+import { AgentAvatar } from "@/ui/agent-avatar";
 import { linkText } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { routes } from "@/shared/safe-path";
@@ -29,6 +33,7 @@ export function InterjectionRow({
   now,
   countdown,
   agent,
+  harness,
 }: {
   item: InterjectionItem;
   org: string;
@@ -40,6 +45,8 @@ export function InterjectionRow({
   countdown: (at: number, now: number) => string | null;
   /** The agent's short name, or null when the writer recorded none. */
   agent: string | null;
+  /** The harness the agent registered, or null when it is not known. */
+  harness: string | null;
 }) {
   const t = useTranslations("shell.approvals");
   const at = Date.parse(item.expiresAt);
@@ -50,12 +57,20 @@ export function InterjectionRow({
       data-testid="interjection-row"
       className="flex items-start gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5 text-card-foreground"
     >
-      <span
-        aria-hidden="true"
-        className="grid size-7 flex-none place-items-center rounded-lg border border-border bg-card text-info"
-      >
-        <ChatCircleDotsIcon className="size-3.5" />
-      </span>
+      {agent === null ? (
+        <span
+          aria-hidden="true"
+          className="grid size-7 flex-none place-items-center rounded-lg border border-border bg-card text-info"
+        >
+          <ChatCircleDotsIcon className="size-3.5" />
+        </span>
+      ) : (
+        <AgentAvatar
+          value={null}
+          initials={agent.slice(0, 2).toUpperCase()}
+          harness={harness}
+        />
+      )}
       <span className="min-w-0 flex-1">
         <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           {t("interjection.kind")}

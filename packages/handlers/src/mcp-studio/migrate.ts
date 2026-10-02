@@ -30,6 +30,10 @@
 // and the total. Registry writes switch to steering PRs only after the last
 // batch merges (steeringWriter in @oxagen/agent/runtime/steering-pr).
 //
+// migration-run.ts calls migrate() for migrate_tools_to_steering and for
+// steering repo provisioning, and records each PR it opens, so a retry
+// answers the open PR instead of opening a second one (ADR-245).
+//
 // createServerFolderWriter() builds the same folders one server at a time for
 // the direct paths (agent.mcp.register, plugin.set_enabled, import_tools) once
 // that switch is on. It adds a proposed row's folder, or adds pinned tools to
@@ -101,8 +105,11 @@ import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { stringify } from "smol-toml";
 import { logger } from "../logger";
 
-/** The capability a migration reads and writes the registry under. */
-export const MIGRATE_CAPABILITY = "migrate_tool_servers";
+/**
+ * The capability a migration reads and writes the registry under:
+ * migrate_tools_to_steering, which starts every migration (ADR-245).
+ */
+export const MIGRATE_CAPABILITY = "migrate_tools_to_steering";
 
 const FOLDER_MAX = 24;
 const TOOL_KEY_LIMIT = TOOL_NAME_MAX - 1 - TOOL_SEPARATOR.length;

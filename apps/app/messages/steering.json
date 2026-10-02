@@ -647,6 +647,171 @@
       "skill": "Add a skill",
       "record": "Write a context record"
     },
+    "import": {
+      "button": "Import Markdown",
+      "title": "Import Markdown",
+      "intro": "Choose a target for each file, then review its statements.",
+      "review": "Review statements",
+      "reviewPending": "Reading the files",
+      "parsing": "Splitting the files into statements: {done, number} of {total, plural, one {# file} other {# files}} read.",
+      "back": "Back",
+      "commit": "Open steering PR",
+      "commitPending": "Opening the steering PR",
+      "cancel": "Cancel",
+      "close": "Close",
+      "drop": {
+        "label": "Drop Markdown files or a folder",
+        "chooseFiles": "Choose files",
+        "chooseFolder": "Choose a folder",
+        "filesInput": "Markdown files to import",
+        "folderInput": "Folder of Markdown files to import",
+        "reading": "Reading the files in this browser.",
+        "none": "What you chose holds no Markdown file. Choose .md or .markdown files.",
+        "tooMany": "An import takes at most {max, number} Markdown files. Choose a smaller folder.",
+        "unreadable": "The browser could not read those files. Choose them again.",
+        "ignored": "{count, plural, one {# file that is not Markdown stays out.} other {# files that are not Markdown stay out.}}"
+      },
+      "files": {
+        "label": "Files to import",
+        "columns": {
+          "file": "File",
+          "target": "Target",
+          "path": "Path",
+          "status": "Status"
+        },
+        "lines": "{count, plural, one {# line} other {# lines}}",
+        "targetLabel": "Target of {file}",
+        "count": "{count, plural, one {# file.} other {# files.}}",
+        "from": "{count, plural, one {# file} other {# files}} from {folder}.",
+        "out": "{count, plural, one {# file stays out.} other {# files stay out.}}"
+      },
+      "targets": {
+        "records": "Steering records",
+        "policies": "Cedar policy",
+        "skip": "Skip",
+        "memories": "Memories",
+        "memoriesHint": "Arrives with memory collection"
+      },
+      "paths": {
+        "records": "steering/",
+        "policies": "policy/",
+        "none": "Nothing"
+      },
+      "status": {
+        "ready": "Ready",
+        "skipped": "Skipped",
+        "notRead": "Not read",
+        "statements": "{count, plural, one {# statement} other {# statements}}",
+        "rules": "{count, plural, one {# rule} other {# rules}}",
+        "cedarError": "Cedar error on line {line}",
+        "cedarProblem": "Cedar error",
+        "matchesPolicy": "Matches {path}",
+        "replacesPolicy": "Replaces {path}"
+      },
+      "reasons": {
+        "index": "An index of the other files",
+        "links": "Only headings and links",
+        "memory": "A Claude Code memory file",
+        "empty": "The file is empty",
+        "tooLarge": "Over {max, number} characters",
+        "pathTooLong": "Path over {max, number} characters"
+      },
+      "grid": {
+        "intro": "Records and policies open one steering PR. Nothing steers until it merges.",
+        "tokens": "The must and should rows add {count, plural, one {# token} other {# tokens}} to every request.",
+        "label": "Statements to import",
+        "columns": {
+          "import": "Import",
+          "statement": "Statement",
+          "kind": "Kind",
+          "force": "Force",
+          "words": "Words",
+          "source": "Source",
+          "marks": "Marks"
+        },
+        "importLabel": "Import line {line} of {file}",
+        "kindLabel": "Kind of line {line} of {file}",
+        "effectLabel": "Effect of line {line} of {file}",
+        "forceLabel": "Force of line {line} of {file}",
+        "conflictLabel": "Settle the conflict on line {line} of {file}",
+        "fromFrontmatter": "From its frontmatter",
+        "yourChoice": "Your choice",
+        "tokensPerRequest": "{count, plural, one {# token} other {# tokens}} per request",
+        "quoted": "“{words}”",
+        "none": "None",
+        "kept": "Kept",
+        "notRead": "Not read",
+        "statements": "{count, plural, one {# statement} other {# statements}}",
+        "rules": "{count, plural, one {# rule} other {# rules}}",
+        "empty": "Nothing to review. Go back and give a file a target other than Skip.",
+        "unmatched": "The files went in several calls and are too large to compare with each other here. The steering PR's conflicts check compares them before it merges.",
+        "summary": "{records, plural, one {# record} other {# records}} and {policies, plural, one {# policy} other {# policies}}.",
+        "out": "{count, plural, one {# statement stays out.} other {# statements stay out.}}",
+        "open": "Choose for {count, plural, one {# conflict} other {# conflicts}} before the PR opens.",
+        "tooMany": "The import puts {count, number} files in the steering PR, and one PR holds at most {max, number}. Leave {over, number} out, or import the files in smaller sets."
+      },
+      "why": {
+        "chosen": "Your choice",
+        "only": "Takes {force} only",
+        "points": "Points to {force}",
+        "capped": "Goes up to {force}",
+        "default": "Default for the kind"
+      },
+      "kinds": {
+        "business-rule": "Business rule",
+        "code-rule": "Code rule",
+        "constraint": "Constraint",
+        "procedure": "Procedure",
+        "skill": "Skill",
+        "fact": "Fact",
+        "preference": "Preference",
+        "memory": "Memory"
+      },
+      "effects": {
+        "require": "Require",
+        "forbid": "Forbid"
+      },
+      "marks": {
+        "duplicate": "Duplicate",
+        "conflict": "Conflict",
+        "update": "Update",
+        "replaced": "Replaced",
+        "matches": "Matches {record}",
+        "conflictsWith": "With {record}",
+        "replacedBy": "By line {line} of {file}",
+        "rowRef": "line {line} of {file}"
+      },
+      "choices": {
+        "choose": "Choose",
+        "keep": "Keep the record",
+        "replace": "Replace the record"
+      },
+      "done": {
+        "opened": "Opened steering PR #{number} on {branch}. Nothing steers until it merges.",
+        "counts": "{records, plural, one {# record} other {# records}} and {policies, plural, one {# policy file} other {# policy files}} in the PR.",
+        "link": "Open pull request #{number}"
+      },
+      "failure": {
+        "denied": "Your roles in this workspace do not allow an import. A workspace Owner or Member, or an organization Owner or Admin, can import.",
+        "conflictUnresolved": "A conflict still needs a choice. Choose for every conflict, then open the steering PR.",
+        "policyInvalid": "A policy file failed its checks. Set its target to Skip, or fix the file and review it again.",
+        "nothingToImport": "Every row is marked skip. Tick at least one statement before you open the steering PR.",
+        "duplicateLineage": "Two statements would write the same record. Keep the record for one of them.",
+        "duplicatePath": "Two rows would write the same file. Untick one of them.",
+        "tooManyFiles": "The import marks more files add than one steering PR holds. Leave some rows out, or import the files in smaller sets.",
+        "branchesExhausted": "The steering repo holds every import branch one day allows. Merge or delete some of them, then try again.",
+        "branchMoved": "The import branch changed while the steering PR opened. Try again.",
+        "steeringRepoRequired": "The workspace has no steering repo yet. Set one up, then try again.",
+        "refused": "The steering PR did not open ({code}).",
+        "tooLarge": "The rows are too large to send in one call. Leave some out, or import the files in smaller sets.",
+        "invalidInput": "The import refused what the dialog sent. Review the files again.",
+        "invalid": "The import refused {file}. Check the file, then review it again.",
+        "pendingApproval": "The import waits for approval on access request {accessRequestId}.",
+        "exhausted": "The organization has no credit left for the model calls an import makes ({code}). Add credit, then try again.",
+        "unavailable": "The import could not run ({code}). Try again.",
+        "billing": "Open Billing"
+      }
+    },
     "deliveries": {
       "title": "Steering delivery",
       "lead": "The latest verified manifest for each recorded run in the last 7 days.",

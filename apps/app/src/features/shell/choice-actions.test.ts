@@ -13,6 +13,7 @@ const { source } = vi.hoisted(() => ({
   source: {
     tools: { versions: vi.fn(), mcpServers: vi.fn() },
     agents: { list: vi.fn() },
+    runs: { list: vi.fn() },
     org: { members: vi.fn() },
     spend: { priceBook: vi.fn(), unpricedModels: vi.fn() },
   },
@@ -33,6 +34,7 @@ const {
   chooseAgents,
   chooseApprovers,
   chooseModels,
+  chooseRuns,
   chooseServerTools,
   chooseSwitchTargets,
   chooseToolPatterns,
@@ -550,15 +552,118 @@ describe("chooseAgents", () => {
             name: "Invoice bot",
             slug: "invoice-bot",
             status: "active",
+            harness: "codex",
           },
-          { id: "agt_2", name: "Old bot", slug: "old-bot", status: "retired" },
+          {
+            id: "agt_2",
+            name: "Old bot",
+            slug: "old-bot",
+            status: "retired",
+            harness: "stella",
+          },
         ],
         nextCursor: null,
       }),
     );
     const result = await chooseAgents("acme", "core");
+    // Each agent carries its avatar with the harness it registered.
     expect(result.ok && result.value.options).toEqual([
-      { value: "agt_1", label: "Invoice bot", detail: "invoice-bot" },
+      {
+        value: "agt_1",
+        label: "Invoice bot",
+        detail: "invoice-bot",
+        icon: { agent: "invoice-bot", harness: "codex" },
+      },
+    ]);
+  });
+});
+
+describe("chooseRuns", () => {
+  it("badges each run's agent with the run's harness, or the agent's registered one when the run recorded none", async () => {
+    source.runs.list.mockResolvedValue(
+      ok({
+        runs: [
+          {
+            id: "tse_wrapped",
+            name: "Cut the release",
+            agentKey: "acme.core.release-bot",
+            harness: { name: "claude-code", version: "2.1", runtime: null },
+          },
+          {
+            id: "arun_ledger",
+            name: null,
+            agentKey: "acme.core.docs",
+            harness: null,
+          },
+          {
+            id: "arun_stranger",
+            name: null,
+            agentKey: "acme.core.stranger",
+            harness: null,
+          },
+          { id: "arun_noagent", name: null, agentKey: null, harness: null },
+        ],
+        nextCursor: null,
+      }),
+    );
+    source.agents.list.mockResolvedValue(
+      ok({
+        agents: [
+          { agentKey: "acme.core.docs", harness: "stella", status: "retired" },
+        ],
+        nextCursor: null,
+      }),
+    );
+    const result = await chooseRuns("acme", "core");
+    const icon = (id: string) =>
+      result.ok
+        ? result.value.options.find((o) => o.value === id)?.icon
+        : undefined;
+    expect(icon("tse_wrapped")).toEqual({
+      agent: "acme.core.release-bot",
+      harness: "claude-code",
+    });
+    // A retired agent's ledger run still names the harness it registered.
+    expect(icon("arun_ledger")).toEqual({
+      agent: "acme.core.docs",
+      harness: "stella",
+    });
+    // An agent the roster does not hold names no harness (negative).
+    expect(icon("arun_stranger")).toEqual({
+      agent: "acme.core.stranger",
+      harness: null,
+    });
+    // A run with no agent draws no mark at all (negative).
+    expect(icon("arun_noagent")).toBeUndefined();
+    expect(source.agents.list).toHaveBeenCalledWith(
+      {},
+      { cursor: null, includeRetired: true },
+    );
+  });
+
+  it("keeps the run list when the agents read fails, unbadged (negative)", async () => {
+    source.runs.list.mockResolvedValue(
+      ok({
+        runs: [
+          {
+            id: "arun_ledger",
+            name: "Fix the build",
+            agentKey: "acme.core.docs",
+            harness: null,
+          },
+        ],
+        nextCursor: null,
+      }),
+    );
+    source.agents.list.mockResolvedValue(readError("agent_index_unavailable", 503));
+    const result = await chooseRuns("acme", "core");
+    expect(result.ok && result.value.options).toEqual([
+      {
+        value: "arun_ledger",
+        label: "Fix the build",
+        detail: "arun_ledger",
+        icon: { agent: "acme.core.docs", harness: null },
+      },
     ]);
   });
 });

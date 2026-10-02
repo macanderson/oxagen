@@ -18,6 +18,7 @@ import { useState } from "react";
 import type { ToolbeltDetail, ToolbeltGroup } from "@/data/contracts/toolbelts";
 import { routes } from "@/shared/safe-path";
 import { unanswered } from "@/ui/action-failure";
+import { AgentAvatar } from "@/ui/agent-avatar";
 import {
   buttonSecondary,
   linkText,
@@ -380,11 +381,14 @@ export function BeltView({
   at,
   detail,
   canEdit,
+  agentHarnesses = {},
 }: {
   at: ToolsAt;
   detail: ToolbeltDetail;
   /** An org Owner or Admin: who the four toolbelt writes admit. */
   canEdit: boolean;
+  /** Each agent's registered harness by slug, for the badge on a carrier's avatar (#4871). */
+  agentHarnesses?: Readonly<Record<string, string>>;
 }) {
   const t = useTranslations("tools.toolbelts");
   const failureOf = useActionFailure();
@@ -533,7 +537,21 @@ export function BeltView({
           ) : (
             <ul className="flex flex-wrap gap-x-4 gap-y-1 text-[13px]">
               {agents.map((agent) => (
-                <li key={agent.id} data-testid="belt-agent">
+                <li
+                  key={agent.id}
+                  data-testid="belt-agent"
+                  className="flex items-center gap-1.5"
+                >
+                  <AgentAvatar
+                    value={null}
+                    initials={agent.slug.slice(0, 2).toUpperCase()}
+                    harness={
+                      Object.hasOwn(agentHarnesses, agent.slug)
+                        ? agentHarnesses[agent.slug]
+                        : null
+                    }
+                    size={18}
+                  />
                   <SafeLink
                     to={routes.agent(at.org, at.ws, agent.slug)}
                     className={linkText}

@@ -47,6 +47,7 @@ import {
 } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { PressLink } from "@/ui/press-link";
+import { type AgentHarnesses, AgentMark, harnessIn } from "./agent-mark";
 import {
   CostFigure,
   Instant,
@@ -254,16 +255,19 @@ function UngroupedLabel({
 
 /**
  * A group's name, linked to its drill. Only an agent and an operator have a
- * drill: `get_spend_drill` has no model or MCP server kind.
+ * drill: `get_spend_drill` has no model or MCP server kind. An agent's name
+ * carries its avatar with the harness it registered (#4871).
  */
 function GroupLabel({
   row,
   by,
   at,
+  harnesses,
 }: {
   row: Row;
   by: SpendMonthBy;
   at: SpendAt;
+  harnesses: AgentHarnesses;
 }) {
   const t = useTranslations("spend.month");
   if (row.key === OTHER_SPEND_KEY) {
@@ -306,12 +310,18 @@ function GroupLabel({
       );
     case "agent":
       return (
-        <SafeLink
-          to={routes.spend(at.org, at.ws, { tab: "agent", drill: row.key })}
-          className={`${linkText} ${mono} truncate font-semibold`}
-        >
-          {row.key}
-        </SafeLink>
+        <span className="flex min-w-0 items-center gap-2">
+          <AgentMark
+            agentKey={row.key}
+            harness={harnessIn(harnesses, row.key)}
+          />
+          <SafeLink
+            to={routes.spend(at.org, at.ws, { tab: "agent", drill: row.key })}
+            className={`${linkText} ${mono} min-w-0 truncate font-semibold`}
+          >
+            {row.key}
+          </SafeLink>
+        </span>
       );
     case "mcp_server":
       return <span className={`${mono} truncate font-semibold`}>{row.key}</span>;
@@ -353,7 +363,15 @@ function Share({
   );
 }
 
-function RunList({ row, at }: { row: Row; at: SpendAt }) {
+function RunList({
+  row,
+  at,
+  harnesses,
+}: {
+  row: Row;
+  at: SpendAt;
+  harnesses: AgentHarnesses;
+}) {
   const t = useTranslations("spend.month");
   const runs = row.topRuns ?? [];
   const more = row.runs - runs.length;
@@ -368,7 +386,9 @@ function RunList({ row, at }: { row: Row; at: SpendAt }) {
             <AgentAvatar
               value={null}
               initials={initialsOf(run.agentKey ?? run.runId)}
-              harness={run.harness}
+              // A ledger run records no harness; its agent's registered one
+              // stands in.
+              harness={run.harness ?? harnessIn(harnesses, run.agentKey)}
               size={22}
             />
             <span className="flex min-w-0 flex-col">
@@ -566,6 +586,7 @@ export function MonthSection({
   by,
   at,
   perMergedPr = null,
+  harnesses = {},
 }: {
   /** The month to date, grouped by `by`. */
   report: SpendReport;
@@ -574,6 +595,8 @@ export function MonthSection({
   at: SpendAt;
   /** Each agent's spend per merged PR over the same month; read only by agent. */
   perMergedPr?: Read<SpendPerMergedPr> | null;
+  /** Each agent's registered harness, by key, for the avatars' badges. */
+  harnesses?: AgentHarnesses;
 }) {
   const t = useTranslations("spend.month");
   const locale = useLocale();
@@ -601,7 +624,7 @@ export function MonthSection({
         : (merged.get(row.key) ?? null);
     const costliest =
       row.key === OTHER_SPEND_KEY || (row.topRuns ?? []).length === 0 ? null : (
-        <RunList row={row} at={at} />
+        <RunList row={row} at={at} harnesses={harnesses} />
       );
     const behind =
       agent === null || agent.runs.length === 0 ? null : (
@@ -609,7 +632,7 @@ export function MonthSection({
       );
     return {
       key: row.key,
-      label: <GroupLabel row={row} by={by} at={at} />,
+      label: <GroupLabel row={row} by={by} at={at} harnesses={harnesses} />,
       toggleLabel: t("showRuns", { name: nameOf(row) }),
       runs: row.key === OTHER_SPEND_KEY ? null : formatCount(row.runs, locale),
       share: (

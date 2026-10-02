@@ -8,7 +8,10 @@
 // answer, its state replaces the body; when it holds nothing, the empty state
 // does. The other summary reads (findings, waste, budgets) leave their count
 // off, and their tile not recorded, when they do not answer, and their own tab
-// says why.
+// says why. An agent's avatar carries the harness it registered (#4871): the
+// rollup names the agent key alone, so the tabs that list agents read the
+// agents once beside the rollup, and a failed read leaves the avatars
+// unbadged.
 import "server-only";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
@@ -19,6 +22,12 @@ import type {
 } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
+import {
+  type AgentHarnessIndex,
+  EMPTY_HARNESS_INDEX,
+  harnessOfKey,
+  readAgentHarnessIndex,
+} from "@/features/agent-harness";
 import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
@@ -52,6 +61,16 @@ type SpendProps = {
   /** Now, the instant the month to date is read up to; the clock when absent. */
   today?: Date;
 };
+
+/**
+ * The tabs whose rows name an agent: the Month rollup and its runs, Tokens by
+ * agent, and Findings on an agent.
+ */
+const AGENT_TABS: ReadonlySet<SpendView["tab"]> = new Set([
+  "month",
+  "tokens",
+  "findings",
+]);
 
 function isEmpty(report: SpendReport): boolean {
   return report.total.runs === 0 && report.rows.length === 0;
@@ -125,12 +144,15 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
   );
 
   if (view.drill !== null) {
-    const [drill, findings, names] = await Promise.all([
+    const [drill, findings, names, harnesses] = await Promise.all([
       source.spend.drill(ctx, view.tab, view.drill),
       source.spend.findings(ctx),
       view.tab === "operator"
         ? source.spend.byGroup(ctx, "operator", period)
         : Promise.resolve(null),
+      view.tab === "agent"
+        ? readAgentHarnessIndex(ctx, source)
+        : Promise.resolve(EMPTY_HARNESS_INDEX),
     ]);
     if (!drill.ok) return <SpendReadFailure read={drill} {...failure} />;
     const operator =
@@ -146,17 +168,25 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
           drill={drill.value}
           findings={listed(findings)}
           operator={operator}
+          harness={
+            drill.value.kind === "agent"
+              ? harnessOfKey(harnesses, drill.value.key)
+              : null
+          }
           at={at}
         />
       </>
     );
   }
 
-  const [month, findings, waste, budgets] = await Promise.all([
+  const [month, findings, waste, budgets, harnesses] = await Promise.all([
     source.spend.byGroup(ctx, view.tab === "month" ? view.by : "model", period),
     source.spend.findings(ctx),
     source.spend.waste(ctx, period),
     source.spend.budgets(ctx),
+    AGENT_TABS.has(view.tab)
+      ? readAgentHarnessIndex(ctx, source)
+      : Promise.resolve(EMPTY_HARNESS_INDEX),
   ]);
   if (!month.ok) return <SpendReadFailure read={month} {...failure} />;
   // Pricing is this build's own tab over the organization's price book, which
@@ -192,6 +222,7 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
             findings,
             waste,
             budgets,
+            harnesses,
             failure: inTab,
           })
         }
@@ -210,6 +241,7 @@ async function body({
   findings,
   waste,
   budgets,
+  harnesses,
   failure,
 }: {
   ctx: WsCtx;
@@ -223,6 +255,8 @@ async function body({
   findings: Read<SpendFindings>;
   waste: Awaited<ReturnType<DataSource["spend"]["waste"]>>;
   budgets: Awaited<ReturnType<DataSource["spend"]["budgets"]>>;
+  /** Each agent's registered harness; empty on a tab that lists no agents. */
+  harnesses: AgentHarnessIndex;
   failure: Omit<Parameters<typeof SpendReadFailure>[0], "read">;
 }): Promise<ReactNode> {
   switch (view.tab) {
@@ -237,6 +271,7 @@ async function body({
           report={month}
           budgets={budgets}
           by={view.by}
+          harnesses={harnesses.byKey}
           at={at}
           perMergedPr={perMergedPr}
         />
@@ -262,6 +297,7 @@ async function body({
           <FindingsSection
             findings={findings.value}
             operators={operators.ok ? operators.value.rows : []}
+            harnesses={harnesses.byKey}
             at={at}
             evidence={
               evidence === null ? null : (
@@ -279,7 +315,14 @@ async function body({
     }
     case "tokens": {
       const agents = await source.spend.byGroup(ctx, "agent", period);
-      return <TokensSection month={month} agents={agents} at={at} />;
+      return (
+        <TokensSection
+          month={month}
+          agents={agents}
+          harnesses={harnesses.byKey}
+          at={at}
+        />
+      );
     }
     case "tool":
     case "task": {

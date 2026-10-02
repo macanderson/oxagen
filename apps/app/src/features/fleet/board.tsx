@@ -115,8 +115,11 @@ import {
 } from "./view";
 import { WaitingTile } from "./waiting-tile";
 
-/** An agent the steer dialog can address. */
-export type FleetAgent = { agentKey: string };
+/**
+ * An agent the steer dialog can address, with the harness it registered for
+ * its avatar's badge. A roster that did not carry one draws no badge.
+ */
+export type FleetAgent = { agentKey: string; harness?: string | null };
 
 /**
  * Each registered agent's harness, by agent key. A run the ledger recorded
