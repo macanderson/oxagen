@@ -1080,8 +1080,14 @@ fn clear_quarantine(_path: &Path) {}
 /// bundled sidecars, recording in `created` every directory made for it, so
 /// Uninstall can remove them again. Every launch runs this, whatever the
 /// PATH link setting says: enrollment names the copy, and a PATH link is a
-/// separate choice.
-fn keep_versioned_copy(env: &InstallEnv, created: &mut Vec<PathBuf>) -> Result<PathBuf, String> {
+/// separate choice. A journal that cannot be written goes into `skipped` as
+/// a note and the copy is still made, because the hooks and the service
+/// name the copy whether or not the record of it was saved.
+fn keep_versioned_copy(
+    env: &InstallEnv,
+    created: &mut Vec<PathBuf>,
+    skipped: &mut Vec<String>,
+) -> Result<PathBuf, String> {
     let bundled = env
         .sidecars
         .as_deref()
@@ -1090,14 +1096,19 @@ fn keep_versioned_copy(env: &InstallEnv, created: &mut Vec<PathBuf>) -> Result<P
     created.extend(create_dir_tracking(&kept)?);
     // Journaled before the copy, so a launch that dies part way still leaves
     // a record of where it was copying to.
-    record_journal(&env.roots, &[journal_entry("copy", &kept, None)])?;
+    if let Err(e) = record_journal(&env.roots, &[journal_entry("copy", &kept, None)]) {
+        skipped.push(format!("could not record what was written: {e}"));
+    }
     keep_sidecars(bundled, &kept)
 }
 
 /// `keep_versioned_copy`, with what it created written to `desktop.json`.
-fn keep_versioned_copy_recorded(env: &InstallEnv) -> Result<PathBuf, String> {
+fn keep_versioned_copy_recorded(
+    env: &InstallEnv,
+    skipped: &mut Vec<String>,
+) -> Result<PathBuf, String> {
     let mut created = Vec::new();
-    let kept = keep_versioned_copy(env, &mut created);
+    let kept = keep_versioned_copy(env, &mut created, skipped);
     record_created(&env.roots, &created)?;
     kept
 }
@@ -1786,7 +1797,7 @@ pub(crate) fn install_cli_locked(env: &InstallEnv) -> CliInstallView {
 
     // Made before anything else, and whether or not anything is linked:
     // every command enrollment writes names this copy (ADR-230).
-    let sidecars = match keep_versioned_copy(env, &mut created) {
+    let sidecars = match keep_versioned_copy(env, &mut created, &mut view.skipped) {
         Ok(kept) => kept,
         Err(e) => {
             let _ = record_created(roots, &created);
@@ -1964,7 +1975,7 @@ pub(crate) fn ensure_cli_installed_in(env: &InstallEnv, state: &CliInstallState)
         };
         // Opting out of PATH links does not opt out of the copy: the hooks
         // and the service name it.
-        if let Err(e) = keep_versioned_copy_recorded(env) {
+        if let Err(e) = keep_versioned_copy_recorded(env, &mut view.skipped) {
             view.skipped.push(format!(
                 "could not keep a copy of the tools in {}: {e}",
                 env.kept_dir().display()
@@ -2968,7 +2979,7 @@ mod tests {
     #[test]
     fn a_launch_keeps_a_copy_of_this_version_and_the_next_one_copies_nothing() {
         let env = scratch_env("kept-copy", "2.1.3");
-        let kept = keep_versioned_copy_recorded(&env).unwrap();
+        let kept = keep_versioned_copy_recorded(&env, &mut Vec::new()).unwrap();
         assert_eq!(kept, env.roots.durable_bin_dir().join("2.1.3"));
         assert_eq!(fs::read(kept.join(exe("tacho"))).unwrap(), b"tacho 2.1.3");
         assert!(has_both_sidecars(&kept));
@@ -2978,7 +2989,7 @@ mod tests {
 
         // A copy of the same length, no older than the bundle: left alone.
         fs::write(kept.join(exe("tacho")), b"TACHO 2.1.3").unwrap();
-        keep_versioned_copy_recorded(&env).unwrap();
+        keep_versioned_copy_recorded(&env, &mut Vec::new()).unwrap();
         assert_eq!(fs::read(kept.join(exe("tacho"))).unwrap(), b"TACHO 2.1.3");
 
         // A rebuilt bundle of the same version is newer: copied again.
@@ -2990,8 +3001,26 @@ mod tests {
             .unwrap()
             .set_modified(later)
             .unwrap();
-        keep_versioned_copy_recorded(&env).unwrap();
+        keep_versioned_copy_recorded(&env, &mut Vec::new()).unwrap();
         assert_eq!(fs::read(kept.join(exe("tacho"))).unwrap(), b"tacho 2.1.3");
+    }
+
+    /// #4298: the hooks and the service name the copy, so a `desktop.json`
+    /// that cannot be written costs the journal entry, never the copy.
+    #[test]
+    fn a_journal_that_cannot_be_written_still_leaves_the_copy() {
+        let env = scratch_env("kept-copy-no-journal", "2.1.4");
+        // A directory where desktop.json belongs makes every write to it fail.
+        fs::create_dir_all(env.roots.desktop_config_path()).unwrap();
+        let mut created = Vec::new();
+        let mut skipped = Vec::new();
+        let kept = keep_versioned_copy(&env, &mut created, &mut skipped).unwrap();
+        assert!(has_both_sidecars(&kept));
+        assert_eq!(fs::read(kept.join(exe("tacho"))).unwrap(), b"tacho 2.1.4");
+        assert!(
+            skipped.iter().any(|note| note.starts_with("could not record what was written")),
+            "{skipped:?}"
+        );
     }
 
     /// A downloaded bundle is quarantined, and a copy keeps extended
@@ -3016,7 +3045,7 @@ mod tests {
             &["-w", "com.apple.quarantine", "0081;00000000;Safari;"],
             &bundled
         ));
-        let kept = keep_versioned_copy_recorded(&env).unwrap();
+        let kept = keep_versioned_copy_recorded(&env, &mut Vec::new()).unwrap();
         assert!(xattr(&["-p", "com.apple.quarantine"], &bundled));
         assert!(!xattr(&["-p", "com.apple.quarantine"], &kept.join("tacho")));
         assert_eq!(fs::read(kept.join("tacho")).unwrap(), b"tacho 2.1.3");
@@ -3091,11 +3120,11 @@ mod tests {
     #[test]
     fn no_copy_is_removed_while_a_host_file_cannot_be_read() {
         let old = scratch_env("unreadable", "2.1.3");
-        keep_versioned_copy_recorded(&old).unwrap();
+        keep_versioned_copy_recorded(&old, &mut Vec::new()).unwrap();
         let host = old.roots.tacho_root().join("agents").join("0a1b2c3d").join("host.json");
         put_file(&host, b"{ truncated");
         let new = scratch_env_over(&old, "2.1.4");
-        keep_versioned_copy_recorded(&new).unwrap();
+        keep_versioned_copy_recorded(&new, &mut Vec::new()).unwrap();
         assert!(prune_old_copies(&new).is_empty());
         assert!(has_both_sidecars(&old.kept_dir()));
         // Once it reads and names nothing, the old copy goes.
