@@ -24,16 +24,16 @@
  * id, so the recorder's model call ledger stamps it a later sighting of the
  * proxy's frame and the call counts once (ADR-262).
  *
- * Measured on 2026-10-02 against 263 rollouts written by Codex 0.155 to
+ * Measured on 2026-10-02 against 263 rollouts written by Codex 0.150 to
  * 0.159.2 on one host:
  *
  * - Between an assistant message and the record that closes its response,
- *   only `reasoning`, `function_call`, `custom_tool_call` and `item_completed`
- *   lines appeared (603 responses).
- * - Six messages had no record of their own: an inter-agent message cut the
- *   response short, and a `token_count` event came before the next
- *   response's record. A `token_count` therefore ends the response in hand,
- *   and its text is dropped rather than put on the next response's frame.
+ *   no `token_count` event and no turn boundary appeared (2,465 responses).
+ * - 56 messages had no record of their own, and in every one a
+ *   `token_count` event came before the next response's record. Most often
+ *   an inter-agent message had cut the response short. A `token_count`
+ *   therefore ends the response in hand, and its text is dropped rather than
+ *   put on the next response's frame.
  * - Rollouts imported from another agent, and the history a forked subagent
  *   copies from its parent, hold assistant messages with no record. Neither
  *   is a call this thread made, and neither seals a frame.
