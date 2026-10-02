@@ -8085,6 +8085,22 @@
       }
     },
     {
+      "name": "get_work_item",
+      "file": "work.item.get.ts",
+      "domain": "work",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "reopen_work_item",
       "file": "work.item.reopen.ts",
       "domain": "work",
@@ -8097,6 +8113,22 @@
         "api": true,
         "unit": true,
         "docs": true
+      }
+    },
+    {
+      "name": "list_work_items",
+      "file": "work.items.list.ts",
+      "domain": "work",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -8220,6 +8252,22 @@
       }
     },
     {
+      "name": "get_work_outcomes",
+      "file": "work.outcomes.get.ts",
+      "domain": "work",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_work_priorities",
       "file": "work.priorities.get.ts",
       "domain": "work",
@@ -8234,6 +8282,22 @@
         "mcp": true,
         "unit": true,
         "docs": true
+      }
+    },
+    {
+      "name": "list_work_targets",
+      "file": "work.targets.list.ts",
+      "domain": "work",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
       }
     },
     {

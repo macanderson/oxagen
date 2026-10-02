@@ -151,6 +151,14 @@ const unproductive = vi.fn<DataSource["spend"]["unproductive"]>();
 const agentsList = vi.fn<DataSource["agents"]["list"]>();
 const source: DataSource = {
   runtimes: { list: vi.fn(), agents: vi.fn(), named: vi.fn() },
+  work: {
+    list: vi.fn(),
+    get: vi.fn(),
+    targets: vi.fn(),
+    outcomes: vi.fn(),
+    collectors: vi.fn(),
+    priorities: vi.fn(),
+  },
   conversations: { latest: vi.fn(), list: vi.fn(), byId: vi.fn() },
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
   shell: {
@@ -1754,16 +1762,50 @@ describe("Spend › Findings › Operator ranking", () => {
     ).toBeInTheDocument();
   });
 
-  it("asks no ranking for a workspace Owner who holds no org manager role (negative)", async () => {
+  // #5182: a workspace's creator holds the workspace Owner role in IAM, so
+  // the page asks for the ranking for that Owner too. The pseudonym switch
+  // stays with the org Owner and Admin.
+  it("reads the ranking for a workspace Owner who holds no org manager role, with no pseudonym switch", async () => {
     const wsOwner = ctxAs("owner");
     loaded({
       operator: report([row("prn_marcusbell", { operator: MARCUS })]),
     });
+    operatorRanking.mockResolvedValue(
+      readOk({
+        period: PERIOD,
+        pseudonyms: false,
+        unproductive: { micros: "5000000", currency: "USD" },
+        unattributed: {
+          unproductive: { micros: "0", currency: "USD" },
+          runs: 0,
+        },
+        operators: [
+          {
+            rank: 1,
+            operator: { kind: "named", key: "prn_marcusbell", facts: MARCUS },
+            unproductive: { micros: "5000000", currency: "USD" },
+            shareOfTotal: 1,
+            unproductiveShare: 0.4,
+            runs: 1,
+            topRuns: [
+              {
+                runId: "arun_01",
+                unproductive: { micros: "5000000", currency: "USD" },
+              },
+            ],
+            doneWorkOrders: 0,
+            topDoneWorkOrders: [],
+            unassignedShare: null,
+            topUnassignedRuns: [],
+          },
+        ],
+      }),
+    );
     await renderSpend(["findings"], undefined, wsOwner);
-    expect(operatorRanking).not.toHaveBeenCalled();
+    expect(operatorRanking).toHaveBeenCalledWith(wsOwner, PERIOD);
     expect(
-      screen.getByText(/An org Owner or Admin can read the operator ranking/),
-    ).toBeInTheDocument();
+      screen.getByRole("table", { name: "Operator ranking" }),
+    ).toHaveTextContent("Marcus Bell");
     expect(screen.queryByRole("button", { name: /pseudonyms/ })).toBeNull();
   });
 
@@ -1777,7 +1819,9 @@ describe("Spend › Findings › Operator ranking", () => {
       screen.queryByRole("table", { name: "Operator ranking" }),
     ).toBeNull();
     expect(
-      screen.getByText(/An org Owner or Admin can read the operator ranking/),
+      screen.getByText(
+        /An org Owner or Admin, or this workspace's Owner, can read the operator ranking/,
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("list", { name: "Findings ranked by savings" }),

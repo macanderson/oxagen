@@ -583,6 +583,14 @@ export function agentsSource(reads: AgentReads) {
       agents: refuse,
       named: answer(reads.runtimes ?? runtimeList(), "runtimes"),
     },
+    work: {
+      list: refuse,
+      get: refuse,
+      targets: refuse,
+      outcomes: refuse,
+      collectors: refuse,
+      priorities: refuse,
+    },
     conversations: { latest: refuse, list: refuse, byId: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {

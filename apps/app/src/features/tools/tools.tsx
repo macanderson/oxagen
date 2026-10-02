@@ -58,13 +58,11 @@ function limitOf(rows: number): { limit?: number } {
  * nothing the kernel would have allowed.
  *
  * `import_tools`, `register_mcp_server` and `delete_mcp_server` also declare a
- * workspace Owner. No person can satisfy that clause: `assertOrgRole` resolves
- * a workspace role from `iam.principal_role_assignments`, and nothing in the
- * tree writes one for a human (`workspace-bootstrap.ts` records the creator in
- * `workspace.workspace_users` and assigns no IAM role). So the page reads only
- * the org role, the one that is enforceable. Whether workspace membership
- * should confer IAM authority is #3198; when that lands, this reads
- * `ctx.wsRole` too.
+ * workspace Owner. A workspace's creator holds that role in IAM
+ * (`workspace-bootstrap.ts`, #5182), so the handlers admit them. This page
+ * still reads only the org role, so it hides these controls from a creator
+ * who holds no org manager role. Reading `ctx.wsRole` here belongs to #3198,
+ * which keeps the rest of the workspace role model.
  */
 function canAdministerOrg(ctx: WsCtx): boolean {
   return ctx.orgRole === "owner" || ctx.orgRole === "admin";

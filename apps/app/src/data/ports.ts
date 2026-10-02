@@ -140,6 +140,14 @@ import type {
   ToolVersionPage,
 } from "./contracts/tools";
 import type { ToolbeltDetail, ToolbeltList } from "./contracts/toolbelts";
+import type {
+  WorkCollectorList,
+  WorkItemDetail,
+  WorkItemList,
+  WorkOutcomes,
+  WorkPriorities,
+  WorkTargetList,
+} from "./contracts/work";
 import type { Read } from "./read";
 
 export interface DataSource {
@@ -817,5 +825,24 @@ export interface DataSource {
     list(ctx: WsCtx): Promise<Read<RuntimeList>>;
     agents(ctx: WsCtx, keys: readonly string[]): Promise<Read<RuntimeAgents>>;
     named(ctx: WsCtx, id?: string): Promise<Read<NamedRuntimeList>>;
+  };
+  /**
+   * The Work pages (agent-work-phase-1.html, Screens; roadmap
+   * mockups/pages/work*.md). Callers: features/work. Each method is one
+   * noBillingGate read of the work records: `list` is list_work_items (the
+   * four tabs, every row's status and wait decided on the server), `get` is
+   * get_work_item by its number (WI-12) or public id, `targets` is
+   * list_work_targets (the agents a send can go to, for the Send dialog and
+   * Setup's Runtimes tab), `outcomes` is get_work_outcomes over 30 days,
+   * `collectors` is list_work_collectors and `priorities` is
+   * get_work_priorities (P1-03), for the page header and Setup.
+   */
+  work: {
+    list(ctx: WsCtx): Promise<Read<WorkItemList>>;
+    get(ctx: WsCtx, item: string): Promise<Read<WorkItemDetail>>;
+    targets(ctx: WsCtx): Promise<Read<WorkTargetList>>;
+    outcomes(ctx: WsCtx): Promise<Read<WorkOutcomes>>;
+    collectors(ctx: WsCtx): Promise<Read<WorkCollectorList>>;
+    priorities(ctx: WsCtx): Promise<Read<WorkPriorities>>;
   };
 }
