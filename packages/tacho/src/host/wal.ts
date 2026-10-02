@@ -100,6 +100,15 @@ const BODY_READ_SLICE = 32;
 const EVENT_TAIL_WINDOW = 16 * 1024;
 
 /**
+ * When an event happened, in epoch milliseconds. A `ts` that does not parse
+ * reads as the earliest time, so its session ships after every dated one.
+ */
+function activityAt(event: TachoEvent): number {
+  const at = Date.parse(event.ts);
+  return Number.isFinite(at) ? at : Number.NEGATIVE_INFINITY;
+}
+
+/**
  * An event written with a seq more than one past the session's last. Only
  * sessions this process has already read or written are checked.
  */
@@ -168,6 +177,12 @@ export class Wal {
    * one read per session per process, and kept current by `append`.
    */
   private readonly lastSeq = new Map<string, number>();
+  /**
+   * When each session's last event happened, in epoch milliseconds, read from
+   * the event's own `ts`. `unshipped` ships the session with the latest event
+   * first. Filled and cleared with `lastSeq`, from the same read.
+   */
+  private readonly lastActivity = new Map<string, number>();
   /**
    * Where each session's shipped cursor sits in its event file. `unshipped`
    * and `stats` resumed from the top of the file, so a session with 20,000
@@ -423,6 +438,7 @@ export class Wal {
     // puts back exactly what it found. Left advanced, `lastSeq` made the seq
     // guard refuse the caller's retry of the same batch.
     const priorLastSeq = new Map<string, number | undefined>();
+    const priorLastActivity = new Map<string, number | undefined>();
     const priorSealed = new Map<string, string | undefined>();
     let eventMarks = new Map<string, number | undefined>();
     let bodyMarks = new Map<string, number | undefined>();
@@ -432,6 +448,10 @@ export class Wal {
           priorLastSeq.set(
             event.session_uuid,
             this.lastSeq.get(event.session_uuid),
+          );
+          priorLastActivity.set(
+            event.session_uuid,
+            this.lastActivity.get(event.session_uuid),
           );
           priorSealed.set(
             event.session_uuid,
@@ -475,6 +495,7 @@ export class Wal {
           });
         }
         this.lastSeq.set(event.session_uuid, event.seq);
+        this.lastActivity.set(event.session_uuid, activityAt(event));
         if (event.kind === "agent_stop") {
           this.cursor.sealed[event.session_uuid] = event.ts;
         }
@@ -517,6 +538,9 @@ export class Wal {
         const prior = priorLastSeq.get(session);
         if (prior === undefined) this.lastSeq.delete(session);
         else this.lastSeq.set(session, prior);
+        const priorActivity = priorLastActivity.get(session);
+        if (priorActivity === undefined) this.lastActivity.delete(session);
+        else this.lastActivity.set(session, priorActivity);
         const priorSeal = priorSealed.get(session);
         if (priorSeal === undefined) delete this.cursor.sealed[session];
         else this.cursor.sealed[session] = priorSeal;
@@ -1119,6 +1143,7 @@ export class Wal {
     }
     truncateSync(path, line.offset);
     this.lastSeq.delete(sessionUuid);
+    this.lastActivity.delete(sessionUuid);
     this.resume.delete(sessionUuid);
     this.dirtyPaths.add(path);
     return "truncated";
@@ -1219,6 +1244,7 @@ export class Wal {
     let last = -1;
     for (const event of this.eventsBackward(sessionUuid)) {
       last = event.seq;
+      this.lastActivity.set(sessionUuid, activityAt(event));
       break;
     }
     this.lastSeq.set(sessionUuid, last);
@@ -1294,6 +1320,18 @@ export class Wal {
   }
 
   /**
+   * Sort order for `unshipped`: the latest last event first, then session id,
+   * so two sessions with the same time always ship in the same order. Read
+   * after `hasUnshipped`, which fills `lastActivity` for each session.
+   */
+  private byLatestActivity(a: string, b: string): number {
+    const left = this.lastActivity.get(a) ?? Number.NEGATIVE_INFINITY;
+    const right = this.lastActivity.get(b) ?? Number.NEGATIVE_INFINITY;
+    if (left !== right) return right > left ? 1 : -1;
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+
+  /**
    * One session's events past its shipped cursor, in seq order.
    *
    * The walk starts at the byte the last walk left the cursor on, so it reads
@@ -1334,15 +1372,37 @@ export class Wal {
     }
   }
 
-  /** Up to `limit` unshipped events, grouped by session in seq order. */
+  /**
+   * Up to `limit` unshipped events, grouped by session in seq order. The
+   * session whose last event is latest comes first.
+   *
+   * Sessions used to go in id order, which is random. A first start imports
+   * every old transcript on the machine, and on 2026-10-02 that queued 88,000
+   * events in 447 sessions. A live session whose id sorted late waited behind
+   * most of them, and its run did not show in Oxagen. A drain also stops when
+   * the control plane's rate window is spent (`Shipper.windowSpent`), so a
+   * backlog that size takes many windows to clear.
+   *
+   * The order comes from the event's `ts`, not from the file's write time. An
+   * import writes old events now, so a write time would put it first. Each
+   * session still ships in seq order. The order across sessions was random
+   * before, so nothing downstream relies on one.
+   *
+   * Old sessions take whatever room is left in each batch. They wait only
+   * while live sessions fill every batch. Then the queue grows under any
+   * order, and this order keeps the live runs current.
+   */
   unshipped(
     limit: number,
     excludedSessions: ReadonlySet<string> = new Set(),
   ): TachoEvent[] {
     const out: TachoEvent[] = [];
-    for (const session of this.sessions()) {
-      if (excludedSessions.has(session) || !this.hasUnshipped(session))
-        continue;
+    const waiting = this.sessions().filter(
+      (session) =>
+        !excludedSessions.has(session) && this.hasUnshipped(session),
+    );
+    waiting.sort((a, b) => this.byLatestActivity(a, b));
+    for (const session of waiting) {
       for (const event of this.eventsAfterShipped(session)) {
         out.push(event);
         if (out.length >= limit) return out;
@@ -1601,6 +1661,7 @@ export class Wal {
       // whatever happens to its body file. A body file left behind is an
       // orphan the loop below removes, on this pass or a later one.
       this.lastSeq.delete(session);
+      this.lastActivity.delete(session);
       this.resume.delete(session);
       delete this.cursor.shipped[session];
       delete this.cursor.sealed[session];
