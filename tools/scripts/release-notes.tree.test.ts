@@ -27,9 +27,8 @@ describe("the model's instructions", () => {
       expect(skills).toContain(
         `<skill path="${BRAND_KIT_REPO}@${KIT_SHA}/${rel}">`,
       );
-    // The skill's body reached the prompt. Match its title, not a rule's
-    // wording: the rules change, and "No em dashes" broke this test when
-    // they did.
+    // The skill's heading, not one of its rules: the rules change when the
+    // skill is revised, and this test only proves the tree copy was read.
     expect(skills).toContain("# Clear prose");
     const system = systemPrompt(skills);
     expect(system).toContain("workforce management for autonomous agents");
