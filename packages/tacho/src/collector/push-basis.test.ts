@@ -153,3 +153,86 @@ describe("pushCredentialBasis", () => {
     expect(calls[0]?.slice(0, 2)).toEqual(["-C", "/repo"]);
   });
 });
+
+describe("pushCredentialBasis in a contained run (ADR-254)", () => {
+  const contained = (execAsync: ReturnType<typeof git>["execAsync"]) => ({
+    // A contained run has no custody receipt.
+    receipts: () => [],
+    containedRepository: "Acme/App",
+    execAsync,
+  });
+
+  it.each([
+    "https://github.com/acme/app.git",
+    "https://github.com/acme/app",
+    "https://github.com/ACME/App.git",
+  ])(
+    "is gateway_brokered when the run's repository is the push URL: %s",
+    async (url) => {
+      const { execAsync } = git({ "remote get-url --push --all origin": url });
+      await expect(
+        pushCredentialBasis(
+          "git push origin main",
+          "/runner/work/app",
+          contained(execAsync),
+        ),
+      ).resolves.toBe("gateway_brokered");
+    },
+  );
+
+  it("is gateway_brokered for the run's repository named as a URL, and from a subdirectory", async () => {
+    const { execAsync, calls } = git({
+      "remote get-url --push --all origin": "https://github.com/acme/app.git",
+    });
+    await expect(
+      pushCredentialBasis(
+        "git push https://github.com/acme/app.git HEAD",
+        "/runner/work/app",
+        contained(execAsync),
+      ),
+    ).resolves.toBe("gateway_brokered");
+    await expect(
+      pushCredentialBasis(
+        "git -C src push origin",
+        "/runner/work/app",
+        contained(execAsync),
+      ),
+    ).resolves.toBe("gateway_brokered");
+    expect(calls.at(-1)?.slice(0, 2)).toEqual(["-C", "/runner/work/app/src"]);
+  });
+
+  it.each([
+    ["another repository", "https://github.com/acme/infra.git"],
+    ["an SSH remote", "git@github.com:acme/app.git"],
+    ["a URL with a token in it", "https://x-access-token:t@github.com/acme/app"],
+    ["a local path", "/tmp/elsewhere.git"],
+    [
+      "one push URL of two that is not the run's repository",
+      "https://github.com/acme/app.git\nhttps://github.com/acme/infra.git",
+    ],
+  ])("is harness_held for %s", async (_label, url) => {
+    const { execAsync } = git({ "remote get-url --push --all origin": url });
+    await expect(
+      pushCredentialBasis(
+        "git push origin",
+        "/runner/work/app",
+        contained(execAsync),
+      ),
+    ).resolves.toBe("harness_held");
+  });
+
+  it("is harness_held outside the run's checkout and asks Git nothing", async () => {
+    const { execAsync, calls } = git({
+      "remote get-url --push --all origin": "https://github.com/acme/app.git",
+    });
+    for (const command of [
+      "git -C .. push origin",
+      "git -C /elsewhere push origin",
+      "git -c remote.origin.url=x push",
+    ])
+      await expect(
+        pushCredentialBasis(command, "/runner/work/app", contained(execAsync)),
+      ).resolves.toBe("harness_held");
+    expect(calls).toEqual([]);
+  });
+});

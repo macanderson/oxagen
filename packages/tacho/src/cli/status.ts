@@ -15,6 +15,7 @@ import { describeHarness } from "./credential";
 import { tachoHookPresence } from "../host/settings-writer";
 import { stellaHookPresence } from "../host/stella-writer";
 import { Wal } from "../host/wal";
+import { readWalCeilingState, type WalCeilingState } from "../host/wal-ceiling";
 import { describeAgent, listAgents } from "../host/agents";
 import { isBrokerableHarness, isModelRoutedHarness } from "../wire";
 import { type CliDeps, cursorAppFacts } from "./deps";
@@ -127,7 +128,17 @@ export interface StatusReport {
    * (ADR-078 §3).
    */
   claudeDesktop?: ReturnType<typeof claudeDesktopPresence>;
-  wal?: { sessions: number; unshipped: number; oldest_unshipped_at?: string };
+  wal?: {
+    sessions: number;
+    unshipped: number;
+    oldest_unshipped_at?: string;
+    /**
+     * What the WAL ceiling last saw and did (ADR-261), as the daemon wrote it
+     * to `ceiling.json`. Absent until a session's shipped cursor first stands
+     * still between two checks. The stall clocks stay in the file.
+     */
+    ceiling?: Omit<WalCeilingState, "schema" | "stall_clocks">;
+  };
   /**
    * Whether recorded events are reaching Oxagen. Absent for a host that is
    * not enrolled here. `oxagen agent status` exits 1 when `healthy` is false.
@@ -395,6 +406,7 @@ async function agentStatus(deps: CliDeps): Promise<StatusReport> {
       )
     : undefined;
   const walStats = new Wal(deps.paths.wal).stats();
+  const ceilingState = readWalCeilingState(deps.paths.wal);
   const gateway = gatewayOf(daemon);
   const routedHarnesses = host.harnesses.filter(isBrokerableHarness);
   // Stella's base URL is written too; its credential is never brokered.
@@ -505,10 +517,64 @@ async function agentStatus(deps: CliDeps): Promise<StatusReport> {
       ...(walStats.oldestUnshippedAt !== undefined
         ? { oldest_unshipped_at: walStats.oldestUnshippedAt }
         : {}),
+      ...(ceilingState !== undefined
+        ? {
+            ceiling: {
+              checked_at: ceilingState.checked_at,
+              ceiling_bytes: ceilingState.ceiling_bytes,
+              stall_grace_ms: ceilingState.stall_grace_ms,
+              stalled_bytes: ceilingState.stalled_bytes,
+              stalled_sessions: ceilingState.stalled_sessions,
+              drops: ceilingState.drops,
+            },
+          }
+        : {}),
     },
     ...(shipping !== undefined ? { shipping } : {}),
   };
   return report;
+}
+
+/** Bytes as a person reads them, in binary units: `8.0 GiB`. */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} bytes`;
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KiB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`;
+  return `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
+}
+
+/** How many drops the text report lists. `--json` carries all of them. */
+const CEILING_DROPS_SHOWN = 5;
+
+/**
+ * The WAL ceiling's lines (ADR-261): what the sessions that stopped shipping
+ * hold against the ceiling, then each session whose stored content went over
+ * it, newest first. Nothing when no session is stalled and nothing went.
+ */
+function ceilingLines(
+  ceiling: NonNullable<NonNullable<StatusReport["wal"]>["ceiling"]>,
+): string[] {
+  const lines: string[] = [];
+  if (ceiling.stalled_sessions > 0) {
+    const minutes = Math.round(ceiling.stall_grace_ms / 60_000);
+    const one = ceiling.stalled_sessions === 1;
+    const who = `${ceiling.stalled_sessions} session${one ? " has" : "s have"} shipped nothing for at least ${minutes} minute${minutes === 1 ? "" : "s"} and ${one ? "holds" : "hold"} ${formatBytes(ceiling.stalled_bytes)}`;
+    lines.push(
+      ceiling.stalled_bytes > ceiling.ceiling_bytes
+        ? `Ceiling     OVER: ${who}, more than the ${formatBytes(ceiling.ceiling_bytes)} ceiling`
+        : `Ceiling     ${who} of the ${formatBytes(ceiling.ceiling_bytes)} ceiling`,
+    );
+  }
+  const newestFirst = [...ceiling.drops].reverse();
+  for (const drop of newestFirst.slice(0, CEILING_DROPS_SHOWN))
+    lines.push(
+      `Dropped     session ${drop.session_uuid} went over the WAL ceiling at ${drop.dropped_at}: ${formatBytes(drop.bytes)} of stored content removed, events ${drop.shipped_through + 1} to ${drop.last_seq} ship without it`,
+    );
+  if (newestFirst.length > CEILING_DROPS_SHOWN)
+    lines.push(
+      `            ${newestFirst.length - CEILING_DROPS_SHOWN} earlier drop${newestFirst.length - CEILING_DROPS_SHOWN === 1 ? "" : "s"} in \`oxagen agent status --json\``,
+    );
+  return lines;
 }
 
 /** `report` as text, one line per finding. */
@@ -677,6 +743,8 @@ function printStatus(report: StatusReport, deps: CliDeps): void {
   deps.out(
     `WAL         ${wal.sessions} session files, ${wal.unshipped} events unshipped${wal.oldest_unshipped_at !== undefined ? ` (oldest ${wal.oldest_unshipped_at})` : ""}`,
   );
+  if (wal.ceiling !== undefined)
+    for (const line of ceilingLines(wal.ceiling)) deps.out(line);
   if (shipping !== undefined)
     deps.out(
       `Shipping    ${shipping.healthy ? "ok" : "FAILING"}: ${shipping.detail}`,

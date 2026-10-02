@@ -14,6 +14,10 @@
 // the row to the new head. An open row on the same lineage for another PR is
 // set aside, because the host allows one open PR per branch, so that PR was
 // closed and the repository sync has not read the close yet.
+import {
+  resolveActingUserId,
+  type ActingCredential,
+} from "@oxagen/iam/org-role";
 import type {
   GovernanceMode,
   ProposalStatus,
@@ -52,16 +56,28 @@ export function jobAuthor(job: string): SteeringPrAuthor {
 }
 
 /**
- * The author of a PR a capability call opened: the signed-in person, else the
- * API key the call carried, as propose_record records a source.
+ * The author of a PR a capability call opened. The person is the acting user
+ * the role check passed: the signed-in person, or the creator of the API key
+ * the call carried (resolveActingUserId). The row keeps that person as its
+ * author, so in team and regulated mode they cannot merge their own change by
+ * scripting it with a key. The source still names the key.
  */
-export function authorOf(ctx: {
-  userId?: string | null;
-  apiKeyId?: string | null;
-}): SteeringPrAuthor {
+export function authorOf(
+  ctx: Pick<ActingCredential, "userId" | "apiKeyId">,
+  actingUserId: string | null,
+): SteeringPrAuthor {
   if (ctx.userId) return personAuthor(ctx.userId);
-  if (ctx.apiKeyId) return { userId: null, source: `api_key:${ctx.apiKeyId}` };
-  return jobAuthor("oxagen");
+  if (ctx.apiKeyId) {
+    return { userId: actingUserId, source: `api_key:${ctx.apiKeyId}` };
+  }
+  return actingUserId === null ? jobAuthor("oxagen") : personAuthor(actingUserId);
+}
+
+/** authorOf, for a caller that has not resolved the acting user. */
+export async function actingAuthor(
+  ctx: ActingCredential,
+): Promise<SteeringPrAuthor> {
+  return authorOf(ctx, await resolveActingUserId(ctx));
 }
 
 export interface SteeringPrRecord {

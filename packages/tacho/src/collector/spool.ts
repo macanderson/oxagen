@@ -622,8 +622,13 @@ export class Shipper {
     // is not. A control plane outage lapses every cached bundle at once, so
     // purging on it would destroy the queued evidence of every session on
     // this host.
+    //
+    // Awaited, because a long session's body file holds gigabytes and the
+    // synchronous `dropBodies` read all of it on the daemon's only thread
+    // (ADR-231). The bodies to send were chosen above, so nothing the drop
+    // does while it waits changes this batch.
     if (retention.proven && withdrawn.length > 0) {
-      const dropped = this.options.wal.dropBodies(withdrawn);
+      const dropped = await this.options.wal.dropBodiesAsync(withdrawn);
       if (dropped > 0)
         this.options.log(
           `retention: dropped ${String(dropped)} body(ies) the mandate no longer covers`,

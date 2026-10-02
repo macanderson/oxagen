@@ -177,7 +177,7 @@ export function createRepositoryUnlinkHandler(
           : {
               store: deps.proposals,
               scope,
-              author: authorOf(ctx),
+              author: authorOf(ctx, actingUserId),
               now: new Date(),
             },
       );

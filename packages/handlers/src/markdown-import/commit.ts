@@ -38,7 +38,7 @@ import type {
 } from "@oxagen/oxagen/contracts/steering.markdown_import.shared";
 import { assertContractRole } from "../lib/capability-role-guard";
 import type { MemoryDraft } from "../memory/types";
-import { authorOf } from "../steering-repo/pr-proposal";
+import { actingAuthor } from "../steering-repo/pr-proposal";
 import { markdownImportBranch } from "../steering-repo/stamp";
 import type { ToolsPullRequestFile } from "../tools.pr.open";
 import type { ImportScope, MarkdownImportDeps } from "./deps";
@@ -275,7 +275,7 @@ export function createCommitMarkdownImportHandler(
       }),
       commitMessage: `steering: import ${counts} from Markdown`,
       files,
-      author: authorOf(ctx),
+      author: await actingAuthor(ctx),
     });
     return {
       pullRequest: {

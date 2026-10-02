@@ -44,6 +44,7 @@ import {
   type SteeringHost,
   type SteeringRepository,
 } from "../context.steering.github";
+import { logger } from "../logger";
 import { githubRepoRef } from "../repository.workspace-toml";
 import {
   convertOxagenTree,
@@ -772,30 +773,40 @@ async function advance(
       ]);
       conversion = await convert(state.source, { workspaceToml, governanceToml });
       for (const branch of conversion.branches) {
-        if (state.pull_requests.some((pr) => pr.branch === branch.branch)) continue;
-        const opened = await openImportPullRequest(
-          steering,
-          base,
-          conversion,
-          branch,
-          state.source.relinked,
-        );
-        state.pull_requests.push(opened);
-        await save();
-        const headSha =
-          deps.recordPullRequest === undefined
-            ? null
-            : await steering.host.branchHead(steering.repo, branch.branch);
-        if (deps.recordPullRequest !== undefined && headSha !== null) {
-          await deps.recordPullRequest(scope, {
-            repo: steering.repo,
-            number: opened.number,
-            url: opened.url,
-            branch: branch.branch,
-            headSha,
-            title: importPullRequestTitle(conversion, branch),
-            paths: branch.files.map((file) => file.path),
-          });
+        let opened = state.pull_requests.find((pr) => pr.branch === branch.branch);
+        if (opened === undefined) {
+          opened = await openImportPullRequest(
+            steering,
+            base,
+            conversion,
+            branch,
+            state.source.relinked,
+          );
+          state.pull_requests.push(opened);
+          await save();
+        }
+        // Every PR the state holds gets its row, not only one opened in this
+        // call: a run that stopped after the save above and before the row
+        // was written records it here on the rerun. Writing the row again for
+        // the same PR moves it to the branch's head and changes nothing else.
+        if (deps.recordPullRequest !== undefined) {
+          const headSha = await steering.host.branchHead(steering.repo, branch.branch);
+          if (headSha === null) {
+            logger.warn(
+              { ...scope, branch: branch.branch, pr: opened.url },
+              "steering_repo.import: the PR's branch has no head, so its proposal row is not written",
+            );
+          } else {
+            await deps.recordPullRequest(scope, {
+              repo: steering.repo,
+              number: opened.number,
+              url: opened.url,
+              branch: branch.branch,
+              headSha,
+              title: importPullRequestTitle(conversion, branch),
+              paths: branch.files.map((file) => file.path),
+            });
+          }
         }
       }
       state.left_for_a_person = leftForAPerson(conversion);

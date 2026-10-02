@@ -393,6 +393,33 @@ describe("a steering PR (#5122)", () => {
       },
     });
     expect(screen.queryByTestId("change-merge")).toBeNull();
+    expect(callbacks.onMergeable).not.toHaveBeenCalledWith(true);
+    expect(callbacks.onMergeable).toHaveBeenLastCalledWith(false);
+  });
+
+  it("offers Merge on a steering PR whose last checks failed, since the merge runs them again", async () => {
+    await loaded({
+      ...PASSED,
+      kind: "tools",
+      lineage: "tools/billing",
+      status: "checks_failed",
+    });
+    await waitFor(() => {
+      expect(callbacks.onMergeable).toHaveBeenLastCalledWith(true);
+    });
+    expect(screen.getByTestId("change-merge")).toBeEnabled();
+  });
+
+  it("offers no Merge on a steering PR that was closed (negative)", async () => {
+    await loaded({
+      ...PASSED,
+      kind: "import",
+      lineage: "steering/import-2026-09-28",
+      status: "rejected",
+    });
+    expect(screen.queryByTestId("change-merge")).toBeNull();
+    expect(callbacks.onMergeable).not.toHaveBeenCalledWith(true);
+    expect(callbacks.onMergeable).toHaveBeenLastCalledWith(false);
   });
 });
 
