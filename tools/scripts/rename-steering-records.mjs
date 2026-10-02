@@ -65,8 +65,6 @@ const PROTECT = [
   /\bADR-\d{3}-[a-z0-9-]+/g,
 ];
 
-const lower = (s) => s.toLowerCase();
-
 /** Code and path rules. They run on file paths and on file contents. */
 const CODE_RULES = [
   // snake_case and SCREAMING_SNAKE
@@ -240,7 +238,7 @@ function trackedFiles() {
 const IDENT = /[A-Za-z0-9_$]+/g;
 
 /** Every identifier a rename produces that the tree already holds. */
-function collisions(files, contents) {
+function collisions(contents) {
   const pairs = new Map();
   for (const [file, text] of contents) {
     for (const m of text.matchAll(IDENT)) {
@@ -280,7 +278,7 @@ function main() {
   }
 
   if (PLAN) {
-    for (const found of collisions(files, contents)) {
+    for (const found of collisions(contents)) {
       console.log(
         `collision ${found.from} -> ${found.to}: ${found.holders} file(s) already hold it` +
           (found.both.length ? `; both in ${found.both.join(", ")}` : ""),
