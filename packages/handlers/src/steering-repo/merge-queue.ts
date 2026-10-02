@@ -742,6 +742,7 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
           commitTitle: input.commitTitle,
           sha: mergedHead,
           commitMessage: trailers,
+          base: main,
         })
       ).sha;
       return {

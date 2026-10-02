@@ -31,6 +31,7 @@ describe("buildCommands", () => {
       "/acme/core-platform/agents",
       "/acme/core-platform/steering",
       "/acme/core-platform/spend",
+      "/acme/core-platform/work",
       "/acme/core-platform/repositories",
       "/acme",
       "/acme/roles",
@@ -41,7 +42,7 @@ describe("buildCommands", () => {
     expect(go.every((c) => c.id.startsWith("go:"))).toBe(true);
     expect(
       go.map((c) => ("shortcut" in c ? (c.shortcut ?? null) : null)),
-    ).toEqual([1, 2, 3, 4, null, null, null, null, null, null]);
+    ).toEqual([1, 2, 3, 4, null, null, null, null, null, null, null]);
   });
 
   it("offers no Model funding or Single sign-on page: neither is a route in the design (negative)", () => {
