@@ -630,6 +630,8 @@ const TACHO_RECALL_PER_MIN = 120;
 // rejects each work order it receives, and a retry of either must not spend
 // the command poll's bucket. A backfill asks once per 500 sessions, a burst
 // at its start that must not starve the command poll either (ADR-161).
+// tacho.host.enroll.test.ts and tacho.events.ingest.test.ts write out the
+// credential ceiling this sets, so a new bucket changes both tests.
 const TACHO_OWN_BUCKET_PATHS = 6;
 
 // Tacho hosts speak to Oxagen with their enrolled API key, whose scope pins
