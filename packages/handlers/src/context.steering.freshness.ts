@@ -70,7 +70,7 @@ export function createGetSteeringFreshnessHandler(
     const [{ version: steeringVersion, publication }, binding, settings, sync] =
       await Promise.all([
         deps.store.versionAndPublication(scope),
-        // The same seam Context PRs resolve through, not a binding-only
+        // The same seam steering PRs resolve through, not a binding-only
         // query of its own. A workspace still on the legacy sources wizard
         // has no `repository_binding_heads` row, and the wizard's
         // `delivery_config` is what `context.steering.github.ts` falls back

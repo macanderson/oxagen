@@ -191,7 +191,7 @@ describe("GitLab webhook: merge request state comes from the API", () => {
     expect(state.mrReads).toBe(1);
   });
 
-  it("leaves a merged merge request for merge_context_pr to publish", async () => {
+  it("leaves a merged merge request for merge_steering_pr to publish", async () => {
     const { deps, state } = world({ mrState: "merged" });
     await expect(deliver(deps, mrEvent({ state: "merged" }))).resolves.toEqual({
       status: 202,
@@ -304,7 +304,7 @@ describe("GitLab webhook: the repository sync (ADR-184)", () => {
   });
 
   it("asks for a sync on a merge even when no open proposal holds the merge request", async () => {
-    // Most merges onto the production branch are not Context PRs. The sync
+    // Most merges onto the production branch are not steering PRs. The sync
     // still has to read them, because a person can edit .oxagen/rules/ in any
     // merge request.
     const { deps, state } = world({ mrState: "merged" });

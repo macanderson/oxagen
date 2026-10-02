@@ -14,8 +14,8 @@
 //
 // A refusal comes back as the kernel seam classified it (`ActionResult`), and
 // the dialog names the code in its own words (./action-failure.ts).
-import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
-import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
+import { steeringPrOpen } from "@oxagen/oxagen/contracts/steering.pr.open";
+import { steeringProposalCreate } from "@oxagen/oxagen/contracts/steering.proposal.create";
 import { workBriefApprove } from "@oxagen/oxagen/contracts/work.brief.approve";
 import { workBriefSave } from "@oxagen/oxagen/contracts/work.brief.save";
 import { workCollectorSet } from "@oxagen/oxagen/contracts/work.collector.set";
@@ -439,7 +439,7 @@ export async function proposePriorities(
   input: { statement: string },
 ): Promise<ActionResult<{ proposalId: string; lineageId: string }>> {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, contextProposalCreate, {
+  const result = await kernelWrite(ctx, steeringProposalCreate, {
     record: {
       lineageId: PRIORITIES_LINEAGE,
       label: "Work priorities",
@@ -461,7 +461,7 @@ export async function proposePriorities(
 
 /**
  * Open the steering pull request for a proposed priorities record
- * (open_context_pr). It answers with the pull request, or null when the
+ * (open_steering_pr). It answers with the pull request, or null when the
  * workspace's steering repository could not take one.
  */
 export async function openPrioritiesPr(
@@ -470,7 +470,7 @@ export async function openPrioritiesPr(
   input: { proposalId: string },
 ): Promise<ActionResult<{ proposalId: string; pr: { number: number; url: string; repository: string } | null }>> {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, contextPrOpen, { proposalId: input.proposalId });
+  const result = await kernelWrite(ctx, steeringPrOpen, { proposalId: input.proposalId });
   if (!result.ok) return result;
   const pr = result.value.pr;
   return {

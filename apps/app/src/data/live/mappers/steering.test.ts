@@ -1,11 +1,11 @@
 // The steering mappers over real contract-output samples: each output maps
-// into a view model its schema accepts, a record no Context PR wrote keeps its
-// nulls, a proposal before its pull request carries none, and the Context PR
+// into a view model its schema accepts, a record no steering PR wrote keeps its
+// nulls, a proposal before its pull request carries none, and the steering PR
 // carries its checks, what merge will do and, once merged, the promotion.
 import { describe, expect, it } from "vitest";
-import { ContextPr, ProposalPage, RecordPage } from "@/data/contracts/steering";
+import { SteeringPr, ProposalPage, RecordPage } from "@/data/contracts/steering";
 import {
-  contextPrOutput,
+  steeringPrOutput,
   LINEAGE,
   PR_URL,
   proposalOutput,
@@ -14,7 +14,7 @@ import {
   recordsOutput,
 } from "@/test/steering-outputs";
 import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
-import { toContextPr, toOxagenTree, toProposalPage, toRecordPage } from "./steering";
+import { toSteeringPr, toOxagenTree, toProposalPage, toRecordPage } from "./steering";
 
 describe("toRecordPage", () => {
   it("keeps each record's classification, commit, file, tokens and weekly price, and the total", () => {
@@ -55,7 +55,7 @@ describe("toRecordPage", () => {
     });
   });
 
-  it("keeps the nulls of a record publish_context_record wrote, never inventing a kind or a commit", () => {
+  it("keeps the nulls of a record publish_steering_record wrote, never inventing a kind or a commit", () => {
     const view = RecordPage.parse(
       toRecordPage(
         recordsOutput([
@@ -108,7 +108,7 @@ describe("toProposalPage", () => {
     });
   });
 
-  it("carries no pull request and no tally before a Context PR opens", () => {
+  it("carries no pull request and no tally before a steering PR opens", () => {
     const view = ProposalPage.parse(
       toProposalPage({
         proposals: [
@@ -125,9 +125,9 @@ describe("toProposalPage", () => {
   });
 });
 
-describe("toContextPr", () => {
+describe("toSteeringPr", () => {
   it("maps the state machine, the pull request, the checks and what merge will do", () => {
-    const view = ContextPr.parse(toContextPr(contextPrOutput()));
+    const view = SteeringPr.parse(toSteeringPr(steeringPrOutput()));
     expect(view).toMatchObject({
       proposalId: "prp_01k5ru4a",
       status: "checks_passed",
@@ -155,9 +155,9 @@ describe("toContextPr", () => {
   });
 
   it("carries the promotion event and the published record once merged", () => {
-    const view = ContextPr.parse(
-      toContextPr(
-        contextPrOutput({
+    const view = SteeringPr.parse(
+      toSteeringPr(
+        steeringPrOutput({
           status: "merged",
           merged: {
             commit: "4d5e6f7a8b9c",
@@ -182,9 +182,9 @@ describe("toContextPr", () => {
   });
 
   it("has no pull request, body, checks or mode before the pull request opens", () => {
-    const view = ContextPr.parse(
-      toContextPr(
-        contextPrOutput({
+    const view = SteeringPr.parse(
+      toSteeringPr(
+        steeringPrOutput({
           status: "proposed",
           governanceMode: null,
           pr: null,

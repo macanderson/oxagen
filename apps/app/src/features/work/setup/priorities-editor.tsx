@@ -6,7 +6,7 @@
 // common rules the person edits, removes, reorders, or adds to.
 //
 // Saving proposes the record (propose_record) and opens its steering pull
-// request (open_context_pr) in one step. The record lives in the steering
+// request (open_steering_pr) in one step. The record lives in the steering
 // repository like every steering record, and triage reads it once that pull
 // request merges. A retry after the pull request failed to open reuses the
 // proposal, because a second proposal on the same record is refused.

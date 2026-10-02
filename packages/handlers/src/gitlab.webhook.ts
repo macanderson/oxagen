@@ -471,17 +471,17 @@ export function gitlabWebhookDeps(): GitLabWebhookDeps {
       const [row] = await withTenantDb((tx) =>
         tx
           .select({
-            id: schema.contextProposals.id,
-            publicId: schema.contextProposals.publicId,
+            id: schema.steeringProposals.id,
+            publicId: schema.steeringProposals.publicId,
           })
-          .from(schema.contextProposals)
+          .from(schema.steeringProposals)
           .where(
             and(
-              eq(schema.contextProposals.orgId, scope.orgId),
-              eq(schema.contextProposals.workspaceId, scope.workspaceId),
-              eq(schema.contextProposals.provider, GITLAB_PROVIDER),
-              eq(schema.contextProposals.prNumber, iid),
-              inArray(schema.contextProposals.status, [...OPEN_PR]),
+              eq(schema.steeringProposals.orgId, scope.orgId),
+              eq(schema.steeringProposals.workspaceId, scope.workspaceId),
+              eq(schema.steeringProposals.provider, GITLAB_PROVIDER),
+              eq(schema.steeringProposals.prNumber, iid),
+              inArray(schema.steeringProposals.status, [...OPEN_PR]),
             ),
           )
           .limit(1),

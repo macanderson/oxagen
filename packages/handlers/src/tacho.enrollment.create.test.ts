@@ -170,7 +170,7 @@ function happyDb(clash = false, records: SteeringRow[] = []): void {
             findFirst: async () => ({ containmentRequired: false }),
           },
         },
-        // The steering read: the ledger count over `context_promotions`
+        // The steering read: the ledger count over `steering_promotions`
         // (awaited straight off `.where()`) and `records` joined to their
         // pinned versions (`.leftJoin().where()`). The fake counts one
         // promotion per record, since a merge appends one. With no records

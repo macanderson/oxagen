@@ -175,7 +175,7 @@ interface Fake {
   updates: Array<{ table: string; values: Record<string, unknown> }>;
   inserts: Array<{ table: string; values: Record<string, unknown> }>;
   /**
-   * Active context records the workspace has published, each joined to its
+   * Active steering records the workspace has published, each joined to its
    * pinned version, as the steering read selects them. The fake counts the
    * promotions ledger as one row per record: a merge appends one.
    */
@@ -289,13 +289,13 @@ function wire(db: Fake, apiKey: Record<string, unknown> = HOST_KEY): void {
           },
           workspaces: { findFirst: async () => undefined },
         },
-        // The steering read: the ledger count over `context_promotions`
+        // The steering read: the ledger count over `steering_promotions`
         // (the bundle cache key) and the records joined to their pinned
         // versions. Any other table answers what it did before.
         select: () => ({
           from: (table: unknown) => ({
             where: async () =>
-              tableName(table) === "context_promotions"
+              tableName(table) === "steering_promotions"
                 ? [
                     {
                       ledger: (db.records ?? []).length,

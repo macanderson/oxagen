@@ -18,7 +18,7 @@
 //   5. Open one steering PR with every file through the steering PR opener
 //      (opener.ts). It runs the steering checks on the new head and reports
 //      them as the "Oxagen steering" check, and writes the PR's `import`
-//      proposal row with the caller as its author, so merge_context_pr can
+//      proposal row with the caller as its author, so merge_steering_pr can
 //      land it (#5122). A commit with no record or policy marked add opens
 //      none.
 //

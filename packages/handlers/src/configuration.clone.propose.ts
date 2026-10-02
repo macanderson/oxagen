@@ -3,13 +3,13 @@ import { applyCloneIdentity } from "./configuration-clone-draft";
 import { parse } from "smol-toml";
 import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
-import { CONTEXT_RECORD_LABEL_MAX } from "@oxagen/oxagen/context-record-label";
+import { STEERING_RECORD_LABEL_MAX } from "@oxagen/oxagen/steering-record-label";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { configurationClonePropose } from "@oxagen/oxagen/contracts/configuration.clone.propose";
 import { skillPropose } from "@oxagen/oxagen/contracts/skill.propose";
-import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
+import { steeringProposalCreate } from "@oxagen/oxagen/contracts/steering.proposal.create";
 import { createProposeSkillHandler } from "./skill.propose";
-import { createProposeRecordHandler } from "./context.proposal.create";
+import { createProposeRecordHandler } from "./steering.proposal.create";
 import { type SteeringGitHub } from "./context.steering.github";
 import { createSteeringHost } from "./context.steering.host";
 import {
@@ -75,11 +75,11 @@ export function createConfigurationCloneProposeHandler(deps: {
     // its label (ADR-178). Refuse a long one here, before the record parse
     // throws an untyped ZodError. The MCP tool spreads the contract's
     // `.shape`, so the contract cannot carry a per-kind refinement.
-    if (input.kind === "record" && input.name.length > CONTEXT_RECORD_LABEL_MAX)
+    if (input.kind === "record" && input.name.length > STEERING_RECORD_LABEL_MAX)
       throw new CapabilityError(
         configurationClonePropose.name,
         "invalid_input",
-        `A record's label is at most ${CONTEXT_RECORD_LABEL_MAX} characters. Choose a shorter name.`,
+        `A record's label is at most ${STEERING_RECORD_LABEL_MAX} characters. Choose a shorter name.`,
       );
     const userId = await resolveActingUserId(ctx);
     await assertOrgRole({ ...ctx, userId }, { org: ["Owner", "Admin"] });
@@ -142,7 +142,7 @@ export function createConfigurationCloneProposeHandler(deps: {
         pullRequest: proposal.pullRequest,
       };
     }
-    const record = contextProposalCreate.input.parse({
+    const record = steeringProposalCreate.input.parse({
       record: parse(source),
       rationale,
       support: {

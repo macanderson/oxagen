@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { LEGACY_RECORD_SCHEMA } from "../steering-repo/paths";
 import {
   CHECK_NAMES,
   checkResultSchema,
@@ -107,7 +108,7 @@ describe("steering vocabulary", () => {
       checkResultSchema.safeParse({
         name: "schema",
         status: "passed",
-        summary: "context-record/v0.1 valid",
+        summary: `${LEGACY_RECORD_SCHEMA} valid`,
         detailsUrl: null,
         startedAt: "2026-09-15T00:00:00.000Z",
         completedAt: "2026-09-15T00:00:01.000Z",
@@ -115,7 +116,7 @@ describe("steering vocabulary", () => {
     ).toBe(true);
   });
 
-  it("names every state of the Context PR state machine and no candidate state", () => {
+  it("names every state of the steering PR state machine and no candidate state", () => {
     expect(proposalStatusSchema.options).toEqual([
       "proposed",
       "pr_open",

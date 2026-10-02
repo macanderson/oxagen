@@ -147,7 +147,7 @@ describe("the repository dialog", () => {
       "Every record lives in the steering repository",
     );
     expect(root).not.toHaveTextContent("Scope is repository");
-    expect(root).not.toHaveTextContent("Context PR");
+    expect(root).not.toHaveTextContent("Steering PR");
     expect(root).toHaveTextContent("1 file at fedcba9");
     await user.click(within(root).getByTestId("repository-dialog-changes"));
     expect(handlers.onSeeChanges).toHaveBeenCalledTimes(1);

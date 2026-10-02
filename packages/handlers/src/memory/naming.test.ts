@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CONTEXT_RECORD_LINEAGE } from "@oxagen/oxagen/context-record-label";
+import { STEERING_RECORD_LINEAGE } from "@oxagen/oxagen/steering-record-label";
 import {
   classifySteeringRepoPath,
   recordLineageFromPath,
@@ -27,7 +27,7 @@ describe("memoryLineage", () => {
       new Set(),
     );
     expect(lineage.length).toBeLessThanOrEqual(MEMORY_LINEAGE_MAX);
-    expect(lineage).toMatch(CONTEXT_RECORD_LINEAGE);
+    expect(lineage).toMatch(STEERING_RECORD_LINEAGE);
     expect(lineage.endsWith("-")).toBe(false);
   });
 
@@ -42,7 +42,7 @@ describe("memoryLineage", () => {
     const second = memoryLineage(statement, new Set([first]));
     expect(second.length).toBeLessThanOrEqual(MEMORY_LINEAGE_MAX);
     expect(second.endsWith("-2")).toBe(true);
-    expect(second).toMatch(CONTEXT_RECORD_LINEAGE);
+    expect(second).toMatch(STEERING_RECORD_LINEAGE);
   });
 
   it("names a statement with no file-safe words memory", () => {

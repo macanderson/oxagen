@@ -2,6 +2,7 @@ import { parse, stringify } from "smol-toml";
 import { parseDocument } from "yaml";
 import { HandlerError } from "@oxagen/oxagen";
 import { proposedRecordSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
+import { LEGACY_RECORD_SCHEMA } from "@oxagen/oxagen/steering-repo/paths";
 import { readSkillFrontmatter } from "./skill-validation";
 import type { ConfigurationSource } from "./configuration-clone-source";
 
@@ -38,7 +39,7 @@ export function clonedConfigurationText(
     return `---\n${String(header)}---\n${lines.slice(frontmatter.bodyStart).join("\n")}`;
   }
   const file = parseSource(original.source);
-  if (file.schema !== "context-record/v0.1" || !Array.isArray(file.record))
+  if (file.schema !== LEGACY_RECORD_SCHEMA || !Array.isArray(file.record))
     return invalid();
   const rows: unknown[] = file.record;
   const raw = rows.find(

@@ -8,7 +8,7 @@
 // The page reads on demand through its server actions: the bound
 // repositories first (a local read, so it draws while GitHub is down), then
 // the repositories the installation reaches, what each bound one holds under
-// `.oxagen/`, and the Context PRs, in parallel. The Working copies tab reads
+// `.oxagen/`, and the steering PRs, in parallel. The Working copies tab reads
 // the directories the CLI reported when it shows. Every write re-reads them
 // all, so a row never goes on describing a state the person has just changed.
 //
@@ -256,7 +256,7 @@ export function Repositories({
     "code" in reachable.failure &&
     UNCONNECTED.has(reachable.failure.code);
   const openCount = changes.kind === "ready" ? changes.value.open : 0;
-  // A Context PR can merge or close on the repository host at any moment, and
+  // A steering PR can merge or close on the repository host at any moment, and
   // the repository sync moves its change within seconds (ADR-184). While one
   // is open, re-read the list so the new state shows up without a reload.
   useEffect(() => {

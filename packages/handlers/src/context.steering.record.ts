@@ -1,11 +1,11 @@
-// context.steering.record.ts: the steering record a Context PR writes in a
+// context.steering.record.ts: the steering record a steering PR writes in a
 // steering repo (#4731).
 //
 // A legacy repo keeps one TOML file per record under .oxagen/rules/. A
 // steering repo reads each record as Markdown with YAML frontmatter
 // (steering-record/v1) at any path under steering/, and its required check
 // refuses a steering/ branch that changes .oxagen/rules/. So in a steering
-// repo, open_context_pr writes the proposal as a steering record:
+// repo, open_steering_pr writes the proposal as a steering record:
 //
 // - A new record goes to steering/<folder>/<lineage>.md. The spec gives
 //   folders no meaning, so the folder names the record's kind, the one field

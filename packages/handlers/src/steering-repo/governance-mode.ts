@@ -11,7 +11,7 @@
 // PR's head and reports the required `Oxagen steering` check there.
 //
 // - Review (team or regulated): the PR stays open and waits for review. The
-//   handler records it as a governance proposal, and merge_context_pr lands
+//   handler records it as a governance proposal, and merge_steering_pr lands
 //   it for an approver through landGovernancePr below (#4795, ADR-232).
 // - Land at once (solo, or the override): the PR goes through the steering
 //   merge queue. The queue brings the branch up to date, stamps the ledger
@@ -113,14 +113,14 @@ export const productionSteeringGovernanceSeams: SteeringGovernanceSeams = {
     const { readSteeringHealth } = await import("./health.read");
     return readSteeringHealth(repo, scope);
   },
-  // The same publisher merge_context_pr lands through, so a governance merge
+  // The same publisher merge_steering_pr lands through, so a governance merge
   // takes its version from the same store under the same lock.
   publisher: async (scope, host) => {
-    const { productionMergeSeams } = await import("../context.pr.merge");
+    const { productionMergeSeams } = await import("../steering.pr.merge");
     const build = productionMergeSeams.publisher;
     if (!build) {
       throw new Error(
-        "set_governance_mode: merge_context_pr binds no steering publisher",
+        "set_governance_mode: merge_steering_pr binds no steering publisher",
       );
     }
     return build(scope, host);
@@ -510,7 +510,7 @@ export interface GovernanceLanded {
  * deployment for a version that went live. The caller holds the merge queue
  * and has checked the repository's health.
  *
- * set_governance_mode lands solo and Apply now through it. merge_context_pr
+ * set_governance_mode lands solo and Apply now through it. merge_steering_pr
  * lands a reviewed governance proposal through it (#4795).
  */
 export async function landGovernancePr(

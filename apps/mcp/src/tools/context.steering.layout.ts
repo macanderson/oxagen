@@ -8,7 +8,7 @@ import { buildContext } from "../context";
  * The tool an agent calls to learn which layout the workspace's bound
  * repository uses before it proposes a record (#4765). A steering repository
  * keeps records under `steering/`, a legacy one under `.oxagen/rules/`, and
- * `open_context_pr` picks the path and branch from this same read.
+ * `open_steering_pr` picks the path and branch from this same read.
  */
 export const schema = contextSteeringLayout.input.shape;
 

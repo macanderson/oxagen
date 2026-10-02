@@ -1,6 +1,12 @@
 // work.collector.set.ts: set_work_collector, create or change a GitHub work
 // collector, or pause and resume one (P1-03, #5103). A new, resumed, or
 // widened collector reads its repositories at once.
+//
+// Only a signed-in person changes a collector (Mac, 2026-10-02, #5181;
+// ADR-250). A collector decides what the workspace takes in. An agent on its
+// operator's machine can read an `oxagen login` key, so every API key is
+// refused, and so is an agent run, before anything is written. An agent may
+// still file a work item (create_work_item).
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   workCollectorSet,
@@ -40,10 +46,27 @@ export const defaultWorkCollectorSetDeps: WorkCollectorSetDeps = {
 
 export function createWorkCollectorSetHandler(deps: WorkCollectorSetDeps): CapabilityHandler<typeof workCollectorSet> {
   return async (input, ctx): Promise<WorkCollectorSetOutput> => {
+    // Who is calling comes first, the way lib/work-records/actor.ts checks a
+    // work decision: an agent run, then any API key, including an
+    // `oxagen login` key that resolves to the person who approved the login.
+    if (ctx.agentRun) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "agent_run",
+        message: "An agent run cannot change a collector. A person sets up collectors in Oxagen.",
+      });
+    }
+    if (ctx.apiKeyId || !ctx.userId) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "person_required",
+        message: "Sign in to Oxagen to set up a collector. An API key cannot create, change, pause, or resume a collector.",
+      });
+    }
     await assertContractRole(workCollectorSet, ctx);
     // assertContractRole answers the role that passed, not who acted. The
     // actor is the person the call acts as, which the record stores as a
-    // user id.
+    // user id. With every API key refused above, that is the session's user.
     const actorUserId = await resolveActingUserId(ctx);
     if (actorUserId === null) {
       throw new HandlerError({

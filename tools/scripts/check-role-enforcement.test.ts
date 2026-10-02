@@ -408,7 +408,7 @@ describe("the #4194 baseline and coverage", () => {
     for (const stem of [
       "api.key.list",
       "api.key.rotate",
-      "context.pr.merge",
+      "steering.pr.merge",
       "org.member.add",
       "org.member.remove",
       "org.member_role.change",

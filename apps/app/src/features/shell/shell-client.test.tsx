@@ -441,7 +441,7 @@ describe("command menu", () => {
       "Create a model key for this organization",
       "Create anything",
       "Add a skill",
-      "Write a context record",
+      "Write a steering record",
       "Cut 4.11.0 release notes",
       "Pause every live run in this workspace",
       "Steer the fleet",

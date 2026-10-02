@@ -95,7 +95,7 @@ export function createRunWorkGetHandler(
         deps.commandFrames(run.sessionUuid),
       ]);
     // A session's first hook is sealed before its first Git read, so it names
-    // a path and nothing else. It folds into the Git context recorded at the
+    // a path and nothing else. It folds into the Git context read at the
     // same path, rather than standing as a checkout no repository or branch
     // can match, which kept the work incomplete for good (#3791).
     const located = foldProvisionalContexts(contexts);

@@ -1362,7 +1362,7 @@ export const agentRunFinalizationObligations = agentSchema.table(
 
 // ── Workspace agent-asset registry (stella-cutover Wave 4) ───────────────────
 //
-// Tool declarations + context records: a logical identity row keyed
+// Tool declarations + steering records: a logical identity row keyed
 // (workspace_id, slug) plus immutable version snapshots, an explicitly pinned
 // active_version_id, and soft delete on the identity row only. Migration
 // 20260831120000_agent_asset_registry.sql.
@@ -1514,24 +1514,24 @@ export const toolVersions = agentSchema.table(
   }),
 );
 
-// Steering/context records — the published registry. Stella keeps these as
+// Steering records — the published registry. Stella keeps these as
 // .oxagen/rules/<lineage>.toml, one record per file; the slug is the file stem
 // and the lineage id (MC spec §10.2). Lifecycle (status) is driven by the
-// append-only contextPromotions ledger below, never edited directly.
+// append-only steeringPromotions ledger below, never edited directly.
 //
 // The classification columns (kind, force, constraint_effect, statement) are
-// required on every write, by merge_context_pr (ADR-061) and by
-// publish_context_record alike (#3302; migration `20260920130000`). Before
-// #3302, publish_context_record wrote only the body, so a record it published
+// required on every write, by merge_steering_pr (ADR-061) and by
+// publish_steering_record alike (#3302; migration `20260920130000`). Before
+// #3302, publish_steering_record wrote only the body, so a record it published
 // carried NULL in all four and sat active in the registry without ever
 // reaching an agent — readWorkspaceSteering only ever delivers a record whose
 // force is must or should, and nothing told the publisher their record never
 // steered. The publication columns (commit_sha, path, published_at) stay
-// NULL on a record published through publish_context_record: that path
+// NULL on a record published through publish_steering_record: that path
 // writes no commit, because merge — not this call — is the publication event
-// for a Context PR (ADR-061 §10).
-export const contextRecords = agentSchema.table(
-  "context_records",
+// for a steering PR (ADR-061 §10).
+export const steeringRecords = agentSchema.table(
+  "steering_records",
   {
     ...idMixin("ctr"),
     ...auditMixin(),
@@ -1544,16 +1544,16 @@ export const contextRecords = agentSchema.table(
     status: text("status").notNull().default("active"),
     validUntil: timestamp("valid_until", { withTimezone: true, mode: "date" }),
     activeVersionId: uuid("active_version_id").references(
-      (): AnyPgColumn => contextRecordVersions.id,
+      (): AnyPgColumn => steeringRecordVersions.id,
     ),
     activatedByUserId: uuid("activated_by_user_id"),
     activatedAt: timestamp("activated_at", {
       withTimezone: true,
       mode: "date",
     }),
-    // The six kinds of context-record/v0.1 (Stella's file surface). Every
+    // The six kinds of a v0.1 record file (Stella's file surface). Every
     // write path has required one since #3302, enforced today at the
-    // application layer (contracts/context.record.publish.ts,
+    // application layer (contracts/steering.record.publish.ts,
     // context.steering.store.ts). The DB-level NOT NULL is a deliberate
     // follow-up migration (see migration `20260920150000`'s comment,
     // Codex round 3 on #3486): db-migrate.yml runs on no ordering guarantee
@@ -1583,47 +1583,47 @@ export const contextRecords = agentSchema.table(
     }),
   },
   (t) => ({
-    workspaceSlugIdx: uniqueIndex("context_records_workspace_slug_idx").on(
+    workspaceSlugIdx: uniqueIndex("steering_records_workspace_slug_idx").on(
       t.workspaceId,
       t.slug,
     ),
-    orgIdx: index("context_records_org_idx").on(t.orgId, t.workspaceId),
-    activeVersionIdx: index("context_records_active_version_idx").on(
+    orgIdx: index("steering_records_org_idx").on(t.orgId, t.workspaceId),
+    activeVersionIdx: index("steering_records_active_version_idx").on(
       t.activeVersionId,
     ),
     labelCheck: check(
-      "context_records_label_check",
+      "steering_records_label_check",
       sql`${t.label} IS NULL OR (length(btrim(${t.label})) BETWEEN 1 AND 36)`,
     ),
     statusCheck: check(
-      "context_records_status_check",
+      "steering_records_status_check",
       sql`${t.status} IN ('active', 'retired', 'superseded')`,
     ),
     kindCheck: check(
-      "context_records_kind_check",
+      "steering_records_kind_check",
       sql`${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference')`,
     ),
     forceCheck: check(
-      "context_records_force_check",
+      "steering_records_force_check",
       sql`${t.force} IN ('must', 'should', 'may', 'info')`,
     ),
     constraintEffectCheck: check(
-      "context_records_constraint_effect_check",
+      "steering_records_constraint_effect_check",
       sql`(${t.constraintEffect} IS NULL AND ${t.kind} IS DISTINCT FROM 'constraint') OR (${t.constraintEffect} IN ('require', 'forbid') AND ${t.kind} = 'constraint')`,
     ),
     sharingScopeCheck: check(
-      "context_records_sharing_scope_check",
+      "steering_records_sharing_scope_check",
       sql`${t.sharingScope} IN ('repository', 'workspace')`,
     ),
     commitShaCheck: check(
-      "context_records_commit_sha_check",
+      "steering_records_commit_sha_check",
       sql`${t.commitSha} IS NULL OR ${t.commitSha} ~ '^[0-9a-f]{7,40}$'`,
     ),
   }),
 );
 
-export const contextRecordVersions = agentSchema.table(
-  "context_record_versions",
+export const steeringRecordVersions = agentSchema.table(
+  "steering_record_versions",
   {
     ...idMixin("crv"),
     ...auditMixin(),
@@ -1638,46 +1638,46 @@ export const contextRecordVersions = agentSchema.table(
     // [{ type, uri?, range?, digest?, method?, by? }].
     provenance: jsonb("provenance").notNull().default(sql`'[]'::jsonb`),
     // The classification this version's body carries, written by
-    // merge_context_pr alongside the record row's copy. It belongs here
+    // merge_steering_pr alongside the record row's copy. It belongs here
     // because it describes the body: promoting an older version back into
     // service must compile what that version says, not what the record row
     // was last told (#3312). NULL in all four on a version the legacy
-    // publish_context_record path wrote; the record row is the fallback then.
+    // publish_steering_record path wrote; the record row is the fallback then.
     kind: text("kind"),
     force: text("force"),
     constraintEffect: text("constraint_effect"),
     statement: text("statement"),
   },
   (t) => ({
-    recordIdx: index("context_record_versions_record_idx").on(t.recordId),
-    recordLatestIdx: uniqueIndex("context_record_versions_record_latest_idx")
+    recordIdx: index("steering_record_versions_record_idx").on(t.recordId),
+    recordLatestIdx: uniqueIndex("steering_record_versions_record_latest_idx")
       .on(t.recordId)
       .where(sql`is_latest = true`),
     recordVersionIdx: uniqueIndex(
-      "context_record_versions_record_version_idx",
+      "steering_record_versions_record_version_idx",
     ).on(t.recordId, t.versionNumber),
-    orgIdx: index("context_record_versions_org_idx").on(t.orgId, t.workspaceId),
+    orgIdx: index("steering_record_versions_org_idx").on(t.orgId, t.workspaceId),
     checksumCheck: check(
-      "context_record_versions_checksum_check",
+      "steering_record_versions_checksum_check",
       sql`${t.checksum} ~ '^[0-9a-f]{64}$'`,
     ),
     kindCheck: check(
-      "context_record_versions_kind_check",
+      "steering_record_versions_kind_check",
       sql`${t.kind} IS NULL OR ${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference')`,
     ),
     forceCheck: check(
-      "context_record_versions_force_check",
+      "steering_record_versions_force_check",
       sql`${t.force} IS NULL OR ${t.force} IN ('must', 'should', 'may', 'info')`,
     ),
     constraintEffectCheck: check(
-      "context_record_versions_constraint_effect_check",
+      "steering_record_versions_constraint_effect_check",
       sql`(${t.constraintEffect} IS NULL AND ${t.kind} IS DISTINCT FROM 'constraint') OR (${t.constraintEffect} IN ('require', 'forbid') AND ${t.kind} = 'constraint')`,
     ),
   }),
 );
 
 /**
- * A classification column of {@link contextRecordVersions}, for the
+ * A classification column of {@link steeringRecordVersions}, for the
  * deploy-before-migrate probe.
  *
  * Migration `20260918160000` adds `kind`, `force`, `constraint_effect` and
@@ -1692,18 +1692,18 @@ export const contextRecordVersions = agentSchema.table(
  * One ref answers for all four: they are added by a single `ALTER TABLE`, so
  * either all four are there or none is.
  */
-export const CONTEXT_VERSION_CLASSIFICATION_COLUMN = {
+export const STEERING_VERSION_CLASSIFICATION_COLUMN = {
   schema: "agent",
-  table: "context_record_versions",
+  table: "steering_record_versions",
   column: "kind",
 } as const;
 
-// Append-only hash-chained ledger of context-record lifecycle actions,
+// Append-only hash-chained ledger of steering-record lifecycle actions,
 // mirroring Stella's promotions.jsonl: chain_digest = sha256(prev_digest +
 // canonical row), seq monotonic per record starting at 1. INSERT-only at the
 // grant level (no UPDATE/DELETE for oxagen_app) — a promotion is evidence.
-export const contextPromotions = agentSchema.table(
-  "context_promotions",
+export const steeringPromotions = agentSchema.table(
+  "steering_promotions",
   {
     ...idMixin("ctp"),
     ...appendOnlyAuditMixin(),
@@ -1720,35 +1720,35 @@ export const contextPromotions = agentSchema.table(
     chainDigest: text("chain_digest").notNull(),
   },
   (t) => ({
-    recordSeqIdx: uniqueIndex("context_promotions_record_seq_idx").on(
+    recordSeqIdx: uniqueIndex("steering_promotions_record_seq_idx").on(
       t.recordId,
       t.seq,
     ),
-    orgIdx: index("context_promotions_org_idx").on(t.orgId, t.workspaceId),
+    orgIdx: index("steering_promotions_org_idx").on(t.orgId, t.workspaceId),
     actionCheck: check(
-      "context_promotions_action_check",
+      "steering_promotions_action_check",
       sql`${t.action} IN ('promote', 'retire', 'supersede')`,
     ),
-    seqCheck: check("context_promotions_seq_check", sql`${t.seq} > 0`),
+    seqCheck: check("steering_promotions_seq_check", sql`${t.seq} > 0`),
     chainCheck: check(
-      "context_promotions_chain_check",
+      "steering_promotions_chain_check",
       sql`${t.chainDigest} ~ '^[0-9a-f]{64}$' AND (${t.prevChainDigest} IS NULL OR ${t.prevChainDigest} ~ '^[0-9a-f]{64}$') AND ((${t.seq} = 1) = (${t.prevChainDigest} IS NULL))`,
     ),
   }),
 );
 
-// A record proposal and the Context PR that publishes it (ADR-061, MC spec
+// A record proposal and the steering PR that publishes it (ADR-061, MC spec
 // §9.2, §10.3). One row is one concern: it carries the record it proposes,
 // the support it cites, and the state machine
 //   proposed → pr_open → checks_running → checks_passed | checks_failed → merged
 // with rejected reachable from proposed and from any open-PR state through
-// dismiss_proposal. The promotion event a merge writes is a contextPromotions
+// dismiss_proposal. The promotion event a merge writes is a steeringPromotions
 // row (promotion_event_id), never a field here: the ledger is append-only and
 // this row is not. A governance proposal (kind 'governance', #4795) is the
 // review-route PR set_governance_mode opens: it proposes no record, and its
 // merge writes no promotion event.
-export const contextProposals = agentSchema.table(
-  "context_proposals",
+export const steeringProposals = agentSchema.table(
+  "steering_proposals",
   {
     ...idMixin("prp"),
     ...auditMixin(),
@@ -1773,9 +1773,9 @@ export const contextProposals = agentSchema.table(
       .default(sql`'{}'`),
     evidenceLinks: text("evidence_links").array().notNull().default(sql`'{}'`),
     status: text("status").notNull().default("proposed"),
-    // ── The Context PR, set by open_context_pr ──────────────────────────────
+    // ── The steering PR, set by open_steering_pr ──────────────────────────────
     // The governance mode read from .oxagen/rules/governance.toml when the PR
-    // was opened; merge_context_pr reads the file again.
+    // was opened; merge_steering_pr reads the file again.
     governanceMode: text("governance_mode"),
     // The host the PR lives on: 'github' or 'gitlab' (#3762). `pr_number` is
     // only meaningful with it. A GitHub PR number and a GitLab merge request
@@ -1795,8 +1795,8 @@ export const contextProposals = agentSchema.table(
     // [{ name, status, summary, detailsUrl, startedAt, completedAt }], one
     // entry per §10.3 check, in the order they run.
     checks: jsonb("checks").notNull().default(sql`'[]'::jsonb`),
-    // ── The merge, set by merge_context_pr ──────────────────────────────────
-    // Set while merge_context_pr is landing the PR, so running the checks
+    // ── The merge, set by merge_steering_pr ──────────────────────────────────
+    // Set while merge_steering_pr is landing the PR, so running the checks
     // again cannot move the row under a merge the host is about to make. A
     // claim older than ten minutes has lapsed (#4504).
     mergeClaimedAt: timestamp("merge_claimed_at", {
@@ -1816,60 +1816,60 @@ export const contextProposals = agentSchema.table(
     dismissedReason: text("dismissed_reason"),
   },
   (t) => ({
-    orgIdx: index("context_proposals_org_idx").on(t.orgId, t.workspaceId),
-    lineageIdx: index("context_proposals_lineage_idx").on(
+    orgIdx: index("steering_proposals_org_idx").on(t.orgId, t.workspaceId),
+    lineageIdx: index("steering_proposals_lineage_idx").on(
       t.workspaceId,
       t.lineageId,
     ),
     // One concern, one pull request: at most one open PR per lineage.
-    openPrIdx: uniqueIndex("context_proposals_open_pr_idx")
+    openPrIdx: uniqueIndex("steering_proposals_open_pr_idx")
       .on(t.workspaceId, t.lineageId)
       .where(
         sql`status IN ('pr_open', 'checks_running', 'checks_passed', 'checks_failed')`,
       ),
     labelCheck: check(
-      "context_proposals_label_check",
+      "steering_proposals_label_check",
       sql`${t.label} IS NULL OR (length(btrim(${t.label})) BETWEEN 1 AND 36)`,
     ),
     // The six record kinds, a governance change (#4795), and the steering
     // PRs that change files rather than one record (#5122, ADR-265).
     kindCheck: check(
-      "context_proposals_kind_check",
+      "steering_proposals_kind_check",
       sql`${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference', 'governance', 'revert', 'tools', 'import', 'memory_pr', 'agent_file', 'agent_proposal', 'workspace')`,
     ),
     forceCheck: check(
-      "context_proposals_force_check",
+      "steering_proposals_force_check",
       sql`${t.force} IN ('must', 'should', 'may', 'info')`,
     ),
     constraintEffectCheck: check(
-      "context_proposals_constraint_effect_check",
+      "steering_proposals_constraint_effect_check",
       sql`(${t.constraintEffect} IS NULL AND ${t.kind} <> 'constraint') OR (${t.constraintEffect} IN ('require', 'forbid') AND ${t.kind} = 'constraint')`,
     ),
     sharingScopeCheck: check(
-      "context_proposals_sharing_scope_check",
+      "steering_proposals_sharing_scope_check",
       sql`${t.sharingScope} IN ('repository', 'workspace')`,
     ),
     statusCheck: check(
-      "context_proposals_status_check",
+      "steering_proposals_status_check",
       sql`${t.status} IN ('proposed', 'pr_open', 'checks_running', 'checks_passed', 'checks_failed', 'merged', 'rejected')`,
     ),
     providerCheck: check(
-      "context_proposals_provider_check",
+      "steering_proposals_provider_check",
       sql`${t.provider} IS NULL OR ${t.provider} IN ('github', 'gitlab')`,
     ),
     prProviderCheck: check(
-      "context_proposals_pr_provider_check",
+      "steering_proposals_pr_provider_check",
       sql`${t.prNumber} IS NULL OR ${t.provider} IS NOT NULL`,
     ),
     governanceModeCheck: check(
-      "context_proposals_governance_mode_check",
+      "steering_proposals_governance_mode_check",
       sql`${t.governanceMode} IS NULL OR ${t.governanceMode} IN ('solo', 'team', 'regulated')`,
     ),
     // Only a record proposal publishes a record and appends its promotion
     // event. A governance proposal (#4795) and a steering PR proposal (#5122)
     // publish no single record, so a merged one needs only its commit.
     mergedCheck: check(
-      "context_proposals_merged_check",
+      "steering_proposals_merged_check",
       sql`(${t.status} = 'merged') = (${t.mergedCommit} IS NOT NULL AND (${t.kind} NOT IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference') OR (${t.promotionEventId} IS NOT NULL AND ${t.publishedRecordId} IS NOT NULL)))`,
     ),
   }),
@@ -1880,7 +1880,7 @@ export const contextProposals = agentSchema.table(
 // context-use records and record proposals, content-addressed by
 // record_hash. Append-only: a correction is a new record on the same lineage
 // and superseded is derived, never stored. A `directive` never lands here;
-// it reaches the workspace only through a Context PR.
+// it reaches the workspace only through a steering PR.
 export const contextAppends = agentSchema.table(
   "context_appends",
   {

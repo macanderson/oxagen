@@ -164,7 +164,7 @@ const OPEN_CHANGE: RepositoryChanges["changes"][number] = {
   lineage: "ctx.scr.001-never-push-to-main",
   statement: "Never push to main",
   why: "Main is shared and contested.",
-  kind: "context_record",
+  kind: "steering_record",
   pullRequest: {
     number: 42,
     url: "https://github.com/acme/platform/pull/42",
@@ -185,7 +185,7 @@ const CHANGES: RepositoryChanges = {
       lineage: "ctx.scr.002-run-tests-before-a-pr",
       statement: "Run tests before a PR",
       why: "CI is the gate, not the first reviewer.",
-      kind: "context_record",
+      kind: "steering_record",
       pullRequest: {
         number: 41,
         url: "https://github.com/acme/platform/pull/41",
@@ -547,7 +547,7 @@ describe("the Repositories tab", () => {
     expect(banner).toHaveTextContent("acme/docs-site");
     // #3340: every record lives in the steering repository (ADR-212), so the
     // panel promises a linked repository no records of its own and no
-    // Context PRs.
+    // steering PRs.
     expect(banner).toHaveTextContent(
       "Every record lives in the steering repository",
     );
@@ -555,7 +555,7 @@ describe("the Repositories tab", () => {
     expect(panel).toHaveTextContent(
       "A linked repo is a code repository the workspace’s agents work in",
     );
-    for (const promise of ["Context PR", "repository-scoped", "Scope is"]) {
+    for (const promise of ["Steering PR", "repository-scoped", "Scope is"]) {
       expect(banner).not.toHaveTextContent(promise);
       expect(panel).not.toHaveTextContent(promise);
     }
@@ -1423,7 +1423,7 @@ describe("the other tabs", () => {
     expect(actions.readWorkingCopies).toHaveBeenCalledTimes(2);
   });
 
-  it("Changes: every Context PR with its kind, opener, state and checks; each opens on its own path", async () => {
+  it("Changes: every steering PR with its kind, opener, state and checks; each opens on its own path", async () => {
     const { user } = await loaded("changes");
     const table = await screen.findByRole("table", {
       name: "Pull requests Oxagen opened",
@@ -1612,17 +1612,17 @@ describe("repository refusal messages", () => {
       expect(result.current({ ok: false, reason, code })).toContain(recovery);
   });
 
-  // #3340: a linked code repository never receives Context PRs (ADR-212), so
+  // #3340: a linked code repository never receives steering PRs (ADR-212), so
   // no refusal gives that as its reason.
   it.each(["main_repo_claimed", "repository_linked_elsewhere"])(
-    "gives %s a reason the code holds, with no Context PR claim",
+    "gives %s a reason the code holds, with no steering PR claim",
     (code) => {
       const { result } = renderHook(useRepositoriesFailure, {
         wrapper: IntlProvider,
       });
       const said = result.current({ ok: false, reason: "conflict", code });
       expect(said).toContain("steering");
-      expect(said).not.toContain("Context PR");
+      expect(said).not.toContain("Steering PR");
     },
   );
 
@@ -1812,7 +1812,7 @@ describe("change read states", () => {
 });
 
 describe("one change on the Changes tab", () => {
-  const CONTEXT_PR = {
+  const STEERING_PR = {
     proposalId: "prp_open1",
     lineage: "ctx.scr.001-never-push-to-main",
     kind: "rule",
@@ -1853,7 +1853,7 @@ describe("one change on the Changes tab", () => {
   it("opens the change with the list's row, hands the gold to Merge, and goes back to every change", async () => {
     actions.readRepositoryChange.mockResolvedValue({
       ok: true,
-      value: CONTEXT_PR,
+      value: STEERING_PR,
     });
     const user = userEvent.setup();
     changePage("prp_open1");
@@ -1887,7 +1887,7 @@ describe("one change on the Changes tab", () => {
   it("re-reads the page after a merge", async () => {
     actions.readRepositoryChange.mockResolvedValue({
       ok: true,
-      value: CONTEXT_PR,
+      value: STEERING_PR,
     });
     actions.mergeRepositoryChange.mockResolvedValue({
       ok: true,
@@ -1911,7 +1911,7 @@ describe("one change on the Changes tab", () => {
     });
     actions.readRepositoryChange.mockResolvedValue({
       ok: true,
-      value: CONTEXT_PR,
+      value: STEERING_PR,
     });
     changePage("prp_open1");
     const detail = await screen.findByTestId("change-detail");
@@ -1926,10 +1926,10 @@ describe("one change on the Changes tab", () => {
 });
 
 describe("page reads", () => {
-  // A Context PR can merge or close on GitHub at any moment, and the
+  // A steering PR can merge or close on GitHub at any moment, and the
   // repository sync moves it within seconds (ADR-184). The list re-reads
   // while one is open, so the new state shows without a reload.
-  it("re-reads the changes every ten seconds while a Context PR is open", async () => {
+  it("re-reads the changes every ten seconds while a steering PR is open", async () => {
     const every = vi.spyOn(window, "setInterval");
     page();
     await waitFor(() => {
@@ -1948,7 +1948,7 @@ describe("page reads", () => {
     every.mockRestore();
   });
 
-  it("does not poll when no Context PR is open", async () => {
+  it("does not poll when no steering PR is open", async () => {
     actions.readRepositoryChanges.mockResolvedValue({
       ok: true,
       value: { changes: [], open: 0 },

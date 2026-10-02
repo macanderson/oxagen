@@ -53,7 +53,7 @@ export async function CompilerTab({
   return <CompilerBody at={at} agent={agent} read={agents} />;
 }
 
-/** "Nothing to compile yet"; its Write a context record is the screen's one gold action. */
+/** "Nothing to compile yet"; its Write a steering record is the screen's one gold action. */
 function CompilerEmpty() {
   const t = useTranslations("steering.bodies.compiler.empty");
   const create = useTranslations("steering.create");

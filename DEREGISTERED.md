@@ -230,7 +230,7 @@ folds the route into **Agents**).
 
 **De-registered by:** spec Appendix E, "steering replaces prompt settings".
 **Replaced by:** the steering record model (spec §9, §10) — published directive
-and knowledge records delivered through Context PRs.
+and knowledge records delivered through steering PRs.
 
 | Registered name | Stem | Parity |
 |---|---|---|

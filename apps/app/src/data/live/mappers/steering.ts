@@ -1,14 +1,14 @@
-// list_records, list_proposals and get_context_pr outputs to the Steering
+// list_records, list_proposals and get_steering_pr outputs to the Steering
 // page's view models (ARCHITECTURE.md §3.4; #2961), and the workspace memory
 // reads to the Memories tab's (#4914). Typed from the contracts' `_output`.
-// The Context PR's review sentence is not carried: the page words each
+// The steering PR's review sentence is not carried: the page words each
 // governance mode from its own catalog.
 import type { agentMemoryList } from "@oxagen/oxagen/contracts/agent.memory.list";
-import type { contextPrDiffGet } from "@oxagen/oxagen/contracts/context.pr.diff.get";
-import type { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
-import type { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
-import type { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
-import type { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
+import type { steeringPrDiffGet } from "@oxagen/oxagen/contracts/steering.pr.diff.get";
+import type { steeringPrGet } from "@oxagen/oxagen/contracts/steering.pr.get";
+import type { steeringProposalList } from "@oxagen/oxagen/contracts/steering.proposal.list";
+import type { steeringRecordsGet } from "@oxagen/oxagen/contracts/steering.records.get";
+import type { steeringRecordsList } from "@oxagen/oxagen/contracts/steering.records.list";
 import type { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import type { contextSteeringLayout } from "@oxagen/oxagen/contracts/context.steering.layout";
 import type { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
@@ -21,8 +21,8 @@ import {
 } from "@oxagen/oxagen/steering-repo/paths";
 import type { z } from "zod";
 import type {
-  ContextPr,
-  ContextPrDiff,
+  SteeringPr,
+  SteeringPrDiff,
   MemoryPage,
   MemoryPrRecords,
   OxagenTree,
@@ -38,7 +38,7 @@ import type {
 import type { ContractOutput } from "@/server/kernel";
 
 export function toRecordPage(
-  out: ContractOutput<typeof contextRecordsList>,
+  out: ContractOutput<typeof steeringRecordsList>,
 ): z.input<typeof RecordPage> {
   return {
     records: out.records.map((record) => ({
@@ -71,7 +71,7 @@ export function toRecordPage(
  */
 export function toRecordDetail(
   out: Extract<
-    ContractOutput<typeof contextRecordsGet>,
+    ContractOutput<typeof steeringRecordsGet>,
     { source: "published" }
   >,
 ): z.input<typeof RecordDetail> {
@@ -120,7 +120,7 @@ export function toRecordDetail(
 }
 
 export function toProposalPage(
-  out: ContractOutput<typeof contextProposalList>,
+  out: ContractOutput<typeof steeringProposalList>,
 ): z.input<typeof ProposalPage> {
   return {
     proposals: out.proposals.map((proposal) => ({
@@ -160,9 +160,9 @@ export function toProposalPage(
   };
 }
 
-export function toContextPr(
-  out: ContractOutput<typeof contextPrGet>,
-): z.input<typeof ContextPr> {
+export function toSteeringPr(
+  out: ContractOutput<typeof steeringPrGet>,
+): z.input<typeof SteeringPr> {
   return {
     proposalId: out.proposalId,
     lineage: out.lineageId,
@@ -236,10 +236,10 @@ export function toContextPr(
   };
 }
 
-/** `get_context_pr_diff` → the Context PR page's diff (#5077). */
-export function toContextPrDiff(
-  out: ContractOutput<typeof contextPrDiffGet>,
-): z.input<typeof ContextPrDiff> {
+/** `get_steering_pr_diff` → the steering PR page's diff (#5077). */
+export function toSteeringPrDiff(
+  out: ContractOutput<typeof steeringPrDiffGet>,
+): z.input<typeof SteeringPrDiff> {
   return {
     state: out.state,
     baseRef: out.baseRef,

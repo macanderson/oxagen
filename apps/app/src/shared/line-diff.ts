@@ -44,7 +44,7 @@ export function diffStat(base: string, draft: string): DiffStat {
   return { added: b.length - common, removed: a.length - common };
 }
 
-/** What happened to one line. The Context PR page maps it to its own words. */
+/** What happened to one line. The steering PR page maps it to its own words. */
 export type DiffOp = "add" | "del" | "ctx";
 
 export type DiffLine = {

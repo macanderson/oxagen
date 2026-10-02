@@ -528,7 +528,7 @@ function PreferencePanel({ effect }: { effect: Effect }) {
 }
 
 /**
- * A record no Context PR classified. It is not a seventh kind: the page says
+ * A record no steering PR classified. It is not a seventh kind: the page says
  * the file carries no kind and stops, because inventing one would put a
  * classification on screen the repository does not hold.
  */

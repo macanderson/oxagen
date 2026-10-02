@@ -1294,30 +1294,6 @@
       "consumes": []
     },
     {
-      "name": "get_context_pr",
-      "domain": "context",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "get_context_pr_diff",
-      "domain": "context",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
       "name": "get_contract_rate",
       "domain": "billing",
       "surfaces": [
@@ -2069,6 +2045,30 @@
       "consumes": []
     },
     {
+      "name": "get_steering_pr",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_steering_pr_diff",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_steering_repo",
       "domain": "repository",
       "surfaces": [
@@ -2564,18 +2564,6 @@
         "api",
         "mcp",
         "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "list_context_records",
-      "domain": "context",
-      "surfaces": [
-        "api",
-        "agent",
-        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -3154,6 +3142,18 @@
       "consumes": []
     },
     {
+      "name": "list_steering_records",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "agent",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_steering_repo_destinations",
       "domain": "repository",
       "surfaces": [
@@ -3371,7 +3371,7 @@
       "consumes": []
     },
     {
-      "name": "merge_context_pr",
+      "name": "merge_pr_without_review",
       "domain": "context",
       "surfaces": [
         "api",
@@ -3382,7 +3382,7 @@
       "consumes": []
     },
     {
-      "name": "merge_pr_without_review",
+      "name": "merge_steering_pr",
       "domain": "context",
       "surfaces": [
         "api",
@@ -3417,17 +3417,6 @@
       "consumes": []
     },
     {
-      "name": "open_context_pr",
-      "domain": "context",
-      "surfaces": [
-        "api",
-        "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
       "name": "open_init_pr",
       "domain": "repository",
       "surfaces": [
@@ -3435,6 +3424,17 @@
         "mcp",
         "agent",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "open_steering_pr",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3580,16 +3580,6 @@
       "consumes": []
     },
     {
-      "name": "promote_context_record",
-      "domain": "context",
-      "surfaces": [
-        "api"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
       "name": "promote_instruction_to_steering",
       "domain": "repository",
       "surfaces": [
@@ -3621,6 +3611,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "promote_steering_record",
+      "domain": "context",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -3672,7 +3672,7 @@
       "consumes": []
     },
     {
-      "name": "publish_context_record",
+      "name": "publish_steering_record",
       "domain": "context",
       "surfaces": [
         "api"
@@ -3875,7 +3875,7 @@
       "consumes": []
     },
     {
-      "name": "refresh_context_pr",
+      "name": "refresh_steering_pr",
       "domain": "context",
       "surfaces": [
         "api",
@@ -4185,7 +4185,7 @@
       "consumes": []
     },
     {
-      "name": "revise_context_record",
+      "name": "revise_steering_record",
       "domain": "context",
       "surfaces": [
         "api",
@@ -4891,8 +4891,7 @@
       "name": "set_work_collector",
       "domain": "work",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "component": null,
       "produces": [],

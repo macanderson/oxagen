@@ -2,7 +2,7 @@
  * @oxagen/steering-freshness — is this checkout running on the records that
  * are in force?
  *
- * A Context PR merges a record onto the repository's production branch
+ * A steering PR merges a record onto the repository's production branch
  * (ADR-061). A developer on a feature branch keeps whatever `.oxagen/` their
  * branch point had, so the longer the branch lives the more likely their
  * agent is steering on records nobody uses any more. This package answers

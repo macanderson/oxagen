@@ -216,12 +216,12 @@ export const SECURITY_EVENT_TYPES = [
   "privacy.export_requested",
   "privacy.erasure_requested",
   "privacy.org_erasure_requested",
-  // Steering (ADR-061): a Context PR merged and published a record — the
-  // bundle a workspace's agents read changed. Emitted by merge_context_pr.
+  // Steering (ADR-061): a steering PR merged and published a record — the
+  // bundle a workspace's agents read changed. Emitted by merge_steering_pr.
   "steering.published",
   // The mode itself changed: `.oxagen/rules/governance.toml` was committed to
   // the production branch, so a different rule now decides who may merge a
-  // Context PR. Emitted by set_governance_mode. A change that went to review
+  // steering PR. Emitted by set_governance_mode. A change that went to review
   // instead emits nothing — the pull request is the record, and the mode in
   // force has not moved until a person merges it.
   "steering.governance_changed",
@@ -421,11 +421,11 @@ export interface GovernanceChangeDetail {
   overrodeReview: boolean;
   /**
    * The Oxagen users whose approval on the host landed a reviewed governance
-   * PR through merge_context_pr (#4795). Absent on a change that landed at
+   * PR through merge_steering_pr (#4795). Absent on a change that landed at
    * once. Empty when a retry resumed a merge the host already held.
    */
   approvedBy?: string[];
-  /** The governance proposal merge_context_pr landed (`prp_…`). */
+  /** The governance proposal merge_steering_pr landed (`prp_…`). */
   proposalId?: string;
   /** The pull request that carried the change. */
   pullRequest?: string | null;
@@ -442,7 +442,7 @@ export interface GovernanceChangeDetail {
  * (detector 6, prompt habits). It rides a `capability.invoke_allowed` or
  * `capability.invoke_error` row for `propose_record` with a null actor. The
  * proposal steers nothing: a person with a workspace role opens it as a
- * Context PR, and `merge_context_pr` records `steering.published` when it
+ * steering PR, and `merge_steering_pr` records `steering.published` when it
  * merges.
  */
 export interface SystemProposalDetail {

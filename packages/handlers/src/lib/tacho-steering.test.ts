@@ -102,7 +102,7 @@ describe("assembleWorkspaceSteering", () => {
     ]);
   });
 
-  it("delivers a record published through publish_context_record, now that the handler requires a classification (#3302)", () => {
+  it("delivers a record published through publish_steering_record, now that the handler requires a classification (#3302)", () => {
     const published = rec({
       slug: "no-bare-unwrap",
       kind: "rule",
@@ -232,8 +232,8 @@ describe("assembleWorkspaceSteering", () => {
 
 /**
  * A fake of the two statements the read issues, dispatched on the table the
- * statement is `from`: the count over `context_promotions` answers the cache
- * key from what the fake holds, and the join over `context_records` answers
+ * statement is `from`: the count over `steering_promotions` answers the cache
+ * key from what the fake holds, and the join over `steering_records` answers
  * the rows. Both count how often they ran.
  */
 function fakeTx(db: {
@@ -295,29 +295,29 @@ function fakeTx(db: {
         expect(fields.revisions).toBeInstanceOf(SQL);
         const query = new PgDialect().sqlToQuery(fields.revisions as SQL);
         expect(query.sql).toContain("md5(string_agg(md5(");
-        expect(query.sql).toContain('"context_records"."active_version_id"');
-        expect(query.sql).toContain('"context_records"."statement"');
-        expect(query.sql).toContain('order by "agent"."context_records"."id"');
+        expect(query.sql).toContain('"steering_records"."active_version_id"');
+        expect(query.sql).toContain('"steering_records"."statement"');
+        expect(query.sql).toContain('order by "agent"."steering_records"."id"');
         expect(query.params).toContain("org");
         expect(query.params).toContain("active");
         if (!ready) {
-          expect(query.sql).not.toContain('"context_record_versions"');
+          expect(query.sql).not.toContain('"steering_record_versions"');
         }
       }
       return {
         from: (table) => ({
           where: async () => {
-            // Two statements land here. The count is `from context_promotions`;
+            // Two statements land here. The count is `from steering_promotions`;
             // the record-only read, which has no join to make, is
-            // `from context_records`.
-            if (tableName(table) === "context_promotions") return versionRow();
-            expect(tableName(table)).toBe("context_records");
+            // `from steering_records`.
+            if (tableName(table) === "steering_promotions") return versionRow();
+            expect(tableName(table)).toBe("steering_records");
             expect(ready).toBe(false);
             return recordRows();
           },
           leftJoin: () => ({
             where: async () => {
-              expect(tableName(table)).toBe("context_records");
+              expect(tableName(table)).toBe("steering_records");
               expect(ready).toBe(true);
               return recordRows();
             },
@@ -471,7 +471,7 @@ describe("readWorkspaceSteering", () => {
       const { tx, calls } = fakeTx(db);
       const before = await readWorkspaceSteering(tx, "org", "ws");
       expect(before.text).toContain("Ask before deleting data.");
-      // publish_context_record changes the pin and classification together.
+      // publish_steering_record changes the pin and classification together.
       // It appends no promotion, and the active record count stays at one.
       db.revisions = "version-2";
       db.rows = [

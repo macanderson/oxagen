@@ -1,0 +1,63 @@
+import { describe, expect, it } from "vitest";
+import { steeringProposalList } from "./steering.proposal.list";
+
+describe("list_proposals contract", () => {
+  it("is a console read", () => {
+    expect(steeringProposalList.name).toBe("list_proposals");
+    expect(steeringProposalList.mutates).toBe(false);
+    expect(steeringProposalList.noBillingGate).toBe(true);
+  });
+
+  it("filters by status and lineage and pages", () => {
+    expect(steeringProposalList.input.parse({})).toEqual({
+      limit: 50,
+      offset: 0,
+    });
+    expect(
+      steeringProposalList.input.safeParse({ status: "candidate" }).success,
+    ).toBe(false);
+    expect(
+      steeringProposalList.input.safeParse({ status: "checks_passed" }).success,
+    ).toBe(true);
+  });
+
+  it("filters by the state a pull request list names (#5077)", () => {
+    for (const state of ["open", "merged", "closed"]) {
+      expect(steeringProposalList.input.safeParse({ state }).success).toBe(true);
+    }
+    expect(
+      steeringProposalList.input.safeParse({ state: "rejected" }).success,
+    ).toBe(false);
+  });
+
+  it("answers each proposal with its support, its PR (or null) and its check tally (or null)", () => {
+    const out = steeringProposalList.output.parse({
+      proposals: [
+        {
+          id: "prp_0123456789abcdefghjkmn",
+          lineageId: "ctx.triage.reproduce-first",
+          kind: "rule",
+          force: "should",
+          constraintEffect: null,
+          sharingScope: "workspace",
+          statement: "Reproduce before labelling.",
+          rationale: "14 unsatisfied runs in 30 days.",
+          source: "reflector · run_01K5RH3G8K5PAS7D",
+          support: {
+            runs: ["run_1"],
+            agents: ["a.b.c"],
+            recordIds: [],
+            evidenceLinks: [],
+          },
+          status: "proposed",
+          pr: null,
+          checks: null,
+          createdAt: "2026-09-15T00:00:00.000Z",
+          updatedAt: "2026-09-15T00:00:00.000Z",
+        },
+      ],
+      total: 1,
+    });
+    expect(out.proposals[0]?.pr).toBeNull();
+  });
+});

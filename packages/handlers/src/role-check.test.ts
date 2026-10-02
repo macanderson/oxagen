@@ -86,8 +86,8 @@ const ROLE_CHECKED_CONTRACTS = [
   "append_record",
   "propose_record",
   "dismiss_proposal",
-  "open_context_pr",
-  // A revert opens a merge-class steering PR, so it takes merge_context_pr's
+  "open_steering_pr",
+  // A revert opens a merge-class steering PR, so it takes merge_steering_pr's
   // roles and asserts them for an API key's creator too (#4449).
   "revert_steering_pr",
   "query_audit_log",
@@ -456,8 +456,8 @@ describe("INV-29: every role gate acts as the resolved user", () => {
         "handlers/src/billing.credits.purchase.ts",
         "handlers/src/billing.gau_bucket.purchase.ts",
         "handlers/src/billing.invoice.list.ts",
-        "handlers/src/context.pr.open.ts",
-        "handlers/src/context.records.append.ts",
+        "handlers/src/steering.pr.open.ts",
+        "handlers/src/steering.records.append.ts",
         "handlers/src/tacho.command.dispatch.ts",
         "handlers/src/audit.events.export.ts",
         "handlers/src/audit.log.query.ts",

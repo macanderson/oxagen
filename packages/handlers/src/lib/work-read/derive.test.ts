@@ -332,6 +332,18 @@ const CASES: Case[] = [
     wait: { kind: "check_failed", check: "test", conclusion: "failure", head: SHA1 },
   },
   {
+    name: "a required check that has not reported listed before one that failed",
+    facts: [...RUN_WITH_HEAD, f.required(O1, SHA1, ["lint", "test"], 10), f.check(O1, SHA1, "test", "failure", 11)],
+    status: "in_review",
+    wait: { kind: "check_failed", check: "test", conclusion: "failure", head: SHA1 },
+  },
+  {
+    name: "a still-running required check listed before one that has not reported",
+    facts: [...RUN_WITH_HEAD, f.required(O1, SHA1, ["lint", "test"], 10), f.check(O1, SHA1, "lint", "pending", 11)],
+    status: "in_review",
+    wait: { kind: "check_missing", check: "test", head: SHA1 },
+  },
+  {
     name: "a done item",
     facts: [...IN_REVIEW, f.accepted(O1, SHA1, 12), f.merged(O1, SHA1, 15)],
     status: "done",
@@ -350,6 +362,18 @@ describe("status and wait", () => {
     const out = row(entry.facts, { triage: entry.triage, lookups: entry.lookups });
     expect(out.status).toBe(entry.status);
     expect(out.wait).toEqual(entry.wait);
+  });
+
+  // The list leaves out the check facts on a send's older heads
+  // (listFactsByItem in read.ts). That is safe only while no derivation reads
+  // a check fact itself, so checks on a head no send is on must change no row
+  // (#5181).
+  it.each(CASES)("ignores checks on a head no send is on: $name", (entry) => {
+    const STALE = "0123456789abcdef".repeat(3).slice(0, 40);
+    const orders = [...new Set(entry.facts.flatMap((fact) => (fact.orderId === null ? [] : [fact.orderId])))];
+    const stale = orders.flatMap((order) => [f.check(order, STALE, "lint", "failure", 3), f.check(order, STALE, "test", "pending", 3)]);
+    const options = { triage: entry.triage, lookups: entry.lookups };
+    expect(row([...entry.facts, ...stale], options)).toEqual(row(entry.facts, options));
   });
 
   it("covers every status the contract names", () => {
@@ -371,6 +395,24 @@ describe("status and wait", () => {
       triage: { decision: decision({ state: "needs_info", done_record: null, questions: [] }) },
     });
     expect(out.wait).toEqual({ kind: "needs_info", question: null });
+  });
+
+  // reviewGate stops at the first required check in name order. The line must
+  // still name the check the checks word ranks first: a failure, then a check
+  // that has not reported, then one still running (#5181).
+  it.each([
+    ["one missing and one failed", [f.check(O1, SHA1, "test", "failure", 11)], "failing", { kind: "check_failed", check: "test" }],
+    ["one running and one missing", [f.check(O1, SHA1, "lint", "pending", 11)], "missing", { kind: "check_missing", check: "test" }],
+    [
+      "one running and one failed",
+      [f.check(O1, SHA1, "lint", "pending", 11), f.check(O1, SHA1, "test", "cancelled", 11)],
+      "failing",
+      { kind: "check_failed", check: "test", conclusion: "cancelled" },
+    ],
+  ] as const)("names the check the checks word reads with %s required check", (_name, checks, word, wait) => {
+    const out = row([...RUN_WITH_HEAD, f.required(O1, SHA1, ["lint", "test"], 10), ...checks]);
+    expect(out.send?.checks).toBe(word);
+    expect(out.wait).toMatchObject(wait);
   });
 
   it("reads a waiting send whose command is only queued as waiting, not as no answer", () => {

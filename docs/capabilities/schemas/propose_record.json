@@ -1,7 +1,7 @@
 {
   "name": "propose_record",
   "domain": "context",
-  "description": "Open a proposal on a lineage: the record it should become (kind, force, constraint effect, scope, statement), the rationale and the supporting runs, agents, records and evidence. Steers nothing until its Context PR merges.",
+  "description": "Open a proposal on a lineage: the record it should become (kind, force, constraint effect, scope, statement), the rationale and the supporting runs, agents, records and evidence. Steers nothing until its steering PR merges.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -76,7 +76,7 @@
               "repository",
               "workspace"
             ],
-            "description": "Decides which repo the Context PR targets (spec §10.3 step 1)"
+            "description": "Decides which repo the steering PR targets (spec §10.3 step 1)"
           },
           "statement": {
             "type": "string",

@@ -23,7 +23,7 @@ vi.mock("xmcp/headers", () => ({ headers: mocks.headers }));
 import restoreManagedBlock, {
   metadata as restoreMeta,
   schema as restoreSchema,
-} from "./context.pr.restore_managed_block";
+} from "./steering.pr.restore_managed_block";
 import listCodeRepositoryFindings, {
   metadata as findingsMeta,
   schema as findingsSchema,

@@ -13,6 +13,10 @@
  * resumed collector reads the repositories at once, and every 15 minutes
  * after that. Pausing keeps each webhook delivery it receives and fetches
  * nothing until a person resumes it.
+ *
+ * Only a signed-in person changes a collector (Mac, 2026-10-02, #5181;
+ * ADR-250). The handler refuses every API key and every agent run, so the
+ * capability is not an MCP tool.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -27,8 +31,8 @@ export const workCollectorSet = registerCapability({
   description:
     "Create or change a GitHub work collector by name: the linked repositories whose issues become work items. It reads through the GitHub connection they were linked through. Pause or resume it with paused.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  surfaces: ["api"],
+  layers: ["schema", "api", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

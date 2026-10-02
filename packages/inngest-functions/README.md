@@ -45,7 +45,7 @@ definition into an Inngest function.
   - `@oxagen/recorder`: digests, export-bundle shapes, and the attester key.
   - `@oxagen/agent` and `@oxagen/ai`: the governed turn and model calls behind
     run enrichment and summaries.
-  - `@oxagen/oxagen`: the run-enrichment setting and context-record labels.
+  - `@oxagen/oxagen`: the run-enrichment setting and steering-record labels.
   - `@oxagen/plugins`: MCP catalog sync and plugin OAuth refresh.
   - `@oxagen/rules`: the mandate ledger for approval expiry.
 - **Used by:** `apps/api`, `apps/app_deprecated`, and `@oxagen/handlers`.

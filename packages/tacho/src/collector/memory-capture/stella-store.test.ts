@@ -49,7 +49,7 @@ CREATE TABLE memory (
     lineage_id    TEXT,
     superseded_at TEXT
 );
-CREATE TABLE context_records (
+CREATE TABLE steering_records (
     record_id      TEXT PRIMARY KEY,
     lineage_id     TEXT NOT NULL,
     record_kind    TEXT NOT NULL,
@@ -92,9 +92,9 @@ SELECT r.rowid     AS seq,
             THEN CAST(substr(json_extract(r.body, '$.use_trace_id'), length('ut_') + 1) AS INTEGER)
        END AS execution_id,
        COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', r.observed_at), r.observed_at) AS used_at
-  FROM context_records r
+  FROM steering_records r
   JOIN node n
-    ON n.public_id = json_extract(r.body, '$.context_record_id')
+    ON n.public_id = json_extract(r.body, '$.steering_record_id')
    AND n.kind = 'memory'
    AND n.uri GLOB 'memory://?*'
  WHERE r.record_kind = 'context_use';`;
@@ -165,7 +165,7 @@ function fixtureWorkspace(options: { views?: boolean } = {}): {
     null,
   );
   const record = db.prepare(
-    "INSERT INTO context_records (record_id, lineage_id, record_kind, record_hash, schema_version, body, observed_at, recorded_at) VALUES (?, ?, ?, 'sha256:x', '1', ?, ?, '2026-09-21T15:00:00Z')",
+    "INSERT INTO steering_records (record_id, lineage_id, record_kind, record_hash, schema_version, body, observed_at, recorded_at) VALUES (?, ?, ?, 'sha256:x', '1', ?, ?, '2026-09-21T15:00:00Z')",
   );
   const use = (
     id: string,
@@ -181,7 +181,7 @@ function fixtureWorkspace(options: { views?: boolean } = {}): {
       kind,
       JSON.stringify({
         use_kind: "rendered",
-        context_record_id: recordId,
+        steering_record_id: recordId,
         use_trace_id: trace,
         task_id: task,
         influence_stage: "none",

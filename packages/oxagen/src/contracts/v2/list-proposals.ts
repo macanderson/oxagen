@@ -16,7 +16,7 @@ const candidate =
  * memory node — otherwise a dismissed suggestion reappeared on the next load.
  *
  * §9 makes `record_proposal` a record kind, and §10.3 gives it a lifecycle
- * (open → Context PR → checks → review → merge). So this list has real rows
+ * (open → Steering PR → checks → review → merge). So this list has real rows
  * with real statuses, and the ranking becomes an ordering over them rather than
  * their reason for existing. The citation-pressure columns carry unchanged
  * because §9 still ranks on them: "Ranking uses citation pressure and
@@ -31,7 +31,7 @@ export const listProposals = defineTool({
   name: "list_proposals",
   domain: "context",
   description:
-    "List the workspace's open record proposals with their proposed kind, rationale, sharing scope, citation pressure and Context PR state, ranked by the signal that made them candidates (§9).",
+    "List the workspace's open record proposals with their proposed kind, rationale, sharing scope, citation pressure and steering PR state, ranked by the signal that made them candidates (§9).",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -105,7 +105,7 @@ export const listProposals = defineTool({
 
         status: z.enum(["open", "pr_open", "merged", "dismissed"]),
 
-        /** Non-null once `open_context_pr` has run. §10.3's lifecycle is
+        /** Non-null once `open_steering_pr` has run. §10.3's lifecycle is
          * legible from this list only if the PR is on it. */
         prUrl: z.string().nullable(),
 

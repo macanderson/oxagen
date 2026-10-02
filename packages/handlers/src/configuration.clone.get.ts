@@ -2,7 +2,7 @@
 import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import { configurationCloneGet } from "@oxagen/oxagen/contracts/configuration.clone.get";
 import { configurationCloneName } from "@oxagen/oxagen/configuration-clone";
-import { CONTEXT_RECORD_LABEL_MAX } from "@oxagen/oxagen/context-record-label";
+import { STEERING_RECORD_LABEL_MAX } from "@oxagen/oxagen/steering-record-label";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import {
   configurationBranchTaken,
@@ -38,7 +38,7 @@ export function createConfigurationCloneGetHandler(
         original.name,
         ordinal,
         maximum,
-        input.kind === "record" ? CONTEXT_RECORD_LABEL_MAX : undefined,
+        input.kind === "record" ? STEERING_RECORD_LABEL_MAX : undefined,
       );
       if (input.kind === "skill") candidate.name = candidate.slug;
       if (

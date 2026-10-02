@@ -116,8 +116,8 @@ export default defineConfig({
         "src/local-servers/broker.ts",
         "src/local-servers/route.ts",
         "src/local-servers/transport.ts",
-        // work intake and triage (P1-03, #5103)
-        "src/tools/work.collector.set.ts",
+        // work intake and triage (P1-03, #5103). set_work_collector has no
+        // tool: only a signed-in person changes a collector (#5181).
         "src/tools/work.collector.sync.ts",
         "src/tools/work.collectors.list.ts",
         "src/tools/work.item.create.ts",
@@ -125,7 +125,7 @@ export default defineConfig({
         "src/tools/work.triage.retry.ts",
         "src/tools/work.triage.revise.ts",
         // instruction files (#4518, ADR-263)
-        "src/tools/context.pr.restore_managed_block.ts",
+        "src/tools/steering.pr.restore_managed_block.ts",
         "src/tools/repository.findings.list.ts",
         "src/tools/repository.instruction.promote.ts",
       ],

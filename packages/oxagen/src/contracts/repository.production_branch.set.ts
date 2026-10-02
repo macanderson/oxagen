@@ -3,7 +3,7 @@
  * the workspace's repositories (Mission Control spec §10.1, §11.4).
  *
  * The production branch is the only branch whose commits update the code
- * graph, the only one `.oxagen/` is read from, and the only one a Context PR
+ * graph, the only one `.oxagen/` is read from, and the only one a steering PR
  * merges into. GitHub's default branch is the suggestion; the person decides.
  * A new head records GitHub's default branch when it is written. This
  * capability confirms or changes it: any branch that exists on GitHub, named

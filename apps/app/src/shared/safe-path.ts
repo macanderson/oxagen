@@ -152,8 +152,8 @@ const STEERING_SEGMENTS: Readonly<Record<string, readonly string[]>> = {
   settings: ["gates"],
   freshness: ["gates"],
   proposals: ["proposals"],
-  // The Context PRs list was a segment of Proposals; it is the one list now
-  // (#5077), and one Context PR is its own page (`routes.steeringProposal`).
+  // The steering PRs list was a segment of Proposals; it is the one list now
+  // (#5077), and one steering PR is its own page (`routes.steeringProposal`).
   prs: ["proposals"],
   compiler: ["compiler"],
   preview: ["compiler"],
@@ -558,7 +558,7 @@ export const routes = {
     org: string,
     ws: string,
     tab?: "working-copies" | "changes" | "configuration",
-    /** One change on the Changes tab, by its proposal id: the Context PR page. */
+    /** One change on the Changes tab, by its proposal id: the steering PR page. */
     change?: string,
   ): SafePath =>
     tab === undefined
@@ -588,7 +588,7 @@ export const routes = {
    * shelves are path segments, `/steering/<tab>` or `/steering/<shelf>`. A
    * tab id written before the rename still maps to where it lives now:
    * `policy`, `settings` and `freshness` are Gates, `deliveries` is
-   * Assignments, `preview` is the Compiler, and `prs`, once the Context PRs
+   * Assignments, `preview` is the Compiler, and `prs`, once the steering PRs
    * segment, is the Proposals list (#5077). Filters, the Proposals state, a
    * page offset, the rows a page holds, the memory the Memories drawer opens
    * and a Skills cursor stay query values.
@@ -650,7 +650,7 @@ export const routes = {
     });
   },
   /**
-   * One Context PR, by its proposal id (#5077):
+   * One steering PR, by its proposal id (#5077):
    * `/steering/proposals/prs/<prp_…>`. The list's state, size and offset ride
    * along as query values, so the page's way back lands on the list as it
    * was left.

@@ -3,7 +3,7 @@
 // published, where it lives, and the two gates every agent its members run
 // answers to.
 //
-// The gates are the point. A Context PR merges a record onto the production
+// The gates are the point. A steering PR merges a record onto the production
 // branch, and a developer on a feature branch keeps whatever `.oxagen/` their
 // branch point had, so without these two switches the longer a branch lives
 // the more likely the agent on it is steering on records nobody uses any
