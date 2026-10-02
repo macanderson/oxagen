@@ -60,12 +60,14 @@ locals {
   # Any job in the platform repository, from any branch or pull request, in
   # both the readable and the immutable owner@id/repo@id subject forms. A fork's
   # pull request gets no OIDC token, so it cannot reach this role at all.
-  turbo_cache_subjects = [
-    for shape in [
-      local.infra_repository,
-      "${split("/", local.infra_repository)[0]}@${local.infra_owner_id}/${split("/", local.infra_repository)[1]}@${local.infra_repo_id}",
-    ] : "repo:${shape}:*"
-  ]
+  turbo_cache_subjects = flatten([
+    for n in local.infra_names : [
+      for shape in [
+        n.repository,
+        "${split("/", n.repository)[0]}@${n.owner_id}/${split("/", n.repository)[1]}@${local.infra_repo_id}",
+      ] : "repo:${shape}:*"
+    ]
+  ])
 }
 
 data "aws_iam_policy_document" "turbo_cache_assume" {

@@ -36,7 +36,7 @@ HARD RULES for this repository. Restate them to any subagent you spawn.
 `
 
 const CONTEXT = `
-oxagen-roadmap:<path> means <path> in https://github.com/macanderson/oxagen-roadmap (the build plan, the gap inventory, and the product spec moved there on 2026-09-23, #3895). Read it from a checkout beside this repository (~/Projects/oxagen-roadmap, or ../oxagen-roadmap in a cloud session); a change to those files is a pull request in that repository.
+oxagen-roadmap:<path> means <path> in https://github.com/oxageninc/roadmap (the build plan, the gap inventory, and the product spec moved there on 2026-09-23, #3895). Read it from a checkout beside this repository (~/Projects/oxagen-roadmap, or ../oxagen-roadmap in a cloud session); a change to those files is a pull request in that repository.
 CONTEXT you must read before editing (paths relative to the repo root):
 - oxagen-roadmap:docs/oxagen/mission-control/BUILD-CHUNKS.md: the session plan and the corrected gap facts. Your session's section names your lane and what is already built.
 - oxagen-roadmap:docs/oxagen/audits/2026-09-19-mission-control-gap-inventory-review.md: why the older gap inventory is stale. Do not rebuild anything §1 there marks Built.
@@ -137,7 +137,7 @@ function scoutPrompt(session, lanes) {
 TASK: Scout for session ${session.id} (${session.title}). Read-only. Do not edit or create files.
 1. git fetch origin. Record origin/main's sha.
 2. For each lane below, check origin/main for what the lane would build. Report still_open=false when it already ships (a route, a component, a binding in capability-ui-map.json, a contract). Cite file:line facts the builder needs: the existing components to extend, the contract name and its input shape, the mapper that drops a field, the message namespace, the test file beside the component.
-3. List open PRs whose diff overlaps a lane's paths (gh pr list, or the GitHub MCP list_pull_requests on macanderson/oxagen) with their state, so a lane can branch from or wait on them.
+3. List open PRs whose diff overlaps a lane's paths (gh pr list, or the GitHub MCP list_pull_requests on oxageninc/product) with their state, so a lane can branch from or wait on them.
 Lanes: ${JSON.stringify(lanes.map(l => ({ id: l.id, title: l.title, owns: l.owns, checks: l.checks })))}
 Return the structured result only.`
 }

@@ -9071,10 +9071,6 @@ type Messages = {
       setBudget: string;
     };
     findings: {
-      strip: {
-        label: string;
-        tail: string;
-      };
       facts: {
         findings: string;
         operators: string;
@@ -9084,6 +9080,7 @@ type Messages = {
       };
       note: string;
       emptyTitle: string;
+      operatorNames: string;
       empty: string;
       kind: {
         cache_writes_never_read: string;
@@ -9182,10 +9179,22 @@ type Messages = {
       };
       costData: string;
       hero: string;
-      heroShare: string;
-      heroWindow: string;
-      heroYearStart: string;
-      heroYearEnd: string;
+      heroShareOf: string;
+      heroPeriod: string;
+      heroNoSpend: string;
+      mixedCurrency: string;
+      parts: {
+        title: string;
+        note: string;
+        detector: {
+          "2": string;
+          "3": string;
+          "5": string;
+        };
+        estimate: string;
+        estimated: string;
+        findings: string;
+      };
       attributionMissing: string;
       evidenceLine: string;
       list: string;
@@ -9749,6 +9758,7 @@ type Messages = {
         saving: string;
         denied: string;
         failed: string;
+        unknown: string;
       };
     };
     toolChart: {
@@ -11539,6 +11549,7 @@ type Messages = {
       };
       weeklyAbsent: string;
       weeklyUnpriced: string;
+      weeklyUnpricedTitle: string;
       weeklyTokenCount: string;
       weeklyTokens: string;
       weeklyTitle: string;

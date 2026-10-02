@@ -25,7 +25,7 @@
 // Oxagen could not tell.
 //
 // The migration that creates these tables and their tenant policies is
-// 20260927021500_steering_memories.sql. 20261002040000_memory_uses.sql adds
+// 20260927021500_steering_memories.sql. 20261002052500_memory_uses.sql adds
 // the lifecycle columns and `memory_uses`.
 import {
   check,

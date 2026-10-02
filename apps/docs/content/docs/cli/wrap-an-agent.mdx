@@ -9,7 +9,7 @@ Hook-based records are client-attested. The process owner can remove the hooks, 
 
 The collector also has a loopback model proxy and an MCP gateway. Their controls apply to calls actually routed through them. A configured base URL alone does not establish that a run reached the gateway tier. Inspect the run's recorded tier and attribution before treating its cost or decisions as gateway-observed evidence.
 
-The MCP gateway serves Oxagen's own tools to Claude Desktop only. Claude Code, Codex, Cursor, and Stella call the MCP servers you configure directly, and their hooks check each call. See the [harness matrix](https://github.com/macanderson/oxagen/blob/main/docs/reference/harness-matrix.md#mcp-gateway) for what can be routed later and what never can.
+The MCP gateway serves Oxagen's own tools to Claude Desktop only. Claude Code, Codex, Cursor, and Stella call the MCP servers you configure directly, and their hooks check each call. See the [harness matrix](https://github.com/oxageninc/product/blob/main/docs/reference/harness-matrix.md#mcp-gateway) for what can be routed later and what never can.
 
 Supported harness adapters include Claude Code, Codex, Cursor, and Stella. A custom agent runs under `oxagen agent run`, or calls `oxagen hook` around its own steps. The table below describes all four hook adapters.
 
@@ -80,7 +80,7 @@ The command exits with the agent's own exit code. An agent stopped by a signal e
 
 A command that names a harness, `claude`, `codex`, `cursor-agent`, or `stella`, runs as it is, and that harness's own hooks record the session. If no agent on this machine wraps that harness, the command exits `2` and prints the `oxagen agent enroll --harness` command to run. With `--name`, the command is recorded as a custom agent whatever it names.
 
-Pass `--contained` to start Claude Code or Codex in the contained launcher instead. It needs Linux with Docker. `oxagen run -- claude …` does the same. See [Run an agent in the contained tier](https://github.com/macanderson/oxagen/blob/main/docs/guides/contained-runs.md).
+Pass `--contained` to start Claude Code or Codex in the contained launcher instead. It needs Linux with Docker. `oxagen run -- claude …` does the same. See [Run an agent in the contained tier](https://github.com/oxageninc/product/blob/main/docs/guides/contained-runs.md).
 
 ### Report each step
 
@@ -109,7 +109,7 @@ On a machine with more than one agent enrolled, a custom agent reports under one
 
 An agent written against the hook command's older name keeps working. Change the command to `oxagen hook --agent <name>`. The payloads and the answers are the same.
 
-For a complete wrapped agent with tests, see [oxagenai/oxagen-wrapped-agents](https://github.com/oxagenai/oxagen-wrapped-agents). Its Stripe refund agent sends every step through the hook under the name `stripe-refunds`, fails closed when the hook does not answer, and shows an operator pause denying the next refund before it reaches Stripe.
+For a complete wrapped agent with tests, see [oxageninc/oxagen-wrapped-agents](https://github.com/oxageninc/oxagen-wrapped-agents). Its Stripe refund agent sends every step through the hook under the name `stripe-refunds`, fails closed when the hook does not answer, and shows an operator pause denying the next refund before it reaches Stripe.
 
 ### The call sequence
 

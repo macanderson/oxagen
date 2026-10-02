@@ -1910,6 +1910,91 @@ describe("readObservedModels", () => {
       readObservedModels({ orgId: ORG, since: SINCE }),
     ).rejects.toThrow();
   });
+
+  // #4572 item 4. The class rows count the calls that used each class, and
+  // one call can use both input_uncached and cache_read, so they cannot say
+  // how many calls in a bucket read nothing from the cache. The weekly
+  // standing context price needs that count to price each bucket's misses.
+  it("counts each bucket's calls and cache reads when asked for call buckets", async () => {
+    answerBoth(summaryOf(1));
+    answer([
+      {
+        model: "model-0",
+        bucket_index: "0",
+        calls: "110",
+        cache_read_calls: "100",
+        first_seen: "2026-09-02T09:00:00.000Z",
+      },
+      {
+        model: "model-0",
+        bucket_index: "1",
+        calls: "5",
+        cache_read_calls: "0",
+        first_seen: "2026-09-03T09:00:00.000Z",
+      },
+    ]);
+    const boundary = new Date("2026-09-03T00:00:00.000Z");
+    const rows = await readObservedModels({
+      orgId: ORG,
+      workspaceId: WS,
+      since: SINCE,
+      boundaries: [boundary],
+      callBuckets: true,
+    });
+    expect(queryMock).toHaveBeenCalledTimes(3);
+    const buckets = queryMock.mock.calls[2]![0];
+    expect(buckets.query).toContain("countIf(cache_read > 0)");
+    expect(buckets.query).toContain("GROUP BY model, bucket_index");
+    // The same calls the summary counted: both stores, the same filters,
+    // and only the models the summary named.
+    expect(buckets.query).toContain("FROM metered_token_usage");
+    expect(buckets.query).toContain("FROM tacho_events FINAL");
+    expect(buckets.query).toContain("attrs[{duplicateAttr:String}] = ''");
+    expect(buckets.query).toContain("source IN {sources:Array(String)}");
+    expect(buckets.query).toContain("AND workspace_id = {workspaceId:UUID}");
+    expect(
+      buckets.query.match(/model IN \{models:Array\(String\)\}/g),
+    ).toHaveLength(2);
+    expect(receivedBounds(buckets.query)).toEqual([
+      "received_at >= {since:DateTime64(3)} - INTERVAL 1 DAY",
+    ]);
+    expect(buckets.query_params).toMatchObject({
+      models: ["model-0"],
+      boundaries: ["2026-09-03 00:00:00.000"],
+    });
+    expect(rows[0]?.callBuckets).toEqual([
+      {
+        calls: 110,
+        cacheReadCalls: 100,
+        firstSeen: "2026-09-02T09:00:00.000Z",
+      },
+      { calls: 5, cacheReadCalls: 0, firstSeen: "2026-09-03T09:00:00.000Z" },
+    ]);
+  });
+
+  it("reads the gateway store alone for call buckets when asked", async () => {
+    answerBoth(summaryOf(1));
+    answer([]);
+    const rows = await readObservedModels({
+      orgId: ORG,
+      since: SINCE,
+      frameStores: "gateway",
+      callBuckets: true,
+    });
+    const buckets = queryMock.mock.calls[2]![0];
+    expect(buckets.query).not.toContain("tacho_events");
+    expect(buckets.query).not.toContain("UNION ALL");
+    // A model the bucket read returned nothing for has no buckets, never a
+    // missing field.
+    expect(rows[0]?.callBuckets).toEqual([]);
+  });
+
+  it("runs no call-bucket read unless asked", async () => {
+    answerBoth(summaryOf(1));
+    const rows = await readObservedModels({ orgId: ORG, since: SINCE });
+    expect(queryMock).toHaveBeenCalledTimes(2);
+    expect(rows[0]).not.toHaveProperty("callBuckets");
+  });
 });
 
 describe("streamed cost frames", () => {
