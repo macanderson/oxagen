@@ -13,7 +13,7 @@ The operators of the active workspace ranked by unproductive spend, highest firs
 - API: `POST /v1/:org_slug/:workspace_slug/spend/operators`
 - Authentication: session (org Owner or Admin)
 - Capability name: `get_operator_ranking`
-- Not billed (`noBillingGate: true`). IAM default-deny; medium sensitivity. The handler asserts the role itself, so an org Member, a Billing member, a workspace Member, and a workspace Owner who is not an org Owner or Admin are refused with `forbidden` (`org_role_required`) on every tier. In an Enterprise org the kernel's IAM check admits the same two roles: migration `20261002025000_backfill_spend_ranking_grants.sql` grants them to every org that existed before the capability did.
+- Not billed (`noBillingGate: true`). IAM default-deny; medium sensitivity. The handler asserts the role itself, so an org Member, a Billing member, a workspace Member, and a workspace Owner who is not an org Owner or Admin are refused with `forbidden` (`org_role_required`) on every tier. In an Enterprise org the kernel's IAM check admits the same two roles: migration `20261002045000_backfill_spend_ranking_grants.sql` grants them to every org that existed before the capability did.
 - No workspace role reads the ranking. No person holds a workspace IAM role yet (#3198), so in an Enterprise org the kernel cannot admit a workspace Owner, and the ranking names org roles on every tier so that each tier admits the same people.
 - Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 

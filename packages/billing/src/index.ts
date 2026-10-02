@@ -70,8 +70,13 @@ export {
 } from "./no-progress";
 export {
   checkNoProgress,
+  NO_PROGRESS_PAUSE_BLOCKS,
   type NoProgressCheck,
+  type NoProgressPauseBlock,
+  type NoProgressPauseOutcome,
+  type NoProgressPauseRequest,
   type NoProgressRun,
+  type PauseRun,
 } from "./no-progress-store";
 export * from "./discount";
 export * from "./action-metering";

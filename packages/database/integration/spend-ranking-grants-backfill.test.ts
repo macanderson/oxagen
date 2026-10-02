@@ -1,7 +1,7 @@
 /**
  * Spend ranking grants backfill (#4574 item 4, #4955)
  *
- * Replays 20261002025000_backfill_spend_ranking_grants.sql against an org
+ * Replays 20261002045000_backfill_spend_ranking_grants.sql against an org
  * whose system roles were provisioned before get_operator_ranking,
  * set_operator_pseudonyms, and get_unproductive_spend existed, and proves the
  * backfill: an org Admin gains an allow on the ranking and on the pseudonym
@@ -36,7 +36,7 @@ function grantPublicId(roleId: string, capability: string): string {
 it("grants the ranking to org Owners and Admins and the headline to every findings reader", async () => {
   const migration = readFileSync(
     new URL(
-      "../atlas/migrations/20261002025000_backfill_spend_ranking_grants.sql",
+      "../atlas/migrations/20261002045000_backfill_spend_ranking_grants.sql",
       import.meta.url,
     ),
     "utf8",

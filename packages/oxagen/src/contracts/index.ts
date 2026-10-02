@@ -302,6 +302,7 @@ import { toolStudioCredentialSet } from "./tool.studio.credential.set";
 import { toolStudioFindingsList } from "./tool.studio.findings.list";
 import { toolStudioDescriptionDraft } from "./tool.studio.description.draft";
 import { toolStudioTry } from "./tool.studio.try";
+import { toolSteeringMigrate } from "./tool.steering.migrate";
 import { toolRelayCreate } from "./tool.relay.create";
 import { toolRelayRevoke } from "./tool.relay.revoke";
 import { credentialGrantList } from "./credential.grant.list";
@@ -1051,6 +1052,7 @@ export {
   toolStudioFindingsList,
   toolStudioDescriptionDraft,
   toolStudioTry,
+  toolSteeringMigrate,
   toolRelayCreate,
   toolRelayRevoke,
   credentialGrantList,
@@ -1501,6 +1503,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   toolStudioFindingsList,
   toolStudioDescriptionDraft,
   toolStudioTry,
+  toolSteeringMigrate,
   toolRelayCreate,
   toolRelayRevoke,
   credentialGrantList,
