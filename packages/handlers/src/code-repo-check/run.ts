@@ -141,13 +141,16 @@ export async function runCodeRepoCheck(
   const startedAt = deps.now().toISOString();
   const host = await deps.host(request);
 
-  const files = (await host.changedPaths(request.base, request.headSha))
-    .filter(isInstructionFile)
-    .sort();
+  const changed = (await host.changedFiles(request.base, request.headSha))
+    .filter((file) => isInstructionFile(file.path))
+    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  const files = changed.map((file) => file.path);
   const added: AddedStatement[] = [];
-  for (const path of files.slice(0, INSTRUCTION_FILES_MAX)) {
+  for (const { path, previousPath } of changed.slice(0, INSTRUCTION_FILES_MAX)) {
+    // A renamed file is compared with its text under the old name, so a move
+    // adds nothing.
     const [before, after] = await Promise.all([
-      host.readFile(path, request.base),
+      host.readFile(previousPath ?? path, request.base),
       host.readFile(path, request.headSha),
     ]);
     if (after === null) continue;

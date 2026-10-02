@@ -37,12 +37,12 @@ describe("githubCodeHost", () => {
     };
   }
 
-  it("lists the paths that exist at the head, from the merge base", async () => {
+  it("lists the files that exist at the head, with a renamed file's old path", async () => {
     const gh = client();
     const host = githubCodeHost(gh, "a-intel/platform");
-    await expect(host.changedPaths("base-sha", "head-sha")).resolves.toEqual([
-      "CLAUDE.md",
-      ".cursor/rules/new.mdc",
+    await expect(host.changedFiles("base-sha", "head-sha")).resolves.toEqual([
+      { path: "CLAUDE.md", previousPath: null },
+      { path: ".cursor/rules/new.mdc", previousPath: ".cursor/rules/old.mdc" },
     ]);
     expect(gh.compareCommits).toHaveBeenCalledWith({
       owner: "a-intel",
@@ -90,16 +90,20 @@ describe("gitlabCodeHost", () => {
       compare: vi.fn(async () => [
         { oldPath: "AGENTS.md", newPath: "AGENTS.md", renamed: false, deleted: false, added: false },
         { oldPath: "CLAUDE.md", newPath: "CLAUDE.md", renamed: false, deleted: true, added: false },
+        { oldPath: "GEMINI.md", newPath: "docs/GEMINI.md", renamed: true, deleted: false, added: false },
       ]),
       getFileRaw: vi.fn(async () => null),
       setCommitStatus: vi.fn(async () => ({ id: 1, targetUrl: null })),
     };
   }
 
-  it("lists the paths that exist at the head and reads a file at a ref", async () => {
+  it("lists the files that exist at the head and reads a file at a ref", async () => {
     const gl = client();
     const host = gitlabCodeHost(gl, "4242");
-    await expect(host.changedPaths("main", "head-sha")).resolves.toEqual(["AGENTS.md"]);
+    await expect(host.changedFiles("main", "head-sha")).resolves.toEqual([
+      { path: "AGENTS.md", previousPath: null },
+      { path: "docs/GEMINI.md", previousPath: "GEMINI.md" },
+    ]);
     expect(gl.compare).toHaveBeenCalledWith({ project: "4242", from: "main", to: "head-sha" });
     await expect(host.readFile("AGENTS.md", "main")).resolves.toBeNull();
     expect(gl.getFileRaw).toHaveBeenCalledWith({ project: "4242", path: "AGENTS.md", ref: "main" });

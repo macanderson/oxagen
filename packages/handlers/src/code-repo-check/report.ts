@@ -97,7 +97,7 @@ function summaryOf(input: ReportInput): string {
     if (rest > 0) parts.push(`- ${plural(rest, "more finding", "more findings")} not listed.`);
     parts.push(
       "",
-      "A steering record already reaches every agent in the workspace, so a repeated line only adds tokens. Remove it from the file.",
+      "Steering already gives agents what a steering record says, so a repeated line only adds tokens. Remove it from the file.",
       "For a contradiction, change the line, or change the steering record through a steering PR.",
     );
   }

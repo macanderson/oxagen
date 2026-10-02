@@ -20,13 +20,20 @@ export interface PostedCheck {
   workspaceId: string;
 }
 
+/** One file a pull request changes that still exists at its head. */
+export interface ChangedFile {
+  path: string;
+  /** The path at the base when the pull request renames the file, else null. */
+  previousPath: string | null;
+}
+
 /** One code repository on its host. */
 export interface CodeHost {
   /**
-   * Every path the pull request changes that still exists at `head`, from
-   * the merge base of `base` and `head`. A rename names its new path.
+   * Every file the pull request changes that still exists at `head`, from
+   * the merge base of `base` and `head`.
    */
-  changedPaths(base: string, head: string): Promise<string[]>;
+  changedFiles(base: string, head: string): Promise<ChangedFile[]>;
   /** A file's text at `ref`, or null when the ref has no such file. */
   readFile(path: string, ref: string): Promise<string | null>;
   postCheck(check: PostedCheck): Promise<void>;
@@ -45,9 +52,14 @@ export function githubCodeHost(
 ): CodeHost {
   const { owner, name: repo } = splitFullName(fullName);
   return {
-    async changedPaths(base, head) {
+    async changedFiles(base, head) {
       const files = await gh.compareCommits({ owner, repo, base, head });
-      return files.filter((f) => f.status !== "removed").map((f) => f.path);
+      return files
+        .filter((f) => f.status !== "removed")
+        .map((f) => ({
+          path: f.path,
+          previousPath: f.status === "renamed" ? f.previousPath : null,
+        }));
     },
     readFile: (path, ref) => gh.getFileContent({ owner, repo, path, ref }),
     async postCheck(check) {
@@ -74,9 +86,11 @@ export function gitlabCodeHost(
   projectId: string,
 ): CodeHost {
   return {
-    async changedPaths(base, head) {
+    async changedFiles(base, head) {
       const changes = await gl.compare({ project: projectId, from: base, to: head });
-      return changes.filter((c) => !c.deleted).map((c) => c.newPath);
+      return changes
+        .filter((c) => !c.deleted)
+        .map((c) => ({ path: c.newPath, previousPath: c.renamed ? c.oldPath : null }));
     },
     readFile: (path, ref) => gl.getFileRaw({ project: projectId, path, ref }),
     async postCheck(check) {

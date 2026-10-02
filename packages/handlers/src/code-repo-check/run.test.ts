@@ -75,11 +75,21 @@ const RECORDS: PublishedStatement[] = [
   },
 ];
 
-/** A repository on its host: each file at each ref, and the checks posted on it. */
+/**
+ * A repository on its host: each file at each ref, and the checks posted on
+ * it. A changed path written `old -> new` is a rename.
+ */
 function repository(files: Record<string, Record<string, string>>, changed: string[]) {
   const posted: PostedCheck[] = [];
   const host: CodeHost = {
-    changedPaths: vi.fn(async () => changed),
+    changedFiles: vi.fn(async () =>
+      changed.map((entry) => {
+        const [from, to] = entry.split(" -> ");
+        return to === undefined
+          ? { path: entry, previousPath: null }
+          : { path: to, previousPath: from ?? null };
+      }),
+    ),
     readFile: vi.fn(async (path: string, ref: string) => files[ref]?.[path] ?? null),
     postCheck: vi.fn(async (check: PostedCheck) => {
       posted.push(check);
@@ -148,7 +158,7 @@ describe("runCodeRepoCheck on GitHub", () => {
       findings: 1,
       memories: 0,
     });
-    expect(host.changedPaths).toHaveBeenCalledWith(BASE_SHA, HEAD_SHA);
+    expect(host.changedFiles).toHaveBeenCalledWith(BASE_SHA, HEAD_SHA);
     expect(posted).toHaveLength(1);
     expect(posted[0]).toMatchObject({
       headSha: HEAD_SHA,
@@ -309,6 +319,27 @@ describe("runCodeRepoCheck on GitHub", () => {
       memories: 0,
     });
     expect(d.captureMemories).not.toHaveBeenCalled();
+  });
+
+  it("reads a renamed instruction file at its old path, so a move adds nothing", async () => {
+    const { host, posted } = repository(
+      {
+        [BASE_SHA]: { "CLAUDE.md": BASE_CLAUDE },
+        [HEAD_SHA]: { "packages/api/CLAUDE.md": BASE_CLAUDE },
+      },
+      ["CLAUDE.md -> packages/api/CLAUDE.md"],
+    );
+    const { deps: d } = deps({ host });
+    await expect(runCodeRepoCheck(d, githubRequest())).resolves.toEqual({
+      conclusion: "success",
+      files: 1,
+      findings: 0,
+      memories: 0,
+    });
+    expect(host.readFile).toHaveBeenCalledWith("CLAUDE.md", BASE_SHA);
+    expect(host.readFile).toHaveBeenCalledWith("packages/api/CLAUDE.md", HEAD_SHA);
+    expect(d.captureMemories).not.toHaveBeenCalled();
+    expect(posted[0]?.report.title).toBe("No findings in instruction files");
   });
 
   it("posts a passing check without reading steering when no instruction file changed", async () => {

@@ -206,7 +206,8 @@ keeps the harness instruction files: `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`
 at any depth, `.cursorrules`, `.cursor/rules/`, `.github/copilot-instructions.md`,
 `.github/instructions/*.instructions.md`, `.windsurfrules`, `.windsurf/rules/`,
 and `.clinerules`. It reads each file at the base and at the head, and keeps
-the list items and paragraphs the head adds. Headings, code blocks, tables,
+the list items and paragraphs the head adds. A renamed file is read at its
+old path at the base, so a move adds nothing. Headings, code blocks, tables,
 comments, and frontmatter are skipped.
 
 **Findings.** Each added statement is compared with the workspace's active
@@ -241,7 +242,10 @@ repository's branch rules.
 from each, because each workspace's records stay in its own tenant scope. One
 check reads at most 20 instruction files and compares at most 500 statements,
 and hands at most 50 memories to capture. GitHub lists at most 300 changed
-files, so an instruction file past that is not read. The findings are not
+files, so an instruction file past that is not read. On GitHub the base text
+is read at the base branch's commit that the delivery names, not at the
+merge base. So a line the base branch removed after the pull request
+branched, which the head still holds, reads as added. The findings are not
 stored, so `list_code_repository_findings`, which the Repositories page asks
 for, has nothing to answer yet.
 
