@@ -699,13 +699,18 @@ export function runTotalsRowToRecord(row: Row): StoredRunTotals {
     toolDefinitionTokens: row.toolDefinitionTokens,
     contextFrameTokens: row.contextFrameTokens,
     steeringTokens: row.steeringTokens,
-    workOrderId: row.workOrderId,
-    workOrderKind: workOrderKind(row.workOrderKind),
+    // Absent on a row rolled up before F13, as on a record the rollup
+    // resolved no work order for.
+    ...workOrderOf(row),
   };
 }
 
-function workOrderKind(value: string | null): RunMeta["workOrderKind"] {
-  return value === "send" || value === "direct" ? value : null;
+/** The row's work order and its kind, or nothing when the row names none. */
+function workOrderOf(row: Row): Pick<RunMeta, "workOrderId" | "workOrderKind"> {
+  const id = row.workOrderId ?? null;
+  const kind = row.workOrderKind;
+  if (id === null || (kind !== "send" && kind !== "direct")) return {};
+  return { workOrderId: id, workOrderKind: kind };
 }
 
 type ModelBreakdown = RunTotalsRecord["breakdown"]["models"][number];
