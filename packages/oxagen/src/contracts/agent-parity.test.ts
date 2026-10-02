@@ -91,6 +91,8 @@ const OFF_AGENT: Readonly<Record<string, string>> = {
     "It returns the replacement credential once, which would land in Stella's transcript.",
   rotate_scim_token:
     "It returns the new SCIM bearer token once, which would land in Stella's transcript.",
+  set_agent_cache_keep_alive:
+    "It decides whether the gateway spends tokens to keep an agent's prompt cache warm, and the team that owns the agent makes that call, so an agent must not change it.",
   set_model_credential:
     "Its input carries a model-vendor API key, which would land in Stella's transcript.",
   set_slack_channel:

@@ -1742,6 +1742,15 @@
       "verifiedAt": "2026-09-22",
       "verifiedBy": "session-1a3727fe-cost-centers"
     },
+    "set_agent_cache_keep_alive": {
+      "route": "/[org]/[ws]/agents/[agent]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent] Overview tab, Coaching panel, the Cache keep-alive row's Turn off or Turn on button (features/agents/cache-keep-alive-controls.tsx, features/agents/actions.ts)",
+      "testid": "agent-keep-alive-change",
+      "proof": "apps/app/src/features/agents/cache-keep-alive-controls.test.tsx",
+      "verifiedAt": "2026-10-01",
+      "verifiedBy": "spend-f32-keep-alive (lane F32)"
+    },
     "get_nav_counts": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",

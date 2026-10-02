@@ -59,6 +59,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - rotate_agent_credential
 - save_memory
 - search_mcp_registry
+- set_agent_cache_keep_alive
 - set_mcp_enabled
 - start_mcp_authorization
 - suggest_promotion_rationales

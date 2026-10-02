@@ -80,6 +80,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [rotate_agent_credential](agent.credential.rotate.md) | [agent.credential.rotate.ts](../../packages/oxagen/src/contracts/agent.credential.rotate.ts) | api |
 | [save_memory](agent.memory.remember.md) | [agent.memory.remember.ts](../../packages/oxagen/src/contracts/agent.memory.remember.ts) | api, mcp, agent |
 | [search_mcp_registry](agent.mcp.registry.search.md) | [agent.mcp.registry.search.ts](../../packages/oxagen/src/contracts/agent.mcp.registry.search.ts) | api, mcp, agent |
+| [set_agent_cache_keep_alive](agent.cache_keep_alive.set.md) | [agent.cache_keep_alive.set.ts](../../packages/oxagen/src/contracts/agent.cache_keep_alive.set.ts) | api, mcp |
 | [set_mcp_enabled](agent.mcp.set_enabled.md) | [agent.mcp.set_enabled.ts](../../packages/oxagen/src/contracts/agent.mcp.set_enabled.ts) | api, mcp |
 | [start_mcp_authorization](agent.mcp.authorize.start.md) | [agent.mcp.authorize.start.ts](../../packages/oxagen/src/contracts/agent.mcp.authorize.start.ts) | api, mcp |
 | [suggest_promotion_rationales](agent.memory_promotion.rationales.md) | [agent.memory_promotion.rationales.ts](../../packages/oxagen/src/contracts/agent.memory_promotion.rationales.ts) | api, mcp, agent |

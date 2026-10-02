@@ -156,6 +156,8 @@ export const AgentDetail = z.object({
     firstFrameAt: Instant.nullable(),
     /** The cost-center label the agent is charged to, or null when it inherits the workspace's (ADR-142). */
     costCenter: z.string().min(1).nullable(),
+    /** Whether the gateway may keep the agent's prompt cache warm while it waits on a subagent; true by default. */
+    cacheKeepAlive: z.boolean(),
   }),
   /** Long-lived credentials: the prefix and dates, never the secret. */
   credentials: z.array(

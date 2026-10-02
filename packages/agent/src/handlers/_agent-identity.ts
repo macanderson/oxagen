@@ -62,6 +62,8 @@ export interface AgentIdentityRow {
   operatorAvatarUrl: string | null;
   /** The label set through set_cost_center (ADR-142); null inherits the workspace's. */
   costCenter: string | null;
+  /** Whether the model proxy may keep the prompt cache warm while the agent waits on a subagent (lane F32). */
+  cacheKeepAlive: boolean;
   /** The runtime the agent runs on now (ADR-198); null when it runs on no named runtime. */
   runtimeId: string | null;
   /** The toolbelt the agent carries now; null reads as the workspace's All tools belt. */
@@ -87,6 +89,7 @@ const identityColumns = {
   operatorName: schema.users.displayName,
   operatorAvatarUrl: schema.users.avatarUrl,
   costCenter: schema.agents.costCenter,
+  cacheKeepAlive: schema.agents.cacheKeepAlive,
   runtimeId: schema.agents.runtimeId,
   toolbeltId: schema.agents.toolbeltId,
 } as const;

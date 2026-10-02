@@ -262,6 +262,14 @@ export const BUNDLE_FEATURE_CEDAR = "cedar" as const;
 export const BUNDLE_FEATURE_SKILLS = "skills" as const;
 
 /**
+ * The host can parse `cache_keep_alive` and its model proxy sends the cache
+ * keep-alive the field turns on (spend spec, detector 3; lane F32). Gated for
+ * the same reason `gateway_tools` is: the bundle schema is strict, so a host
+ * built before the field would reject the whole mandate.
+ */
+export const BUNDLE_FEATURE_CACHE_KEEP_ALIVE = "cache_keep_alive" as const;
+
+/**
  * Every bundle feature the host in *this* tree can parse, which is what it
  * advertises. One list, read by the daemon's health report and by enrollment,
  * so a field added to `policyBundleSchema` is advertised from the one place
@@ -280,6 +288,7 @@ export const TACHO_BUNDLE_FEATURES = [
   BUNDLE_FEATURE_UNBOUND_REPO,
   BUNDLE_FEATURE_CEDAR,
   BUNDLE_FEATURE_SKILLS,
+  BUNDLE_FEATURE_CACHE_KEEP_ALIVE,
 ] as const;
 
 export type TachoBundleFeature = (typeof TACHO_BUNDLE_FEATURES)[number];
@@ -1144,6 +1153,23 @@ export const policyBundleSchema = z
           BUNDLE_SKILLS_CHARS_MAX,
         `at most ${BUNDLE_SKILLS_CHARS_MAX} characters of skills`,
       )
+      .optional(),
+    /**
+     * The cache keep-alive for this host's agent (spend spec, detector 3;
+     * lane F32). Present means on: the agent's idle cache finding shows that
+     * a keep-alive costs less than the cache rewrites it saves (decision 6),
+     * and the owning team has not turned it off. While a parent run waits on
+     * a subagent, the model proxy then resends the parent's last request
+     * with `max_tokens: 0` so its cached prompt stays warm. `finding_id`
+     * names that finding, and each keep-alive frame carries it, so the
+     * record says which evidence turned the keep-alive on.
+     *
+     * Absent means off. Emitted only to a host that advertised
+     * `BUNDLE_FEATURE_CACHE_KEEP_ALIVE`.
+     */
+    cache_keep_alive: z
+      .object({ finding_id: z.string().min(1).max(64) })
+      .strict()
       .optional(),
     signature: z
       .object({

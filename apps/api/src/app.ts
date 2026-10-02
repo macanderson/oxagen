@@ -347,6 +347,7 @@ import { agentRetireRoute } from "./routes/v1/agent.retire";
 import { agentToolbeltGetRoute } from "./routes/v1/agent.toolbelt.get";
 import { agentMoveRoute } from "./routes/v1/agent.move";
 import { agentToolbeltAssignRoute } from "./routes/v1/agent.toolbelt.assign";
+import { agentCacheKeepAliveSetRoute } from "./routes/v1/agent.cache_keep_alive.set";
 import { runtimeCreateRoute } from "./routes/v1/runtime.create";
 import { runtimeListRoute } from "./routes/v1/runtime.list";
 import { runtimeUpdateRoute } from "./routes/v1/runtime.update";
@@ -1090,6 +1091,9 @@ orgScoped.route("/agents/retire", agentRetireRoute);
 orgScoped.route("/agents/move", agentMoveRoute);
 orgScoped.route("/agents/toolbelt/assign", agentToolbeltAssignRoute);
 orgScoped.route("/agents/toolbelt", agentToolbeltGetRoute);
+// The per-agent cache keep-alive switch (lane F32). Session auth; the org
+// role is checked in the handler.
+orgScoped.route("/agents/cache-keep-alive/set", agentCacheKeepAliveSetRoute);
 orgScoped.route("/agents", agentListRoute);
 // Runtimes, toolbelts and tool state (ADR-198). Session auth; the role is
 // checked in each write handler.

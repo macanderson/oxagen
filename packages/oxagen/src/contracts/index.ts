@@ -42,6 +42,8 @@ import { agentCredentialRotate } from "./agent.credential.rotate";
 import { agentSuspend } from "./agent.suspend";
 import { agentRetire } from "./agent.retire";
 import { agentToolbeltGet } from "./agent.toolbelt.get";
+// Lane F32: the per-agent switch for the model proxy's cache keep-alive.
+import { agentCacheKeepAliveSet } from "./agent.cache_keep_alive.set";
 import { tachoIncidentList } from "./tacho.incident.list";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { mandateGrant } from "./mandate.grant";
@@ -793,6 +795,7 @@ export {
   agentSuspend,
   agentRetire,
   agentToolbeltGet,
+  agentCacheKeepAliveSet,
   tachoIncidentList,
   agentApprovalResolve,
   mandateGrant,
@@ -1245,6 +1248,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   agentSuspend,
   agentRetire,
   agentToolbeltGet,
+  agentCacheKeepAliveSet,
   tachoIncidentList,
   agentApprovalResolve,
   mandateGrant,

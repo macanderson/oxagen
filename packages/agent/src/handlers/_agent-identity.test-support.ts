@@ -140,6 +140,8 @@ export async function seedAgent(
     workspaceId?: string;
     /** A cost-center label as set_cost_center stores it (ADR-142). */
     costCenter?: string | null;
+    /** false seeds an agent whose cache keep-alive is off (lane F32). */
+    cacheKeepAlive?: boolean;
     /** `agent.runtimes.id` the agent runs on (ADR-198). */
     runtimeId?: string | null;
     /** `tools.toolbelts.id` the agent carries (ADR-198). */
@@ -186,6 +188,7 @@ export async function seedAgent(
         deploymentStatus: "inactive",
         principalId: principal?.id ?? null,
         costCenter: over.costCenter ?? null,
+        cacheKeepAlive: over.cacheKeepAlive ?? true,
         runtimeId: over.runtimeId ?? null,
         toolbeltId: over.toolbeltId ?? null,
         deletedAt: over.deletedAt ?? null,

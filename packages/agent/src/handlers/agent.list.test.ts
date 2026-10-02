@@ -35,6 +35,7 @@ const row = {
   operatorName: "Marcus Bell",
   operatorAvatarUrl: "https://avatars.example.com/marcus.png",
   costCenter: null,
+  cacheKeepAlive: true,
   runtimeId: null,
   toolbeltId: null,
 };

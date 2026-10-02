@@ -210,6 +210,9 @@ function tabBody({
           lastRun={lastRun}
           operatorName={operatorName}
           place={place}
+          // set_agent_cache_keep_alive admits an org Owner or Admin (lane
+          // F32). A retired agent's setting is left as the record holds it.
+          canSetKeepAlive={mayRebind(ctx) && identity.status !== "retired"}
         />
       );
     case "identity":

@@ -139,6 +139,9 @@
                 "type": "null"
               }
             ]
+          },
+          "cacheKeepAlive": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -154,7 +157,8 @@
           "status",
           "registeredAt",
           "firstFrameAt",
-          "costCenter"
+          "costCenter",
+          "cacheKeepAlive"
         ],
         "additionalProperties": false
       },

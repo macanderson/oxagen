@@ -4085,6 +4085,17 @@
       "consumes": []
     },
     {
+      "name": "set_agent_cache_keep_alive",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "set_approval_rule_enabled",
       "domain": "approval_rule",
       "surfaces": [

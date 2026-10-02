@@ -6,6 +6,7 @@
 import "./contracts/agent.approval.list";
 import "./contracts/agent.approval.list_resolved";
 import "./contracts/agent.approval.resolve";
+import "./contracts/agent.cache_keep_alive.set";
 import "./contracts/agent.credential.rotate";
 import "./contracts/agent.debug.trace";
 import "./contracts/agent.environment.bind";
