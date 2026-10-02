@@ -109,6 +109,7 @@ import {
   type MessageAssembly,
   type RecallBody,
   recallOf,
+  replyPartsOf,
   type RunFrame,
   stepFolds,
   toolFamilyOf,
@@ -177,6 +178,8 @@ import {
 const RECALL_BODY_MAX = 1_048_576;
 /** Bodies read at once. */
 const BODY_CONCURRENCY = 8;
+/** The most further parts of one reply an entry carries; the contract's cap. */
+const REPLY_PARTS_MAX = 256;
 /**
  * The most bytes of bodies and reassemblies one read holds so that a second
  * ask for the same object is not a second read (`readEachOnce`).
@@ -2002,6 +2005,19 @@ export function createRunTranscriptGetHandler(
       });
       return entry === null ? null : Number(entry.microsPerMillion);
     };
+    // A reply's further parts, which the fold gathered into its model step
+    // (#4351). Each is read as a half is read, one after another, so a page
+    // holds no more reads at once than BODY_CONCURRENCY.
+    const partsOf = async (fold: TranscriptFold) => {
+      const out: { frame: RunFrame; body: TranscriptEntryBody | null }[] = [];
+      for (const frame of replyPartsOf(fold).slice(0, REPLY_PARTS_MAX)) {
+        out.push({
+          frame,
+          body: await half(bodies, scope, frame, textMax, outputRate, keys),
+        });
+      }
+      return out;
+    };
     const halves = await mapConcurrent(
       page,
       BODY_CONCURRENCY,
@@ -2022,6 +2038,7 @@ export function createRunTranscriptGetHandler(
           outputRate,
           keys,
         ),
+        parts: await partsOf(fold),
       }),
     );
     // What each recall entry put in front of the model, parsed here from the
@@ -2041,7 +2058,11 @@ export function createRunTranscriptGetHandler(
     // call, and what came back, so a reader draws each call once.
     const claimer = toolUseClaimer(steps);
     const results = toolResultsOf(
-      halves.flatMap((pair) => [pair.request, pair.response]),
+      halves.flatMap((pair) => [
+        pair.request,
+        pair.response,
+        ...pair.parts.map((part) => part.body),
+      ]),
     );
 
     const entries: TranscriptEntry[] = page.map((fold, i) => {
@@ -2049,13 +2070,20 @@ export function createRunTranscriptGetHandler(
       const pair = halves[i] as {
         request: TranscriptEntryBody | null;
         response: TranscriptEntryBody | null;
+        parts: { frame: RunFrame; body: TranscriptEntryBody | null }[];
       };
-      // Each half is claimed from the frame that carried it, so a turn's
-      // reply claims its calls as the model step that made it does.
+      // Each half, and each further part of a reply, is claimed from the
+      // frame that carried it, so a turn's reply claims its calls as the
+      // model step that made it does. Declared before the parts read it: a
+      // const read earlier in the same scope throws (#4936 CI).
       const claimFrom =
         (carrier: RunFrame | null) =>
         (uses: { name: string; callKey: string | null }[]) =>
           claimer(carrier, uses);
+      const parts = pair.parts.flatMap(({ frame, body }) => {
+        const part = withToolUseFacts(body, claimFrom(frame), results);
+        return part === null ? [] : [part];
+      });
       return {
         seq: opening.seq,
         endSeq: fold.endSeq,
@@ -2090,6 +2118,7 @@ export function createRunTranscriptGetHandler(
           claimFrom(fold.response),
           results,
         ),
+        ...(parts.length > 0 ? { parts } : {}),
         decision: fold.decision === null ? null : decisionView(fold.decision),
         frames: fold.frames,
         turn: turnOf(fold.turn),

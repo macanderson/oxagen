@@ -77,7 +77,12 @@ describe("design record: the recipes carry the mockup's rules", () => {
     // v3 draws page tabs as a muted track with a raised tab. Until a slice
     // ports that, the gold underline stays the app's rule for every tab row.
     expect(lightRoot()).toMatch(/--tab-border-active:\s*var\(--gold\)/);
-    expect(tabLink).toContain("aria-[current=page]:border-gold");
+    // A tab row is a tablist (ADR-243, #3995), so the
+    // selected tab is the one with `aria-selected`, as engine.css keys
+    // `.tab[aria-selected]`. A tab carries no `aria-current`.
+    expect(tabLink).toContain("aria-selected:border-gold");
+    expect(tabLink).toContain("aria-selected:text-foreground");
+    expect(tabLink).not.toContain("aria-[current=page]");
     expect(tabLink).not.toContain("border-foreground");
   });
 

@@ -95,7 +95,8 @@ const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { ToolsBody, ToolsHeaderActions, ToolsLoading, toolsTabCounts } =
   await import("./tools");
-const { ServerViews } = await import("./tabs");
+const { SERVER_VIEW_PANEL, ServerViews } = await import("./tabs");
+const { RouteTabPanel } = await import("@/ui/route-tabs");
 const {
   credentialGrantPage,
   killSwitchBoard,
@@ -168,7 +169,7 @@ async function renderActions(
 const at = { org: "acme", ws: "core-platform" };
 /** The Tool servers views row, drawn above the registry, providers and toolbelts. */
 const viewsRow = () =>
-  screen.queryByRole("navigation", { name: "Tool server views" });
+  screen.queryByRole("tablist", { name: "Tool server views" });
 
 /** Every gold (`.btn.primary`) control on the screen. */
 const golds = () => [
@@ -293,8 +294,8 @@ describe("Tools › server views", () => {
     async (tab, agentsTab) => {
       await renderTools({}, tab);
       const row = element(viewsRow(), "views row");
-      const links = within(row).getAllByRole("link");
-      expect(links.map((link) => link.getAttribute("data-view"))).toEqual([
+      const links = within(row).getAllByRole("tab");
+      expect(links.map((link) => link.getAttribute("data-tab"))).toEqual([
         "providers",
         "tools",
         "toolbelts",
@@ -304,11 +305,18 @@ describe("Tools › server views", () => {
         "/acme/core-platform/agents?tab=tools",
         "/acme/core-platform/agents?tab=toolbelts",
       ]);
-      expect(
-        links
-          .filter((link) => link.getAttribute("aria-current") === "page")
-          .map((link) => link.getAttribute("href")),
-      ).toEqual([`/acme/core-platform/agents?tab=${agentsTab}`]);
+      const selected = links.filter(
+        (link) => link.getAttribute("aria-selected") === "true",
+      );
+      expect(selected.map((link) => link.getAttribute("href"))).toEqual([
+        `/acme/core-platform/agents?tab=${agentsTab}`,
+      ]);
+      // The selected view names the panel its body draws in, and the panel
+      // takes the view as its label.
+      const panel = screen.getByRole("tabpanel");
+      expect(selected[0]).toHaveAttribute("aria-controls", panel.id);
+      expect(panel).toHaveAttribute("aria-labelledby", selected[0]?.id);
+      expect(selected[0]).toHaveAttribute("tabindex", "0");
     },
   );
 
@@ -364,7 +372,16 @@ describe("Tools › server views", () => {
 
   it("prints no versions count when it is handed none", () => {
     withIntl(
-      <ServerViews at={at} current="toolbelts" versions={null} providers={3} />,
+      // The row names the panel its page draws, so the panel is drawn too.
+      <>
+        <ServerViews
+          at={at}
+          current="toolbelts"
+          versions={null}
+          providers={3}
+        />
+        <RouteTabPanel panel={SERVER_VIEW_PANEL} />
+      </>,
     );
     expect(document.querySelector('[data-count="tools"]')).toBeNull();
     expect(

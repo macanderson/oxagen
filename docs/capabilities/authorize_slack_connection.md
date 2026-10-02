@@ -39,8 +39,9 @@ The order is fixed:
    organization or person is refused, and the code never reaches Slack.
 2. Exchanges the code with `oauth.v2.access`, using the redirect URL stored
    beside the state.
-3. Revokes and refuses a token from another Slack app (when `SLACK_APP_ID` is
-   set) or one without `chat:write`.
+3. Revokes and refuses a token from another Slack app (the registry entry
+   [`SLACK_APP_ID`](../../packages/config/src/registry.ts) says when the app is checked) or one without
+   `chat:write`.
 4. Stores the token encrypted, replacing any earlier connection, then asks
    Slack to revoke the replaced token. That revoke is best effort and logged.
 5. Writes a `plugin.credential_set` security event with

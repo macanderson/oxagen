@@ -30,13 +30,19 @@ import {
   orgTwoFactorPolicy,
 } from "@/server/viewer";
 import { routes, type SafePath } from "@/shared/safe-path";
+import { RouteTabPanel } from "@/ui/route-tabs";
 import { OrganizationHeader } from "./header";
 import {
   OrganizationDenied,
   OrganizationEmpty,
   OrganizationError,
 } from "./states";
-import { type OrganizationTab, OrganizationTabs } from "./tabs";
+import {
+  inOrganizationRow,
+  ORGANIZATION_PANEL,
+  type OrganizationTab,
+  OrganizationTabs,
+} from "./tabs";
 
 /** The org roles `org.admin` names: the ones that may read this page. */
 const ORG_ADMIN_ROLES: readonly OrgRole[] = ["owner", "admin"];
@@ -155,15 +161,21 @@ export async function OrganizationFrame({
           workspaces: workspaces.value.workspaces.length,
         }}
       />
-      {
-        await children({
-          members: members.value,
-          roles: roles.value,
-          workspaces: workspaces.value,
-          twoFactor,
-          enterable,
-        })
-      }
+      <RouteTabPanel
+        panel={ORGANIZATION_PANEL}
+        selected={inOrganizationRow(current)}
+        className="flex flex-col gap-4"
+      >
+        {
+          await children({
+            members: members.value,
+            roles: roles.value,
+            workspaces: workspaces.value,
+            twoFactor,
+            enterable,
+          })
+        }
+      </RouteTabPanel>
     </div>
   );
 }

@@ -500,11 +500,11 @@ describe("callServed billing admission", () => {
     expect(recorded.meter).toEqual([]);
   });
 
-  it("refuses a call when the free month is used and no card is saved", async () => {
-    const { call, recorded } = await setup({ admit: () => Promise.resolve({ admitted: false, reason: "no_payment_method" }) });
+  it("refuses a call when the signup grant is used and no plan is chosen", async () => {
+    const { call, recorded } = await setup({ admit: () => Promise.resolve({ admitted: false, reason: "subscription_required" }) });
     const result = await call("billing__list_charges");
     expect(textOf(result)).toBe(
-      "The organization used this month's free governed actions, so Oxagen did not send billing__list_charges. Ask an organization admin to add a payment method in Billing.",
+      "The organization has used or outlived its signup grant, so Oxagen did not send billing__list_charges. Ask an organization admin to add a card and choose a plan in Billing.",
     );
     nothingSent(recorded);
     expect(recorded.meter).toEqual([]);

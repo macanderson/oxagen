@@ -1,14 +1,19 @@
 // Spend › Wasted spend (spec "Wasted spend"): money whose frames show it
 // bought nothing. Four tiles, By cause, and Runs with waste. list_waste reads
 // one cause today (a cache write no later call read), so it is printed as
-// recorded, and the six causes the design meters are listed as not recorded
+// recorded. Retry loops are recorded too, from the open retry_loops findings
+// (F15). The five other causes the design meters are listed as not recorded
 // yet (#2962) rather than drawn as zeros. A run card carries what the cause
 // cites: the run's session name over its id, and the cause. Its own amount is
 // not on the contract yet.
 // Wasted spend is read from frames.
 import { useLocale, useTranslations } from "next-intl";
 import { ratioOfMicros } from "@/data/contracts/money";
-import type { SpendReport, SpendWaste } from "@/data/contracts/spend";
+import type {
+  SpendFinding,
+  SpendReport,
+  SpendWaste,
+} from "@/data/contracts/spend";
 import { routes } from "@/shared/safe-path";
 import { buttonSecondary, mono, panel } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
@@ -16,25 +21,99 @@ import { formatCount, formatRatio, ratioWidth } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { BasisLabel, NotRecordedValue, Tile, TileStrip } from "./figures";
 import { NotBacked } from "./not-backed";
+import { savingOf } from "./rollup";
 import { Empty, Panel } from "./tables";
 import type { SpendAt } from "./view";
 
-/** The causes the design meters, in its order. None is on list_waste yet. */
+/** The causes the design meters that nothing records yet, in its order. */
 const DESIGN_CAUSES = [
   "cacheMisses",
   "correctivePrompts",
-  "retryLoops",
   "contextBloat",
   "idleWhileParked",
   "haltedEarly",
 ] as const;
 
+/**
+ * Retry loops, from the open `retry_loops` findings: what the requests that
+ * only retried a failing call cost, and the runs they cite. The findings cover
+ * the findings job's trailing 30 days, not this period, so the row draws no
+ * share bar. Not recorded when the findings read did not answer.
+ */
+function RetryLoops({
+  findings,
+  at,
+}: {
+  findings: SpendFinding[] | null;
+  at: SpendAt;
+}) {
+  const t = useTranslations("spend.waste");
+  const locale = useLocale();
+  if (findings === null)
+    return (
+      <li
+        data-cause="retryLoops"
+        data-recorded="false"
+        className="flex flex-wrap items-baseline justify-between gap-2 text-[13px]"
+      >
+        <span className="font-semibold">{t("designCause.retryLoops")}</span>
+        <NotRecordedValue />
+      </li>
+    );
+  const loops = findings.filter((finding) => finding.kind === "retry_loops");
+  const saving = savingOf(loops);
+  const runs = loops.reduce((n, finding) => n + finding.runs, 0);
+  return (
+    <li
+      data-cause="retryLoops"
+      data-recorded="true"
+      className="flex flex-col gap-1.5"
+    >
+      <span className="flex flex-wrap items-baseline justify-between gap-2 text-[13px]">
+        <span>
+          <span className="font-semibold">{t("designCause.retryLoops")}</span>{" "}
+          {loops.length === 0 ? null : (
+            <span className={`${mono} text-[11px] text-muted-foreground`}>
+              {t("causeRuns", { runs: formatCount(runs, locale) })}
+            </span>
+          )}
+        </span>
+        {loops.length === 0 ? (
+          <span className="text-muted-foreground">{t("retryLoopsNone")}</span>
+        ) : saving === null ? (
+          <span className="font-semibold">
+            {t("retryLoopsFindings", {
+              findings: formatCount(loops.length, locale),
+            })}
+          </span>
+        ) : (
+          <span className="font-semibold">
+            <Money value={saving} /> <BasisLabel basis={saving.basis} />
+          </span>
+        )}
+      </span>
+      <span className="text-[12px] text-muted-foreground">
+        {t("retryLoopsWhy")}{" "}
+        <SafeLink
+          to={routes.spend(at.org, at.ws, { tab: "findings" })}
+          className="underline underline-offset-2"
+        >
+          {t("retryLoopsOpen")}
+        </SafeLink>
+      </span>
+    </li>
+  );
+}
+
 export function WasteSection({
   waste,
+  findings,
   month,
   at,
 }: {
   waste: SpendWaste;
+  /** The open findings, for the retry loops row; null when the read did not answer. */
+  findings: SpendFinding[] | null;
   month: SpendReport;
   at: SpendAt;
 }) {
@@ -149,6 +228,7 @@ export function WasteSection({
               </li>
             );
           })}
+          <RetryLoops findings={findings} at={at} />
           {DESIGN_CAUSES.map((cause) => (
             <li
               key={cause}

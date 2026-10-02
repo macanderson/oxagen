@@ -84,6 +84,8 @@ export {
   type GauSubscriptionPeriod,
 } from "./contract-terms";
 export * from "./gau-bucket";
+export * from "./signup-grant";
+export { resolveIncludedRetentionDays } from "./retention-window";
 export * from "./gau-ledger";
 export * from "./gau-reversals";
 export * from "./gau-settlements";

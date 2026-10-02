@@ -35,6 +35,19 @@ export type PlanCard = z.infer<typeof PlanCard>;
  */
 export const GauBucket = z.object({
   mode: z.enum(["prepaid", "invoice"]),
+  /** What the bucket is measured against (ADR-241, signup grant). */
+  basis: z.enum(["subscription", "signup_grant", "after_signup_grant"]),
+  /** The organization's one-time signup grant, or null when it has none. */
+  signupGrant: z
+    .object({
+      grantedGau: Count,
+      grantedAt: Instant,
+      expiresAt: Instant,
+      active: z.boolean(),
+      remainingGau: z.number().int(),
+      evidenceDays: z.number().int().positive(),
+    })
+    .nullable(),
   period: z.object({ start: Instant, end: Instant }),
   includedGau: Count,
   purchasedGau: Count,
@@ -128,6 +141,11 @@ export type UsageCredits = z.infer<typeof UsageCredits>;
  */
 export const EvidenceRetention = z.object({
   includedMonths: z.number().int().positive(),
+  /**
+   * Days of evidence this organization's billing basis includes today: the
+   * paid months for a subscriber, or 30 days with no subscription (ADR-241).
+   */
+  includedDays: z.number().int().positive(),
   perGbMonth: Money,
   extendedRetentionEnabled: z.boolean(),
 });

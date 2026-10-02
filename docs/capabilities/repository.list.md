@@ -46,6 +46,7 @@ None. The org and workspace come from the capability context.
 
 | Code | Reason | When |
 |---|---|---|
-| `forbidden` | IAM | the principal holds none of the default roles |
+| `forbidden` | `org_role_required` | the acting user holds none of the default roles. The handler checks them itself, so a non-enterprise organization refuses a workspace Viewer and an org Billing member too |
+| `forbidden` | `no_principal` | no user resolves: no signed-in user, or an API key with no recorded creator |
 
 A workspace with no heads answers an empty list. A workspace has none until the steering repo job binds its steering repository (ADR-212). `create_workspace` starts that job and returns before it finishes. `create_org` does not start it, so a first workspace it writes has no heads.

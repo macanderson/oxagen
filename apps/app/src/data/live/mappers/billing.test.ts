@@ -212,6 +212,7 @@ describe("toEvidenceRetention", () => {
   it("copies the window and the opt-in, and reads the dollar price into micros through its text", () => {
     expect(toEvidenceRetention(evidenceRetentionOutput())).toEqual({
       includedMonths: 12,
+      includedDays: 360,
       perGbMonth: { micros: "80000", currency: "USD" },
       extendedRetentionEnabled: false,
     });

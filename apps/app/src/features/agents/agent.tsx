@@ -25,6 +25,7 @@ import type { DataSource } from "@/data/ports";
 import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
+import { RouteTabPanel } from "@/ui/route-tabs";
 import { ActivitySection } from "./activity";
 import {
   type AgentReads,
@@ -36,7 +37,7 @@ import {
   tabOf,
   tamperOf,
 } from "./agent-reads";
-import { AgentTabs } from "./agent-tabs";
+import { AGENT_PANEL, AgentTabs } from "./agent-tabs";
 import { RuntimeMove, ToolbeltChoice } from "./binding-controls";
 import { AgentHeader, operatorNameOf } from "./header";
 import { IdentitySection } from "./identity";
@@ -153,7 +154,9 @@ export async function Agent({
         ws={place.ws}
         agent={place.agent}
       />
-      {body}
+      <RouteTabPanel panel={AGENT_PANEL} className="flex flex-col gap-5">
+        {body}
+      </RouteTabPanel>
     </div>
   );
 }

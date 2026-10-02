@@ -161,6 +161,11 @@ organization or not. The workspace's own main repository is refused as
 `conflict: main_repo` (it is already bound), and a second link of the same
 repository as `conflict: repository_already_linked`.
 
+Amended 2026-10-01 (#3340): a linked code repository receives no Context PRs.
+Mac decided it that day, because ADR-212 moved every record into the
+steering repository. The refusal stands for its second reason alone: another
+workspace's steering repository holds that workspace's records.
+
 ### 5. Unlink deletes the head; binding versions are evidence
 
 `unlink_repository` takes the `rpb_…` binding id and deletes the binding
