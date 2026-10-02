@@ -9,6 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  applyCover,
   applyGrace,
   applySupersession,
   classifyRuns,
@@ -293,5 +294,83 @@ describe("verdictOf with a too-young commit", () => {
 
   it("does not soften a real gap sitting beside it", () => {
     expect(verdictOf([s("too_young"), s("none")])).toBe("unverified");
+  });
+});
+
+describe("applyCover", () => {
+  const MINUTE = 60 * 1000;
+  const COVER = 180 * MINUTE;
+  const s = (sha: string, state: string, ageMs?: number) => ({
+    sha,
+    state,
+    ageMs,
+  });
+
+  it("waits on a commit whose run a newer push replaced (ADR-287)", () => {
+    // A burst on the shared group: the oldest run is going, the newest push
+    // waits behind it, and the push between them was replaced and cancelled.
+    const judged = applyCover(
+      [
+        s("newest", "in_flight", 5 * MINUTE),
+        s("replaced", "none", 15 * MINUTE),
+        s("running", "in_flight", 30 * MINUTE),
+      ],
+      COVER,
+    );
+    expect(judged.map((x: CommitState) => x.state)).toEqual([
+      "in_flight",
+      "awaiting_cover",
+      "in_flight",
+    ]);
+    expect(verdictOf(judged)).toBe("pending");
+  });
+
+  it("reports a gap older than the bound, however many runs are going", () => {
+    const judged = applyCover(
+      [s("newest", "in_flight", MINUTE), s("old", "none", COVER)],
+      COVER,
+    );
+    expect(judged[1]?.state).toBe("none");
+    expect(verdictOf(judged)).toBe("unverified");
+  });
+
+  it("needs a later run in flight, not an earlier one", () => {
+    // HEAD has no run and the only run going is older, so nothing will
+    // answer for HEAD.
+    const judged = applyCover(
+      [s("head", "none", 20 * MINUTE), s("older", "in_flight", 40 * MINUTE)],
+      COVER,
+    );
+    expect(judged[0]?.state).toBe("none");
+  });
+
+  it("leaves an undatable commit alone", () => {
+    const judged = applyCover(
+      [s("newest", "in_flight", MINUTE), s("undated", "none")],
+      COVER,
+    );
+    expect(judged[1]?.state).toBe("none");
+  });
+
+  it("keeps a superseded commit superseded", () => {
+    const judged = applyCover(
+      applySupersession([
+        s("newest", "in_flight", MINUTE),
+        s("answered", "concluded", 80 * MINUTE),
+        s("replaced", "none", 90 * MINUTE),
+      ]),
+      COVER,
+    );
+    expect(judged.map((x: CommitState) => x.state)).toEqual([
+      "in_flight",
+      "concluded",
+      "superseded",
+    ]);
+  });
+
+  it("does not mutate its argument", () => {
+    const states = [s("newest", "in_flight", MINUTE), s("x", "none", MINUTE)];
+    applyCover(states, COVER);
+    expect(states[1]?.state).toBe("none");
   });
 });

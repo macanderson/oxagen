@@ -16,6 +16,7 @@ import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { RunIssueConnections } from "@/features/run-outcomes";
 import { parseGitHubUrl } from "@/shared/github-url";
+import { mayActInWorkspace } from "@/shared/workspace-authority";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import { mono } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
@@ -244,7 +245,10 @@ function IssuesFromRead({
  */
 export function IssuesTab(props: RunTabProps): Promise<ReactNode> {
   const { ctx, place, work, issues, outputs } = props;
-  const canManage = ctx.orgRole === "owner" || ctx.orgRole === "admin";
+  const canManage = mayActInWorkspace(ctx.orgRole, ctx.wsRole, [
+    "owner",
+    "admin",
+  ]);
   return Promise.resolve(
     <>
       <Suspense fallback={<IssuesPanel place={place} read={null} />}>

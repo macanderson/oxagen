@@ -7,7 +7,7 @@ import {
   readManagedBlock,
 } from "@oxagen/oxagen/steering-repo/templates";
 import { describe, expect, it } from "vitest";
-import { restoreManagedBlock } from "./managed-block";
+import { managedBlockFinding, restoreManagedBlock } from "./managed-block";
 
 const AGENTS = agentsMdTemplate({
   provider: "github",
@@ -81,5 +81,58 @@ describe("restoreManagedBlock", () => {
       kind: "no_block",
     });
     expect(restoreManagedBlock(null, "anything")).toEqual({ kind: "no_block" });
+  });
+});
+
+describe("managedBlockFinding (#4518 item 7)", () => {
+  const blockLine = () => {
+    const read = readManagedBlock(AGENTS);
+    if (!read.ok || read.block === null) throw new Error("no block");
+    return read.block.begin_line;
+  };
+
+  it("names an edited block at its begin line", () => {
+    const edited = AGENTS.replace(
+      "Run `oxagen check` before you push.",
+      "Push straight to main.",
+    );
+    expect(managedBlockFinding("AGENTS.md", AGENTS, edited)).toEqual({
+      rule: "managed-block",
+      path: "AGENTS.md",
+      line: blockLine(),
+      message: "The managed block in AGENTS.md was edited.",
+    });
+  });
+
+  it("names a removed block, a deleted file, and broken markers", () => {
+    const notes = "# Agents\n\nOur own notes.\n";
+    expect(managedBlockFinding("AGENTS.md", AGENTS, notes)).toMatchObject({
+      line: 1,
+      message: "This steering PR removes the managed block from AGENTS.md.",
+    });
+    expect(managedBlockFinding("AGENTS.md", AGENTS, null)).toMatchObject({
+      line: null,
+      message:
+        "This steering PR removes AGENTS.md and the managed block Oxagen writes in it.",
+    });
+    const doubled = `${AGENTS}\n${blockOf(AGENTS)}\n`;
+    expect(managedBlockFinding("AGENTS.md", AGENTS, doubled)).toMatchObject({
+      rule: "managed-block",
+      message: expect.stringContaining(
+        "The managed block markers in AGENTS.md are broken",
+      ),
+    });
+  });
+
+  it("finds nothing when the block matches the production branch (negative)", () => {
+    expect(
+      managedBlockFinding("AGENTS.md", AGENTS, `${AGENTS}- A note.\n`),
+    ).toBeNull();
+    expect(managedBlockFinding("CLAUDE.md", CLAUDE, CLAUDE)).toBeNull();
+  });
+
+  it("finds nothing when the production branch holds no block to restore from (negative)", () => {
+    expect(managedBlockFinding("README.md", "# Platform\n", "# Changed\n")).toBeNull();
+    expect(managedBlockFinding("README.md", null, "# Changed\n")).toBeNull();
   });
 });

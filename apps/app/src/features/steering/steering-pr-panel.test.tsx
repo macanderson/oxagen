@@ -6,9 +6,17 @@
 // asks for, a drifted managed block, and a memory PR whose records no read
 // returns yet. A steering PR proposal (#5122) merges from any open status and
 // offers no control that runs the record checks, while a governance change
-// keeps its gate. Every state gets an axe check.
-import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+// keeps its gate. Approve, Drop, and Restore block each reach their action
+// with the arguments the panel holds (#4518). Every state gets an axe check.
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProposalStatus } from "@/data/contracts/steering";
 import { type Read, readError } from "@/data/read";
 import type { SteeringPr } from "@/data/contracts/steering";
@@ -17,24 +25,27 @@ import { IntlProvider } from "@/test/intl";
 import { readOk } from "@/data/read";
 import {
   AT,
+  PROPOSAL_ID,
   steeringPr,
   memoryPrRecords,
   steeringPrSteeringPr,
 } from "@/test/steering-views";
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+const { actions, router } = vi.hoisted(() => ({
+  router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+  actions: {
+    openSteeringPr: vi.fn(),
+    mergeSteeringPr: vi.fn(),
+    dismissProposal: vi.fn(),
+    approveSteeringPr: vi.fn(),
+    mergePrWithoutReview: vi.fn(),
+    restoreManagedBlock: vi.fn(),
+    revertSteeringPr: vi.fn(),
+    dropMemoryRecord: vi.fn(),
+  },
 }));
-vi.mock("./actions", () => ({
-  openSteeringPr: vi.fn(),
-  mergeSteeringPr: vi.fn(),
-  dismissProposal: vi.fn(),
-  approveSteeringPr: vi.fn(),
-  mergePrWithoutReview: vi.fn(),
-  restoreManagedBlock: vi.fn(),
-  revertSteeringPr: vi.fn(),
-  dropMemoryRecord: vi.fn(),
-}));
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
+vi.mock("./actions", () => actions);
 
 const { SteeringPrPanel } = await import("./steering-pr-panel");
 
@@ -59,6 +70,12 @@ const mergeWithoutReview = () =>
   screen.queryByRole("button", { name: "Merge without review" });
 const revert = () =>
   screen.queryByRole("button", { name: "Revert pull request" });
+
+beforeEach(() => {
+  for (const fn of [...Object.values(actions), ...Object.values(router)]) {
+    fn.mockReset();
+  }
+});
 
 afterEach(async () => {
   try {
@@ -181,7 +198,7 @@ describe("once every check passed", () => {
       "Publish .oxagen/rules/ctx.release.no-reread-changelog.toml as a record in force",
       "Take the workspace's promotion ledger from 41 entries to 42",
       "Write the promotion event to the ledger and a steering_published audit event",
-      "Merge rule: team: an org Owner or Admin, or a workspace Owner, other than the author merges",
+      "Merge rule: team: an org Owner or Admin, or a workspace Owner or Admin, other than the author merges",
     ]);
     // The re-run stays offered after the checks pass: when the head moves,
     // merge_steering_pr refuses with `head_moved` and running the checks again
@@ -406,7 +423,7 @@ describe("a steering PR proposal (#5122)", () => {
       "Run the steering checks on the pull request's latest commit",
       "Merge the pull request's files into the production branch",
       "Publish the next steering version",
-      "Merge rule: team: an org Owner or Admin, or a workspace Owner, other than the author merges",
+      "Merge rule: team: an org Owner or Admin, or a workspace Owner or Admin, other than the author merges",
     ]);
     expect(panel.querySelector("[data-on-merge]")).not.toHaveTextContent(
       "promotion",
@@ -420,7 +437,7 @@ describe("a steering PR proposal (#5122)", () => {
       "Merge the pull request's files into the production branch",
       "Retire each record whose file the revert deletes",
       "Publish the next steering version",
-      "Merge rule: team: an org Owner or Admin, or a workspace Owner, other than the author merges",
+      "Merge rule: team: an org Owner or Admin, or a workspace Owner or Admin, other than the author merges",
     ]);
   });
 
@@ -561,6 +578,94 @@ describe("a memory PR", () => {
   it("shows no memory section on a steering PR from a steering branch (negative)", () => {
     renderState("checks_passed");
     expect(document.querySelector("[data-memory-pr]")).toBeNull();
+  });
+});
+
+describe("the panel's writes (#4518)", () => {
+  const BRANCH = "memory/2026-09-27";
+
+  it("approves the steering PR this panel shows", async () => {
+    actions.approveSteeringPr.mockResolvedValue({
+      ok: true,
+      value: { approvals: 1 },
+    });
+    renderPanel(readOk(steeringPr("checks_passed")), { approvals: 0 });
+    const button = approve();
+    if (button === null) throw new Error("no Approve button");
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(router.replace).toHaveBeenCalled();
+    });
+    expect(actions.approveSteeringPr).toHaveBeenCalledWith(
+      AT.org,
+      AT.ws,
+      PROPOSAL_ID,
+    );
+  });
+
+  it("names the author's refusal beside Approve and stays on the page (negative)", async () => {
+    actions.approveSteeringPr.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "author_cannot_approve",
+    });
+    renderPanel(readOk(steeringPr("checks_passed")), { approvals: 0 });
+    const button = approve();
+    if (button === null) throw new Error("no Approve button");
+    fireEvent.click(button);
+    expect(
+      await screen.findByTestId("approve-steering-pr-failure"),
+    ).toHaveTextContent("Ask another workspace member to approve it.");
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("drops a memory PR's record by the PR's number and marks its card", async () => {
+    actions.dropMemoryRecord.mockResolvedValue({
+      ok: true,
+      value: { commitSha: "a1b2c3d4e5f6" },
+    });
+    const base = steeringPr("checks_passed");
+    if (base.pr === null) throw new Error("fixture has a pull request");
+    const records = memoryPrRecords();
+    renderPanel(readOk({ ...base, pr: { ...base.pr, branch: BRANCH } }), {
+      memoryRecords: readOk(records),
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Drop Draft releases only" }),
+    );
+    expect(await screen.findByText("Dropped in a1b2c3d")).toBeInTheDocument();
+    expect(actions.dropMemoryRecord).toHaveBeenCalledWith(
+      AT.org,
+      AT.ws,
+      records.pullRequest.number,
+      "steering/memory/release/release.draft-releases.md",
+    );
+  });
+
+  it("restores a drifted managed block on this steering PR", async () => {
+    actions.restoreManagedBlock.mockResolvedValue({
+      ok: true,
+      value: { commitSha: "a1b2c3d4e5f6" },
+    });
+    renderPanel(readOk(steeringPr("checks_failed")), {
+      findings: [
+        {
+          rule: "managed-block",
+          path: "AGENTS.md",
+          message: "The managed block in AGENTS.md was edited.",
+        },
+      ],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Restore block" }));
+    await waitFor(() => {
+      expect(router.replace).toHaveBeenCalled();
+    });
+    expect(actions.restoreManagedBlock).toHaveBeenCalledWith(
+      AT.org,
+      AT.ws,
+      PROPOSAL_ID,
+      "AGENTS.md",
+    );
   });
 });
 

@@ -1,7 +1,8 @@
 "use client";
-// The button on a failing collector's row that reads its repositories again
-// now (sync_work_collector). It queues one read and says so, and the page
-// reads the collector again. A paused collector or a role that cannot change
+// Read now: the button on every collector row that is not paused. It reads
+// the collector's repositories again now (sync_work_collector) rather than at
+// the next 15-minute sweep, queues one read, says so, and the page reads the
+// collector again. A paused collector or a role that cannot change
 // collectors is refused on the server, and the refusal is shown here.
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
@@ -61,11 +62,12 @@ export function Reconnect({
         disabled={!canControl}
         aria-describedby={canControl ? undefined : reasonId}
         aria-disabled={pending || undefined}
+        aria-label={pending ? undefined : t("reconnectLabel", { name })}
         title={canControl ? undefined : t("noRole")}
         className={buttonSecondary}
         onClick={() => void readAgain()}
       >
-        {pending ? t("reconnectPending") : t("reconnect", { name })}
+        {pending ? t("reconnectPending") : t("reconnect")}
       </button>
       {canControl ? null : (
         <span id={reasonId} className="sr-only">
@@ -74,13 +76,13 @@ export function Reconnect({
       )}
       <p
         role="status"
-        data-testid="work-reconnect-status"
+        data-testid={`work-reconnect-status-${name}`}
         className="text-sm text-muted-foreground"
       >
         {queued ? t("reconnectQueued", { name }) : null}
       </p>
       {failure === null ? null : (
-        <FormAlert testId="work-reconnect-failure">{failure}</FormAlert>
+        <FormAlert testId={`work-reconnect-failure-${name}`}>{failure}</FormAlert>
       )}
     </div>
   );

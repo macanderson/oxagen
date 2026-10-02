@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   docker-test:
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
@@ -52,7 +52,7 @@ jobs:
       vars.OXAGEN_CONTAINED_ENABLED == 'true' &&
       (github.event_name == 'workflow_dispatch' ||
        github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       TACHO: node packages/tacho/bin/tacho.mjs

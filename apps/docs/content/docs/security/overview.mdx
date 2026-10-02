@@ -69,22 +69,23 @@ Oxagen runs in AWS `us-east-1` (US East). The application host, Postgres, Neo4j,
 
 ## Roles and access control
 
-Seven built-in roles govern what people can do. Four are org-scoped:
+Eight built-in roles govern what people can do. Four are org-scoped:
 
 - **Owner**: full control, including billing and org deletion.
 - **Admin**: all operations except destructive org-level actions.
 - **Compliance**: security and privacy policy management. Cannot reach operational surfaces or billing.
 - **Billing**: billing and subscription management only. Cannot reach operational surfaces.
 
-Three are workspace-scoped:
+Four are workspace-scoped:
 
-- **Owner**: workspace settings, grants within the workspace, and full operational access.
+- **Owner**: everything in the workspace, and nothing outside it.
+- **Admin**: the same as Owner.
 - **Member**: run agents, resolve approvals, and edit memories.
 - **Viewer**: read-only across the workspace.
 
 Agents get three roles of their own. See [Agent roles](/docs/governance/agent-roles).
 
-The resolver also defines direct workspace grants and org-enforced policies that rank above role grants, but that tier is not active today. Migration 0027 removed its tables, so every live decision comes from role grants, the system org Owner role, or the contract default. [RBAC and roles](/docs/governance/rbac) documents the resolution order.
+The resolver also defines direct workspace grants and org-enforced policies that rank above role grants, but that tier is not active today. Migration 0027 removed its tables, so every live decision comes from role grants, the system org Owner role, a workspace's Owner or Admin role, or the contract default. [RBAC and roles](/docs/governance/rbac) documents the resolution order.
 
 ## Sub-processors
 

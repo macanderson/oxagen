@@ -1246,18 +1246,55 @@ describe("the GitHub seam's merge-queue calls", () => {
       expect(calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
     });
 
-    it.each([
-      { name: "the head moved", answer: pull(null, "h2") },
-      { name: "the pull request closed", answer: pull(null, "h1", "closed") },
-    ])("keeps GitHub's refusal when $name", async ({ answer }) => {
+    it("keeps GitHub's refusal when the pull request closed", async () => {
       const { gh, repo, calls } = await restSeam({
         [MERGE]: refuse(405, "Pull Request is not mergeable"),
-        [PULL]: () => answer,
+        [PULL]: () => pull(null, "h1", "closed"),
       });
       await expect(gh.mergePullRequest(repo, args)).rejects.toMatchObject({
         reason: "github_refused",
       });
       expect(calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+    });
+
+    it("keeps GitHub's refusal when the head never reaches the pinned commit", async () => {
+      const { gh, repo, calls } = await restSeam({
+        [MERGE]: refuse(405, "Pull Request is not mergeable"),
+        [PULL]: () => pull(true, "h2"),
+      });
+      await expect(gh.mergePullRequest(repo, args)).rejects.toMatchObject({
+        reason: "github_refused",
+      });
+      // A head someone pushed past never reaches h1, so the reads run out.
+      expect(calls.filter((c) => c.method === "GET")).toHaveLength(15);
+      expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1);
+    });
+
+    it("waits for GitHub to move the head to the pinned stamp after 'Head branch was modified'", async () => {
+      const { gh, repo, calls } = await restSeam({
+        [MERGE]: inTurn(
+          refuse(409, "Head branch was modified. Review and try the merge again."),
+          () => ({ sha: "sq5" }),
+        ),
+        // GitHub still names the commit before the stamp, then catches up.
+        [PULL]: inTurn(
+          () => pull(true, "h0"),
+          () => pull(null, "h1"),
+          () => pull(true, "h1"),
+        ),
+        [BASE_REF]: baseAt("b1"),
+      });
+      await expect(
+        gh.mergePullRequest(repo, { ...args, base: "b1" }),
+      ).resolves.toEqual({ sha: "sq5" });
+      expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+        MERGE,
+        PULL,
+        PULL,
+        PULL,
+        BASE_REF,
+        MERGE,
+      ]);
     });
 
     it("keeps GitHub's refusal when reading the pull request fails", async () => {

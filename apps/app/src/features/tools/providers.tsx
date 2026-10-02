@@ -45,7 +45,10 @@ export function Providers({
 }: {
   at: ToolsAt;
   orgRole: OrgRole;
-  /** An org Owner or Admin: who `register_mcp_server` and `delete_mcp_server` admit. */
+  /**
+   * An org or workspace Owner or Admin: who `register_mcp_server` and
+   * `delete_mcp_server` admit.
+   */
   canAdminister: boolean;
   servers: Read<McpServerList>;
   /** The registry's unfiltered first page, which each provider's versions come from. */

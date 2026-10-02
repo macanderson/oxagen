@@ -29,6 +29,11 @@ const person = {
   apiKeyId: null,
 } as unknown as CapabilityContext;
 const apiKey = { ...person, userId: null, apiKeyId: "aky_1" } as unknown as CapabilityContext;
+/**
+ * A user-bound key, such as an `oxagen login` key: the API sets both the key
+ * and the user it resolves to (apps/api/src/middleware/auth.ts).
+ */
+const loginKey = { ...person, apiKeyId: "aky_2" } as unknown as CapabilityContext;
 const nobody = { ...person, userId: null, apiKeyId: null } as unknown as CapabilityContext;
 
 const VIEW: CollectorView = {
@@ -168,5 +173,58 @@ describe("set_work_collector records the person, not the role", () => {
       reason: "person_required",
     });
     expect(deps.set).not.toHaveBeenCalled();
+  });
+});
+
+// Mac's decision on #5181 (2026-10-02): an agent may file work items, but only
+// a person may change collectors. create_work_item above still records an API
+// key's creator. set_work_collector refuses the key and an agent run before
+// the role check and before any write.
+describe("set_work_collector takes only a signed-in person", () => {
+  const input = { name: "github", connection_id: "con_01", repos: ["acme/web"] };
+
+  it.each([
+    ["a key that names no user", apiKey],
+    ["a login key that resolves to a person", loginKey],
+  ])("refuses an API key, %s, before it writes", async (_name, ctx) => {
+    const deps = collectorDeps();
+    await expect(createWorkCollectorSetHandler(deps)(input, ctx)).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "person_required",
+    });
+    expect(mocks.role).not.toHaveBeenCalled();
+    expect(mocks.resolveActingUserId).not.toHaveBeenCalled();
+    expect(deps.set).not.toHaveBeenCalled();
+    expect(deps.send).not.toHaveBeenCalled();
+  });
+
+  it("refuses an agent run, before it writes", async () => {
+    const deps = collectorDeps();
+    const agentRun = { ...person, agentRun: { runId: "arun_01" } } as unknown as CapabilityContext;
+    await expect(createWorkCollectorSetHandler(deps)(input, agentRun)).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "agent_run",
+    });
+    expect(mocks.role).not.toHaveBeenCalled();
+    expect(deps.set).not.toHaveBeenCalled();
+    expect(deps.send).not.toHaveBeenCalled();
+  });
+
+  it("refuses an agent run that carries an API key as an agent run", async () => {
+    const deps = collectorDeps();
+    const keyedRun = { ...apiKey, agentRun: { runId: "arun_02" } } as unknown as CapabilityContext;
+    await expect(createWorkCollectorSetHandler(deps)(input, keyedRun)).rejects.toMatchObject({ reason: "agent_run" });
+    expect(deps.set).not.toHaveBeenCalled();
+  });
+
+  it("lets a signed-in person set up a collector", async () => {
+    const deps = collectorDeps();
+    const out = await createWorkCollectorSetHandler(deps)(input, person);
+    expect(mocks.role).toHaveBeenCalledTimes(1);
+    expect(deps.set).toHaveBeenCalledWith(
+      { orgId: person.orgId, workspaceId: person.workspaceId },
+      { name: "github", connectionId: "con_01", repos: ["acme/web"], actorUserId: USER },
+    );
+    expect(out).toEqual({ collector: VIEW, created: true, reconcile_queued: false });
   });
 });

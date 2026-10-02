@@ -1,7 +1,7 @@
 // iam-provision.test.ts — unit tests for bootstrapOrgIAM / provisionMemberPrincipal.
 //
 // Tests verify:
-//   - bootstrapOrgIAM inserts 7 system roles with deterministic public_ids
+//   - bootstrapOrgIAM inserts 8 system roles with deterministic public_ids
 //   - Owner principal is created with kind:"human"
 //   - Owner role assignment is created via principalRoleAssignments
 //   - role_grants are seeded from listCapabilities()
@@ -74,17 +74,18 @@ function buildMockDb(opts: {
   const makeSelectResult = (): unknown[] => {
     const idx = selectCount++;
     // bootstrapOrgIAM query order:
-    // Queries 0..6: role existence checks (7 human roles, one per role spec)
-    // Query 7: user display name lookup
-    // Query 8: principal existence check
-    // Query 9: PRA existence check
-    // Queries 10..12: agent role existence checks (3 agent roles, one per
+    // Queries 0..7: role existence checks (8 human roles, one per role spec;
+    // the workspace Admin role joined them with #5228)
+    // Query 8: user display name lookup
+    // Query 9: principal existence check
+    // Query 10: PRA existence check
+    // Queries 11..13: agent role existence checks (3 agent roles, one per
     // AGENT_ROLE_SPECS entry, in AGENT_ROLE_SPECS order — Observer/
     // Contributor/Operator)
-    if (idx < 7) {
+    if (idx < 8) {
       return opts.existingRoles ? [{ id: `role_existing_${idx}` }] : [];
     }
-    if (idx === 7) {
+    if (idx === 8) {
       return [
         {
           displayName: opts.userDisplayName ?? "Test User",
@@ -92,15 +93,15 @@ function buildMockDb(opts: {
         },
       ];
     }
-    if (idx === 8) {
+    if (idx === 9) {
       return opts.existingPrincipal ? [{ id: "prn_existing" }] : [];
     }
-    if (idx === 9) {
+    if (idx === 10) {
       return opts.existingPra ? [{ id: "pra_existing" }] : [];
     }
-    if (idx >= 10 && idx < 13) {
+    if (idx >= 11 && idx < 14) {
       return opts.existingAgentRoles
-        ? [{ id: `agent_role_existing_${idx - 10}` }]
+        ? [{ id: `agent_role_existing_${idx - 11}` }]
         : [];
     }
     return [];
@@ -169,7 +170,7 @@ describe("bootstrapOrgIAM()", () => {
     mocks.listCapabilities.mockReturnValue(FAKE_CAPABILITIES);
   });
 
-  it("inserts exactly 7 human system roles (4 org + 3 workspace) for a fresh org", async () => {
+  it("inserts exactly 8 human system roles (4 org + 4 workspace) for a fresh org", async () => {
     const db = buildMockDb({});
 
     await bootstrapOrgIAM({
@@ -189,7 +190,7 @@ describe("bootstrapOrgIAM()", () => {
           r.values["name"] as (typeof AGENT_ROLE_NAMES)[number],
         ),
     );
-    expect(roleInserts).toHaveLength(7);
+    expect(roleInserts).toHaveLength(8);
 
     // Check org roles.
     const orgRoles = roleInserts.filter((r) => r.values["scopeKind"] === "org");
@@ -201,9 +202,13 @@ describe("bootstrapOrgIAM()", () => {
     const wsRoles = roleInserts.filter(
       (r) => r.values["scopeKind"] === "workspace",
     );
-    expect(wsRoles).toHaveLength(3);
+    // Admin joined the workspace roles with #5228. Every new org gets it,
+    // marked system-default so rule 7.6 of the resolver reads it.
+    expect(wsRoles).toHaveLength(4);
     const wsRoleNames = wsRoles.map((r) => r.values["name"] as string).sort();
-    expect(wsRoleNames).toEqual(["Member", "Owner", "Viewer"]);
+    expect(wsRoleNames).toEqual(["Admin", "Member", "Owner", "Viewer"]);
+    const wsAdmin = wsRoles.find((r) => r.values["name"] === "Admin");
+    expect(wsAdmin?.values["isSystemDefault"]).toBe(true);
   });
 
   it("role public_ids are deterministic (same input → same output)", async () => {

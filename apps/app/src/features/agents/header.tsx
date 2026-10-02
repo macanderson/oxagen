@@ -59,6 +59,7 @@ export function AgentHeader({
   identity,
   lastRun,
   orgRole,
+  wsRole,
   org,
   ws,
 }: {
@@ -66,6 +67,7 @@ export function AgentHeader({
   /** The newest run of this agent on the page of runs read, or null. */
   lastRun: RunRow | null;
   orgRole: WsCtx["orgRole"];
+  wsRole: WsCtx["wsRole"];
   org: string;
   ws: string;
 }) {
@@ -173,6 +175,7 @@ export function AgentHeader({
             agentKey={identity.agentKey}
             name={identity.name}
             orgRole={orgRole}
+            wsRole={wsRole}
           />
         ) : null}
       </div>

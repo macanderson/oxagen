@@ -26,9 +26,12 @@ vi.mock("next/navigation", () => ({
 
 const { AgentKillSwitch } = await import("./kill-switch");
 
+type Role = "owner" | "admin" | "member" | "viewer";
+
 function renderSwitch(
   agentKey: string | null = "acme.core.release-bot",
-  orgRole: "owner" | "admin" | "member" | "viewer" = "owner",
+  orgRole: Role = "owner",
+  wsRole: Role = "member",
 ) {
   render(
     <IntlProvider>
@@ -39,6 +42,7 @@ function renderSwitch(
         agentKey={agentKey}
         name="Release bot"
         orgRole={orgRole}
+        wsRole={wsRole}
       />
     </IntlProvider>,
   );
@@ -137,6 +141,15 @@ describe("AgentKillSwitch", () => {
     expect(screen.getByRole("button", { name: "Kill switch" })).toBeEnabled();
     expect(screen.queryByTestId("agent-kill-switch-no-role")).toBeNull();
   });
+
+  it.each(["owner", "admin"] as const)(
+    "offers the switch to the workspace's %s whose org role is only Member (#5228)",
+    (wsRole) => {
+      renderSwitch("acme.core.release-bot", "member", wsRole);
+      expect(screen.getByRole("button", { name: "Kill switch" })).toBeEnabled();
+      expect(screen.queryByTestId("agent-kill-switch-no-role")).toBeNull();
+    },
+  );
 
   it("says the switch was already on when a second flip changes nothing, and still reports the pause", async () => {
     pauseAgent.mockResolvedValue({

@@ -39,14 +39,17 @@ export function SteeringRepoCard({
   ws,
   read,
   canAct,
+  canChangeConnection = canAct,
   returnTo,
   setupOpen = false,
 }: {
   org: string;
   ws: string;
   read: SteeringRepoRead;
-  /** An owner or admin: the setup's actions and Repair are theirs. */
+  /** An org or workspace Owner or Admin: the setup's actions are theirs. */
   canAct: boolean;
+  /** An org Owner or Admin: the organization's connection is theirs. */
+  canChangeConnection?: boolean;
   /** Where GitHub returns the person: this page with the setup dialog open. */
   returnTo: SafePath;
   /** The address asked for the setup dialog (`?setup=steering`). */
@@ -79,6 +82,7 @@ export function SteeringRepoCard({
             ws={ws}
             view={read.view}
             canAct={canAct}
+            canChangeConnection={canChangeConnection}
             returnTo={returnTo}
             initiallyOpen={setupOpen}
           />

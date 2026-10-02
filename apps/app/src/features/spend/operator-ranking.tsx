@@ -1,9 +1,10 @@
 // Spend › Findings › Operator ranking (D15, #2962; spec "Operator
 // ranking"), under the findings it coaches from: the workspace's operators by
 // unproductive spend for the period, highest first, from get_operator_ranking.
-// An org Owner or Admin reads it and sets its pseudonym switch. The
-// workspace's Owner reads it too. Anyone else sees who can. Each figure links to its definition under the table, and
-// each operator's runs link to their Cost tab. The panel reports the record
+// An org Owner or Admin reads it and sets its pseudonym switch, and so does
+// the workspace's Owner or Admin (#5228). Anyone else sees who can. Each
+// figure links to its definition under the table, and each operator's runs
+// link to their Cost tab. The panel reports the record
 // and gives no verdict on the person. The operator rows and the row for runs
 // with no operator sum to the total row, which equals the hero's headline.
 // The switch stays in reach when the ranking does not load (#4574).
@@ -22,6 +23,7 @@ import type {
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
+import { mayActInWorkspace } from "@/shared/workspace-authority";
 import { linkText } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatCount, formatRatio } from "@/ui/money-format";
@@ -38,29 +40,25 @@ import type { SpendAt } from "./view";
 const MIXED_CURRENCY = "ranking_mixed_currency";
 
 /**
- * Who reads the ranking: an org Owner or Admin, or the workspace's Owner, the
- * roles get_operator_ranking's defaultRoles allow and its handler asserts. A
- * workspace's creator holds the workspace Owner role in IAM (#5182), so the
- * kernel admits that Owner in an Enterprise org too.
+ * Who reads the ranking: an org Owner or Admin, or the workspace's Owner or
+ * Admin. get_operator_ranking's handler asserts the org pair, and the
+ * workspace pair passes every gate in its workspace (#5228).
  */
 export function canReadOperatorRanking(
   ctx: Pick<WsCtx, "orgRole" | "wsRole">,
 ): boolean {
-  return (
-    ctx.orgRole === "owner" || ctx.orgRole === "admin" || ctx.wsRole === "owner"
-  );
+  return mayActInWorkspace(ctx.orgRole, ctx.wsRole, ["owner", "admin"]);
 }
 
 /**
  * Who sets the pseudonyms: an org Owner or Admin, the pair
- * set_operator_pseudonyms asserts. Every one of them reads the ranking too. A
- * workspace Owner who holds neither org role reads the ranking and does not
- * see the switch.
+ * set_operator_pseudonyms asserts, or the workspace's Owner or Admin (#5228).
+ * It is the same set that reads the ranking.
  */
 export function canSetOperatorPseudonyms(
-  ctx: Pick<WsCtx, "orgRole">,
+  ctx: Pick<WsCtx, "orgRole" | "wsRole">,
 ): boolean {
-  return ctx.orgRole === "owner" || ctx.orgRole === "admin";
+  return mayActInWorkspace(ctx.orgRole, ctx.wsRole, ["owner", "admin"]);
 }
 
 /**

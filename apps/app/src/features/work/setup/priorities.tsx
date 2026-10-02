@@ -7,8 +7,10 @@
 // The record lives in the steering repo, so Edit priorities opens the
 // record's own page, which carries the steering review flow. Triage uses a
 // new version for the items it reads after that change merges. With no
-// record in place the tab says why, in the server's words, and that triage
-// cannot rank work until one is merged.
+// record in place the tab says why, in the server's words, and offers the
+// editor that writes one (priorities-editor.tsx). With more than one record
+// in place it offers no editor, because a third record would not help: the
+// person retires all but one.
 import { useLocale, useTranslations } from "next-intl";
 import type { WorkPriorities } from "@/data/contracts/work";
 import type { Read } from "@/data/read";
@@ -31,6 +33,13 @@ import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { StateWrap } from "@/ui/state-wrap";
 import { WorkReadFailure } from "../read-failure";
+import { PrioritiesEditor } from "./priorities-editor";
+
+/**
+ * How get_work_priorities opens its problem when two records match
+ * (packages/handlers/src/lib/work-intake/priorities.ts, prioritiesProblem).
+ */
+const AMBIGUOUS = "This workspace has more than one priorities record";
 
 function TriagePanel({ last30Days }: { last30Days: WorkPriorities["last30Days"] }) {
   const t = useTranslations("work.setup.priorities");
@@ -108,6 +117,9 @@ export function PrioritiesTab({
         >
           {page("descriptionNoRecord")}
         </StateWrap>
+        {problem?.startsWith(AMBIGUOUS) === true ? null : (
+          <PrioritiesEditor org={org} ws={ws} />
+        )}
         <TriagePanel last30Days={last30Days} />
       </div>
     );

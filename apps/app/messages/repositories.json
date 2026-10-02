@@ -40,7 +40,7 @@
       }
     },
     "failure": {
-      "denied": "Only an organization Owner or Admin, or this workspace’s Owner, can read or change this workspace’s repositories.",
+      "denied": "Only an organization Owner or Admin, or this workspace’s Owner or Admin, can read or change this workspace’s repositories.",
       "githubNotConnected": "No GitHub App installation is attached to this workspace, so Oxagen cannot reach a repository. Install the App first.",
       "repositoryNotInstalled": "The installation cannot read that repository. Grant it access on GitHub, then try again.",
       "mainRepoBound": "This workspace already binds a different main repository. Changing it is an org owner's decision, recorded as a security event.",
@@ -139,6 +139,7 @@
         "role": "Role",
         "productionBranch": "Production branch",
         "oxagen": ".oxagen/",
+        "issues": "Issues",
         "events": "Events",
         "symbols": "Symbols",
         "action": "Action"
@@ -176,7 +177,17 @@
       "retired": "Connection retired. Oxagen can no longer reach this repository.",
       "reachableUnread": "The repositories this installation reaches could not be listed, so only bound ones are shown.",
       "truncated": "The installation reaches more repositories than this list holds. Narrow the App's repository access on GitHub to see the rest.",
-      "note": "Changing which repository is <code>main</code> is an organization-owner action with approval, and it lands in the audit record as a security event. The production branch never moves on its own: when GitHub’s default branch changes, the App records it and prompts, and the binding stays where it is until somebody confirms."
+      "note": "Changing which repository is <code>main</code> is an organization-owner action with approval, and it lands in the audit record as a security event. The production branch never moves on its own: when GitHub’s default branch changes, the App records it and prompts, and the binding stays where it is until somebody confirms.",
+      "issues": {
+        "label": "Collect issues from {repository}",
+        "stateOn": "On",
+        "stateOff": "Off",
+        "unknown": "Unknown",
+        "saving": "Saving",
+        "on": "oxagen collects the issues in {repository}.",
+        "onReading": "oxagen is reading the open issues in {repository} now. They show up in Work in a few minutes.",
+        "off": "oxagen stopped collecting the issues in {repository}. Work items it already made stay in Work."
+      }
     },
     "dialog": {
       "subtitle": {
@@ -225,7 +236,8 @@
         "unchanged": "{branch} is already the production branch. Nothing was written.",
         "submit": "Set production branch",
         "pending": "Setting…"
-      }
+      },
+      "issuesAfterLink": "Once the link merges, turn on Issues in this repository's row to collect its open issues as work items."
     },
     "unlink": {
       "title": "Unlink {repository} from {workspace}?",
@@ -468,7 +480,7 @@
       "governanceMissing": "No governance.toml on the production branch. Pull requests are reviewed as team.",
       "modes": {
         "solo": "The author may merge their own.",
-        "team": "A reviewer other than the author merges: an org Owner or Admin, or a workspace Owner. This is what a missing file means.",
+        "team": "A reviewer other than the author merges: an org Owner or Admin, or a workspace Owner or Admin. This is what a missing file means.",
         "regulated": "An org Owner or Admin other than the author merges, recorded as the accountable approver."
       },
       "mode": {

@@ -27,6 +27,7 @@ import { and, desc, eq, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { recordSource, type WorkScope } from "../work-records/store";
 import { findProviderItem, sourceDedupeKey, upsertProviderItem } from "./items";
+import { linkedGithubRepositories, linkedScope } from "./linked-repos";
 
 const collectors = schema.workCollectors;
 const events = schema.workInboundEvents;
@@ -77,10 +78,15 @@ export function postgresCollectorStore(scope: WorkScope, now: () => Date = () =>
 
   return {
     async getCollector(id) {
-      const [row] = await withTenantDb((tx) =>
-        tx.select().from(collectors).where(and(eq(collectors.id, id), inScope(collectors))).limit(1),
-      );
-      return row ? toCollector(row) : null;
+      // A repository unlinked after the collector was set stays in the row's
+      // scope, so the scope the pipeline reads keeps only linked repositories.
+      return withTenantDb(async (tx) => {
+        const [row] = await tx.select().from(collectors).where(and(eq(collectors.id, id), inScope(collectors))).limit(1);
+        if (!row) return null;
+        const collector = toCollector(row);
+        if (collector.type !== "github") return collector;
+        return { ...collector, scope: linkedScope(collector.scope, await linkedGithubRepositories(tx, scope)) };
+      });
     },
 
     async hasDelivery(collectorId, deliveryId) {

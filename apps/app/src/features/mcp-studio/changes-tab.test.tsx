@@ -953,7 +953,7 @@ describe("ChangesTab save and Review failures", () => {
     renderTab(STRIPE, { save: save.save, open: open.open });
     openSteeringPr();
     expect((await screen.findByTestId("studio-pr-failed")).textContent).toBe(
-      "Only an organization owner or admin, or a workspace owner, can open a steering PR.",
+      "Only an organization owner or admin, or a workspace owner or admin, can open a steering PR.",
     );
     expect(open.calls).toHaveLength(0);
   });
@@ -1180,7 +1180,7 @@ describe("ChangesTab editing and folder", () => {
     expect(screen.queryAllByRole("button")).toHaveLength(0);
     expect(
       screen.getByText(
-        "Only an organization owner or admin can open a steering PR.",
+        "Only an organization owner or admin, or a workspace owner or admin, can open a steering PR.",
       ),
     ).toBeInTheDocument();
   });
@@ -1258,7 +1258,7 @@ describe("ChangesTab editing and folder", () => {
     expect(screen.getByTestId("studio-folder-missing")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Only an organization owner or admin can open a steering PR.",
+        "Only an organization owner or admin, or a workspace owner or admin, can open a steering PR.",
       ),
     ).toBeInTheDocument();
   });

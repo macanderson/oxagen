@@ -92,6 +92,15 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "approve_steering_pr",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "work",
       "name": "approve_work_brief",
       "reads": [],
@@ -871,6 +880,17 @@
       "reads": [],
       "surfaces": [
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "drop_memory_record",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -4454,8 +4474,7 @@
       "name": "set_work_collector",
       "reads": [],
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "writes": []
     },
@@ -5058,6 +5077,7 @@
         "postgres:agent.memory_rejections",
         "postgres:agent.memory_uses",
         "postgres:agent.runtimes",
+        "postgres:agent.steering_pr_approvals",
         "postgres:agent.steering_promotions",
         "postgres:agent.steering_proposals",
         "postgres:agent.steering_publications",
@@ -10554,6 +10574,65 @@
           "type": "citext"
         },
         {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "proposal_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:agent.steering_proposals",
+          "type": "uuid"
+        },
+        {
+          "name": "user_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "commit_sha",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.steering_pr_approvals",
+      "name": "steering_pr_approvals",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
           "name": "created_at",
           "nullable": false,
           "primaryKey": false,
@@ -10841,6 +10920,12 @@
         },
         {
           "name": "checks",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "check_findings",
           "nullable": false,
           "primaryKey": false,
           "type": "jsonb"

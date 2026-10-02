@@ -50,8 +50,8 @@ export function ReauthorizeLink({
 
 /**
  * The notice a step shows when its error asks an owner to authorize Oxagen
- * again. Everyone reads why provisioning stopped. Only an owner or admin gets
- * the link, because the API refuses anyone else.
+ * again. Everyone reads why provisioning stopped. Only an org Owner or Admin
+ * gets the link, because the API refuses anyone else.
  */
 export function ReauthorizeNotice({
   org,
@@ -62,7 +62,7 @@ export function ReauthorizeNotice({
   org: string;
   provider: SteeringRepoView["provider"];
   returnTo: SafePath;
-  /** An owner or admin: the authorization is theirs. */
+  /** An org Owner or Admin: the authorization is theirs. */
   canAct: boolean;
 }) {
   const t = useTranslations("repositories.steeringRepo.reauthorize");

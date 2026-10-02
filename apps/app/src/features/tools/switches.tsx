@@ -11,6 +11,11 @@
 // `set_kill_switch` stops a class by impact, and side effect and
 // egress are not tags. Those two cards say so and carry no toggle (#3922).
 //
+// A switch on a tool, a server, a connection or an agent stays inside the
+// workspace, so the workspace's Owner and Admin flip it (#5228). A switch on
+// an operator, a workspace, the organization or a class reaches past it, so
+// only an org Owner or Admin flips one of those (`set_kill_switch`).
+//
 // A switch someone flipped carries Edit and Remove. Neither has a write: a
 // switch row holds its target, and nothing edits or deletes one. Remove on a
 // switch that is denying refuses and says to clear it first, because clearing
@@ -20,6 +25,7 @@ import {
   type KillSwitch,
   type KillSwitchBoard,
   KILL_SWITCH_BOARD_LIMIT,
+  KILL_SWITCH_KINDS,
   MONEY_TAG,
 } from "@/data/contracts/tools";
 import type { Read } from "@/data/read";
@@ -41,6 +47,11 @@ import { switchScopeOf, type ToolsAt, toolsLink } from "./view";
 export function switchesOn(switches: readonly KillSwitch[]): number {
   return switches.filter((s) => s.on).length;
 }
+
+/** The levels whose switch stays inside the workspace. */
+const WORKSPACE_SWITCH_KINDS = KILL_SWITCH_KINDS.filter(
+  (kind) => switchScopeOf(kind) === "workspace",
+);
 
 type Member = { id: string; name: string | null; email: string };
 type Agent = { id: string; slug: string; name: string; harness: string };
@@ -338,6 +349,7 @@ export function Switches({
   at,
   orgRole,
   canFlip,
+  canFlipOrgWide,
   selfWorkspaceId,
   orgName,
   wsName,
@@ -347,7 +359,13 @@ export function Switches({
 }: {
   at: ToolsAt;
   orgRole: OrgRole;
+  /** Whether the viewer may flip a switch that stays inside the workspace. */
   canFlip: boolean;
+  /**
+   * Whether the viewer may flip a switch that reaches past the workspace: an
+   * operator, a workspace, the organization or a class. An org Owner or Admin.
+   */
+  canFlipOrgWide: boolean;
   /** The workspace in view, to tell its own switch from a sibling's. */
   selfWorkspaceId: string;
   orgName: string;
@@ -371,6 +389,9 @@ export function Switches({
     );
   }
   const { denyGeneration, switches, truncated } = read.value;
+  /** Whether this viewer may flip a switch at this level. */
+  const flips = (kind: KillSwitch["target"]["kind"]) =>
+    switchScopeOf(kind) === "workspace" ? canFlip : canFlipOrgWide;
   // The newest row per target: the board lists every flip, and a target
   // flipped twice is one switch.
   const byTarget = new Map<string, KillSwitch>();
@@ -408,7 +429,7 @@ export function Switches({
       kind={item.target.kind}
       item={item}
       denyGeneration={denyGeneration}
-      canFlip={canFlip}
+      canFlip={flips(item.target.kind)}
       members={members}
       ships={false}
     />
@@ -449,7 +470,7 @@ export function Switches({
             item={moneyClass}
             fixed={{ kind: "class", ref: MONEY_TAG }}
             denyGeneration={denyGeneration}
-            canFlip={canFlip}
+            canFlip={flips("class")}
             members={members}
             ships
           />
@@ -476,6 +497,7 @@ export function Switches({
                 denyGeneration={denyGeneration}
                 existing={null}
                 members={members}
+                {...(canFlipOrgWide ? {} : { levels: WORKSPACE_SWITCH_KINDS })}
               />
               <CreateSwitch agents={agents} members={members} />
             </span>
@@ -489,7 +511,7 @@ export function Switches({
             item={orgSwitch}
             fixed={{ kind: "org", ref: null }}
             denyGeneration={denyGeneration}
-            canFlip={canFlip}
+            canFlip={flips("org")}
             members={members}
             ships
           />
@@ -500,7 +522,7 @@ export function Switches({
             item={wsSwitch}
             fixed={{ kind: "workspace", ref: null }}
             denyGeneration={denyGeneration}
-            canFlip={canFlip}
+            canFlip={flips("workspace")}
             members={members}
             ships
           />

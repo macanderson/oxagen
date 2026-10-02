@@ -101,6 +101,7 @@ export function SteeringRepoHealthBannerView({
   health,
   differences,
   canAct,
+  canChangeConnection = canAct,
   returnTo,
 }: {
   org: string;
@@ -108,8 +109,13 @@ export function SteeringRepoHealthBannerView({
   provider: SteeringRepoView["provider"];
   health: UnhealthyRepo;
   differences: readonly SettingsDifferenceView[];
-  /** An owner or admin: the repair is theirs. */
+  /** An org or workspace Owner or Admin: the repair is theirs. */
   canAct: boolean;
+  /**
+   * An org Owner or Admin: authorizing Oxagen again writes the organization's
+   * connection, so the link is theirs. The same as `canAct` when omitted.
+   */
+  canChangeConnection?: boolean;
   /** Where GitHub sends the person back to after Re-authorize. */
   returnTo: SafePath;
 }) {
@@ -171,7 +177,7 @@ export function SteeringRepoHealthBannerView({
           )}
         </div>
       ) : null}
-      {canAct && health === "disconnected" ? (
+      {canChangeConnection && health === "disconnected" ? (
         <div>
           <ReauthorizeLink
             org={org}

@@ -14,8 +14,8 @@
 // it out on its next check.
 //
 // A viewer `seal_run` would refuse (neither an organization Owner or Admin
-// nor the workspace Owner) sees the button disabled with the reason, as
-// Export draws its own.
+// nor the workspace Owner or Admin) sees the button disabled with the reason,
+// as Export draws its own.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
 import type { CommandBlock } from "@/data/contracts/runs";

@@ -11,8 +11,9 @@
 //
 // Send stays disabled until it can do something, and the line beside it says
 // why: the viewer's role, the closed window, no pick yet, or an unnamed
-// workspace. Only an organization Owner or Admin, or the workspace Owner, can
-// answer with a path, so anyone else sees the question and the reason.
+// workspace. Only an organization Owner or Admin, or the workspace Owner or
+// Admin, can answer with a path, so anyone else sees the question and the
+// reason.
 //
 // A link binds nothing at once (ADR-212). It opens a steering PR that adds the
 // repository to the workspace's steering record, so the receipt names that PR

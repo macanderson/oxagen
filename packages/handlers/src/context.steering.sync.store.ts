@@ -36,7 +36,7 @@ import {
   appendVersion,
   lockWorkspacePublication,
 } from "./context.steering.publication";
-import type { ProposalRow } from "./context.steering.store";
+import { asFindings, type ProposalRow } from "./context.steering.store";
 import type {
   RegistryRecord,
   SyncFinding,
@@ -458,6 +458,7 @@ export const postgresSyncStore: SyncStore = {
       checks: Array.isArray(row.checks)
         ? (row.checks as ProposalRow["checks"])
         : [],
+      checkFindings: asFindings(row.checkFindings),
     }));
   },
 

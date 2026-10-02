@@ -10,8 +10,15 @@
 // per bound repository (`get_repository_tree`); a repository that is not
 // linked has no binding to read through, so its tree reads as not read. The
 // delivery counters and the code graph have no store yet and say so.
+//
+// The Issues column turns issue collection on or off for each linked GitHub
+// repository: on, oxagen reads its open issues into Work as work items. A
+// repository that is not linked takes no switch, because a collector reads
+// only linked repositories. The column reads list_work_collectors; when that
+// read fails, each switch says the state is unknown and stays off.
 import { FolderSimpleIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
+import { useState } from "react";
 import { Badge } from "@/ui/badge";
 import { mono } from "@/ui/control-styles";
 import {
@@ -20,9 +27,12 @@ import {
   ListPager,
   useList,
 } from "@/ui/list-controls";
+import { FormAlert } from "@/ui/form-feedback";
 import { cell, headCell } from "@/ui/table";
+import { setIssueCollection } from "./actions";
+import { UNANSWERED, useRepositoriesFailure } from "./failure";
 import { REPOSITORY_GAPS } from "./gaps";
-import { buttonSmall, code, note, Panel } from "./parts";
+import { buttonSmall, code, type Load, note, Panel } from "./parts";
 import { type RepositoryRow, treeState, type TreeState } from "./view";
 
 /** A `.oxagen/` state as a dot and a word. */
@@ -97,14 +107,117 @@ function ungoverned(rows: readonly RepositoryRow[]): RepositoryRow[] {
   );
 }
 
+/** A row oxagen can collect issues from: linked, and on GitHub. */
+function collectable(row: RepositoryRow): boolean {
+  return row.role !== "available" && row.htmlUrl.startsWith("https://github.com/");
+}
+
+/** The switch that turns issue collection on or off for one linked GitHub repository. */
+function IssuesSwitch({
+  org,
+  ws,
+  row,
+  issues,
+  onChanged,
+}: {
+  org: string;
+  ws: string;
+  row: RepositoryRow;
+  issues: Load<{ collected: string[] }>;
+  onChanged: (message: string) => void;
+}) {
+  const t = useTranslations("repositories.repos.issues");
+  const failureText = useRepositoriesFailure();
+  const [pending, setPending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  if (!collectable(row)) return null;
+  const known = issues.kind === "ready";
+  const on =
+    known && issues.value.collected.includes(row.fullName.toLowerCase());
+
+  async function flip() {
+    if (pending || !known) return;
+    setPending(true);
+    setFailure(null);
+    try {
+      const result = await setIssueCollection(org, ws, {
+        repository: row.fullName,
+        collect: !on,
+      });
+      if (result.ok) {
+        onChanged(
+          result.value.collecting
+            ? t(result.value.reconcileQueued ? "onReading" : "on", {
+                repository: row.fullName,
+              })
+            : t("off", { repository: row.fullName }),
+        );
+      } else {
+        setFailure(failureText(result));
+      }
+    } catch {
+      setFailure(failureText(UNANSWERED));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-disabled={pending || !known || undefined}
+        aria-label={t("label", { repository: row.fullName })}
+        data-testid={`repository-issues-${row.fullName}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          void flip();
+        }}
+        className="inline-flex min-h-8 items-center gap-2 rounded-md px-1 text-sm text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11"
+      >
+        <span
+          aria-hidden="true"
+          className={`relative inline-flex h-4 w-8 flex-none items-center rounded-full border transition-colors ${
+            on ? "border-success/60 bg-success/15" : "border-border bg-muted"
+          }`}
+        >
+          <span
+            className={`absolute size-3 rounded-full transition-transform motion-reduce:transition-none ${
+              on ? "translate-x-[1.05rem] bg-success" : "translate-x-0.5 bg-muted-foreground"
+            }`}
+          />
+        </span>
+        {pending ? t("saving") : !known ? t("unknown") : on ? t("stateOn") : t("stateOff")}
+      </button>
+      {failure === null ? null : (
+        <FormAlert testId={`repository-issues-failure-${row.fullName}`}>
+          {failure}
+        </FormAlert>
+      )}
+    </div>
+  );
+}
+
 export function RepositoriesTab({
+  org,
+  ws,
   rows,
+  issues,
+  onIssuesChanged,
   reachableUnread,
   truncated,
   onOpen,
   onAddOxagen,
 }: {
+  org: string;
+  ws: string;
   rows: RepositoryRow[];
+  /** Which linked repositories a collector reads (list_work_collectors). */
+  issues: Load<{ collected: string[] }>;
+  /** A switch changed what a collector reads; the message says what. */
+  onIssuesChanged: (message: string) => void;
   /** The installation listing did not answer, so not-linked rows are missing. */
   reachableUnread: boolean;
   truncated: boolean;
@@ -200,7 +313,7 @@ export function RepositoriesTab({
           <table
             aria-label={t("label")}
             data-testid="repositories-table"
-            className="w-full min-w-[720px] border-collapse text-sm"
+            className="w-full min-w-[820px] border-collapse text-sm"
           >
             <thead>
               <tr className="border-b border-border">
@@ -210,6 +323,7 @@ export function RepositoriesTab({
                     "role",
                     "productionBranch",
                     "oxagen",
+                    "issues",
                     "events",
                     "symbols",
                     "action",
@@ -232,7 +346,7 @@ export function RepositoriesTab({
             <tbody className="divide-y divide-border">
               {list.shown.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className={`${cell} text-dim`}>
+                  <td colSpan={8} className={`${cell} text-dim`}>
                     {t("nothing")}
                   </td>
                 </tr>
@@ -240,7 +354,11 @@ export function RepositoriesTab({
                 list.shown.map((row) => (
                   <Row
                     key={row.fullName}
+                    org={org}
+                    ws={ws}
                     row={row}
+                    issues={issues}
+                    onIssuesChanged={onIssuesChanged}
                     onOpen={onOpen}
                     onAddOxagen={onAddOxagen}
                   />
@@ -274,11 +392,19 @@ export function RepositoriesTab({
 }
 
 function Row({
+  org,
+  ws,
   row,
+  issues,
+  onIssuesChanged,
   onOpen,
   onAddOxagen,
 }: {
+  org: string;
+  ws: string;
   row: RepositoryRow;
+  issues: Load<{ collected: string[] }>;
+  onIssuesChanged: (message: string) => void;
   onOpen: (fullName: string) => void;
   onAddOxagen: (fullName: string | null) => void;
 }) {
@@ -354,6 +480,15 @@ function Row({
             {t("tree.files", { count: ready.oxagen.files.length })}
           </span>
         ) : null}
+      </td>
+      <td className={cell}>
+        <IssuesSwitch
+          org={org}
+          ws={ws}
+          row={row}
+          issues={issues}
+          onChanged={onIssuesChanged}
+        />
       </td>
       <td className={`${cell} text-xs text-muted-foreground`}>
         {row.events === null ? (

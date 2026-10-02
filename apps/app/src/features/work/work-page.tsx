@@ -280,7 +280,17 @@ function WorkView({
     priorities === null
       ? undefined
       : record === null
-        ? t("page.descriptionNoRecord")
+        ? t.rich("page.descriptionNoRecordLink", {
+            record: (chunks) => (
+              <SafeLink
+                to={routes.workSetup(org, ws, "priorities")}
+                data-testid="work-write-priorities"
+                className={linkText}
+              >
+                {chunks}
+              </SafeLink>
+            ),
+          })
         : t.rich("page.description", {
             lineage: record.lineage,
             version: String(record.version),

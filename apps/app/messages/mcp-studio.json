@@ -31,7 +31,7 @@
     "tools": {
       "title": "Tools",
       "missing": "Discovery has not listed this server's tools yet. The table shows the tools the registry holds.",
-      "readOnly": "Only an organization owner or admin can import tools or change their classification.",
+      "readOnly": "Only an organization owner or admin, or a workspace owner or admin, can import tools or change their classification.",
       "refused": "The draft cannot hold that edit, so it was not kept. Remove an edit on the Changes tab or discard the draft first.",
       "unclassified": "Unclassified",
       "suggested": "Suggested",
@@ -373,7 +373,7 @@
         "open": "Open steering PR",
         "opening": "Opening",
         "discard": "Discard draft",
-        "readOnly": "Only an organization owner or admin can open a steering PR.",
+        "readOnly": "Only an organization owner or admin, or a workspace owner or admin, can open a steering PR.",
         "opened": "Opened steering PR #{number}",
         "failed": "The steering PR did not open. Oxagen answered {code}.",
         "thrown": "The steering PR did not open because the request failed before Oxagen answered. Try again.",
@@ -386,7 +386,7 @@
         "overBudgetBadge": "Over budget",
         "overBudget": "The imported tools come to {tokens} definition tokens, over this server's budget of {budget}. The steering PR will carry an over-budget warning.",
         "codes": {
-          "denied": "Only an organization owner or admin, or a workspace owner, can open a steering PR.",
+          "denied": "Only an organization owner or admin, or a workspace owner or admin, can open a steering PR.",
           "invalid": "Oxagen could not read the draft this page sent. Reload the page, then open the steering PR again.",
           "unavailable": "Oxagen could not open the steering PR just now. Try again in a minute.",
           "pending_approval": "Opening this steering PR waits on an approval. Open it again once the request is approved.",

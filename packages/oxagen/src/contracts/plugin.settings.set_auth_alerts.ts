@@ -18,6 +18,7 @@ export const pluginSettingsSetAuthAlerts = registerCapability({
   // apps/app_deprecated, and apps/app/capability-ui-map.json has no binding.
   layers: ["api", "docs", "mcp", "unit"],
   scoped: true,
+  orgLevel: true,
   sensitivity: "medium",
   mutates: true,
   defaultEffect: "deny",

@@ -16,7 +16,8 @@
 // action; this contract is its binding today.
 //
 // All three are `noBillingGate`, admit an org Owner or Admin in their handlers
-// (INV-29), and land in the audit record through the kernel. A refusal comes
+// (INV-29), and the workspace's Owner or Admin too (#5228), and land in the
+// audit record through the kernel. A refusal comes
 // back as the seam classified it, with nothing changed.
 import { runtimeCreate } from "@oxagen/oxagen/contracts/runtime.create";
 import { runtimeUpdate } from "@oxagen/oxagen/contracts/runtime.update";

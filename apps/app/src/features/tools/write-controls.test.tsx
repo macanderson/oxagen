@@ -426,7 +426,7 @@ describe("ToolDialog", () => {
     expect(dialog.getByText("Not classified yet")).toBeInTheDocument();
     expect(
       dialog.getByText(
-        "Reclassifying a tool version needs an organization Owner or Admin.",
+        "Reclassifying a tool version needs an organization Owner or Admin, or the workspace Owner or Admin.",
       ),
     ).toBeInTheDocument();
   });

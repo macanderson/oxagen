@@ -1,7 +1,7 @@
 // workspace-memories.handlers.test.ts: the MCP tools for workspace memories
 // (memory-collection spec, lane MEM5, #4912): list_workspace_memories,
-// get_workspace_memory, promote_memories, dismiss_memories, and
-// list_memory_pr_records.
+// get_workspace_memory, promote_memories, dismiss_memories,
+// list_memory_pr_records, and drop_memory_record (#4518).
 //
 // The kernel `invoke` and the context seam `buildContext` are doubles. Each
 // case checks that invoke received the contract name, the args, and
@@ -30,6 +30,9 @@ import promoteMemories, { metadata as promoteMeta } from "./steering.memories.pr
 import listMemoryPrRecords, {
   metadata as recordsMeta,
 } from "./steering.memory_pr_records.list";
+import dropMemoryRecord, {
+  metadata as dropMeta,
+} from "./steering.memory_pr_records.drop";
 
 const fakeCtx = {
   orgId: "org_test",
@@ -77,6 +80,7 @@ describe("the workspace memory tools carry their contract's name and hints", () 
     [promoteMeta, "promote_memories", false, false, false],
     [dismissMeta, "dismiss_memories", false, false, true],
     [recordsMeta, "list_memory_pr_records", true, false, true],
+    [dropMeta, "drop_memory_record", false, true, true],
   ])("%s", (meta, name, readOnly, destructive, idempotent) => {
     expect(meta.name).toBe(name);
     expect(meta.annotations?.readOnlyHint).toBe(readOnly);
@@ -272,5 +276,34 @@ describe("list_memory_pr_records", () => {
       fakeCtx,
       { surface: "mcp" },
     );
+  });
+});
+
+describe("drop_memory_record", () => {
+  it("invokes with the contract name and forwards the commit", async () => {
+    const output = {
+      pull_request: {
+        number: 7,
+        url: "https://github.com/acme/steering/pull/7",
+        branch: "memory/2026-10-02",
+      },
+      path: "steering/memory/workspace/general/use-pnpm.md",
+      lineage: "use-pnpm",
+      commit_sha: "abc1234",
+      already_dropped: false,
+    };
+    mocks.invoke.mockResolvedValueOnce(output);
+    const args = { number: 7, path: "steering/memory/workspace/general/use-pnpm.md" };
+    await expect(dropMemoryRecord(args)).resolves.toEqual(output);
+    expect(mocks.invoke).toHaveBeenCalledWith("drop_memory_record", args, fakeCtx, {
+      surface: "mcp",
+    });
+  });
+
+  it("refuses an output outside the contract", async () => {
+    mocks.invoke.mockResolvedValueOnce({ commit_sha: "abc1234" });
+    await expect(
+      dropMemoryRecord({ number: 7, path: "steering/memory/workspace/general/use-pnpm.md" }),
+    ).rejects.toThrow();
   });
 });

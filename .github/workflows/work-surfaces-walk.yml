@@ -96,7 +96,7 @@ jobs:
     # A draft gets fast feedback from the light checks alone (CLAUDE.md, Agent-
     # monitored pull requests). The walk runs once the pull request is ready.
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     # The container, services, job env, and the setup steps down to Seed e2e
     # are copied from mockup-parity-capture.yml, which copies them from
     # pipeline.yml's e2e job. Keep the three in step.

@@ -16,14 +16,14 @@
 
 This capability merges a steering PR that nobody approved ([ADR-213](../adr/ADR-213-merge-without-review-is-a-grantable-permission.md)). It is [`merge_steering_pr`](steering.pr.merge.md) with one gate moved.
 
-Outside `solo` mode, `merge_steering_pr` needs an approval on the host at the head that merges. An owner may merge without one. This capability lets a member of any role the organization grants it merge without one too.
+Outside `solo` mode, `merge_steering_pr` needs an approval at the head that merges, on the host or given in Oxagen with [`approve_steering_pr`](steering.pr.approve.md). An owner may merge without one. This capability lets a member of any role the organization grants it merge without one too.
 
 The handler first asks the IAM resolver whether the caller holds `merge_pr_without_review` in the workspace. The kernel's IAM gate allows every call below the enterprise tier, so the handler does not rely on it. A caller who does not hold the capability is refused `merge_without_review_not_held`, and nothing is read or merged.
 
 A holder then runs the `merge_steering_pr` handler. Every other refusal still applies:
 
 - Every check must have passed.
-- The governance mode must let the caller merge. In `team` mode that is an org Owner or Admin, or a workspace Owner, other than the author. A workspace Member who holds this capability is still refused `org_role_required`.
+- The governance mode must let the caller merge. In `team` mode that is an org Owner or Admin, or a workspace Owner or Admin, other than the author. A workspace Member who holds this capability is still refused `org_role_required`.
 - The repository must be healthy.
 - The head must be the commit the checks ran on.
 - On GitLab, the project must reset approvals on push. Otherwise the merge is refused `approvals_not_head_bound`, holders included. An approval counts for the newest diff version GitLab recorded before it, as [`merge_steering_pr`](steering.pr.merge.md) describes.

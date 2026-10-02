@@ -64,6 +64,13 @@ export type DiscoverySender = (
 export interface DiscoveryActor extends DiscoveryScope {
   userId: string | null;
   apiKeyId: string | null;
+  /**
+   * The capability the kernel checked the call for, and the agent run when
+   * there is one. The role gate reads both to decide whether the workspace's
+   * Owner or Admin passes (#5228).
+   */
+  invokedCapability?: string;
+  agentRun?: unknown;
 }
 
 export interface DiscoveryEntryDeps {
@@ -196,7 +203,13 @@ export async function startServerDiscovery(
       apiKeyId: actor.apiKeyId,
     });
     await assertOrgRole(
-      { orgId: actor.orgId, workspaceId: actor.workspaceId, userId: acting },
+      {
+        orgId: actor.orgId,
+        workspaceId: actor.workspaceId,
+        userId: acting,
+        invokedCapability: actor.invokedCapability,
+        agentRun: actor.agentRun,
+      },
       START_ROLES,
     );
     return acting;
@@ -222,7 +235,13 @@ export async function assertReader(
       apiKeyId: actor.apiKeyId,
     });
     await assertOrgRole(
-      { orgId: actor.orgId, workspaceId: actor.workspaceId, userId },
+      {
+        orgId: actor.orgId,
+        workspaceId: actor.workspaceId,
+        userId,
+        invokedCapability: actor.invokedCapability,
+        agentRun: actor.agentRun,
+      },
       READ_ROLES,
     );
   });

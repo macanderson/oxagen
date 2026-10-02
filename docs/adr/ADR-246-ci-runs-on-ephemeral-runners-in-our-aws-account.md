@@ -1,6 +1,10 @@
 # ADR-246: CI runs on ephemeral runners in our AWS account
 
-- **Status:** Accepted. Mac set the direction on 2026-10-01: self-hosted,
+- **Status:** Superseded (#5218). The runner pools cost more than the
+  team could carry, so `oxageninc/product` went public, where standard
+  GitHub-hosted runners are free, and the pools were removed. ECR Public keeps
+  the CI images. docs/runbooks/ci-runners.md says what is left. Before that:
+  Accepted. Mac set the direction on 2026-10-01: self-hosted,
   ephemeral, autoscaling runners in our AWS account, no dependency on GitHub
   billing wherever possible, and speed before cost. The scaler choice, the
   runner sizes, and the network layout are the agent's, recorded here for

@@ -46,6 +46,7 @@ import {
 } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
+import { holdsWorkspaceAuthority } from "@/shared/workspace-authority";
 import { AgentAvatar } from "@/ui/agent-avatar";
 import { linkText, mono, panel } from "@/ui/control-styles";
 import { MandateAuthorityList } from "@/ui/mandate-authority";
@@ -205,12 +206,15 @@ const COLUMNS = [
 export function MandatesLedger({
   read,
   orgRole,
+  wsRole,
   at,
   grant,
   agentHarnesses = {},
 }: {
   read: Read<MandateList>;
   orgRole: OrgRole;
+  /** The reader's workspace role. The workspace's Owner and Admin read every mandate (#5228). */
+  wsRole?: string;
   at: ToolsAt;
   /** Null for a reader no consequence role can name, who is offered no grant. */
   grant: LedgerGrant | null;
@@ -220,7 +224,9 @@ export function MandatesLedger({
   const t = useTranslations("tools.mandates");
   const title = t("title");
   /** Why an empty answer would not establish an empty ledger, or null when it would. */
-  const blindSpot = read.ok ? blindSpotOf(read.value, orgRole) : null;
+  const blindSpot = read.ok
+    ? blindSpotOf(read.value, orgRole, holdsWorkspaceAuthority(wsRole))
+    : null;
   return (
     <section aria-labelledby="tools-mandates" className={`${panel} p-4`}>
       <div className="flex flex-wrap items-start justify-between gap-3">

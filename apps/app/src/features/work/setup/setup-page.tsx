@@ -2,12 +2,12 @@
 // `workSetupView()`): what Phase 1 reads, how triage ranks it, and which
 // agents can take a send, on three tabs. The tab is `?tab=`.
 //
-// Each tab makes only its own reads. Collectors reads the collectors, the
-// workspace's connected GitHub accounts for Add collector, and the work items
-// for what the viewer's roles admit. A failed roles read leaves the buttons
-// on and lets the server's refusal speak. A failed connections read only
-// disables the connection picker. Priorities reads the priorities record.
-// Runtimes reads which agents can take a send.
+// Each tab makes only its own reads. Collectors reads the collectors with the
+// repositories linked to the workspace, which are the only ones a collector
+// may read, and the work items for what the viewer's roles admit. A failed
+// roles read leaves the buttons on and lets the server's refusal speak.
+// Priorities reads the priorities record. Runtimes reads which agents can
+// take a send.
 //
 // Phase 1 draws no Workflows, Autonomy or Training tab, and no write-back
 // switch.
@@ -73,26 +73,16 @@ async function tabBody({
   const ws = ctx.wsSlug;
   switch (tab) {
     case "collectors": {
-      const [collectors, list, connections] = await Promise.all([
+      const [collectors, list] = await Promise.all([
         source.work.collectors(ctx),
         source.work.list(ctx),
-        source.tools.connections(ctx, { status: null, connectorId: "github" }),
       ]);
-      const choices = connections.ok
-        ? connections.value.connections
-            .filter((connection) => connection.status === "connected")
-            .map((connection) => ({
-              id: connection.id,
-              name: connection.displayName,
-            }))
-        : null;
       return (
         <CollectorsTab
           org={org}
           ws={ws}
           read={collectors}
           canControl={list.ok ? list.value.viewer.canControl : true}
-          connections={choices}
         />
       );
     }

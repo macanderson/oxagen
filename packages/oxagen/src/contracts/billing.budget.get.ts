@@ -57,6 +57,7 @@ export const billingBudgetGet = registerCapability({
   surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "docs", "mcp", "unit", "app"],
   scoped: true,
+  orgLevel: true,
   // Reading your own spend/budget must never be denied by the budget gate.
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "billing" },

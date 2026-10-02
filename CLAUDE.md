@@ -171,11 +171,11 @@ Mac set this on 2026-10-02, replacing the rule of 2026-09-29. Aeonik is the hous
 ## Issue titles
 
 Mac set this format on 2026-09-30 for oxagen and stella. An issue title gives its
-priority, model tier, size, kind, and area, then the problem in plain words, so a person
+priority, model tier, size, kind, and domain, then the problem in plain words, so a person
 can read the backlog without opening an issue:
 
 ```
-<Priority> <Tier> <Size> <Kind> (<Area>): <Statement>
+<Priority> <Tier> <Size> <Kind> (<Domain>): <Statement>
 P0 T3 XS Bug (CI): Main stays red because the coverage step reads a stale lockfile
 P1 T3 L Feature (Steering): Bulk import memories from Markdown files
 ```
@@ -192,7 +192,7 @@ the kind before the size. That shape had replaced `P<n> · <area>/<surface> ·
   what a list, a search result, and a notification show. `<Priority>` is the `P0` to `P4`
   label. `<Tier>` is the `MODEL:` label, `T1` to `T4`. `<Size>` is the `SIZE:` label, `XS`
   to `XL`. `<Kind>` is the `KIND:` label: `Bug`, `Feature`, `Improvement`, `Chore`,
-  `Documentation`, or `DevOps`. `<Area>` is the title name of the one `AREA:` label.
+  `Documentation`, or `DevOps`. `<Domain>` is the title name of the one `DOMAIN:` label.
   Retitle whenever one of those labels changes.
 - **The statement** says what goes wrong for a bug, and what a person will be able to do
   for a feature or an improvement. Write it for a reader who has never opened the
@@ -205,7 +205,7 @@ the kind before the size. That shape had replaced `P<n> · <area>/<surface> ·
   `STORE-DRIFT`) gets its whole title from the workflow that files it. The triage pass
   keeps that title and adds the labels it names.
 
-`.claude/commands/triage-issues.md` holds the full rules: the tier, size, kind, and area
+`.claude/commands/triage-issues.md` holds the full rules: the tier, size, kind, and domain
 tables, how to choose each label, and the procedure. Read it before you file an issue.
 Run `/triage-issues` to complete every open issue that has no priority label.
 
@@ -224,7 +224,7 @@ One issue carries one full change. Include context, paths, reproduction steps wh
 - A PR uses `Closes #N` only when it finishes every item in that issue's definition of done. Otherwise use `Refs #N`.
 - A PR that closes no issue, such as a chore, uses `NO-ISSUE` for a trivial change or `CLOSES-NOTHING` for a substantial change. These are PR labels, not substitute text in the body.
 - A PR that changes a schema carries `MIGRATION-REQUIRED` (SCR-006). `migration-label.yml` applies it from the diff. Add it yourself only if the workflow has not, and never remove it while the diff still changes a schema, because the workflow puts it back. Nothing else about the PR changes: `migration-gate` applies the migration on merge.
-- File every issue you create complete. Write the full title from Issue titles above. Apply one priority, one `MODEL:`, one `SIZE:`, one `KIND:`, and one `AREA:` label, plus the labels below that apply. Set the issue type to the kind (`gh issue create --type Bug`), and set the fields Oxagen issue fields marks for filing. Do not apply `TRIAGE`. Mac set this on 2026-10-02. Never apply workflow-owned labels manually.
+- File every issue you create complete. Write the full title from Issue titles above. Apply one priority, one `MODEL:`, one `SIZE:`, one `KIND:`, and one `DOMAIN:` label, plus the labels below that apply. Set the issue type to the kind (`gh issue create --type Bug`), and set the fields Oxagen issue fields marks for filing. Do not apply `TRIAGE`. Mac set this on 2026-10-02. Never apply workflow-owned labels manually.
 - Add no attribution to an issue, an issue comment, or a PR: no "Generated with Claude Code" footer, no `claude.ai/code` session link, and no co-author line. Mac had them stripped from every issue on 2026-09-25.
 - CI files a `P0` issue labelled `DEPLOYMENT-FAILURE` when `main` goes red or a production deploy fails, and closes it when a later run recovers (`.github/workflows/deployment-failure.yml`). This is the one priority label a workflow applies. Record the root cause and the fixing commit (it lands straight on `main`, per AGENTS.md under Git Workflow) in a comment, and leave the open and close to CI, because the time between them is the recovery-time statistic.
 - Close an issue as completed only with verification. Use not planned with an explanation for duplicates, superseded work, or a decision not to proceed.
@@ -247,7 +247,8 @@ Changes issue fields.
 
 Mac set this label scheme on 2026-09-30 for oxagen and stella, and every label name is
 uppercase. A complete issue carries exactly one priority, one `MODEL:`, one `SIZE:`, one
-`KIND:`, and one `AREA:` label:
+`KIND:`, and one `DOMAIN:` label. Mac renamed the oxagen `AREA:` labels to `DOMAIN:` on
+2026-10-02, and the Area(s) issue field to Domains. Stella keeps its `AREA:` crate labels.
 
 | Dimension | Values |
 |---|---|
@@ -255,7 +256,7 @@ uppercase. A complete issue carries exactly one priority, one `MODEL:`, one `SIZ
 | Tier | `MODEL:T1` (Haiku: mechanical, fully specified work), `MODEL:T2` (Sonnet: routine implementation from a clear spec), `MODEL:T3` (Opus: judgment across packages, invariants, security, or migrations), `MODEL:T4` (Fable: architecture-critical or novel design) |
 | Size | `SIZE:EXTRA-SMALL`, `SIZE:SMALL`, `SIZE:MEDIUM`, `SIZE:LARGE`, `SIZE:EXTRA-LARGE` |
 | Kind | `KIND:BUG`, `KIND:FEATURE`, `KIND:IMPROVEMENT`, `KIND:CHORE`, `KIND:DOCUMENTATION`, `KIND:DEVOPS` |
-| Area | `AREA:FLEET`, `AREA:RUNS`, `AREA:MANDATES`, `AREA:AGENTS`, `AREA:TOOLS`, `AREA:STEERING`, `AREA:SKILLS`, `AREA:SPEND`, `AREA:BILLING`, `AREA:ORGANIZATION`, `AREA:AUTH`, `AREA:ONBOARDING`, `AREA:REPOSITORIES`, `AREA:STELLA`, `AREA:APP-SHELL`, `AREA:TACHO`, `AREA:DESKTOP`, `AREA:GATEWAY`, `AREA:API`, `AREA:MCP`, `AREA:CLI`, `AREA:DATABASE`, `AREA:CI`, `AREA:DEPLOY`, `AREA:DOCS`, `AREA:COMPLIANCE` |
+| Domain | `DOMAIN:FLEET`, `DOMAIN:RUNS`, `DOMAIN:MANDATES`, `DOMAIN:AGENTS`, `DOMAIN:TOOLS`, `DOMAIN:STEERING`, `DOMAIN:SKILLS`, `DOMAIN:SPEND`, `DOMAIN:BILLING`, `DOMAIN:ORGANIZATION`, `DOMAIN:AUTH`, `DOMAIN:ONBOARDING`, `DOMAIN:REPOSITORIES`, `DOMAIN:STELLA`, `DOMAIN:APP-SHELL`, `DOMAIN:TACHO`, `DOMAIN:DESKTOP`, `DOMAIN:GATEWAY`, `DOMAIN:API`, `DOMAIN:MCP`, `DOMAIN:CLI`, `DOMAIN:DATABASE`, `DOMAIN:CI`, `DOMAIN:DEPLOY`, `DOMAIN:DOCS`, `DOMAIN:COMPLIANCE` |
 
 Add these where they apply:
 
@@ -271,7 +272,7 @@ pull request: XS is 30 or fewer, S is 31 to 90, M is 91 to 240, L is 241 to 480,
 is more than 480. Move up one size for high risk or a wide blast radius. The Estimated
 Minutes issue field holds the same estimate as a number (see Oxagen issue fields below).
 
-The area names where a person meets the problem, not the package that holds the code. Add `SECURITY` when the issue involves credentials, secrets, tenant isolation, access control, or personal data.
+The domain names where a person meets the problem, not the package that holds the code. Add `SECURITY` when the issue involves credentials, secrets, tenant isolation, access control, or personal data.
 
 A bug is something that exists and behaves wrongly. A feature adds a capability none of which exists yet, with a rationale against `docs/VISION.md`. An improvement makes an existing capability better, and a gap where the spec or mockup shows more than the build has is an improvement. A chore is maintenance with no visible change. Documentation and DevOps name their deliverable. A decision belongs in an ADR. Use `NEEDS:DECISION` only when the body asks the maintainer a specific question and the work waits on the answer. Read `gh label list` for current labels and descriptions.
 
@@ -295,7 +296,7 @@ Mac set this on 2026-10-02 for every repository in an Oxagen organization (`oxag
 |---|---|---|
 | Priority | `priority` | Filing. It matches the `P` label |
 | Model Tier | `model_tier` | Filing. Lite is T1, Standard T2, Pro T3, and Ultra T4 |
-| Area(s) | `areas` | Filing. One or more names from the `AREA:` labels |
+| Domains | `domains` | Filing. One or more names from the `DOMAIN:` labels |
 | Minutes Estimated | `minutes_estimated` | Filing |
 | Minutes Actual | `minutes_actual` | Run end. Add your minutes to the value already there |
 | Blocked | `blocked` | Yes while the work waits on a maintainer decision |

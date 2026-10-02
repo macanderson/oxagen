@@ -78,7 +78,7 @@ jobs:
   cut:
     name: Cut ${{ inputs.bump }} release
     if: github.event_name == 'workflow_dispatch'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Require RELEASE_TOKEN
@@ -175,7 +175,7 @@ jobs:
   tag:
     name: Tag and publish
     if: "github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore(release): v')"
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     # Job-level scopes replace the workflow's. `actions: write` lets the
     # fallback below dispatch desktop.yml and npm.yml; without it the dispatch
