@@ -66,6 +66,7 @@ import {
   recordGithubPullRequestState,
 } from "@oxagen/handlers/github.pull-request.webhook";
 import { recordWorkOrderPullRequest } from "@oxagen/handlers/work.pull-request.webhook";
+import { requestForgePullRequestSync } from "@oxagen/handlers/forge.pull-request.webhook";
 import {
   findHealthScopes,
   healthRequests,
@@ -402,6 +403,24 @@ githubAppWebhookRoute.post("/", async (c) => {
       logger.error(
         { err, eventName },
         "GitHub App webhook: could not store the pull request's state; runs show the last state stored",
+      );
+    }
+    // ── Pull request record (ADR-288) ───────────────────────────────────
+    // Each connected workspace's copy of the pull request, the diff of its
+    // head, and its links are kept by the forge sync. A failure never fails
+    // the delivery: the pull request's next delivery asks again.
+    try {
+      await requestForgePullRequestSync(
+        {
+          connectedScopes: githubPullRequestStateDeps.connectedScopes,
+          send: (events) => eventClient.send(events),
+        },
+        { body, installationId },
+      );
+    } catch (err) {
+      logger.error(
+        { err, eventName },
+        "GitHub App webhook: could not ask the forge sync for the pull request; its next delivery asks again",
       );
     }
     // ── Work orders (ADR-251) ───────────────────────────────────────────
