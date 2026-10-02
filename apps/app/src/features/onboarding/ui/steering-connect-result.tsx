@@ -8,6 +8,7 @@
 //
 // The copy is the same for an unknown organization and one the viewer can't
 // open, and it never names the organization.
+import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { routes } from "@/shared/safe-path";
 import { buttonPrimary } from "@/ui/control-styles";
@@ -17,14 +18,27 @@ import type { SteeringResult } from "./steering-result";
 
 export function SteeringConnectResult({
   result,
+  signOut,
 }: {
   result: SteeringResult | null;
+  /**
+   * The shell's sign-out button. The page passes it in, so this lane never
+   * imports the shell. Signing out is how the person reaches the account that
+   * can open the organization, so both outcomes offer it beside the way home.
+   */
+  signOut: ReactNode;
 }) {
   const t = useTranslations("onboarding.steeringConnect");
   const home = (
     <SafeLink to={routes.root()} className={buttonPrimary}>
       {t("home")}
     </SafeLink>
+  );
+  const next = (
+    <>
+      {home}
+      {signOut}
+    </>
   );
   if (result === null)
     return (
@@ -43,7 +57,7 @@ export function SteeringConnectResult({
         tone="ok"
         testId="steering-connect-connected"
         title={t("connectedTitle")}
-        actions={home}
+        actions={next}
       >
         <p>{t("connectedBody")}</p>
       </OutcomePanel>
@@ -53,7 +67,7 @@ export function SteeringConnectResult({
       tone="neutral"
       testId="steering-connect-error"
       title={t("errorTitle")}
-      actions={home}
+      actions={next}
     >
       <p>
         {result.code === null

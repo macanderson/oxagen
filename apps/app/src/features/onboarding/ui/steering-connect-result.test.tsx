@@ -10,10 +10,17 @@ import { IntlProvider } from "@/test/intl";
 import { SteeringConnectResult } from "./steering-connect-result";
 import type { SteeringResult } from "./steering-result";
 
+/** Stands in for the shell's sign-out button, which the page passes in. */
+const signOut = (
+  <button type="button" data-testid="sign-out-stub">
+    Sign out
+  </button>
+);
+
 function renderResult(result: SteeringResult | null) {
   return render(
     <IntlProvider>
-      <SteeringConnectResult result={result} />
+      <SteeringConnectResult result={result} signOut={signOut} />
     </IntlProvider>,
   );
 }
@@ -41,6 +48,19 @@ describe("SteeringConnectResult", () => {
       "href",
       "/",
     );
+    expect(panel).toContainElement(screen.getByTestId("sign-out-stub"));
+  });
+
+  it("offers sign out on a failed connection too", () => {
+    renderResult({ kind: "error", code: "store_failed" });
+    expect(screen.getByTestId("steering-connect-error")).toContainElement(
+      screen.getByTestId("sign-out-stub"),
+    );
+  });
+
+  it("offers no sign out when there is no result", () => {
+    renderResult(null);
+    expect(screen.queryByTestId("sign-out-stub")).toBeNull();
   });
 
   it("names the reason the connection failed", () => {

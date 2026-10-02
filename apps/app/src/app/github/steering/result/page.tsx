@@ -5,6 +5,7 @@ import {
   parseSteeringResult,
   SteeringConnectResult,
 } from "@/features/onboarding";
+import { SignOutButton } from "@/features/shell";
 import { firstParam } from "@/shared/safe-path";
 import { AuthColumn, AuthShell, AuthSkeleton } from "@/ui/auth-shell";
 import { PageHeader } from "@/ui/page-header";
@@ -52,7 +53,7 @@ async function SteeringConnectResultBody({
   return (
     <AuthColumn>
       <PageHeader title={pages("steeringConnect")} />
-      <SteeringConnectResult result={result} />
+      <SteeringConnectResult result={result} signOut={<SignOutButton />} />
     </AuthColumn>
   );
 }
