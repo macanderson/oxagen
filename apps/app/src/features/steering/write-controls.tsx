@@ -4,7 +4,8 @@
 // reason, approve, merge, merge without review, revert a merged Context PR,
 // restore a drifted managed block, and drop one record from a memory PR.
 // Open, close, merge and revert sit behind a confirming dialog. Merge is the
-// page's one primary action and stays disabled until every check has passed.
+// page's one primary action and stays disabled until the caller says the
+// proposal can merge: every check passed, or for a steering PR, an open PR.
 // Each write calls the host first and moves the proposal only when the host
 // agreed, so a refusal is named where the person acted and changes nothing.
 // A completed write reloads the Context PR page, except a drop, which marks
@@ -23,7 +24,7 @@ import {
   textareaBase,
 } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
-import { PullRequestLink, useNavigate } from "@/ui/navigation";
+import { PullRequestLink, SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import {
@@ -151,14 +152,17 @@ export function ProposalWrites({
   ws,
   proposalId,
   status,
-  governance = false,
+  recordChecks = true,
 }: Target & {
   status: ProposalStatus;
   /**
-   * A governance change (#4795). open_context_pr refuses it: setting the mode
-   * again runs its steering checks. So it offers dismiss only.
+   * The proposal publishes one record, so open_context_pr opens its PR and
+   * runs the six record checks. False for a governance change (#4795) and a
+   * steering PR (#5122), which open_context_pr refuses: setting the mode
+   * again runs a governance change's checks, and merging runs a steering
+   * PR's. Each of those offers dismiss only.
    */
-  governance?: boolean;
+  recordChecks?: boolean;
 }) {
   const t = useTranslations("steering.actions");
   // Only `merged` and `rejected` are terminal. `checks_passed` is not: when the
@@ -173,7 +177,7 @@ export function ProposalWrites({
   const page = routes.steeringProposal(org, ws, proposalId);
   return (
     <>
-      {settled || governance ? null : (
+      {settled || !recordChecks ? null : (
         <WriteDialog
           testId="open-context-pr"
           copy={{
@@ -233,7 +237,15 @@ export function MergeContextPr({
   ws,
   proposalId,
   blocked,
-}: Target & { blocked: boolean }) {
+  files = false,
+}: Target & {
+  blocked: boolean;
+  /**
+   * A steering PR (#5122): the merge runs the steering checks and lands the
+   * PR's files, so the dialog says that in place of publishing a record.
+   */
+  files?: boolean;
+}) {
   const t = useTranslations("steering.actions.merge");
   return (
     <div className="flex flex-col gap-2">
@@ -244,7 +256,7 @@ export function MergeContextPr({
         copy={{
           open: t("confirm"),
           title: t("title"),
-          body: t("body"),
+          body: files ? t("filesBody") : t("body"),
           confirm: t("dialogConfirm"),
           pending: t("pending"),
         }}
@@ -336,7 +348,8 @@ export function MergeWithoutReview({
 /**
  * Revert pull request: open a steering PR that undoes this merged one, behind
  * a confirming dialog. The merged PR's panel does not change, so the revert
- * PR's link takes the button's place once it is open.
+ * PR's link takes the button's place once it is open, with a link to the
+ * revert's own Context PR page when the revert carries a proposal.
  */
 export function RevertSteeringPr({ org, ws, proposalId }: Target) {
   const t = useTranslations("steering.actions.revert");
@@ -376,6 +389,16 @@ export function RevertSteeringPr({ org, ws, proposalId }: Target) {
           <PullRequestLink to={url} className={linkText}>
             {t("goToPr", { number })}
           </PullRequestLink>
+        )}
+        {/* A steering repo's revert carries its own proposal, which a
+            reviewer merges from its Context PR page (#5122). */}
+        {opened.proposalId === null ? null : (
+          <SafeLink
+            to={routes.steeringProposal(org, ws, opened.proposalId)}
+            className={linkText}
+          >
+            {t("goToProposal")}
+          </SafeLink>
         )}
         {opened.check === "failure" ? (
           <p className="text-muted-foreground">{t("checkFailed")}</p>

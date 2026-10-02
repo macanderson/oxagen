@@ -961,13 +961,13 @@ describe("TranscriptTailer", () => {
     expect(session.lines.map((l) => l.line)).toEqual(["a1", "b1", "b2"]);
   });
 
-  it("never tails a transcript for a harness transcript.ts cannot normalize", async () => {
+  it("never tails a transcript for a harness the recorder has no reader for", async () => {
     const dir = scratch();
     const path = join(dir, "s.jsonl");
-    // Codex's hook payload can carry a transcript_path, but its shape is not
-    // Claude Code's JSONL, which is the only shape `transcript.ts` reads.
+    // A Cursor session can inherit a transcript_path from an earlier Claude
+    // Code identity, but nothing reads Cursor's transcript shape yet.
     writeFileSync(path, "not claude code jsonl\n");
-    const session = fakeSession("s1", path, { harness: "codex" });
+    const session = fakeSession("s1", path, { harness: "cursor" });
     const { instance, recorded } = tailer([session]);
     await instance.tick();
     await instance.tick();

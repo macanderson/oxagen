@@ -16,7 +16,10 @@ Queue a reconcile of one work collector now, even while it is failing (lane P1-0
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `collector_id` | `uuid` | |
+| `collector_id` | `uuid`, optional | The collector's row id |
+| `name` | `string`, optional | The collector's name, unique in the workspace |
+
+Name the collector by exactly one of the two. A call with neither or both answers 400.
 
 ## Output
 

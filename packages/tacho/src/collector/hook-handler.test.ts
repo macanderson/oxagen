@@ -993,6 +993,30 @@ describe("handleHookEvent over the recorded session", () => {
     );
   });
 
+  it("keeps a Codex session's own rollout when a subagent's hook names the subagent's", async () => {
+    const { deps, registry } = harness();
+    // Recorded Codex payloads: the root's prompt, then the prompt the root
+    // sent the subagent it spawned. Both carry the root session's id, and
+    // the subagent's carries its own rollout as `transcript_path`.
+    const codexHook = (name: string) =>
+      (
+        JSON.parse(
+          readFileSync(
+            join(__dirname, "..", "..", "fixtures", "codex", "hooks", name),
+            "utf8",
+          ),
+        ) as { stdin: Record<string, unknown> }
+      ).stdin;
+    const root = codexHook("UserPromptSubmit-typed.json");
+    const child = codexHook("UserPromptSubmit-subagent.json");
+    expect(child["session_id"]).toBe(root["session_id"]);
+    const id = root["session_id"] as string;
+    await handleHookEvent(root, {}, deps, undefined, "codex");
+    expect(registry.get(id)?.transcriptPath).toBe(root["transcript_path"]);
+    await handleHookEvent(child, {}, deps, undefined, "codex");
+    expect(registry.get(id)?.transcriptPath).toBe(root["transcript_path"]);
+  });
+
   it("numbers each Stella invocation of one repeated call, and still pairs Pre with Post", async () => {
     const { deps, registry } = harness({
       permissions: { allow: ["Bash(ls*)"], deny: [], ask: [] },

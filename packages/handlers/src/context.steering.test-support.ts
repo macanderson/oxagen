@@ -17,7 +17,10 @@ import {
   type SteeringGitHub,
   type SteeringRepository,
 } from "./context.steering.github";
-import type { ProposalStatus } from "@oxagen/oxagen/contracts/context.steering.shared";
+import {
+  isRecordKind,
+  type ProposalStatus,
+} from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
   alreadyMerged,
   refusedWrite,
@@ -610,6 +613,74 @@ export class MemoryStore implements SteeringStore {
     });
     return merged;
   }
+  async mergeSteeringPr(input: Parameters<SteeringStore["mergeSteeringPr"]>[0]) {
+    const { scope, proposal } = input;
+    // One transaction in Postgres: nothing retires unless the proposal is
+    // still at `checks_passed`.
+    const current = this.proposals.find((p) => p.id === proposal.id);
+    if (current?.status !== "checks_passed" || current.kind !== proposal.kind)
+      throw alreadyMerged(proposal.publicId);
+    const retired: string[] = [];
+    for (const lineageId of input.retire) {
+      const record = this.records.find(
+        (r) =>
+          r.workspaceId === scope.workspaceId &&
+          r.slug === lineageId &&
+          r.status === "active" &&
+          r.deletedAt === null,
+      );
+      if (!record) continue;
+      Object.assign(record, {
+        status: "retired",
+        commitSha: input.commitSha,
+        publishedAt: input.mergedAt,
+        updatedById: input.mergedByUserId,
+        updatedAt: input.mergedAt,
+      });
+      const head = this.ledger
+        .filter((l) => l.recordId === record.id)
+        .sort((a, b) => b.seq - a.seq)[0];
+      const seqNo = (head?.seq ?? 0) + 1;
+      const prev = head?.chainDigest ?? null;
+      this.ledger.push({
+        id: uuid(),
+        publicId: nextId("ctp"),
+        recordId: record.id,
+        seq: seqNo,
+        chainDigest: sha256Hex(
+          (prev ?? "") +
+            canonicalJson({
+              action: "retire",
+              approver_user_id: input.mergedByUserId,
+              policy_version: input.policyVersion,
+              record_id: record.id,
+              seq: seqNo,
+              version_id: null,
+            }),
+        ),
+        prev,
+        policyVersion: input.policyVersion,
+        approverUserId: input.mergedByUserId,
+        action: "retire",
+      });
+      retired.push(lineageId);
+    }
+    const merged = await this.updateProposal(
+      proposal.id,
+      {
+        status: "merged",
+        mergeClaimedAt: null,
+        updatedById: input.mergedByUserId,
+      },
+      ["checks_passed"],
+    );
+    Object.assign(merged, {
+      mergedCommit: input.commitSha,
+      mergedAt: input.mergedAt,
+      mergedByUserId: input.mergedByUserId,
+    });
+    return { proposal: merged, retired };
+  }
 }
 
 const pullUrl = (n: number) => `https://github.com/a-intel/platform/pull/${n}`;
@@ -676,6 +747,7 @@ export class FakeGitHub implements SteeringGitHub {
     commitTitle: string;
     sha: string;
     commitMessage?: string;
+    base?: string;
   }[] = [];
   deletedBranches: string[] = [];
   /** Every stamp commit `commitFiles` wrote, in order. */
@@ -1072,6 +1144,7 @@ export class FakeGitHub implements SteeringGitHub {
       commitTitle: string;
       sha: string;
       commitMessage?: string;
+      base?: string;
     },
   ) {
     if (this.mergeRefusedWith) return this.refused(this.mergeRefusedWith);
@@ -1587,7 +1660,7 @@ export class MemorySyncStore implements SyncStore {
     );
   }
 
-  async linkMergedGovernance(
+  async linkMergedWithoutRecord(
     scope: SyncScope,
     proposalId: string,
     args: { mergedCommit: string; mergedAt: Date; noClaimSince: Date },
@@ -1596,7 +1669,7 @@ export class MemorySyncStore implements SyncStore {
     if (
       !proposal ||
       proposal.workspaceId !== scope.workspaceId ||
-      proposal.kind !== "governance" ||
+      isRecordKind(proposal.kind) ||
       !OPEN.has(proposal.status)
     )
       return false;

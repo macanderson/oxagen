@@ -5,6 +5,10 @@
 // production branch, the file lands on it, and only then does the handler
 // look for an open PR, so a reused PR always carries this change. A second
 // call for the same repository reuses the branch and the PR.
+//
+// With `record`, the PR's `workspace` proposal row is written or moved to the
+// new head, so merge_context_pr can land it through the merge queue (#5122,
+// ADR-265). A row that fails to write is logged, and the PR stays open.
 import { createHash } from "node:crypto";
 import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import type { SteeringPullRequest } from "@oxagen/oxagen/contracts/repository.link";
@@ -14,6 +18,11 @@ import {
   type SteeringHost,
   type SteeringRepository,
 } from "./context.steering.github";
+import {
+  recordSteeringPrQuietly,
+  type SteeringPrAuthor,
+  type SteeringPrProposalStore,
+} from "./steering-repo/pr-proposal";
 
 export type SteeringPullRequestHost = Pick<
   SteeringHost,
@@ -34,31 +43,64 @@ export async function openSteeringPullRequest(
     title: string;
     body: string;
   },
+  record?: {
+    store: SteeringPrProposalStore;
+    scope: { orgId: string; workspaceId: string };
+    author: SteeringPrAuthor;
+    now: Date;
+  },
 ): Promise<SteeringPullRequest> {
+  let pullRequest: SteeringPullRequest;
+  let headSha: string;
   try {
     await host.ensureBranch(repo, args.branch, repo.defaultBranch);
-    await host.putFile(repo, {
+    ({ commitSha: headSha } = await host.putFile(repo, {
       path: WORKSPACE_TOML_PATH,
       content: args.content,
       message: args.message,
       branch: args.branch,
-    });
+    }));
     const open = await host.findOpenPullRequest(repo, {
       head: args.branch,
       base: repo.defaultBranch,
     });
-    if (open) return { number: open.number, url: open.htmlUrl, reused: true };
-    const opened = await host.openPullRequest(repo, {
-      title: args.title,
-      head: args.branch,
-      base: repo.defaultBranch,
-      body: args.body,
-      labels: OXAGEN_PR_LABELS,
-    });
-    return { number: opened.number, url: opened.htmlUrl, reused: false };
+    if (open) {
+      pullRequest = { number: open.number, url: open.htmlUrl, reused: true };
+    } else {
+      const opened = await host.openPullRequest(repo, {
+        title: args.title,
+        head: args.branch,
+        base: repo.defaultBranch,
+        body: args.body,
+        labels: OXAGEN_PR_LABELS,
+      });
+      pullRequest = { number: opened.number, url: opened.htmlUrl, reused: false };
+    }
   } catch (err) {
     throw githubRefused(err);
   }
+  if (record !== undefined) {
+    await recordSteeringPrQuietly(
+      record.store,
+      {
+        scope: record.scope,
+        repo,
+        kind: "workspace",
+        pullRequest: {
+          number: pullRequest.number,
+          url: pullRequest.url,
+          branch: args.branch,
+          headSha,
+        },
+        title: args.title,
+        paths: [WORKSPACE_TOML_PATH],
+        check: null,
+        author: record.author,
+      },
+      record.now,
+    );
+  }
+  return pullRequest;
 }
 
 /**

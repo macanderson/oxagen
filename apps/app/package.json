@@ -20,7 +20,8 @@
     "gen:messages": "tsx scripts/gen-messages-types.ts",
     "check:messages": "tsx scripts/gen-messages-types.ts --check",
     "seed:e2e": "E2E_TEST=true tsx e2e/support/seed/index.ts",
-    "seed:audit": "E2E_TEST=true tsx scripts/mockup-parity/seed-personas.ts"
+    "seed:audit": "E2E_TEST=true tsx scripts/mockup-parity/seed-personas.ts",
+    "seed:work": "E2E_TEST=true tsx scripts/work-walk/seed.ts"
   },
   "dependencies": {
     "@base-ui/react": "1.8.0",

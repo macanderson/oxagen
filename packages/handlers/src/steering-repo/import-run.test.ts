@@ -169,6 +169,68 @@ async function refusal(promise: Promise<unknown>): Promise<string> {
 }
 
 describe("runSteeringImport: a workspace steered by .oxagen/", () => {
+  it("records each import steering PR at its head, so a person merges it from Oxagen (#5122)", async () => {
+    const world = new World();
+    const recorded: Parameters<NonNullable<SteeringImportDeps["recordPullRequest"]>>[1][] = [];
+    await runSteeringImport(SCOPE, CHOICES, {
+      ...world.deps(),
+      recordPullRequest: async (_scope, pr) => {
+        recorded.push(pr);
+      },
+    });
+
+    expect(recorded.map((pr) => pr.branch)).toEqual([IMPORT_BRANCH, IMPORT_WORKSPACE_BRANCH]);
+    for (const pr of recorded) {
+      const pull = world.steering.pulls.find((p) => p.head === pr.branch);
+      expect(pr).toMatchObject({
+        repo: STEERING_REPO,
+        number: pull?.number,
+        url: `https://github.com/a-intel/platform/pull/${pull?.number}`,
+        headSha: world.steering.heads.get(pr.branch),
+        title: pull?.title,
+      });
+      expect(pr.paths.length).toBeGreaterThan(0);
+    }
+    // The cleanup PR is on the old repository, which is no steering repo.
+    expect(recorded.some((pr) => pr.branch === IMPORT_CLEANUP_BRANCH)).toBe(false);
+  });
+
+  it("records a PR on the rerun when the run stopped after saving it and before writing its row (#5122)", async () => {
+    const world = new World();
+    const recorded: string[] = [];
+    let stopOnce = true;
+    const deps = (): SteeringImportDeps => ({
+      ...world.deps(),
+      recordPullRequest: async (_scope, pr) => {
+        if (stopOnce) {
+          // The process stops here: the PR is saved and its row is not.
+          stopOnce = false;
+          world.stopped = true;
+          throw new Error("the process stopped");
+        }
+        recorded.push(pr.branch);
+      },
+    });
+
+    await expect(runSteeringImport(SCOPE, CHOICES, deps())).rejects.toThrow(
+      "the process stopped",
+    );
+    world.stopped = false;
+    expect(world.state?.pull_requests.map((pr) => pr.branch)).toEqual([IMPORT_BRANCH]);
+    expect(recorded).toEqual([]);
+
+    world.clock = new Date(world.clock.getTime() + IMPORT_LEASE_MS + 1000);
+    const result = await runSteeringImport(SCOPE, CHOICES, deps());
+
+    expect(result.outcome).toBe("imported");
+    // The rerun opened no second PR and wrote the first PR's row.
+    expect(world.steering.pulls.map((pr) => pr.head)).toEqual([
+      IMPORT_BRANCH,
+      IMPORT_WORKSPACE_BRANCH,
+    ]);
+    expect(recorded).toEqual([IMPORT_BRANCH, IMPORT_WORKSPACE_BRANCH]);
+  });
+
   it("opens the import steering PRs, the cleanup PR, and leaves the old head linked", async () => {
     const world = new World();
     const expected = expectedConversion();

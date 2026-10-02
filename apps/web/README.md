@@ -81,21 +81,27 @@ Never put `--` before the filename. Each build module has a co-located
   constellation and the glow behind a hero) follows docs.oxagen.sh
   (`apps/docs`, on `@oxagen/ui`), so the two sites read as one; change it
   there first, then here.
+- The header: `siteHeader()` in `scripts/lib/html.mjs` writes the floating
+  island, its four menus (Product, Research, Resources, Company), and the
+  phone menu. The blog renders it into each page. A hand-written page holds
+  the comment `<!-- site-header -->` (or `<!-- site-header demo="ghost" -->`
+  when its hero holds the gold action), and the build fills it with the same
+  markup, so the menus are written once.
 - `assets/oxagen.js`: the shared behaviour for those same pages: nav state,
-  the mobile drawer, reveal-on-scroll, the live-figure observer, the terminal
+  the island's menus, the mobile drawer, reveal-on-scroll, the live-figure observer, the terminal
   replay, and the lead forms. Plain JavaScript, no dependencies, no build step.
   Every animation that would otherwise run forever (a figure's `.dg-loop`, the
   terminal replay) is started and stopped by an IntersectionObserver, so a page
   of them costs nothing below the fold.
-- `index.html`, the marketing one-pager: the hero with a spend rollup and the
-  supported-agent logos, the operator's five steps (with tasks marked coming
+- `index.html`, the marketing one-pager: the hero with one night of agent runs
+  and its morning report, then the supported-agent logos, the operator's five steps (with tasks marked coming
   soon), the four mandate clauses (access, record, budget and rules,
   equipment) each with its own figure, the supported-agents section with the
   site's one terminal and a short support matrix, a `#field-manual` section
   with the ebook lead-capture form, and the "Get a demo" lead form.
 - `products/oxagen/`, the product page: a routed request in the hero, then one
   figure per ranked feature, and the full support matrix at `#support`. It
-  carries its own copy of the nav, drawer and footer markup.
+  carries its own copy of the footer markup.
 - The support matrix (Claude Code, Codex, Cursor, Stella) is the same table on
   both pages, the home page showing six of its rows. Each cell is read from
   `packages/tacho` (the harness adapters, `wire.ts`, the hook handler) and
@@ -135,20 +141,17 @@ Never put `--` before the filename. Each build module has a co-located
   `/research/deterministic-systems-optimizations-for-ai-agents` path to
   `/read?e=page-flip-reader` (`prefix_redirects` in
   `infra/stacks-new/oxagen/main.tf`). There is no `index.html` at that path.
-- `fonts/`: the house faces (Geist, Monaspace Neon, and Space Grotesk at
-  400/500/600/700), vendored from the brand kit by
-  `node tools/scripts/sync-brand-assets.mjs`, plus Literata variable serif
-  (normal and italic, latin subset), which only the book reader offers as a
-  long-form reading option. All of them are cached immutable for a year. The
-  Aeonik binaries they replaced were removed with the house system.
-  Geist sets every heading and all running text. Monaspace Neon sets code.
-  Space Grotesk sets two things only: the wordmark when it is text rather
-  than an SVG, and the first line of a hero headline. Mac set that rule on
-  2026-09-29. Mark hero line 1 with the `hero-line-1` class. In a two-line
-  hero it goes on a span before the `<br>`, so line 2 stays in Geist. In a
-  one-line hero it goes on the `<h1>`. A page preloads only the Space Grotesk
-  weight its hero line or text wordmark uses, and a page with neither
-  preloads none.
+- `fonts/`: the house faces, vendored from the brand kit by
+  `node tools/scripts/sync-brand-assets.mjs`: Aeonik (upright and italic),
+  Aeonik Mono, Aeonik Fono, Monaspace Neon, and Space Grotesk at
+  400/500/600/700. Literata variable serif (normal and italic, latin subset)
+  sits beside them, and only the book reader offers it as a long-form reading
+  option. All of them are cached immutable for a year. Mac set the rule on
+  2026-10-02: Space Grotesk sets every h1, h2, and h3, and so every hero
+  line, and the wordmark when it is text rather than an SVG. Aeonik sets h4
+  and all running text. Monaspace Neon sets code. Aeonik Mono and Aeonik
+  Fono load, and no rule names them yet. A page preloads only the faces its
+  first screen draws.
 - `favicon.svg`: the hive, the kit's Oxagen icon: six hexagonal cells, four
   drawn as an outline in the tab's ink and two filled with the gold, one of
   them at half strength. The outline adapts to the tab's colour scheme. The
@@ -173,9 +176,10 @@ Never put `--` before the filename. Each build module has a co-located
 - `assets/blog.css`: the blog's own rules (index, pillar and post layouts,
   the reading measure, references, callouts). Semantic tokens only, same four
   rules as `oxagen.css`.
-- `scripts/fonts/`: Geist, the variable file Google Fonts ships
-  (OFL), used only at build time to set the text on generated images as
-  outlines. Not published.
+- Generated images set their text as outlines from `scripts/fonts/aeonik-wght.ttf`
+  at build time (`scripts/lib/text.mjs`), so a render never depends on the
+  fonts a machine has installed. That file is the kit's `fonts/aeonik-wght.woff2`
+  unpacked to a TTF, because fontkit can't make a weight from a WOFF2.
 
 ## The palette, and the four rules
 

@@ -262,6 +262,12 @@ export interface GovernanceCheckContext {
   scope: Scope;
   now: () => Date;
   check: SteeringGovernanceSeams["check"];
+  /**
+   * What the check says to do when the checks did not run. A governance PR's
+   * checks run again when the mode is set again, the default. A steering PR
+   * proposal's run again when it is merged again (#5122).
+   */
+  rerun?: string;
 }
 
 /** Report the required check on `head`. A failed report is logged. */
@@ -277,7 +283,7 @@ async function reportCheck(
       ? {
           conclusion: "failure" as const,
           title: "The steering checks did not run",
-          summary: `Oxagen could not run the steering checks on ${head}: ${error instanceof Error ? error.message : String(error)}. Set the mode again to run them.`,
+          summary: `Oxagen could not run the steering checks on ${head}: ${error instanceof Error ? error.message : String(error)}. ${input.rerun ?? "Set the mode again to run them."}`,
         }
       : checkRunText(report);
   try {

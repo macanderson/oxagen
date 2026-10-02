@@ -5,7 +5,8 @@
 - **Date:** 2026-10-02
 - **Owners:** tacho
 - **Related:** issue #3824 (item 3), macanderson/oxagen#3822, ADR-160,
-  ADR-189, `packages/tacho/src/collector/model-proxy.ts`,
+  ADR-189, ADR-262 (amends: Codex rollout frames),
+  `packages/tacho/src/collector/model-proxy.ts`,
   `packages/tacho/src/evidence/replay-grade.ts`.
 
 ## Context
@@ -107,6 +108,26 @@ record showed nothing.
   `error` frames today. One that needs one count per failed call can key on
   `oxagen.not_forwarded`, which only the gateway's frame carries.
 - A host keeps sealing nothing for these exits until its daemon is upgraded.
+
+## Amendment: Codex rollout frames (2026-10-02)
+
+ADR-262 reads Codex rollouts and seals one `llm_call` per completed response.
+That frame and the gateway's frame describe the same call, and the call must
+count once.
+
+- **Join key.** The gateway's `llm_call` for a Responses API call stores the
+  response's `response.id` as `message_id` (`model-proxy.ts`, read by
+  `foldUsageDocument` in `model-usage.ts`). The rollout's
+  `token_usage_record` carries the same id as `response_id`, and the rollout
+  frame stores it as `message_id`.
+- **Rule.** The model call ledger (`llm-call-dedupe.ts`) joins the two on
+  that id. Whichever frame seals second is stamped
+  `oxagen.llm_call_duplicate_of` with the source that sealed first, and no
+  reader counts its usage. The rollout frame still seals, because it holds
+  the response as Codex recorded it.
+- **This ADR's frames.** A call the gateway answers without forwarding seals
+  an `error` and reaches no model, so Codex writes no usage record for it.
+  The two kinds of frame never describe the same call.
 
 ## Alternatives considered
 
