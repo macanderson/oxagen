@@ -2021,8 +2021,8 @@
       "does": "by kind, scope, status, lineage",
       "absorbs": [
         {
-          "name": "list_context_records",
-          "file": "context.record.list.ts"
+          "name": "list_steering_records",
+          "file": "steering.record.list.ts"
         },
         {
           "name": "list_memories",
@@ -2112,8 +2112,8 @@
           "file": "agent.memory.promote.ts"
         },
         {
-          "name": "promote_context_record",
-          "file": "context.record.promote.ts"
+          "name": "promote_steering_record",
+          "file": "steering.record.promote.ts"
         },
         {
           "name": "suggest_promotion_rationales",
@@ -2132,14 +2132,14 @@
       "milestone": "M3"
     },
     {
-      "tool": "open_context_pr",
+      "tool": "open_steering_pr",
       "grade": "INHERIT",
       "group": "Context and steering",
       "does": "the pull request",
       "absorbs": [
         {
-          "name": "publish_context_record",
-          "file": "context.record.publish.ts"
+          "name": "publish_steering_record",
+          "file": "steering.record.publish.ts"
         }
       ],
       "unresolved": [],
@@ -2873,8 +2873,8 @@
     },
     {
       "screen": "Steering",
-      "job": "Published records, proposals, open Context PRs, effect metrics, and retirement candidates",
-      "actions": ["open Context PR", "review", "retire"]
+      "job": "Published records, proposals, open steering PRs, effect metrics, and retirement candidates",
+      "actions": ["open steering PR", "review", "retire"]
     },
     {
       "screen": "Spend",

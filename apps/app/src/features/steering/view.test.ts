@@ -173,7 +173,7 @@ describe("resolveSteeringRoute", () => {
     });
   });
 
-  it("moves the Context PRs segment to the list, and a selected proposal to its own page", () => {
+  it("moves the steering PRs segment to the list, and a selected proposal to its own page", () => {
     expect(resolve(["proposals", "prs"], { state: "merged" })).toEqual({
       kind: "redirect",
       to: `${BASE}/proposals?state=merged`,
@@ -352,7 +352,7 @@ describe("resolveSteeringRoute", () => {
 });
 
 describe("proposalListFrom", () => {
-  it("reads the list a Context PR page was opened from", () => {
+  it("reads the list a steering PR page was opened from", () => {
     expect(
       proposalListFrom({ state: "merged", rows: "25", offset: "50" }),
     ).toEqual({ state: "merged", rows: 25, offset: 50 });

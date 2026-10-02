@@ -95,7 +95,7 @@ export const repositoryMainGet = registerCapability({
            * insert a NEW connection, while the binding head still points at the
            * retired one. `readGitHubConnection` joins head → binding →
            * connection and filters exactly those statuses, so from that moment
-           * it resolves nothing and steering and Context PRs are off, silently.
+           * it resolves nothing and steering and steering PRs are off, silently.
            *
            * It is reported rather than hidden because the repository is still
            * the one the workspace binds and the person has to be told which it

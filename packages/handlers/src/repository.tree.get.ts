@@ -16,7 +16,7 @@
 //      same page.
 //   5. The paths under `.oxagen/` and `steering/` at that head, the two files
 //      the page shows in full when they exist, the mode the governance file
-//      declares (read by the same parser the Context PR gate uses), and the
+//      declares (read by the same parser the steering PR gate uses), and the
 //      open init pull request. A steering repository keeps its mode in
 //      `steering/governance.toml`, and a legacy one in
 //      `.oxagen/rules/governance.toml` (#4821).

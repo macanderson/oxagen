@@ -1,9 +1,9 @@
 // What the curator names a memory record: its lineage, label, description,
 // and path in the steering repo (ADR-206, decision 6).
 import {
-  contextRecordSlug,
-  fitContextRecordLabel,
-} from "@oxagen/oxagen/context-record-label";
+  steeringRecordSlug,
+  fitSteeringRecordLabel,
+} from "@oxagen/oxagen/steering-record-label";
 import { DESCRIPTION_MAX } from "@oxagen/oxagen/steering-repo/tokens";
 import { MEMORY_DIR, recordFileName } from "@oxagen/oxagen/steering-repo/paths";
 import { TOOL_SEPARATOR } from "@oxagen/oxagen/steering-repo/names";
@@ -62,7 +62,7 @@ export function memoryLineage(
     .split(" ")
     .filter((word) => word !== "" && !LINEAGE_SKIP.has(word));
   const base =
-    fitSlug(contextRecordSlug(words.join(" ")), MEMORY_LINEAGE_MAX) ||
+    fitSlug(steeringRecordSlug(words.join(" ")), MEMORY_LINEAGE_MAX) ||
     "memory";
   const lineage = base.length >= 2 ? base : `memory-${base}`;
   if (!taken.has(lineage)) return lineage;
@@ -82,7 +82,7 @@ function firstSentence(statement: string): string {
 
 /** A label of at most 36 characters, cut from the statement's first sentence. */
 export function memoryLabel(statement: string): string {
-  const label = fitContextRecordLabel(firstSentence(statement)).replace(
+  const label = fitSteeringRecordLabel(firstSentence(statement)).replace(
     /[\s,;:.-]+$/,
     "",
   );
@@ -104,7 +104,7 @@ export function memoryDescription(statement: string): string {
 
 /** A folder name from free text, or null when nothing file-safe is left. */
 function folderSlug(value: string): string | null {
-  const slug = contextRecordSlug(value.replace(/[._]+/g, "-"));
+  const slug = steeringRecordSlug(value.replace(/[._]+/g, "-"));
   return slug === "" ? null : slug;
 }
 

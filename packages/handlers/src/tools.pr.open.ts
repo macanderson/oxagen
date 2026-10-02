@@ -25,7 +25,7 @@
 //      the "Oxagen steering" check. A report that fails is logged. The PR is
 //      open, and the missing required check blocks its merge.
 //   6. Write the PR's proposal row, of the kind's proposalKind, so
-//      merge_context_pr can land it (#5122, ADR-265). A row that fails to
+//      merge_steering_pr can land it (#5122, ADR-265). A row that fails to
 //      write is logged, and the next commit added to the PR writes it again.
 //
 // With `existing`, step 2 finds that PR open on the branch and targeting the

@@ -15,7 +15,7 @@ export async function generateMetadata({
   return { title: `${lineage} · ${t("record")}` };
 }
 
-// One published context record (#3395; ADR-061; MC spec §10.2;
+// One published steering record (#3395; ADR-061; MC spec §10.2;
 // mockups/pages/record.md). The route names the record by its lineage, which
 // is the file stem under `.oxagen/rules/`: the same name the repository uses,
 // so a reader who has the file has the address.

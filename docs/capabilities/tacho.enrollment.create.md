@@ -10,7 +10,7 @@ Refuses when the deployment holds no enrollment signing secret or no bundle sign
 
 Once the host is enrolled, Oxagen opens a steering PR that adds `agents/<runtime>.toml`, the agent/v1 file the MCP gateway matches the host's runs to before it serves them any published tool ([ADR-266](../adr/ADR-266-enrollment-proposes-the-runtimes-agent-file.md), #5149). The file names the member who enrolled the host as its operator, by public user id, the runtime the hostname binds, and the first harness the host reports that an agent file can name. It carries no secret, and no `toolbelt`, `budget`, or `environment`.
 
-The PR carries an `agent_file` proposal ([ADR-265](../adr/ADR-265-every-steering-pr-oxagen-opens-carries-a-proposal-row.md)), so a person merges it from Oxagen with [`merge_context_pr`](context.pr.merge.md). Oxagen opens no PR when:
+The PR carries an `agent_file` proposal ([ADR-265](../adr/ADR-265-every-steering-pr-oxagen-opens-carries-a-proposal-row.md)), so a person merges it from Oxagen with [`merge_steering_pr`](steering.pr.merge.md). Oxagen opens no PR when:
 
 - an agent file proposal for the runtime is open or merged, so enrolling the same runtime again opens no second PR
 - the production branch already holds `agents/<runtime>.toml`, or another agent file names the runtime

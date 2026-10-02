@@ -9,7 +9,7 @@ export const schema = {
     "The workspace to change (ws_…); omitted, the workspace this call is scoped to",
   ),
   mode: contextGovernanceModeSet.input.shape.mode.describe(
-    "solo: any member merges a Context PR. team: an org Owner or Admin, or a workspace Owner, other than the author. regulated: an org Owner or Admin other than the author, recorded as the accountable approver",
+    "solo: any member merges a steering PR. team: an org Owner or Admin, or a workspace Owner, other than the author. regulated: an org Owner or Admin other than the author, recorded as the accountable approver",
   ),
   applyImmediately:
     contextGovernanceModeSet.input.shape.applyImmediately.describe(

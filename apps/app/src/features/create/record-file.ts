@@ -1,21 +1,21 @@
-// The context-record wizard's pure logic (roadmap creation-spec §5; mockup
+// The steering-record wizard's pure logic (roadmap creation-spec §5; mockup
 // `wzRecSlug`, `wzRecLineage`, `wzRecStatement`, `wzRecTok`, `wzRecCe` and the
 // force filter in `wzRecord` step 3). The steps and their tests read the
 // record through these functions, so both agree on one reading.
 //
-// The file itself is not built here. open_context_pr writes it and stamps
+// The file itself is not built here. open_steering_pr writes it and stamps
 // `record_id` and `record_hash` from its content on the server, so the bytes
 // a reviewer sees are the bytes the checks hash. In a legacy repository (no
 // `steering/governance.toml` on its production branch) that file is
-// `.oxagen/rules/<lineage>.toml`, context-record/v0.1
+// `.oxagen/rules/<lineage>.toml`, a v0.1 record file
 // (packages/handlers/src/context.steering.file.ts). In a steering repository
 // it is a Markdown steering record under `steering/`
 // (packages/handlers/src/context.steering.record.ts). `recordPathFor` and
 // `branchFor` below mirror that split so the wizard's preview names the path
-// and the branch open_context_pr actually writes, never a guess. This module
+// and the branch open_steering_pr actually writes, never a guess. This module
 // otherwise only shapes what the operator chooses: the lineage, the
 // statement, the force and the effect.
-import { CONTEXT_RECORD_LINEAGE } from "@oxagen/oxagen/context-record-label";
+import { STEERING_RECORD_LINEAGE } from "@oxagen/oxagen/steering-record-label";
 import { forcesFor as sharedForcesFor } from "@oxagen/oxagen/steering-repo/record-force";
 import {
   LEGACY_RULES_DIR,
@@ -54,7 +54,7 @@ const STEERING_FOLDERS: Record<Exclude<RecordKind, "memory">, string> = {
 const MEMORY_SHARD = "workspace/general";
 
 /**
- * The path a new record of this kind will hold once open_context_pr writes
+ * The path a new record of this kind will hold once open_steering_pr writes
  * it, given the bound repository's layout. Null while the layout is unread
  * or unbound, matching the handler's own refusal to guess.
  */
@@ -71,7 +71,7 @@ export function recordPathFor(
 }
 
 /**
- * The branch open_context_pr cuts for a record at `path`: `memory/<lineage>`
+ * The branch open_steering_pr cuts for a record at `path`: `memory/<lineage>`
  * under the memory shard, `steering/<lineage>` everywhere else (both layouts
  * agree on this once the path is known). Null while `path` is null.
  */
@@ -142,16 +142,16 @@ export function lineageOf(ws: string, desc: string): string {
   const set =
     (ws.split("-")[0] ?? "").toLowerCase().replace(/[^a-z0-9]/g, "") || "ws";
   const id = `ctx.${set}.${slugOf(desc)}`;
-  return CONTEXT_RECORD_LINEAGE.test(id) ? id : `ctx.${set}.new-record`;
+  return STEERING_RECORD_LINEAGE.test(id) ? id : `ctx.${set}.new-record`;
 }
 
 /**
  * The statement as the record carries it: one line, with every run of
  * whitespace collapsed to a single space. The contract calls the field the
- * single-sentence claim, and the file that open_context_pr writes escapes a
+ * single-sentence claim, and the file that open_steering_pr writes escapes a
  * newline rather than wrapping the string, so a line break typed or pasted
  * into the editor would reach every surface that preserves whitespace (the
- * wizard preview, the Context PR body, the turn the record is rendered into)
+ * wizard preview, the steering PR body, the turn the record is rendered into)
  * as a sentence broken mid-way. Collapsing it here keeps the editor free-form
  * and the record one line. #3736 is the case without it: a revision whose
  * only change was six line breaks inside the sentence.

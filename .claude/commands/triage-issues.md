@@ -189,7 +189,7 @@ built and `KIND:IMPROVEMENT` when part of it is.
 | `AREA:MANDATES` | Mandates | Access, approvals, decision rules, and enforcement |
 | `AREA:AGENTS` | Agents | Registry, identities, roles, enrolled hosts, and runtimes |
 | `AREA:TOOLS` | Tools | MCP servers, connections, and the tools an agent is given |
-| `AREA:STEERING` | Steering | Context records, memory, the knowledge graph, and ingestion |
+| `AREA:STEERING` | Steering | Steering records, memory, the knowledge graph, and ingestion |
 | `AREA:SKILLS` | Skills | The Skills page, skill publishing, and skill sync |
 | `AREA:SPEND` | Spend | Metering, budgets, ceilings, and cost attribution |
 | `AREA:BILLING` | Billing | Plans, Stripe, credits, invoices, and checkout |

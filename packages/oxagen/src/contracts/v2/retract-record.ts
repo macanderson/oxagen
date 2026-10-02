@@ -14,7 +14,7 @@ import { agentMemoryDemote } from "../agent.memory.demote";
  *   - §9: "A correction is a new record on the same `lineage_id`. Superseded is
  *     derived, never stored." A retraction is therefore an *append*, not an
  *     edit, and the record it retracts stays exactly as it was.
- *   - §10.3 step 5: "Retirement is a Context PR that sets `status = "archived"`
+ *   - §10.3 step 5: "Retirement is a steering PR that sets `status = "archived"`
  *     in place. Files are never deleted."
  *
  * So this tool writes a new record carrying a `SUPERSEDES` edge, and the thing
@@ -24,7 +24,7 @@ import { agentMemoryDemote } from "../agent.memory.demote";
  *
  * **Publishing the retraction is a different call.** This is the graph half. If
  * the retracted record was published to `.oxagen/rules/`, the archive has to go
- * through a Context PR (§10.3 step 5) — that is `open_context_pr`, and the
+ * through a steering PR (§10.3 step 5) — that is `open_steering_pr`, and the
  * `promotion_event` lands on merge.
  *
  * Nothing is imported from `delete_memory`: every field it had is in `drops`,
@@ -35,7 +35,7 @@ export const retractRecord = defineTool({
   name: "retract_record",
   domain: "context",
   description:
-    "Withdraw a context record by appending a retraction to its lineage. The original record is never deleted or edited — it keeps its hash, evidence and citations, and the retraction supersedes it (§9). Publishing the retirement of a published record is open_context_pr.",
+    "Withdraw a steering record by appending a retraction to its lineage. The original record is never deleted or edited — it keeps its hash, evidence and citations, and the retraction supersedes it (§9). Publishing the retirement of a published record is open_steering_pr.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -61,7 +61,7 @@ export const retractRecord = defineTool({
     {
       field: "toClass",
       from: "demote_memory",
-      why: "the FACT → RULE → OBSERVATION ladder is gone from the graph (see append_record): a record's force is its kind and its published status, and lowering a published directive's force is a Context PR, not an in-place edit (§10.3)",
+      why: "the FACT → RULE → OBSERVATION ladder is gone from the graph (see append_record): a record's force is its kind and its published status, and lowering a published directive's force is a steering PR, not an in-place edit (§10.3)",
     },
     {
       field: "enforcementScore",
@@ -144,11 +144,11 @@ export const retractRecord = defineTool({
 
     /**
      * True when the retracted record was published to `.oxagen/rules/` and the
-     * retirement therefore still needs a Context PR to take effect (§10.3 step
+     * retirement therefore still needs a steering PR to take effect (§10.3 step
      * 5). Without this the caller cannot tell a finished withdrawal from one
      * that is still steering every run.
      */
-    requiresContextPr: z.boolean(),
+    requiresSteeringPr: z.boolean(),
   }),
 });
 

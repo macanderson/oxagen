@@ -4,7 +4,7 @@
 // so the row that owns the fix is one lookup from the element that waits on
 // it. A gap leaves this table in the pull request that backs it.
 export const RECORD_GAPS = {
-  /** `archive_context_record`: the pull request that takes a record out of force. */
+  /** `archive_steering_record`: the pull request that takes a record out of force. */
   archive: "#3867",
   /** The rollup of runs that went against, crossed or departed from a record. */
   violated: "#3868",

@@ -139,7 +139,7 @@ function matches(words: readonly string[], text: string): boolean {
 
 const SEARCH_EXAMPLES = [
   "pull request",
-  "context record",
+  "steering record",
   "stripe payment",
   "delete repository",
   "graph",

@@ -31,17 +31,17 @@ const str = (v: unknown): string | null =>
   typeof v === "string" && v.length > 0 ? v : null;
 
 /**
- * The branches a Context PR is opened on. open_context_pr names the branch
+ * The branches a steering PR is opened on. open_steering_pr names the branch
  * for the folder its file is in: `steering/<lineage>`, or `memory/<lineage>`
  * for a memory (#4731). A PR opened before the steering layout may still sit
  * on a `context/` branch.
  */
-const CONTEXT_PR_BRANCH_PREFIXES = ["steering/", "memory/", "context/"];
+const STEERING_PR_BRANCH_PREFIXES = ["steering/", "memory/", "context/"];
 
-function isContextPrBranch(ref: string | null): boolean {
+function isSteeringPrBranch(ref: string | null): boolean {
   return (
     ref !== null &&
-    CONTEXT_PR_BRANCH_PREFIXES.some((prefix) => ref.startsWith(prefix))
+    STEERING_PR_BRANCH_PREFIXES.some((prefix) => ref.startsWith(prefix))
   );
 }
 
@@ -64,11 +64,11 @@ export function githubDeliveryBranch(
     const pr = body.pull_request as
       | { base?: { ref?: unknown }; head?: { ref?: unknown } }
       | undefined;
-    // Only a Context PR has a proposal to settle. Any other PR that merges
+    // Only a steering PR has a proposal to settle. Any other PR that merges
     // into the production branch arrives as that branch's push, which is
     // what changes records; asking on every PR edit would put the page into
     // "pending" for nothing.
-    if (!isContextPrBranch(str(pr?.head?.ref))) return null;
+    if (!isSteeringPrBranch(str(pr?.head?.ref))) return null;
     return str(pr?.base?.ref);
   }
   return null;

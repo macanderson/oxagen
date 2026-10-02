@@ -72,7 +72,7 @@ export const steeringPolicyFileSchema = z
     remote: z.string().min(1).optional(),
     /**
      * The production branch. Omitted or null, the remote's own default
-     * branch is resolved, which is what a Context PR targets.
+     * branch is resolved, which is what a steering PR targets.
      */
     branch: z.string().min(1).nullable().optional(),
     /**

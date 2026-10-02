@@ -1,9 +1,9 @@
 // Proposals: what is proposed but not published (roadmap pages/steering.md).
 // One list at `/steering/proposals`, filtered by state the way a pull request
-// list is (#5077): Open (a candidate with no pull request yet, or a Context
+// list is (#5077): Open (a candidate with no pull request yet, or a steering
 // PR still open), Merged and Closed, each with its count. The state is the
 // `?state=` query value, so a reload or a shared link keeps it, and Open is
-// the default. Each row opens that proposal's Context PR page.
+// the default. Each row opens that proposal's steering PR page.
 import { useTranslations } from "next-intl";
 import {
   PROPOSAL_STATES,
@@ -17,7 +17,7 @@ import { PressLink } from "@/ui/press-link";
 import { ProposalList } from "../proposal-list";
 import { type SteeringAt, steeringLink } from "../view";
 
-/** A proposal whose Context PR is open on the repository host. */
+/** A proposal whose steering PR is open on the repository host. */
 const OPEN_PR_STATUSES: ReadonlySet<string> = new Set([
   "pr_open",
   "checks_running",
@@ -98,7 +98,7 @@ export async function ProposalsTab({
     limit: rows,
     state,
   });
-  // A Context PR can merge or close on the repository host at any moment, and
+  // A steering PR can merge or close on the repository host at any moment, and
   // the repository sync moves the proposal within seconds (ADR-184). While
   // one is open, the page re-reads itself so the change shows up here.
   const waiting =

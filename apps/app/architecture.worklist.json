@@ -85,7 +85,7 @@
     },
     {
       "page": "Steering /{org}/{ws}/steering (pages.steering)",
-      "ships": "PageHeader + one NotRecorded state until the #2961 lane lands its app half: published records → proposals with their support → the Context PR state machine. No effect metrics, retirement candidates or promotion thresholds.",
+      "ships": "PageHeader + one NotRecorded state until the #2961 lane lands its app half: published records → proposals with their support → the steering PR state machine. No effect metrics, retirement candidates or promotion thresholds.",
       "backing": "none at WL-33; the #2961 backend half registers the contracts the app half binds",
       "notRecordedOnly": ["steering — deleted by the lane's app-half PR"]
     },

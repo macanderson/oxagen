@@ -273,7 +273,7 @@ function tableName(table: unknown): string {
  * table it names: the unused token, the agent (the handler's join and the
  * mint's runtime read take one row, which names a runtime so no runtime is
  * created), no existing host, and the steering read. The steering read is the
- * ledger count over `context_promotions`, awaited straight off `.where()`,
+ * ledger count over `steering_promotions`, awaited straight off `.where()`,
  * and `records` joined to their pinned versions. The fake counts one
  * promotion per record, since a merge appends one.
  */
@@ -289,7 +289,7 @@ function mintDb(records: SteeringRow[]): void {
             return [
               { ...AGENT, runtimeId: "runtime-uuid", activeVersionId: null },
             ];
-          case "context_promotions":
+          case "steering_promotions":
             return [{ ledger: records.length, steering: records.length }];
           default:
             return [];

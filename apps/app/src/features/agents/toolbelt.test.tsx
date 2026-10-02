@@ -109,7 +109,7 @@ describe("Belt search", () => {
     const { container } = draw();
     for (const example of [
       "pull request",
-      "context record",
+      "steering record",
       "stripe payment",
       "delete repository",
       "graph",

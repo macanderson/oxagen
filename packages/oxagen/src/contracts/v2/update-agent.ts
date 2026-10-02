@@ -9,7 +9,7 @@ import { toolbeltRefSchema } from "../toolbelt.shared";
  * Appendix E: `update_agent`, "identity and belt update". ADR-198 replaced the
  * mechanism and narrowed what an update can change.
  *
- * Appendix E had it open a Context PR changing `.oxagen/agents/<slug>.toml`,
+ * Appendix E had it open a steering PR changing `.oxagen/agents/<slug>.toml`,
  * absorbing `update_agent_def`, `revise_agent_def`, `publish_agent_def` and
  * `deploy_agent`. ADR-198 deleted all four with the definition file:
  *

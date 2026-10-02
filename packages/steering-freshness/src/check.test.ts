@@ -473,7 +473,7 @@ describe("checkSteeringFreshness, the platform signal", () => {
     expect(v.notes[0]).toContain("steering version 42");
   });
 
-  // Two Context PRs merged inside one second. GitHub reports a merge to the
+  // Two steering PRs merged inside one second. GitHub reports a merge to the
   // second, so the platform cannot say which commit is later and names both.
   // A ref holding only the earlier one is missing the later record.
   it("reports behind when the ref reaches one tied commit and not the other", async () => {

@@ -2,7 +2,7 @@
 // organization and the gate opens on its first workspace; a registered agent
 // gets a single-use enrollment token; two machines present it at once and
 // exactly one becomes the host; the first frame that host ingests unlocks
-// the gate and stamps the agent; the gate's workspace publishes a context
+// the gate and stamps the agent; the gate's workspace publishes a steering
 // record before any repository is bound; the gate refuses to skip the
 // run step; a session opened in the workspace's steering repository reads
 // linked; the role-checked writes refuse a workspace Member and a
@@ -52,7 +52,7 @@ vi.mock("@oxagen/database/security", () => ({
   emitSecurityEventAsync: mocks.emitSecurityEventAsync,
 }));
 
-import { contextRecordPublishHandler } from "./context.record.publish";
+import { steeringRecordPublishHandler } from "./steering.record.publish";
 import { hashEnrollmentToken } from "./lib/onboarding";
 import { GITHUB_STEERING_PROVIDER } from "./lib/steering-app";
 import { onboardingAdvanceHandler } from "./onboarding.advance";
@@ -165,14 +165,14 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
         // The record's active_version_id references a version: clear the
         // pointer, then the versions, then the records.
         await tx
-          .update(schema.contextRecords)
+          .update(schema.steeringRecords)
           .set({ activeVersionId: null })
-          .where(eq(schema.contextRecords.orgId, orgId));
+          .where(eq(schema.steeringRecords.orgId, orgId));
         await del(
-          schema.contextRecordVersions,
-          schema.contextRecordVersions.orgId,
+          schema.steeringRecordVersions,
+          schema.steeringRecordVersions.orgId,
         );
-        await del(schema.contextRecords, schema.contextRecords.orgId);
+        await del(schema.steeringRecords, schema.steeringRecords.orgId);
         await del(
           schema.repositoryBindingHeads,
           schema.repositoryBindingHeads.orgId,
@@ -763,8 +763,8 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
     expect(after?.firstFrameAt?.getTime()).toBe(before);
   });
 
-  it("the gate's workspace publishes a context record while no repository is bound", async () => {
-    // The gate's workspace once refused every context record with
+  it("the gate's workspace publishes a steering record while no repository is bound", async () => {
+    // The gate's workspace once refused every steering record with
     // `conflict: provisional` until a bound main repository closed the
     // window, and onboarding no longer binds one, so a new organization's
     // first workspace could never publish (#4516). #4616 dropped the window.
@@ -784,7 +784,7 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
     expect(heads).toEqual([]);
 
     const published = await inScope(() =>
-      contextRecordPublishHandler(
+      steeringRecordPublishHandler(
         {
           record_id: `rule-${tag}`,
           title: "No bare unwrap",
@@ -1076,7 +1076,7 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
         firstRunId: null,
       });
       const published = await inPreScope(() =>
-        contextRecordPublishHandler(
+        steeringRecordPublishHandler(
           {
             record_id: `rule-pre-${tag}`,
             title: "No bare unwrap",
@@ -1097,15 +1097,15 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
     } finally {
       await withSystemDb(async (tx) => {
         await tx
-          .update(schema.contextRecords)
+          .update(schema.steeringRecords)
           .set({ activeVersionId: null })
-          .where(eq(schema.contextRecords.orgId, preOrgId));
+          .where(eq(schema.steeringRecords.orgId, preOrgId));
         await tx
-          .delete(schema.contextRecordVersions)
-          .where(eq(schema.contextRecordVersions.orgId, preOrgId));
+          .delete(schema.steeringRecordVersions)
+          .where(eq(schema.steeringRecordVersions.orgId, preOrgId));
         await tx
-          .delete(schema.contextRecords)
-          .where(eq(schema.contextRecords.orgId, preOrgId));
+          .delete(schema.steeringRecords)
+          .where(eq(schema.steeringRecords.orgId, preOrgId));
         await tx
           .delete(schema.principalRoleAssignments)
           .where(eq(schema.principalRoleAssignments.orgId, preOrgId));
