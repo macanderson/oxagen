@@ -5,7 +5,7 @@
 - **Owners:** billing
 - **Decided by:** the maintainer, 2026-10-02, in the ADR-235 amendment of that
   date: "The Oxagen app never controls the assistant."
-- **Related:** issue #5102, ADR-235 (amended 2026-10-01 and 2026-10-02), #4935,
+- **Related:** issue #5102, PR #5227, ADR-235 (amended 2026-10-01 and 2026-10-02), #4935,
   #5101, `DEREGISTERED.md` §13, ADR-081.
 
 ## Context
