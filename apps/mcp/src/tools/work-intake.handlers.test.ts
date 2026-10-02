@@ -91,12 +91,24 @@ describe("work intake MCP tools", () => {
   it.each([
     [
       "create_work_item",
-      () => createWorkItem({ subject: "Fix invites", labels: [] }),
+      () => createWorkItem({ subject: "Fix invites", labels: [], description: undefined, repository: undefined }),
       { item_id: "wi_01", number: "WI-1", state: "new", revision: 1, version: 1 },
     ],
     [
       "revise_work_triage",
-      () => reviseWorkTriage({ item_id: "wi_01", expected_version: 2, reason: "Customer", priority: "P0" }),
+      () =>
+        reviseWorkTriage({
+          item_id: "wi_01",
+          expected_version: 2,
+          reason: "Customer",
+          priority: "P0",
+          estimate_minutes: undefined,
+          labels: undefined,
+          claims: undefined,
+          criteria: undefined,
+          outcome: undefined,
+          duplicate_of: undefined,
+        }),
       {
         item_id: "wi_01",
         version: 3,
@@ -110,7 +122,7 @@ describe("work intake MCP tools", () => {
     ["list_work_collectors", () => listWorkCollectors({}), { collectors: [COLLECTOR] }],
     [
       "set_work_collector",
-      () => setWorkCollector({ name: "github", connection_id: "con_01", repos: ["acme/web"] }),
+      () => setWorkCollector({ name: "github", connection_id: "con_01", repos: ["acme/web"], paused: undefined }),
       { collector: COLLECTOR, created: true, reconcile_queued: true },
     ],
     ["sync_work_collector", () => syncWorkCollector({ collector_id: COLLECTOR_ID }), { collector_id: COLLECTOR_ID, queued: true }],

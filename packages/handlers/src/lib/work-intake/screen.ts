@@ -13,7 +13,6 @@ import { redactText } from "@oxagen/recorder/redaction";
 const MARKER = "[redacted:";
 
 /** Control characters other than tab, newline, and carriage return. */
-// eslint-disable-next-line no-control-regex -- the pattern names the control characters it removes
 const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g;
 
 function markers(text: string): number {

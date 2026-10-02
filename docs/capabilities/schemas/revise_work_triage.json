@@ -7,6 +7,7 @@
     "api",
     "mcp"
   ],
+  "sensitivity": "medium",
   "agent": null,
   "chain": {
     "produces": [],

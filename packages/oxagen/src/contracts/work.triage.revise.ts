@@ -39,6 +39,7 @@ export const workTriageRevise = registerCapability({
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
+  sensitivity: "medium",
   mutates: true,
   defaultEffect: "deny",
   defaultRoles: {

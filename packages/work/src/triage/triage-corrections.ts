@@ -124,7 +124,7 @@ export function effectiveTriage(
   const corrected = inForce(corrections);
   const field = <F extends TriageCorrectionField>(name: F): TriageField<TriageFieldValues[F]> => {
     const correction = corrected.get(name) as TriageCorrection<F> | undefined;
-    if (correction === undefined) return suggested(values[name]);
+    if (correction === undefined) return suggested(values[name] as TriageFieldValues[F] | null);
     return { value: correction.after, by: "person", actor: correction.by, at: correction.at };
   };
   const priority = field("priority");

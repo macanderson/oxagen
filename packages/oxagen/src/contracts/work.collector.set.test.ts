@@ -24,7 +24,7 @@ describe("set_work_collector contract", () => {
 
   it("is a setup action for a workspace owner or an org admin", () => {
     expect(contract.sensitivity).toBe("high");
-    expect(contract.defaultRoles?.workspace).toEqual({ Owner: "allow" });
-    expect(contract.defaultRoles?.org).toEqual({ Owner: "allow", Admin: "allow" });
+    expect(contract.defaultRoles.workspace).toEqual({ Owner: "allow" });
+    expect(contract.defaultRoles.org).toEqual({ Owner: "allow", Admin: "allow" });
   });
 });

@@ -36,6 +36,6 @@ describe("get_work_priorities contract", () => {
   it("reads only, and lets a workspace viewer read", () => {
     expect(contract.input.parse({})).toEqual({});
     expect(contract.mutates).not.toBe(true);
-    expect(contract.defaultRoles?.workspace?.Viewer).toBe("allow");
+    expect(contract.defaultRoles.workspace.Viewer).toBe("allow");
   });
 });
