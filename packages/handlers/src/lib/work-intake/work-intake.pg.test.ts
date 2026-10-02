@@ -33,6 +33,7 @@ vi.mock("@oxagen/github/workspace-token", () => ({
 
 const { readWorkItem } = await import("../work-records/store");
 const { enterWorkItem, prioritiesSummary, readTriageStanding, reviseTriage } = await import("./actions");
+const { upsertProviderItem } = await import("./items");
 const { listCollectorViews, setCollector } = await import("./collectors");
 const { routeGithubWorkDelivery, defaultWorkDeliveryDeps } = await import("./delivery");
 const { createWorkIntakeRunner, githubFileTrees } = await import("./runner");
@@ -454,6 +455,64 @@ describe.skipIf(!enabled)("work intake and triage against Postgres", () => {
     github.state.treeStatus = 404;
     expect(await runInTenantScope(scope, () => githubFileTrees(scope, { repository: recorded.RECORDED_REPO, collectorId }))).toEqual([]);
     expect(await runInTenantScope(scope, () => githubFileTrees(scope, { repository: null, collectorId: null }))).toEqual([]);
+  });
+
+  it("keeps a newer stored copy when an older read of the same issue lands late", async () => {
+    const [before] = await inScope((tx) => tx.select().from(schema.workItems).where(eq(schema.workItems.publicId, itemPublicId)));
+    const written = await inScope((tx) =>
+      upsertProviderItem(tx, scope, collectorId, {
+        providerId: `issue:node:${recorded.RECORDED_NODE_ID}`,
+        origin: "provider",
+        subject: "An old title from a late read",
+        description: null,
+        labels: [],
+        status: "open",
+        statusCategory: "open",
+        resolution: null,
+        owner: null,
+        requester: null,
+        sourceCreatedBy: null,
+        sourceCreatedAt: null,
+        sourceUpdatedBy: null,
+        sourceUpdatedAt: "2026-01-01T00:00:00Z",
+        closedAt: null,
+        sourceUrl: null,
+        priorityRaw: null,
+        estimateMinutes: null,
+        tainted: ["subject"],
+      }),
+    );
+    expect(written).toMatchObject({ stale: true, created: false });
+    const [after] = await inScope((tx) => tx.select().from(schema.workItems).where(eq(schema.workItems.publicId, itemPublicId)));
+    expect(after!.subject).toBe(before!.subject);
+  });
+
+  it("leaves an item whose source issue closed out of triage", async () => {
+    github.state.issue = { ...github.state.issue, state: "closed", updatedAt: minutesAgo(10) };
+    await deliver("delivery-closed-9", "closed");
+    const [stored] = await inScope((tx) => tx.select().from(schema.workItems).where(eq(schema.workItems.publicId, itemPublicId)));
+    expect(stored!.statusCategory).toBe("closed");
+    const { model, calls } = scriptedModel([suggestion(itemPublicId)]);
+    const result = await runInTenantScope(scope, () => runTriage(triageDeps(model), scope, itemPublicId, true));
+    expect(result).toMatchObject({ kind: "skipped", reason: expect.stringContaining("closed") });
+    expect(calls()).toBe(0);
+  });
+
+  it("reads a collector from the start again when it gains a repository", async () => {
+    const [withCursor] = await inScope((tx) => tx.select().from(schema.workCollectors).where(eq(schema.workCollectors.id, collectorId)));
+    expect(withCursor!.cursor).not.toBeNull();
+    const widened = await inScope((tx) =>
+      setCollector(tx, scope, { name: "github", repos: [recorded.RECORDED_REPO, "aintel-test/second"], actorUserId: AMARA }),
+    );
+    expect(widened).toMatchObject({ created: false, reconcile: true });
+    const [reset] = await inScope((tx) => tx.select().from(schema.workCollectors).where(eq(schema.workCollectors.id, collectorId)));
+    expect(reset!.cursor).toBeNull();
+    // Dropping a repository needs no fresh read of the others, but still queues one.
+    await inScope((tx) => tx.update(schema.workCollectors).set({ cursor: "2026-10-02T00:00:00Z" }).where(eq(schema.workCollectors.id, collectorId)));
+    const narrowed = await inScope((tx) => setCollector(tx, scope, { name: "github", repos: [recorded.RECORDED_REPO], actorUserId: AMARA }));
+    expect(narrowed.reconcile).toBe(true);
+    const [kept] = await inScope((tx) => tx.select().from(schema.workCollectors).where(eq(schema.workCollectors.id, collectorId)));
+    expect(kept!.cursor).toBe("2026-10-02T00:00:00Z");
   });
 
   it("shows another workspace none of this workspace's collectors or items", async () => {

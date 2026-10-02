@@ -3,8 +3,8 @@
 //
 // 1. Read the item, its state, and the workspace's priorities record and open
 //    work in one tenant transaction. Triage runs only while the item is new,
-//    held, triaged, needs_info, or changed, and once per item revision unless
-//    a person asks for a retry.
+//    held, triaged, needs_info, or changed, while its source is not closed,
+//    and once per item revision unless a person asks for a retry.
 // 2. With no single priorities record, record a triage_failed fact that says
 //    what to fix, and stop.
 // 3. Outside the transaction, read the file tree of the item's repository and
@@ -145,6 +145,7 @@ async function readItemRow(tx: Tx, scope: WorkScope, publicId: string) {
       sourceRepository: items.sourceRepository,
       collectorId: items.collectorId,
       origin: items.origin,
+      statusCategory: items.statusCategory,
       deletedAt: items.deletedAt,
     })
     .from(items)
@@ -180,6 +181,8 @@ async function openWork(tx: Tx, scope: WorkScope, itemId: string): Promise<Triag
         ne(items.id, itemId),
         isNull(items.deletedAt),
         notInArray(items.state, ["done", "closed"]),
+        // An item its provider closed is not open work to compare against.
+        ne(items.statusCategory, "closed"),
       ),
     )
     .orderBy(desc(items.updatedAt))
@@ -222,6 +225,9 @@ export async function runTriage(deps: TriageRunDeps, scope: WorkScope, itemPubli
     const row = await readItemRow(tx, scope, itemPublicId);
     if (row === null) return { kind: "skipped", reason: "This workspace has no such work item." };
     if (row.deletedAt !== null) return { kind: "skipped", reason: "The work item is deleted." };
+    // A closed source issue does not establish work, and triaging it would
+    // spend a model call on history (agent-work-phase-1.html, Work lifecycle).
+    if (row.statusCategory === "closed") return { kind: "skipped", reason: "The source item is closed, so triage leaves it alone." };
     const record = await readWorkItem(tx, scope, row.id);
     const { state, revision } = record.projection;
     if (!TRIAGE_STATES_OPEN.includes(state)) return { kind: "skipped", reason: `The work item is ${state}, so triage leaves it alone.` };
@@ -290,6 +296,9 @@ export async function runTriage(deps: TriageRunDeps, scope: WorkScope, itemPubli
 
   const request = triageRequest(input);
   return withTenantDb(async (tx): Promise<TriageRunResult> => {
+    // Hold the item's row, so no source change can commit between the
+    // revision check and the decision this run stores against it.
+    await tx.select({ id: items.id }).from(items).where(eq(items.id, read.itemId)).for("update");
     const record = await readWorkItem(tx, scope, read.itemId);
     const current = reduceWorkItem(record.facts);
     if (current.revision !== read.revision) {
