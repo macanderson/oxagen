@@ -92,6 +92,7 @@ import { workOrderPullRequestLinked, workOrderRunEnded } from "./functions/work.
 import { agentInterjectionTimeout } from "./functions/agent.interjection-timeout";
 import { agentInterjectionTimeoutSweep } from "./functions/agent.interjection-timeout-sweep";
 import { conversationTitle } from "./functions/conversation.title";
+import { codeRepoCheck } from "./functions/code-repo.check";
 
 // The DurableFunction objects returned by createFunction are also valid Inngest
 // function instances at runtime (they are Object.assign-ed Inngest functions).
@@ -178,4 +179,5 @@ export const functions: any[] = [
   agentInterjectionTimeout,
   agentInterjectionTimeoutSweep,
   conversationTitle,
+  codeRepoCheck,
 ].filter((fn): fn is NonNullable<typeof fn> => fn != null);
