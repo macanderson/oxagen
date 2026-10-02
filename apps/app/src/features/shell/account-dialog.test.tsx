@@ -1569,7 +1569,11 @@ it("presents as a bottom sheet on a phone", async () => {
     const style = getComputedStyle(dialog);
     expect(dialog.dataset.sheet).toBe("");
     expect(style.width).toBe("100%");
-    expect(style.borderRadius).toBe("18px 18px 0 0");
+    // The sheet's top corners are the kit's 4xl step (18.72px at the 0.45rem
+    // base). jsdom does not resolve var(), so the computed value is the token.
+    expect(style.borderRadius).toMatch(
+      /^var\(--ox-radius-4xl\)\s*var\(--ox-radius-4xl\)\s*0(px)?\s*0(px)?$/,
+    );
     expect(dialog.querySelector("[data-sheet-handle]")).not.toBeNull();
     expect(dialog.querySelector("[data-sheet-footer]")).not.toBeNull();
   } finally {

@@ -25,7 +25,8 @@
     scroll-snap-align: start;
   }
 
-  /* Inputs are 16px, so iOS never zooms the page on focus. */
+  /* Inputs are 16px, so iOS never zooms the page on focus. The size is
+     Safari's floor, not a step of the type scale, so it stays a literal. */
   input,
   select,
   textarea {
@@ -44,7 +45,7 @@
     width: 100%;
     max-width: none;
     max-height: calc(100dvh - 24px);
-    border-radius: 18px 18px 0 0;
+    border-radius: var(--ox-radius-4xl) var(--ox-radius-4xl) 0 0;
     border-bottom-width: 0;
     padding-bottom: calc(0px + env(safe-area-inset-bottom));
   }
@@ -86,7 +87,7 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--ox-radius-card);
     padding: 6px 12px;
   }
 

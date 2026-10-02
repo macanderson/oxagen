@@ -119,7 +119,7 @@ export function SheetDialog({
           aria-modal="true"
           data-sheet=""
           data-testid={testId}
-          className={`fixed z-50 flex flex-col overflow-hidden border border-dialog-border bg-dialog-bg text-dialog-fg shadow-2xl ${side ? "inset-y-0 right-0 w-full max-w-lg" : `left-1/2 top-[12vh] max-h-[76dvh] w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-4xl ${width}`}`}
+          className={`fixed z-50 flex flex-col overflow-hidden border border-dialog-border bg-dialog-bg text-dialog-fg shadow-pop ${side ? "inset-y-0 right-0 w-full max-w-lg" : `left-1/2 top-[12vh] max-h-[76dvh] w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-4xl ${width}`}`}
         >
           <SheetHandle />
           <div

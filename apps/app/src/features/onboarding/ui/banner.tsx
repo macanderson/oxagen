@@ -23,7 +23,7 @@ export function GateBanner({
   return (
     <section
       data-testid={testId}
-      className="flex flex-col gap-2 rounded-xl border border-border bg-banner p-4 text-card-foreground shadow-sm sm:flex-row sm:items-start sm:gap-4"
+      className="flex flex-col gap-2 rounded-xl border border-border bg-banner p-4 text-card-foreground sm:flex-row sm:items-start sm:gap-4"
     >
       <span className="flex-none">
         <Badge tone={tone} dot={false} data-banner-badge={tone}>

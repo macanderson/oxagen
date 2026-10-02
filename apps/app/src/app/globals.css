@@ -61,17 +61,10 @@
   --color-code-string: var(--code-string);
   --color-code-number: var(--code-number);
   --color-code-punct: var(--code-punct);
-  /* The corner scale of the chosen shadcn preset (base-maia, radius 0.45rem):
-     each step is a multiple of --radius, as the shadcn CLI writes it, so the
-     kit's additive steps give way here. `rounded-4xl` is the pill a maia
-     button and input wear; `rounded-2xl` is a card, a popover and a menu. */
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  /* The corner scale is @oxagen/ui's, which reads the kit's --ox-radius-<step>
+     tokens: the theme's corner base (0.45rem, shadcn's base-maia preset) times
+     each step's multiplier. `rounded-4xl` is the pill a maia button and input
+     wear; `rounded-2xl` is a card, a popover and a menu. */
 }
 
 @layer base {
@@ -138,8 +131,6 @@
     --sidebar-bg: var(--void);
     --mono: var(--ox-font-mono);
     --font: var(--ox-font);
-    /* The preset's radius. The kit's knob is 0.5rem; the scale above reads it. */
-    --ui-radius: 0.45rem;
     --muted-surface: var(--_stone-100);
     --data-surface: var(--ox-paper-hl);
     /* A panel header is a light grey band over the white panel (ADR-226). */
@@ -170,9 +161,6 @@
        they keep the muted grey, which clears the floor. */
     --sidebar-nav-link-fg: var(--_stone-700);
     --sidebar-nav-label-fg: var(--_stone-700);
-    --shadow:
-      0 1px 0 rgba(255, 255, 255, 0.7), 0 18px 44px rgba(9, 9, 11, 0.08);
-    --shadow-sm: 0 1px 2px rgba(9, 9, 11, 0.06);
     /* Code sits a shade below the panel: grey on paper, and on ink a grey
        between the panel and the canvas, never the canvas itself. */
     --code-bg: var(--ox-paper-hl);
@@ -189,8 +177,8 @@
     background: var(--ink);
     color: var(--fg);
     font-family: var(--font);
-    font-size: 14px;
-    line-height: 1.55;
+    font-size: var(--ox-a-body);
+    line-height: var(--ox-a-body-leading);
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
   }
@@ -235,8 +223,6 @@
        own (engine.css), so the page body is ink in the dark theme. Panels,
        tiles and the drawers stay on the panel. */
     --app-panel-bg: var(--ink);
-    --shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 18px 44px rgba(0, 0, 0, 0.5);
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   }
 
   /* Match explicit dark mode before the theme script runs. */
@@ -276,15 +262,13 @@
       --button-disabled-bg: var(--hl);
       --input-disabled-bg: var(--hl);
       --app-panel-bg: var(--ink);
-      --shadow:
-        0 1px 0 rgba(255, 255, 255, 0.03), 0 18px 44px rgba(0, 0, 0, 0.5);
-      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     }
   }
 }
 
 /* The mockup's workspace frame and data density, shared by every app page. */
 [data-shell-page] main#main {
+  /* The app's workspace frame, wider than the website's --ox-wrap on purpose. */
   max-width: 1500px;
   padding: 22px 24px 80px;
 }
