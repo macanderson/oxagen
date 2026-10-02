@@ -410,6 +410,7 @@ export function PermissionsSection({
   runs,
   operatorName,
   orgRole,
+  wsRole,
   place,
 }: {
   detail: AgentDetail;
@@ -421,6 +422,8 @@ export function PermissionsSection({
   runs: readonly RunRow[];
   operatorName: string | null;
   orgRole: OrgRole;
+  /** The reader's workspace role, for the mandates section (#5228). */
+  wsRole?: string;
   place: Place;
 }) {
   const { identity } = detail;
@@ -465,6 +468,7 @@ export function PermissionsSection({
       <MandatesSection
         read={mandates}
         orgRole={orgRole}
+        wsRole={wsRole}
         agentStatus={status}
         org={place.org}
         ws={place.ws}

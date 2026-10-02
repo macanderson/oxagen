@@ -135,7 +135,7 @@ jobs:
   plan:
     name: Plan the build
     if: github.event_name != 'release'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     # Job-level scopes replace the workflow's: the checkout, and the
     # production deployment records the daily build reads.
@@ -621,7 +621,7 @@ jobs:
     name: Publish the installers
     needs: [plan, build]
     if: needs.plan.outputs.publish == 'true'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
     permissions:
@@ -781,7 +781,7 @@ jobs:
   feed:
     name: Point the GitHub update feed at this release
     if: github.event_name == 'release' && startsWith(github.event.release.tag_name, 'desktop-v')
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5

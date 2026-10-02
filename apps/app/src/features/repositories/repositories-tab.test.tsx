@@ -2,15 +2,27 @@
 // The Repositories table on its own, over rows in every `.oxagen/` state the
 // page can hold: each state's badge, the banner's Add Oxagen on the first
 // ungoverned repository, the rows whose tree is unsettled offering nothing,
-// the note a truncated listing adds, and a search that matches nothing.
+// the note a truncated listing adds, a search that matches nothing, and the
+// Issues switch that turns issue collection on and off for a linked repository.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import type { RepositoryTree } from "@/data/contracts/repository";
 import { IntlProvider } from "@/test/intl";
-import { RepositoriesTab, TreeBadge } from "./repositories-tab";
+import type { Load } from "./parts";
 import type { RepositoryRow } from "./view";
+
+const { setIssueCollection } = vi.hoisted(() => ({ setIssueCollection: vi.fn() }));
+vi.mock("./actions", () => ({ setIssueCollection }));
+
+const { RepositoriesTab, TreeBadge } = await import("./repositories-tab");
+
+/** acme/docs is collected; the rest are not. */
+const ISSUES: Load<{ collected: string[] }> = {
+  kind: "ready",
+  value: { collected: ["acme/docs"] },
+};
 
 const TREE: RepositoryTree = {
   bindingId: "rpb_x",
@@ -65,11 +77,23 @@ afterEach(async () => {
   }
 });
 
-function tab(truncated = false) {
+beforeEach(() => {
+  setIssueCollection.mockReset();
+});
+
+function tab(
+  truncated = false,
+  issues: Load<{ collected: string[] }> = ISSUES,
+  onIssuesChanged = vi.fn(),
+) {
   const onAddOxagen = vi.fn();
   render(
     <IntlProvider>
       <RepositoriesTab
+        org="acme"
+        ws="core-platform"
+        issues={issues}
+        onIssuesChanged={onIssuesChanged}
         rows={ROWS}
         reachableUnread={false}
         truncated={truncated}
@@ -101,6 +125,10 @@ describe("the Repositories table", () => {
     render(
       <IntlProvider>
         <RepositoriesTab
+          org="acme"
+          ws="core-platform"
+          issues={ISSUES}
+          onIssuesChanged={vi.fn()}
           rows={[
             row(
               "oxagen-steering",
@@ -151,6 +179,89 @@ describe("the Repositories table", () => {
       name: "Repositories this workspace can see",
     });
     expect(within(table).getByText("No rows match.")).toBeTruthy();
+  });
+});
+
+describe("the Issues switch", () => {
+  it("shows which linked repositories a collector reads, and offers no switch on a repository that is not linked", () => {
+    render(
+      <IntlProvider>
+        <RepositoriesTab
+          org="acme"
+          ws="core-platform"
+          issues={ISSUES}
+          onIssuesChanged={vi.fn()}
+          rows={[...ROWS, row("elsewhere", null, { role: "available", bindingId: null })]}
+          reachableUnread={false}
+          truncated={false}
+          onOpen={vi.fn()}
+          onAddOxagen={vi.fn()}
+        />
+      </IntlProvider>,
+    );
+    const docs = screen.getByRole("switch", { name: "Collect issues from acme/docs" });
+    expect(docs).toHaveAttribute("aria-checked", "true");
+    expect(docs).toHaveTextContent("On");
+    expect(screen.getByRole("switch", { name: "Collect issues from acme/site" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
+    expect(screen.queryByTestId("repository-issues-acme/elsewhere")).toBeNull();
+  });
+
+  it("turns collection on for a repository and says the read started", async () => {
+    const user = userEvent.setup();
+    setIssueCollection.mockResolvedValue({
+      ok: true,
+      value: { collecting: true, reconcileQueued: true },
+    });
+    const onIssuesChanged = vi.fn();
+    tab(false, ISSUES, onIssuesChanged);
+    await user.click(screen.getByRole("switch", { name: "Collect issues from acme/site" }));
+    expect(setIssueCollection).toHaveBeenCalledWith("acme", "core-platform", {
+      repository: "acme/site",
+      collect: true,
+    });
+    expect(onIssuesChanged).toHaveBeenCalledWith(
+      "oxagen is reading the open issues in acme/site now. They show up in Work in a few minutes.",
+    );
+  });
+
+  it("turns collection off for a repository a collector reads", async () => {
+    const user = userEvent.setup();
+    setIssueCollection.mockResolvedValue({
+      ok: true,
+      value: { collecting: false, reconcileQueued: false },
+    });
+    tab();
+    await user.click(screen.getByRole("switch", { name: "Collect issues from acme/docs" }));
+    expect(setIssueCollection).toHaveBeenCalledWith("acme", "core-platform", {
+      repository: "acme/docs",
+      collect: false,
+    });
+  });
+
+  it("shows the refusal beside the switch and changes nothing (negative)", async () => {
+    const user = userEvent.setup();
+    setIssueCollection.mockResolvedValue({ ok: false, reason: "denied", code: "work.collectors.set" });
+    const onIssuesChanged = vi.fn();
+    tab(false, ISSUES, onIssuesChanged);
+    await user.click(screen.getByRole("switch", { name: "Collect issues from acme/site" }));
+    expect(await screen.findByTestId("repository-issues-failure-acme/site")).toBeTruthy();
+    expect(onIssuesChanged).not.toHaveBeenCalled();
+  });
+
+  it("does nothing while the collectors could not be read (negative)", async () => {
+    const user = userEvent.setup();
+    tab(false, {
+      kind: "failed",
+      failure: { ok: false, reason: "unavailable", code: "control_plane_unavailable" },
+    });
+    const docs = screen.getByRole("switch", { name: "Collect issues from acme/docs" });
+    expect(docs).toHaveAttribute("aria-checked", "false");
+    expect(docs).toHaveTextContent("Unknown");
+    await user.click(docs);
+    expect(setIssueCollection).not.toHaveBeenCalled();
   });
 });
 

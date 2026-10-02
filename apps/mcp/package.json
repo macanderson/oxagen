@@ -5,7 +5,7 @@
   "scripts": {
     "build": "xmcp build",
     "dev": "xmcp dev",
-    "lint": "eslint src --max-warnings 0",
+    "lint": "NODE_OPTIONS=--max-old-space-size=4096 eslint src --max-warnings 0",
     "start": "node dist/http.js",
     "start:stdio": "node dist/stdio.js",
     "test:coverage": "vitest run --coverage",

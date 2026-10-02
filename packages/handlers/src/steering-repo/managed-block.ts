@@ -12,10 +12,23 @@
 // - Broken markers (a second block, a begin with no end) are taken out, with
 //   the text between a begin marker and the end marker after it, and the
 //   production block goes where the first of them was.
+import type { CheckFinding } from "@oxagen/oxagen/contracts/context.steering.shared";
+import {
+  AGENTS_MD_PATH,
+  CLAUDE_MD_PATH,
+  README_PATH,
+} from "@oxagen/oxagen/steering-repo/paths";
 import {
   MANAGED_BLOCK_END,
   readManagedBlock,
 } from "@oxagen/oxagen/steering-repo/templates";
+
+/** The files that hold Oxagen's managed block. */
+export const MANAGED_BLOCK_FILES: readonly string[] = [
+  AGENTS_MD_PATH,
+  CLAUDE_MD_PATH,
+  README_PATH,
+];
 
 /** The start of every begin marker; the hash follows it. */
 const BEGIN_PREFIX = "<!-- oxagen:begin managed sha256:";
@@ -88,4 +101,47 @@ export function restoreManagedBlock(
   const { kept, at } = withoutMarkers(lines);
   kept.splice(at, 0, ...blockLines);
   return { kind: "restored", text: kept.join("\n") };
+}
+
+/**
+ * The finding a steering PR's check run stores when the PR changes the
+ * managed block in `path` (#4518 item 7, ADR-267), or null when it does not.
+ * It fires exactly when restoreManagedBlock would write a commit, so the
+ * panel draws Restore block only where the restore can run. The message says
+ * what the PR did to the block, in the words of the `owned` check.
+ */
+export function managedBlockFinding(
+  path: string,
+  production: string | null,
+  head: string | null,
+): CheckFinding | null {
+  if (restoreManagedBlock(production, head).kind !== "restored") return null;
+  const finding = (line: number | null, message: string): CheckFinding => ({
+    rule: "managed-block",
+    path,
+    line,
+    message,
+  });
+  if (head === null) {
+    return finding(
+      null,
+      `This steering PR removes ${path} and the managed block Oxagen writes in it.`,
+    );
+  }
+  const read = readManagedBlock(head);
+  if (!read.ok) {
+    return finding(
+      read.issue.line ?? null,
+      `The managed block markers in ${path} are broken: ${read.issue.message}.`,
+    );
+  }
+  if (read.block === null) {
+    return finding(1, `This steering PR removes the managed block from ${path}.`);
+  }
+  return read.block.intact
+    ? finding(
+        read.block.begin_line,
+        `This steering PR rewrites the managed block in ${path}.`,
+      )
+    : finding(read.block.begin_line, `The managed block in ${path} was edited.`);
 }

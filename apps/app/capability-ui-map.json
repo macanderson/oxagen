@@ -1163,6 +1163,15 @@
       "verifiedAt": "2026-10-02",
       "verifiedBy": "session_01B5MzP4EGjHSj52UKpWTxyz"
     },
+    "approve_steering_pr": {
+      "route": "/[org]/[ws]/steering/proposals/prs/[proposal]",
+      "page": "apps/app/src/app/[org]/[ws]/steering/proposals/prs/[proposal]/page.tsx",
+      "entry": "Approve on the steering PR page under the team and regulated modes (features/steering/write-controls.tsx, shown by steering-pr-panel.tsx)",
+      "testid": "approve-steering-pr",
+      "proof": "apps/app/src/features/steering/steering-pr-panel.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "054a9da7 (#4518)"
+    },
     "merge_pr_without_review": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
@@ -2038,6 +2047,14 @@
       "proof": "apps/app/src/features/steering/memories/memories.test.tsx",
       "verifiedAt": "2026-10-01",
       "verifiedBy": "steering-memories-tab (#4914)"
+    },
+    "drop_memory_record": {
+      "route": "/[org]/[ws]/steering/proposals/prs/[proposal]",
+      "page": "apps/app/src/app/[org]/[ws]/steering/proposals/prs/[proposal]/page.tsx",
+      "entry": "The Drop button on each proposed record of a memory PR on its steering PR page (features/steering/memory-pr-review.tsx, features/steering/write-controls.tsx)",
+      "proof": "apps/app/src/features/steering/steering-pr-panel.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "054a9da7 (#4518)"
     },
     "list_memory_pr_records": {
       "route": "/[org]/[ws]/steering/proposals/prs",

@@ -7,6 +7,7 @@
 // snake_case to the view's camelCase and copies every value: a cost the
 // record does not hold stays null and nothing is invented, and a tier comes
 // from the contract field (INV-10).
+import type { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import type { workCollectorsList } from "@oxagen/oxagen/contracts/work.collectors.list";
 import type { workItemsList } from "@oxagen/oxagen/contracts/work.items.list";
 import type { workOutcomesGet } from "@oxagen/oxagen/contracts/work.outcomes.get";
@@ -272,8 +273,15 @@ export function toWorkOutcomes(
 
 export function toWorkCollectorList(
   out: ContractOutput<typeof workCollectorsList>,
+  repositories: ContractOutput<typeof repositoryList> | null,
 ): z.input<typeof WorkCollectorList> {
   return {
+    linked:
+      repositories === null
+        ? null
+        : repositories.repositories
+            .filter((repo) => repo.provider === "github")
+            .map((repo) => repo.fullName),
     collectors: out.collectors.map((collector) => ({
       name: collector.name,
       type: collector.type,

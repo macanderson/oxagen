@@ -19,10 +19,10 @@ Merge is the publication ([ADR-061](../adr/ADR-061-steering-governance-mode-thre
 | mode | who merges |
 | --- | --- |
 | `solo` | any workspace member (org Owner/Admin, workspace Owner/Member), the author included |
-| `team` | an org Owner or Admin, or a workspace Owner, other than the author |
+| `team` | an org Owner or Admin, or a workspace Owner or Admin, other than the author |
 | `regulated` | an org Owner or Admin other than the author; recorded on the ledger row as the accountable approver |
 
-Outside `solo` mode the PR also needs an approval on the host at the head that merges. The approver is a workspace member other than the author, and their host account is linked to an Oxagen user. Without one, an org Owner, a workspace Owner, or a member who holds [`merge_pr_without_review`](steering.pr.merge_without_review.md) may still merge, and the ledger line and the trailers record that nobody reviewed it. Oxagen refuses anyone else with `approval_required`.
+Outside `solo` mode the PR also needs an approval at the head that merges, from a workspace member other than the author. The approval is a review on the host by an account linked to an Oxagen user, or one given in Oxagen with [`approve_steering_pr`](steering.pr.approve.md) ([ADR-267](../adr/ADR-267-a-steering-pr-approval-is-stored-in-oxagen.md)). Both pass the same rule, and a person counts once. Without one, an org Owner, a workspace Owner, or a member who holds [`merge_pr_without_review`](steering.pr.merge_without_review.md) may still merge, and the ledger line and the trailers record that nobody reviewed it. Oxagen refuses anyone else with `approval_required`.
 
 GitLab does not say which commit a reviewer approved. On GitLab the merge reads when each approval was given and when GitLab recorded each diff version of the merge request. An approval counts for the newest version GitLab recorded before it. GitLab keeps an approval across a rebase, because the rebase leaves the diff's patch unchanged. So an approval given before the merge queue rebased the branch counts for the old head, and the reviewer approves again. An approval given before GitLab records the version of a push counts for the version before it. When GitLab has not yet recorded the current head as a version, the merge is refused `gitlab_refused`, and a merge a minute later can pass. GitLab documents `approved_at` on every approval. An approval that GitLab reports with no readable `approved_at` cannot be placed on a head, so the merge is refused `approvals_not_head_bound`, owners included.
 

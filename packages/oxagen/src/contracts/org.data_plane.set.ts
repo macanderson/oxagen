@@ -101,6 +101,7 @@ export const orgDataPlaneSet = registerCapability({
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: false,
+  orgLevel: true,
   agent: {
     requiresApproval: true,
     riskLevel: "high",

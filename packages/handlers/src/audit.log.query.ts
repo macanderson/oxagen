@@ -44,10 +44,20 @@ export const auditLogQueryHandler: CapabilityHandler<
     ctx.workspaceId && ctx.workspaceId !== ORG_ONLY_WS ? ctx.workspaceId : null;
   const requested = input.workspaceId ?? null;
 
+  // On the caller's own workspace the gate also reads the invoked capability
+  // and the agent run, so it can admit the workspace's Owner or Admin
+  // (#5228). The org-wide branch names no workspace, so the rule never
+  // reaches it.
   let workspaceFilter: string | null;
   if (ownWorkspace !== null && requested === ownWorkspace) {
     await assertOrgRole(
-      { orgId, workspaceId: ownWorkspace, userId: actingUserId },
+      {
+        orgId,
+        workspaceId: ownWorkspace,
+        userId: actingUserId,
+        invokedCapability: ctx.invokedCapability,
+        agentRun: ctx.agentRun,
+      },
       { org: ORG_AUDIT_ROLES, workspace: WORKSPACE_AUDIT_ROLES },
     );
     workspaceFilter = ownWorkspace;
@@ -66,7 +76,13 @@ export const auditLogQueryHandler: CapabilityHandler<
       workspaceFilter = null;
     } else {
       await assertOrgRole(
-        { orgId, workspaceId: ownWorkspace, userId: actingUserId },
+        {
+          orgId,
+          workspaceId: ownWorkspace,
+          userId: actingUserId,
+          invokedCapability: ctx.invokedCapability,
+          agentRun: ctx.agentRun,
+        },
         { org: ORG_AUDIT_ROLES, workspace: WORKSPACE_AUDIT_ROLES },
       );
       workspaceFilter = ownWorkspace;

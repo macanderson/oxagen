@@ -220,11 +220,13 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_workspace_memory](steering.memories.get.md) | [steering.memories.get.ts](../../packages/oxagen/src/contracts/steering.memories.get.ts) | api, mcp, cli |
 | [list_steering_records](steering.record.list.md) | [steering.record.list.ts](../../packages/oxagen/src/contracts/steering.record.list.ts) | api, agent, mcp |
 | [list_memory_pr_records](steering.memory_pr_records.list.md) | [steering.memory_pr_records.list.ts](../../packages/oxagen/src/contracts/steering.memory_pr_records.list.ts) | api, mcp |
+| [drop_memory_record](steering.memory_pr_records.drop.md) | [steering.memory_pr_records.drop.ts](../../packages/oxagen/src/contracts/steering.memory_pr_records.drop.ts) | api, mcp, cli |
 | [list_proposals](steering.proposal.list.md) | [steering.proposal.list.ts](../../packages/oxagen/src/contracts/steering.proposal.list.ts) | api, mcp, agent |
 | [list_records](steering.records.list.md) | [steering.records.list.ts](../../packages/oxagen/src/contracts/steering.records.list.ts) | api, mcp, agent |
 | [list_workspace_memories](steering.memories.list.md) | [steering.memories.list.ts](../../packages/oxagen/src/contracts/steering.memories.list.ts) | api, mcp, cli |
 | [merge_steering_pr](steering.pr.merge.md) | [steering.pr.merge.ts](../../packages/oxagen/src/contracts/steering.pr.merge.ts) | api, agent |
 | [merge_pr_without_review](steering.pr.merge_without_review.md) | [steering.pr.merge_without_review.ts](../../packages/oxagen/src/contracts/steering.pr.merge_without_review.ts) | api, agent |
+| [approve_steering_pr](steering.pr.approve.md) | [steering.pr.approve.ts](../../packages/oxagen/src/contracts/steering.pr.approve.ts) | api |
 | [commit_markdown_import](steering.markdown_import.commit.md) | [steering.markdown_import.commit.ts](../../packages/oxagen/src/contracts/steering.markdown_import.commit.ts) | api, mcp, agent, cli |
 | [open_steering_pr](steering.pr.open.md) | [steering.pr.open.ts](../../packages/oxagen/src/contracts/steering.pr.open.ts) | api, agent |
 | [parse_markdown_import](steering.markdown_import.parse.md) | [steering.markdown_import.parse.ts](../../packages/oxagen/src/contracts/steering.markdown_import.parse.ts) | api, mcp, agent, cli |
@@ -724,7 +726,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [revise_work_triage](work.triage.revise.md) | [work.triage.revise.ts](../../packages/oxagen/src/contracts/work.triage.revise.ts) | api, mcp |
 | [save_work_brief](work.brief.save.md) | [work.brief.save.ts](../../packages/oxagen/src/contracts/work.brief.save.ts) | api |
 | [send_work_order](work.order.send.md) | [work.order.send.ts](../../packages/oxagen/src/contracts/work.order.send.ts) | api |
-| [set_work_collector](work.collector.set.md) | [work.collector.set.ts](../../packages/oxagen/src/contracts/work.collector.set.ts) | api, mcp |
+| [set_work_collector](work.collector.set.md) | [work.collector.set.ts](../../packages/oxagen/src/contracts/work.collector.set.ts) | api |
 | [stop_work_order](work.order.stop.md) | [work.order.stop.ts](../../packages/oxagen/src/contracts/work.order.stop.ts) | api |
 | [sync_work_collector](work.collector.sync.md) | [work.collector.sync.ts](../../packages/oxagen/src/contracts/work.collector.sync.ts) | api, mcp |
 

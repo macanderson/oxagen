@@ -116,8 +116,8 @@ export default defineConfig({
         "src/local-servers/broker.ts",
         "src/local-servers/route.ts",
         "src/local-servers/transport.ts",
-        // work intake and triage (P1-03, #5103)
-        "src/tools/work.collector.set.ts",
+        // work intake and triage (P1-03, #5103). set_work_collector has no
+        // tool: only a signed-in person changes a collector (#5181).
         "src/tools/work.collector.sync.ts",
         "src/tools/work.collectors.list.ts",
         "src/tools/work.item.create.ts",

@@ -58,8 +58,8 @@ const ctx = unsafeMint(WsCtx, {
   wsRole: "member",
 });
 
-/** The same viewer without an accountable org role, for the gates in the actions. */
-const member = unsafeMint(WsCtx, {
+/** The fields of a viewer without an accountable org role. */
+const memberFields = {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
   orgId: "7a000000-0000-4000-8000-0000000000a1",
   orgSlug: "acme",
@@ -69,7 +69,10 @@ const member = unsafeMint(WsCtx, {
   wsSlug: "core-platform",
   wsName: "Core platform",
   wsRole: "member",
-});
+} as const;
+
+/** The same viewer without an accountable org role, for the gates in the actions. */
+const member = unsafeMint(WsCtx, memberFields);
 
 const TENANT = {
   orgId: ctx.orgId,
@@ -1001,6 +1004,35 @@ describe("registerServer", () => {
     ).toEqual({ ok: false, reason: "denied", code: "org_role_required" });
     expect(invoke).not.toHaveBeenCalled();
   });
+
+  it.each(["owner", "admin"] as const)(
+    "registers the server for the workspace's %s whose org role is only Member (#5228)",
+    async (wsRole) => {
+      requireViewer.mockResolvedValue(unsafeMint(WsCtx, { ...memberFields, wsRole }));
+      invoke.mockResolvedValue(output);
+      expect(
+        await registerServer("acme", "core-platform", {
+          name: "Notion",
+          transportType: "streamable-http",
+          endpointUrl: "https://mcp.notion.example/v1",
+          authStrategy: "none",
+          authConfig: {},
+        }),
+      ).toEqual({
+        ok: true,
+        value: {
+          serverId: "mcs_01k5s9",
+          healthStatus: "healthy",
+          discoveredTools: ["get_page"],
+        },
+      });
+      expect(invoke).toHaveBeenCalledWith(
+        "register_mcp_server",
+        expect.objectContaining({ name: "Notion" }),
+        expect.objectContaining(TENANT),
+      );
+    },
+  );
 });
 
 describe("removeProvider", () => {

@@ -167,9 +167,11 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 ## context
 
 - append_record
+- approve_steering_pr
 - commit_markdown_import
 - dismiss_memories
 - dismiss_proposal
+- drop_memory_record
 - get_published_steering
 - get_record
 - get_steering_deliveries

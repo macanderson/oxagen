@@ -44,7 +44,7 @@ jobs:
   guard:
     # ubuntu-slim (one vCPU, $0.002 a minute): a sparse checkout and a few
     # API calls, done in seconds (#4918).
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-slim' }}
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     # Reopening an issue fires `issues: reopened`, not `closed`, so this cannot
     # loop. The state_reason filter is applied inside the script, where the

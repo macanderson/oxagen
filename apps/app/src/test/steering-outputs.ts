@@ -5,6 +5,7 @@
 // one waiting memory and one memory PR. Test support only: src/test is never in a
 // production bundle.
 import type { steeringPrGet } from "@oxagen/oxagen/contracts/steering.pr.get";
+import type { steeringPrOpen } from "@oxagen/oxagen/contracts/steering.pr.open";
 import type { steeringProposalList } from "@oxagen/oxagen/contracts/steering.proposal.list";
 import type { steeringRecordsGet } from "@oxagen/oxagen/contracts/steering.records.get";
 import type { steeringRecordsList } from "@oxagen/oxagen/contracts/steering.records.list";
@@ -18,6 +19,7 @@ type RecordOutput = RecordsOutput["records"][number];
 type ProposalsOutput = ContractOutput<typeof steeringProposalList>;
 type ProposalOutput = ProposalsOutput["proposals"][number];
 type SteeringPrOutput = ContractOutput<typeof steeringPrGet>;
+type SteeringPrOpenOutput = ContractOutput<typeof steeringPrOpen>;
 type RecordGetOutput = Extract<
   ContractOutput<typeof steeringRecordsGet>,
   { source: "published" }
@@ -139,9 +141,25 @@ const CHECK_NAMES = [
   "constraint_effect",
 ] as const;
 
+/**
+ * What get_steering_pr answers: open_steering_pr's view, with no finding and
+ * no approval in Oxagen unless the test names them (#4518).
+ */
 export function steeringPrOutput(
   overrides: Partial<SteeringPrOutput> = {},
 ): SteeringPrOutput {
+  return {
+    ...steeringPrOpenOutput(),
+    findings: [],
+    approvals: 0,
+    ...overrides,
+  };
+}
+
+/** What open_steering_pr answers: the steering PR view, which carries no findings or approvals. */
+export function steeringPrOpenOutput(
+  overrides: Partial<SteeringPrOpenOutput> = {},
+): SteeringPrOpenOutput {
   return {
     proposalId: "prp_01k5ru4a",
     lineageId: LINEAGE,
@@ -197,7 +215,7 @@ export function steeringPrOutput(
       publishes: { lineageId: LINEAGE, path: RECORD_PATH },
       bundleVersion: { current: 41, afterMerge: 42 },
       review:
-        "team: an org Owner or Admin, or a workspace Owner, other than the author merges",
+        "team: an org Owner or Admin, or a workspace Owner or Admin, other than the author merges",
     },
     merged: null,
     closed: null,

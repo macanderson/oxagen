@@ -616,7 +616,7 @@
             "turnOn": "Turn on",
             "turningOff": "Turning off",
             "turningOn": "Turning on",
-            "denied": "The keep-alive setting did not change. Only an org Owner or Admin can change it.",
+            "denied": "The keep-alive setting did not change. Only an org Owner or Admin, or a workspace Owner or Admin, can change it.",
             "failed": "The keep-alive setting did not change. Reload the page and try again."
           }
         },
@@ -732,7 +732,7 @@
         }
       },
       "runtime": {
-        "needsRole": "Enrolling and unenrolling a host needs an organization Owner or Admin role.",
+        "needsRole": "Enrolling and unenrolling a host needs an organization Owner or Admin role, or the workspace Owner or Admin role.",
         "empty": {
           "title": "No runtime is enrolled for this agent",
           "body": "Until a host enrolls, this agent has an identity and a toolbelt but no hook is installed. Its runs would be graded observe, and no report could say more.",
@@ -896,7 +896,7 @@
           "notRequired": "Not required",
           "setOn": "set on the runtime <runtime>{name}</runtime>",
           "noRuntime": "This agent runs on no named runtime, so nothing requires it.",
-          "note": "An organization Owner or Admin changes it on the Runtimes tab. The change applies to every agent on that runtime and reaches each host on its next bundle fetch."
+          "note": "An organization or workspace Owner or Admin changes it on the Runtimes tab. The change applies to every agent on that runtime and reaches each host on its next bundle fetch."
         }
       },
       "activity": {
@@ -1000,7 +1000,7 @@
           "manage": "Manage toolbelts",
           "current": "It carries {belt}.",
           "currentNone": "It carries no toolbelt yet.",
-          "needsRole": "An organization owner or admin can change it.",
+          "needsRole": "An organization or workspace owner or admin can change it.",
           "tools": "{count, plural, one {# active tool} other {# active tools}}",
           "save": "Save toolbelt",
           "pending": "Saving",
@@ -1011,7 +1011,7 @@
           "lead": "Move the agent to new hardware or a new cloud. Its principal, roles and runs stay.",
           "current": "It runs on {runtime}.",
           "currentNone": "It runs on no named runtime.",
-          "needsRole": "An organization owner or admin can move it.",
+          "needsRole": "An organization or workspace owner or admin can move it.",
           "here": "The agent runs here now.",
           "taken": "{harness} already runs on {runtime} as {agent}.",
           "revokes": "Moving revokes the agent's host enrollments on its current runtime. Enroll the new machine from the Runtime tab.",
@@ -1074,7 +1074,7 @@
         "reason": "Reason",
         "confirm": "Stop this agent",
         "pending": "Stopping",
-        "needsRole": "The kill switch needs an organization Owner or Admin role.",
+        "needsRole": "The kill switch needs an organization Owner or Admin role, or the workspace Owner or Admin role.",
         "reread": "Reload the agent",
         "unchanged": "This agent's kill switch was already on. The pause below still ran.",
         "outcome": {

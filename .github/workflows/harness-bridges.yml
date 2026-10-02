@@ -48,7 +48,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, "${{ vars.CI_RUNNERS == 'aws' && 'oxagen-small-x64' || 'ubuntu-latest' }}"]
+        os: [windows-latest, "ubuntu-latest"]
     steps:
       - name: Turn symlinks off, as on a Windows machine without Developer Mode
         run: git config --global core.symlinks false

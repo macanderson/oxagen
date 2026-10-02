@@ -51,7 +51,7 @@ permissions:
 jobs:
   sync:
     name: reconcile Stripe with packages/billing/src/pricing.ts
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     # Without a limit a hung job holds a deploy runner for 360 minutes.
     timeout-minutes: 20
     # Resolves the `production` environment's secrets. As db-migrate.yml already

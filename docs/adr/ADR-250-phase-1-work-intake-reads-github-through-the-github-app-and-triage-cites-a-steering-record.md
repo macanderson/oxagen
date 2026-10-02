@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-02
+- **Amended:** 2026-10-02, only a signed-in person changes a collector (#5181).
 - **Owners:** work
 - **Related:** issue #5103 (lane P1-03), `agent-work-phase-1.html` in
   `oxageninc/roadmap` (Work lifecycle, Data contract, Delivery and review),
@@ -168,3 +169,16 @@ lock.
 - **Keeping the raw delivery bytes.** Rejected: the screened envelope is
   enough to fetch by id, and unscreened bytes would need their own access
   control and retention.
+
+## Amendment 2026-10-02: only a person changes collectors (#5181)
+
+Mac decided that an agent may file work items, but only a person may change
+collectors. A collector decides what the workspace takes in.
+
+- `create_work_item` keeps the `api` and `mcp` surfaces and still takes an API
+  key. The key's creator is recorded as the actor.
+- `set_work_collector` refuses an agent run and every API key before it checks
+  the role or writes anything, the way `lib/work-records/actor.ts` checks a
+  work decision. An agent on its operator's machine can read the operator's
+  `oxagen login` key, so a key that resolves to a person is refused too.
+- `set_work_collector` is on the `api` surface only. It has no MCP tool.

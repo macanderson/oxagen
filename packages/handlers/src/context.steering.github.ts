@@ -962,6 +962,12 @@ async function listGitTree(
  * times MERGE_SETTLE_INTERVAL_MS apart, and merges again once GitHub says it
  * can. Each later retry waits one interval longer first, because after "Base
  * branch was modified" the pull request can still read `mergeable: true`.
+ *
+ * GitHub also moves the pull request's head to a pushed commit a moment after
+ * the push, so a merge pinned to the stamp can meet 409 "Head branch was
+ * modified" while the pull request still names the commit before the stamp
+ * (run 37071302742). The reads therefore wait for the head to reach the
+ * pinned commit, too, instead of refusing at the first read that differs.
  */
 const MERGE_SETTLE_READS = 15;
 const MERGE_SETTLE_INTERVAL_MS = 1_000;
@@ -969,15 +975,20 @@ const MERGE_SETTLE_INTERVAL_MS = 1_000;
 const MERGE_RETRIES = 3;
 
 /**
- * Which of GitHub's two "still working out this head" refusals `err` is, or
- * null for any other answer. "Base branch was modified" can also mean the base
+ * Which of GitHub's "still working out this push" refusals `err` is, or null
+ * for any other answer. "Base branch was modified" can also mean the base
  * really moved, so the merge retries it only while the base is still the
- * commit the merge queue checked.
+ * commit the merge queue checked. "Head branch was modified" can also mean
+ * someone pushed past the pinned commit, and then the head never reaches it,
+ * so the reads run out and the refusal stands.
  */
 function settlingRefusal(
   err: unknown,
-): "not_mergeable" | "base_modified" | null {
-  if (!(err instanceof GitHubApiError) || err.status !== 405) return null;
+): "not_mergeable" | "base_modified" | "head_modified" | null {
+  if (!(err instanceof GitHubApiError)) return null;
+  if (err.status === 409 && /head branch was modified/i.test(err.message))
+    return "head_modified";
+  if (err.status !== 405) return null;
   if (/not mergeable/i.test(err.message)) return "not_mergeable";
   if (/base branch was modified/i.test(err.message)) return "base_modified";
   return null;
@@ -1063,10 +1074,12 @@ export function createSteeringGitHub(
   /**
    * Reads the pull request until GitHub knows whether it can merge. True only
    * when GitHub says it can, at the head the merge is pinned to, and, when the
-   * merge names its base, while the base branch is still at that commit.
-   * Anything else is false, and the merge keeps GitHub's first refusal: a
-   * closed pull request, a head that moved, a base that moved, a "no" from
-   * GitHub, a failed read, or no answer after MERGE_SETTLE_READS reads.
+   * merge names its base, while the base branch is still at that commit. A
+   * head that differs is read again, because GitHub moves the head to a
+   * just-pushed commit a moment late. Anything else is false, and the merge
+   * keeps GitHub's first refusal: a closed pull request, a base that moved, a
+   * "no" from GitHub, a failed read, or no answer after MERGE_SETTLE_READS
+   * reads, which is also how a head someone pushed past ends.
    */
   const mergeableOnceChecked = async (
     repo: SteeringRepository,
@@ -1093,7 +1106,8 @@ export function createSteeringGitHub(
         );
         return false;
       }
-      if (pr.state !== "open" || pr.head.sha !== args.sha) return false;
+      if (pr.state !== "open") return false;
+      if (pr.head.sha !== args.sha) continue;
       if (pr.mergeable === false) return false;
       if (pr.mergeable === true) {
         if (args.base === undefined) return true;

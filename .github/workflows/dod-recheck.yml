@@ -68,7 +68,7 @@ jobs:
           && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association))
     # ubuntu-slim (one vCPU, $0.002 a minute): a sparse checkout and a few
     # API calls, done in seconds (#4918).
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-slim' }}
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       # The checker lives in oxagen, and a caller repo does not have it. Same

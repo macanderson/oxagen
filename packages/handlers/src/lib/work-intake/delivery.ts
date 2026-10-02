@@ -28,7 +28,7 @@ import {
   receiveDelivery,
 } from "@oxagen/ingestion/collectors";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, exists, isNull, sql } from "drizzle-orm";
 import { logger } from "../../logger";
 import { scopeRepos } from "./collector-store";
 import { sendWorkEvents } from "./handler-support";
@@ -100,6 +100,25 @@ export async function githubCollectorsFor(installationId: string, repository: st
           eq(schema.sourceConnections.status, "connected"),
           isNull(schema.sourceConnections.deletedAt),
           sql`${schema.sourceConnections.deliveryConfig} ->> 'installationId' = ${installationId}`,
+          // A collector reads only repositories its workspace links. One the
+          // workspace unlinked after the collector was set gets no delivery.
+          exists(
+            tx
+              .select({ one: sql`1` })
+              .from(schema.repositoryBindingHeads)
+              .innerJoin(
+                schema.repositoryBindings,
+                eq(schema.repositoryBindings.id, schema.repositoryBindingHeads.currentBindingId),
+              )
+              .where(
+                and(
+                  eq(schema.repositoryBindingHeads.orgId, schema.workCollectors.orgId),
+                  eq(schema.repositoryBindingHeads.workspaceId, schema.workCollectors.workspaceId),
+                  eq(schema.repositoryBindingHeads.provider, "github"),
+                  sql`lower(${schema.repositoryBindings.providerFullName}) = ${wanted}`,
+                ),
+              ),
+          ),
         ),
       ),
   );

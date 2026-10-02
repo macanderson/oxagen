@@ -22,6 +22,7 @@ import { RECONCILE_INTERVAL_MINUTES } from "@oxagen/work";
 import { and, asc, desc, eq, inArray, isNull, like, notLike, sql } from "drizzle-orm";
 import { stringify } from "smol-toml";
 import type { WorkScope } from "../work-records/store";
+import { linkedGithubRepositories } from "./linked-repos";
 
 const collectors = schema.workCollectors;
 const events = schema.workInboundEvents;
@@ -173,7 +174,7 @@ export class CollectorSetupError extends Error {
 /** What set_work_collector asks for. */
 export interface SetCollectorInput {
   name: string;
-  /** The connection's public id. Required to create a collector. */
+  /** The connection's public id. Optional: the repositories' own connection is used. */
   connectionId?: string;
   repos?: string[];
   paused?: boolean;
@@ -188,14 +189,18 @@ export interface SetCollectorResult {
   reconcile: boolean;
 }
 
-/** The workspace's GitHub connection by public id. */
-async function githubConnection(tx: Tx, scope: WorkScope, publicId: string): Promise<{ id: string; publicId: string }> {
+/** The workspace's GitHub connection by public id, or by row id for the connection a repository was linked through. */
+async function githubConnection(
+  tx: Tx,
+  scope: WorkScope,
+  by: { publicId: string } | { id: string },
+): Promise<{ id: string; publicId: string }> {
   const [row] = await tx
     .select({ id: connections.id, publicId: connections.publicId, status: connections.status })
     .from(connections)
     .where(
       and(
-        eq(connections.publicId, publicId),
+        "publicId" in by ? eq(connections.publicId, by.publicId) : eq(connections.id, by.id),
         eq(connections.orgId, scope.orgId),
         eq(connections.workspaceId, scope.workspaceId),
         eq(connections.connectorId, "github"),
@@ -203,16 +208,48 @@ async function githubConnection(tx: Tx, scope: WorkScope, publicId: string): Pro
       ),
     )
     .limit(1);
-  if (!row) throw new CollectorSetupError("not_found", `This workspace has no GitHub connection ${publicId}. Connect GitHub first.`);
+  if (!row) {
+    throw new CollectorSetupError(
+      "not_found",
+      "publicId" in by
+        ? `This workspace has no GitHub connection ${by.publicId}. Connect GitHub first.`
+        : "The GitHub connection these repositories were linked through is gone. Connect GitHub again on the Repositories page.",
+    );
+  }
   if (row.status !== "connected") {
-    throw new CollectorSetupError("conflict", `The GitHub connection ${publicId} is ${row.status}. Reconnect it, then set the collector.`);
+    throw new CollectorSetupError("conflict", `The GitHub connection ${row.publicId} is ${row.status}. Reconnect it, then set the collector.`);
   }
   return { id: row.id, publicId: row.publicId };
 }
 
 /**
- * Create or change a GitHub collector by name. A new collector needs a
- * connection and repositories. A change keeps whatever the input leaves out.
+ * The connection the named repositories were linked through. Every one of
+ * them must be linked to the workspace, and all through one connection.
+ */
+async function linkedConnection(tx: Tx, scope: WorkScope, repos: readonly string[]): Promise<string> {
+  const linked = await linkedGithubRepositories(tx, scope);
+  const unlinked = repos.filter((repo) => !linked.has(repo.toLowerCase()));
+  if (unlinked.length > 0) {
+    throw new CollectorSetupError(
+      "invalid_input",
+      `${unlinked.join(", ")} ${unlinked.length === 1 ? "is" : "are"} not linked to this workspace. A collector reads only linked repositories. Link ${unlinked.length === 1 ? "it" : "them"} on the Repositories page first.`,
+    );
+  }
+  const through = new Set(repos.map((repo) => linked.get(repo.toLowerCase())!.connectionId));
+  if (through.size > 1) {
+    throw new CollectorSetupError(
+      "invalid_input",
+      "These repositories were linked through more than one GitHub connection. Give each connection's repositories their own collector.",
+    );
+  }
+  return [...through][0]!;
+}
+
+/**
+ * Create or change a GitHub collector by name. A new collector needs
+ * repositories, and each must be linked to the workspace. The collector reads
+ * through the connection they were linked through; connection_id, when given,
+ * must name that connection. A change keeps whatever the input leaves out.
  * Pausing keeps the collector's deliveries, and resuming reads it again.
  */
 export async function setCollector(tx: Tx, scope: WorkScope, input: SetCollectorInput): Promise<SetCollectorResult> {
@@ -226,12 +263,21 @@ export async function setCollector(tx: Tx, scope: WorkScope, input: SetCollector
   if (existing && existing.type !== "github") {
     throw new CollectorSetupError("conflict", `${input.name} is a ${existing.type} collector. Give a GitHub collector its own name.`);
   }
-  if (!existing && (input.connectionId === undefined || input.repos === undefined)) {
-    throw new CollectorSetupError("invalid_input", `A new collector needs connection_id and repos.`);
+  if (!existing && input.repos === undefined) {
+    throw new CollectorSetupError("invalid_input", `A new collector needs repos.`);
   }
 
+  const through = input.repos === undefined ? null : await linkedConnection(tx, scope, input.repos);
   let connection: { id: string; publicId: string } | null = null;
-  if (input.connectionId !== undefined) connection = await githubConnection(tx, scope, input.connectionId);
+  if (input.connectionId !== undefined) {
+    connection = await githubConnection(tx, scope, { publicId: input.connectionId });
+    if (through !== null && connection.id !== through) {
+      throw new CollectorSetupError(
+        "invalid_input",
+        `These repositories were linked through another GitHub connection than ${input.connectionId}. Leave connection_id out to read through theirs.`,
+      );
+    }
+  } else if (through !== null) connection = await githubConnection(tx, scope, { id: through });
   else if (existing?.connectionId) {
     const [row] = await tx
       .select({ id: connections.id, publicId: connections.publicId })

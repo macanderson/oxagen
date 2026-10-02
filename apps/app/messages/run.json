@@ -637,7 +637,7 @@
       "noRecipient": "No live run took this command.",
       "reread": "Re-read the run",
       "ledgerReason": "Pause refuses the next evidence batch. Resume reopens evidence ingress. Cancel revokes the run credentials. These controls do not stop the external process; steering needs a producer connection.",
-      "roleReason": "Sending a command needs an organization Owner or Admin role, or a workspace Owner or Member role.",
+      "roleReason": "Sending a command needs an organization Owner or Admin role, or a workspace Owner, Admin or Member role.",
       "pause": {
         "open": "❙❙ Pause run",
         "title": "Pause {run}",
@@ -772,7 +772,7 @@
         "hostOffline": "No kill was sent, because the run's host has not checked in for five minutes."
       },
       "reread": "Re-read the run",
-      "roleReason": "Sealing a run needs an organization Owner or Admin role, or the workspace Owner role."
+      "roleReason": "Sealing a run needs an organization Owner or Admin role, or the workspace Owner or Admin role."
     },
     "interjection": {
       "eyebrow": "Run",
@@ -840,7 +840,7 @@
       "pickOne": "pick one",
       "answersAs": "answers in your name",
       "nameFirst": "Name the workspace and give it a slug.",
-      "roleReason": "Answering needs an organization Owner or Admin role, or the workspace Owner role.",
+      "roleReason": "Answering needs an organization Owner or Admin role, or the workspace Owner or Admin role.",
       "closedReason": "The answer window closed at {at}.",
       "receipt": {
         "sent": "Answer recorded. Receipt {receipt}.",
@@ -879,7 +879,7 @@
         "cut": "This read stopped before the end of the recording, so later frames are not listed."
       },
       "failure": {
-        "orgRoleRequired": "Your role cannot answer this question. An organization Owner or Admin, or the workspace Owner, can.",
+        "orgRoleRequired": "Your role cannot answer this question. An organization Owner or Admin, or the workspace Owner or Admin, can.",
         "noPrincipal": "Oxagen could not tell who is signed in. Sign in again and retry.",
         "answered": "Someone already answered this question. Re-read the run to see the answer.",
         "expired": "The answer window closed before this answer arrived. Nothing was linked or created.",
@@ -911,7 +911,7 @@
         "confirm": "Queue the summary",
         "pending": "Queueing",
         "queued": "The summary is queued. It appears on this run once the model has written it.",
-        "needsRole": "Summarizing needs an organization Owner, Admin or Member role.",
+        "needsRole": "Summarizing needs an organization Owner, Admin or Member role, or the workspace Owner or Admin role.",
         "needsBodies": "This recording kept digests and no bodies, so there is nothing for a model to read. Summarizing is refused."
       },
       "resummarize": {
@@ -924,7 +924,7 @@
         "confirm": "Queue the bundle",
         "pending": "Queueing",
         "queued": "The bundle is queued.",
-        "needsRole": "Exporting a signed bundle needs an organization Owner or Admin role.",
+        "needsRole": "Exporting a signed bundle needs an organization Owner or Admin role, or the workspace Owner or Admin role.",
         "status": {
           "queued": "Waiting for the job to start.",
           "building": "Oxagen is building the bundle."
@@ -947,7 +947,7 @@
         "failedUnrecorded": "The export failed, and the job recorded no error.",
         "readFailure": {
           "notFound": "This export is not in this workspace.",
-          "denied": "Reading an export needs an organization Owner or Admin role.",
+          "denied": "Reading an export needs an organization Owner or Admin role, or the workspace Owner or Admin role.",
           "other": "Oxagen answered {code} when asked for this export."
         },
         "needsSeal": "A signed bundle is built from the sealed record. Export this run once it seals.",
@@ -1112,7 +1112,7 @@
       "forkNeedsLedger": "Forking replays an attempt from the evidence ledger. This run was recorded by a wrapped agent, which has no attempt to branch from.",
       "forkNoGrade": "This run's seal recorded no replay grade, so Oxagen cannot say the recording is complete enough to fork.",
       "forkNeedsGrade": "This recording is graded {grade}. Forking needs a recording graded fork, because every body before the branch point has to be there.",
-      "forkNeedsRole": "Forking needs an organization Owner, Admin or Member role. A workspace role does not grant it.",
+      "forkNeedsRole": "Forking needs an organization Owner, Admin or Member role, or the workspace Owner or Admin role.",
       "fork": {
         "open": "Fork replay",
         "title": "Fork {run}",
@@ -1198,6 +1198,7 @@
       "noPullRequest": "no pull request",
       "pullState": {
         "open": "open",
+        "draft": "draft",
         "closed": "closed",
         "merged": "merged",
         "unknown": "status unknown"

@@ -6,8 +6,9 @@
 // there is no second gate here: `import_tools` and `set_tool_classification`
 // want an org Owner or Admin (import also accepts a workspace Owner),
 // `set_kill_switch` an org Owner or Admin, and the three auto-approval writes
-// an org Owner or Admin. A refusal comes back as `denied` with nothing
-// changed, and the page names it where the person acted.
+// an org Owner or Admin. Each acts inside the workspace, so the workspace's
+// Owner and Admin pass too (#5228). A refusal comes back as `denied` with
+// nothing changed, and the page names it where the person acted.
 import { agentMcpDelete } from "@oxagen/oxagen/contracts/agent.mcp.delete";
 import { agentMcpRegister } from "@oxagen/oxagen/contracts/agent.mcp.register";
 import { approvalRuleDelete } from "@oxagen/oxagen/contracts/approval_rule.delete";
@@ -43,6 +44,7 @@ import {
 import type { ActionResult, ContractOutput } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
+import { mayActInWorkspace } from "@/shared/workspace-authority";
 import { type ConnectionScheme, CONNECTION_SCHEMES } from "./view";
 
 /**
@@ -557,12 +559,14 @@ export type McpServerDraft = {
  * checks the endpoint, envelope-encrypts the auth config and records the pins
  * it discovered; `import_tools` then pulls those pins into the registry.
  *
- * **The org role is checked here, not only in the handler.**
+ * **The role is checked here, not only in the handler.**
  * `register_mcp_server` declares org Owner or Admin and its handler asserts
  * nothing, so on a non-enterprise org `checkIAM` fast-paths the declaration to
  * an allow (#3258) and the contract's restriction holds nowhere. Refusing here
- * keeps the app from being the widest door to it. The handler is still the
- * place the assertion belongs; until it has one, this is the gate.
+ * keeps the app from being the widest door to it. The capability acts inside
+ * the workspace, so the workspace's Owner and Admin pass too (#5228). The
+ * handler is still the place the assertion belongs; until it has one, this
+ * is the gate.
  */
 export async function registerServer(
   org: string,
@@ -610,7 +614,7 @@ export async function registerServer(
   }
 
   const ctx = await requireViewer(org, ws);
-  if (ctx.orgRole !== "owner" && ctx.orgRole !== "admin") {
+  if (!mayActInWorkspace(ctx.orgRole, ctx.wsRole, ["owner", "admin"])) {
     return { ok: false, reason: "denied", code: "org_role_required" };
   }
   const result = await kernelWrite(ctx, agentMcpRegister, {

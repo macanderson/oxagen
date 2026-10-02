@@ -29,6 +29,7 @@ export const workspaceArchive = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
+  orgLevel: true,
   // A settings write, never a governed action (ADR-052 exclusion 2; INV-28).
   noBillingGate: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "workspace" },

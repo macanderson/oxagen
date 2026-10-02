@@ -24,6 +24,13 @@ One proposal's steering PR ([ADR-061](../adr/ADR-061-steering-governance-mode-th
 
 `raised` is the proposal as raised: its statement, rationale, source (with `sourceName` when the source is a user with a display name), force, constraint effect, sharing scope, support and the instant it was raised. `closed` is set on a rejected proposal: the instant, the reason (null when none was given), the closer and their display name, and `onHost` when the host closed it and the repository sync or `refresh_steering_pr` recorded the close. A close on the host records no closer. A display name comes from `auth.users.display_name`; a user without one is named by nothing, never by email.
 
+Two fields come after `steeringPrSchema`'s ([ADR-267](../adr/ADR-267-a-steering-pr-approval-is-stored-in-oxagen.md), #4518). Both are read from Postgres, so the page's poll reads no host.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `findings` | `{ rule, path, line, message }[]` | What the latest check run found on the head beyond the six outcomes. `rule` is `managed-block`: the PR changes the managed block in `AGENTS.md`, `CLAUDE.md`, or `README.md`, and [`restore_managed_block`](steering.pr.restore_managed_block.md) puts it back. Empty before a run finishes, in a legacy repository, and once a run finds the block matches the production branch |
+| `approvals` | `int` | How many people approved the checked head in Oxagen with [`approve_steering_pr`](steering.pr.approve.md). A review on the host is not counted here. The merge counts both |
+
 ## Errors
 
 | code | reason |

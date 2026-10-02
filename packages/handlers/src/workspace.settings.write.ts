@@ -69,14 +69,21 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
   typeof workspaceSettingsWrite
 > = async (input, ctx) => {
   const actingUserId = await resolveActingUserId(ctx);
+  // A named workspace may be another one, so only the org roles reach it.
+  // The consequence roles say which org roles answer for each impact, an org
+  // decision. `namedRolesOnly` keeps the workspace Owner and Admin rule off
+  // both (#5228).
   await assertOrgRole(
     { ...ctx, userId: actingUserId },
     input.workspaceId === undefined
       ? { org: ["Owner", "Admin"], workspace: ["Owner", "Admin"] }
-      : { org: ["Owner", "Admin"] },
+      : { org: ["Owner", "Admin"], namedRolesOnly: true },
   );
   if (input.consequenceRoles !== undefined) {
-    await assertOrgRole({ ...ctx, userId: actingUserId }, { org: ["Owner"] });
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ["Owner"], namedRolesOnly: true },
+    );
   }
 
   // `workspace.workspaces` is org_only, so the target resolves under an

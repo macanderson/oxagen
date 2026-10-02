@@ -13,6 +13,9 @@
 //   Rule 6: Org default grant         → inherit org grant
 //   Rule 7: Role-inherited grant      → inherit role grant
 //   Rule 7.5: Org owner super-user    → ALLOW (system org Owner role)
+//   Rule 7.6: Workspace Owner/Admin   → ALLOW (system workspace Owner or Admin
+//             on the call's own workspace, for a capability that acts inside
+//             it; ./workspace-authority.ts, #5228)
 //   Rule 8: Default effect (contract) → use contract.defaultEffect
 //
 // ── Live coverage: rules 1–6 currently decide nothing ────────────────────────
@@ -26,7 +29,8 @@
 //
 // Rules 1–6 read only those two collections, so in a running system the
 // decision is always made by rule 7 (role grant), rule 7.5 (system org Owner),
-// or rule 8 (contract defaultEffect). `conditionsMet` is likewise reachable
+// rule 7.6 (system workspace Owner or Admin), or rule 8 (contract
+// defaultEffect). `conditionsMet` is likewise reachable
 // only from rules 1–6, which means the whole condition language in
 // conditions.ts (time_window, ip_ranges/ip_allow) is plumbed but never
 // evaluated on a live request — rule 7 decides a role grant on its `effect`
@@ -38,6 +42,10 @@
 // rules 1–6 as changing code that is not currently on any request path.
 
 import type { CapabilityEffect, ResolvedPrincipal } from "../types";
+import {
+  isRealWorkspaceId,
+  WORKSPACE_FULL_ACCESS_ROLES,
+} from "./workspace-authority";
 import {
   evaluateConditions,
   parseResourceScope,
@@ -107,6 +115,55 @@ export function grantsOrgOwnerSuperUser(
       r.name === ORG_OWNER_ROLE_NAME &&
       r.isSystemDefault === true,
   );
+}
+
+/**
+ * Rule 7.6's own test, as a function: the system workspace Owner or Admin role
+ * a human principal holds on the scope's own workspace, for a capability that
+ * acts inside it, or null (#5228, ./workspace-authority.ts).
+ *
+ * Every condition must hold, and each input that says so is one the caller
+ * supplies only on the human path of the kernel's check (check-iam.ts):
+ *
+ *   - `actsInWorkspace` is true: the caller read the contract and it is not
+ *     org-level. Absent is false.
+ *   - The scope names a real workspace, never `ORG_ONLY_WORKSPACE_ID`.
+ *   - The role is a system-default workspace role named Owner or Admin. A
+ *     custom role is not, whatever its name.
+ *   - The principal is assigned that role ON this workspace:
+ *     `workspaceRoleIds` lists the roles assigned with `workspace_id` equal to
+ *     the scope's. `Role.principalIds` also counts org-wide assignments, so it
+ *     cannot say that alone.
+ *
+ * The agent paths (`resolveAgentEffectivePermissions`, the pinned ceiling,
+ * live authority) build their inputs without `actsInWorkspace`, so the rule
+ * never decides for an agent.
+ */
+export function workspaceFullAccessGrant(
+  input: Pick<
+    ResolveInput,
+    "principal" | "scope" | "roles" | "actsInWorkspace" | "workspaceRoleIds"
+  >,
+): Role | null {
+  const { principal, scope, roles } = input;
+  if (input.actsInWorkspace !== true) return null;
+  if (principal.kind !== "human") return null;
+  if (scope.kind !== "workspace" || !isRealWorkspaceId(scope.workspaceId)) {
+    return null;
+  }
+  const onThisWorkspace = new Set(input.workspaceRoleIds ?? []);
+  const held = roles.filter(
+    (r) =>
+      onThisWorkspace.has(r.id) &&
+      r.principalIds.includes(principal.id) &&
+      r.scopeKind === "workspace" &&
+      r.isSystemDefault === true,
+  );
+  for (const name of WORKSPACE_FULL_ACCESS_ROLES) {
+    const role = held.find((r) => r.name === name);
+    if (role) return role;
+  }
+  return null;
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -226,6 +283,19 @@ export interface ResolveInput {
    * condition will fail-closed (deny) when this is absent.
    */
   clientIp?: string | null;
+  /**
+   * Rule 7.6 (#5228): whether the capability acts inside the scope's
+   * workspace, read from its contract (`actsInWorkspace` in
+   * ./workspace-authority.ts). Absent is false, and rule 7.6 then decides
+   * nothing.
+   */
+  actsInWorkspace?: boolean;
+  /**
+   * Rule 7.6 (#5228): ids of the roles the principal is assigned on
+   * `scope.workspaceId` itself, not org-wide. Absent or empty, rule 7.6
+   * decides nothing.
+   */
+  workspaceRoleIds?: readonly string[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -686,6 +756,33 @@ export function resolve(input: ResolveInput): ResolveResult {
   steps.push({
     rule: "7.5:org_owner_superuser",
     description: "Principal is not a system org owner",
+    decided: false,
+  });
+
+  // ── Rule 7.6: Workspace Owner or Admin ─────────────────────────────────────
+  // A workspace's Owner and Admin do everything in that workspace (#5228).
+  // Like rule 7.5, this runs after every explicit grant above, so a role
+  // grant of `deny` or `require_approval` still decides first. It makes a
+  // workspace owner's access independent of each contract's
+  // `defaultRoles.workspace`: a capability whose map names no workspace role,
+  // or one added after the org's role grants were seeded, admits them too.
+  // It never decides an org-level capability, another workspace, or an
+  // org-only call; see workspaceFullAccessGrant.
+  const workspaceGrant = workspaceFullAccessGrant(input);
+  if (workspaceGrant) {
+    const step: TraceStep = {
+      rule: "7.6:workspace_full_access",
+      description: `Principal holds the system workspace ${workspaceGrant.name} role on this workspace`,
+      decided: true,
+      outcome: "allow",
+    };
+    steps.push(step);
+    return { outcome: "allow", trace: { steps, decidedBy: step } };
+  }
+  steps.push({
+    rule: "7.6:workspace_full_access",
+    description:
+      "Principal holds no system workspace Owner or Admin role on this workspace, or the capability is not a workspace one",
     decided: false,
   });
 
