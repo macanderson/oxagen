@@ -14,6 +14,9 @@
 import { z } from "zod";
 import type { EffectiveDefinition } from "../contract/manifest";
 
+/** A server's selection tests, relative to its folder under tools/servers/. */
+export const SELECTION_TESTS_FILE = "tests/selection.jsonl";
+
 /**
  * One task to put to the model. A tests/selection.jsonl line, as
  * parseSelectionTests returns it, is one. expect is null when no tool fits
@@ -104,7 +107,14 @@ export interface SelectionReport {
   counts: SelectionCounts;
 }
 
-export const SELECTION_RUN_ERROR_CODES = ["no_tools", "duplicate_tool", "model_failed"] as const;
+/**
+ * The most tasks one selection run asks. Each task is one model call, billed
+ * to the workspace, so the cap bounds what one click can spend. It also keeps
+ * a run, which asks one task at a time, well inside a request's time limit.
+ */
+export const SELECTION_TASKS_MAX = 50;
+
+export const SELECTION_RUN_ERROR_CODES = ["no_tools", "duplicate_tool", "too_many_tasks", "model_failed"] as const;
 export type SelectionRunErrorCode = (typeof SELECTION_RUN_ERROR_CODES)[number];
 
 /**
@@ -112,6 +122,7 @@ export type SelectionRunErrorCode = (typeof SELECTION_RUN_ERROR_CODES)[number];
  *
  * - no_tools: the server offers no tool, so there is nothing to choose from.
  * - duplicate_tool: two tools share a name, so a reply could not say which one the model picked.
+ * - too_many_tasks: the run has more than SELECTION_TASKS_MAX tasks. It asks the model nothing.
  * - model_failed: the model call for one task failed. The run asks no more tasks.
  */
 export class SelectionRunError extends Error {
@@ -178,6 +189,9 @@ function countOutcomes(cases: readonly SelectionCaseResult[]): SelectionCounts {
 /**
  * Ask the model which tool fits each task, and report each hit and miss.
  *
+ * Before it asks anything, the run refuses a server with no tools, two tools
+ * with one name, and more than SELECTION_TASKS_MAX tasks.
+ *
  * The run asks one task at a time, in order, so a failed model call stops it
  * before it spends more. It throws a SelectionRunError with code
  * model_failed, which holds the tasks finished so far. When the signal
@@ -201,6 +215,12 @@ export async function runSelection(
       );
     }
     offered.add(tool.name);
+  }
+  if (cases.length > SELECTION_TASKS_MAX) {
+    throw new SelectionRunError(
+      "too_many_tasks",
+      `The run has ${cases.length} tasks, and one run asks at most ${SELECTION_TASKS_MAX}, because each task is a billed model call. Remove tasks from tests/selection.jsonl until it holds ${SELECTION_TASKS_MAX} or fewer.`,
+    );
   }
 
   const results: SelectionCaseResult[] = [];

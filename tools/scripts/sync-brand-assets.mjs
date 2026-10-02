@@ -56,6 +56,10 @@
  * the pipeline's checks job, as Mac decided on 2026-09-29 (#3074). After a
  * kit change lands on main, the check fails here until someone runs this
  * script and commits the result. The kit's fan-out workflow opens that PR.
+ * brand-drift.yml's `Brand drift` job is a required check on main (#5131),
+ * and it fails a pull request only when that pull request changes a file the
+ * check lists, this script, the literal guard, or the workflow. The step in
+ * the checks job is advisory.
  *
  * `--check` also runs the literal guard in lib/brand-literals.mjs: each
  * stylesheet it lists must take its corners, shadows, font sizes, and page

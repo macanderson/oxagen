@@ -6701,6 +6701,36 @@
       }
     },
     {
+      "name": "read_steering",
+      "file": "steering.read.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "search_steering",
+      "file": "steering.search.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_steering_repo",
       "file": "steering_repo.get.ts",
       "domain": "repository",
@@ -7523,6 +7553,23 @@
     {
       "name": "open_studio_review",
       "file": "tool.studio.review.open.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "run_studio_selection",
+      "file": "tool.studio.selection.run.ts",
       "domain": "tool",
       "mode": "sync",
       "surfaces": [

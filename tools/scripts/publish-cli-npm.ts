@@ -13,9 +13,9 @@
  * because a laptop may have no token, but in CI a missing token means the
  * secret is gone and npm has stopped following main.
  *
- * `--verify` runs the published version with npx and checks that
- * `oxagen --version` prints it. The registry can take a minute to serve a new
- * version, so it tries again before it fails.
+ * `--verify` runs the published tarball with npx and checks that
+ * `oxagen --version` prints it. It tries again before it fails, in case the
+ * tarball takes a moment to reach npm's servers.
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -25,9 +25,9 @@ import { argv, exit } from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 import {
-  CLI_PACKAGE,
   type PublishOutcome,
   publishCliToNpm,
+  tarballUrl,
 } from "./lib/npm-cli";
 
 const ROOT = resolve(import.meta.dirname, "../..");
@@ -102,7 +102,11 @@ export async function main(
   }
   if (outcome === "skipped" || !verify) return 0;
 
-  const spec = `${CLI_PACKAGE}@${version}`;
+  // The tarball URL, not `@oxagen/cli@<version>`: npm serves a new tarball at
+  // once, but its package list can trail a publish by several minutes, and
+  // npx resolves a version through that list. The first publish on
+  // 2026-10-02 waited four minutes for it.
+  const spec = tarballUrl(version);
   for (let attempt = 1; attempt <= VERIFY_TRIES; attempt++) {
     let printed = "";
     try {

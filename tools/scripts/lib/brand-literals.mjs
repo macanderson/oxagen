@@ -99,11 +99,6 @@ export const KEEP = {
   ],
   "apps/web/assets/oxagen.css": [
     {
-      prop: "width",
-      values: ["1180px"],
-      why: "the site's page wrap (--page-wrap), 60px wider than --ox-wrap until Mac decides (#5104)",
-    },
-    {
       prop: "font-size",
       values: ["10.5px", "11px", "11.5px", "12px", "12.5px", "13px", "13.5px"],
       why: BELOW_M_MICRO,

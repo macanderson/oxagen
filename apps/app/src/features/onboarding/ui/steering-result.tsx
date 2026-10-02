@@ -1,7 +1,7 @@
 // The line a GitHub install or authorize leaves behind. The steering
-// connection's start route sends the person back to its `return_to` with
-// `?steering=connected`, or with `?steering=error&code=<reason>` when GitHub or
-// the route refused. Onboarding's GitHub links return to Create the first
+// connection's start route sends the person back to its `return_to`, through
+// the `/github/steering` landing (#5151), with `?steering=connected`, or with
+// `?steering=error&code=<reason>` when GitHub or the route refused. Onboarding's GitHub links return to Create the first
 // workspace. Connect a code host reads the query too, so a return that names
 // it shows the same line.
 //

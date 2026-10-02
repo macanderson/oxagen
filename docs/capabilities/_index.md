@@ -233,8 +233,10 @@ after the registered name separately when their contract uses a dotted stem.
 | [propose_record](context.proposal.create.md) | [context.proposal.create.ts](../../packages/oxagen/src/contracts/context.proposal.create.ts) | api, mcp, agent |
 | [propose_steering](steering.propose.md) | [steering.propose.ts](../../packages/oxagen/src/contracts/steering.propose.ts) | mcp |
 | [publish_context_record](context.record.publish.md) | [context.record.publish.ts](../../packages/oxagen/src/contracts/context.record.publish.ts) | api |
+| [read_steering](steering.read.md) | [steering.read.ts](../../packages/oxagen/src/contracts/steering.read.ts) | mcp |
 | [refresh_context_pr](context.pr.refresh.md) | [context.pr.refresh.ts](../../packages/oxagen/src/contracts/context.pr.refresh.ts) | api, agent |
 | [revert_steering_pr](context.pr.revert.md) | [context.pr.revert.ts](../../packages/oxagen/src/contracts/context.pr.revert.ts) | api, mcp, agent, cli |
+| [search_steering](steering.search.md) | [steering.search.ts](../../packages/oxagen/src/contracts/steering.search.ts) | mcp |
 
 ## Control
 
@@ -657,6 +659,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [open_studio_review](tool.studio.review.open.md) | [tool.studio.review.open.ts](../../packages/oxagen/src/contracts/tool.studio.review.open.ts) | api, mcp |
 | [publish_tool_declaration](tool.declaration.publish.md) | [tool.declaration.publish.ts](../../packages/oxagen/src/contracts/tool.declaration.publish.ts) | api |
 | [revoke_relay](tool.relay.revoke.md) | [tool.relay.revoke.ts](../../packages/oxagen/src/contracts/tool.relay.revoke.ts) | api, mcp |
+| [run_studio_selection](tool.studio.selection.run.md) | [tool.studio.selection.run.ts](../../packages/oxagen/src/contracts/tool.studio.selection.run.ts) | api, mcp |
 | [save_studio_draft](tool.studio.draft.save.md) | [tool.studio.draft.save.ts](../../packages/oxagen/src/contracts/tool.studio.draft.save.ts) | api, mcp |
 | [set_mcp_credential](tool.studio.credential.set.md) | [tool.studio.credential.set.ts](../../packages/oxagen/src/contracts/tool.studio.credential.set.ts) | api, mcp |
 | [set_tool_classification](tool.classification.set.md) | [tool.classification.set.ts](../../packages/oxagen/src/contracts/tool.classification.set.ts) | api, mcp, agent |

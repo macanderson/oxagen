@@ -110,6 +110,8 @@ import { workingCopyRecord } from "./repository.working_copy.record";
 import { workingCopyList } from "./repository.working_copy.list";
 import { publishedSteeringGet } from "./context.steering.published.get";
 import { steeringIndexGet } from "./context.steering.index.get";
+import { steeringSearch } from "./steering.search";
+import { steeringRead } from "./steering.read";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
 import { runTurnsGet } from "./run.turns.get";
@@ -308,6 +310,7 @@ import { toolStudioCredentialSet } from "./tool.studio.credential.set";
 import { toolStudioFindingsList } from "./tool.studio.findings.list";
 import { toolStudioDescriptionDraft } from "./tool.studio.description.draft";
 import { toolStudioTry } from "./tool.studio.try";
+import { toolStudioSelectionRun } from "./tool.studio.selection.run";
 import { toolSteeringMigrate } from "./tool.steering.migrate";
 import { toolRelayCreate } from "./tool.relay.create";
 import { toolRelayRevoke } from "./tool.relay.revoke";
@@ -985,6 +988,8 @@ export {
   workingCopyList,
   publishedSteeringGet,
   steeringIndexGet,
+  steeringSearch,
+  steeringRead,
   runList,
   runGet,
   runFrameBodyGet,
@@ -1151,6 +1156,7 @@ export {
   toolStudioFindingsList,
   toolStudioDescriptionDraft,
   toolStudioTry,
+  toolStudioSelectionRun,
   toolSteeringMigrate,
   toolRelayCreate,
   toolRelayRevoke,
@@ -1469,6 +1475,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   workingCopyList,
   publishedSteeringGet,
   steeringIndexGet,
+  steeringSearch,
+  steeringRead,
   runList,
   runGet,
   runFrameBodyGet,
@@ -1635,6 +1643,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   toolStudioFindingsList,
   toolStudioDescriptionDraft,
   toolStudioTry,
+  toolStudioSelectionRun,
   toolSteeringMigrate,
   toolRelayCreate,
   toolRelayRevoke,

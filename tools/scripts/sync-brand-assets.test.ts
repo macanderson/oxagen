@@ -663,6 +663,23 @@ describe("brand-drift.yml", () => {
     expect(check).toContain(CHECK_COMMAND);
     expect(check).toMatch(/::error::.*Run node tools\/scripts\/sync-brand-assets\.mjs/);
   });
+
+  // #5131: the main ruleset requires Brand drift. A required check that never
+  // runs blocks the merge for good, so the workflow takes no paths filter and
+  // the job no condition. The pull request rule keeps a kit merge from failing
+  // every other pull request, which took the blocking check offline in #4938.
+  it("runs on every pull request and fails only one that touches what it guards", () => {
+    expect(workflow).toMatch(/^ {2}pull_request:\n {2}[a-z]/m);
+    expect(workflow).not.toMatch(/^\s+paths(-ignore)?:/m);
+    expect(workflow).not.toMatch(/^ {4}if:/m);
+    expect(workflow).toMatch(/fetch-depth: 2\n/);
+    const check = stepIn(workflow, "Brand files match the kit");
+    expect(check).toContain('if [ "$EVENT" = pull_request ]; then');
+    expect(check).toContain("git diff --name-only HEAD^1 HEAD");
+    expect(check).toContain(
+      "tools/scripts/sync-brand-assets.mjs|tools/scripts/lib/brand-literals.mjs|.github/workflows/brand-drift.yml",
+    );
+  });
 });
 
 // #3074: check:brand ran only in the local gate, so CI checked no vendored

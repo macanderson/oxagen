@@ -426,6 +426,142 @@ else
   fail "packages/telemetry/src/migrations is gone — half the ClickHouse check has no input"
 fi
 
+# --- clickhouse_dropped_columns --------------------------------------------
+#
+# A dropped column leaves its table in system.tables and its migration in the
+# ledger, so neither question above sees one that survived (#3072).
+
+DROPS="$WORK/drop-migrations"
+mkdir -p "$DROPS"
+cat > "$DROPS/0001_create.sql" <<'SQL'
+CREATE TABLE IF NOT EXISTS events (a Int8, b Int8, c Int8, d Int8, e Int8) ENGINE = Log;
+CREATE TABLE IF NOT EXISTS gone_later (x Int8, y Int8) ENGINE = Log;
+SQL
+cat > "$DROPS/0002_drop.sql" <<'SQL'
+-- ALTER TABLE events DROP COLUMN commented_out;
+ALTER TABLE events DROP COLUMN IF EXISTS a;
+ALTER TABLE oxagen.events
+  DROP COLUMN b,
+  DROP COLUMN IF EXISTS c;
+ALTER TABLE events MODIFY COLUMN d Int16;
+ALTER TABLE events DROP COLUMN IF EXISTS e;
+ALTER TABLE gone_later DROP COLUMN x;
+SQL
+cat > "$DROPS/0003_restore.sql" <<'SQL'
+ALTER TABLE events ADD COLUMN IF NOT EXISTS b Int8 AFTER a;
+DROP TABLE IF EXISTS gone_later;
+SQL
+cat > "$DROPS/0004_drop_again.sql" <<'SQL'
+alter table events drop column if exists e;
+SQL
+
+DROPPED=$(clickhouse_dropped_columns "$DROPS"); CODE=$?
+expect_code 0 "$CODE" "dropped columns: a readable directory is a clean read"
+contains "$DROPPED" "events a 0002_drop.sql" "dropped columns: reads DROP COLUMN IF EXISTS"
+contains "$DROPPED" "events c 0002_drop.sql" "dropped columns: reads the second clause of a multi-line ALTER and strips the database qualifier"
+contains "$DROPPED" "events e 0004_drop_again.sql" "dropped columns: a lowercase drop counts, and names the file that dropped it last"
+case "$DROPPED" in
+  *"events b"*) fail "dropped columns: a column a later migration added back must not be demanded gone" ;;
+  *) pass ;;
+esac
+case "$DROPPED" in
+  *gone_later*) fail "dropped columns: a column of a table a later migration dropped must not be asked about" ;;
+  *) pass ;;
+esac
+case "$DROPPED" in
+  *commented_out*) fail "dropped columns: a commented-out drop must not count" ;;
+  *) pass ;;
+esac
+case "$DROPPED" in
+  *"events d"*) fail "dropped columns: MODIFY COLUMN is not a drop" ;;
+  *) pass ;;
+esac
+case "$DROPPED" in
+  *"e 0002_drop.sql"*) fail "dropped columns: a column dropped twice must be listed once, under the later file" ;;
+  *) pass ;;
+esac
+case "$DROPPED" in
+  *" IF "*|*" if "*|*EXISTS*|*exists*) fail "dropped columns: a keyword must not enter the list as a column" ;;
+  *) pass ;;
+esac
+if [[ $(printf '%s\n' "$DROPPED" | grep -c .) -eq 3 ]]; then pass; else
+  fail "dropped columns: expected exactly 3 lines, got: $(printf '%s' "$DROPPED" | tr '\n' '|')"
+fi
+
+clickhouse_dropped_columns "$WORK/no-such-dir" >/dev/null 2>&1
+expect_code 2 "$?" "dropped columns: an unreadable directory is 'unknown', not 'nothing dropped'"
+
+# The column #3072 exists for. tacho-events-ddl.test.ts ties every
+# DROPPED_COLUMNS entry to a line this parser reads, so if this fails the
+# parser lost the shape that line has.
+if [[ -d $REAL_MIGS ]]; then
+  REAL_DROPPED=$(clickhouse_dropped_columns "$REAL_MIGS")
+  contains "$REAL_DROPPED" "tacho_events anthropic_user_email 0031_drop_tacho_events_anthropic_user_email.sql" \
+    "the real migrations: the dropped email address column is asked about (#3072)"
+  # 0028, 0035 and 0036 add tacho_events columns in multi-line ALTERs. An
+  # ADD must never enter the list.
+  case "$REAL_DROPPED" in
+    *observed_changes*|*request_effort*|*steering_tokens*) fail "the real migrations: an added column must not be read as dropped" ;;
+    *) pass ;;
+  esac
+fi
+
+# --- report_dropped_columns ------------------------------------------------
+
+printf 'events a 0002_drop.sql\ntacho_events anthropic_user_email 0031_drop.sql\n' > "$WORK/dropped.txt"
+
+printf 'events a 0\ntacho_events anthropic_user_email 0\n' > "$WORK/counts-gone.txt"
+OUT=$(report_dropped_columns "$WORK/dropped.txt" "$WORK/counts-gone.txt" 2>&1); CODE=$?
+expect_code 0 "$CODE" "dropped report: every count 0 is current"
+contains "$OUT" "current" "dropped report: says the store is current"
+contains "$OUT" "2 dropped" "dropped report: counts what it checked"
+case "$OUT" in
+  *::error::*) fail "dropped report: a current store must not emit an error annotation" ;;
+  *) pass ;;
+esac
+
+printf 'events a 0\ntacho_events anthropic_user_email 1\n' > "$WORK/counts-left.txt"
+OUT=$(report_dropped_columns "$WORK/dropped.txt" "$WORK/counts-left.txt" 2>&1); CODE=$?
+expect_code 1 "$CODE" "dropped report: a column still there is behind"
+contains "$OUT" "::error::ClickHouse still has tacho_events.anthropic_user_email" "dropped report: names the table and the column"
+contains "$OUT" "0031_drop.sql" "dropped report: names the migration that drops it"
+contains "$OUT" "by hand" "dropped report: says an apply may skip it and what to do instead"
+case "$OUT" in
+  *"still has events.a,"*) fail "dropped report: a column that is gone must not be named" ;;
+  *) pass ;;
+esac
+case "$OUT" in
+  *"Store Migrate"*) fail "dropped report: must not send the reader to an apply that skips a listed file" ;;
+  *) pass ;;
+esac
+
+# No count is not a count of 0. The query failed, or answered something else.
+printf 'events a 0\n' > "$WORK/counts-short.txt"
+OUT=$(report_dropped_columns "$WORK/dropped.txt" "$WORK/counts-short.txt" 2>&1); CODE=$?
+expect_code 2 "$CODE" "dropped report: a column with no count is 'unknown', not 'gone'"
+contains "$OUT" "unknown" "dropped report: says the column's state is unknown"
+printf 'events a 0\ntacho_events anthropic_user_email Code: 60.\n' > "$WORK/counts-junk.txt"
+report_dropped_columns "$WORK/dropped.txt" "$WORK/counts-junk.txt" >/dev/null 2>&1
+expect_code 2 "$?" "dropped report: a count that is not a number is 'unknown'"
+report_dropped_columns "$WORK/dropped.txt" "$WORK/no-such-counts.txt" >/dev/null 2>&1
+expect_code 2 "$?" "dropped report: no answer at all is 'unknown', not 'gone'"
+
+# Unknown outranks behind, as in bump_status, and the column still there is
+# named anyway.
+printf 'events a 3\n' > "$WORK/counts-mixed.txt"
+OUT=$(report_dropped_columns "$WORK/dropped.txt" "$WORK/counts-mixed.txt" 2>&1); CODE=$?
+expect_code 2 "$CODE" "dropped report: unknown outranks behind"
+contains "$OUT" "ClickHouse still has events.a" "dropped report: a column still there is named when another is unknown"
+
+# A later DROP TABLE can empty the list, so an empty list is a pass, not a
+# broken check.
+: > "$WORK/dropped-none.txt"
+OUT=$(report_dropped_columns "$WORK/dropped-none.txt" "$WORK/counts-gone.txt" 2>&1); CODE=$?
+expect_code 0 "$CODE" "dropped report: nothing dropped is nothing to check"
+contains "$OUT" "nothing to check" "dropped report: says there was nothing to check"
+report_dropped_columns "$WORK/no-such-dropped.txt" "$WORK/counts-gone.txt" >/dev/null 2>&1
+expect_code 2 "$?" "dropped report: an unreadable dropped list is 'unknown'"
+
 # Unknown must outrank behind. ClickHouse unreadable then Neo4j behind used to
 # exit 1 and report "a store is behind", saying nothing about the store nobody
 # could read — and the two need different responses.
@@ -554,7 +690,7 @@ esac
 bad=$(grep -oE 'ch_query "[^"]*' "$TOOLS/check-store-drift.sh" | grep -cv 'ch_query "SELECT' || true)
 expect_code 0 "$bad" "script: every ClickHouse statement it sends is a SELECT"
 sent=$(grep -cE 'ch_query "SELECT' "$TOOLS/check-store-drift.sh" || true)
-if [[ $sent -ge 2 ]]; then pass; else fail "script: expected both ClickHouse reads, found $sent"; fi
+if [[ $sent -ge 3 ]]; then pass; else fail "script: expected the ledger, table and column reads, found $sent"; fi
 
 bad=$(grep -oE 'neo_cypher "[^"]*' "$TOOLS/check-store-drift.sh" | grep -cv 'neo_cypher "SHOW' || true)
 expect_code 0 "$bad" "script: every Neo4j statement it sends is a SHOW"
@@ -578,6 +714,8 @@ case "$SCRIPT" in
 esac
 contains "$SCRIPT" "_migrations" "script: reads the ledger db-migrate.ts actually writes"
 contains "$SCRIPT" "system.tables" "script: also asks which tables exist, not only the ledger"
+contains "$SCRIPT" "SELECT count() FROM system.columns" "script: counts each dropped column, so every answer is a row (#3072)"
+contains "$SCRIPT" 'report_dropped_columns "$WORK/ch-dropped.txt"' "script: the live check reaches the dropped-column verdict"
 contains "$SCRIPT" "readonly=1" "script: read-only is enforced on the server, not asserted about the text"
 
 # SHOW cannot be a UNION branch — Neo4j 5.24 answers that with a syntax error,

@@ -48,8 +48,11 @@ Two properties of the proxy are load-bearing for everything below, and both are
 deliberate (ADR-094, amended by ADR-143). The vendor credential stays on the
 machine and Oxagen's servers never hold it: on a brokered provider the gateway
 holds it in custody under `TACHO_HOME` and the harness holds a run token; on a
-harness-held provider it crosses in memory, forwarded untouched. Prompt bodies
-go to the vendor the harness chose and never to Oxagen. Only the frame goes up.
+harness-held provider it crosses in memory, forwarded untouched. The call goes
+from the machine to the vendor the harness chose, and no Oxagen server is on
+that path. Only the frame goes up. ADR-100 (§4 and §6) sets what the frame
+carries: the request and response bodies ride on it when the workspace's
+retention policy keeps them, and a workspace with no policy keeps them.
 
 | Capability | State |
 |---|---|
@@ -171,7 +174,9 @@ What remains under G3:
   and response bodies, and ADR-094 decided it keeps them on the machine.
   Whether `content_exact` changes that is a decision this spec does not make,
   and it should be made explicitly rather than by whoever writes the code
-  first.
+  first. ADR-100 made it on 2026-09-18: the `llm_call` frame carries the
+  request and response as one body, under the same retention rule as the hook
+  path.
 - **Tool result bodies on the hook path.** `tool_call` frames map to the
   `tool_call` content class and nothing writes their bodies yet, so a
   workspace that authorised that class still receives digests for it.

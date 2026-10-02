@@ -5,7 +5,7 @@ import { fixtureDelivery, SCOPE, steeringCtx } from "./steering.test-support";
 
 const delivery = await fixtureDelivery();
 
-describe("steering_search", () => {
+describe("search_steering", () => {
   it("searches the versions the caller's workspace reads", async () => {
     const published = vi.fn(() => Promise.resolve(delivery));
     const handler = createSteeringSearchHandler({ published });
