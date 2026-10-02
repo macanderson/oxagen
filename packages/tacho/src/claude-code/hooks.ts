@@ -17,6 +17,7 @@ import {
   textContent,
 } from "../evidence/frame-body";
 import { redactText } from "../evidence/redaction";
+import { WORK_ORDER_ATTR, WORK_ORDER_ENV, workOrderIdOf } from "../wire";
 import { contextFactsFromEnv, digestText, hostFactsFromEnv } from "./context";
 import {
   classifyTool,
@@ -493,7 +494,19 @@ export function normalizeHook(
           ? { model: str(input["model"]) }
           : {}),
       };
-      return [draft("agent_start", body, { hook_source_kind: source })];
+      // `oxagen work start` sets the work order on the harness it starts,
+      // and the hook client passes it on (ADR-250). The session's start names
+      // it, and ingest links the run to the order only when this host
+      // claimed it, so a value set by some other process links nothing.
+      const workOrder = workOrderIdOf(env[WORK_ORDER_ENV]);
+      return [
+        draft("agent_start", body, {
+          hook_source_kind: source,
+          ...(workOrder !== undefined
+            ? { attrs: { ...base.attrs, [WORK_ORDER_ATTR]: workOrder } }
+            : {}),
+        }),
+      ];
     }
     case "Setup": {
       const trigger = str(input["trigger"]);
