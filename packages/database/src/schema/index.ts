@@ -37,6 +37,7 @@ export * from "./skills";
 export * from "./memory";
 export * from "./steering";
 export * from "./steering-repo-health";
+export * from "./code-repository-findings";
 export * from "./machine-groups";
 export * from "./work";
 

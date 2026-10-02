@@ -263,6 +263,7 @@ import { contextPrDiffGetRoute } from "./routes/v1/context.pr.diff.get";
 import { contextPrMergeRoute } from "./routes/v1/context.pr.merge";
 import { contextPrMergeWithoutReviewRoute } from "./routes/v1/context.pr.merge_without_review";
 import { contextPrRevertRoute } from "./routes/v1/context.pr.revert";
+import { contextPrRestoreManagedBlockRoute } from "./routes/v1/context.pr.restore_managed_block";
 import { agentRoleAssignRoute } from "./routes/v1/agent.role.assign";
 import { agentRoleRevokeRoute } from "./routes/v1/agent.role.revoke";
 import { agentRoleListRoute } from "./routes/v1/agent.role.list";
@@ -325,6 +326,8 @@ import { repositoryMainGetRoute } from "./routes/v1/repository.main.get";
 import { repositoryLinkRoute } from "./routes/v1/repository.link";
 import { repositoryUnlinkRoute } from "./routes/v1/repository.unlink";
 import { repositoryListRoute } from "./routes/v1/repository.list";
+import { codeRepositoryFindingsListRoute } from "./routes/v1/repository.findings.list";
+import { instructionPromoteRoute } from "./routes/v1/repository.instruction.promote";
 import { repositoryTreeGetRoute } from "./routes/v1/repository.tree.get";
 import { workingCopyRecordRoute } from "./routes/v1/repository.working_copy.record";
 import { workingCopyListRoute } from "./routes/v1/repository.working_copy.list";
@@ -878,6 +881,12 @@ orgScoped.route("/repository/main", repositoryMainGetRoute);
 orgScoped.route("/repositories", repositoryListRoute);
 orgScoped.route("/repository/link", repositoryLinkRoute);
 orgScoped.route("/repository/unlink", repositoryUnlinkRoute);
+// The Instruction files section of the Repositories page (#4518, ADR-263): the
+// statements the Oxagen check flagged, and the write that promotes one into a
+// steering proposal. Hono matches each mounted path exactly, so the read does
+// not catch the promote path below it.
+orgScoped.route("/repository/findings", codeRepositoryFindingsListRoute);
+orgScoped.route("/repository/findings/promote", instructionPromoteRoute);
 // The Repositories page (MC spec §10.1, §10.2, §11.4).
 orgScoped.route("/repository/tree", repositoryTreeGetRoute);
 orgScoped.route(
@@ -1385,6 +1394,8 @@ orgScoped.route(
 );
 // Open a steering PR that undoes a merged one (#4449).
 orgScoped.route("/context/prs/revert", contextPrRevertRoute);
+// Put the managed block back in one file of an open steering PR (#4518).
+orgScoped.route("/context/prs/restore-block", contextPrRestoreManagedBlockRoute);
 orgScoped.route("/privacy/export", privacyDataExportRoute);
 orgScoped.route("/privacy/erase", privacyDataEraseRoute);
 orgScoped.route("/connections", connectionRoute);

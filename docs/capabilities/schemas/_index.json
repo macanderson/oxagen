@@ -2537,6 +2537,19 @@
       "consumes": []
     },
     {
+      "name": "list_code_repository_findings",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_commands",
       "domain": "control",
       "surfaces": [
@@ -3539,6 +3552,19 @@
       "consumes": []
     },
     {
+      "name": "promote_instruction_to_steering",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "promote_memories",
       "domain": "context",
       "surfaces": [
@@ -4022,6 +4048,19 @@
       "domain": "agent",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "restore_managed_block",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
       ],
       "component": null,
       "produces": [],

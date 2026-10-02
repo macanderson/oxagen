@@ -743,7 +743,11 @@
         "mergeCommitUnknown": "Oxagen cannot find what the production branch held before this merge, so nothing was opened.",
         "nothingToRevert": "This merge changed nothing outside the ledger, so there is nothing to revert.",
         "revertBranchExists": "A revert of this pull request is already open, or its branch is still there. Merge or close that pull request and delete its branch, then try again.",
-        "toolNotRegistered": "Oxagen has not registered this action yet."
+        "toolNotRegistered": "Oxagen has not registered this action yet.",
+        "blockIntact": "The managed block already matches the production branch. Nothing was changed.",
+        "noManagedBlock": "The production branch holds no managed block in this file, so there is nothing to restore.",
+        "noManagedBlocks": "This repository keeps its steering under .oxagen/, which holds no managed blocks.",
+        "prNotOpen": "This proposal has no open steering PR. Open it first."
       },
       "approve": {
         "confirm": "Approve",

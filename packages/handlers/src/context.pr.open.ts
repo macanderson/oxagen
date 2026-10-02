@@ -587,4 +587,50 @@ export async function recheckContextPr(
   });
 }
 
+export interface CommittedHead {
+  scope: { orgId: string; workspaceId: string };
+  repo: SteeringRepository;
+  /** The row, in any open status. */
+  row: ProposalRow;
+  layout: SteeringLayout;
+  path: string;
+  branch: string;
+  /** The commit Oxagen just wrote on the branch. */
+  to: string;
+  updatedById: string | null;
+}
+
+/**
+ * Run the checks on a commit Oxagen just wrote on an open Context PR's
+ * branch, such as the one restore_managed_block writes (#4518). The row
+ * moves to that commit from any open status, a failed run included, so the
+ * checks read the head Oxagen made and not the host's view of the PR, which
+ * can lag a push. A merge's claim refuses it, as it refuses a re-run.
+ */
+export async function checkCommittedHead(
+  deps: CheckDeps,
+  input: CommittedHead,
+): Promise<ProposalRow> {
+  const row = await deps.store.updateProposal(
+    input.row.id,
+    {
+      status: "checks_running",
+      headSha: input.to,
+      checks: pendingChecks(),
+      updatedById: input.updatedById,
+    },
+    OPEN_PR,
+    { noClaimSince: claimCutoff(deps.now()) },
+  );
+  return runHeadChecks(deps, {
+    scope: input.scope,
+    repo: input.repo,
+    row,
+    layout: input.layout,
+    path: input.path,
+    branch: input.branch,
+    headSha: input.to,
+  });
+}
+
 export const openContextPrHandler = createOpenContextPrHandler(steeringDeps());
