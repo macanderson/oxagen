@@ -13,6 +13,11 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Each test imports ./bootstrap fresh. On a busy CI runner with coverage on,
+// that import can pass the 5-second default. The timed-out import then
+// registers the gate during the next test and breaks its spy count (#5037).
+vi.setConfig({ testTimeout: 30_000 });
+
 // Top-level mocks are hoisted by vitest — they apply to all dynamic imports.
 //
 // Each factory carries `satisfies Pick<typeof import(...), the names it

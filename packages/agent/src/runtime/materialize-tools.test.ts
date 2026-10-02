@@ -1,6 +1,12 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { z } from "zod";
 
+// Many tests here call vi.resetModules() and import ./materialize-tools
+// again. Each takes 2 to 5 seconds on a busy CI runner with coverage on, so
+// the 5-second default fails them. A test that times out keeps running and
+// breaks the next test's spy counts (#5037).
+vi.setConfig({ testTimeout: 30_000 });
+
 // Fixed capability fixture: one non-agent (excluded), one low-risk agent,
 // one high-risk agent, one non-agent.* agent-surface capability (form.fill).
 const FIXTURE = [
