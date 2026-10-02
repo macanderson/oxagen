@@ -49,7 +49,7 @@ export const steeringMarkdownImportCommit = registerCapability({
     "Open one steering PR on steering/import-<date> with the Markdown import's records and Cedar policies marked add. Records keep origin: user and provenance.source: import. The PR runs the steering checks, and nothing steers until it merges.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
-  layers: ["schema", "api", "mcp", "cli", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,
