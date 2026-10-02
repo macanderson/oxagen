@@ -10,6 +10,12 @@
 //
 // Only a waiting memory is cited. A memory whose statement an open memory PR
 // already proposes is skipped, so one lesson never sits in two open PRs.
+//
+// A promoted memory record goes where the curator puts one, under
+// steering/memory/. Every other kind goes to its kind's folder, as
+// open_context_pr and the Markdown import write it: a promoted code rule is
+// a steering record like any other, and the curator's stale check, which
+// reads only steering/memory/, never proposes archiving it.
 import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import type {
   MemoryDraftRecord,
@@ -27,6 +33,7 @@ import type {
   RecordForce,
 } from "@oxagen/oxagen/steering-repo/record";
 import type { SteeringHost, SteeringRepository } from "../context.steering.github";
+import { importRecordPath } from "../markdown-import/render";
 import { readSteeringLayout } from "../steering-repo/merge-queue";
 import { MEMORY_PR_FILES_MAX, memoryBranch } from "./curate";
 import { memoryLineage, memoryRecordPath, memoryShard } from "./naming";
@@ -139,6 +146,20 @@ function provenanceMemory(memory: WorkspaceMemoryRow): ProvenanceMemory {
     statement: memory.statement,
     evidence: [...memory.evidence],
   };
+}
+
+/**
+ * Where a promoted record lives: a memory where the curator puts one, in its
+ * repository's shard, and every other kind at `steering/<kind folder>/<lineage>.md`.
+ */
+function recordPath(
+  draft: ResolvedDraft,
+  first: WorkspaceMemoryRow,
+  lineage: string,
+): string {
+  return draft.kind === "memory"
+    ? memoryRecordPath(draft.repos, first.appliesTo, first.tools, lineage)
+    : importRecordPath(draft.kind, lineage);
 }
 
 /** A path's file name without `.md`, which is the lineage a record there usually has. */
@@ -355,11 +376,11 @@ export async function promoteMemories(
   for (const draft of resolved) {
     let lineage = memoryLineage(draft.statement, taken);
     const first = draft.memories[0] as WorkspaceMemoryRow;
-    let path = memoryRecordPath(draft.repos, first.appliesTo, first.tools, lineage);
+    let path = recordPath(draft, first, lineage);
     while (paths.has(path)) {
       taken.add(lineage);
       lineage = memoryLineage(draft.statement, taken);
-      path = memoryRecordPath(draft.repos, first.appliesTo, first.tools, lineage);
+      path = recordPath(draft, first, lineage);
     }
     taken.add(lineage);
     paths.add(path);

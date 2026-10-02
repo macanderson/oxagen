@@ -475,6 +475,7 @@ export async function readRecords(
       lineage: record.lineage,
       kind: record.kind,
       status: record.status,
+      force: record.force,
       statement: recordStatement(read.body),
       repos: record.repos ?? null,
       appliesTo: record.applies_to ?? null,

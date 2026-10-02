@@ -82,6 +82,7 @@ function activeRecord(
     lineage,
     kind: "memory",
     status: "active",
+    force: "info",
     statement: CHANGELOG,
     repos: null,
     appliesTo: null,
@@ -222,6 +223,34 @@ describe("planCuration", () => {
         },
       ]);
       expect(plan.stampRecalls).toEqual([unstamped.lineage]);
+    });
+
+    it("never archives a must or should record under steering/memory, which loads on every request", () => {
+      const plan = planCuration(
+        input({
+          records: [
+            activeRecord("must-stale", { kind: "code-rule", force: "must", statement: REFUND }),
+            activeRecord("should-contradicted", {
+              kind: "business-rule",
+              force: "should",
+              statement: MIGRATE,
+            }),
+            activeRecord("must-unstamped", { kind: "code-rule", force: "must", statement: PNPM }),
+            activeRecord("may-stale", { kind: "preference", force: "may", statement: KEYS }),
+          ],
+          recalls: [
+            stamp("must-stale", daysAgo(400)),
+            stamp("should-contradicted", daysAgo(1), daysAgo(10)),
+            stamp("may-stale", daysAgo(181)),
+          ],
+          reflections: [{ createdAt: daysAgo(5), lessons: [{ statement: NEVER_MIGRATE }] }],
+        }),
+      );
+      expect(plan.retirements.map((r) => [r.lineage, r.reason])).toEqual([
+        ["may-stale", "stale"],
+      ]);
+      // A must record gets no recall row either, so no stale clock starts.
+      expect(plan.stampRecalls).toEqual([]);
     });
   });
 

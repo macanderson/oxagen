@@ -16,6 +16,7 @@
 import { MEMORY_DIR } from "@oxagen/oxagen/steering-repo/paths";
 import type {
   ProvenanceMemory,
+  RecordForce,
   RecordKind,
 } from "@oxagen/oxagen/steering-repo/record";
 import { memoryLineage, memoryRecordPath, memoryShard } from "./naming";
@@ -84,11 +85,19 @@ function retireReason(
   return null;
 }
 
+/** The forces recall serves. A `must` or `should` record loads on every request instead. */
+const RECALLED_FORCES: ReadonlySet<RecordForce> = new Set<RecordForce>([
+  "may",
+  "info",
+]);
+
 /**
  * The memory records to archive, and those with no recall row. A record with
  * no row gets one stamped now, which starts its stale clock, and is not
  * archived this time. A record an open memory PR already names waits for
- * that PR.
+ * that PR. Only a `may` or `info` record is read: recall never serves a
+ * `must` or `should` record, so its recall row says nothing about its use,
+ * and a person who promoted it decides when it goes.
  */
 function planRetirements(
   input: CurateInput,
@@ -103,6 +112,7 @@ function planRetirements(
     if (
       record.status !== "active" ||
       !record.path.startsWith(`${MEMORY_DIR}/`) ||
+      !RECALLED_FORCES.has(record.force) ||
       pendingLineages.has(record.lineage)
     ) {
       continue;

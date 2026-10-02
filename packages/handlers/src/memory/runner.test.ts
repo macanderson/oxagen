@@ -1574,6 +1574,7 @@ function activeRecord(
     path: `steering/memory/workspace/general/${over.lineage}.md`,
     kind: "memory",
     status: "active",
+    force: "info",
     statement: RECALLED,
     repos: null,
     appliesTo: null,

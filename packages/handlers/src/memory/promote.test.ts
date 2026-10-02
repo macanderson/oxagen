@@ -230,7 +230,9 @@ describe("promoteMemories opening a memory PR", () => {
     });
 
     const lineage = memoryLineage(statement, new Set());
-    const path = memoryRecordPath(["github.com/acme/api"], null, null, lineage);
+    // A constraint goes to its kind's folder, as open_context_pr writes one,
+    // and its repository scope lives in its frontmatter.
+    const path = `steering/constraints/${lineage}.md`;
     expect(result.records).toEqual([
       { path, lineage, kind: "constraint", force: "must", effect: "forbid", memoryIds: [m.publicId] },
     ]);
@@ -247,15 +249,44 @@ describe("promoteMemories opening a memory PR", () => {
     expect(read.body.trim()).toBe(statement);
   });
 
-  it("keeps a code rule a code rule and gives it force should when the person names no force", async () => {
-    const { fakes, deps } = harness();
-    const m = memory("Run the migration check before the build.", { kind: "code-rule" });
+  it("keeps a code rule a code rule in steering/code-rules, with force should when the person names no force", async () => {
+    const { gh, fakes, deps } = harness();
+    const statement = "Run the migration check before the build.";
+    const m = memory(statement, { kind: "code-rule", repos: ["github.com/acme/api"] });
     fakes.memories.push(m);
     const result = await promoteMemories(deps, SCOPE, {
       drafts: [{ memory_ids: [m.publicId] }],
       sameText: true,
     });
-    expect(result.records[0]).toMatchObject({ kind: "code-rule", force: "should" });
+    const path = `steering/code-rules/${memoryLineage(statement, new Set())}.md`;
+    expect(result.records[0]).toMatchObject({ path, kind: "code-rule", force: "should" });
+    const read = readSteeringRecord(fileAt(gh, path));
+    if (!read.ok) throw new Error("the record does not read");
+    // The record still cites the memory it came from.
+    expect(read.record.provenance.memories).toEqual([
+      { agent: "agt.laptop", run: null, statement, evidence: [] },
+    ]);
+    expect(fakes.prs[0]?.records[0]?.path).toBe(path);
+  });
+
+  it("keeps only a memory under steering/memory, in its repository's shard", async () => {
+    const { fakes, deps } = harness();
+    const fact = memory("The api runs on port 4000.", { kind: "fact" });
+    const lesson = memory(STATEMENT, { repos: ["github.com/acme/api"] });
+    fakes.memories.push(fact, lesson);
+    const result = await promoteMemories(deps, SCOPE, {
+      drafts: [{ memory_ids: [fact.publicId] }, { memory_ids: [lesson.publicId] }],
+      sameText: true,
+    });
+    expect(result.records.map((r) => [r.kind, r.force, r.path])).toEqual([
+      ["fact", "info", `steering/facts/${memoryLineage(fact.statement, new Set())}.md`],
+      [
+        "memory",
+        "info",
+        memoryRecordPath(["github.com/acme/api"], null, null, memoryLineage(STATEMENT, new Set())),
+      ],
+    ]);
+    expect(result.records[1]?.path.startsWith("steering/memory/github.com/acme/api/")).toBe(true);
   });
 
   it("names a new lineage when the planned path already holds a file", async () => {

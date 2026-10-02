@@ -8,6 +8,7 @@ import type { z } from "zod";
 import type { GovernanceSettings } from "@oxagen/oxagen/steering-repo/governance";
 import type {
   ProvenanceMemory,
+  RecordForce,
   RecordKind,
 } from "@oxagen/oxagen/steering-repo/record";
 import type { reflectionOutcomeSchema } from "@oxagen/oxagen/steering-repo/reflection";
@@ -170,6 +171,11 @@ export interface ActiveRecord {
   lineage: string;
   kind: RecordKind;
   status: "active" | "archived";
+  /**
+   * When the record reaches a request. `must` and `should` load on every
+   * request, never through recall, so the curator never archives one.
+   */
+  force: RecordForce;
   /** The record's body, as `recordStatement` gives it. */
   statement: string;
   /** The record's `repos`, `applies_to`, and `tools`, which recall scopes by. */

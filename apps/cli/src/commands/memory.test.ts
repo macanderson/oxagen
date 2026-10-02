@@ -283,7 +283,7 @@ describe("memory promote", () => {
     },
     records: [
       {
-        path: "steering/memory/workspace/general/pnpm-never-npm-repository.md",
+        path: "steering/code-rules/pnpm-never-npm-repository.md",
         lineage: "pnpm-never-npm-repository",
         kind: "code-rule",
         force: "should",
@@ -344,7 +344,7 @@ describe("memory promote", () => {
     expect(captured.output()).toBe(
       [
         "Opened memory PR #7 on memory/2026-10-01: https://github.com/acme/steering/pull/7",
-        "  steering/memory/workspace/general/pnpm-never-npm-repository.md (code-rule, should) cites mem_0a1b2c, mem_3d4e5f",
+        "  steering/code-rules/pnpm-never-npm-repository.md (code-rule, should) cites mem_0a1b2c, mem_3d4e5f",
         "Nothing steers until a person merges the PR.",
         "Skipped mem_9z8y7x: the memory is not waiting.",
       ].join("\n"),
