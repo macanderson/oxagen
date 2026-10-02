@@ -13,6 +13,7 @@ import {
   MEMORY_SCAN_PATHS_MAX,
   MEMORY_USES_PATH,
   MEMORY_USES_PER_REPORT,
+  MEMORY_USES_QUEUED_MAX,
   memoryFileOf,
   memoryReadsOf,
 } from "./memory-uses";
@@ -134,6 +135,7 @@ interface Call {
     uses?: Array<{
       harness: string;
       path: string;
+      signal?: string;
       session_uuid: string;
       count: number;
       used_at: string;
@@ -394,5 +396,81 @@ describe("a report", () => {
     await first;
     expect(calls).toHaveLength(1);
     expect(memoryUses.size()).toBe(1);
+  });
+});
+
+describe("a Stella citation", () => {
+  const LINEAGE = "mem_3f9a1c0b7e2d4a5c6b8e9f01";
+
+  it("is a use of its own beside a read of the same path in the same run", async () => {
+    const { fetch, calls } = plane();
+    const { memoryUses } = uses(fetch);
+    memoryUses.note({ harness: "stella", path: LINEAGE, sessionUuid: RUN_A, at: at(NOW), signal: "citation" });
+    memoryUses.note({ harness: "stella", path: LINEAGE, sessionUuid: RUN_A, at: at(NOW + 1_000), signal: "citation" });
+    memoryUses.note({ harness: "claude-code", path: FILE, sessionUuid: RUN_A, at: at(NOW) });
+    expect(memoryUses.size()).toBe(2);
+    await memoryUses.report();
+    // Reads go first, and a citation never shares a call with a read.
+    expect(calls.map((call) => call.body.uses)).toEqual([
+      [
+        {
+          harness: "claude-code",
+          path: FILE,
+          session_uuid: RUN_A,
+          count: 1,
+          used_at: at(NOW),
+        },
+      ],
+      [
+        {
+          harness: "stella",
+          path: LINEAGE,
+          signal: "citation",
+          session_uuid: RUN_A,
+          count: 2,
+          used_at: at(NOW + 1_000),
+        },
+      ],
+    ]);
+  });
+
+  it("is dropped with its own call when the control plane refuses it, and the reads land", async () => {
+    const { fetch, calls } = plane([200, 400]);
+    const { memoryUses, lines } = uses(fetch);
+    memoryUses.note({ harness: "stella", path: LINEAGE, sessionUuid: RUN_A, at: at(NOW), signal: "citation" });
+    memoryUses.note({ harness: "claude-code", path: FILE, sessionUuid: RUN_A, at: at(NOW) });
+    await memoryUses.report();
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.body.uses?.[0]?.harness).toBe("claude-code");
+    expect(memoryUses.size()).toBe(0);
+    expect(lines).toEqual([
+      "memory uses: the control plane refused 1 uses (400); they are dropped",
+    ]);
+  });
+
+  it("waits with the reads when the control plane is down", async () => {
+    const { fetch } = plane([503]);
+    const { memoryUses } = uses(fetch);
+    memoryUses.note({ harness: "stella", path: LINEAGE, sessionUuid: RUN_A, at: at(NOW), signal: "citation" });
+    memoryUses.note({ harness: "claude-code", path: FILE, sessionUuid: RUN_A, at: at(NOW) });
+    await memoryUses.report();
+    expect(memoryUses.size()).toBe(2);
+  });
+
+  it("says when the queue had no room for it", () => {
+    const { fetch } = plane();
+    const { memoryUses } = uses(fetch);
+    for (let i = 0; i < MEMORY_USES_QUEUED_MAX; i += 1)
+      expect(
+        memoryUses.note({ harness: "stella", path: `mem_${i}`, sessionUuid: RUN_A, at: at(NOW), signal: "citation" }),
+      ).toBe(true);
+    expect(
+      memoryUses.note({ harness: "stella", path: "mem_more", sessionUuid: RUN_A, at: at(NOW), signal: "citation" }),
+    ).toBe(false);
+    // A use already queued still merges.
+    expect(
+      memoryUses.note({ harness: "stella", path: "mem_0", sessionUuid: RUN_A, at: at(NOW), signal: "citation" }),
+    ).toBe(true);
+    expect(memoryUses.size()).toBe(MEMORY_USES_QUEUED_MAX);
   });
 });

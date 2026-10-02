@@ -13,6 +13,10 @@
 // this run started. Each tool's result cost is an estimate of input the run's
 // cost already counts, so it always carries the `estimated` basis. So does
 // the standing context by source (#4537, spec detector 2).
+//
+// It also answers each loop that reached the workspace's no-progress limit
+// (#4490, spec detector 1), from `cost.no_progress_hits`: the Cost tab draws
+// one line per loop.
 import {
   standingContextBySource,
   standingSourcesOf,
@@ -20,10 +24,12 @@ import {
 } from "@oxagen/billing";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
+  RUN_NO_PROGRESS_PAUSE_BLOCKS,
   runCostGet,
   type RunCostBaseline,
   type RunCostByClass,
   type RunCostGetOutput,
+  type RunCostNoProgressHit,
   type RunCostProvisional,
   type RunCostStandingContext,
 } from "@oxagen/oxagen/contracts/run.cost";
@@ -52,7 +58,94 @@ export type RunCostDeps = {
     scope: SpendScope,
     run: BaselineRun,
   ) => Promise<RunCostBaseline | null>;
+  /** The run's no-progress hits; absent, the answer carries none. */
+  readNoProgressHits?: (
+    scope: SpendScope,
+    runId: string,
+  ) => Promise<RunCostNoProgressHit[]>;
 };
+
+const noProgressHits = schema.noProgressHits;
+
+/** The most hits one read answers; a run holds one row per loop. */
+export const RUN_NO_PROGRESS_HITS_MAX = 100;
+
+type NoProgressHitRow = {
+  tool: string;
+  loop: number;
+  repeats: number;
+  limitRepeats: number;
+  atCall: number;
+  mode: string;
+  outcome: string;
+  pauseBlock: string | null;
+  detectedAt: Date;
+};
+
+const pauseBlockOf = (
+  value: string | null,
+): RunCostNoProgressHit["pauseBlock"] =>
+  (RUN_NO_PROGRESS_PAUSE_BLOCKS as readonly string[]).includes(value ?? "")
+    ? (value as RunCostNoProgressHit["pauseBlock"])
+    : null;
+
+/**
+ * A stored hit on the wire. The table's checks hold the mode, outcome, and
+ * block to the contract's sets, so an unknown value here means a newer
+ * writer: it reads as observe, `would_pause`, and no block, the reading that
+ * claims the least.
+ */
+export function noProgressHitOf(row: NoProgressHitRow): RunCostNoProgressHit {
+  const mode = row.mode === "enforced" ? "enforced" : "observe";
+  const outcome =
+    mode === "enforced" && row.outcome === "paused" ? "paused" : "would_pause";
+  return {
+    tool: row.tool,
+    loop: row.loop,
+    repeats: row.repeats,
+    limit: row.limitRepeats,
+    atCall: row.atCall,
+    mode,
+    outcome,
+    pauseBlock:
+      mode === "enforced" && outcome === "would_pause"
+        ? pauseBlockOf(row.pauseBlock)
+        : null,
+    detectedAt: row.detectedAt.toISOString(),
+  };
+}
+
+/** The run's `cost.no_progress_hits` rows, in the order each loop reached the limit. */
+export async function readNoProgressHits(
+  scope: SpendScope,
+  runId: string,
+): Promise<RunCostNoProgressHit[]> {
+  const rows = await withTenantDb((tx) =>
+    tx
+      .select({
+        tool: noProgressHits.tool,
+        loop: noProgressHits.loop,
+        repeats: noProgressHits.repeats,
+        limitRepeats: noProgressHits.limitRepeats,
+        atCall: noProgressHits.atCall,
+        mode: noProgressHits.mode,
+        outcome: noProgressHits.outcome,
+        pauseBlock: noProgressHits.pauseBlock,
+        detectedAt: noProgressHits.detectedAt,
+      })
+      .from(noProgressHits)
+      .where(
+        and(
+          eq(noProgressHits.orgId, scope.orgId),
+          eq(noProgressHits.workspaceId, scope.workspaceId),
+          eq(noProgressHits.runId, runId),
+        ),
+      )
+      .orderBy(asc(noProgressHits.atCall), asc(noProgressHits.tool))
+      .limit(RUN_NO_PROGRESS_HITS_MAX),
+  );
+  return rows.map(noProgressHitOf);
+}
 
 const sessions = schema.tachoSessions;
 const sessionModels = schema.tachoSessionModels;
@@ -201,17 +294,28 @@ export function createRunCostHandler(
 ): CapabilityHandler<typeof runCostGet> {
   return async (input, ctx): Promise<RunCostGetOutput> => {
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
-    const row = (await deps.readRunTotalsByIds(scope, [input.runId])).get(
-      input.runId,
-    );
+    const [rows, hits] = await Promise.all([
+      deps.readRunTotalsByIds(scope, [input.runId]),
+      deps.readNoProgressHits
+        ? deps.readNoProgressHits(scope, input.runId)
+        : null,
+    ]);
+    const loops = hits === null ? {} : { noProgressHits: hits };
+    const row = rows.get(input.runId);
     if (!row) {
       // With no row there is no agent key or start to read a baseline for.
       const provisional = deps.readProvisional
         ? await deps.readProvisional(scope, input.runId)
         : null;
       return provisional === null
-        ? { runId: input.runId, rollup: null, baseline: null }
-        : { runId: input.runId, rollup: null, provisional, baseline: null };
+        ? { runId: input.runId, rollup: null, baseline: null, ...loops }
+        : {
+            runId: input.runId,
+            rollup: null,
+            provisional,
+            baseline: null,
+            ...loops,
+          };
     }
     const baseline = await deps.readBaseline(scope, {
       runId: row.runId,
@@ -229,6 +333,7 @@ export function createRunCostHandler(
     return {
       runId: input.runId,
       baseline,
+      ...loops,
       rollup: {
         cost: cost(row.costMicros, row.currency, row.costBasis),
         tokens: row.tokens,
@@ -276,4 +381,5 @@ export const runCostHandler = createRunCostHandler({
   readRunTotalsByIds,
   readProvisional: readProvisionalCost,
   readBaseline: readRunCostBaseline,
+  readNoProgressHits,
 });

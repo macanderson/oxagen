@@ -212,6 +212,22 @@ function toStandingContext(context: ContractStandingContext | undefined) {
 export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
   const { rollup, provisional, baseline } = out;
   return {
+    // An answer from before the hits were read carries none (#4490).
+    ...(out.noProgressHits === undefined
+      ? {}
+      : {
+          noProgressHits: out.noProgressHits.map((hit) => ({
+            tool: hit.tool,
+            loop: hit.loop,
+            repeats: hit.repeats,
+            limit: hit.limit,
+            atCall: hit.atCall,
+            mode: hit.mode,
+            outcome: hit.outcome,
+            pauseBlock: hit.pauseBlock,
+            detectedAt: hit.detectedAt,
+          })),
+        }),
     baseline:
       baseline === null
         ? null
@@ -563,7 +579,7 @@ export function toRunChain(out: RunChainOutput): z.input<typeof RunChain> {
       recorded: out.gaps.recorded,
     },
     // One entry per attempt, oldest first; empty while the run is unsealed
-    // (finding 8, macanderson/oxagen#3370).
+    // (finding 8, oxageninc/product#3370).
     seals: out.seals.map((seal) => ({
       sealedAt: seal.sealedAt,
       terminalStatus: seal.terminalStatus,

@@ -61,12 +61,16 @@ function mandatesOf(read: Read<MandateList> | undefined) {
 async function renderPanel(reads: {
   approvals: Read<ApprovalQueue>;
   mandates?: Read<MandateList>;
+  agentHarnesses?: Record<string, string>;
 }) {
   const { container } = render(
     <IntlProvider>
       <ApprovalsPanel
         approvals={reads.approvals}
         mandates={mandatesOf(reads.mandates)}
+        {...(reads.agentHarnesses === undefined
+          ? {}
+          : { agentHarnesses: reads.agentHarnesses })}
         now={NOW}
         org="acme"
         ws="core-platform"
@@ -116,7 +120,8 @@ describe("the approvals panel", () => {
     );
     expect(first).toHaveTextContent("The call ends unanswered in 7:30");
     expect(within(first ?? section).queryByRole("link")).toBeNull();
-    expect(second).toHaveTextContent("Agentacme.core.release-bot");
+    // The agent hop draws the agent's avatar, whose initials sit before its key.
+    expect(second).toHaveTextContent("AgentREacme.core.release-bot");
     expect(second).toHaveTextContent("Requesternot recorded");
     // The rule hop names the mandate, because a rule id of this form is only
     // legible beside it.
@@ -126,6 +131,28 @@ describe("the approvals panel", () => {
     expect(
       within(second ?? section).getByRole("link", { name: "Open run" }),
     ).toHaveAttribute("href", "/acme/core-platform/runs/arun_7k2m9q");
+  });
+
+  it("badges the agent hop's avatar with the harness the page resolved, and draws none it did not", async () => {
+    await renderPanel({
+      approvals: approvalQueue([
+        approvalItem({ id: "apr_known", agentKey: "acme.core.release-bot" }),
+        approvalItem({ id: "apr_other", agentKey: "acme.core.stranger" }),
+      ]),
+      agentHarnesses: { "acme.core.release-bot": "codex" },
+    });
+    const [known, other] = within(approvalsSection()).getAllByTestId(
+      "approval",
+    );
+    expect(
+      within(known ?? approvalsSection())
+        .getByTestId("chain")
+        .querySelector("[data-harness-badge]"),
+    ).toHaveAttribute("data-harness-badge", "codex");
+    // An agent the page did not resolve draws its avatar with no badge (negative).
+    const otherChain = within(other ?? approvalsSection()).getByTestId("chain");
+    expect(otherChain.querySelector("[data-agent-avatar]")).not.toBeNull();
+    expect(otherChain.querySelector("[data-harness-badge]")).toBeNull();
   });
 
   it("says no rule covered a call the auto-approval clause never judged", async () => {

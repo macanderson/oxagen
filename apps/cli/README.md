@@ -285,7 +285,7 @@ bumps all packages to the same version and syncs it to Vercel.
 ## Support
 
 - Docs: https://docs.oxagen.sh
-- Issues: https://github.com/macanderson/oxagen/issues
+- Issues: https://github.com/oxageninc/product/issues
 
 ## License
 

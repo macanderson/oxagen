@@ -38,7 +38,7 @@ describe("pinProblem", () => {
     expect(pinProblem("github/codeql-action/init@v3")).toBeNull();
     expect(pinProblem("./.github/actions/pnpm-install")).toBeNull();
     expect(
-      pinProblem("macanderson/oxagen/.github/workflows/dod-check.yml@main"),
+      pinProblem("oxageninc/product/.github/workflows/dod-check.yml@main"),
     ).toBeNull();
   });
 

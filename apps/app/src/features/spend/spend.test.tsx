@@ -7,8 +7,8 @@
 // columns in the design's order, one key's drill, the evidence and stub
 // dialogs, and each state (empty, loading, error, denied, waiting). Every
 // money figure carries its basis or prints "not recorded"; a slice no store
-// records says so and names its issue; axe checks the state each test ends in
-// (INV-26).
+// records says so and names its issue; each agent's avatar carries the harness
+// it registered (#4871); axe checks the state each test ends in (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
@@ -24,12 +24,14 @@ import type {
   SpendGroupKind,
   SpendReport,
   SpendWaste,
+  UnproductiveSpend,
 } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
 import type { WsRole } from "@/server/viewer";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { pickOption } from "@/test/select";
+import { agentPage, enrolledAgent } from "@/test/steering-views";
 import enMessages from "../../../messages/en.json";
 import spendMessages from "../../../messages/spend.json";
 import uiMessages from "../../../messages/ui.json";
@@ -48,8 +50,6 @@ vi.mock("./actions", () => ({
   setPriceEntryAction: vi.fn(),
   removePriceEntryAction: vi.fn(),
   setGatewayPolicyAction: vi.fn(),
-}));
-vi.mock("./operator-ranking-actions", () => ({
   setOperatorPseudonymsAction: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
@@ -79,6 +79,20 @@ const ctx = ctxAs("member");
 
 const TODAY = new Date("2026-09-15T12:00:00.000Z");
 const PERIOD = { from: "2026-09-01", to: "2026-09-15" };
+
+/** The month's headline: $5.00 unproductive of $20.00 spent, 25%. */
+const HEADLINE: UnproductiveSpend = {
+  period: PERIOD,
+  unproductive: { micros: "5000000", currency: "USD" },
+  spend: { micros: "20000000", currency: "USD" },
+  share: 0.25,
+  parts: [
+    { detector: 2, saving: { micros: "1000000", currency: "USD" }, findings: 1 },
+    { detector: 3, saving: { micros: "0", currency: "USD" }, findings: 0 },
+    { detector: 5, saving: { micros: "984600000", currency: "USD" }, findings: 1 },
+  ],
+  estimate: { saving: { micros: "300000", currency: "USD" }, findings: 1 },
+};
 
 const cost = (micros: string, basis: Cost["basis"] = "gateway_observed") => ({
   micros,
@@ -131,6 +145,8 @@ const findingEvidence = vi.fn<DataSource["spend"]["findingEvidence"]>();
 const priceBook = vi.fn<DataSource["spend"]["priceBook"]>();
 const unpricedModels = vi.fn<DataSource["spend"]["unpricedModels"]>();
 const operatorRanking = vi.fn<DataSource["spend"]["operatorRanking"]>();
+const unproductive = vi.fn<DataSource["spend"]["unproductive"]>();
+const agentsList = vi.fn<DataSource["agents"]["list"]>();
 const source: DataSource = {
   runtimes: { list: vi.fn(), agents: vi.fn(), named: vi.fn() },
   conversations: { latest: vi.fn(), list: vi.fn(), byId: vi.fn() },
@@ -168,7 +184,7 @@ const source: DataSource = {
   approvals: { pending: vi.fn(), resolved: vi.fn(), resolvedSince: vi.fn() },
   interjections: { open: vi.fn(), forRun: vi.fn() },
   agents: {
-    list: vi.fn(),
+    list: agentsList,
     get: vi.fn(),
     toolbelt: vi.fn(),
     incidents: vi.fn(),
@@ -179,6 +195,7 @@ const source: DataSource = {
     drill,
     waste,
     operatorRanking,
+    unproductive,
     budgets,
     gatewayPolicy,
     findings,
@@ -231,6 +248,24 @@ const source: DataSource = {
     toolbelt: vi.fn(),
   },
 };
+
+/**
+ * The agents the harness index reads (#4871): triage registered on Claude Code
+ * and stella-ci on stella. `acme.core.review` is not among them.
+ */
+const registry = agentPage([
+  enrolledAgent({
+    slug: "triage",
+    agentKey: "acme.core.triage",
+    harness: "claude-code",
+  }),
+  enrolledAgent({
+    id: "agt_01k5rs7c",
+    slug: "stella-ci",
+    agentKey: "a-intel.core.stella-ci",
+    harness: "stella",
+  }),
+]);
 
 /** The route's own parse, so a test names a path the way a person does. */
 async function renderSpend(
@@ -414,6 +449,9 @@ beforeEach(() => {
   priceBook.mockReset();
   unpricedModels.mockReset();
   operatorRanking.mockReset();
+  unproductive.mockReset().mockResolvedValue(readOk(HEADLINE));
+  agentsList.mockReset();
+  agentsList.mockResolvedValue(readOk(registry));
 });
 
 afterEach(async () => {
@@ -720,6 +758,79 @@ describe("Spend › Month", () => {
     expect(screen.getByText("7 more runs")).toBeInTheDocument();
   });
 
+  it("badges each agent with the harness it registered, and a run with the harness it recorded (#4871)", async () => {
+    loadedMonth();
+    await renderSpend();
+    expect(agentsList).toHaveBeenCalledWith(ctx, {
+      cursor: null,
+      includeRetired: true,
+    });
+    const triageRow = rowOf("acme.core.triage");
+    expect(
+      triageRow.querySelector('[data-harness-badge="claude-code"]'),
+    ).not.toBeNull();
+    await userEvent.click(
+      within(triageRow).getByRole("button", {
+        name: "Costliest runs of acme.core.triage",
+      }),
+    );
+    // The run recorded Codex and keeps it over its agent's registered harness.
+    const run = screen.getByRole("link", { name: /Repair the login redirect/ });
+    expect(run.querySelector("[data-harness-badge]")).toHaveAttribute(
+      "data-harness-badge",
+      "codex",
+    );
+  });
+
+  it("badges a run that recorded no harness with the one its agent registered (#4871)", async () => {
+    loadedMonth(() =>
+      month([
+        row("acme.core.triage", {
+          runs: 8,
+          topRuns: [{ ...triage, harness: null }],
+        }),
+      ]),
+    );
+    await renderSpend();
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Costliest runs of acme.core.triage",
+      }),
+    );
+    const run = screen.getByRole("link", { name: /Repair the login redirect/ });
+    expect(run.querySelector("[data-harness-badge]")).toHaveAttribute(
+      "data-harness-badge",
+      "claude-code",
+    );
+  });
+
+  it("leaves an agent the registry does not hold unbadged (negative)", async () => {
+    loadedMonth();
+    await renderSpend();
+    const review = rowOf("acme.core.review");
+    expect(review.querySelector("[data-agent-avatar]")).not.toBeNull();
+    expect(review.querySelector("[data-harness-badge]")).toBeNull();
+  });
+
+  it("still lists the groups, every agent's avatar unbadged, when the agents do not answer (negative)", async () => {
+    loadedMonth();
+    agentsList.mockResolvedValue(readError("agents_down", 503));
+    await renderSpend();
+    const triageRow = rowOf("acme.core.triage");
+    expect(triageRow).toHaveTextContent("$9.00");
+    // Each group's avatar sits in its row's header cell. A top run, in the
+    // hidden row under it, keeps the harness its session recorded, which needs
+    // no agents read.
+    const avatars = [
+      ...document.querySelectorAll<HTMLElement>(
+        "tr[data-key] > th [data-agent-avatar]",
+      ),
+    ];
+    expect(avatars.length).toBeGreaterThan(0);
+    for (const avatar of avatars)
+      expect(avatar.querySelector("[data-harness-badge]")).toBeNull();
+  });
+
   it("groups by the query's choice, with the chip in force pressed and Agent on the bare path", async () => {
     loadedMonth(() =>
       month([
@@ -967,21 +1078,27 @@ describe("Spend › Month", () => {
 });
 
 describe("Spend › Findings", () => {
-  it("leads with the savings identified, the share strip, the legend and the four facts", async () => {
+  it("leads with the month's unproductive spend beside its share, the parts and the estimate beside them, and the four facts", async () => {
     loaded({ operator: report([row("prn_marcusbell", { operator: MARCUS })]) });
     await renderSpend(["findings"]);
+    expect(unproductive).toHaveBeenCalledWith(ctx, PERIOD);
     const hero = screen.getByTestId("spend-findings-hero");
-    expect(within(hero).getByRole("heading")).toHaveTextContent(
-      "Savings identified",
-    );
-    expect(hero).toHaveTextContent("$1,670.80");
-    expect(hero).toHaveTextContent("64% of");
-    expect(hero).toHaveTextContent("About $17,649.60 a year at this run rate.");
     expect(
-      within(hero).getByRole("img", {
-        name: "Share of the identified savings by finding",
-      }),
+      within(hero).getByRole("heading", { name: "Unproductive spend" }),
     ).toBeInTheDocument();
+    expect(within(hero).getByTestId("spend-headline")).toHaveTextContent(
+      "$5.00",
+    );
+    expect(within(hero).getByTestId("spend-headline-share")).toHaveTextContent(
+      "25%",
+    );
+    expect(hero).toHaveTextContent("of $20.00 spent this month.");
+    // The listed findings' savings summed across kinds is not the headline.
+    expect(hero).not.toHaveTextContent("$1,670.80");
+    expect(hero).not.toHaveTextContent("a year at this run rate");
+    const parts = within(hero).getByTestId("spend-headline-parts");
+    expect(parts).toHaveTextContent("Context carry$984.60");
+    expect(parts).toHaveTextContent("Model class fit Estimated$0.30");
     expect(hero).toHaveTextContent("3 findings");
     expect(hero).toHaveTextContent("3 operators involved");
     expect(hero).toHaveTextContent("2 high confidence 1 medium");
@@ -1083,6 +1200,14 @@ describe("Spend › Findings", () => {
         }),
       ),
     );
+    unproductive.mockResolvedValue(
+      readOk({
+        ...HEADLINE,
+        unproductive: { micros: "0", currency: "USD" },
+        spend: null,
+        share: null,
+      }),
+    );
     await renderSpend(["findings"]);
     expect(screen.getByText("No finding is open")).toBeInTheDocument();
     expect(screen.getByTestId("spend-findings-hero")).toHaveTextContent(
@@ -1144,6 +1269,26 @@ describe("Spend › Findings", () => {
     await renderSpend(["findings"], "fnd_01k5rtgh");
     const dialog = await screen.findByTestId("spend-evidence-dialog");
     expect(dialog.querySelector('[data-reason="error"]')).not.toBeNull();
+  });
+});
+
+describe("Spend › Findings › harness (#4871)", () => {
+  it("badges a finding on an agent with the harness that agent registered", async () => {
+    loaded({ operator: report([row("prn_marcusbell", { operator: MARCUS })]) });
+    await renderSpend(["findings"]);
+    const card = document.querySelector('li[data-finding="fnd_01k5rteg"]');
+    if (card === null) throw new Error("no card on stella-ci");
+    expect(card.querySelector('[data-harness-badge="stella"]')).not.toBeNull();
+  });
+
+  it("draws no agent avatar on a finding about a tool or an operator (negative)", async () => {
+    loaded({ operator: report([row("prn_marcusbell", { operator: MARCUS })]) });
+    await renderSpend(["findings"]);
+    for (const id of ["fnd_01k5rtgh", "fnd_01k5rtop"]) {
+      const card = document.querySelector(`li[data-finding="${id}"]`);
+      if (card === null) throw new Error(`no card ${id}`);
+      expect(card.querySelector("[data-agent-avatar]")).toBeNull();
+    }
   });
 });
 
@@ -1238,6 +1383,21 @@ describe("Spend › Tokens", () => {
       document.querySelector('tr[data-key="a-intel.core.agent-0"]'),
     ).toBeNull();
   });
+
+  it("badges each agent with the harness it registered, and leaves one the registry does not hold unbadged (#4871)", async () => {
+    loaded({
+      agent: report([row("acme.core.triage"), row("acme.core.review")]),
+    });
+    await renderSpend(["tokens"]);
+    expect(
+      rowOf("acme.core.triage").querySelector(
+        '[data-harness-badge="claude-code"]',
+      ),
+    ).not.toBeNull();
+    const review = rowOf("acme.core.review");
+    expect(review.querySelector("[data-agent-avatar]")).not.toBeNull();
+    expect(review.querySelector("[data-harness-badge]")).toBeNull();
+  });
 });
 
 describe("Spend › Findings › Operator ranking", () => {
@@ -1305,8 +1465,7 @@ describe("Spend › Findings › Operator ranking", () => {
     ).toBeInTheDocument();
   });
 
-  it("reads the ranking for the workspace Owner and hides the pseudonym switch an org role sets", async () => {
-    const wsOwner = ctxAs("owner");
+  it("prints the same total in the hero and in the ranking's Total row", async () => {
     loaded({
       operator: report([row("prn_marcusbell", { operator: MARCUS })]),
     });
@@ -1314,18 +1473,89 @@ describe("Spend › Findings › Operator ranking", () => {
       readOk({
         period: PERIOD,
         pseudonyms: false,
-        unproductive: { micros: "0", currency: "USD" },
+        unproductive: HEADLINE.unproductive,
+        unattributed: {
+          unproductive: { micros: "1000000", currency: "USD" },
+          runs: 1,
+        },
+        operators: [
+          {
+            rank: 1,
+            operator: { kind: "named", key: "prn_marcusbell", facts: MARCUS },
+            unproductive: { micros: "4000000", currency: "USD" },
+            shareOfTotal: 0.8,
+            unproductiveShare: 0.4,
+            runs: 1,
+            topRuns: [
+              {
+                runId: "arun_01",
+                unproductive: { micros: "4000000", currency: "USD" },
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    await renderSpend(["findings"], undefined, owner);
+    expect(unproductive).toHaveBeenCalledWith(owner, PERIOD);
+    expect(operatorRanking).toHaveBeenCalledWith(owner, PERIOD);
+    const total = document.querySelector('tr[data-row="total"]');
+    if (total === null) throw new Error("no Total row");
+    const headline = screen.getByTestId("spend-headline").textContent;
+    expect(headline).toBe("$5.00");
+    expect(total).toHaveTextContent(headline);
+  });
+
+  // #4574: the operator rollup and the ranking are read apart, so a rollup
+  // that fails names nobody on the cards and leaves the ranking whole.
+  it("keeps the ranking and its pseudonym switch when the operator rollup fails", async () => {
+    loaded({ operator: readError("rollup_unavailable", 503) });
+    operatorRanking.mockResolvedValue(
+      readOk({
+        period: PERIOD,
+        pseudonyms: false,
+        unproductive: HEADLINE.unproductive,
         unattributed: {
           unproductive: { micros: "0", currency: "USD" },
           runs: 0,
         },
-        operators: [],
+        operators: [
+          {
+            rank: 1,
+            operator: { kind: "named", key: "prn_marcusbell", facts: MARCUS },
+            unproductive: HEADLINE.unproductive,
+            shareOfTotal: 1,
+            unproductiveShare: null,
+            runs: 1,
+            topRuns: [{ runId: "arun_01", unproductive: HEADLINE.unproductive }],
+          },
+        ],
       }),
     );
-    await renderSpend(["findings"], undefined, wsOwner);
-    expect(operatorRanking).toHaveBeenCalledWith(wsOwner, PERIOD);
+    await renderSpend(["findings"], undefined, owner);
     expect(
-      screen.getByText("No run has unproductive spend in this period."),
+      screen.getByRole("table", { name: "Operator ranking" }),
+    ).toHaveTextContent("Marcus Bell");
+    expect(
+      screen.getByRole("button", { name: "Turn on pseudonyms" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("list", { name: "Findings ranked by savings" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Operator names" }),
+    ).toBeInTheDocument();
+  });
+
+  it("asks no ranking for a workspace Owner who holds no org manager role (negative)", async () => {
+    const wsOwner = ctxAs("owner");
+    loaded({
+      operator: report([row("prn_marcusbell", { operator: MARCUS })]),
+    });
+    await renderSpend(["findings"], undefined, wsOwner);
+    expect(operatorRanking).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(/An org Owner or Admin can read the operator ranking/),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /pseudonyms/ })).toBeNull();
   });
@@ -1340,7 +1570,7 @@ describe("Spend › Findings › Operator ranking", () => {
       screen.queryByRole("table", { name: "Operator ranking" }),
     ).toBeNull();
     expect(
-      screen.getByText(/or the workspace Owner, can read the operator ranking/),
+      screen.getByText(/An org Owner or Admin can read the operator ranking/),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("list", { name: "Findings ranked by savings" }),
@@ -1422,6 +1652,12 @@ describe("Spend › By tool", () => {
 });
 
 describe("Spend › Wasted spend", () => {
+  it("reads no agents, since its rows name runs and no agent (negative, #4871)", async () => {
+    loaded();
+    await renderSpend(["waste"]);
+    expect(agentsList).not.toHaveBeenCalled();
+  });
+
   it("prints the four tiles, the recorded cause, retry loops from the findings, the five other design causes as not recorded, and a card per run with its two links", async () => {
     loaded();
     await renderSpend(["waste"]);
@@ -1570,6 +1806,29 @@ describe("Spend › drill", () => {
     expect(byDay).toHaveTextContent("Peak $20.00 on 2026-09-15");
     expect(byDay).toHaveTextContent("Average $10.00");
     expect(rowOf("github__get_issue")).toHaveTextContent("5");
+  });
+
+  it("badges an agent's drill with the harness the agent registered (#4871)", async () => {
+    drill.mockResolvedValue(readOk(drillOf()));
+    findings.mockResolvedValue(readOk(listing()));
+    await renderSpend(["agent", "a-intel.core.stella-ci"]);
+    const heading = screen.getByRole("heading", {
+      level: 2,
+      name: "a-intel.core.stella-ci",
+    });
+    expect(
+      heading.parentElement?.querySelector('[data-harness-badge="stella"]'),
+    ).not.toBeNull();
+  });
+
+  it("reads no agents and draws no agent avatar on a tool's drill (negative)", async () => {
+    drill.mockResolvedValue(
+      readOk(drillOf({ kind: "tool", key: "github__get_issue" })),
+    );
+    findings.mockResolvedValue(readOk(listing()));
+    await renderSpend(["tool", "github__get_issue"]);
+    expect(agentsList).not.toHaveBeenCalled();
+    expect(document.querySelector("[data-agent-avatar]")).toBeNull();
   });
 
   it("says what Export this view would do and that nothing was built", async () => {
@@ -1894,17 +2153,71 @@ describe("Spend › a tab's own read failing", () => {
     );
   });
 
-  it("still lists findings, naming nobody, when the operator rollup read fails", async () => {
+  // #4574: the operator rollup fails on its own. Its section says so beside
+  // the ranking that loaded, and the findings stay, naming nobody.
+  it("shows the operator rollup's own failure beside the findings and the ranking", async () => {
+    const orgOwner = unsafeMint(WsCtx, {
+      userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      orgId: "7a000000-0000-4000-8000-0000000000a1",
+      orgSlug: "acme",
+      orgName: "Acme Robotics",
+      orgRole: "owner",
+      workspaceId: "7b000000-0000-4000-8000-000000000001",
+      wsSlug: "core-platform",
+      wsName: "Core platform",
+      wsRole: "member",
+    });
     loaded();
     byGroup.mockImplementation((_ctx, groupBy) =>
       Promise.resolve(
         groupBy === "model" ? monthByModel() : readError("rollup_down", 503),
       ),
     );
-    await renderSpend(["findings"]);
+    operatorRanking.mockResolvedValue(
+      readOk({
+        period: PERIOD,
+        pseudonyms: false,
+        unproductive: HEADLINE.unproductive,
+        unattributed: {
+          unproductive: { micros: "0", currency: "USD" },
+          runs: 0,
+        },
+        operators: [
+          {
+            rank: 1,
+            operator: { kind: "named", key: "prn_marcusbell", facts: MARCUS },
+            unproductive: HEADLINE.unproductive,
+            shareOfTotal: 1,
+            unproductiveShare: null,
+            runs: 1,
+            topRuns: [{ runId: "arun_01", unproductive: HEADLINE.unproductive }],
+          },
+        ],
+      }),
+    );
+    await renderSpend(["findings"], undefined, orgOwner);
+
+    const failure = screen
+      .getByRole("heading", { name: "Operator names" })
+      .closest("section");
+    if (failure === null) throw new Error("no operator rollup section");
+    expect(failure).toHaveAttribute("data-state", "error");
+    expect(failure).toHaveTextContent("503 rollup_down");
+    // The rollup's failure is its own panel, not the page's.
+    expect(screen.queryByTestId("spend-error")).toBeNull();
+
+    // The findings stay, naming the operator by key alone.
     expect(
       document.querySelector('li[data-finding="fnd_01k5rtop"]')?.textContent,
     ).toContain("prn_marcusbell");
+
+    // The ranking that loaded sits after the failure, whole.
+    const ranking = screen.getByRole("table", { name: "Operator ranking" });
+    expect(ranking).toHaveTextContent("Marcus Bell");
+    expect(
+      failure.compareDocumentPosition(ranking) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("offers a workspace owner the gateway policy form under the budgets", async () => {

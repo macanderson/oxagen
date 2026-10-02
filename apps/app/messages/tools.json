@@ -884,6 +884,7 @@
       },
       "weeklyAbsent": "not recorded",
       "weeklyUnpriced": "not priced",
+      "weeklyUnpricedTitle": "No weekly price. The last 7 days had no model calls, a call with no rate in the price book, or rates in more than one currency.",
       "weeklyTokenCount": "{tokens} tokens",
       "weeklyTokens": "Estimated from {tokens} tokens",
       "weeklyTitle": "The price of {tokens} tokens of tool definitions at the book rate in force at each model call of the last 7 days. It assumes every call sent them.",

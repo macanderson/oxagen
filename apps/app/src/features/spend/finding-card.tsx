@@ -11,7 +11,8 @@
 // needs a value the contract does not carry, such as a model name or a
 // repeated sentence, the card shows the detector's own text, which names it.
 // A kind with no entry in CARDS, such as one a later detector adds, draws the
-// generic card: the same figures and the detector's own text.
+// generic card: the same figures and the detector's own text. A finding about
+// an agent draws the agent's avatar with its registered harness (#4871).
 import { useLocale, useTranslations } from "next-intl";
 import { type Cost, ratioOfMicros } from "@/data/contracts/money";
 import type { SpendFinding } from "@/data/contracts/spend";
@@ -22,6 +23,7 @@ import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount, formatMoney, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
+import { type AgentHarnesses, AgentMark, harnessIn } from "./agent-mark";
 import { NotRecordedValue } from "./figures";
 import { FixDialog } from "./fix-dialog";
 import type { SpendAt } from "./view";
@@ -181,6 +183,7 @@ export function FindingCard({
   finding,
   rank,
   names,
+  harnesses = {},
   spend,
   at,
 }: {
@@ -188,6 +191,8 @@ export function FindingCard({
   rank: number;
   /** An operator finding's subject is a `prn_…` id; this is the person's name for it. */
   names: Readonly<Record<string, string>>;
+  /** An agent finding's subject is an agent key; this is its harness by key. */
+  harnesses?: AgentHarnesses;
   /** The workspace's priced spend over the findings' window; null when none was recorded. */
   spend: Cost | null;
   at: SpendAt;
@@ -239,11 +244,22 @@ export function FindingCard({
         </div>
         <Figures finding={finding} spend={spend} card={card} />
         <FindingText finding={finding} who={who} card={card} />
-        <p
-          className={`text-[12.5px] text-muted-foreground ${finding.level === "operator" ? "" : mono}`}
-        >
-          {who}
-        </p>
+        {finding.level === "agent" ? (
+          <p className="flex min-w-0 items-center gap-2 text-[12.5px] text-muted-foreground">
+            <AgentMark
+              agentKey={finding.subject}
+              harness={harnessIn(harnesses, finding.subject)}
+              size={20}
+            />
+            <span className={`${mono} min-w-0 truncate`}>{who}</span>
+          </p>
+        ) : (
+          <p
+            className={`text-[12.5px] text-muted-foreground ${finding.level === "operator" ? "" : mono}`}
+          >
+            {who}
+          </p>
+        )}
         <p className="text-[12px] text-muted-foreground">
           {t(`findings.kindDefinition.${finding.kind}`)}
         </p>

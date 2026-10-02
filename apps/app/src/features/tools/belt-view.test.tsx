@@ -37,10 +37,19 @@ const { toolbeltDetail } = await import("./tools.builders");
 const at = { org: "acme", ws: "core-platform" };
 const carrier = { id: "agt_macclaude", name: "Mac Claude", slug: "mac-claude" };
 
-function renderBelt(detail: ToolbeltDetail, canEdit: boolean) {
+function renderBelt(
+  detail: ToolbeltDetail,
+  canEdit: boolean,
+  agentHarnesses: Readonly<Record<string, string>> = {},
+) {
   return render(
     <IntlProvider>
-      <BeltView at={at} detail={detail} canEdit={canEdit} />
+      <BeltView
+        at={at}
+        detail={detail}
+        canEdit={canEdit}
+        agentHarnesses={agentHarnesses}
+      />
     </IntlProvider>,
   );
 }
@@ -238,6 +247,21 @@ describe("BeltView › a custom belt, edited by an admin", () => {
         name: "Mac Claude",
       }),
     ).toHaveAttribute("href", "/acme/core-platform/agents/mac-claude");
+  });
+
+  it("badges each carrier's avatar with the harness the page resolved, and draws none it did not (#4871)", () => {
+    const stranger = { id: "agt_docsbot", name: "Docs bot", slug: "docs-bot" };
+    renderBelt(toolbeltDetail("custom", [carrier, stranger]), true, {
+      "mac-claude": "claude-code",
+    });
+    const [known, unknown] = screen.getAllByTestId("belt-agent");
+    expect(
+      known?.querySelector(
+        '[data-agent-avatar] [data-harness-badge="claude-code"]',
+      ),
+    ).not.toBeNull();
+    expect(unknown?.querySelector("[data-agent-avatar]")).not.toBeNull();
+    expect(unknown?.querySelector("[data-harness-badge]")).toBeNull();
   });
 });
 

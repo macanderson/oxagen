@@ -235,7 +235,7 @@ export function plan(verdict, { existingComment = null, existingStatus = null, c
 // ---------------------------------------------------------------------------
 // GitHub I/O. Everything below talks to the API; everything above is pure.
 
-const REPO = process.env.GITHUB_REPOSITORY ?? "macanderson/oxagen";
+const REPO = process.env.GITHUB_REPOSITORY ?? "oxageninc/product";
 const TOKEN = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
 
 async function api(path, init) {

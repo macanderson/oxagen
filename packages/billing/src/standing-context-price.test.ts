@@ -6,12 +6,15 @@ import {
 } from "./cost-rollup";
 import type { PriceEntry } from "./price-book";
 import {
+  emptyWeekTally,
   priceAtPerThousand,
   resentStandingTokens,
   runReadPrice,
   standingContextBySource,
   standingReadPrice,
+  tallyWeek,
   weeklyPriceFromBook,
+  weeklyPriceOfTally,
   type WeekOfModel,
 } from "./standing-context-price";
 
@@ -162,20 +165,35 @@ const BOOK: PriceEntry[] = [
   }),
 ];
 
+/**
+ * A model's week: a bucket for each group of cache reads, and the calls left
+ * over as misses in one bucket at the week's last call.
+ */
 function week(
   model: string,
   calls: number,
   reads: readonly { calls: number; at: string }[],
 ): WeekOfModel {
+  const read = reads.reduce((sum, r) => sum + r.calls, 0);
   return {
     model,
     calls,
-    lastSeen: "2026-09-26T12:00:00.000Z",
-    classes: reads.map((r) => ({
-      tokenClass: "cache_read",
-      calls: r.calls,
-      firstSeen: r.at,
-    })),
+    buckets: [
+      ...reads.map((r) => ({
+        calls: r.calls,
+        cacheReadCalls: r.calls,
+        firstSeen: r.at,
+      })),
+      ...(calls > read
+        ? [
+            {
+              calls: calls - read,
+              cacheReadCalls: 0,
+              firstSeen: "2026-09-26T12:00:00.000Z",
+            },
+          ]
+        : []),
+    ],
   };
 }
 
@@ -197,7 +215,6 @@ describe("weeklyPriceFromBook", () => {
       perThousandMicros: 500_000n,
       currency: "USD",
       requests: 2_000,
-      unpricedRequests: 0,
     });
   });
 
@@ -243,7 +260,77 @@ describe("weeklyPriceFromBook", () => {
     expect(price?.requests).toBe(10_000);
   });
 
-  it("leaves out and counts a request the book has no rate for", () => {
+  // #4572 item 4: misses on both sides of an input rate change. The old
+  // quote priced every miss at the model's last call, so both buckets read
+  // $2 a million and the week read 400,000 micros.
+  it("prices each bucket's misses at the input rate in force in that bucket", () => {
+    const book = [
+      entry({
+        id: "pe_in_old",
+        tokenClass: "input_uncached",
+        effectiveTo: RATE_CHANGE,
+      }),
+      entry({
+        id: "pe_in_new",
+        tokenClass: "input_uncached",
+        microsPerMillion: 2_000_000n,
+        effectiveFrom: RATE_CHANGE,
+      }),
+      ...BOOK.filter((e) => e.tokenClass === "cache_read"),
+    ];
+    // 100 misses at $3 and 100 at $2 a million: 300,000 + 200,000 micros.
+    const price = weeklyPriceFromBook({
+      observed: [
+        {
+          model: "claude-sonnet-5",
+          calls: 200,
+          buckets: [
+            {
+              calls: 100,
+              cacheReadCalls: 0,
+              firstSeen: "2026-09-19T08:00:00.000Z",
+            },
+            {
+              calls: 100,
+              cacheReadCalls: 0,
+              firstSeen: "2026-09-21T08:00:00.000Z",
+            },
+          ],
+        },
+      ],
+      book,
+      orgId: ORG,
+    });
+    expect(price?.perThousandMicros).toBe(500_000n);
+    expect(price?.requests).toBe(200);
+  });
+
+  it("prices a bucket's cache reads and its misses apart", () => {
+    // 100 reads at $0.20 and 10 misses at $3 a million: 20,000 + 30,000.
+    const price = weeklyPriceFromBook({
+      observed: [
+        {
+          model: "claude-sonnet-5",
+          calls: 110,
+          buckets: [
+            {
+              calls: 110,
+              cacheReadCalls: 100,
+              firstSeen: "2026-09-22T08:00:00.000Z",
+            },
+          ],
+        },
+      ],
+      book: BOOK,
+      orgId: ORG,
+    });
+    expect(price?.perThousandMicros).toBe(50_000n);
+    expect(price?.requests).toBe(110);
+  });
+
+  // #4572 item 8: the quote left an unpriced request out and returned the
+  // rest, 200,000 micros, so a provider's price read as a floor.
+  it("is null when a request has no rate in the book, rather than a floor", () => {
     const price = weeklyPriceFromBook({
       observed: [
         week("claude-sonnet-5", 1_000, [
@@ -256,11 +343,50 @@ describe("weeklyPriceFromBook", () => {
       book: BOOK,
       orgId: ORG,
     });
-    expect(price).toEqual({
-      perThousandMicros: 200_000n,
+    expect(price).toBeNull();
+  });
+
+  it("is null when the buckets do not hold every call", () => {
+    const price = weeklyPriceFromBook({
+      observed: [
+        {
+          model: "claude-sonnet-5",
+          calls: 1_001,
+          buckets: [
+            {
+              calls: 1_000,
+              cacheReadCalls: 1_000,
+              firstSeen: "2026-09-22T08:00:00.000Z",
+            },
+          ],
+        },
+      ],
+      book: BOOK,
+      orgId: ORG,
+    });
+    expect(price).toBeNull();
+  });
+
+  it("adds pages to one tally and rounds once", () => {
+    const pages = [
+      [
+        week("claude-sonnet-5", 1_000, [
+          { calls: 1_000, at: "2026-09-19T08:00:00.000Z" },
+        ]),
+      ],
+      [
+        week("claude-sonnet-5", 1_000, [
+          { calls: 1_000, at: "2026-09-21T08:00:00.000Z" },
+        ]),
+      ],
+    ];
+    const tally = emptyWeekTally();
+    for (const observed of pages)
+      tallyWeek(tally, { observed, book: BOOK, orgId: ORG });
+    expect(weeklyPriceOfTally(tally)).toEqual({
+      perThousandMicros: 500_000n,
       currency: "USD",
-      requests: 1_000,
-      unpricedRequests: 40,
+      requests: 2_000,
     });
   });
 

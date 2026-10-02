@@ -142,6 +142,7 @@ const source: DataSource = {
     priceBook: vi.fn(),
     operatorRanking: vi.fn(),
     unpricedModels: vi.fn(),
+    unproductive: vi.fn(),
   },
   onboarding: { state: vi.fn(), firstFrame: vi.fn() },
   org: {

@@ -1,4 +1,4 @@
-// audit-exempt: read-only — ranks operators by the claimed frames in cost.finding_claims, with each operator's priced spend from cost.run_totals and the pseudonym setting from workspace.operator_ranking_policy; mutates nothing. The kernel capability.invoke_* audit covers access.
+// audit-exempt: read-only — ranks operators by the claimed frames in cost.finding_claims, with each operator's priced spend from cost.run_totals and the frame store and the pseudonym setting from workspace.operator_ranking_policy; mutates nothing. The kernel capability.invoke_* audit covers access.
 //
 // `get_operator_ranking` (spend spec, Operator ranking; D15): the operators
 // of the workspace ranked by unproductive spend, highest first. The figures
@@ -8,9 +8,14 @@
 // figure is `countClaims` over that run's rows. The dedupe key holds the run
 // id, so the run figures partition the headline too.
 //
-// Managers read it: an org Owner or Admin, or the workspace's Owner. No person
-// holds a workspace IAM role yet (#3198), so the workspace Owner is read from
-// the membership row when the IAM check refuses. With the
+// The unproductive share divides an operator's claimed frames by the priced
+// spend of the frames that operator's runs ran in the period. Both sides
+// count a frame by the time it ran (./lib/frame-time-spend.ts), so a run that
+// crosses the period's first or last day adds the same frames to each.
+//
+// Managers read it: an org Owner or Admin. The kernel's IAM check admits the
+// same two roles in an Enterprise org, and no person holds a workspace IAM
+// role yet (#3198), so the ranking names no workspace role. With the
 // pseudonym setting on, a pseudonym replaces each name, and the answer drops
 // the key, the facts, and the run ids, since a run page names its operator.
 // It also drops the unproductive share and the run count: the share gives
@@ -25,13 +30,9 @@ import {
   readUnproductiveClaims,
   type UnproductiveClaim,
 } from "@oxagen/billing";
-import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
+import { withTenantDb } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
-import {
-  type CapabilityHandler,
-  HandlerError,
-  isHandlerError,
-} from "@oxagen/oxagen";
+import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import type { OperatorFacts } from "@oxagen/oxagen/contracts/operator.shared";
 import {
   OPERATOR_RANKING_RUNS_MAX,
@@ -39,7 +40,11 @@ import {
   spendOperatorRanking,
   type SpendOperatorRankingOutput,
 } from "@oxagen/oxagen/contracts/spend.operator_ranking";
-import { and, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
+import {
+  type FrameTimeSpendResult,
+  frameTimeSpendDeps,
+  readFrameTimeSpend,
+} from "./lib/frame-time-spend";
 import { readOperatorFacts, type ReadOperatorFacts } from "./lib/operator-facts";
 import {
   operatorPseudonym,
@@ -50,62 +55,26 @@ import {
 export type RankingScope = { orgId: string; workspaceId: string };
 type Window = { start: Date; end: Date };
 
-/** One operator's priced spend in one currency over the window. */
-export type OperatorSpend = {
-  operatorKey: string;
-  currency: string;
-  micros: bigint;
-};
-
 export type OperatorRankingDeps = {
   readClaims: (
     scope: RankingScope,
     window: Window,
   ) => Promise<UnproductiveClaim[]>;
-  /** Priced spend of the named operators' runs that started in the window. */
+  /**
+   * The priced spend of the frames the named operators' runs ran in the
+   * window, per operator and currency (./lib/frame-time-spend.ts).
+   */
   readOperatorSpend: (
     scope: RankingScope,
     window: Window,
     operatorKeys: readonly string[],
-  ) => Promise<OperatorSpend[]>;
+  ) => Promise<FrameTimeSpendResult>;
   readOperatorFacts: ReadOperatorFacts;
   readPolicy: (scope: RankingScope) => Promise<PseudonymPolicy>;
-  /** The person's `workspace_users.role`, lowercased, or null when absent. */
-  readWorkspaceRole: (
-    scope: RankingScope,
-    userId: string,
-  ) => Promise<string | null>;
 };
 
 /** Who may read the ranking: the roles the contract's defaultRoles allow. */
-export const RANKING_ROLES = {
-  org: ["Owner", "Admin"],
-  workspace: ["Owner"],
-} as const;
-
-async function readWorkspaceRole(
-  scope: RankingScope,
-  userId: string,
-): Promise<string | null> {
-  // withSystemDb, as capability-role-guard reads it: this read decides
-  // whether the caller may act in the scope, so it must not depend on it.
-  // tenancy: filtered by workspaceId and the caller's userId. This membership
-  // read decides authority, so it runs before a tenant scope exists.
-  const rows = await withSystemDb((tx) =>
-    tx
-      .select({ role: schema.workspaceUsers.role })
-      .from(schema.workspaceUsers)
-      .where(
-        and(
-          eq(schema.workspaceUsers.workspaceId, scope.workspaceId),
-          eq(schema.workspaceUsers.userId, userId),
-        ),
-      )
-      .limit(1),
-  );
-  // The column holds both casings (capability-role-guard's permittedRoles).
-  return rows[0]?.role?.toLowerCase() ?? null;
-}
+export const RANKING_ROLES = { org: ["Owner", "Admin"] } as const;
 
 async function readClaims(
   scope: RankingScope,
@@ -114,44 +83,12 @@ async function readClaims(
   return withTenantDb((tx) => readUnproductiveClaims(tx, scope, window));
 }
 
-async function readOperatorSpend(
+function readOperatorSpend(
   scope: RankingScope,
   window: Window,
   operatorKeys: readonly string[],
-): Promise<OperatorSpend[]> {
-  if (operatorKeys.length === 0) return [];
-  const totals = schema.runTotals;
-  const rows = await withTenantDb((tx) =>
-    tx
-      .select({
-        operatorKey: totals.operatorKey,
-        currency: totals.currency,
-        micros: sql<string>`sum(${totals.costMicros})::text`,
-      })
-      .from(totals)
-      .where(
-        and(
-          eq(totals.orgId, scope.orgId),
-          eq(totals.workspaceId, scope.workspaceId),
-          gte(totals.startedAt, window.start),
-          lt(totals.startedAt, window.end),
-          isNotNull(totals.costMicros),
-          inArray(totals.operatorKey, [...operatorKeys]),
-        ),
-      )
-      .groupBy(totals.operatorKey, totals.currency),
-  );
-  return rows.flatMap((r) =>
-    r.operatorKey === null
-      ? []
-      : [
-          {
-            operatorKey: r.operatorKey,
-            currency: r.currency,
-            micros: BigInt(r.micros),
-          },
-        ],
-  );
+): Promise<FrameTimeSpendResult> {
+  return readFrameTimeSpend(frameTimeSpendDeps, scope, window, operatorKeys);
 }
 
 const byMicrosDesc = (
@@ -205,22 +142,7 @@ export function createOperatorRankingHandler(
   return async (input, ctx): Promise<SpendOperatorRankingOutput> => {
     const userId = await resolveActingUserId(ctx);
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
-    try {
-      await assertOrgRole(
-        { ...ctx, userId },
-        {
-          org: [...RANKING_ROLES.org],
-          workspace: [...RANKING_ROLES.workspace],
-        },
-      );
-    } catch (err) {
-      if (!isHandlerError(err) || err.code !== "forbidden" || !userId) {
-        throw err;
-      }
-      // No person holds a workspace IAM role yet (#3198), so the workspace
-      // Owner comes from the membership row.
-      if ((await deps.readWorkspaceRole(scope, userId)) !== "owner") throw err;
-    }
+    await assertOrgRole({ ...ctx, userId }, { org: [...RANKING_ROLES.org] });
     const { from, to } = input.period;
     const window = { start: dayBounds(from).start, end: dayBounds(to).next };
 
@@ -248,16 +170,18 @@ export function createOperatorRankingHandler(
     const keys = named.map((o) => o.key);
     const [spend, facts] = await Promise.all([
       pseudonyms || keys.length === 0
-        ? Promise.resolve<OperatorSpend[]>([])
+        ? Promise.resolve<FrameTimeSpendResult>({ rows: [], partial: new Set() })
         : deps.readOperatorSpend(scope, window, keys),
       pseudonyms || keys.length === 0
         ? Promise.resolve(new Map<string, OperatorFacts>())
         : deps.readOperatorFacts(scope, keys),
     ]);
     // An operator whose priced spend holds another currency has no share: the
-    // part is in one currency and the whole would be in two.
+    // part is in one currency and the whole would be in two. Nor has one
+    // whose spend misses a run the frame store did not price.
     const spendOf = new Map<string, bigint | null>();
-    for (const s of spend) {
+    for (const s of spend.rows) {
+      if (s.operatorKey === null) continue;
       const held = spendOf.get(s.operatorKey);
       if (s.currency !== currency || held === null) {
         spendOf.set(s.operatorKey, null);
@@ -265,6 +189,8 @@ export function createOperatorRankingHandler(
         spendOf.set(s.operatorKey, (held ?? 0n) + s.micros);
       }
     }
+    for (const key of spend.partial)
+      if (key !== null) spendOf.set(key, null);
 
     const shareOf = (micros: bigint, key: string): number | null => {
       const whole = spendOf.get(key);
@@ -315,5 +241,4 @@ export const spendOperatorRankingHandler = createOperatorRankingHandler({
   readOperatorSpend,
   readOperatorFacts,
   readPolicy: readPseudonymPolicy,
-  readWorkspaceRole,
 });

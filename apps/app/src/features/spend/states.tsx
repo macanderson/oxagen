@@ -238,9 +238,17 @@ export function SpendReadFailure({
 /**
  * A section's own read that did not answer, inside a tab that did: a compact
  * panel naming the refusal, the waiting request or the error code. It never
- * replaces the page, since the sections beside it still answered.
+ * replaces the page, since the sections beside it still answered. `title`
+ * names the section when the tab holds a second panel that answered, so the
+ * two do not both read as the whole page's spend.
  */
-export function SpendSectionFailure({ read }: { read: Failed }) {
+export function SpendSectionFailure({
+  read,
+  title,
+}: {
+  read: Failed;
+  title?: string;
+}) {
   const t = useTranslations("spend.states");
   return (
     <section
@@ -248,11 +256,12 @@ export function SpendSectionFailure({ read }: { read: Failed }) {
       className={`${panel} flex flex-col gap-2 p-5`}
     >
       <h2 className="text-base font-semibold">
-        {read.reason === "denied"
-          ? t("denied.title")
-          : read.reason === "pending_approval"
-            ? t("pending.title")
-            : t("error.title")}
+        {title ??
+          (read.reason === "denied"
+            ? t("denied.title")
+            : read.reason === "pending_approval"
+              ? t("pending.title")
+              : t("error.title"))}
       </h2>
       <p className="text-[13px] text-muted-foreground">
         {read.reason === "denied" ? (
