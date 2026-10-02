@@ -1,6 +1,6 @@
 # ADR-246: CI runs on ephemeral runners in our AWS account
 
-- **Status:** Superseded on 2026-10-02. The runner pools cost more than the
+- **Status:** Superseded (#5218). The runner pools cost more than the
   team could carry, so `oxageninc/product` went public, where standard
   GitHub-hosted runners are free, and the pools were removed. ECR Public keeps
   the CI images. docs/runbooks/ci-runners.md says what is left. Before that:

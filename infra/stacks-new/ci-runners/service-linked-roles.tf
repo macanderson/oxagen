@@ -1,7 +1,7 @@
 /**
  * Service-linked roles for EC2 Spot, EC2 Fleet, and Image Builder.
  *
- * The CI runner pools created these, and the pools are gone (2026-10-02).
+ * The CI runner pools created these, and the pools are gone (#5218).
  * The roles stay because they belong to the whole account: deleting one
  * breaks any later Spot, Fleet, or Image Builder use in it, and they cost
  * nothing.

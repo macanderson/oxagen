@@ -3,8 +3,8 @@
 Every CI job in `oxageninc/product` runs on a standard GitHub-hosted runner:
 `ubuntu-latest`, `ubuntu-slim`, `ubuntu-24.04-arm`, `windows-latest`, or a
 macOS runner. Standard runners are free for a public repository, so the
-repository went public on 2026-10-02 and the AWS runner pools of ADR-246 were
-removed the same day.
+repository went public and the AWS runner pools of ADR-246 were removed
+(#5218).
 
 Do not add a larger runner (a label with `-large`, `-xlarge`, or a core
 count) or a self-hosted label. Larger runners bill per minute even on a
@@ -42,4 +42,4 @@ gh workflow run rerun-lost-runner.yml --repo oxageninc/product -f run_id=<run id
 
 ADR-246 describes the five pools (`oxagen-large-*`, `oxagen-small-*`,
 `oxagen-deploy`), their scaler, and the daily runner AMI. This runbook covered
-them until 2026-10-02. Read it in the git history if the pools come back.
+them until #5219 removed them. Read it in the git history if the pools come back.

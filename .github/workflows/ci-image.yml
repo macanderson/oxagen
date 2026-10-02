@@ -5,8 +5,8 @@ name: ci-image
 # CI jobs run inside these images instead of re-installing Node, pnpm, Atlas,
 # postgresql-client, and Playwright Chromium on every job (ADR-246).
 #
-# ECR Public serves anonymous pulls to our own runners and to GitHub-hosted
-# ones alike, so the images work on both sides of the CI_RUNNERS switch. The
+# ECR Public serves anonymous pulls to GitHub-hosted runners with no
+# registry credentials, and none of it bills through GitHub. The
 # images were public GHCR packages under the `macanderson` user, which this
 # repository cannot push to, so their `:latest` stopped moving when the
 # repository changed owners.

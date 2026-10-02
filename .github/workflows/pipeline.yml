@@ -107,7 +107,7 @@ env:
   # reads when building those images.
   ATLAS_VERSION: "v1.2.2"
   # Every job runs on GitHub-hosted runners, which are free for a public
-  # repository. The AWS runner pools of ADR-246 were removed on 2026-10-02.
+  # repository. The AWS runner pools of ADR-246 were removed (#5218).
   # CI_IMAGE_REGISTRY points the toolchain and service images at ECR Public
   # (public.ecr.aws/<alias>).
   #
