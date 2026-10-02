@@ -110,6 +110,8 @@ import { workingCopyRecord } from "./repository.working_copy.record";
 import { workingCopyList } from "./repository.working_copy.list";
 import { publishedSteeringGet } from "./context.steering.published.get";
 import { steeringIndexGet } from "./context.steering.index.get";
+import { steeringSearch } from "./steering.search";
+import { steeringRead } from "./steering.read";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
 import { runTurnsGet } from "./run.turns.get";
@@ -981,6 +983,8 @@ export {
   workingCopyList,
   publishedSteeringGet,
   steeringIndexGet,
+  steeringSearch,
+  steeringRead,
   runList,
   runGet,
   runFrameBodyGet,
@@ -1462,6 +1466,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   workingCopyList,
   publishedSteeringGet,
   steeringIndexGet,
+  steeringSearch,
+  steeringRead,
   runList,
   runGet,
   runFrameBodyGet,

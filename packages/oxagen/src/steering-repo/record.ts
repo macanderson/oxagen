@@ -69,7 +69,7 @@ export type ProvenanceMemory = z.output<typeof provenanceMemorySchema>;
 
 /**
  * Where a record came from. Oxagen sets `agent` from the authenticated run of
- * the agent that called steering_propose, and such a record has
+ * the agent that called propose_record, and such a record has
  * `source: proposal`. Only the curator writes `source: run`, and it copies
  * each memory it cites into `memories`. No tool input carries either field.
  */
@@ -81,7 +81,7 @@ export const recordProvenanceSchema = withRules(
       agent: z
         .string()
         .optional()
-        .describe("The agent that proposed the record with steering_propose."),
+        .describe("The agent that proposed the record with propose_record."),
       memories: z
         .array(provenanceMemorySchema)
         .min(1)

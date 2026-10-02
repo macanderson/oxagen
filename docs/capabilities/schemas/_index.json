@@ -3668,6 +3668,16 @@
       "consumes": []
     },
     {
+      "name": "read_steering",
+      "domain": "context",
+      "surfaces": [
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "reauth_plugin_credential",
       "domain": "plugin",
       "surfaces": [
@@ -4326,6 +4336,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "search_steering",
+      "domain": "context",
+      "surfaces": [
+        "mcp"
       ],
       "component": null,
       "produces": [],

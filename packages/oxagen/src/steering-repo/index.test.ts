@@ -16,6 +16,7 @@ import * as reflection from "./reflection";
 import * as schemaIds from "./schema-ids";
 import * as schemas from "./schemas";
 import * as settingsBaseline from "./settings-baseline";
+import * as steeringTools from "./steering-tools";
 import * as templates from "./templates";
 import * as tokens from "./tokens";
 import * as toolbelt from "./toolbelt";
@@ -41,6 +42,7 @@ const modules: [string, string, object][] = [
   ["schema-ids", "SCHEMA_IDS", schemaIds],
   ["schemas", "STEERING_REPO_SCHEMAS", schemas],
   ["settings-baseline", "GITHUB_SETTINGS_BASELINE", settingsBaseline],
+  ["steering-tools", "steeringSearchInputSchema", steeringTools],
   ["templates", "renderManagedBlock", templates],
   ["tokens", "countTokens", tokens],
   ["toolbelt", "toolbeltSchema", toolbelt],
