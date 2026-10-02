@@ -563,7 +563,9 @@ export function buildProgram(): Command {
 
   const contextCmd = program
     .command("context")
-    .description("Steering: record a proposal on a lineage");
+    .description(
+      "Steering: record a proposal on a lineage, or revert a merged one",
+    );
   contextCmd
     .command("propose")
     .description(
@@ -598,6 +600,16 @@ export function buildProgram(): Command {
         await contextPropose(opts);
       },
     );
+  contextCmd
+    .command("revert <proposalId>")
+    .description(
+      "Open a steering PR that undoes a merged one (revert_steering_pr); it merges after its own review",
+    )
+    .option("--json", "Output JSON")
+    .action(async (proposalId: string, opts: { json?: boolean }) => {
+      const { contextRevert } = await import("./commands/context.js");
+      await contextRevert(proposalId, opts);
+    });
 
   // ── repo: the workspace's repositories, one steering and any number linked ──
 

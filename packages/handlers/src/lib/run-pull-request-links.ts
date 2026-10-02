@@ -8,6 +8,13 @@
 // new. Only the backfill creates a row and webhooks only update rows, so a
 // lost event leaves the link reading "status unknown" until the run records
 // the link again.
+//
+// A link a `pr_open` effect frame names is one the run opened: the frame
+// holds the URL that a `github__create_pull_request` call or a
+// `gh pr create` line printed. Its event says so (`opened`), and the
+// backfill then puts the Oxagen block and label on the pull request
+// (ADR-252). That event takes its own id, so a `pr_link` frame for the same
+// link in an earlier batch cannot stand in for it.
 import { createHash } from "node:crypto";
 import { RUN_PULL_REQUEST_LINKED_EVENT } from "@oxagen/inngest-functions/events";
 import { logger } from "../logger";
@@ -18,6 +25,8 @@ export type LinkFrame = {
   kind: string;
   root_session_uuid: string;
   attrs: Readonly<Record<string, string>>;
+  /** The frame's body. A `pr_open` effect frame carries `effect_kind` here. */
+  body?: unknown;
 };
 
 export type PullRequestLinkedEvent = {
@@ -28,6 +37,8 @@ export type PullRequestLinkedEvent = {
     workspaceId: string;
     rootSessionUuid: string;
     url: string;
+    /** Set when the run opened this pull request (ADR-252). */
+    opened?: true;
   };
 };
 
@@ -39,8 +50,24 @@ function linkOf(frame: LinkFrame): string {
 }
 
 /**
+ * Whether the frame is the call that opened its pull request. The frame kind
+ * does not decide this: a pull request opened from the shell seals a
+ * `command` frame and one opened through a GitHub MCP server seals a
+ * `network` frame. The `effect_kind` does.
+ */
+function opensLink(frame: LinkFrame): boolean {
+  const body = frame.body;
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    (body as Record<string, unknown>)["effect_kind"] === "pr_open"
+  );
+}
+
+/**
  * One event per root session and link a batch records. Only a link on a
- * forge Oxagen can connect is asked for: no read could fill any other.
+ * forge Oxagen can connect is asked for: no read could fill any other. When
+ * one frame in the batch opened the link, the one event says so.
  */
 export function pullRequestLinkEvents(
   scope: { orgId: string; workspaceId: string },
@@ -51,16 +78,19 @@ export function pullRequestLinkEvents(
     const url = linkOf(frame);
     if (url === "" || forgeKeyOf(url) === null) continue;
     const digest = createHash("sha256").update(url).digest("hex").slice(0, 32);
-    const id = `run-pr-linked:${frame.root_session_uuid}:${digest}`;
-    if (out.has(id)) continue;
-    out.set(id, {
+    const pair = `${frame.root_session_uuid}:${digest}`;
+    const opened = opensLink(frame);
+    const held = out.get(pair);
+    if (held !== undefined && (held.data.opened === true || !opened)) continue;
+    out.set(pair, {
       name: RUN_PULL_REQUEST_LINKED_EVENT,
-      id,
+      id: `${opened ? "run-pr-opened" : "run-pr-linked"}:${pair}`,
       data: {
         orgId: scope.orgId,
         workspaceId: scope.workspaceId,
         rootSessionUuid: frame.root_session_uuid,
         url,
+        ...(opened ? { opened: true as const } : {}),
       },
     });
   }

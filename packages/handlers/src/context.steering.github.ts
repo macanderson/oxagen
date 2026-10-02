@@ -316,6 +316,13 @@ export interface SteeringHost {
     ancestor: string,
   ): Promise<boolean>;
   /**
+   * The parents of the commit `sha`, in git's order. A squash merge has one:
+   * the production branch head it landed on. A merge commit's first parent
+   * is the branch it merged into. A root commit has none. A revert reads the
+   * first parent to learn what the production branch held before the merge.
+   */
+  commitParents(repo: SteeringRepository, sha: string): Promise<string[]>;
+  /**
    * Bring the steering PR's branch up to date with the production branch.
    * Refuses with `head_moved` when the branch is not at `expectedHead`, and
    * with `update_conflict` when the production branch does not merge in
@@ -1504,6 +1511,18 @@ export function createSteeringGitHub(
           `${path}/compare/${encodeURIComponent(ancestor)}...${encodeURIComponent(head)}?per_page=1`,
         );
         return out.data.status === "ahead" || out.data.status === "identical";
+      } catch (err) {
+        throw githubRefused(err);
+      }
+    },
+    async commitParents(repo, sha) {
+      const { rest, path } = restFor(repo);
+      try {
+        const out = await rest.request<{ parents?: { sha: string }[] }>(
+          "GET",
+          `${path}/git/commits/${encodeURIComponent(sha)}`,
+        );
+        return (out.data.parents ?? []).map((parent) => parent.sha);
       } catch (err) {
         throw githubRefused(err);
       }

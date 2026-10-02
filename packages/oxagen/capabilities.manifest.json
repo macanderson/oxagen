@@ -2141,6 +2141,25 @@
       }
     },
     {
+      "name": "get_context_pr_diff",
+      "file": "context.pr.diff.get.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_context_pr",
       "file": "context.pr.get.ts",
       "domain": "context",
@@ -2205,6 +2224,44 @@
       "layers": {
         "schema": true,
         "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "refresh_context_pr",
+      "file": "context.pr.refresh.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "revert_steering_pr",
+      "file": "context.pr.revert.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
         "unit": true,
         "docs": true,
         "app": true

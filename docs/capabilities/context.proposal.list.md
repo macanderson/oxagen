@@ -12,13 +12,14 @@
 
 ## Intent
 
-The workspace's record proposals with their support and, once a Context PR is open, its state ([ADR-061](../adr/ADR-061-steering-governance-mode-thresholds-and-the-reflector.md); MC spec §9.2). The read behind the Proposals and Context PRs tabs and the Steering nav count (proposals waiting for a person: `proposed`, `checks_passed`).
+The workspace's record proposals with their support and, once a Context PR is open, its state ([ADR-061](../adr/ADR-061-steering-governance-mode-thresholds-and-the-reflector.md); MC spec §9.2). The read behind the Proposals list, its Open, Merged and Closed counts, and the Steering nav count (proposals waiting for a person: `proposed`, `checks_passed`).
 
 ## Input
 
 | Field | Type | Notes |
 | --- | --- | --- |
 | `status` | `proposed \| pr_open \| checks_running \| checks_passed \| checks_failed \| merged \| rejected`? | |
+| `state` | `open \| merged \| closed`? | As a pull request list filters: `open` is `proposed` and every open-PR status, `merged` is `merged`, `closed` is `rejected`. Narrows with `status` when both are given (#5077). |
 | `lineageId` | `string`? | |
 | `limit` / `offset` | `int` | 1–200, default 50 / default 0 |
 

@@ -1365,6 +1365,26 @@ describe("the GitHub seam's merge-queue calls", () => {
     });
   });
 
+  it("reads a commit's parents in order, none for a root commit", async () => {
+    const { gh, repo } = await restSeam({
+      [`GET ${REPO_PATH}/git/commits/s1`]: () => ({
+        sha: "s1",
+        parents: [{ sha: "m1" }],
+      }),
+      [`GET ${REPO_PATH}/git/commits/u1`]: () => ({
+        sha: "u1",
+        parents: [{ sha: "h1" }, { sha: "m1" }],
+      }),
+      [`GET ${REPO_PATH}/git/commits/r1`]: () => ({ sha: "r1", parents: [] }),
+    });
+    await expect(gh.commitParents(repo, "s1")).resolves.toEqual(["m1"]);
+    await expect(gh.commitParents(repo, "u1")).resolves.toEqual(["h1", "m1"]);
+    await expect(gh.commitParents(repo, "r1")).resolves.toEqual([]);
+    await expect(gh.commitParents(repo, "x9")).rejects.toMatchObject({
+      reason: "github_refused",
+    });
+  });
+
   it("merges the main head it was given into the branch and answers the new head and its parents, or the old head when nothing changed", async () => {
     let merged: unknown = { sha: "u1", parents: [{ sha: "h1" }, { sha: "m1" }] };
     const getBranch = vi.fn(async () => ({ name: "b", sha: "h1" }));

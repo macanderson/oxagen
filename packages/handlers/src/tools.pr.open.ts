@@ -234,6 +234,86 @@ export function createToolsPullRequestOpener(
   return createSteeringPullRequestOpener(deps, TOOLS_PULL_REQUEST);
 }
 
+/** Where a steering check report goes: the PR's repository and its head. */
+export interface SteeringCheckTarget {
+  host: Pick<SteeringHost, "readFile" | "listFiles" | "reportCheckRun">;
+  repo: SteeringRepository;
+  scope: ToolsPullRequestScope;
+  /** The commit the checks run on and the check is reported on. */
+  head: string;
+  /** The production branch head the checks compare against. */
+  base: string;
+  /** Names the caller in the log lines, such as `tools.pr.open`. */
+  source: string;
+}
+
+/**
+ * Run the steering checks on `head` and report them on the host as the
+ * required "Oxagen steering" check. Checks that cannot run report a failure
+ * that says why, so the PR cannot merge on a check nobody ran.
+ *
+ * It never throws: the PR is open by the time it runs. It answers the
+ * conclusion it reported, or null when the host refused the report, in which
+ * case the required check stays missing until a push reports it.
+ */
+export async function reportSteeringChecks(
+  deps: Pick<ToolsPullRequestDeps, "readIndex" | "readContext" | "now">,
+  target: SteeringCheckTarget,
+): Promise<"success" | "failure" | null> {
+  const { host, repo, scope, head, base, source } = target;
+  const startedAt = deps.now().toISOString();
+  let result: ReturnType<typeof checkRunText>;
+  try {
+    const [index, context] = await Promise.all([
+      deps.readIndex(scope),
+      deps.readContext(scope),
+    ]);
+    const report = await checkSteeringChange({
+      host: steeringTreeHost(host, repo),
+      head,
+      base,
+      index,
+      context,
+      health: null,
+    });
+    result = checkRunText(report);
+  } catch (err) {
+    // The PR is open. A failed check blocks its merge, and the message
+    // says why the checks did not run.
+    logger.error(
+      { err, orgId: scope.orgId, workspaceId: scope.workspaceId, head },
+      `${source}: steering checks did not run`,
+    );
+    result = {
+      conclusion: "failure",
+      title: "The steering checks did not run",
+      summary: `Oxagen could not run the steering checks on ${head}: ${err instanceof Error ? err.message : String(err)}. Push a commit to the branch to run them again.`,
+    };
+  }
+  try {
+    await host.reportCheckRun(repo, {
+      name: REQUIRED_CHECK_NAME,
+      headSha: head,
+      conclusion: result.conclusion,
+      title: result.title,
+      summary: result.summary,
+      startedAt,
+      completedAt: deps.now().toISOString(),
+    });
+    return result.conclusion;
+  } catch (err) {
+    // The commit and the PR exist. Throwing here would tell the caller
+    // nothing was written, and a retry would find the branch taken. The
+    // required check stays missing, so the PR cannot merge until a push
+    // reports it.
+    logger.error(
+      { err, orgId: scope.orgId, workspaceId: scope.workspaceId, head },
+      `${source}: the Oxagen steering check was not reported`,
+    );
+    return null;
+  }
+}
+
 /**
  * An opener for one kind of many-file steering PR. The flow is the one the
  * header describes for tools PRs. Only the refusal and the words differ.
@@ -250,55 +330,14 @@ export function createSteeringPullRequestOpener(
     head: string,
     base: string,
   ): Promise<void> {
-    const startedAt = deps.now().toISOString();
-    let result: ReturnType<typeof checkRunText>;
-    try {
-      const [index, context] = await Promise.all([
-        deps.readIndex(scope),
-        deps.readContext(scope),
-      ]);
-      const report = await checkSteeringChange({
-        host: steeringTreeHost(host, repo),
-        head,
-        base,
-        index,
-        context,
-        health: null,
-      });
-      result = checkRunText(report);
-    } catch (err) {
-      // The PR is open. A failed check blocks its merge, and the message
-      // says why the checks did not run.
-      logger.error(
-        { err, orgId: scope.orgId, workspaceId: scope.workspaceId, head },
-        "tools.pr.open: steering checks did not run",
-      );
-      result = {
-        conclusion: "failure",
-        title: "The steering checks did not run",
-        summary: `Oxagen could not run the steering checks on ${head}: ${err instanceof Error ? err.message : String(err)}. Push a commit to the branch to run them again.`,
-      };
-    }
-    try {
-      await host.reportCheckRun(repo, {
-        name: REQUIRED_CHECK_NAME,
-        headSha: head,
-        conclusion: result.conclusion,
-        title: result.title,
-        summary: result.summary,
-        startedAt,
-        completedAt: deps.now().toISOString(),
-      });
-    } catch (err) {
-      // The commit and the PR exist. Throwing here would tell the caller
-      // nothing was written, and a retry would find the branch taken. The
-      // required check stays missing, so the PR cannot merge until a push
-      // reports it.
-      logger.error(
-        { err, orgId: scope.orgId, workspaceId: scope.workspaceId, head },
-        "tools.pr.open: the Oxagen steering check was not reported",
-      );
-    }
+    await reportSteeringChecks(deps, {
+      host,
+      repo,
+      scope,
+      head,
+      base,
+      source: "tools.pr.open",
+    });
   }
 
   /**

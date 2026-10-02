@@ -96,6 +96,7 @@ This inventory uses registered capability names. Their source files retain dotte
 | `get_pr`, `get_pr_diff` | Merge request, diffs, notes | Not implemented. These read GitHub PRs for agents and remain GitHub-only |
 | `get_ci_status`, `list_branches` | Commit statuses, pipelines, branches | Not implemented; GitHub-only |
 | `open_context_pr`, `get_context_pr`, `merge_context_pr` | Open, read, merge a merge request | Implemented through the provider seam. Checks are commit statuses; the merge squashes with `sha` pinned to the checked head; a proposal records which host issued its number |
+| `revert_steering_pr` | Open a merge request that undoes a merged one | Implemented through the provider seam. It reads the merge commit's parent through the commits API and reports the required check as a commit status |
 | `propose_record`, `revise_context_record`, `publish_context_record`, `set_governance_mode`, `get_steering_freshness` | Branch/file changes and merge history | Implemented through the provider seam. `get_steering_freshness` names the host so the CLI matches a gitlab.com remote, nested groups included |
 | `list_proposals`, `dismiss_proposal`, `list_context_records`, `promote_context_record` | Local proposal and record state | Local semantics kept. `dismiss_proposal` closes the merge request and deletes its branch, and leaves alone a PR opened on the other host |
 | `propose_skill` | Repository commits and merge requests | Implemented through the provider seam |

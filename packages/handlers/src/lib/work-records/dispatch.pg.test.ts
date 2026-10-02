@@ -737,9 +737,16 @@ describe.skipIf(!enabled)("work order dispatch against Postgres", { timeout: 30_
     // A second run that names the same send is stopped, so the work runs once.
     const late = await openRun(r);
     expect(await link(r.hostA, sent.orderPublicId, late.runId)).toBe("already_linked");
-    expect(await commandsByKey(stopCommandKey(sent.key, late.runId))).toEqual([
-      expect.objectContaining({ command: "cancel", outcome: "queued", targetId: late.runId }),
-    ]);
+    const [duplicateCancel] = await commandsByKey(stopCommandKey(sent.key, late.runId));
+    expect(duplicateCancel).toEqual(expect.objectContaining({ command: "cancel", outcome: "queued", targetId: late.runId }));
+    // The host applies that cancel: the duplicate run stops, and the send it
+    // named keeps running on its own run.
+    expect(
+      await acks(r.hostA, [
+        { publicId: duplicateCancel!.publicId, command: "cancel", outcome: "applied", payload: duplicateCancel!.payload, targetId: late.runId },
+      ]),
+    ).toBe(0);
+    expect(orderIn(await read(item.itemId), sent.orderId)).toMatchObject({ delivery: "running", runIds: [run.runId] });
 
     expect(await endRun(run.runId)).toBe(1);
     expect(await endRun(run.runId)).toBe(0);
@@ -810,7 +817,7 @@ describe.skipIf(!enabled)("work order dispatch against Postgres", { timeout: 30_
       payload: { session_uuid: run.sessionUuid, work_order: sent.orderPublicId },
     });
 
-    const applied: AckedCommand = { publicId: cancels[0]!.publicId, command: "cancel", outcome: "applied", payload: cancels[0]!.payload };
+    const applied: AckedCommand = { publicId: cancels[0]!.publicId, command: "cancel", outcome: "applied", payload: cancels[0]!.payload, targetId: run.runId };
     expect(await acks(r.hostA, [applied])).toBe(1);
     expect(await acks(r.hostA, [applied])).toBe(0);
     const stopped = await read(item.itemId);

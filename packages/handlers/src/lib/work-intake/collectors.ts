@@ -252,8 +252,14 @@ export async function setCollector(tx: Tx, scope: WorkScope, input: SetCollector
   const wasPaused = existing?.health === "paused";
   const paused = input.paused ?? wasPaused;
   const health: CollectorHealth = paused ? "paused" : wasPaused ? "healthy" : ((existing?.health as CollectorHealth | undefined) ?? "healthy");
-  const reposBefore = existing ? reposOf(existing.scope).map((repo) => repo.toLowerCase()).sort().join(",") : "";
-  const reposAfter = repos.map((repo) => repo.toLowerCase()).sort().join(",");
+  const before = new Set(existing ? reposOf(existing.scope).map((repo) => repo.toLowerCase()) : []);
+  const after = repos.map((repo) => repo.toLowerCase());
+  const reposChanged = after.length !== before.size || after.some((repo) => !before.has(repo));
+  // The cursor is a time, and a reconcile reads every repository from it. A
+  // repository the collector did not read before, or another connection, has
+  // issues older than the cursor that no read has seen, so the next reconcile
+  // starts from the beginning. Items already stored are not written twice.
+  const readFromStart = after.some((repo) => !before.has(repo)) || existing?.connectionId !== connection.id;
 
   if (existing) {
     await tx
@@ -263,6 +269,7 @@ export async function setCollector(tx: Tx, scope: WorkScope, input: SetCollector
         scope: file.file.scope,
         health,
         fileHash: file.file.fileHash,
+        ...(readFromStart ? { cursor: null } : {}),
         updatedAt: sql`now()`,
         updatedById: input.actorUserId,
       })
@@ -270,7 +277,7 @@ export async function setCollector(tx: Tx, scope: WorkScope, input: SetCollector
     return {
       collectorId: existing.id,
       created: false,
-      reconcile: !paused && (wasPaused || reposBefore !== reposAfter || existing.connectionId !== connection.id),
+      reconcile: !paused && (wasPaused || reposChanged || readFromStart),
     };
   }
   const [row] = await tx

@@ -497,7 +497,7 @@ describe("the context-record wizard: pull request", () => {
     expect(screen.getByText(t("opened.passed"))).toBeTruthy();
     // The page behind moves to Context PRs with this pull request selected.
     const target =
-      "/acme/core-platform/steering/proposals/prs?proposal=prp_01K5ABC";
+      "/acme/core-platform/steering/proposals/prs/prp_01K5ABC";
     await waitFor(() => {
       expect(push).toHaveBeenCalledWith(target);
     });

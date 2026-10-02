@@ -171,6 +171,7 @@ describe("getPullRequest", () => {
         commits: 1,
         comments: 5,
         review_comments: 2,
+        labels: [{ name: "oxagen", color: "09090B" }, { name: "P2" }],
         // draft intentionally omitted → defaults to false
       }),
     );
@@ -209,6 +210,7 @@ describe("getPullRequest", () => {
       commits: 1,
       commentCount: 5,
       reviewCommentCount: 2,
+      labels: ["oxagen", "P2"],
     });
   });
 
@@ -240,6 +242,8 @@ describe("getPullRequest", () => {
     expect(pr.authorAvatarUrl).toBeNull();
     expect(pr.merged).toBe(true);
     expect(pr.headSha).toBeNull();
+    // A payload with no labels array reads as no labels.
+    expect(pr.labels).toEqual([]);
   });
 });
 

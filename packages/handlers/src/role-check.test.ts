@@ -87,6 +87,9 @@ const ROLE_CHECKED_CONTRACTS = [
   "propose_record",
   "dismiss_proposal",
   "open_context_pr",
+  // A revert opens a merge-class steering PR, so it takes merge_context_pr's
+  // roles and asserts them for an API key's creator too (#4449).
+  "revert_steering_pr",
   "query_audit_log",
   "export_audit_events",
   "list_skills",

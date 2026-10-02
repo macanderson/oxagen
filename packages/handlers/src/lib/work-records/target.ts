@@ -24,7 +24,7 @@
 //     `harness` and `observe`.
 import { schema, type Tx } from "@oxagen/database";
 import { type RuntimeTier, WorkRecordError } from "@oxagen/work/records";
-import { and, desc, eq, gt, isNull, lte, ne, or } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { composeAgentKey } from "../run-item";
 import { takesWorkOrders } from "../tacho-host";
 import type { WorkScope } from "./store";
@@ -158,7 +158,8 @@ export async function readSendTarget(tx: Tx, scope: WorkScope, agentPublicId: st
         key === null ? eq(hosts.agentId, agent.id) : or(eq(hosts.agentId, agent.id), eq(hosts.agentKey, key)),
       ),
     )
-    .orderBy(desc(hosts.lastSeenAt))
+    // The host that polled last; one that never polled sorts after it.
+    .orderBy(sql`${hosts.lastSeenAt} DESC NULLS LAST`)
     .limit(1);
   if (!host) {
     refuse("not_allowed", `No machine is enrolled for ${agent.name} on ${runtime.name}. Enroll it with oxagen, then send again.`);

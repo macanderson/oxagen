@@ -1415,6 +1415,20 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./context.pr.get"))
         .getContextPrHandler as CapabilityHandlerFn,
   );
+  // The Context PR page (#5077): the host's state for one PR now, and the
+  // files its branch changes.
+  registerHandler(
+    "refresh_context_pr",
+    async () =>
+      (await import("./context.pr.refresh"))
+        .refreshContextPrHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_context_pr_diff",
+    async () =>
+      (await import("./context.pr.diff.get"))
+        .getContextPrDiffHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "merge_context_pr",
     async () =>
@@ -1426,6 +1440,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./context.pr.merge_without_review"))
         .mergePrWithoutReviewHandler as CapabilityHandlerFn,
+  );
+  // Open a steering PR that undoes a merged one (#4449).
+  registerHandler(
+    "revert_steering_pr",
+    async () =>
+      (await import("./context.pr.revert"))
+        .revertSteeringPrHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "set_governance_mode",

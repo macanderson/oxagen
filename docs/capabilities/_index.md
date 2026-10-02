@@ -211,6 +211,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [dismiss_proposal](context.proposal.dismiss.md) | [context.proposal.dismiss.ts](../../packages/oxagen/src/contracts/context.proposal.dismiss.ts) | api, agent |
 | [dismiss_memories](steering.memories.dismiss.md) | [steering.memories.dismiss.ts](../../packages/oxagen/src/contracts/steering.memories.dismiss.ts) | api, mcp, cli |
 | [get_context_pr](context.pr.get.md) | [context.pr.get.ts](../../packages/oxagen/src/contracts/context.pr.get.ts) | api, mcp, agent |
+| [get_context_pr_diff](context.pr.diff.get.md) | [context.pr.diff.get.ts](../../packages/oxagen/src/contracts/context.pr.diff.get.ts) | api, mcp, agent |
 | [get_record](context.records.get.md) | [context.records.get.ts](../../packages/oxagen/src/contracts/context.records.get.ts) | api, mcp, agent |
 | [get_published_steering](context.steering.published.get.md) | [context.steering.published.get.ts](../../packages/oxagen/src/contracts/context.steering.published.get.ts) | api, mcp, cli |
 | [get_steering_index](context.steering.index.get.md) | [context.steering.index.get.ts](../../packages/oxagen/src/contracts/context.steering.index.get.ts) | api, cli |
@@ -231,6 +232,8 @@ after the registered name separately when their contract uses a dotted stem.
 | [promote_context_record](context.record.promote.md) | [context.record.promote.ts](../../packages/oxagen/src/contracts/context.record.promote.ts) | api |
 | [propose_record](context.proposal.create.md) | [context.proposal.create.ts](../../packages/oxagen/src/contracts/context.proposal.create.ts) | api, mcp, agent |
 | [publish_context_record](context.record.publish.md) | [context.record.publish.ts](../../packages/oxagen/src/contracts/context.record.publish.ts) | api |
+| [refresh_context_pr](context.pr.refresh.md) | [context.pr.refresh.ts](../../packages/oxagen/src/contracts/context.pr.refresh.ts) | api, agent |
+| [revert_steering_pr](context.pr.revert.md) | [context.pr.revert.ts](../../packages/oxagen/src/contracts/context.pr.revert.ts) | api, mcp, agent, cli |
 
 ## Control
 

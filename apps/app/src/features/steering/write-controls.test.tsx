@@ -2,7 +2,8 @@
 // The steering PR writes as a person makes them: each write sends the
 // proposal the page shows, a completed write reloads the view it leads to, a
 // refusal is named where the person acted and navigates nowhere, and a merge
-// the checks have not cleared cannot be sent. Every refusal code the handlers
+// the checks have not cleared cannot be sent. A revert waits for its dialog's
+// confirmation and links the pull request it opened in place. Every refusal code the handlers
 // and the merge queue throw has its own sentence, and a write the platform has
 // not registered says so. Each state gets an axe check.
 import {
@@ -26,6 +27,7 @@ const {
   approveContextPr,
   mergePrWithoutReview,
   restoreManagedBlock,
+  revertSteeringPr,
 } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
   openContextPr: vi.fn(),
@@ -34,6 +36,7 @@ const {
   approveContextPr: vi.fn(),
   mergePrWithoutReview: vi.fn(),
   restoreManagedBlock: vi.fn(),
+  revertSteeringPr: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({
@@ -43,6 +46,7 @@ vi.mock("./actions", () => ({
   approveContextPr,
   mergePrWithoutReview,
   restoreManagedBlock,
+  revertSteeringPr,
   dropMemoryRecord: vi.fn(),
 }));
 
@@ -52,11 +56,12 @@ const {
   MergeWithoutReview,
   ProposalWrites,
   RestoreManagedBlock,
+  RevertSteeringPr,
 } = await import("./write-controls");
 const { useActionFailure } = await import("./action-failure");
 
 const TARGET = { org: "acme", ws: "core-platform", proposalId: "prp_01k5ru4a" };
-const PRS = "/acme/core-platform/steering/proposals/prs?proposal=prp_01k5ru4a";
+const PRS = "/acme/core-platform/steering/proposals/prs/prp_01k5ru4a";
 
 const intl = ({ children }: { children: ReactNode }) => (
   <IntlProvider>{children}</IntlProvider>
@@ -72,6 +77,7 @@ beforeEach(() => {
     approveContextPr,
     mergePrWithoutReview,
     restoreManagedBlock,
+    revertSteeringPr,
   ]) {
     fn.mockReset();
   }
@@ -189,34 +195,36 @@ describe("Open a Context PR", () => {
     expect(
       screen.queryByRole("button", { name: "Run the checks again" }),
     ).toBeNull();
-    expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Close without merging" }),
+    ).toBeNull();
   });
 });
 
-describe("Dismiss", () => {
+describe("Close without merging", () => {
   function submitReason(reason: string) {
     render(<ProposalWrites {...TARGET} status="checks_failed" />, {
       wrapper: intl,
     });
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Reason" }), {
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close without merging" }),
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Optional reason" }), {
       target: { value: reason },
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Dismiss the proposal" }),
+      screen.getByRole("button", { name: "Close the pull request" }),
     );
   }
 
-  it("dismisses this proposal with the reason written and reloads Proposals", async () => {
+  it("closes this proposal with the reason written and reloads its page", async () => {
     dismissProposal.mockResolvedValue({
       ok: true,
       value: { status: "rejected" },
     });
     submitReason("Duplicate of ctx.release.notes-format");
     await waitFor(() => {
-      expect(router.replace).toHaveBeenCalledWith(
-        "/acme/core-platform/steering/proposals",
-      );
+      expect(router.replace).toHaveBeenCalledWith(PRS);
     });
     expect(dismissProposal).toHaveBeenCalledWith(
       "acme",
@@ -240,20 +248,66 @@ describe("Dismiss", () => {
     );
     expect(router.replace).not.toHaveBeenCalled();
   });
+
+  it("closes with no reason when none is written", async () => {
+    dismissProposal.mockResolvedValue({
+      ok: true,
+      value: { status: "rejected" },
+    });
+    submitReason("");
+    await waitFor(() => {
+      expect(router.replace).toHaveBeenCalledWith(PRS);
+    });
+    expect(dismissProposal).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "prp_01k5ru4a",
+      "",
+    );
+  });
+
+  it("names GitHub's refusal and leaves the proposal open (negative)", async () => {
+    dismissProposal.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "github_refused",
+    });
+    submitReason("");
+    expect(
+      await screen.findByTestId("dismiss-proposal-failure"),
+    ).toHaveTextContent("GitHub refused the change.");
+    expect(router.replace).not.toHaveBeenCalled();
+  });
 });
 
 describe("Merge pull request", () => {
-  it("cannot be sent while the checks have not passed (negative)", () => {
+  /** Opens the confirming dialog and confirms the merge. */
+  function confirmMerge() {
+    fireEvent.click(screen.getByRole("button", { name: "Merge pull request" }));
+    fireEvent.click(screen.getByRole("button", { name: "Merge and publish" }));
+  }
+
+  it("cannot be opened while the checks have not passed (negative)", () => {
     render(<MergeContextPr {...TARGET} blocked />, { wrapper: intl });
     const button = screen.getByRole("button", { name: "Merge pull request" });
     expect(button).toBeDisabled();
-    const form = button.closest("form");
-    if (form === null) throw new Error("the merge button sits in no form");
-    fireEvent.submit(form);
+    fireEvent.click(button);
+    expect(screen.queryByTestId("merge-context-pr")).toBeNull();
     expect(mergeContextPr).not.toHaveBeenCalled();
     expect(
       screen.getByText("Merge is blocked until every check passes."),
     ).toBeInTheDocument();
+  });
+
+  it("asks first, and merges nothing until the person confirms", () => {
+    render(<MergeContextPr {...TARGET} blocked={false} />, { wrapper: intl });
+    const button = screen.getByRole("button", { name: "Merge pull request" });
+    expect(button.className).toMatch(/button-primary/);
+    fireEvent.click(button);
+    expect(screen.getByTestId("merge-context-pr")).toHaveTextContent(
+      "Merging publishes the record",
+    );
+    expect(mergeContextPr).not.toHaveBeenCalled();
   });
 
   it("merges this proposal's pull request and reloads its Context PR", async () => {
@@ -262,7 +316,7 @@ describe("Merge pull request", () => {
       value: { commit: "4d5e6f7" },
     });
     render(<MergeContextPr {...TARGET} blocked={false} />, { wrapper: intl });
-    fireEvent.click(screen.getByRole("button", { name: "Merge pull request" }));
+    confirmMerge();
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(PRS);
     });
@@ -280,7 +334,7 @@ describe("Merge pull request", () => {
       code: "separation_of_duties",
     });
     render(<MergeContextPr {...TARGET} blocked={false} />, { wrapper: intl });
-    fireEvent.click(screen.getByRole("button", { name: "Merge pull request" }));
+    confirmMerge();
     expect(
       await screen.findByTestId("merge-context-pr-failure"),
     ).toHaveTextContent(
@@ -375,6 +429,92 @@ describe("Restore block", () => {
   });
 });
 
+describe("Revert pull request", () => {
+  const REVERT_URL = "https://github.com/acme/core-platform/pull/520";
+
+  function confirmRevert() {
+    render(<RevertSteeringPr {...TARGET} />, { wrapper: intl });
+    fireEvent.click(screen.getByRole("button", { name: "Revert pull request" }));
+    const dialog = screen.getByTestId("revert-steering-pr");
+    fireEvent.click(screen.getByRole("button", { name: "Open the revert" }));
+    return dialog;
+  }
+
+  it("asks for confirmation first, and sends nothing until the person confirms", () => {
+    render(<RevertSteeringPr {...TARGET} />, { wrapper: intl });
+    expect(screen.queryByTestId("revert-steering-pr")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Revert pull request" }));
+    expect(screen.getByTestId("revert-steering-pr")).toHaveTextContent(
+      "Nothing changes until the new pull request passes review and merges.",
+    );
+    expect(revertSteeringPr).not.toHaveBeenCalled();
+  });
+
+  it("opens the revert for this proposal and links the pull request in place", async () => {
+    revertSteeringPr.mockResolvedValue({
+      ok: true,
+      value: {
+        number: 520,
+        url: REVERT_URL,
+        branch: "steering/revert-519",
+        check: "success",
+      },
+    });
+    confirmRevert();
+    expect(
+      await screen.findByText("Revert pull request #520 is open."),
+    ).toBeInTheDocument();
+    expect(revertSteeringPr).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "prp_01k5ru4a",
+    );
+    expect(
+      screen.getByRole("link", { name: "Go to pull request #520" }),
+    ).toHaveAttribute("href", REVERT_URL);
+    expect(screen.queryByTestId("revert-steering-pr")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Revert pull request" }),
+    ).toBeNull();
+    // The merged PR's panel does not change, so nothing reloads.
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("says when the Oxagen steering check failed on the revert", async () => {
+    revertSteeringPr.mockResolvedValue({
+      ok: true,
+      value: {
+        number: 520,
+        url: REVERT_URL,
+        branch: "steering/revert-519",
+        check: "failure",
+      },
+    });
+    confirmRevert();
+    expect(
+      await screen.findByText(
+        "The Oxagen steering check failed on the revert. Read the check on the pull request.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("names a refusal in the dialog and opens nothing (negative)", async () => {
+    revertSteeringPr.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+    confirmRevert();
+    expect(
+      await screen.findByTestId("revert-steering-pr-failure"),
+    ).toHaveTextContent(
+      "Your role in this organization or workspace does not allow this change. Nothing was changed.",
+    );
+    expect(screen.queryByText(/is open\./)).toBeNull();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+});
+
 describe("the sentence for each refusal", () => {
   it.each([
     [
@@ -456,6 +596,34 @@ describe("the sentence for each refusal", () => {
     [
       { reason: "conflict", code: "checks_failed" },
       "the checks failed after Oxagen brought the branch up to date",
+    ],
+    [
+      { reason: "conflict", code: "not_merged" },
+      "Only a merged steering PR can be reverted. Nothing was opened.",
+    ],
+    [
+      { reason: "conflict", code: "governance_proposal" },
+      "Set the mode again to change it back.",
+    ],
+    [
+      { reason: "conflict", code: "pr_not_recorded" },
+      "This proposal has no recorded pull request.",
+    ],
+    [
+      { reason: "conflict", code: "repository_changed" },
+      "Revert it there by hand.",
+    ],
+    [
+      { reason: "conflict", code: "merge_commit_unknown" },
+      "Oxagen cannot find what the production branch held before this merge",
+    ],
+    [
+      { reason: "conflict", code: "nothing_to_revert" },
+      "This merge changed nothing outside the ledger",
+    ],
+    [
+      { reason: "conflict", code: "revert_branch_exists" },
+      "A revert of this pull request is already open",
     ],
     [
       { reason: "conflict", code: "some_new_reason" },

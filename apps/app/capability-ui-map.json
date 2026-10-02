@@ -228,12 +228,13 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "dismiss_proposal": {
-      "route": "/[org]/[ws]/steering",
-      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "/[org]/[ws]/steering \u2014 the rev1 surface that invokes dismiss_proposal (features/steering/actions.ts)",
+      "route": "/[org]/[ws]/steering/proposals/prs/[proposal]",
+      "page": "apps/app/src/app/[org]/[ws]/steering/proposals/prs/[proposal]/page.tsx",
+      "entry": "Close without merging on the Context PR page (features/steering/write-controls.tsx)",
+      "testid": "dismiss-proposal-open",
       "proof": "apps/app/src/features/steering/write-controls.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "session_01B5MzP4EGjHSj52UKpWTxyz"
     },
     "dispatch_command": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -389,13 +390,30 @@
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
+    "get_context_pr_diff": {
+      "route": "/[org]/[ws]/steering/proposals/prs/[proposal]",
+      "page": "apps/app/src/app/[org]/[ws]/steering/proposals/prs/[proposal]/page.tsx",
+      "entry": "The Changes section of the Context PR page (features/steering/context-pr-diff.tsx)",
+      "proof": "apps/app/src/features/steering/context-pr-page.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "session_01B5MzP4EGjHSj52UKpWTxyz"
+    },
+    "refresh_context_pr": {
+      "route": "/[org]/[ws]/steering/proposals/prs/[proposal]",
+      "page": "apps/app/src/app/[org]/[ws]/steering/proposals/prs/[proposal]/page.tsx",
+      "entry": "Refresh from GitHub on the Context PR page, and the refresh when the page opens (features/steering/context-pr-controls.tsx)",
+      "testid": "refresh-context-pr",
+      "proof": "apps/app/src/features/steering/context-pr-page.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "session_01B5MzP4EGjHSj52UKpWTxyz"
+    },
     "get_context_pr": {
-      "route": "/[org]/[ws]/steering",
-      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "/[org]/[ws]/steering \u2014 the rev1 surface that invokes get_context_pr (data/live/mappers/steering.ts, data/live/steering.ts)",
-      "proof": "apps/app/src/features/steering/steering.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "route": "/[org]/[ws]/steering/proposals/prs/[proposal]",
+      "page": "apps/app/src/app/[org]/[ws]/steering/proposals/prs/[proposal]/page.tsx",
+      "entry": "The Context PR page (#5077): the read behind the whole page (features/steering/context-pr-page.tsx)",
+      "proof": "apps/app/src/features/steering/context-pr-page.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "session_01B5MzP4EGjHSj52UKpWTxyz"
     },
     "get_contract_rate": {
       "route": "/[org]/billing",
@@ -956,12 +974,13 @@
       "verifiedBy": "session-cost-price-book-autoseed"
     },
     "list_proposals": {
-      "route": "/[org]/[ws]/steering",
-      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "/[org]/[ws]/steering \u2014 the rev1 surface that invokes list_proposals (data/live/mappers/steering.ts, data/live/steering.ts)",
+      "route": "/[org]/[ws]/steering/[...view]",
+      "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
+      "entry": "The Proposals list at /steering/proposals with its Open, Merged and Closed filters (features/steering/tabs/proposals.tsx)",
+      "testid": "tab-proposals",
       "proof": "apps/app/src/features/steering/steering.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "session_01B5MzP4EGjHSj52UKpWTxyz"
     },
     "list_records": {
       "route": "/[org]/[ws]/steering",
@@ -1109,12 +1128,13 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "merge_context_pr": {
-      "route": "/[org]/[ws]/steering",
-      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "/[org]/[ws]/steering \u2014 the rev1 surface that invokes merge_context_pr (features/steering/actions.ts)",
-      "proof": "apps/app/src/features/steering/context-pr-panel.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "route": "/[org]/[ws]/steering/proposals/prs/[proposal]",
+      "page": "apps/app/src/app/[org]/[ws]/steering/proposals/prs/[proposal]/page.tsx",
+      "entry": "Merge pull request on the Context PR page, behind its confirming dialog (features/steering/write-controls.tsx)",
+      "testid": "merge-context-pr-open",
+      "proof": "apps/app/src/features/steering/write-controls.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "session_01B5MzP4EGjHSj52UKpWTxyz"
     },
     "merge_pr_without_review": {
       "route": "/[org]/[ws]/steering",
@@ -1125,13 +1145,23 @@
       "verifiedAt": "2026-09-27",
       "verifiedBy": "3f363c89"
     },
-    "open_context_pr": {
+    "revert_steering_pr": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "/[org]/[ws]/steering \u2014 the rev1 surface that invokes open_context_pr (features/steering/actions.ts)",
-      "proof": "apps/app/src/features/steering/context-pr-panel.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "entry": "/[org]/[ws]/steering — the Revert pull request button on a merged steering PR, behind a confirming dialog (features/steering/write-controls.tsx, shown by context-pr-panel.tsx)",
+      "testid": "revert-steering-pr",
+      "proof": "apps/app/src/features/steering/write-controls.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "054a9da7"
+    },
+    "open_context_pr": {
+      "route": "/[org]/[ws]/steering/proposals/prs/[proposal]",
+      "page": "apps/app/src/app/[org]/[ws]/steering/proposals/prs/[proposal]/page.tsx",
+      "entry": "Open a Context PR, or Run the checks again, on the Context PR page (features/steering/write-controls.tsx)",
+      "testid": "open-context-pr-open",
+      "proof": "apps/app/src/features/steering/write-controls.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "session_01B5MzP4EGjHSj52UKpWTxyz"
     },
     "open_init_pr": {
       "route": "/[org]/[ws]/repositories",
