@@ -48,7 +48,7 @@ tokens through CSS, so nothing else is needed — never hand-pick a hex.
 ### Type and the gold rule
 
 Three families, each with its own job. **Space Grotesk** (`--ox-font-display`) sets the
-wordmarks and h1 to h3. **Geist** (`--ox-font`) sets h4 to h6 and everything else a
+wordmarks and h1 to h3. **Aeonik** (`--ox-font`) sets h4 to h6 and everything else a
 person reads: body, labels, buttons, tables, navigation. **Monaspace Neon**
 (`--ox-font-mono`) sets code, terminal output, logs, digests, paths, ids, and numbers
 in tables, with `calt` and `liga` on for texture healing. A figure in a table is mono

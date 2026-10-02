@@ -14,6 +14,13 @@ export const SEED = {
   orgName: "E2E Org",
   workspaceSlug: "core",
   workspaceName: "Core",
+  /**
+   * The one work item, entered by the owner, so `/{org}/{ws}/work/WI-1` has a
+   * title to load. It is the workspace's first item, so its number is WI-1,
+   * and seed:e2e fails when it is not.
+   */
+  workItemTitle: "Seeded work item for the e2e suite",
+  workItemNumber: "WI-1",
 } as const;
 
 /** `apps/app/e2e`, resolved from this file so cwd never matters. */

@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "getting-started",
+    "work",
     "releases",
     "cli",
     "configuration",

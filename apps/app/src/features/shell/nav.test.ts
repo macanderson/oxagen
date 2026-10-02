@@ -90,6 +90,12 @@ describe("isNavItemCurrent", () => {
     ["/acme/core-platform/tools", "agents"],
     ["/acme/core-platform/tools/servers/mcs_01k5s1/try", "agents"],
     ["/acme/core-platform/steering", "steering"],
+    // Work and its own pages, and one work item, light Work.
+    ["/acme/core-platform/work", "work"],
+    ["/acme/core-platform/work?tab=review", "work"],
+    ["/acme/core-platform/work/setup", "work"],
+    ["/acme/core-platform/work/outcomes", "work"],
+    ["/acme/core-platform/work/WI-12", "work"],
     ["/acme/core-platform/runtimes", "agents"],
     ["/acme/core-platform/runtimes/mbell-mbp-16", "agents"],
     ["/acme/core-platform/repositories", "repositories"],
@@ -154,10 +160,11 @@ describe("hrefs", () => {
 });
 
 describe("sidebarSections", () => {
-  it("has the mockup's eight links in order, Repositories between Steering and Spend, and Audit after Billing, and no Run, Skills, Tools, Runtimes or Ontology entry", () => {
+  it("has the mockup's nine links in order, Work first, Repositories between Steering and Spend, and Audit after Billing, and no Run, Skills, Tools, Runtimes or Ontology entry", () => {
     const sections = sidebarSections("acme", "core-platform");
     expect(sections.map((s) => s.key)).toEqual(["workspace", "organization"]);
     expect(sections.flatMap((s) => s.items)).toEqual([
+      { key: "work", href: "/acme/core-platform/work" },
       { key: "fleet", href: "/acme/core-platform" },
       { key: "agents", href: "/acme/core-platform/agents" },
       { key: "steering", href: "/acme/core-platform/steering" },
@@ -186,9 +193,10 @@ describe("sidebarSections", () => {
 });
 
 describe("the phone's thumb bar and More sheet", () => {
-  it("split the eight sidebar keys: three slots, the rest in the sheet, each key once", () => {
+  it("split the nine sidebar keys: three slots, the rest in the sheet, each key once", () => {
     expect(THUMB_SLOTS).toEqual(["fleet", "agents", "spend"]);
     expect(MORE_SHEET).toEqual([
+      "work",
       "steering",
       "repositories",
       "organization",
@@ -209,6 +217,8 @@ describe("the phone's thumb bar and More sheet", () => {
       "/acme/audit",
       "/acme/core-platform/steering",
       "/acme/core-platform/repositories",
+      "/acme/core-platform/work",
+      "/acme/core-platform/work/WI-12",
     ])
       expect(isMoreCurrent(path)).toBe(true);
   });

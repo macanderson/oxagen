@@ -90,6 +90,14 @@ const read = vi.fn<DataSource["skills"]["inventory"]>();
 const config = vi.fn<DataSource["skills"]["configuration"]>();
 const source: DataSource = {
   runtimes: { list: vi.fn(), agents: vi.fn(), named: vi.fn() },
+  work: {
+    list: vi.fn(),
+    get: vi.fn(),
+    targets: vi.fn(),
+    outcomes: vi.fn(),
+    collectors: vi.fn(),
+    priorities: vi.fn(),
+  },
   conversations: { latest: vi.fn(), list: vi.fn(), byId: vi.fn() },
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
   shell: {

@@ -8,7 +8,9 @@ import {
   picture,
   indexPage,
   inlineWordmark,
+  latestPosts,
   layout,
+  lockup,
   mergeSitemap,
   pillarChips,
   pillarPage,
@@ -20,6 +22,7 @@ import {
   THEME_HEAD,
   THEME_SWITCH,
   urls,
+  withSiteHeader,
 } from "./html.mjs";
 
 const imagesFor = (base) => ({
@@ -126,12 +129,15 @@ describe("helpers", () => {
 });
 
 describe("chrome", () => {
-  it("marks the blog link current and lists pillars in the footer", () => {
+  it("marks Research current on the blog and lists pillars in the footer", () => {
     const header = siteHeader({ wordmark, current: "blog" });
-    expect(header).toContain(
-      '<a href="/blog" aria-current="page">Research</a>',
+    expect(header).toContain('<a href="/blog" aria-current="page">All research');
+    expect(header).toMatch(
+      /<div class="nav-item nav-item--mega" data-open="false" data-current>\s*<button class="nav-trigger"[^>]*aria-controls="menu-research">Research/,
     );
-    expect(siteHeader({ wordmark })).toContain('<a href="/blog">Research</a>');
+    const plain = siteHeader({ wordmark });
+    expect(plain).toContain('<a href="/blog">All research');
+    expect(plain).not.toContain("data-current");
     const footer = siteFooter({ wordmark, pillars });
     expect(footer).toContain(
       '<li><a href="/blog/pillars/alpha">Alpha</a></li>',
@@ -147,18 +153,117 @@ describe("chrome", () => {
     expect(footer).toContain('<a href="/privacy">Privacy policy</a>');
   });
 
-  it("gives the phone menu one list with no headings and no demo button", () => {
+  it("puts the four menus in the island, in order, each behind a button", () => {
     const header = siteHeader({ wordmark });
-    const drawer = header.slice(header.indexOf('<div class="drawer"'));
-    const links = [...drawer.matchAll(/<a [^>]*>([^<]+)<\/a>/g)].map(
-      (m) => m[1],
+    const labels = [
+      ...header.matchAll(/<button class="nav-trigger"[^>]*>([^<]+)</g),
+    ].map((m) => m[1]);
+    expect(labels).toEqual(["Product", "Research", "Resources", "Company"]);
+    for (const id of ["product", "research", "resources", "company"]) {
+      expect(header).toContain(`aria-controls="menu-${id}"`);
+      expect(header).toContain(`<div class="menu menu--`);
+      expect(header).toContain(`id="menu-${id}"`);
+    }
+    // Every menu starts closed, and its button says so.
+    expect(header.match(/aria-expanded="true"/g)).toBeNull();
+    expect(header).toContain('<a class="brand" href="/" aria-label="Oxagen home"><svg viewBox="0 0 604.125 115.625"');
+  });
+
+  it("lists the docs, the app login, and the open source projects under Resources", () => {
+    const header = siteHeader({ wordmark });
+    const menu = header.slice(
+      header.indexOf('id="menu-resources"'),
+      header.indexOf('id="menu-company"'),
     );
-    expect(links).toEqual(["Overview", "Research", "Field manual", "Docs"]);
+    for (const href of [
+      "https://docs.oxagen.sh",
+      "https://app.oxagen.sh",
+      "https://stella.oxagen.sh/docs",
+      "https://contextgraphprotocol.org",
+      "https://github.com/macanderson/context-graph-protocol",
+    ]) {
+      expect(menu).toContain(`href="${href}"`);
+    }
+    // Stella and the protocol sit under one Open source heading, each with
+    // its own links indented beneath it.
+    const oss = menu.slice(menu.indexOf("Open source"));
+    expect(oss.match(/<div class="oss">/g)).toHaveLength(2);
+    expect(oss.match(/<ul class="oss-sub">/g)).toHaveLength(2);
+    // A link that leaves the site opens in a new tab.
+    expect(menu).toContain(
+      '<a class="mm-a" href="https://docs.oxagen.sh" target="_blank" rel="noopener">',
+    );
+  });
+
+  it("fills Research with the pillars and the newest posts it is given", () => {
+    const header = siteHeader({
+      wordmark,
+      pillars,
+      latest: [{ slug: "my-post", title: "Post <one>", pillar: "Alpha" }],
+    });
+    expect(header).toContain(
+      '<a class="mm-topic" href="/blog/pillars/beta"><b>Beta &amp; co</b><span>Second.</span></a>',
+    );
+    expect(header).toContain(
+      '<a class="mm-post" href="/blog/my-post">Post &lt;one&gt;<small>Alpha</small></a>',
+    );
+    const bare = siteHeader({ wordmark, pillars: [{ slug: "x", name: "X" }], latest: [{ slug: "p", title: "P" }] });
+    expect(bare).toContain('<a class="mm-topic" href="/blog/pillars/x"><b>X</b></a>');
+    expect(bare).toContain('<a class="mm-post" href="/blog/p">P</a>');
+  });
+
+  it("gives the header one Get a demo button, gold unless the page asks for ghost", () => {
+    const gold = siteHeader({ wordmark });
+    expect(gold.match(/class="btn [^"]*"[^>]*>Get a demo/g)).toEqual([
+      'class="btn btn-primary btn-sm" href="/#demo">Get a demo',
+    ]);
+    const ghost = siteHeader({ wordmark, demo: "ghost" });
+    expect(ghost).toContain('class="btn btn-ghost btn-sm" href="/#demo">Get a demo');
+    expect(ghost).not.toContain("btn-primary");
+  });
+
+  it("gives the phone menu one section per menu and no demo button", () => {
+    const header = siteHeader({ wordmark, pillars });
+    const drawer = header.slice(header.indexOf('<div class="drawer"'));
+    const sections = [
+      ...drawer.matchAll(/<summary>([^<]+)</g),
+    ].map((m) => m[1]);
+    expect(sections).toEqual(["Product", "Research", "Resources", "Company"]);
     expect(drawer).toContain('<a href="/products/oxagen">Overview</a>');
-    expect(drawer).not.toContain("<h5>");
+    expect(drawer).toContain('<a href="/blog/pillars/alpha">Alpha</a>');
+    expect(drawer).toContain("Stella docs");
+    expect(drawer).toContain("Context Graph Protocol");
+    // One Get a demo, in the header (#4901).
     expect(drawer).not.toContain("btn");
-    // The header keeps the one Get a demo button.
-    expect(header.match(/Get a demo/g)).toHaveLength(1);
+    expect(drawer).not.toContain("Get a demo");
+  });
+
+  it("draws the lockup: the hive beside the wordmark's own paths", () => {
+    const svg = lockup('<svg viewBox="0 0 10 10" role="img"><path d="M0"/></svg>\n');
+    expect(svg).toMatch(/^<svg viewBox="0 0 604\.125 115\.625" role="img" aria-label="oxagen">/);
+    expect(svg).toContain('<g transform="translate(150.257,11.190)"><path d="M0"/></g></svg>');
+    expect(svg.match(/fill="#D4AF37"/g)).toHaveLength(2);
+  });
+
+  it("fills a page's header placeholder and leaves other pages alone", () => {
+    const render = ({ demo }) => `[header ${demo}]`;
+    expect(withSiteHeader("a<!-- site-header -->b", render)).toBe("a[header primary]b");
+    expect(withSiteHeader('<!--site-header demo="ghost"-->', render)).toBe("[header ghost]");
+    expect(withSiteHeader('<!-- site-header demo="primary" -->', render)).toBe("[header primary]");
+    expect(withSiteHeader("<p>no header</p>", render)).toBe("<p>no header</p>");
+  });
+
+  it("names the newest posts with their first pillar", () => {
+    const posts = [
+      { slug: "a", title: "A", pillars: ["beta", "alpha"] },
+      { slug: "b", title: "B", pillars: ["gone"] },
+      { slug: "c", title: "C", pillars: ["alpha"] },
+    ];
+    expect(latestPosts(posts, pillars, 2)).toEqual([
+      { slug: "a", title: "A", pillar: "Beta & co" },
+      { slug: "b", title: "B", pillar: undefined },
+    ]);
+    expect(latestPosts(posts, pillars)).toHaveLength(3);
   });
 
   it("puts the System / Light / Dark control in the footer, System first", () => {

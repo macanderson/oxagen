@@ -11,7 +11,7 @@
   overflow: clip;
 }
 .blog-hero h1 {
-  font-size: clamp(var(--ox-m-h3), 5vw, var(--ox-m-h1));
+  font-size: clamp(calc(var(--ox-m-h2) * 0.85), 5vw, calc(var(--ox-m-h1) * 0.8));
   margin-top: 16px;
   max-width: 20ch;
 }
@@ -185,7 +185,7 @@
 }
 .post-card p {
   color: var(--ink-3);
-  font-size: var(--ox-m-micro);
+  font-size: var(--fs-ui);
   line-height: 1.5;
 }
 .byline {
@@ -276,7 +276,7 @@
   max-width: 600px;
 }
 .pillar-hero-copy h1 {
-  font-size: clamp(var(--ox-m-h3), 4.6vw, var(--ox-m-h1));
+  font-size: clamp(calc(var(--ox-m-h2) * 0.8), 4.6vw, calc(var(--ox-m-h1) * 0.72));
   margin-top: 14px;
 }
 .pillar-tagline {
@@ -339,7 +339,7 @@
   max-width: 640px;
 }
 .post-head h1 {
-  font-size: clamp(var(--ox-m-h3), 4.4vw, var(--ox-m-h1));
+  font-size: clamp(calc(var(--ox-m-h2) * 0.75), 4.4vw, calc(var(--ox-m-h1) * 0.7));
   margin-top: 16px;
   text-wrap: balance;
 }
@@ -415,7 +415,7 @@
   margin-top: 1.1em;
 }
 .prose h2 {
-  font-size: clamp(var(--ox-m-h4), 2.6vw, var(--ox-m-h3));
+  font-size: clamp(calc(var(--ox-m-h3) * 6 / 7), 2.6vw, calc(var(--ox-m-h3) * 15 / 14));
   margin-top: 2.1em;
   padding-top: 0.8em;
   border-top: 1px solid var(--line);
@@ -509,7 +509,7 @@
 .prose table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--ox-m-micro);
+  font-size: var(--fs-ui);
   line-height: 1.45;
 }
 .prose th,
@@ -534,7 +534,7 @@
   margin-top: 3em;
   padding-top: 1.2em;
   border-top: 1px solid var(--line);
-  font-size: var(--ox-m-micro);
+  font-size: var(--fs-ui);
   color: var(--ink-2);
 }
 .prose .refs-title {
@@ -644,7 +644,7 @@
 .fig-title {
   margin-bottom: 14px;
   color: var(--ink);
-  font-size: var(--ox-m-micro);
+  font-size: var(--fs-ui);
   font-weight: 600;
   letter-spacing: -0.01em;
 }
