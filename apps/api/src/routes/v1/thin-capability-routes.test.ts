@@ -138,6 +138,7 @@ import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
 import { contextPrRestoreManagedBlock } from "@oxagen/oxagen/contracts/context.pr.restore_managed_block";
+import { contextPrRevert } from "@oxagen/oxagen/contracts/context.pr.revert";
 import { conversationAttachmentAdd } from "@oxagen/oxagen/contracts/conversation.attachment.add";
 import { tachoCommandDispatch } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
@@ -303,6 +304,7 @@ import { contextPrGetRoute } from "./context.pr.get";
 import { contextPrMergeRoute } from "./context.pr.merge";
 import { contextPrMergeWithoutReviewRoute } from "./context.pr.merge_without_review";
 import { contextPrRestoreManagedBlockRoute } from "./context.pr.restore_managed_block";
+import { contextPrRevertRoute } from "./context.pr.revert";
 import { conversationAttachmentAddRoute } from "./conversation.attachment.add";
 import { conversationChatRoute } from "./conversation.chat";
 import { costPriceEntryListRoute } from "./cost.price_entry.list";
@@ -733,6 +735,16 @@ const ROUTES: ThinRoute[] = [
     body: { proposalId: "prp_1", path: "AGENTS.md" },
     // Only AGENTS.md, CLAUDE.md, and README.md hold a managed block.
     invalidBody: { proposalId: "prp_1", path: "README.txt" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "context.pr.revert",
+    route: contextPrRevertRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: contextPrRevert.name,
+    body: { proposalId: "prp_1" },
+    invalidBody: { proposalId: "prp_1", number: 7 },
     jsonGuard: true,
     status: 200,
   },

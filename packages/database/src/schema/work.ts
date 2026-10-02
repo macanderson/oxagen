@@ -759,6 +759,11 @@ export const workItemFacts = workSchema.table(
     runLinkedIdx: index("item_facts_run_linked_idx")
       .on(t.runId)
       .where(sql`${t.kind} = 'run_linked'`),
+    // A GitHub pull_request delivery finds the send that ran the pull request
+    // by its pr_linked fact (P1-04, #5100).
+    prLinkedIdx: index("item_facts_pr_linked_idx")
+      .on(t.orgId, t.workspaceId, t.repository, t.prNumber)
+      .where(sql`${t.kind} = 'pr_linked'`),
     // One approved brief per item revision, and one send request per order.
     approvalUniq: uniqueIndex("item_facts_approval_uniq")
       .on(t.itemId, t.itemRevision)

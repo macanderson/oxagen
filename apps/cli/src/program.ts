@@ -515,7 +515,9 @@ export function buildProgram(): Command {
 
   const contextCmd = program
     .command("context")
-    .description("Steering: record a proposal on a lineage");
+    .description(
+      "Steering: record a proposal on a lineage, or revert a merged one",
+    );
   contextCmd
     .command("propose")
     .description(
@@ -550,6 +552,16 @@ export function buildProgram(): Command {
         await contextPropose(opts);
       },
     );
+  contextCmd
+    .command("revert <proposalId>")
+    .description(
+      "Open a steering PR that undoes a merged one (revert_steering_pr); it merges after its own review",
+    )
+    .option("--json", "Output JSON")
+    .action(async (proposalId: string, opts: { json?: boolean }) => {
+      const { contextRevert } = await import("./commands/context.js");
+      await contextRevert(proposalId, opts);
+    });
 
   // ── repo: the workspace's repositories, one steering and any number linked ──
 
@@ -2026,6 +2038,36 @@ export function buildProgram(): Command {
     .action(async (opts: { json?: boolean }) => {
       const { handleAgentDetect } = await import("./commands/tacho.js");
       if (!(await handleAgentDetect(opts))) process.exitCode = 1;
+    });
+
+  // ── work: work orders sent to this machine's agents (ADR-251) ──────────────
+  //
+  // A person sends an approved brief to an agent in the app. The agent's
+  // host keeps the work order until the person at the machine starts it
+  // here. `start` claims the order first, so nothing runs for an order the
+  // server refuses.
+
+  const work = program
+    .command("work")
+    .description(
+      "See and start the work orders Oxagen sent to the agents on this machine",
+    );
+  work
+    .command("list")
+    .description("List the work orders waiting on this machine")
+    .action(async () => {
+      const { handleWorkList } = await import("./commands/tacho.js");
+      process.exitCode = await handleWorkList();
+    });
+  work
+    .command("start")
+    .description(
+      "Claim a work order, then start the agent in this directory with the order's brief as its first prompt",
+    )
+    .argument("<work-order>", "The work order's id, which starts with wo_")
+    .action(async (workOrderId: string) => {
+      const { handleWorkStart } = await import("./commands/tacho.js");
+      process.exitCode = await handleWorkStart(workOrderId);
     });
 
   // ── env: workspace environments ─────────────────────────────────────────────

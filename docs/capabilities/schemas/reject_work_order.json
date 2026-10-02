@@ -1,0 +1,53 @@
+{
+  "name": "reject_work_order",
+  "domain": "work",
+  "description": "Refuse a work order the calling enrolled host cannot start, with the reason. The send ends and the work item can be sent again.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "host_enrollment_id": {
+        "type": "string"
+      },
+      "work_order_id": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512
+      }
+    },
+    "required": [
+      "host_enrollment_id",
+      "work_order_id",
+      "reason"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "repeat": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "repeat"
+    ],
+    "additionalProperties": false
+  }
+}

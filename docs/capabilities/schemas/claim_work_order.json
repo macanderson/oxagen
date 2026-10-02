@@ -1,0 +1,98 @@
+{
+  "name": "claim_work_order",
+  "domain": "work",
+  "description": "Claim a work order for the calling enrolled host before it starts a run, and read the first prompt the run starts with.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "host_enrollment_id": {
+        "type": "string"
+      },
+      "work_order_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "host_enrollment_id",
+      "work_order_id"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "repeat": {
+        "type": "boolean"
+      },
+      "work_order": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "send": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "item_number": {
+            "type": "string"
+          },
+          "brief_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "repository": {
+            "type": "string"
+          },
+          "agent_id": {
+            "type": "string"
+          },
+          "harness": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "key",
+          "send",
+          "item_id",
+          "item_number",
+          "brief_revision",
+          "repository",
+          "agent_id",
+          "harness"
+        ],
+        "additionalProperties": false
+      },
+      "prompt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "repeat",
+      "work_order",
+      "prompt"
+    ],
+    "additionalProperties": false
+  }
+}

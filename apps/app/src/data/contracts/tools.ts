@@ -278,7 +278,7 @@ export const ApprovalRuleSet = z.object({
 });
 export type ApprovalRuleSet = z.infer<typeof ApprovalRuleSet>;
 
-// ── Connections and tool servers (lane: connections) ────────────────────────
+// ── Connections and MCP servers (lane: connections) ─────────────────────────
 // Two reads the Tools page had no view model for until now: the workspace's
 // data-source connections (`list_connections`, `get_connection`) and the MCP
 // servers the registry imports from (`list_mcp_servers`). Both contracts

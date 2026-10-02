@@ -9,7 +9,7 @@
 // A body reads the registry's first page before it draws anything. A refusal
 // or an outage of that read replaces the tab's body and never the header, the
 // strip or the shell, and a workspace with no provider and no version shows
-// the empty state on the Tool servers views. Policies and Off switches do not
+// the empty state on the MCP servers views. Policies and Off switches do not
 // hang on a provider, so they draw whatever the registry holds. The kernel
 // seam serves one read per request, so a body that asks for the same record
 // the header or the strip read pays nothing.
@@ -170,14 +170,14 @@ function ToolsHeaderButtons({
 
 /**
  * The counts the Agents tab strip carries for the Tools tabs: the providers
- * on Tool servers and the switches denying on Off switches. Null where the
+ * on MCP servers and the switches denying on Off switches. Null where the
  * read did not answer, so the strip prints no figure rather than a zero.
  */
 export async function toolsTabCounts(
   ctx: WsCtx,
   source: DataSource,
 ): Promise<{
-  servers: number | null;
+  mcpServers: number | null;
   switchesOn: number | null;
   switchesOnIsFloor: boolean;
 }> {
@@ -186,7 +186,7 @@ export async function toolsTabCounts(
     source.tools.killSwitches(ctx),
   ]);
   return {
-    servers: servers.ok ? servers.value.servers.length : null,
+    mcpServers: servers.ok ? servers.value.servers.length : null,
     switchesOn: board.ok ? switchesOn(board.value.switches) : null,
     switchesOnIsFloor: board.ok && board.value.truncated,
   };

@@ -7,8 +7,17 @@
  *                          --rationale "…" [--effect <require|forbid>] [--json]
  *
  * The Context PR is opened, checked and merged in Oxagen
- * (`open_context_pr`, `merge_context_pr`): both gate on the caller's org or
- * workspace role and declare only the `api` surface.
+ * (`open_context_pr`, `merge_context_pr`). Neither declares the `cli`
+ * surface: merge_context_pr needs a signed-in reviewer, which an API key is
+ * not.
+ *
+ * `oxagen context revert` — open a steering PR that undoes a merged one
+ * through `revert_steering_pr` (#4449):
+ *
+ *   oxagen context revert <proposalId> [--json]
+ *
+ * The handler acts for the API key's creator and applies the governance
+ * mode's merge rule. The revert PR it opens merges after its own review.
  *
  * Output discipline (ADR-023 §4): `--json` emits the contract payload as one
  * line on stdout; pretty mode prints the proposal id and where it is opened;
@@ -112,4 +121,63 @@ export async function contextPropose(
   writer.write(
     "open its Context PR from Oxagen → Steering; merge there publishes it",
   );
+}
+
+interface ContextRevertOptions {
+  json?: boolean;
+}
+
+/** The `revert_steering_pr` output. */
+export interface RevertResult {
+  proposalId: string;
+  reverted: { number: number; mergedCommit: string };
+  pullRequest: {
+    number: number;
+    url: string;
+    branch: string;
+    headSha: string | null;
+  };
+  check: "success" | "failure" | null;
+}
+
+const PROPOSAL_ID = /^prp_[0-9A-Za-z]+$/;
+
+/** The line that says how the Oxagen steering check came out on the revert. */
+function checkLine(check: RevertResult["check"]): string {
+  if (check === "success") return "Oxagen steering check passed";
+  if (check === "failure")
+    return "Oxagen steering check failed: read the check on the pull request";
+  return "no Oxagen steering check was reported";
+}
+
+export async function contextRevert(
+  proposalId: string | undefined,
+  opts: ContextRevertOptions,
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
+  if (!proposalId || !PROPOSAL_ID.test(proposalId)) {
+    writer.writeErr("error: name the merged proposal, such as prp_01k5ru4a");
+    writer.writeErr("usage: oxagen context revert <proposalId> [--json]");
+    process.exitCode = 2;
+    return;
+  }
+  let result: RevertResult;
+  try {
+    result = await apiPostOrThrow<RevertResult>("context/prs/revert", {
+      proposalId,
+    });
+  } catch (err) {
+    out.error(err, "api");
+    return;
+  }
+  if (out.isJson) {
+    out.data(result);
+    return;
+  }
+  writer.write(
+    `opened #${result.pullRequest.number} on ${result.pullRequest.branch}: it reverts #${result.reverted.number}`,
+  );
+  writer.write(result.pullRequest.url);
+  writer.write(checkLine(result.check));
 }

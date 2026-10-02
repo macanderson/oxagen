@@ -1,24 +1,27 @@
 "use client";
 // The steering PR writes on the page: open a proposal's steering PR (or run
 // its checks again), dismiss a proposal with a reason, approve, merge, merge
-// without review, restore a drifted managed block, and drop one record from a
-// memory PR. Open and dismiss sit behind a confirming dialog. Merge is the
-// panel's one primary action and stays disabled until every check has
-// passed. A refusal is named where the person acted and changes nothing. A
-// completed write reloads the view it leads to, except a drop, which marks
-// its card in place.
+// without review, revert a merged steering PR, restore a drifted managed
+// block, and drop one record from a memory PR. Open, dismiss, and revert sit
+// behind a confirming dialog. Merge is the panel's one primary action and
+// stays disabled until every check has passed. A refusal is named where the
+// person acted and changes nothing. A completed write reloads the view it
+// leads to, except a drop, which marks its card in place, and a revert, which
+// links the pull request it opened in place.
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import type { ProposalStatus } from "@/data/contracts/steering";
 import type { ActionResult } from "@/server/kernel";
+import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { routes, type SafePath } from "@/shared/safe-path";
 import {
   buttonPrimary,
   buttonSecondary,
+  linkText,
   textareaBase,
 } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
-import { useNavigate } from "@/ui/navigation";
+import { PullRequestLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import {
@@ -29,6 +32,8 @@ import {
   mergePrWithoutReview,
   openContextPr,
   restoreManagedBlock,
+  revertSteeringPr,
+  type RevertOpened,
 } from "./actions";
 
 type Copy = {
@@ -320,6 +325,92 @@ export function MergeWithoutReview({
       write={() => mergePrWithoutReview(org, ws, proposalId)}
       after={routes.steering(org, ws, { tab: "prs", proposal: proposalId })}
     />
+  );
+}
+
+/**
+ * Revert pull request: open a steering PR that undoes this merged one, behind
+ * a confirming dialog. The merged PR's panel does not change, so the revert
+ * PR's link takes the button's place once it is open.
+ */
+export function RevertSteeringPr({ org, ws, proposalId }: Target) {
+  const t = useTranslations("steering.actions.revert");
+  const failureText = useActionFailure();
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [opened, setOpened] = useState<RevertOpened | null>(null);
+
+  async function submit(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending) return;
+    setPending(true);
+    setFailure(null);
+    try {
+      const result = await revertSteeringPr(org, ws, proposalId);
+      if (result.ok) {
+        setOpened(result.value);
+        setOpen(false);
+      } else {
+        setFailure(failureText(result));
+      }
+    } catch {
+      setFailure(failureText(UNANSWERED));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  if (opened !== null) {
+    const number = String(opened.number);
+    const url = parsePullRequestUrl(opened.url);
+    return (
+      <div data-reverted={number} className="flex flex-col gap-1 text-sm">
+        <p className="text-foreground">{t("opened", { number })}</p>
+        {url === null ? null : (
+          <PullRequestLink to={url} className={linkText}>
+            {t("goToPr", { number })}
+          </PullRequestLink>
+        )}
+        {opened.check === "failure" ? (
+          <p className="text-muted-foreground">{t("checkFailed")}</p>
+        ) : null}
+      </div>
+    );
+  }
+  return (
+    <>
+      <button
+        type="button"
+        className={buttonSecondary}
+        onClick={() => {
+          setOpen(true);
+        }}
+      >
+        {t("open")}
+      </button>
+      <SheetDialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) setFailure(null);
+        }}
+        title={t("title")}
+        testId="revert-steering-pr"
+      >
+        <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">{t("body")}</p>
+          {failure === null ? null : (
+            <FormAlert testId="revert-steering-pr-failure">{failure}</FormAlert>
+          )}
+          <SubmitButton
+            pending={pending}
+            label={t("confirm")}
+            pendingLabel={t("pending")}
+          />
+        </form>
+      </SheetDialog>
+    </>
   );
 }
 

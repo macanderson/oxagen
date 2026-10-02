@@ -6,7 +6,7 @@
 // longer history, reduce to the same projection. The shuffle uses a fixed
 // seed, never Math.random or the clock, so a failure always reproduces.
 import { describe, expect, it } from "vitest";
-import type { WorkFact } from "./facts";
+import { type WorkFact, newFact } from "./facts";
 import { type WorkItemProjection, reduceWorkItem, reviewGate } from "./reduce";
 import { IN_REVIEW, MERGE, READY, SHA1, SHA2, at, digest, f } from "./test-fixtures";
 
@@ -182,6 +182,32 @@ describe("reduceWorkItem: review and finish", () => {
     const open = reduceWorkItem([...IN_REVIEW, f.prClosed("o1", 13)]);
     expect(reviewGate(open, open.activeOrder!)).toMatchObject({ open: false, block: "pr_closed" });
     expect(state([...IN_REVIEW, f.prClosed("o1", 12), f.merged("o1", SHA1, 13), f.accepted("o1", SHA1, 1, 14)])).toBe("done");
+  });
+
+  it("reads the head, a close, and a merge only on the send's current pull request", () => {
+    const pr = (number: number, minute: number) =>
+      newFact({ kind: "pr_linked", source: "runtime", itemRevision: 1, actor: "tch_runner", occurredAt: at(minute), dedupeKey: `pr:${number}`, orderId: "o1", repository: "aintel/platform", prNumber: number, data: {} });
+    const on = (number: number, kind: "pr_closed" | "head_observed" | "merged", minute: number, sha = SHA1) =>
+      newFact({
+        kind,
+        source: "provider",
+        itemRevision: 1,
+        actor: "github",
+        occurredAt: at(minute),
+        dedupeKey: `${kind}:${number}:${minute}`,
+        orderId: "o1",
+        repository: "aintel/platform",
+        prNumber: number,
+        ...(kind === "pr_closed" ? {} : { headSha: sha }),
+        data: kind === "merged" ? { merge_commit: MERGE } : {},
+      } as never) as WorkFact;
+    const base = [...READY, f.send("o1", 1, 1, 1, 4), f.runtime("claimed", "o1", 5), f.runtime("run_linked", "o1", 6), f.runtime("run_ended", "o1", 7)];
+    // The run closes #10 and opens #11: the send reads #11, open, at #11's head.
+    const moved = reduceWorkItem([...base, pr(10, 8), on(10, "head_observed", 8, SHA1), on(10, "pr_closed", 9), pr(11, 10), on(11, "head_observed", 10, SHA2)]);
+    expect(moved.activeOrder).toMatchObject({ pullRequest: { repository: "aintel/platform", number: 11 }, head: SHA2, prClosed: false, merge: null });
+    // A late close or merge of #10 changes nothing on #11.
+    const late = reduceWorkItem([...base, pr(10, 8), pr(11, 10), on(11, "head_observed", 10, SHA2), on(10, "pr_closed", 11), on(10, "merged", 12)]);
+    expect(late.activeOrder).toMatchObject({ head: SHA2, prClosed: false, merge: null });
   });
 
   it("lists every claim by criterion, and labels a check optional until the required checks are read", () => {

@@ -34,6 +34,8 @@ import {
 } from "./lib/tacho-host";
 import { hostCedarReader } from "./lib/tacho-host-cedar";
 import { hostSkillsReader } from "./lib/tacho-host-skills";
+import { type AckedCommand, recordWorkOrderAcks } from "./lib/work-records/runtime";
+import { logger } from "./logger";
 import {
   type TachoPublished,
   VERSION_STORE_PUBLISHED,
@@ -115,6 +117,7 @@ export function createTachoCommandFetchHandler(
         input.host_enrollment_id,
       );
       let acknowledged = 0;
+      const moved: AckedCommand[] = [];
       for (const ack of input.acknowledgements) {
         const updated = await tx
           .update(schema.tachoControlCommands)
@@ -129,8 +132,51 @@ export function createTachoCommandFetchHandler(
               ),
             ),
           )
-          .returning({ id: schema.tachoControlCommands.id });
+          .returning({
+            id: schema.tachoControlCommands.id,
+            publicId: schema.tachoControlCommands.publicId,
+            command: schema.tachoControlCommands.command,
+            outcome: schema.tachoControlCommands.outcome,
+            payload: schema.tachoControlCommands.payload,
+            detail: schema.tachoControlCommands.outcomeDetail,
+            targetId: schema.tachoControlCommands.targetId,
+          });
         acknowledged += updated.length;
+        for (const row of updated) {
+          moved.push({
+            publicId: String(row.publicId),
+            command: row.command,
+            outcome: row.outcome,
+            payload: row.payload,
+            detail: row.detail,
+            targetId: row.targetId,
+          });
+        }
+      }
+      // A work order's command the host took is `send_delivered`, one it
+      // could not keep is `send_rejected`, and a stop's `cancel` it applied is
+      // `stopped` (ADR-251). Each is recorded in a savepoint of its own: a work
+      // record that refuses one must not undo the acknowledgements, or the
+      // host would send them again on every poll, and must not drop the
+      // others.
+      for (const command of moved) {
+        if (command.command !== "work_order" && command.command !== "cancel") continue;
+        try {
+          await tx.transaction((savepoint) =>
+            recordWorkOrderAcks(
+              savepoint as never,
+              { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+              { id: host.id, publicId: String(host.publicId), runtimeId: host.runtimeId, agentId: host.agentId },
+              [command],
+              now,
+            ),
+          );
+        } catch (error) {
+          logger.warn(
+            { err: error, host: host.publicId, command: command.publicId },
+            "fetch_commands: a work order acknowledgement was not recorded on its work item",
+          );
+        }
       }
       const seen = await touchHost(tx as never, host, input.daemon, now, false);
       return { acknowledged, seen };

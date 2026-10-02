@@ -236,8 +236,8 @@ describe("toolsLink", () => {
     const link = toolsLink(at, { tab: "providers", rows: 10, cursor: "c9" });
     const url = new URL(link, "https://mission-control.invalid");
     expect(url.pathname).toBe("/acme/core-platform/agents");
-    expect(url.searchParams.get("tab")).toBe("servers");
-    expect(toolsTabOfAgentsTab("servers")).toBe("providers");
+    expect(url.searchParams.get("tab")).toBe("mcp-servers");
+    expect(toolsTabOfAgentsTab("mcp-servers")).toBe("providers");
     expect(
       parseToolsView("providers", Object.fromEntries(url.searchParams)),
     ).toEqual({
@@ -268,7 +268,7 @@ describe("toolsLink", () => {
 
 describe("toolsTabOfAgentsTab", () => {
   it.each([
-    ["servers", "providers"],
+    ["mcp-servers", "providers"],
     ["tools", "tools"],
     ["toolbelts", "toolbelts"],
     ["policies", "policy"],
@@ -295,7 +295,7 @@ describe("toolsTabOfAgentsTab", () => {
     expect(tabs).toEqual([
       "tools",
       "toolbelts",
-      "servers",
+      "mcp-servers",
       "policies",
       "switches",
     ]);

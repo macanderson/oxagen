@@ -328,6 +328,18 @@ import { steeringMemoriesList } from "./steering.memories.list";
 import { steeringMemoriesGet } from "./steering.memories.get";
 import { steeringMemoriesPromote } from "./steering.memories.promote";
 import { steeringMemoriesDismiss } from "./steering.memories.dismiss";
+import { workBriefSave } from "./work.brief.save";
+import { workBriefApprove } from "./work.brief.approve";
+import { workOrderSend } from "./work.order.send";
+import { workOrderCancel } from "./work.order.cancel";
+import { workOrderStop } from "./work.order.stop";
+import { workOrderReturn } from "./work.order.return";
+import { workOrderAccept } from "./work.order.accept";
+import { workOrderChecksRefresh } from "./work.order.checks.refresh";
+import { workItemClose } from "./work.item.close";
+import { workItemReopen } from "./work.item.reopen";
+import { workOrderClaim } from "./work.order.claim";
+import { workOrderReject } from "./work.order.reject";
 import { steeringMemoryPrRecordsList } from "./steering.memory_pr_records.list";
 import { workItemCreate } from "./work.item.create";
 import { workTriageRevise } from "./work.triage.revise";
@@ -354,6 +366,7 @@ import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
 import { contextPrMerge } from "./context.pr.merge";
 import { contextPrMergeWithoutReview } from "./context.pr.merge_without_review";
+import { contextPrRevert } from "./context.pr.revert";
 // Instruction files in linked code repositories, and the managed blocks of a
 // steering PR (#4518, ADR-253).
 import { codeRepositoryFindingsList } from "./repository.findings.list";
@@ -669,6 +682,26 @@ export type {
   WorkspaceMemoryGroup,
   WorkspaceMemoryState,
 } from "./steering.memories.shared";
+// Phase 1 work action vocabulary (P1-04, ADR-251). The shared file is not a
+// capability, so it is exported here for the check-contracts file-coverage guard.
+export {
+  WORK_ACTION_CLOSE_RESOLUTIONS,
+  WORK_ACTION_CRITERION_TAGS,
+  WORK_ACTION_DELIVERY_STATES,
+  WORK_ACTION_INTENTS,
+  WORK_ACTION_ITEM_STATES,
+  WORK_ACTION_PROVENANCES,
+  workAgentIdSchema,
+  workDigestSchema,
+  workHeadShaSchema,
+  workItemAfterSchema,
+  workItemVersionSchema,
+  workOrderAfterSchema,
+  workOrderIdSchema,
+  workReasonSchema,
+  workRevisionSchema,
+  workWriteOutputShape,
+} from "./work.order.shared";
 // Finding vocabulary (ADR-062): a finding, its evidence and the decision
 // input. The shared file is not a capability, so it is exported here to
 // satisfy the check-contracts file-coverage guard.
@@ -1150,6 +1183,18 @@ export {
   steeringMemoriesPromote,
   steeringMemoriesDismiss,
   steeringMemoryPrRecordsList,
+  workBriefSave,
+  workBriefApprove,
+  workOrderSend,
+  workOrderCancel,
+  workOrderStop,
+  workOrderReturn,
+  workOrderAccept,
+  workOrderChecksRefresh,
+  workItemClose,
+  workItemReopen,
+  workOrderClaim,
+  workOrderReject,
   workItemCreate,
   workTriageRevise,
   workTriageRetry,
@@ -1161,6 +1206,7 @@ export {
   contextPrGet,
   contextPrMerge,
   contextPrMergeWithoutReview,
+  contextPrRevert,
   codeRepositoryFindingsList,
   instructionPromote,
   contextPrRestoreManagedBlock,
@@ -1620,6 +1666,18 @@ export const contracts: readonly CapabilityDeclaration[] = [
   steeringMemoriesPromote,
   steeringMemoriesDismiss,
   steeringMemoryPrRecordsList,
+  workBriefSave,
+  workBriefApprove,
+  workOrderSend,
+  workOrderCancel,
+  workOrderStop,
+  workOrderReturn,
+  workOrderAccept,
+  workOrderChecksRefresh,
+  workItemClose,
+  workItemReopen,
+  workOrderClaim,
+  workOrderReject,
   workItemCreate,
   workTriageRevise,
   workTriageRetry,
@@ -1631,6 +1689,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextPrGet,
   contextPrMerge,
   contextPrMergeWithoutReview,
+  contextPrRevert,
   codeRepositoryFindingsList,
   instructionPromote,
   contextPrRestoreManagedBlock,

@@ -1301,7 +1301,7 @@ type Messages = {
       tabs: {
         label: string;
         agents: string;
-        servers: string;
+        "mcp-servers": string;
         policies: string;
         runtimes: string;
         switches: string;
@@ -10516,6 +10516,13 @@ type Messages = {
         productionBranchMissing: string;
         productionBranchMoving: string;
         checksFailed: string;
+        notMerged: string;
+        governanceProposal: string;
+        prNotRecorded: string;
+        repositoryChanged: string;
+        mergeCommitUnknown: string;
+        nothingToRevert: string;
+        revertBranchExists: string;
         toolNotRegistered: string;
         blockIntact: string;
         noManagedBlock: string;
@@ -10529,6 +10536,16 @@ type Messages = {
       mergeWithoutReview: {
         confirm: string;
         pending: string;
+      };
+      revert: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+        opened: string;
+        goToPr: string;
+        checkFailed: string;
       };
       restore: {
         confirm: string;

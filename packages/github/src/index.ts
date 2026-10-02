@@ -20,6 +20,7 @@ export type {
   GitHubRepoInfo,
   GitHubInstallationRepo,
   GitHubInstallationRepositories,
+  RequiredChecksRead,
 } from "./types";
 export {
   createGitHubClient,

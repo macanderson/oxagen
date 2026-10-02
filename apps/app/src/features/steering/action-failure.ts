@@ -1,9 +1,9 @@
 // The sentence a refused steering PR write shows. The kernel classified the
 // refusal and put the handler's HandlerError reason in `code` (§3.2). Each
-// reason open_context_pr, merge_context_pr, dismiss_proposal and the merge
-// queue throw has its own sentence. A write the platform has not registered
-// yet answers `tool_not_registered` and says so. Any other code is printed as
-// recorded.
+// reason open_context_pr, merge_context_pr, dismiss_proposal,
+// revert_steering_pr and the merge queue throw has its own sentence. A write
+// the platform has not registered yet answers `tool_not_registered` and says
+// so. Any other code is printed as recorded.
 import { useTranslations } from "next-intl";
 import type { ActionResult } from "@/server/kernel";
 
@@ -69,6 +69,20 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("productionBranchMoving");
           case "checks_failed":
             return t("checksFailed");
+          case "not_merged":
+            return t("notMerged");
+          case "governance_proposal":
+            return t("governanceProposal");
+          case "pr_not_recorded":
+            return t("prNotRecorded");
+          case "repository_changed":
+            return t("repositoryChanged");
+          case "merge_commit_unknown":
+            return t("mergeCommitUnknown");
+          case "nothing_to_revert":
+            return t("nothingToRevert");
+          case "revert_branch_exists":
+            return t("revertBranchExists");
           // restore_managed_block (#4518).
           case "block_intact":
             return t("blockIntact");

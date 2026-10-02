@@ -3,13 +3,15 @@
 // workspace viewer the URL names. Every contract is `noBillingGate`.
 // open_context_pr and dismiss_proposal gate the acting user's role in their
 // handlers (INV-29); merge_context_pr gates the signed-in reviewer the
-// governance mode names. A refusal comes back as `denied` or `conflict` with
+// governance mode names, and revert_steering_pr gates the acting user by the
+// same mode. A refusal comes back as `denied` or `conflict` with
 // the handler's reason as its code, and nothing changed.
 import { agentMemoryUpdate } from "@oxagen/oxagen/contracts/agent.memory.update";
 import { contextGovernanceModeSet } from "@oxagen/oxagen/contracts/context.governance_mode.set";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
+import { contextPrRevert } from "@oxagen/oxagen/contracts/context.pr.revert";
 import {
   contextPrRestoreManagedBlock,
   type MANAGED_BLOCK_PATHS,
@@ -48,6 +50,40 @@ export async function mergeContextPr(
   return result.ok
     ? { ok: true, value: { commit: result.value.mergedCommit } }
     : result;
+}
+
+/** What the revert dialog shows once `revert_steering_pr` opened the revert PR. */
+export type RevertOpened = {
+  number: number;
+  url: string;
+  branch: string;
+  /** The Oxagen steering check on the revert's head; null when none was reported. */
+  check: "success" | "failure" | null;
+};
+
+/**
+ * Opens a steering PR that undoes this merged one. The handler gates the
+ * contract's roles and the governance mode's merge rule (INV-29). The revert
+ * waits for its own review and merges nothing here.
+ */
+export async function revertSteeringPr(
+  org: string,
+  ws: string,
+  proposalId: string,
+): Promise<ActionResult<RevertOpened>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, contextPrRevert, { proposalId });
+  if (!result.ok) return result;
+  const { pullRequest, check } = result.value;
+  return {
+    ok: true,
+    value: {
+      number: pullRequest.number,
+      url: pullRequest.url,
+      branch: pullRequest.branch,
+      check,
+    },
+  };
 }
 
 /** Dismisses the proposal with a reason; an open pull request for it is closed and its branch deleted. */

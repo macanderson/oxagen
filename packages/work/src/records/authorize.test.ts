@@ -20,10 +20,11 @@ describe("workActionRoles", () => {
     }
   });
 
-  it("puts approve and accept under run.approve, and every other change under run.control", () => {
-    expect(WORK_ACTION_PERMISSION.approve_brief).toBe("run.approve");
-    expect(WORK_ACTION_PERMISSION.accept).toBe("run.approve");
-    expect(WORK_ACTION_PERMISSION.send).toBe("run.control");
+  it("puts approve and accept under work.approve, and every other change under work.control", () => {
+    expect(WORK_ACTION_PERMISSION.read).toBe("run.read");
+    expect(WORK_ACTION_PERMISSION.approve_brief).toBe("work.approve");
+    expect(WORK_ACTION_PERMISSION.accept).toBe("work.approve");
+    expect(WORK_ACTION_PERMISSION.send).toBe("work.control");
     for (const action of WORK_ITEM_ACTIONS) expect(WORK_PERMISSIONS).toContain(WORK_ACTION_PERMISSION[action]);
   });
 });

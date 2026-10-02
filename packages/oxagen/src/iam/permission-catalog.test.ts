@@ -82,6 +82,21 @@ describe("capabilitiesOf", () => {
   });
 });
 
+describe("the run and work permissions", () => {
+  it("keep run.control and run.approve as they were, so no existing role loses them", () => {
+    const capabilities = (id: string) => PERMISSION_CATALOG.find((p) => p.id === id)?.capabilities;
+    expect(capabilities("run.control")).toEqual(["dispatch_command"]);
+    expect(capabilities("run.approve")).toEqual(["resolve_approval"]);
+  });
+
+  it("put the work actions in work.control and work.approve", () => {
+    expect(capabilitiesOf(["work.control"])).toEqual(
+      ["cancel_work_order", "close_work_item", "reopen_work_item", "return_work_order", "save_work_brief", "send_work_order", "stop_work_order"],
+    );
+    expect(capabilitiesOf(["work.approve"])).toEqual(["accept_work_order", "approve_work_brief", "refresh_work_order_checks"]);
+  });
+});
+
 describe("permissionsHeldBy", () => {
   it("reports a permission only when every capability it names is allowed", () => {
     expect(permissionsHeldBy(new Set(["dispatch_command"]))).toEqual([

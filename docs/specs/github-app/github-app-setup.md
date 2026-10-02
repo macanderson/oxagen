@@ -746,6 +746,97 @@ read on a push to `main`. For a workspace, it also asks for a repository sync (A
 refuses the hook's URL, as GitLab.com does for a localhost `OXAGEN_API_URL`, the step logs a
 warning and finishes. The 10-minute sweep then finds drift until a later run registers the hook.
 
+### Steering live test
+
+The steering live test runs the whole steering repo path against production Oxagen and a GitHub
+test organization (lane S11, #4723). It creates a workspace and waits for its steering repo to read
+healthy. It merges a steering PR through Oxagen and reads a published version one higher. It then
+allows merge commits on the repository, expects drifted health and a failed `Oxagen steering` check
+within 60 seconds, repairs, and expects healthy again. The suite is in `apps/app/live/`, and the
+workflow is `.github/workflows/steering-live.yml`. This section is its runbook.
+
+| Part | Value |
+| --- | --- |
+| GitHub test organization | `ox-product` |
+| Oxagen app | Oxagen Connect (`oxagen-connect`), installed on `ox-product` through the steering connect in step 2 below |
+| Rig app | A second GitHub App, installed on `ox-product` on all repositories. Oxagen Github Connect Local (App ID 4055401) is installed there with every permission the rig uses. |
+| Oxagen test account | A production Oxagen user that signs in with email and password. It is an Owner of the test Oxagen organization. |
+| GitHub environment | `steering-live` on `oxageninc/product`. It allows only `main`. |
+
+The rig app's token approves the steering PR, changes the merge settings, reads check runs, lists
+the test organization's repositories, and deletes test repositories. It needs Administration and
+Pull requests write, and Checks and Metadata read. The rig app can't be Oxagen Connect, because
+GitHub refuses an app's approval of its own pull request.
+
+The workflow reads these secrets and variables. `packages/config/src/ci-registry.ts` describes each
+one and how to refresh it.
+
+| Name | Kind | Where it lives |
+| --- | --- | --- |
+| `STEERING_LIVE_OXAGEN_EMAIL` | secret | `steering-live` environment |
+| `STEERING_LIVE_OXAGEN_PASSWORD` | secret | `steering-live` environment |
+| `STEERING_LIVE_GITHUB_APP_PRIVATE_KEY` | secret | `steering-live` environment |
+| `STEERING_LIVE_GITHUB_APP_ID` | variable | repository |
+| `STEERING_LIVE_GITHUB_ORG` | variable | repository, set to `ox-product` on 2026-10-02 |
+| `STEERING_LIVE_OXAGEN_ORG` | variable | repository |
+| `STEERING_LIVE_ENABLED` | variable | repository |
+
+#### Setup
+
+1. Create the Oxagen test account. In a private browser window, sign up at
+   `https://app.oxagen.sh/signup` with an email you control and a password from
+   `openssl rand -base64 24`. Verify the email and leave two-factor sign-in off, because the suite
+   signs in with email and password alone. Create the test Oxagen organization. The account that
+   creates it is its Owner, which lets it start the steering connect and merge a steering PR
+   without an approving review.
+2. Connect GitHub steering for the test organization. Still signed in as the test account, open
+   `https://app.oxagen.sh/api/v1/<oxagen org>/connections/steering/github?mode=install&return_to=/<oxagen org>`.
+   On GitHub, install Oxagen Connect on `ox-product` with **All repositories**, and authorize it.
+   Oxagen returns to the organization with `steering=connected`. Don't start from Oxagen Connect's
+   public install page: the callback refuses an install that carries no steering state. Authorize
+   with a GitHub account that owns `ox-product` and no other organization that has Oxagen Connect,
+   so the token Oxagen stores sees only the test organization.
+3. Check the repository policies on `ox-product`, as step 7 of the [Setup checklist](#setup-checklist)
+   says. They must let Oxagen Connect create private repositories named `oxagen-live-<run id>-<attempt>`.
+4. Give the rig app a key for CI. On the rig app's settings page, generate a new private key. For
+   Oxagen Github Connect Local, generate a key only CI holds, so deleting a developer's key never
+   breaks the live test.
+5. Save the values from a checkout of `oxageninc/product`. `gh secret set` prompts for each value,
+   so no value lands in shell history. Delete the `.pem` file afterward.
+
+   ```sh
+   gh secret set STEERING_LIVE_OXAGEN_EMAIL --env steering-live
+   gh secret set STEERING_LIVE_OXAGEN_PASSWORD --env steering-live
+   gh secret set STEERING_LIVE_GITHUB_APP_PRIVATE_KEY --env steering-live < rig-app.pem
+   gh variable set STEERING_LIVE_GITHUB_APP_ID --body '<rig app id>'
+   gh variable set STEERING_LIVE_OXAGEN_ORG --body '<oxagen org slug>'
+   ```
+
+6. Dispatch a run with `gh workflow run steering-live.yml --ref main`. A run with a missing value
+   fails in its first step and names each one. Run 37007573039 on 2026-10-02 named five.
+7. After two dispatched runs pass in a row, set `STEERING_LIVE_ENABLED` to `true`. The workflow
+   then also runs every day at 09:17 UTC.
+
+#### Cleanup
+
+Each run names its workspace `live-<run id>-<attempt>` and its steering repo
+`oxagen-live-<run id>-<attempt>`. Before the suite, the sweep step archives any other workspace a
+run left and deletes test repositories older than one day. After the suite, its teardown archives
+the run's workspace and deletes its repository. The workflow's `always()` step does the same again,
+for a run cancelled before its teardown.
+
+#### Logs
+
+The suite never prints a secret. An error names the request method, the path, the status, and at
+most 500 characters of the response body. A failed sign-in names only the status and the error
+code. Actions masks secret values in step logs, but not in the uploaded Playwright report.
+
+#### Failures
+
+When the drift test times out, read the run's last state first. The 60-second window depends on
+GitHub sending a `repository` webhook for the merge-setting change. Without one, drift shows only
+at the next 10-minute health sweep.
+
 ---
 
 ## Known gaps / follow-ups

@@ -324,8 +324,8 @@ describe("the Tools route", () => {
   });
 
   it.each<[string[] | undefined, Record<string, string>, string]>([
-    // A bare `/tools` lands on Tool servers, as the mockup routes it.
-    [undefined, {}, "/acme/core-platform/agents?tab=servers"],
+    // A bare `/tools` lands on MCP servers, as the mockup routes it.
+    [undefined, {}, "/acme/core-platform/agents?tab=mcp-servers"],
     // A registry filter keeps the registry, the view the filter narrows.
     [undefined, { names: "api" }, "/acme/core-platform/agents?tab=tools&names=api"],
     [
@@ -333,15 +333,15 @@ describe("the Tools route", () => {
       { category: "moves_money", provider: "mcs_01k5s1", cursor: "c2" },
       "/acme/core-platform/agents?tab=tools&category=moves_money&provider=mcs_01k5s1&cursor=c2",
     ],
-    [["providers"], {}, "/acme/core-platform/agents?tab=servers"],
+    [["providers"], {}, "/acme/core-platform/agents?tab=mcp-servers"],
     // #4693: an old link keeps the size its page held.
     [
       ["providers"],
       { rows: "25", cursor: "g2" },
-      "/acme/core-platform/agents?tab=servers&rows=25&cursor=g2",
+      "/acme/core-platform/agents?tab=mcp-servers&rows=25&cursor=g2",
     ],
     // `/tools/servers` is the Providers tab's name before rev1.
-    [["servers"], {}, "/acme/core-platform/agents?tab=servers"],
+    [["servers"], {}, "/acme/core-platform/agents?tab=mcp-servers"],
     [["policy"], {}, "/acme/core-platform/agents?tab=policies"],
     [
       ["toolbelts"],
@@ -841,14 +841,16 @@ describe("the Agents pages", () => {
   });
 
   it.each([
-    ["servers", "servers"],
+    ["mcp-servers", "mcp-servers"],
     ["tools", "tools"],
     ["toolbelts", "toolbelts"],
     ["policies", "policies"],
     ["runtimes", "runtimes"],
     ["switches", "switches"],
+    // The MCP servers tab's key before 2026-10-02 still opens it.
+    ["servers", "mcp-servers"],
     // The Tools page's own tab ids land on the tab that holds them.
-    ["providers", "servers"],
+    ["providers", "mcp-servers"],
     ["policy", "policies"],
     // A tab the page does not serve is the Agents tab (negative).
     ["registry", "agents"],

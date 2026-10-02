@@ -166,6 +166,9 @@ const ACTIONS = new Set([
   // baseline Oxagen applied. Not "reconcile" or "sync": those move records,
   // and this writes one repository's settings.
   "repair",
+  // revert_steering_pr: open a steering PR that undoes a merged one (#4449).
+  // Not "undo" or "rollback": git and the host both call this a revert.
+  "revert",
   // restore_managed_block: put the production branch's managed block back in
   // one file of a steering PR (#4518). Not "repair": that writes a steering
   // repo's settings, and this writes one file on one branch.
@@ -213,6 +216,14 @@ const ACTIONS = new Set([
   "append",
   "propose",
   "merge",
+  // Phase 1 work lifecycle (P1-04, ADR-251). A person returns a send's result
+  // to the agent, closes or reopens a work item; a runtime claims a work
+  // order before it starts and rejects one it cannot start.
+  "return",
+  "close",
+  "reopen",
+  "claim",
+  "reject",
   // snake_case compound actions
   "set_enabled",
   "set_default",

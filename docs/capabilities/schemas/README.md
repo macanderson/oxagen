@@ -192,6 +192,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - propose_record
 - publish_context_record
 - restore_managed_block
+- revert_steering_pr
 - revise_context_record
 
 ## control
@@ -598,12 +599,24 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 
 ## work
 
+- accept_work_order
+- approve_work_brief
+- cancel_work_order
+- claim_work_order
+- close_work_item
 - create_work_item
 - get_work_priorities
 - list_work_collectors
+- refresh_work_order_checks
+- reject_work_order
+- reopen_work_item
 - retry_work_triage
+- return_work_order
 - revise_work_triage
+- save_work_brief
+- send_work_order
 - set_work_collector
+- stop_work_order
 - sync_work_collector
 
 ## workspace

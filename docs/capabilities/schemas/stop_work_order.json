@@ -1,0 +1,146 @@
+{
+  "name": "stop_work_order",
+  "domain": "work",
+  "description": "Ask the runtime to stop the run a send started. The send reads stopped once the runtime confirms.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "item_id": {
+        "type": "string"
+      },
+      "version": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "work_order_id": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      }
+    },
+    "required": [
+      "item_id",
+      "version",
+      "work_order_id",
+      "reason"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "item": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "held",
+              "triaged",
+              "needs_info",
+              "changed",
+              "ready",
+              "sent",
+              "running",
+              "review",
+              "done",
+              "closed"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "revision",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "repeat": {
+        "type": "boolean"
+      },
+      "order": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "send": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "key": {
+            "type": "string"
+          },
+          "delivery": {
+            "type": "string",
+            "enum": [
+              "waiting_for_claim",
+              "claimed",
+              "running",
+              "stopping",
+              "run_ended",
+              "stopped",
+              "returned",
+              "withdrawn",
+              "rejected"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "send",
+          "key",
+          "delivery"
+        ],
+        "additionalProperties": false
+      },
+      "command_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "item",
+      "repeat",
+      "order",
+      "command_id"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -19,7 +19,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // The Tools page is gone: its tabs are tabs of the Agents page (roadmap
-// mockups `agents?tab=servers|policies|switches`). This route keeps two jobs.
+// mockups `agents?tab=mcp-servers|policies|switches`). This route keeps two
+// jobs.
 //
 // MCP Studio (#4678) still lives here: `/tools/servers/<mcs_id>[/<tab>]` is one
 // server's page. It stays off `/agents/<segment>`, which is one agent's page.
@@ -27,12 +28,11 @@ export async function generateMetadata(): Promise<Metadata> {
 //
 // Every other path moves, for a member of the workspace, to the Agents tab
 // that absorbed it, with the query values the Tools views read: a bare
-// `/tools` to Tool servers (roadmap mockups `AREA_ALIAS`), `/tools` with a
+// `/tools` to MCP servers (roadmap mockups `AREA_ALIAS`), `/tools` with a
 // registry filter to the registry, `/tools/providers` and `/tools/servers` to
-// Tool servers,
-// `/tools/policy` to Policies, `/tools/switches` to Off switches, and the
-// `?tab=` links written before the tabs became segments to the tab that took
-// each one. A path deeper than one segment names no page and is a 404.
+// MCP servers, `/tools/policy` to Policies, `/tools/switches` to Off switches,
+// and the `?tab=` links written before the tabs became segments to the tab
+// that took each one. A path deeper than one segment names no page and is a 404.
 export default async function ToolsPage({
   params,
   searchParams,
@@ -62,7 +62,7 @@ export default async function ToolsPage({
   const bare = segments === undefined || segments.length === 0;
   if (bare && legacy === undefined && !registryQuery)
     permanentRedirectTo(
-      routes.agents(ctx.orgSlug, ctx.wsSlug, { tab: "servers" }),
+      routes.agents(ctx.orgSlug, ctx.wsSlug, { tab: "mcp-servers" }),
     );
   permanentRedirectTo(
     routes.tools(ctx.orgSlug, ctx.wsSlug, {

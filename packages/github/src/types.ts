@@ -129,6 +129,21 @@ export interface GitHubCiChecks {
   statuses: GitHubCommitStatus[];
 }
 
+/** What the base branch requires before a merge, read from GitHub. */
+export type RequiredChecksRead =
+  | {
+      ok: true;
+      /** Required check names, sorted and without duplicates. */
+      names: string[];
+      /** Which source has a required-checks setting for the branch. */
+      sources: { protection: boolean; rulesets: boolean };
+    }
+  | {
+      ok: false;
+      /** The read that failed and why, such as "protection read failed: 403". */
+      reason: string;
+    };
+
 /** A single file entry from the PR files endpoint. */
 export interface GitHubPrFile {
   path: string;
@@ -464,6 +479,30 @@ export interface GitHubClient {
     repo: string;
     ref: string;
   }): Promise<GitHubCiChecks>;
+
+  /**
+   * The check names a branch requires before a merge. It reads two sources
+   * and merges their names, sorted and without duplicates:
+   *
+   * 1. Classic branch protection, from the branch's `protected` flag and
+   *    `protection` summary (`GET /repos/{owner}/{repo}/branches/{branch}`).
+   *    This needs only read access. An unprotected branch, a summary with no
+   *    `required_status_checks`, and an enforcement level of "off" require
+   *    nothing. A protected branch with no summary is a failed read.
+   * 2. Rulesets (`GET /repos/{owner}/{repo}/rules/branches/{branch}`), every
+   *    page up to 10.
+   *
+   * An empty list with `ok: true` means GitHub answered both reads and
+   * neither names a check. A 404 or any other refusal, a network error, or a
+   * body of the wrong shape returns `ok: false` with the read that failed. It
+   * never throws for those. A cancellation through the client's `signal`
+   * still throws.
+   */
+  getRequiredStatusChecks(args: {
+    owner: string;
+    repo: string;
+    branch: string;
+  }): Promise<RequiredChecksRead>;
 
   /**
    * List the files changed in a pull request with per-file patch and stats.

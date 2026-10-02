@@ -626,6 +626,13 @@
         "productionBranchMissing": "The repository has no production branch to merge into. Nothing was merged.",
         "productionBranchMoving": "The production branch kept moving while Oxagen was merging. Merge again.",
         "checksFailed": "The production branch moved, and the checks failed after Oxagen brought the branch up to date. Fix the branch and run the checks again.",
+        "notMerged": "Only a merged steering PR can be reverted. Nothing was opened.",
+        "governanceProposal": "This pull request changed the governance mode. Set the mode again to change it back. Nothing was opened.",
+        "prNotRecorded": "This proposal has no recorded pull request. Nothing was changed.",
+        "repositoryChanged": "This pull request merged in another repository than the one this workspace steers through now. Revert it there by hand.",
+        "mergeCommitUnknown": "Oxagen cannot find what the production branch held before this merge, so nothing was opened.",
+        "nothingToRevert": "This merge changed nothing outside the ledger, so there is nothing to revert.",
+        "revertBranchExists": "A revert of this pull request is already open, or its branch is still there. Merge or close that pull request and delete its branch, then try again.",
         "toolNotRegistered": "Oxagen has not registered this action yet.",
         "blockIntact": "The managed block already matches the production branch. Nothing was changed.",
         "noManagedBlock": "The production branch holds no managed block in this file, so there is nothing to restore.",
@@ -639,6 +646,16 @@
       "mergeWithoutReview": {
         "confirm": "Merge without review",
         "pending": "Merging"
+      },
+      "revert": {
+        "open": "Revert pull request",
+        "title": "Revert pull request",
+        "body": "Oxagen opens a new steering PR that puts every file this merge changed back the way it was. The ledger keeps its lines. Nothing changes until the new pull request passes review and merges.",
+        "confirm": "Open the revert",
+        "pending": "Opening",
+        "opened": "Revert pull request #{number} is open.",
+        "goToPr": "Go to pull request #{number}",
+        "checkFailed": "The Oxagen steering check failed on the revert. Read the check on the pull request."
       },
       "restore": {
         "confirm": "Restore block",
