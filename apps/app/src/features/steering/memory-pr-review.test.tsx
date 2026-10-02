@@ -48,6 +48,7 @@ const KEPT = memoryPrRecord({
       ],
     }),
     memoryPrMemory({
+      id: "mem_01k5rw3notes",
       statement: "The release notes named the changelog as read.",
       agent: null,
       run: null,

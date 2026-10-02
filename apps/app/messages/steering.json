@@ -564,7 +564,7 @@
       },
       "memory": {
         "title": "Memory records",
-        "notBacked": "the records on this memory branch and the memories each one cites. It needs list_memory_pr_records.",
+        "empty": "This memory PR proposes no record.",
         "memories": "Cited memories",
         "unknownAgent": "Unknown agent",
         "evidence": "Evidence"

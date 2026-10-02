@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The Steering hub over a fake DataSource (roadmap pages/steering.md): the
-// header with the governance chip and one gold action, the five tabs as path
+// header with the governance chip and one gold action, the six tabs as path
 // segments, the Library's shelf row and its All shelf, the empty, error,
 // denied and loading states, and each tab and shelf making only its own
 // reads: Records in its ok, filtered, empty and paged states, Proposals with
@@ -190,7 +190,7 @@ const tab = (name: string) =>
   screen.getByRole("tab", { name: new RegExp(`^${name}`) });
 
 describe("the hub", () => {
-  it("opens the Library's All shelf on the bare route with the five tabs as path segments, in order", async () => {
+  it("opens the Library's All shelf on the bare route with the six tabs as path segments, in order", async () => {
     const calls = await renderSteering();
     // The All shelf reads the whole list at the contract's bound.
     expect(calls.records).toEqual([
@@ -209,6 +209,7 @@ describe("the hub", () => {
         ]),
     ).toEqual([
       ["Library1", `${BASE}/library`, "true"],
+      ["Memories2", `${BASE}/memories`, "false"],
       ["Assignments", `${BASE}/assignments`, "false"],
       ["Gates", `${BASE}/gates`, "false"],
       ["Proposals3", `${BASE}/proposals`, "false"],
@@ -289,8 +290,8 @@ describe("the hub", () => {
     expect(tab("Gates")).toHaveAttribute("tabindex", "-1");
     library.focus();
     fireEvent.keyDown(library, { key: "ArrowRight" });
-    expect(tab("Assignments")).toHaveFocus();
-    fireEvent.keyDown(tab("Assignments"), { key: "End" });
+    expect(tab("Memories")).toHaveFocus();
+    fireEvent.keyDown(tab("Memories"), { key: "End" });
     expect(tab("Compiler")).toHaveFocus();
     fireEvent.keyDown(tab("Compiler"), { key: "ArrowRight" });
     expect(library).toHaveFocus();
@@ -845,7 +846,7 @@ describe("states", () => {
       ).toBeVisible();
       expect(document.querySelectorAll("[data-create]")).toHaveLength(1);
       expect(screen.getByTestId("governance-chip")).toBeVisible();
-      expect(screen.getAllByRole("tab")).toHaveLength(5);
+      expect(screen.getAllByRole("tab")).toHaveLength(6);
       expect(tab("Library")).toHaveTextContent(/^Library$/);
     },
   );
@@ -1315,6 +1316,9 @@ describe("Proposals", () => {
       deliveries: [],
       hub: [[ctx]],
       memories: [],
+      workspaceMemories: [],
+      workspaceMemory: [],
+      memoryPrRecords: [],
       tree: [],
     });
     const card = within(section("Proposals")).getByRole("article");

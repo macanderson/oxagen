@@ -1,33 +1,23 @@
-// A memory PR's records (#4518). A steering PR on a `memory/` branch proposes
-// one record file per lesson drawn from the agents' memories. Each card shows
-// the record, the memories it cites with the agent each came from, and the
-// runs its evidence names, and a Drop button that removes that one record
-// from the branch. The cards are keyed by path, so a dropped card keeps its
-// state through the page's refresh.
+// A memory PR's records (#4518), as list_memory_pr_records reads them
+// (#4914). A steering PR on a `memory/` branch proposes one record file per
+// lesson drawn from the agents' memories, and the records Promote adds from
+// the Memories tab join it. Each card shows the record, the memories it cites
+// with the agent each came from, and the runs its evidence names, and a Drop
+// button that removes that one record from the branch. The cards are keyed by
+// path, so a dropped card keeps its state through the page's refresh.
 import { useTranslations } from "next-intl";
+import type { MemoryPrRecords } from "@/data/contracts/steering";
 import { routes } from "@/shared/safe-path";
 import { linkText, mono } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import type { SteeringAt } from "./view";
 import { DropMemoryRecord } from "./write-controls";
 
-/** One proposed record in a memory PR, as list_memory_pr_records would answer it (#4518). */
-export type MemoryPrRecord = {
-  path: string;
-  lineage: string;
-  title: string;
-  summary: string;
-  memories: readonly MemoryPrMemory[];
-  dropped: { commitSha: string } | null;
-};
+/** One record a memory PR proposes or archives. */
+export type MemoryPrRecord = MemoryPrRecords["records"][number];
 
 /** One memory a record cites: what it says, the agent it came from, and where it was seen. */
-type MemoryPrMemory = {
-  statement: string;
-  agent: string | null;
-  run: string | null;
-  evidence: readonly string[];
-};
+type MemoryPrMemory = MemoryPrRecord["memories"][number];
 
 /** A run's public id: `arun_…` for a ledger run, `tse_…` for a wrapped one. */
 const RUN = /^(?:arun|tse)_[0-9A-Za-z]+$/;
@@ -117,9 +107,8 @@ export function MemoryPrReview({
                 {t("memories")}
               </p>
               <ul className="flex flex-col gap-2">
-                {record.memories.map((memory, index) => (
-                  // eslint-disable-next-line @eslint-react/no-array-index-key -- a record's memories are a fixed list in the order the file cites them, and two can share a statement, agent and run, so the position is the only stable key
-                  <Memory key={index} at={at} memory={memory} />
+                {record.memories.map((memory) => (
+                  <Memory key={memory.id} at={at} memory={memory} />
                 ))}
               </ul>
             </div>

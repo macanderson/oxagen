@@ -10414,7 +10414,7 @@ type Messages = {
       };
       memory: {
         title: string;
-        notBacked: string;
+        empty: string;
         memories: string;
         unknownAgent: string;
         evidence: string;
