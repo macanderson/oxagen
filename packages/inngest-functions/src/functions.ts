@@ -35,6 +35,7 @@ import {
   costRunPrOutcomesDelivery,
   costRunPrOutcomesHourly,
 } from "./functions/cost.run-pr-outcomes";
+import { costWorkOrderSendBackHourly } from "./functions/cost.work-order-send-back";
 import { securityAuditPartitionRollover } from "./functions/security.audit-partition-rollover";
 import { pluginOauthRefreshWatcher } from "./functions/plugin.oauth-refresh-watcher";
 import {
@@ -133,6 +134,8 @@ export const functions: any[] = [
   costFindingsNightly,
   costRunPrOutcomesHourly,
   costRunPrOutcomesDelivery,
+  // Post each send-back note on a schedule (R3, #5108).
+  costWorkOrderSendBackHourly,
   securityAuditPartitionRollover,
   pluginOauthRefreshWatcher,
   privacyExportProcess,

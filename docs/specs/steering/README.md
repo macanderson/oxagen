@@ -302,10 +302,14 @@ the draft, the branch, or the PR body.
   at publish, sorted by lineage. Every other record and skill becomes one line
   under `## More steering`. The frontmatter stays out of what the model reads
   (`packages/steering-bundle/src/render.ts`).
-- **`steering_search` and `steering_read`.** The handlers exist in
-  `packages/handlers/src/steering.search.ts` and `steering.read.ts`, and
-  `packages/steering-bundle/src/cursor.ts` holds a Cursor dashboard rule that
-  calls them. No contract registers them yet.
+- **`search_steering` and `read_steering`.** Two MCP tools
+  (`packages/handlers/src/steering.search.ts` and `steering.read.ts`). They
+  read the Postgres version store through `steering.published.ts`, the way
+  `TachoPublished` does, and refuse a call that names a run until a run's
+  delivered versions can be read back (#5137). The steering repo spec
+  proposed `steering_search` and `steering_read`. ADR-025 puts the verb
+  first. `packages/steering-bundle/src/cursor.ts` holds the Cursor dashboard
+  rule that calls them.
 - **Wrapped agents.** `get_tacho_bundle` and `recall_tacho_memories` read
   through `TachoPublished`, which `VERSION_STORE_PUBLISHED` binds to the
   Postgres version store (#4550). Recall answers merged memory records only
