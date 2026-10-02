@@ -118,7 +118,7 @@ const TRANSCRIPT_NORMALIZED_HARNESSES: ReadonlySet<TachoHarness> = new Set([
   "codex",
 ]);
 
-/** Whether `transcript.ts` has a normalizer for this session's harness. */
+/** Whether the recorder has a transcript reader for this session's harness. */
 function hasTranscriptNormalizer(
   session: Pick<TailedSession, "harness">,
 ): boolean {
