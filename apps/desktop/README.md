@@ -151,9 +151,12 @@ app downloads comes from downloads.oxagen.sh, never from a GitHub release,
 because the repository is private and has changed owner more than once
 (ADR-245).
 
-Every production deploy publishes too (ADR-158). Once `deploy-node` has
-shipped, `publish-installers` in `pipeline.yml` dispatches `desktop.yml` with
-`publish: true` and the deployed commit. The build is numbered
+Builds of main publish too (ADR-158). Once `deploy-node` has shipped,
+`publish-installers` in `pipeline.yml` dispatches `desktop.yml` with
+`publish: true` and the deployed commit when the push changed `apps/desktop`,
+`packages/tacho`, `apps/cli`, `tools/sea`, or `desktop.yml`. Once a day,
+`desktop.yml` also builds the commit production runs when the installers are
+older than it (#4918). The build is numbered
 `X.Y.(Z+1)-N`, N commits after release `X.Y.Z`, and lands under
 `desktop/<version>/` like a release, without a tag, a GitHub release, or an
 updater entry. Whichever version is newest also sits at

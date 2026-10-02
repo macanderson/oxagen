@@ -10,9 +10,9 @@ At the start of each agent turn, the runtime builds the tool list in four steps:
 1. Take every capability that declares `surfaces: ['agent']` (or `['api', 'mcp', 'agent']`).
 2. Keep the capabilities the turn's tool policy allows.
 3. Keep the capabilities the current principal holds grants for.
-4. Add tools from enabled workspace plugins. These are external MCP servers whose tools the governed MCP tool gateway adds to the workspace toolchain.
+4. Add tools from enabled workspace plugins. These are external MCP servers whose tools the governed MCP tool gateway adds to the workspace toolchain. The in-app assistant skips this step: its tools are Oxagen's capability contracts only.
 
-The result is a Vercel AI SDK `tools` map passed to `streamText`. The agent picks from this map and cannot use a tool outside it. There is no sandbox, file system, or browser tool. The only way the agent changes anything is a capability call through `kernel.invoke()`, and a rule answers each one.
+The result is a Vercel AI SDK `tools` map passed to `streamText`. The agent picks from this map and cannot use a tool outside it. There is no sandbox, file system, or browser tool. The only way the agent changes anything is a capability call through `kernel.invoke()`, and the kernel's checks answer each one. For the in-app assistant, those are your own IAM check and the capability's approval flag. Your workspace's decision rules do not apply to it.
 
 ## Built-in agent tools
 

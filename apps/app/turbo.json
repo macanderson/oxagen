@@ -7,7 +7,7 @@
     // turbo cache hit on one leaves the other without them); lint waits for
     // typecheck so the two never rewrite .next/types while tsc reads it.
     "lint": {
-      "dependsOn": ["typecheck"]
+      "dependsOn": ["^build", "typecheck"]
     },
     "build": {
       "dependsOn": ["^build"],

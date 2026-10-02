@@ -83,14 +83,19 @@ describe("buildChatSystemPrompt", () => {
       expect(prompt).toContain("it has not run");
     });
 
-    // First-use consent applies only to external MCP tools. Contract tools
-    // pass the kernel's gates and, when requiresApproval is set, an approval.
-    it("ties first-use consent to external MCP servers only", () => {
-      const sentences = flatPrompt()
-        .split(/(?<=\.)\s/)
-        .filter((sentence) => sentence.includes("consent"));
-      expect(sentences).toHaveLength(1);
-      expect(sentences[0]).toContain("external MCP server");
+    // stella loads no MCP server (#4310), so no first-use consent card can
+    // reach it. Contract tools pass the kernel's gates and, when
+    // requiresApproval is set, an approval.
+    it("promises no first-use consent for an MCP tool stella never loads", () => {
+      const prompt = flatPrompt();
+      expect(prompt).not.toContain("consent");
+      expect(prompt).not.toContain("MCP server");
+    });
+
+    // ADR-235: the workspace's instructions do not reach stella, so the
+    // prompt does not tell the model to expect them.
+    it("promises no workspace instructions", () => {
+      expect(flatPrompt()).not.toContain("own instructions");
     });
 
     it("says the turn is recorded as a run", () => {

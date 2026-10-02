@@ -431,6 +431,10 @@ const PLATFORM_NAMED_ROWS: Readonly<
       "STEERING_DIR",
       "recordFileName",
     ],
+    // The forces a kind may carry are the rule the import contracts enforce
+    // (#4907), so the wizard reads the same function rather than a copy. The
+    // module imports only zod and a type.
+    "@oxagen/oxagen/steering-repo/record-force": ["forcesFor"],
   },
   // The On disk panel strips the steering tree's folder from each path, and
   // reads the folder's name from the one module that names every steering

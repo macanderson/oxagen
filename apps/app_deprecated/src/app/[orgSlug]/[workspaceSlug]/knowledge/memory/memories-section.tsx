@@ -29,7 +29,6 @@ import {
   suggestRationalesAction,
   promotionCandidatesAction,
 } from "./actions";
-import { parseImportAction, commitImportAction } from "./bulk-import-actions";
 
 interface MemoriesSectionProps {
   orgId: string;
@@ -105,8 +104,6 @@ export async function MemoriesSection({
       demoteMemory={demoteMemoryAction}
       suggestRationales={suggestRationalesAction}
       promotionCandidates={promotionCandidatesAction}
-      parseImport={parseImportAction}
-      commitImport={commitImportAction}
     />
   );
 }

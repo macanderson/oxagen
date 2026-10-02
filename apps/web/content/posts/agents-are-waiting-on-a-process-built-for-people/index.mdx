@@ -1,7 +1,8 @@
 ---
 title: "Agents are waiting on a process built for people"
-description: "An agent can write a change in minutes. Then the change waits for a person to read it. This post looks at that wait, and at the process Oxagen uses to ship at every hour."
+description: "An agent can write a change in minutes. Then the change waits for a person to read it. This post measures that wait, looks at what eight companies changed, and shows the process Oxagen uses to ship at every hour."
 date: 2026-09-30
+updated: 2026-10-01
 authors:
   - Oxagen Research
 pillars:
@@ -23,15 +24,59 @@ The agent is not the slow part. The process around it is. Most software processe
 
 A week has 168 hours. A 40-hour work week covers 40 of them. A process that needs a person at every step can only move in those 40 hours. For the other 128 hours, the work sits still.
 
-The wait inside the work week is long too. Meta measured how long code changes wait for a reviewer. In early 2021, the typical change waited a few hours. The slowest quarter of changes waited as much as a day.[^1] Meta then built a tool that reminds reviewers about old changes. It cut the average wait by 7 percent. It cut the number of changes that waited more than three days by 12 percent.[^1] Those are real gains. They are gains on a wait counted in hours and days, for work an agent does in minutes.
+The wait inside the work week is long too, and it has been measured for years. A 2018 study of code review at Google found a median wait of under an hour for first feedback on a small change and about 5 hours on the largest ones. The median for a whole review, all sizes together, was under 4 hours. The same paper lists the earlier figures it beat: a median time to approval of 17.5 hours at AMD, 15.7 hours for Chrome OS, and between 14.7 and 19.8 hours on three Microsoft projects.[^1] Meta measured how long changes wait for a reviewer. In early 2021, the typical change waited a few hours. The slowest quarter of changes waited as much as a day.[^2] Meta then built a tool that reminds reviewers about old changes. It cut the average wait by 7 percent. It cut the number of changes that waited more than three days by 12 percent.[^2] Microsoft built the same kind of tool. In a trial across 147 repositories, its reminders cut the time to resolve 8,500 pull requests by 60 percent, and it went on to send 210,000 reminders a year across 8,000 repositories.[^3] Those are real gains. They are gains on a wait counted in hours and days, for work an agent does in minutes.
 
-Reading also has limits. A SmartBear study of a Cisco team found that a person reads code best in chunks of 200 to 400 lines. Past 400 lines, people find fewer problems. The study also advises reading for no more than 60 minutes at a time.[^2] One agent task can produce more than 400 lines. Read well, that is about an hour of one person's time, for each task.
+The wait is not only for the first look. At Google, reviewers leave millions of comments a year, and an author spends about 60 minutes of active work on a change between sending it for review and submitting it.[^4] Reading also has limits. A SmartBear study of a Cisco team found that a person reads code best in chunks of 200 to 400 lines. Past 400 lines, people find fewer problems. The study also advises reading for no more than 60 minutes at a time.[^5] One agent task can produce more than 400 lines. Read well, that is about an hour of one person's time, for each task.
+
+A change an agent wrote waits longer than one a person wrote. A 2026 benchmark over 8.1 million pull requests from 4,800 teams found that a pull request opened by an agent waited 5.3 times longer for a reviewer to pick it up than one written without AI. Once picked up, AI-written pull requests were reviewed twice as fast, and fewer of them were accepted: 32.7 percent against 84.4 percent.[^6] A study of 33,596 agent-authored pull requests on GitHub found that 61 percent received no recorded review at all. Of the review comments the rest did get, 72 percent came from other agents.[^7]
+
+## Faster writing
+
+The writing itself did get faster, in most measurements. In a 2023 trial, 95 programmers given an AI code completion tool finished a task 55.8 percent faster than those without one.[^8] Three field experiments at Microsoft, Accenture, and a Fortune 100 company, covering 4,867 developers, found 26 percent more completed tasks.[^9] A trial with 96 Google engineers found a gain of about 21 percent, with a wide confidence interval.[^10] One trial found the opposite. Sixteen experienced open-source developers took 19 percent longer with AI on repositories they knew well.[^11] An earlier post, [The problem is not slop, it is your process](/blog/the-problem-is-not-slop-it-is-your-process), looks at that result.
+
+Agents are also taking on bigger jobs. METR measures the length of task an AI model can finish, counted in the time a skilled person would need. That length has doubled about every seven months since 2019.[^12] Longer tasks make bigger changes, and bigger changes take longer to read.
 
 ## Bigger changes
 
-Agents are taking on bigger jobs. METR measures the length of task an AI model can finish, counted in the time a skilled person would need. That length has doubled about every seven months since 2019.[^3] Longer tasks make bigger changes, and bigger changes take longer to read.
+DORA's 2024 report shows what happens when teams add AI and keep the old process. When a team's use of AI went up by a quarter, delivery throughput fell by an estimated 1.5 percent. Delivery stability fell by an estimated 7.2 percent.[^13] The report names large batches as one cause. DORA's 2025 report, from a survey of nearly 5,000 technology professionals, found 90 percent of respondents using AI at work. This time, more AI went with higher throughput. It still went with lower stability. The report names what is missing: automated tests, mature version control practice, and fast feedback, without which more change brings more instability.[^14]
 
-DORA's 2024 report shows what happens when teams add AI and keep the old process. When a team's use of AI went up by a quarter, delivery throughput fell by an estimated 1.5 percent. Delivery stability fell by an estimated 7.2 percent.[^4] The report names large batches as one cause. An earlier post, [The problem is not slop, it is your process](/blog/the-problem-is-not-slop-it-is-your-process), looks at that finding in detail.
+A 2025 telemetry study shows where the time goes. Across more than 10,000 developers in 1,255 teams, developers using AI completed 21 percent more tasks and merged 98 percent more pull requests. The average pull request grew by 154 percent. Review time per pull request rose by 91 percent, and bugs per developer rose by 9 percent. At the company level, the study found no significant link between AI adoption and delivery metrics.[^15] Each developer got faster. The process absorbed the gain.
+
+## Process changes at eight companies
+
+Some companies changed the process instead of waiting on it. Each change below moves a step that needed a person onto a machine, and keeps a person for the rule, the exception, or the final click.
+
+### The fix beside the comment
+
+Google trained a model on its own review history to turn a reviewer's comment into a suggested edit. The author sees the edit next to the comment and applies it with one click. In production, authors resolve 7.5 percent of all reviewer comments this way.[^4] By mid 2024, AI assistance addressed more than 8 percent of review comments, and code completion wrote 50 percent of the code characters at Google, with engineers accepting 37 percent of its suggestions.[^16] The reviewer still writes the comment. The author no longer writes the fix.
+
+### Tests filtered before review
+
+Meta built TestGen-LLM to extend existing unit tests. A generated test reaches an engineer only after it builds, passes reliably, and raises coverage. On Instagram's Reels and Stories, 75 percent of generated tests built, 57 percent passed reliably, and 25 percent raised coverage. Engineers accepted 73 percent of the tests that passed the filter for production.[^17] The filter did the first review. The person did the last.
+
+### Migrations as a loop
+
+Airbnb moved about 3,500 React test files from one test framework to another. The estimate by hand was 1.5 years. The migration took six weeks. A pipeline sent each file through a set of steps. When a step failed, it sent the errors and the current file back to the model and tried again, up to a retry limit. Seventy-five percent of the files finished in four hours. Raising the retry limit, to between 50 and 100 attempts for the hardest files, took the total to 97 percent. People finished the last 3 percent.[^18]
+
+Amazon used its own tool to move production Java applications from Java 8 and 11 to Java 17. An upgrade that typically took 50 developer-days took a few hours. In under six months, more than half of Amazon's production Java systems moved. Developers shipped 79 percent of the generated changes without editing them. Amazon puts the saving at 4,500 developer-years and 260 million dollars a year.[^19] Google ran 39 code migrations over twelve months with three developers. Of the 595 changes submitted, 74 percent were written by the model, and the developers put the time saved at half.[^20] In each case the loop runs without a person, and a person reads the result.
+
+### A machine reviewer on every change
+
+Uber's uReview reads more than 90 percent of the roughly 65,000 changes its engineers post each week and comments on them before a person does. Engineers mark 75 percent of its comments as useful and address more than 65 percent of them.[^21] A comment is not a decision. The person still decides.
+
+Not every rollout saves time. One company added an automated reviewer across ten projects and 238 practitioners. Of 4,335 pull requests, 1,568 got an automated review. Engineers resolved 73.8 percent of the automated comments, and the average time to close a pull request rose from 5 hours 52 minutes to 8 hours 20 minutes.[^22] A reviewer that only adds comments adds work. The gain comes when the review changes what a person has to read.
+
+### Approval by rule
+
+Google's large-scale change tooling has worked this way for years. A change that touches thousands of files is split by ownership into pieces that can land on their own. Each piece goes through its own test, mail, and submit pipeline. Reviewers for the whole change use pattern-based tools to approve the pieces that match what they expect, and read only the anomalies, such as a merge conflict. The pipeline lands more than 700 changes touching more than 15,000 files a day.[^23]
+
+Two companies now approve pull requests by rule. At Intercom, more than 93 percent of pull requests in the two main codebases are agent-driven. More than 19 percent are approved with no person in the loop, and time to approval at the 75th percentile improved by 6 to 16 times. Any engineer can ask for a human review on any change.[^24] At Rewind, a review bot approves about 40 percent of pull requests. Approval is not merge. The bot posts an approval the way a person would and does not press the merge button, and a pull request an agent wrote cannot merge until a person clicks. The policy is one YAML file, which code owners must approve and which changes through the same review as any other code. A verdict engine of ordinary tested code, not a model, turns the findings into the decision.[^25]
+
+GitHub's coding agent shows the default without such a rule. The agent works in a GitHub Actions environment and pushes commits to a draft pull request. It opened more than a million pull requests between May and September 2025.[^26] Each one waits for a person's approval before its automated checks even run.[^27]
+
+### The shared shape
+
+In every case, a machine does the first pass, and a person does something smaller than reading every line: writes the rule, handles the exception, or clicks the final approval. The person is still in charge. The person is no longer in the line.
 
 ## A process made for agents
 
@@ -42,24 +87,25 @@ A process made for agents keeps people in charge and takes them out of the line.
 - **Decisions.** A rule can send a request to a person: more budget, a new tool, or a change to production data. The run waits for that answer, and only for that answer.
 - **The record.** Every change leaves a record of what it did, which checks passed, and what it cost. A person reads the record each day instead of reading every line.
 
-Each change then moves through ten stages. Agents run all ten.
+Each change then moves through ten stages. Agents run all ten. The figure follows one change, #17, through them.
 
 <Flow
   title="Ten stages of the agent SDLC"
+  unit="#17"
   loop="Each run ends with a note that the next issue can use"
   steps={[
-    { label: "Issue", detail: "The issue says what done looks like" },
-    { label: "Triage", detail: "A triage agent sets priority and size" },
-    { label: "Claim", detail: "One change, one writer" },
-    { label: "Build", detail: "The change ships with its tests" },
-    { label: "Check", detail: "Automatic checks build and test it", emph: true },
-    { label: "Review", detail: "Review agents rate each finding" },
-    { label: "Merge", detail: "Green checks and no serious finding" },
-    { label: "Release", detail: "Database changes go first" },
-    { label: "Watch", detail: "A broken main opens an issue" },
-    { label: "Learn", detail: "Minutes planned against minutes spent" },
+    { label: "Issue", detail: "The issue says what done looks like", mark: "filed" },
+    { label: "Triage", detail: "A triage agent sets priority and size", mark: "sized" },
+    { label: "Claim", detail: "One change, one writer", mark: "one writer" },
+    { label: "Build", detail: "The change ships with its tests", mark: "with tests" },
+    { label: "Check", detail: "Automatic checks build and test it", emph: true, mark: "green" },
+    { label: "Review", detail: "Review agents rate each finding", mark: "rated" },
+    { label: "Merge", detail: "Green checks and no serious finding", mark: "merged" },
+    { label: "Release", detail: "Database changes go first", mark: "deployed" },
+    { label: "Watch", detail: "A broken main opens an issue", mark: "main green" },
+    { label: "Learn", detail: "Minutes planned against minutes spent", mark: "noted" },
   ]}
-  caption="Schematic. Each stage is described in full at sdlc.oxagen.sh."
+  caption="Schematic. One change, #17, moves through the ten stages and the loop back to the next issue. Each stage is described in full at sdlc.oxagen.sh."
 />
 
 ## Oxagen's own process
@@ -73,7 +119,7 @@ Oxagen builds its own product this way. Four agent tools do the work: Claude Cod
 - An agent looks at each open change every 60 seconds. It fixes failed checks, answers review comments, and clears conflicts.
 - When the main branch breaks, a check opens a top-priority issue. The fix goes straight to the main branch. The check closes the issue when the branch is green again.
 
-From September 1 to 29, 2026, 1,064 changes merged into Oxagen's main branch.[^5] Of those, 685 merged outside weekday work hours. That is 64 percent. 283 merged on a Saturday or a Sunday, and 289 merged between 10 pm and 6 am Pacific time.
+From September 1 to 29, 2026, 1,064 changes merged into Oxagen's main branch.[^28] Of those, 685 merged outside weekday work hours. That is 64 percent. 283 merged on a Saturday or a Sunday, and 289 merged between 10 pm and 6 am Pacific time.
 
 <Bars
   title="Changes merged into Oxagen, September 1 to 29, 2026"
@@ -114,11 +160,37 @@ The full process is at [sdlc.oxagen.sh](https://sdlc.oxagen.sh). It has the ten 
 ## Limits
 
 - The merge counts come from one repository over 29 days. They describe when Oxagen's changes merged. They do not predict what another team will see.
-- The Meta and SmartBear numbers describe people reading code that people wrote. They were measured before agents wrote much of the code.
+- The company figures come from each company's own engineering posts and papers. Each company measured its own code with its own tools, and none of the figures has been reproduced elsewhere.
+- The Google, Meta, and SmartBear review numbers describe people reading code that people wrote. They were measured before agents wrote much of the code.
+- The trial results measure how fast one person finishes a task. They do not measure delivery.
+- The pull request benchmark and the telemetry study come from vendors of engineering analytics, over the teams that use their products.
 - DORA reports links in survey data. A link is not proof of a cause.
 
-[^1]: Riggs, P. (2022). *Improving code review time at Meta*. Engineering at Meta. https://engineering.fb.com/2022/11/16/culture/meta-code-review-time-improving/
-[^2]: SmartBear. *Best practices for code review*, reporting a SmartBear study of a Cisco Systems programming team. https://smartbear.com/learn/code-review/best-practices-for-peer-code-review/
-[^3]: Kwa, T., West, B., Becker, J., et al. (2025). *Measuring AI Ability to Complete Long Software Tasks*. METR. https://arxiv.org/abs/2503.14499
-[^4]: DORA (2024). *Announcing the 2024 DORA report*. Google Cloud. https://cloud.google.com/blog/products/devops-sre/announcing-the-2024-dora-report
-[^5]: Oxagen (2026). GitHub search `repo:macanderson/oxagen is:pr is:merged merged:2026-09-01..2026-09-29`, run on September 30, 2026. It returned 1,064 pull requests.
+[^1]: Sadowski, C., Söderberg, E., Church, L., Sipko, M., & Bacchelli, A. (2018). *Modern Code Review: A Case Study at Google*. ICSE SEIP 2018. https://research.google/pubs/modern-code-review-a-case-study-at-google/
+[^2]: Riggs, P. (2022). *Improving code review time at Meta*. Engineering at Meta. https://engineering.fb.com/2022/11/16/culture/meta-code-review-time-improving/
+[^3]: Maddila, C., Upadhyaya, S. S., Bansal, C., Nagappan, N., Gousios, G., & van Deursen, A. (2022). *Nudge: Accelerating Overdue Pull Requests Towards Completion*. ACM TOSEM. https://arxiv.org/abs/2011.12468
+[^4]: Frömmgen, A., Austin, J., Choy, P., et al. (2024). *Resolving Code Review Comments with Machine Learning*. ICSE SEIP 2024. https://research.google/pubs/resolving-code-review-comments-with-machine-learning/
+[^5]: SmartBear. *Best practices for code review*, reporting a SmartBear study of a Cisco Systems programming team. https://smartbear.com/learn/code-review/best-practices-for-peer-code-review/
+[^6]: LinearB (2026). *2026 Software Engineering Benchmarks Report*, a study of 8.1 million pull requests from 4,800 engineering teams. https://linearb.io/resources/engineering-benchmarks
+[^7]: Duma, K., Wróblewski, P., Bobińska, J., Winiarska, J., & Przymus, P. (2026). *These Aren't the Reviews You're Looking For: How Humans Review AI-Generated Pull Requests*. arXiv. https://arxiv.org/abs/2605.02273
+[^8]: Peng, S., Kalliamvakou, E., Cihon, P., & Demirer, M. (2023). *The Impact of AI on Developer Productivity*. arXiv. https://arxiv.org/abs/2302.06590
+[^9]: Cui, Z. K., Demirer, M., Jaffe, S., Musolff, L., Peng, S., & Salz, T. (2025). *The Effects of Generative AI on High-Skilled Work: Evidence from Three Field Experiments with Software Developers*. https://economics.mit.edu/sites/default/files/inline-files/draft_copilot_experiments.pdf
+[^10]: Paradis, E., Grey, K., Hoang, Q., et al. (2024). *How much does AI impact development speed? An enterprise-based randomized controlled trial*. arXiv. https://arxiv.org/abs/2410.12944
+[^11]: Becker, J., Rush, N., Barnes, E., & Rein, D. (2025). *Measuring the Impact of Early-2025 AI on Experienced Open-Source Developer Productivity*. arXiv. https://arxiv.org/abs/2507.09089
+[^12]: Kwa, T., West, B., Becker, J., et al. (2025). *Measuring AI Ability to Complete Long Software Tasks*. METR. https://arxiv.org/abs/2503.14499
+[^13]: DORA (2024). *Announcing the 2024 DORA report*. Google Cloud. https://cloud.google.com/blog/products/devops-sre/announcing-the-2024-dora-report
+[^14]: DORA (2025). *Announcing the 2025 DORA report*. Google Cloud. https://cloud.google.com/blog/products/ai-machine-learning/announcing-the-2025-dora-report
+[^15]: Faros AI (2025). *The AI Productivity Paradox Report 2025*, telemetry from more than 10,000 developers across 1,255 teams. https://www.faros.ai/blog/ai-software-engineering
+[^16]: Chandra, S., & Tabachnyk, M. (2024). *AI in software engineering at Google: Progress and the path ahead*. Google Research. https://research.google/blog/ai-in-software-engineering-at-google-progress-and-the-path-ahead/
+[^17]: Alshahwan, N., Chheda, J., Finegenova, A., et al. (2024). *Automated Unit Test Improvement using Large Language Models at Meta*. arXiv. https://arxiv.org/abs/2402.09171
+[^18]: Covey-Brandt, C. (2025). *Accelerating Large-Scale Test Migration with LLMs*. The Airbnb Tech Blog. https://medium.com/airbnb-engineering/accelerating-large-scale-test-migration-with-llms-9565c208023b
+[^19]: Jassy, A. (2024). Post on the Amazon Q Developer Java upgrades, August 2024. https://www.linkedin.com/posts/andy-jassy-8b1615_one-of-the-most-tedious-but-critical-tasks-activity-7232374162185461760-AdSz/ See also Arisoy Cholkar, A. (2024). *Amazon Q Developer just reached a 260 million dollar milestone*. AWS DevOps Blog. https://aws.amazon.com/blogs/devops/amazon-q-developer-just-reached-a-260-million-dollar-milestone
+[^20]: Ziftci, C., Nikolov, S., Sjövall, A., Kim, B., Codecasa, D., & Kim, M. (2025). *Migrating Code At Scale With LLMs At Google*. arXiv. https://arxiv.org/abs/2504.09691
+[^21]: Mahajan, A., Roy Choudhary, S., Bond, M., Wang, Z., & Utture, A. (2025). *uReview*. Uber Engineering. https://www.uber.com/blog/ureview/
+[^22]: Cihan, U., Haratian, V., İnce, A., et al. (2025). *Automated Code Review In Practice*. ICSE SEIP 2025. https://arxiv.org/abs/2412.18531
+[^23]: Wright, H. (2020). *Large-Scale Changes*, chapter 22 of *Software Engineering at Google*. O'Reilly. https://abseil.io/resources/swe-book/html/ch22.html
+[^24]: Mykhailov, K., & Young, N. (2026). *AI is approving our pull requests: Here's how we made it safe*. Intercom. https://www.intercom.com/blog/ai-is-approving-our-pull-requests-heres-how-we-made-it-safe/
+[^25]: North, D. (2026). *How we let AI approve pull requests (safely)*. Rewind. https://rewind.com/blog/ai-approve-pull-requests-safely/
+[^26]: GitHub (2025). *Octoverse: A new developer joins GitHub every second as AI leads TypeScript to #1*. The GitHub Blog. https://github.blog/news-insights/octoverse/octoverse-a-new-developer-joins-github-every-second-as-ai-leads-typescript-to-1/
+[^27]: Dohmke, T. (2025). *Meet the new coding agent*. The GitHub Blog. https://github.blog/news-insights/product-news/github-copilot-meet-the-new-coding-agent/
+[^28]: Oxagen (2026). GitHub search `repo:macanderson/oxagen is:pr is:merged merged:2026-09-01..2026-09-29`, run on September 30, 2026. It returned 1,064 pull requests.

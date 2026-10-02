@@ -59,7 +59,7 @@ permissions:
 
 jobs:
   migrate:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-latest' }}
     environment: production
     timeout-minutes: 20
 

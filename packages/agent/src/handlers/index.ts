@@ -39,9 +39,10 @@ const LOADERS: Record<string, LoaderEntry> = {
   update_memory: () => import("./agent.memory.update"),
   delete_memory: () => import("./agent.memory.delete"),
   save_memory: () => import("./agent.memory.remember"),
-  // Bulk memory import: parse uploaded docs → drafts, then commit the edited set.
-  parse_memory_import: () => import("./agent.memory_import.parse"),
-  commit_memory_import: () => import("./agent.memory_import.commit"),
+  // parse_memory_import and commit_memory_import are retired
+  // (DEREGISTERED.md §8). Their handler files stay in this folder, unloaded.
+  // parse_markdown_import and commit_markdown_import replaced them
+  // (packages/handlers/src/markdown-import/).
   // Two-axis memory: confidence ladder promotion + the citation/evidence
   // mechanism that drives it (docs/specs/two-axis-memory).
   promote_memory: () => import("./agent.memory.promote"),
