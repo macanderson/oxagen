@@ -31,7 +31,7 @@ describe("list_code_repository_findings contract", () => {
     );
     expect(codeRepositoryFindingsList.mutates).toBe(false);
     expect(codeRepositoryFindingsList.noBillingGate).toBe(true);
-    expect(codeRepositoryFindingsList.surfaces).toEqual(["api", "mcp", "cli"]);
+    expect(codeRepositoryFindingsList.surfaces).toEqual(["api", "mcp", "cli", "agent"]);
     expect(codeRepositoryFindingsList.defaultRoles?.workspace).toEqual({
       Owner: "allow",
       Member: "allow",
