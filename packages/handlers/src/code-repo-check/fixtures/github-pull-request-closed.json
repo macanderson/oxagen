@@ -1,0 +1,25 @@
+{
+  "action": "closed",
+  "number": 318,
+  "pull_request": {
+    "id": 2304417790,
+    "number": 318,
+    "state": "closed",
+    "merged": true,
+    "title": "Write down the deploy notes in CLAUDE.md",
+    "html_url": "https://github.com/a-intel/platform/pull/318",
+    "updated_at": "2026-10-02T16:03:30Z",
+    "head": {
+      "ref": "notes/deploy",
+      "sha": "c47a0e9d1f2b3c4d5e6f708192a3b4c5d6e7f809",
+      "repo": { "id": 771020341, "full_name": "a-intel/platform" }
+    },
+    "base": {
+      "ref": "main",
+      "sha": "1e2d3c4b5a69788796a5b4c3d2e1f0a9b8c7d6e5",
+      "repo": { "id": 771020341, "full_name": "a-intel/platform" }
+    }
+  },
+  "repository": { "id": 771020341, "name": "platform", "full_name": "a-intel/platform" },
+  "installation": { "id": 61200044 }
+}

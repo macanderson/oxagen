@@ -5,6 +5,7 @@ import {
   registerSteeringPrOpener,
 } from "@oxagen/agent/runtime/steering-pr";
 import { setSpendProposalOpener } from "@oxagen/billing/proposal-opener";
+import { setCodeRepoCheckRunner } from "@oxagen/inngest-functions/code-repo-check-runner";
 import { setInterjectionTimeoutRunner } from "@oxagen/inngest-functions/interjection-timeout-runner";
 import { setMcpServerDiscoveryRunner } from "@oxagen/inngest-functions/mcp-server-discovery-runner";
 import { setMemoryRunner } from "@oxagen/inngest-functions/memory-runner";
@@ -187,6 +188,21 @@ registerHandlersOnce("@oxagen/handlers", () => {
       const { postgresMemoryStore } = await import("./memory/store");
       return postgresMemoryStore.listCurateWorkspaces();
     },
+  });
+  // The Oxagen check on a linked code repository's pull requests (S2b,
+  // #5058) reads the host, the registry, and the published version through
+  // this package. It runs in the workspace's tenant scope, and is loaded on
+  // its first run.
+  setCodeRepoCheckRunner(async (request) => {
+    const [{ runInTenantScope }, run, deps] = await Promise.all([
+      import("@oxagen/tenancy"),
+      import("./code-repo-check/run"),
+      import("./code-repo-check/deps"),
+    ]);
+    return runInTenantScope(
+      { orgId: request.orgId, workspaceId: request.workspaceId },
+      () => run.runCodeRepoCheck(deps.codeRepoCheckDeps, request),
+    );
   });
   // The pull request backfill (ADR-192) lives in @oxagen/inngest-functions
   // for the same reason, and is loaded on its first run.
