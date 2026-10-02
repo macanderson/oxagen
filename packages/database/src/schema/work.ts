@@ -3,7 +3,7 @@
 //
 // C0 (#4735, migration 20260929000000_work_schema.sql) created ten tables from
 // agent-work-spec.html, Storage. P1-02 (#4897, migration
-// 20261002024500_work_records.sql) adds the Phase 1 work records from
+// 20261002030300_work_records.sql) adds the Phase 1 work records from
 // agent-work-phase-1.html, Data contract: a revision and a version on each
 // work item, the acceptance brief (work.briefs), the work order
 // (work.orders), and the append-only history (work.item_facts). ADR-244 maps

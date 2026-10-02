@@ -48,6 +48,47 @@ export const runCostUnproductiveCausesSchema = z
   })
   .strict();
 
+/**
+ * Why an enforced no-progress limit could not pause the run (#4490): the run
+ * had ended, its host cannot take a command (`commandBlockOf`'s reasons), no
+ * host carries commands for it, or the check had no pause path. The billing
+ * check writes the same list (`NO_PROGRESS_PAUSE_BLOCKS`).
+ */
+export const RUN_NO_PROGRESS_PAUSE_BLOCKS = [
+  "run_sealed",
+  "no_host",
+  "host_revoked",
+  "host_offline",
+  "no_connection_point",
+  "pause_unavailable",
+] as const;
+
+/**
+ * One loop that reached the workspace's no-progress limit (spend spec,
+ * detector 1; #4490): the same call made again and again in a row with an
+ * unchanged result. `paused` means an enforced limit queued a pause the host
+ * applies at the run's next checkpoint. `would_pause` is every observe hit,
+ * and an enforced hit with `pauseBlock` saying why it could not pause.
+ */
+export const runCostNoProgressHitSchema = z
+  .object({
+    tool: z.string(),
+    /** 1 for the call's first loop in the run, 2 for its second. */
+    loop: z.number().int().positive(),
+    /** The calls in the loop so far, the first one included. */
+    repeats: z.number().int().positive(),
+    /** The limit the loop reached. */
+    limit: z.number().int().min(2),
+    /** The call that reached the limit, counted from 1 in the run's order. */
+    atCall: z.number().int().positive(),
+    mode: z.enum(["observe", "enforced"]),
+    outcome: z.enum(["would_pause", "paused"]),
+    pauseBlock: z.enum(RUN_NO_PROGRESS_PAUSE_BLOCKS).nullable(),
+    /** RFC 3339: when the loop reached the limit. */
+    detectedAt: z.string().datetime(),
+  })
+  .strict();
+
 /** The fewest runs a baseline figure is computed over (#3984). */
 export const RUN_COST_BASELINE_MIN_RUNS = 5;
 
@@ -224,7 +265,7 @@ export const runCostGet = registerCapability({
   name: "get_run_cost",
   domain: "run",
   description:
-    "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps and how many of them advanced the run, model and tool calls, and the per-model breakdown (cost by token class, cache saving, whether any call went unpriced) and per-tool breakdown with each tool's result tokens and their estimated cost, the standing context each call after the first re-sent by source (tool definitions, steering, context frames) with its estimated cost, marked as an estimate while the run is still open; null until the rollup has rebuilt the run from its frames, with provisional per-model figures for a wrapped run in the meantime. It also answers the agent's median cost and productive share over its runs in the 30 days before this one.",
+    "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps and how many of them advanced the run, model and tool calls, and the per-model breakdown (cost by token class, cache saving, whether any call went unpriced) and per-tool breakdown with each tool's result tokens and their estimated cost, the standing context each call after the first re-sent by source (tool definitions, steering, context frames) with its estimated cost, marked as an estimate while the run is still open; null until the rollup has rebuilt the run from its frames, with provisional per-model figures for a wrapped run in the meantime. It also answers the agent's median cost and productive share over its runs in the 30 days before this one, and each loop that reached the workspace's no-progress limit: the call repeated with an unchanged result, how often, the mode, whether the run was paused, and why an enforced limit could not pause it.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -251,6 +292,11 @@ export const runCostGet = registerCapability({
        * runs in the window.
        */
       baseline: runCostBaselineSchema.nullable(),
+      /**
+       * Each loop that reached the workspace's no-progress limit, in the
+       * order each reached it (#4490). Empty or absent when none did.
+       */
+      noProgressHits: z.array(runCostNoProgressHitSchema).optional(),
     })
     .strict(),
 });
@@ -267,3 +313,4 @@ export type RunCostStandingContext = z.output<
 export type RunCostUnproductiveCauses = z.output<
   typeof runCostUnproductiveCausesSchema
 >;
+export type RunCostNoProgressHit = z.output<typeof runCostNoProgressHitSchema>;

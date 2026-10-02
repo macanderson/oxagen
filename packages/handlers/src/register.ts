@@ -8,6 +8,7 @@ import { setInstructionProposalOpener } from "@oxagen/billing/proposal-opener";
 import { setInterjectionTimeoutRunner } from "@oxagen/inngest-functions/interjection-timeout-runner";
 import { setMcpServerDiscoveryRunner } from "@oxagen/inngest-functions/mcp-server-discovery-runner";
 import { setMemoryRunner } from "@oxagen/inngest-functions/memory-runner";
+import { setNoProgressPauseRunner } from "@oxagen/inngest-functions/no-progress-pause-runner";
 import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
 import { setRunPrOutcomesRunner } from "@oxagen/inngest-functions/run-pr-outcomes-runner";
 import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
@@ -253,6 +254,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
       return timeout.denyExpiredInterjection(
         request,
         timeout.POSTGRES_INTERJECTION_TIMEOUT_DEPS,
+      );
+    },
+  });
+  // An enforced no-progress limit (#4490) pauses a run through the same
+  // command path an operator's pause takes, which lives here too. Loaded on
+  // the first pause.
+  setNoProgressPauseRunner({
+    pause: async (request) => {
+      const pause = await import("./lib/no-progress-pause");
+      return pause.pauseForNoProgress(
+        request,
+        pause.POSTGRES_NO_PROGRESS_PAUSE_DEPS,
       );
     },
   });

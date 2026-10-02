@@ -707,6 +707,19 @@ const NO_PROGRESS_HIT_MODES = ["observe", "enforced"] as const;
 /** `paused` only when an enforced limit paused the run. */
 const NO_PROGRESS_HIT_OUTCOMES = ["would_pause", "paused"] as const;
 
+/**
+ * Why an enforced limit could not pause the run (`NO_PROGRESS_PAUSE_BLOCKS`
+ * in packages/billing/src/no-progress-store.ts, which says what each means).
+ */
+const NO_PROGRESS_PAUSE_BLOCKS = [
+  "run_sealed",
+  "no_host",
+  "host_revoked",
+  "host_offline",
+  "no_connection_point",
+  "pause_unavailable",
+] as const;
+
 // `no_progress_hits` is one row per loop that reached the workspace's
 // no-progress limit (spend spec, detector 1). A loop is the same call, with
 // the same tool, input digest, and output digest, made again and again in a
@@ -734,6 +747,9 @@ export const noProgressHits = costSchema.table(
     atCall: integer("at_call").notNull(),
     mode: text("mode").notNull(),
     outcome: text("outcome").notNull(),
+    // Why an enforced limit could not pause the run. NULL when it paused the
+    // run, and on every observe hit.
+    pauseBlock: text("pause_block"),
     detectedAt: timestamp("detected_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
@@ -766,6 +782,15 @@ export const noProgressHits = costSchema.table(
     pausedCheck: check(
       "no_progress_hits_paused_check",
       sql`${t.outcome} = 'would_pause' OR ${t.mode} = 'enforced'`,
+    ),
+    pauseBlockCheck: check(
+      "no_progress_hits_pause_block_check",
+      sql`${t.pauseBlock} IS NULL OR ${t.pauseBlock} IN (${inList(NO_PROGRESS_PAUSE_BLOCKS)})`,
+    ),
+    // Only an enforced hit that did not pause the run says why.
+    pauseBlockOutcomeCheck: check(
+      "no_progress_hits_pause_block_outcome_check",
+      sql`${t.pauseBlock} IS NULL OR (${t.mode} = 'enforced' AND ${t.outcome} = 'would_pause')`,
     ),
     loopCheck: check("no_progress_hits_loop_check", sql`${t.loop} >= 1`),
     repeatsCheck: check(
