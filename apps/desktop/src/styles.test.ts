@@ -24,10 +24,11 @@ describe("styles.css fonts", () => {
     expect(css).toContain('@import "@oxagen/ui/styles/house-fonts.css";');
   });
 
-  it("imports a path @oxagen/ui exports, which declares Geist and Monaspace Neon", () => {
+  it("imports a path @oxagen/ui exports, which declares Aeonik and Monaspace Neon", () => {
     const path = require.resolve("@oxagen/ui/styles/house-fonts.css");
     const faces = readFileSync(path, "utf8");
-    expect(faces).toMatch(/font-family:\s*"Geist"/);
+    // Aeonik replaced Geist as the body face in oxagen-brand@143f2a6.
+    expect(faces).toMatch(/font-family:\s*"Aeonik"/);
     expect(faces).toMatch(/font-family:\s*"Monaspace Neon"/);
     expect(faces).toMatch(/font-family:\s*"Space Grotesk"/);
   });

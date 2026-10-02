@@ -345,16 +345,17 @@ function scanned(): string[] {
 /**
  * A reference to Space Grotesk: the kit's display token, the wordmark token,
  * or the family by name. Mac set the rule on 2026-09-29: every heading and
- * every line of text is Geist, and Space Grotesk sets the wordmark only.
+ * every line of text is one face, and Space Grotesk sets the wordmark only.
+ * On 2026-10-02 that face became Aeonik in place of Geist (oxageninc/brand#81).
  */
 const SPACE_GROTESK = /--ox-font-display|--font-wordmark|Space Grotesk/;
 
 describe("design record: one face for every heading and every line", () => {
-  it("the heading token is Geist, and Space Grotesk is left to the wordmark", () => {
+  it("the heading token is Aeonik, and Space Grotesk is left to the wordmark", () => {
     const styles = path.join(APP_DIR, "../../packages/ui/src/styles");
     const kit = readFileSync(path.join(styles, "house-tailwind.css"), "utf8");
-    expect(kit).toMatch(/--font-display:\s*var\(--font-geist, "Geist"\)/);
-    expect(kit).toMatch(/--font-sans:\s*var\(--font-geist, "Geist"\)/);
+    expect(kit).toMatch(/--font-display:\s*var\(--font-aeonik, "Aeonik"\)/);
+    expect(kit).toMatch(/--font-sans:\s*var\(--font-aeonik, "Aeonik"\)/);
     expect(kit).toMatch(
       /--font-wordmark:\s*var\(--font-space-grotesk, "Space Grotesk"\)/,
     );
