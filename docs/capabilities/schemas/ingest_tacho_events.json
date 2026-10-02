@@ -14040,7 +14040,8 @@
                         "daemon_down",
                         "http_hook_failed",
                         "otel_missing",
-                        "spool_overflow"
+                        "spool_overflow",
+                        "wal_ceiling"
                       ]
                     },
                     "incident_kind": {
@@ -14562,7 +14563,8 @@
                         "daemon_down",
                         "http_hook_failed",
                         "otel_missing",
-                        "spool_overflow"
+                        "spool_overflow",
+                        "wal_ceiling"
                       ]
                     },
                     "incident_kind": {
@@ -16143,7 +16145,8 @@
                         "daemon_down",
                         "http_hook_failed",
                         "otel_missing",
-                        "spool_overflow"
+                        "spool_overflow",
+                        "wal_ceiling"
                       ]
                     },
                     "incident_kind": {
@@ -29981,7 +29984,8 @@
                         "daemon_down",
                         "http_hook_failed",
                         "otel_missing",
-                        "spool_overflow"
+                        "spool_overflow",
+                        "wal_ceiling"
                       ]
                     },
                     "incident_kind": {
@@ -30606,7 +30610,8 @@
                         "daemon_down",
                         "http_hook_failed",
                         "otel_missing",
-                        "spool_overflow"
+                        "spool_overflow",
+                        "wal_ceiling"
                       ]
                     },
                     "incident_kind": {
@@ -31271,7 +31276,8 @@
                         "daemon_down",
                         "http_hook_failed",
                         "otel_missing",
-                        "spool_overflow"
+                        "spool_overflow",
+                        "wal_ceiling"
                       ]
                     },
                     "incident_kind": {
@@ -31897,7 +31903,8 @@
                         "daemon_down",
                         "http_hook_failed",
                         "otel_missing",
-                        "spool_overflow"
+                        "spool_overflow",
+                        "wal_ceiling"
                       ]
                     },
                     "incident_kind": {

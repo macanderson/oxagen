@@ -848,6 +848,14 @@ describe("result use (decision 7)", () => {
       `${TOOL} returned 2 results over 5,000 tokens on 1 run. Later requests read them 5 times. No later step quoted 1 result, which later requests read 2 times. A later step quoted 1 result. This figure leaves out its 3 re-reads, which paging would have cut by $0.05.`,
     );
     expect(finding!.claims).toBeUndefined();
+    // #5023: the card names the results, the quoted ones apart, and the bound.
+    expect(finding!.evidence.values).toEqual({
+      kind: "unpaged_results",
+      results: 2,
+      retention: "content_exact",
+      quoted: { results: 1, reads: 3 },
+      unchecked: { results: 0, reads: 0 },
+    });
   });
 
   it("writes no finding when a later step quoted every result", () => {
@@ -876,6 +884,13 @@ describe("result use (decision 7)", () => {
     expect(finding!.why).toBe(
       `${TOOL} returned 2 results over 5,000 tokens on 1 run. Later requests read them 5 times.${NO_SIGNAL}`,
     );
+    expect(finding!.evidence.values).toEqual({
+      kind: "unpaged_results",
+      results: 2,
+      retention: null,
+      quoted: { results: 0, reads: 0 },
+      unchecked: { results: 2, reads: 5 },
+    });
   });
 
   it("keeps the upper bound on a digest_only workspace, whatever verdicts it is handed, and names the retention setting", () => {

@@ -237,6 +237,15 @@ describe("repeated instructions on a content_exact workspace", () => {
     );
     expect(f!.fix).toContain("steering record proposal");
     expect(f!.why).not.toMatch(/waste|session|trace/i);
+    // #5023: the card reads the retention mode and the sentence as fields.
+    expect(f!.evidence.values).toEqual({
+      kind: "repeated_instructions",
+      retention: "content_exact",
+      sentence: TESTS,
+      prompts: 4,
+      promptRuns: 3,
+      others: 0,
+    });
   });
 
   it("opens a proposal for a repeat no later prompt prices, and writes no finding", () => {
@@ -392,6 +401,12 @@ describe("repeated instructions on a content_exact workspace", () => {
     const [f] = habits(input(runs, prompts));
     expect(f!.why).toContain("…\"");
     expect(f!.why).not.toContain(long);
+    // The stored sentence is cut the same way the text quotes it.
+    const values = f!.evidence.values;
+    if (values?.kind !== "repeated_instructions") throw new Error("no values");
+    expect(values.sentence).toHaveLength(160);
+    expect(values.sentence?.endsWith("…")).toBe(true);
+    expect(f!.why).toContain(`"${values.sentence}"`);
     expect(instructionProposals(prompts, runs)[0]!.statement).toBe(long);
   });
 
@@ -587,6 +602,15 @@ describe("whole-prompt repeats on a digest_only workspace", () => {
     expect(f!.fix).toContain("retention policy");
     expect(f!.claims).toBeUndefined();
     expect(instructionProposals(prompts, [a!, b!])).toEqual([]);
+    // #5023: the Needs prompt text badge reads this retention mode.
+    expect(f!.evidence.values).toEqual({
+      kind: "repeated_instructions",
+      retention: "digest_only",
+      sentence: null,
+      prompts: 2,
+      promptRuns: 2,
+      others: 0,
+    });
   });
 
   it("names the other repeated prompts", () => {

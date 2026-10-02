@@ -58,6 +58,12 @@ export interface GitHubPullRequest {
   baseRef: string;
   headRef: string;
   headSha: string | null;
+  /**
+   * The repository that holds the head branch, as `owner/name`: a fork's for
+   * a pull request opened from a fork. Null when GitHub reports none, which it
+   * does once the fork is deleted. Absent when the response did not say.
+   */
+  headRepository?: string | null;
   /** The merge commit once `merged` is true; null before. */
   mergeCommitSha: string | null;
   /** When GitHub merged it (ISO 8601), once `merged` is true; null before. */

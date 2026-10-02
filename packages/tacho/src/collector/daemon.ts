@@ -98,6 +98,12 @@ import {
   type RetentionMandate,
 } from "../evidence/retention";
 import { Wal, WalRecoveryConflict } from "../host/wal";
+import {
+  DEFAULT_WAL_CEILING,
+  WalCeiling,
+  type WalCeilingDrop,
+  type WalCeilingPolicy,
+} from "../host/wal-ceiling";
 import { keepWorkOrder as keepPendingWorkOrder } from "../host/work-orders";
 import { ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
@@ -323,6 +329,11 @@ export interface DaemonOptions {
    * nor suspended.
    */
   localServers?: boolean;
+  /**
+   * The WAL ceiling's figures (ADR-261). Defaults to `DEFAULT_WAL_CEILING`;
+   * a test sets a small ceiling and no grace to drive a session past it.
+   */
+  walCeiling?: Partial<WalCeilingPolicy>;
 }
 
 export interface DaemonHandle {
@@ -1494,6 +1505,11 @@ async function initializeDaemon(
   // Bound once the contained runner exists below. Until then no session is
   // one the launcher started, which is the fail-closed answer.
   let launchedContained: (harnessSessionId: string) => boolean = () => false;
+  // The same for the repository a launched session may reach through Git
+  // custody (ADR-254). Until bound, no push is judged as a contained one.
+  let containedGitHubRepository: (
+    harnessSessionId: string,
+  ) => string | undefined = () => undefined;
   function policy(): PolicyView {
     const current = host as HostFile;
     return {
@@ -2682,12 +2698,18 @@ async function initializeDaemon(
           now,
           // Both reads hold this hook's session queue, and both answer no
           // answer once `stop` begins (`hookExecAsync`).
-          pushCredentialBasis: (command, cwd) =>
-            pushCredentialBasis(command, cwd, {
+          pushCredentialBasis: (command, cwd, harnessSessionId) => {
+            const containedRepository =
+              containedGitHubRepository(harnessSessionId);
+            return pushCredentialBasis(command, cwd, {
               receipts: () =>
                 readHostFile(paths.hostFile)?.github_repositories ?? [],
+              ...(containedRepository !== undefined
+                ? { containedRepository }
+                : {}),
               execAsync: hookExecAsync,
-            }),
+            });
+          },
           repositoryRemote: (cwd) => readRepositoryRemote(hookExecAsync, cwd),
           cedar: loadCedarRuntime,
           skills,
@@ -3763,6 +3785,26 @@ async function initializeDaemon(
     log,
   });
 
+  // One Git custody proxy serves both a configured checkout's credential
+  // helper (ADR-151) and the contained launcher's bridge (ADR-254).
+  const githubProxy = createGithubProxy({
+    host: () => {
+      const current = readHostFile(paths.hostFile);
+      return {
+        ...host,
+        github_broker_enabled: current?.github_broker_enabled === true,
+        github_repositories: current?.github_repositories ?? [],
+      };
+    },
+    policy,
+    refreshBundle,
+    registry,
+    controlFetch: options.fetch ?? globalThis.fetch,
+    now,
+    record,
+    log,
+  });
+
   const contained = createContainedRunner({
     host: () => host,
     registry,
@@ -3794,10 +3836,12 @@ async function initializeDaemon(
           log,
         },
       ),
+    github: githubProxy,
     fetch: options.fetch ?? ((input, init) => fetch(input, init)),
     log,
   });
   launchedContained = contained.launched;
+  containedGitHubRepository = contained.githubRepository;
 
   /**
    * The real interrupt. A pause, cancel or kill already stops the session at
@@ -3902,24 +3946,6 @@ async function initializeDaemon(
     for (const refusal of session.recorder.takeOtelRefusals())
       log(`OTel record not sealed for session ${sessionId}: ${refusal}`);
   }
-
-  const githubProxy = createGithubProxy({
-    host: () => {
-      const current = readHostFile(paths.hostFile);
-      return {
-        ...host,
-        github_broker_enabled: current?.github_broker_enabled === true,
-        github_repositories: current?.github_repositories ?? [],
-      };
-    },
-    policy,
-    refreshBundle,
-    registry,
-    controlFetch: options.fetch ?? globalThis.fetch,
-    now,
-    record,
-    log,
-  });
 
   const api: CollectorApi = {
     runContained: contained.run,
@@ -4216,6 +4242,59 @@ async function initializeDaemon(
   let lastCompact = 0;
   const COMPACT_EVERY_MS = 60 * 60_000;
   const COMPACT_RETRY_MS = 60_000;
+
+  const walCeiling = new WalCeiling(
+    wal,
+    paths.wal,
+    { ...DEFAULT_WAL_CEILING, ...options.walCeiling },
+    timers.walRetainMs,
+    log,
+  );
+
+  /**
+   * Seal the frame that says one session's stored bodies went over the WAL
+   * ceiling (ADR-261), and write it. `WalCeiling.check` calls this right after
+   * the body file is removed, in the same synchronous stretch.
+   *
+   * The frame goes on the daemon's own chain. A stalled session has often
+   * sealed its `agent_stop` already, or left the registry, so its own chain
+   * cannot always take a frame, and the daemon's always can. The session's
+   * own record still shows the loss: each of its frames that owed a body
+   * carries a `body_missing` gap.
+   *
+   * A frame that cannot be written is logged, and the drop stands. The disk
+   * is near full when this runs, and the removal is what frees the room the
+   * write needs.
+   */
+  function recordCeilingDrop(drop: WalCeilingDrop): void {
+    const mark = hostRecorder.markChain();
+    try {
+      record([
+        hostRecorder.sealCollectorEvent("telemetry_gap", {
+          gap_cause: "wal_ceiling",
+          // How long the session went without shipping, capped at what the
+          // column holds.
+          gap_duration_ms: Math.min(
+            Math.max(
+              0,
+              Date.parse(drop.dropped_at) - Date.parse(drop.stalled_since),
+            ),
+            0xffff_ffff,
+          ),
+          incident_evidence: { ...drop },
+        }),
+      ]);
+    } catch (error) {
+      hostRecorder.rollbackChain(mark);
+      log(
+        `WAL ceiling: removed the stored bodies of session ${drop.session_uuid}, but could not record it on the daemon chain: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+    log(
+      `WAL ceiling: removed ${drop.bytes} bytes of stored bodies from session ${drop.session_uuid}, which has shipped nothing since ${drop.stalled_since}; events ${drop.shipped_through + 1} to ${drop.last_seq} ship without their bodies`,
+    );
+  }
 
   // A narrowing this host owed when it last exited. Run here rather than left
   // to the first poll: a poll can be a bundle refresh interval away, or an
@@ -4536,6 +4615,19 @@ async function initializeDaemon(
     // costs them one interval and nothing else — they are already asynchronous
     // and already land a batch or more after the tool frames they belong with.
     void startGitReads();
+    // After the drain, so a session that just shipped has moved its cursor
+    // before the ceiling looks at it (ADR-261). The check stats files and
+    // removes whole body files. It reads no body, and no event past the last
+    // line the WAL already keeps, so it does not hold the thread on a large
+    // file, and it runs on no hook queue (ADR-231).
+    await stage("wal ceiling", () => {
+      if (!walCeiling.due(now())) return;
+      // Not while a task that can seal on the daemon's own chain runs. The
+      // frame that records a drop goes on that chain, and such a task can
+      // stand between a chain mark and its WAL write. A later tick checks.
+      if (queues.busy(hostRecord.harnessSessionId)) return;
+      walCeiling.check(now(), recordCeilingDrop);
+    });
     await stage("compact", () => {
       if (now() - lastCompact < COMPACT_EVERY_MS) return;
       lastCompact = now();
