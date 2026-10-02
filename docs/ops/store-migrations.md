@@ -48,14 +48,25 @@ repository:
 |---|---|---|
 | ClickHouse migrations | `packages/telemetry/src/migrations/*.sql` | `SELECT DISTINCT filename FROM <db>._migrations` |
 | ClickHouse tables | `CREATE TABLE` in `packages/telemetry/src/schema.sql` and in `migrations/*.sql` | `SELECT name FROM system.tables` |
+| ClickHouse dropped columns | `DROP COLUMN` in `migrations/*.sql`, less any column a later file adds back or whose table it drops | `SELECT count() FROM system.columns`, one per column, which must be 0 |
 | Neo4j | named constraints and indexes in `packages/ontology/src/schema.cypher` | `SHOW CONSTRAINTS` / `SHOW INDEXES` |
 
-ClickHouse is asked **twice** because its schema arrives two ways.
+ClickHouse is asked three questions. The first two exist because its schema arrives two ways.
 `packages/telemetry/src/migrate.ts` applies `schema.sql` on every call, outside
 the ledger, and that file holds twelve table definitions `_migrations` will
 never mention. Checking only the ledger would call a store current while most of
 its tables were missing. Its own comment says as much: *"Treat schema.sql plus
 migrations/ together as the desired state."*
+
+Neither of those questions sees a column a migration dropped. The ledger lists
+the file, and the table is still there, so a drop that never ran reads as
+current. The third ClickHouse question counts each dropped column in
+`system.columns` and reads the store as behind when a count is not 0, naming
+the table, the column, and the migration (#3072). An apply runs only files the
+ledger does not list. So when the ledger already lists the migration, the
+column has to be dropped by hand with that file's `ALTER TABLE` statement. The
+same check runs in `pipeline.yml`'s `migration-gate`, so a dropped column that
+is still in production holds the deploy until it is gone.
 
 Every statement sent is a `SELECT` or a `SHOW`, and the ClickHouse requests
 carry `readonly=1`, so the server refuses a write regardless of what a later
