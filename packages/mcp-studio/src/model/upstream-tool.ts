@@ -22,6 +22,7 @@ import {
   graphqlFieldSchema,
   grpcMethodSchema,
   httpMethodSchema,
+  httpUrlSchema,
   inputNameSchema,
   objectJsonSchemaSchema,
   protoFullNameSchema,
@@ -50,10 +51,19 @@ export const httpParameterSchema = z
     property: inputNameSchema.describe("The inputSchema property that carries the value."),
     required: z.boolean(),
     style: z
-      .enum(["simple", "label", "matrix", "form", "spaceDelimited", "pipeDelimited", "deepObject"])
+      .enum(["simple", "label", "matrix", "form", "spaceDelimited", "pipeDelimited", "deepObject", "cookie"])
       .optional()
       .describe("OpenAPI's serialization style, when it differs from the default for `in`."),
-    explode: z.boolean().optional(),
+    explode: z
+      .boolean()
+      .optional()
+      .describe("OpenAPI's explode. Import writes it on every cookie parameter, so the executor never guesses its default."),
+    allow_reserved: z
+      .boolean()
+      .optional()
+      .describe(
+        "A query parameter only: true sends reserved characters such as / and : in the value without percent-encoding (OpenAPI's allowReserved).",
+      ),
   })
   .strict();
 export type HttpParameter = z.output<typeof httpParameterSchema>;
@@ -116,8 +126,15 @@ export const httpRequestSchema = z
     path: z
       .string()
       .regex(/^\/[^\s?#]*$/, "a path template starts with / and has no query or fragment")
-      .describe("The path template, relative to the environment's url."),
-    parameters: z.array(httpParameterSchema).describe("Parameters a security scheme names are never here."),
+      .describe("The path template, relative to the environment's url, or to base_url when the operation has one."),
+    base_url: httpUrlSchema
+      .optional()
+      .describe(
+        "The operation's own server, from the servers list on the operation or its path item, when that list differs from the document's. A call sends to it in every environment.",
+      ),
+    parameters: z
+      .array(httpParameterSchema)
+      .describe("Every parameter the operation declares. Compile drops one that the server's API key scheme supplies."),
     body: httpBodySchema.optional(),
     response: httpResponseSchema.optional().describe("Absent when no 2xx response has a JSON schema."),
     security: z
