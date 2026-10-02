@@ -52,9 +52,11 @@ const MIN_COVERAGE = 0.5;
 /** Findings kept per kind, largest saving first. */
 export const FINDINGS_PER_KIND = 10;
 /**
- * Open findings one pass keeps, largest saving first: `list_findings` answers
- * at most 50 (`FINDINGS_LIST_MAX`), so every open finding fits one answer
- * however many kinds the detectors write.
+ * Open findings one pass keeps: `list_findings` answers at most 50
+ * (`FINDINGS_LIST_MAX`), so every open finding fits one answer however many
+ * kinds the detectors write. A finding that counts toward the unproductive
+ * spend headline takes its place first, in counting order. The other
+ * findings fill the room left, largest saving first (#5050).
  */
 export const FINDINGS_MAX = 50;
 /** Runs itemised in a finding's evidence, largest saving first. */
