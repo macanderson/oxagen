@@ -81,21 +81,27 @@ Never put `--` before the filename. Each build module has a co-located
   constellation and the glow behind a hero) follows docs.oxagen.sh
   (`apps/docs`, on `@oxagen/ui`), so the two sites read as one; change it
   there first, then here.
+- The header: `siteHeader()` in `scripts/lib/html.mjs` writes the floating
+  island, its four menus (Product, Research, Resources, Company), and the
+  phone menu. The blog renders it into each page. A hand-written page holds
+  the comment `<!-- site-header -->` (or `<!-- site-header demo="ghost" -->`
+  when its hero holds the gold action), and the build fills it with the same
+  markup, so the menus are written once.
 - `assets/oxagen.js`: the shared behaviour for those same pages: nav state,
-  the mobile drawer, reveal-on-scroll, the live-figure observer, the terminal
+  the island's menus, the mobile drawer, reveal-on-scroll, the live-figure observer, the terminal
   replay, and the lead forms. Plain JavaScript, no dependencies, no build step.
   Every animation that would otherwise run forever (a figure's `.dg-loop`, the
   terminal replay) is started and stopped by an IntersectionObserver, so a page
   of them costs nothing below the fold.
-- `index.html`, the marketing one-pager: the hero with a spend rollup and the
-  supported-agent logos, the operator's five steps (with tasks marked coming
+- `index.html`, the marketing one-pager: the hero with one night of agent runs
+  and its morning report, then the supported-agent logos, the operator's five steps (with tasks marked coming
   soon), the four mandate clauses (access, record, budget and rules,
   equipment) each with its own figure, the supported-agents section with the
   site's one terminal and a short support matrix, a `#field-manual` section
   with the ebook lead-capture form, and the "Get a demo" lead form.
 - `products/oxagen/`, the product page: a routed request in the hero, then one
   figure per ranked feature, and the full support matrix at `#support`. It
-  carries its own copy of the nav, drawer and footer markup.
+  carries its own copy of the footer markup.
 - The support matrix (Claude Code, Codex, Cursor, Stella) is the same table on
   both pages, the home page showing six of its rows. Each cell is read from
   `packages/tacho` (the harness adapters, `wire.ts`, the hook handler) and

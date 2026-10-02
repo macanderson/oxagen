@@ -195,6 +195,122 @@
       }
     });
 
+  /* ---------- nav: the island's menus ----------
+     Each top-level item holds its menu in the markup. A mouse opens it on
+     hover after a short pause, so a pointer crossing the island on its way
+     elsewhere opens nothing; switching between open menus is quicker. A click
+     or a tap toggles it, and Escape, a click outside, or focus leaving the
+     island closes it. The item carries the state as data-open, and its button
+     carries aria-expanded. */
+  var isl = document.querySelector(".nav-isl");
+  var navItems = Array.prototype.slice.call(
+    document.querySelectorAll(".nav-item"),
+  );
+  if (isl && navItems.length) {
+    var openItem = null;
+    var menuTimer = null;
+    var finePointer = window.matchMedia("(hover: hover) and (pointer: fine)");
+    var setOpen = function (item, open) {
+      item.setAttribute("data-open", open ? "true" : "false");
+      var btn = item.querySelector(".nav-trigger");
+      if (btn) {
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+    };
+    var showMenu = function (item) {
+      clearTimeout(menuTimer);
+      if (openItem && openItem !== item) {
+        setOpen(openItem, false);
+      }
+      openItem = item;
+      setOpen(item, true);
+    };
+    var hideMenu = function () {
+      clearTimeout(menuTimer);
+      if (openItem) {
+        setOpen(openItem, false);
+      }
+      openItem = null;
+    };
+    var later = function (fn, ms) {
+      clearTimeout(menuTimer);
+      menuTimer = setTimeout(fn, ms);
+    };
+    var isMouse = function (e) {
+      return e.pointerType === "mouse" && finePointer.matches;
+    };
+    navItems.forEach(function (item) {
+      var btn = item.querySelector(".nav-trigger");
+      item.addEventListener("pointerenter", function (e) {
+        if (!isMouse(e)) {
+          return;
+        }
+        later(
+          function () {
+            showMenu(item);
+          },
+          openItem ? 120 : 70,
+        );
+      });
+      if (btn) {
+        btn.addEventListener("click", function () {
+          if (openItem === item) {
+            hideMenu();
+          } else {
+            showMenu(item);
+          }
+        });
+      }
+      /* A link inside a menu may point at this same page (/#demo). Close
+         the menu so it does not cover where the link lands. */
+      item.addEventListener("click", function (e) {
+        if (e.target && e.target.closest && e.target.closest(".menu a")) {
+          hideMenu();
+        }
+      });
+      /* The section holding the page we are on reads as current. */
+      if (item.querySelector('a[aria-current="page"]')) {
+        item.setAttribute("data-current", "");
+      }
+    });
+    isl.addEventListener("pointerleave", function (e) {
+      if (isMouse(e) && openItem) {
+        later(hideMenu, 220);
+      }
+    });
+    isl.addEventListener("pointerenter", function (e) {
+      if (isMouse(e) && openItem) {
+        clearTimeout(menuTimer);
+      }
+    });
+    /* The glow follows the cursor: the island's own coordinates. */
+    isl.addEventListener("pointermove", function (e) {
+      var r = isl.getBoundingClientRect();
+      isl.style.setProperty("--mx", e.clientX - r.left + "px");
+      isl.style.setProperty("--my", e.clientY - r.top + "px");
+    });
+    isl.addEventListener("focusout", function (e) {
+      if (openItem && !isl.contains(e.relatedTarget)) {
+        hideMenu();
+      }
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape" || !openItem) {
+        return;
+      }
+      var btn = openItem.querySelector(".nav-trigger");
+      hideMenu();
+      if (btn) {
+        btn.focus();
+      }
+    });
+    document.addEventListener("click", function (e) {
+      if (openItem && !isl.contains(e.target)) {
+        hideMenu();
+      }
+    });
+  }
+
   /* ---------- nav: mobile drawer ---------- */
   var burger = document.getElementById("burger");
   var drawer = document.getElementById("drawer");
@@ -208,8 +324,14 @@
       drawer.setAttribute("data-open", next ? "true" : "false");
       burger.setAttribute("aria-expanded", next ? "true" : "false");
     });
+    /* A tap on a link closes the menu, including a tap on the icon inside
+       one. A tap on a section heading only opens or closes that section. */
     drawer.addEventListener("click", function (e) {
-      if (e.target.tagName === "A") {
+      var link =
+        e.target.tagName === "A"
+          ? e.target
+          : e.target.closest && e.target.closest("a");
+      if (link) {
         closeDrawer();
       }
     });

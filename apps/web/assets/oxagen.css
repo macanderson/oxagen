@@ -105,7 +105,22 @@
   /* The hairline under a control, on ink. The light theme below repoints it
      to the paper twin. */
   --shadow-ui: var(--ox-shadow-ui);
-  --nav-h: 60px;
+  /* Under a floating menu, a popover, or the phone menu, on ink. The light
+     theme below repoints it to the paper twin. */
+  --shadow-pop: var(--ox-shadow-pop);
+  /* The header island floats 12px below the top and stands 56px tall; the
+     page clears it with this. */
+  --nav-h: 76px;
+  /* The site's type ramp, built on the kit's marketing scale so a theme edit
+     still reaches it. Body copy is the scale's body (18px). Secondary copy
+     (cards, steps, lists, tables) is 16px, labels and controls 15px, and the
+     top-level navigation 16px. The scale's micro step (14px) is left to
+     captions and notes. A section heading tops out at 1.2 times the scale's
+     h2 (48px). */
+  --fs-small: calc(var(--ox-m-body) * 8 / 9);
+  --fs-ui: calc(var(--ox-m-micro) * 15 / 14);
+  --fs-nav: calc(var(--ox-m-micro) * 8 / 7);
+  --fs-sec: clamp(var(--ox-m-h3), 4.2vw, calc(var(--ox-m-h2) * 1.2));
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   /* ---- the metal in motion: the kit's sheen, deep → metal → highlight. The
@@ -204,11 +219,13 @@
 :root[data-theme="light"] {
   --tex-hex: var(--tex-hex-paper);
   --shadow-ui: var(--ox-shadow-ui-ink);
+  --shadow-pop: var(--ox-shadow-pop-ink);
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
     --tex-hex: var(--tex-hex-paper);
     --shadow-ui: var(--ox-shadow-ui-ink);
+    --shadow-pop: var(--ox-shadow-pop-ink);
   }
 }
 :root {
@@ -216,13 +233,13 @@
 }
 
 /* The house faces, self-hosted from /fonts/ (vendored by
-   tools/scripts/sync-brand-assets.mjs). Geist sets every heading and all
-   running text. Monaspace Neon sets code, with texture healing on. Space
-   Grotesk sets two things only: the wordmark when it is text rather than an
-   SVG, and the first line of a hero headline (.hero-line-1). Mac set that
-   rule on 2026-09-29. The home and product heroes set line 1 at 680, which
-   resolves to the 700 file. The blog heroes inherit the heading weight, 600.
-   Those are the two Space Grotesk weights declared here. */
+   tools/scripts/sync-brand-assets.mjs). On this site Space Grotesk sets every
+   h1, h2, and h3, and so every line of a hero; Mac set that on 2026-10-02,
+   replacing the 2026-09-29 rule that kept it to hero line 1. The house sans
+   sets h4 and all running text. Monaspace Neon sets code, with texture
+   healing on. The heroes set their headline at 680, which resolves to the
+   700 file; every other heading is 600. Those are the two Space Grotesk
+   weights declared here. */
 @font-face {
   font-family: "Space Grotesk";
   src: url("/fonts/space-grotesk-latin-600.woff2") format("woff2");
@@ -300,9 +317,13 @@ h4 {
   line-height: 1.1;
   text-wrap: balance;
 }
-/* The first line of a hero headline. A two-line hero wraps line 1 in a
-   span before the <br>, so line 2 stays in the heading face. A one-line
-   hero puts the class on the h1. */
+h1,
+h2,
+h3 {
+  font-family: var(--font-hero);
+}
+/* The first line of a hero headline, kept for markup that marks it. The h1
+   around it already sets the same face. */
 .hero-line-1 {
   font-family: var(--font-hero);
 }
@@ -426,17 +447,37 @@ hr {
 }
 
 /* ============ the sheen on type ============
-   A headline's accent word takes the gradient (docs: .lp-grad-text). Only in
-   a heading — inline .gold elsewhere stays the flat metal, because a mark and
-   a link are one colour. */
+   A headline's accent words take the kit's sheen (deep, metal, highlight,
+   metal, deep), and the sheen sweeps across them once every two shimmer
+   periods. The sheen is symmetric, so a 200% tile moved by its own width
+   loops without a seam. Only in a heading: inline .gold elsewhere stays the
+   flat metal, because a mark and a link are one colour. A reader who asks
+   for reduced motion gets the sheen standing still. */
 h1 .gold,
 h2 .gold,
 .grad-text {
-  background-image: var(--grad-ember);
+  background-image: var(--ox-gold-sheen);
+  background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
+  animation: sheen calc(var(--ox-shimmer-period) * 2) linear infinite;
+}
+@keyframes sheen {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: 0% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  h1 .gold,
+  h2 .gold,
+  .grad-text {
+    animation: none;
+  }
 }
 
 /* ============ eyebrow / section head ============
@@ -477,7 +518,7 @@ h2 .gold,
   margin-bottom: 52px;
 }
 .sec-head h2 {
-  font-size: clamp(var(--ox-m-h3), 4.2vw, var(--ox-m-h2));
+  font-size: var(--fs-sec);
   margin: 16px 0 14px;
 }
 .sec-head p {
@@ -499,7 +540,7 @@ h2 .gold,
   padding: 12px 22px;
   border-radius: var(--r);
   font-weight: 600;
-  font-size: var(--ox-m-micro);
+  font-size: var(--fs-ui);
   border: 1px solid transparent;
   cursor: pointer;
   white-space: nowrap;
@@ -535,8 +576,8 @@ h2 .gold,
   color: var(--ink);
 }
 .btn-sm {
-  padding: 8px 15px;
-  font-size: 13.5px;
+  padding: 9px 16px;
+  font-size: var(--fs-ui);
 }
 .btn .arr {
   transition: transform 0.16s var(--ease);
@@ -550,33 +591,130 @@ h2 .gold,
   transform: none;
 }
 
-/* ============ nav ============ */
+/* ============ nav ============
+   The header is a glass island that floats over the page, its corners the
+   button corner (--r). siteHeader() in scripts/lib/html.mjs writes it once;
+   the build puts the same markup on every page.
+
+   The glass sits on its own layer (.nav-glass), not on the island, and each
+   menu draws its glass on a pseudo-element. An element with a backdrop
+   filter becomes the backdrop for everything inside it, so a menu inside a
+   filtered island would blur the island and not the page.
+
+   While the pointer is on the island it lights: a gold beam runs around its
+   edge, and a soft glow follows the cursor. assets/oxagen.js writes the
+   cursor's position to --mx and --my; without script the glow sits in the
+   middle. */
+@property --nav-spot {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+@property --nav-beam {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
 .nav {
   position: fixed;
   inset: 0 0 auto 0;
   z-index: 100;
-  height: var(--nav-h);
+  display: flex;
+  justify-content: center;
+  padding: 12px 16px 0;
+  pointer-events: none;
+}
+.nav-isl {
+  --mx: 50%;
+  --my: 50%;
+  --nav-spot: 0px;
+  position: relative;
+  isolation: isolate;
   display: flex;
   align-items: center;
-  background: color-mix(in srgb, var(--ground) 82%, transparent);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid transparent;
+  gap: 16px;
+  width: min(calc(var(--page-wrap) - 140px), 100%);
+  padding: 7px 7px 7px 18px;
+  border-radius: var(--r);
+  pointer-events: auto;
+  transition: --nav-spot 0.45s var(--ease);
+}
+.nav-isl:is(:hover, :focus-within) {
+  --nav-spot: 320px;
+}
+.nav-glass,
+.nav-spot,
+.nav-beam {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.nav-glass {
+  z-index: -3;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ground) 62%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 6%, transparent);
   transition:
-    border-color 0.2s,
-    background-color 0.2s;
+    background-color 0.3s,
+    border-color 0.3s;
 }
-.nav.scrolled {
-  border-bottom-color: var(--line);
-  background: color-mix(in srgb, var(--ground) 94%, transparent);
+.nav.scrolled .nav-glass {
+  background: color-mix(in srgb, var(--ground) 80%, transparent);
 }
-.nav-in {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  width: min(var(--page-wrap), calc(100% - 40px));
-  margin-inline: auto;
+.nav-isl:is(:hover, :focus-within) .nav-glass {
+  border-color: color-mix(in srgb, var(--gold) 28%, var(--line));
 }
+.nav-spot {
+  z-index: -2;
+  background: radial-gradient(
+    var(--nav-spot) circle at var(--mx) var(--my),
+    color-mix(in srgb, var(--gold) 16%, transparent),
+    transparent 70%
+  );
+}
+/* The beam: a gold arc on a conic gradient, masked down to a 1px ring and
+   turned by animating its start angle. It runs only while lit. */
+.nav-beam {
+  z-index: 1;
+  inset: -1px;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--nav-beam),
+    transparent 0deg 210deg,
+    var(--ember-a) 270deg,
+    var(--ember-c) 325deg,
+    var(--ember-b) 345deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  opacity: 0;
+  transition: opacity 0.4s;
+  animation: nav-beam 3.6s linear infinite paused;
+}
+.nav-beam-glow {
+  inset: -3px;
+  padding: 3px;
+  filter: blur(7px);
+}
+.nav-isl:is(:hover, :focus-within) .nav-beam {
+  opacity: 1;
+  animation-play-state: running;
+}
+@keyframes nav-beam {
+  to {
+    --nav-beam: 360deg;
+  }
+}
+
 /* The brand slot holds the house LOCKUP: the hive, a gap, then the wordmark
    (logo.svg in the brand kit). Its two lit cells and the x keep their gold;
    the rest is currentColor. It is sized by height, and 24px tall keeps it
@@ -584,6 +722,7 @@ h2 .gold,
 .brand {
   display: flex;
   align-items: center;
+  flex: none;
   color: var(--ink);
 }
 .brand svg {
@@ -593,33 +732,71 @@ h2 .gold,
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 2px;
   margin-inline: auto;
 }
-.nav-links > a {
-  font-size: var(--ox-m-micro);
-  color: var(--ink-3);
-  transition: color 0.14s;
-  background: none;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
+/* A megamenu centres on the island, so its item is not a containing block;
+   the plain dropdown hangs from its own button. */
+.nav-item--dd {
+  position: relative;
+}
+.nav-trigger {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  height: 42px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r);
+  background: none;
+  color: var(--ink-3);
+  font-family: var(--font-sans);
+  font-size: var(--fs-nav);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    background-color 0.15s;
 }
-.nav-links > a:hover {
+.chev {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.7;
+  transition: rotate 0.25s var(--ease);
+}
+.nav-trigger:hover,
+.nav-item[data-open="true"] > .nav-trigger,
+.nav-item[data-current] > .nav-trigger {
   color: var(--ink);
+}
+.nav-trigger:hover,
+.nav-item[data-open="true"] > .nav-trigger {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+.nav-item[data-open="true"] > .nav-trigger .chev {
+  rotate: 180deg;
+  opacity: 1;
 }
 .nav-cta {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-left: auto;
+  gap: 4px;
+  flex: none;
 }
 .nav-cta .login {
-  font-size: var(--ox-m-micro);
+  display: inline-flex;
+  align-items: center;
+  height: 42px;
+  padding: 0 12px;
   color: var(--ink-3);
+  font-size: var(--fs-nav);
+  font-weight: 500;
 }
 .nav-cta .login:hover {
   color: var(--ink);
@@ -630,35 +807,427 @@ h2 .gold,
   color: var(--faint);
   margin-left: 3px;
 }
-.nav-links a[aria-current="page"] {
+
+/* ---- menus ----
+   A menu is in the markup on every page, hidden until its item opens:
+   oxagen.js sets data-open on hover, click, or keyboard. Without script,
+   hover and focus open it here. The pseudo-element under each menu holds its
+   glass; the one above it bridges the gap to the island, so the pointer can
+   cross from the button to the menu without closing it. */
+.menu {
+  position: absolute;
+  top: calc(100% + 14px);
+  left: 50%;
+  z-index: 110;
+  display: none;
+  isolation: isolate;
+  width: min(940px, calc(100vw - 32px));
+  border-radius: var(--r);
+  color: var(--ink);
+  line-height: 1.4;
+  text-align: left;
+  translate: -50% 0;
+}
+.menu--dd {
+  width: 320px;
+}
+.menu::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border: 1px solid var(--line);
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--panel) 84%, transparent);
+  -webkit-backdrop-filter: blur(26px) saturate(170%);
+  backdrop-filter: blur(26px) saturate(170%);
+  box-shadow: var(--shadow-pop);
+}
+.menu::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -18px;
+  height: 18px;
+}
+.nav-item[data-open="true"] > .menu {
+  display: block;
+  animation: menu-in 0.26s var(--ease) both;
+}
+.nav-item[data-open="true"] > .menu::before,
+.nav-item[data-open="true"] > .menu > .menu-in {
+  animation: menu-fade 0.22s ease-out both;
+}
+html:not(.js) .nav-item:is(:hover, :focus-within) > .menu {
+  display: block;
+}
+@keyframes menu-in {
+  from {
+    transform: translateY(-6px) scale(0.985);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes menu-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.menu-in {
+  padding: 18px 18px 0;
+}
+.mm-cols {
+  display: grid;
+  gap: 18px;
+}
+.mm-cols--product {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 0.95fr);
+}
+.mm-cols--research {
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+.mm-cols--resources {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr) minmax(0, 1fr);
+}
+.mm-col {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+}
+.mm-h,
+.dsec-h {
+  padding: 8px 10px 10px;
+  color: var(--faint);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.mm-a {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 2px;
+  padding: 9px 10px;
+  border-radius: var(--r);
+  transition: background-color 0.15s;
+}
+.mm-a:hover,
+.mm-topic:hover,
+.mm-post:hover,
+.oss-sub a:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.mm-a[aria-current="page"] .mm-t {
   color: var(--gold);
 }
+.mm-ic {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  color: var(--ink-3);
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+.mi {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mm-a:hover .mm-ic {
+  color: var(--gold);
+  border-color: color-mix(in srgb, var(--gold) 45%, transparent);
+}
+.mm-t {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink);
+  font-size: var(--fs-ui);
+  font-weight: 550;
+  line-height: 1.3;
+}
+.mm-d {
+  color: var(--ink-3);
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+.mm-feat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background:
+    radial-gradient(
+      120% 90% at 100% 0%,
+      color-mix(in srgb, var(--gold) 15%, transparent),
+      transparent 60%
+    ),
+    color-mix(in srgb, var(--panel) 70%, transparent);
+  transition: border-color 0.2s;
+}
+.mm-feat:hover {
+  border-color: color-mix(in srgb, var(--gold) 50%, transparent);
+}
+.mm-kick {
+  color: var(--ink-3);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.mm-ft {
+  color: var(--ink);
+  font-size: var(--ox-m-body);
+  font-weight: 600;
+  line-height: 1.25;
+}
+.mm-fd {
+  color: var(--ink-3);
+  font-size: var(--ox-m-micro);
+  line-height: 1.5;
+}
+.mm-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  color: var(--ink);
+  font-size: var(--ox-m-micro);
+  font-weight: 550;
+}
+.mm-go .mi {
+  width: 15px;
+  height: 15px;
+  transition: translate 0.16s var(--ease);
+}
+.mm-feat:hover .mm-go .mi {
+  translate: 3px 0;
+}
+.mm-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mm-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  margin: 16px -18px 0;
+  padding: 13px 28px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 var(--r) var(--r);
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+  color: var(--ink-3);
+  font-size: var(--ox-m-micro);
+}
+.mm-foot a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-3);
+  transition: color 0.15s;
+}
+.mm-foot a:hover {
+  color: var(--ink);
+}
+.mm-foot .mi {
+  width: 15px;
+  height: 15px;
+}
+.mm-foot .end {
+  margin-left: auto;
+}
+.mm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--panel) 60%, transparent);
+  color: var(--ink-2);
+  font-size: 13.5px;
+}
+.mm-chip svg {
+  width: 15px;
+  height: 15px;
+}
+.mm-cmd {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--ground) 50%, transparent);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.tag {
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--ox-radius-sm);
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 450;
+  line-height: 1;
+}
+.mm-topics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+}
+.mm-topic,
+.mm-post {
+  display: block;
+  padding: 9px 10px;
+  border-radius: var(--r);
+  transition: background-color 0.15s;
+}
+.mm-topic b {
+  display: block;
+  color: var(--ink);
+  font-size: var(--fs-ui);
+  font-weight: 550;
+  line-height: 1.3;
+}
+.mm-topic span {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-3);
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+.mm-post {
+  color: var(--ink-2);
+  font-size: var(--fs-ui);
+  font-weight: 500;
+}
+.mm-post:hover {
+  color: var(--ink);
+}
+.mm-post small {
+  display: block;
+  margin-top: 3px;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.oss {
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--panel) 55%, transparent);
+}
+.oss + .oss {
+  margin-top: 10px;
+}
+.oss-sub {
+  display: grid;
+  gap: 1px;
+  margin: 6px 0 0 27px;
+  padding: 0 0 0 20px;
+  border-left: 1px solid var(--rule);
+  list-style: none;
+}
+.oss-sub a {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: var(--r);
+  color: var(--ink-2);
+  font-size: var(--ox-m-micro);
+}
+.oss-sub a:hover {
+  color: var(--ink);
+}
+.dd {
+  display: grid;
+  gap: 2px;
+  margin-top: -10px;
+  padding-bottom: 10px;
+}
+.dd-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 6px;
+  padding: 10px 6px 0 10px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-3);
+  font-size: 13.5px;
+}
+.dd-row > a:hover {
+  color: var(--ink);
+}
+.dd-social {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.dd-social a {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r);
+  color: var(--ink-3);
+  transition:
+    color 0.15s,
+    background-color 0.15s;
+}
+.dd-social a:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.dd-social svg {
+  width: 17px;
+  height: 17px;
+}
 
-/* dropdown */
-
-/* mobile drawer */
+/* ---- phone menu ---- */
 .burger {
   display: none;
-  background: none;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
   border: 1px solid var(--rule);
   border-radius: var(--r);
-  width: 36px;
-  height: 34px;
-  padding: 0;
-  cursor: pointer;
-  place-items: center;
+  background: none;
   color: var(--ink-3);
+  cursor: pointer;
 }
 .burger:hover {
   color: var(--ink);
   border-color: var(--gold);
 }
 .burger i {
+  position: relative;
   display: block;
   width: 15px;
   height: 1.4px;
   background: currentColor;
-  position: relative;
 }
 .burger i::before,
 .burger i::after {
@@ -678,47 +1247,134 @@ h2 .gold,
 .drawer {
   display: none;
 }
-@media (max-width: 900px) {
-  .nav-links {
+@media (max-width: 1000px) {
+  .nav-links,
+  .nav-cta .login {
     display: none;
   }
   .burger {
     display: grid;
   }
-  .nav-cta .login {
-    display: none;
+  .nav-isl {
+    gap: 8px;
+    padding: 6px 6px 6px 14px;
   }
+  .nav-cta {
+    margin-left: auto;
+    gap: 6px;
+  }
+  /* The phone menu is its own sheet of glass under the island. It holds no
+     nested glass, so its backdrop filter sits on the sheet itself. */
   .drawer {
-    display: block;
     position: fixed;
-    top: var(--nav-h);
-    left: 0;
-    right: 0;
+    top: calc(var(--nav-h) - 2px);
+    left: 16px;
+    right: 16px;
     z-index: 99;
-    background: var(--panel);
-    border-bottom: 1px solid var(--rule);
-    padding: 14px 20px 20px;
+    display: block;
     max-height: 0;
     overflow: hidden;
     visibility: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    background: color-mix(in srgb, var(--panel) 88%, transparent);
+    -webkit-backdrop-filter: blur(28px) saturate(170%);
+    backdrop-filter: blur(28px) saturate(170%);
+    box-shadow: var(--shadow-pop);
     transition:
-      max-height 0.26s var(--ease),
-      visibility 0.26s;
+      max-height 0.3s var(--ease),
+      visibility 0.3s;
   }
   .drawer[data-open="true"] {
-    max-height: 82vh;
+    max-height: calc(100dvh - var(--nav-h) - 16px);
     overflow: auto;
     visibility: visible;
   }
-  .drawer a {
-    display: block;
-    padding: 9px 0;
-    font-size: var(--ox-m-body);
-    color: var(--ink-2);
-    border-bottom: 1px solid var(--line);
-  }
-  .drawer a:hover {
-    color: var(--gold);
+}
+.drawer-in {
+  padding: 4px 14px 14px;
+}
+.dsec {
+  border-bottom: 1px solid var(--line);
+}
+.dsec > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 54px;
+  padding: 0 4px;
+  color: var(--ink);
+  font-size: var(--ox-m-body);
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+.dsec > summary::-webkit-details-marker {
+  display: none;
+}
+.dsec > summary .chev {
+  width: 18px;
+  height: 18px;
+}
+.dsec[open] > summary .chev {
+  rotate: 180deg;
+}
+.dsec-in {
+  display: grid;
+  padding: 0 0 12px;
+}
+.dsec-in a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 4px;
+  color: var(--ink-2);
+  font-size: var(--fs-small);
+}
+.dsec-in a:hover {
+  color: var(--gold);
+}
+.dsec-h {
+  padding: 12px 4px 2px;
+}
+.dsec-in .dsec-group {
+  color: var(--ink);
+  font-weight: 550;
+}
+.dsec-group svg {
+  width: 18px;
+  height: 18px;
+}
+.dsec-sub {
+  display: grid;
+  margin-left: 8px;
+  padding-left: 18px;
+  border-left: 1px solid var(--rule);
+}
+.drawer-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  color: var(--ink);
+  font-size: var(--fs-ui);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-isl,
+  .nav-glass,
+  .nav-beam,
+  .menu,
+  .menu::before,
+  .menu-in,
+  .drawer {
+    animation: none;
+    transition: none;
   }
 }
 
@@ -900,7 +1556,7 @@ figcaption b {
 }
 .card p {
   color: var(--ink-3);
-  font-size: var(--ox-m-micro);
+  font-size: var(--fs-small);
 }
 .card-icon {
   width: 40px;
@@ -935,7 +1591,7 @@ figcaption b {
   gap: 18px;
   padding: 15px 18px;
   border-bottom: 1px solid var(--line);
-  font-size: var(--ox-m-micro);
+  font-size: var(--fs-ui);
 }
 .spec > div:last-child {
   border-bottom: 0;
@@ -1023,7 +1679,7 @@ figcaption b {
   border: 1px solid var(--rule);
   border-radius: var(--r);
   padding: 11px 13px;
-  font-size: var(--ox-m-micro);
+  font-size: var(--fs-small);
   color: var(--ink);
   width: 100%;
   transition: border-color 0.14s;
@@ -1106,7 +1762,7 @@ figcaption b {
 }
 .unlocked p {
   color: var(--ink-3);
-  font-size: var(--ox-m-micro);
+  font-size: var(--fs-ui);
 }
 
 /* ============ footer ============ */
@@ -1144,7 +1800,7 @@ footer {
 }
 .foot-brand p {
   color: var(--ink-3);
-  font-size: var(--ox-m-micro);
+  font-size: var(--fs-ui);
   margin-top: 13px;
   max-width: 30ch;
 }
@@ -1167,7 +1823,7 @@ footer {
 }
 .foot-col a,
 .foot-col li {
-  font-size: var(--ox-m-micro);
+  font-size: var(--fs-ui);
   color: var(--ink-3);
 }
 .foot-col a:hover {
@@ -1175,7 +1831,7 @@ footer {
 }
 .foot-col address {
   font-style: normal;
-  font-size: var(--ox-m-micro);
+  font-size: var(--fs-ui);
   color: var(--ink-3);
   line-height: 1.7;
 }
@@ -1503,7 +2159,7 @@ html:not(.js) .theme-switch {
 
 /* the copy column beside a figure */
 .dg-copy h2 {
-  font-size: clamp(var(--ox-m-h3), 3.8vw, var(--ox-m-h2));
+  font-size: clamp(var(--ox-m-h3), 3.8vw, calc(var(--ox-m-h2) * 1.1));
   margin: 14px 0;
 }
 .dg-copy .lede {
@@ -1522,7 +2178,7 @@ html:not(.js) .theme-switch {
   position: relative;
   padding-left: 20px;
   color: var(--ink-2);
-  font-size: var(--ox-m-micro);
+  font-size: var(--fs-small);
   max-width: 60ch;
 }
 .dg-copy li::before {
@@ -1616,7 +2272,7 @@ h4 {
   border: 1px solid var(--line);
   border-radius: var(--r-pill);
   background: color-mix(in srgb, var(--panel) 70%, transparent);
-  font-size: var(--ox-m-micro);
+  font-size: var(--fs-ui);
   font-weight: 500;
   color: var(--ink);
   white-space: nowrap;
@@ -1648,7 +2304,7 @@ table.matrix {
   width: 100%;
   min-width: 680px;
   border-collapse: collapse;
-  font-size: var(--ox-m-micro);
+  font-size: var(--fs-ui);
 }
 .matrix th,
 .matrix td {
@@ -1779,7 +2435,7 @@ table.matrix {
   color: var(--ink);
 }
 .steps p {
-  font-size: var(--ox-m-micro);
+  font-size: var(--fs-small);
   color: var(--ink-3);
 }
 /* coming soon: dashed, the pending shape */
@@ -1792,7 +2448,7 @@ table.matrix {
   padding: 16px 20px;
   border: 1px dashed var(--rule);
   border-radius: var(--r-lg);
-  font-size: var(--ox-m-micro);
+  font-size: var(--fs-ui);
   color: var(--ink-3);
 }
 .soon b {
@@ -1817,7 +2473,7 @@ table.matrix {
 }
 .dg-copy .logo-row > li {
   padding: 7px 14px 7px 10px;
-  font-size: var(--ox-m-micro);
+  font-size: var(--fs-ui);
   color: var(--ink);
   max-width: none;
 }

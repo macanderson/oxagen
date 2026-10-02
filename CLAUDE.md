@@ -148,11 +148,12 @@ Load `clear-prose` before you write any of these strings. `apps/app/src/test/arc
 
 ## Type
 
-Mac set this on 2026-09-29. The app uses Geist for every heading and every line of text. Space Grotesk sets the Oxagen and stella wordmarks and, on oxagen.sh, the first line of a hero. It sets nothing else.
+Mac set this on 2026-10-02, replacing the rule of 2026-09-29. Aeonik is the house sans. It sets every heading and every line of text in the app and the docs site, and all running text on oxagen.sh. Space Grotesk sets the Oxagen and stella wordmarks and, on oxagen.sh only, every h1, h2, and h3 and every hero line. The gold accent in an oxagen.sh headline shimmers with the kit's sheen. Monaspace Neon sets code. Aeonik Mono and Aeonik Fono load as faces, and no role uses them yet. Geist is retired: no file outside history names it.
 
-- The kit's `packages/ui/src/styles/house-tailwind.css` sets `--font-display` and `--font-sans` to Geist, so every heading and the `text-m-h*` and `text-a-h*` utilities draw in Geist. Space Grotesk reaches the page only through `--font-wordmark`, the `.ox-wordmark` class, and the kit's `hero-line-1` class on a marketing hero.
-- Do not write `--ox-font-display`, `--font-wordmark`, or "Space Grotesk" in app source outside a comment. `apps/app/src/test/arch/design-record.test.ts` fails on each of them.
-- The brand kit (`oxageninc/brand`) has set every heading in Geist since 2.4.0 (#27), so `globals.css` carries no font override. The files the sync writes into `packages/ui/src/styles/` stay byte-identical to the kit.
+- The brand kit (`oxageninc/brand`) owns the faces. Its `house-tailwind.css`, synced into `packages/ui/src/styles/`, sets `--font-display` and `--font-sans` to Aeonik, so every app heading and the `text-m-h*` and `text-a-h*` utilities draw in Aeonik. The files the sync writes there stay byte-identical to the kit.
+- In the app, Space Grotesk reaches the page only through `--font-wordmark` and the `.ox-wordmark` class. Do not write `--ox-font-display`, `--font-wordmark`, or "Space Grotesk" in app source outside a comment. `apps/app/src/test/arch/design-record.test.ts` fails on each of them.
+- On oxagen.sh, `apps/web/assets/oxagen.css` sets h1 to h3 from `--font-hero` (the kit's `--ox-font-display`) and everything else from `--font-sans`. Its sizes come from the kit's marketing scale through the site's own ramp (`--fs-small`, `--fs-ui`, `--fs-nav`, `--fs-sec`), so no running text sits below 15px except captions and figure labels.
+- docs.oxagen.sh reads the app scale one step up (`--docs-step`, 8/7), so its body is 16px.
 
 ## Runtime checks that matter
 

@@ -60,66 +60,71 @@
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
- * Docs type: the kit's app scale (Mac, 2026-10-02, oxageninc/brand#72).
+ * Docs type: one step above the kit's app scale.
  *
- * Every docs site reads the app scale (--ox-a-*), the scale the app and
- * stella's docs use. Fumadocs brings its own sizes: a 16px body on a 28px
- * line, a 28px title, an 18px description, and 14px chrome from Tailwind's
- * text-sm. These rules sit outside any CSS layer, so they win over Fumadocs'
- * layered prose styles and utilities. Each size is a kit token with its
- * line-height twin, so a change in the kit's theme editor reaches this site
- * with the next sync.
+ * Mac put the docs on the app scale (--ox-a-*) on 2026-10-02
+ * (oxageninc/brand#72), then found the pages read small the same day
+ * (#5217). Docs are read for minutes at a time, not glanced at like a
+ * dashboard, so every size here is the app scale times --docs-step (8/7):
+ * a 16px body, a 34px title, and the headings in proportion. The sidebar,
+ * the phone drawer, and the table of contents title sit at 15px. Fumadocs
+ * brings its own sizes; these rules sit outside any CSS layer, so they win
+ * over its layered prose styles and utilities. Each size reads a kit token,
+ * so a change in the kit's theme editor still reaches this site with the
+ * next sync.
  *
  * `.prose` is the page body and also each item in the table of contents,
  * which Fumadocs marks `prose text-sm`.
  * ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  --docs-step: calc(8 / 7);
+}
+
 .prose {
-  font-size: var(--ox-a-body);
+  font-size: calc(var(--ox-a-body) * var(--docs-step));
   line-height: var(--ox-a-body-leading);
 }
 
-/* Fumadocs sets a table at 0.875em, which is 12.25px on a 14px body and off
-   the scale, so a table takes the body size. */
+/* Fumadocs sets a table at 0.875em, which falls off the scale, so a table
+   takes the body size. */
 .prose table {
-  font-size: var(--ox-a-body);
+  font-size: calc(var(--ox-a-body) * var(--docs-step));
   line-height: var(--ox-a-body-leading);
 }
 
 /* The page title, and an h1 in the body. */
 #nd-page h1 {
-  font-size: var(--ox-a-h1);
+  font-size: calc(var(--ox-a-h1) * var(--docs-step));
   line-height: var(--ox-a-h1-leading);
 }
 
 .prose h2 {
-  font-size: var(--ox-a-h2);
+  font-size: calc(var(--ox-a-h2) * var(--docs-step));
   line-height: var(--ox-a-h2-leading);
 }
 
 .prose h3 {
-  font-size: var(--ox-a-h3);
+  font-size: calc(var(--ox-a-h3) * var(--docs-step));
   line-height: var(--ox-a-h3-leading);
 }
 
 .prose h4 {
-  font-size: var(--ox-a-h4);
+  font-size: calc(var(--ox-a-h4) * var(--docs-step));
   line-height: var(--ox-a-h4-leading);
 }
 
-/* The description under the title. The app scale has no 18px step, so the
-   description takes h4, the first step above the body. */
+/* The description under the title: the h4 step, a size above the body. */
 #nd-page > p {
-  font-size: var(--ox-a-h4);
+  font-size: calc(var(--ox-a-h4) * var(--docs-step));
   line-height: var(--ox-a-h4-leading);
 }
 
-/* The sidebar, the phone drawer, and the table of contents title. Fumadocs
-   sets the drawer at 15px, a size the scale does not have. The sidebar's own
-   items set no size, so they follow their aside. */
+/* The sidebar, the phone drawer, and the table of contents title, at 15px.
+   The sidebar's own items set no size, so they follow their aside. */
 #nd-sidebar,
 #nd-sidebar-mobile,
 #toc-title {
-  font-size: var(--ox-a-body);
+  font-size: calc(var(--ox-a-body) * 15 / 14);
   line-height: var(--ox-a-body-leading);
 }
 
