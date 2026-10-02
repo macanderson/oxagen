@@ -21,6 +21,7 @@ import {
   type FrameRunRef,
   type ModelCallFrameRow,
 } from "@oxagen/telemetry";
+import { IN_APP_AGENT_SURFACES } from "@oxagen/oxagen/contracts/run.shared";
 import {
   MODEL_CALL_EVENT_TYPES,
   subagentSessionsQuery,
@@ -40,7 +41,7 @@ import {
   type AnyColumn,
   type SQL,
 } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { alias, getTableConfig } from "drizzle-orm/pg-core";
 import {
   createRunRollup,
   createDailyRollup,
@@ -104,6 +105,43 @@ export function toolCallName(payload: AnyColumn | SQL): SQL<string | null> {
   return sql<
     string | null
   >`coalesce(${payload}->>'capability_name', ${payload}->>'tool_name')`;
+}
+
+/**
+ * True for a `cost.run_totals` row whose run is the in-app assistant's: an
+ * `agent_runs` row in the row's workspace on an in-app surface
+ * (`IN_APP_AGENT_SURFACES`). A Tacho session's id (`tse_…`) never names an
+ * `agent_runs` row, so a wrapped session's row is never in-app.
+ *
+ * The workspace does not monitor the assistant (ADR-235, 2026-10-02
+ * amendment). Every read that names a run takes this one predicate, so no two
+ * reads disagree on which rows are the assistant's. A total keeps the row,
+ * because it counts what the organization spent.
+ *
+ * It follows `inAppApproval()` in `@oxagen/rules`. The inner table's columns
+ * go in as identifiers under their own alias, so no query builder can rewrite
+ * them to the outer table's alias. The cast to citext lets the unique index on
+ * `agent_runs.public_id` serve the lookup. A function rather than a constant,
+ * for the reason `modelCallHidesTurn` gives.
+ */
+export function inAppRunTotal(): SQL<boolean> {
+  const totals = schema.runTotals;
+  const agentRuns = schema.agentRuns;
+  const runAlias = "in_app_run";
+  const inner = (c: { name: string }) =>
+    sql`${sql.identifier(runAlias)}.${sql.identifier(c.name)}`;
+  // The outer row's columns, named in full. Drizzle writes a single-table
+  // select list without table names, and inside this subquery a bare
+  // "org_id" or "workspace_id" would bind to the inner table's own column.
+  // The reader selects from `cost.run_totals` without an alias.
+  const table = getTableConfig(totals);
+  const outer = (c: { name: string }) =>
+    sql`${sql.identifier(table.schema ?? "public")}.${sql.identifier(table.name)}.${sql.identifier(c.name)}`;
+  const surfaces = sql.join(
+    IN_APP_AGENT_SURFACES.map((surface) => sql`${surface}`),
+    sql`, `,
+  );
+  return sql<boolean>`exists (select 1 from ${agentRuns} as ${sql.identifier(runAlias)} where ${inner(agentRuns.publicId)} = ${outer(totals.runId)}::citext and ${inner(agentRuns.orgId)} = ${outer(totals.orgId)} and ${inner(agentRuns.workspaceId)} = ${outer(totals.workspaceId)} and ${inner(agentRuns.surface)} in (${surfaces}))`;
 }
 const seals = schema.agentRunAttemptSeals;
 const sessions = schema.tachoSessions;

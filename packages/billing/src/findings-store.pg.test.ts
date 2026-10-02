@@ -10,8 +10,9 @@
 // a local run without one is skipped, not red. Every row it writes is removed
 // in afterAll.
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
+import { inAppRunTotal } from "./cost-rollup-store";
 import {
   findingFingerprint,
   type FindingClaim,
@@ -397,6 +398,94 @@ describe.skipIf(!enabled)("writeFindings against Postgres", () => {
       await withSystemDb((tx) =>
         tx.delete(findings).where(eq(findings.workspaceId, own.workspaceId)),
       );
+    }
+  });
+
+  // ADR-235, 2026-10-02 amendment. A finding names its runs as evidence, and
+  // the workspace does not monitor the in-app assistant, so the pass reads
+  // none of its runs. This is the predicate `readRuns` adds, read on the
+  // system connection the pass uses.
+  it("leaves the in-app assistant's run rows out of the pass's run read", async () => {
+    const own = {
+      orgId: crypto.randomUUID(),
+      workspaceId: crypto.randomUUID(),
+    };
+    const runIds = {
+      chat: crypto.randomUUID(),
+      apiChat: crypto.randomUUID(),
+      external: crypto.randomUUID(),
+    };
+    const session = `tse_findings_${crypto.randomUUID().slice(0, 8)}`;
+    const startedAt = new Date("2026-09-10T12:00:00.000Z");
+    const row = (runId: string, runSource: "ledger" | "tacho") => ({
+      ...own,
+      runId,
+      runSource,
+      startedAt,
+      sealedAt: new Date(startedAt.getTime() + 600_000),
+      steps: 1,
+      modelCalls: 1,
+      toolCalls: 0,
+      tokens: {},
+      costMicros: null,
+      costBasis: null,
+      breakdown: { models: [], tools: [], steps: null },
+      rolledUpAt: new Date("2026-09-15T00:00:00.000Z"),
+    });
+    try {
+      const publicIds = await withSystemDb(async (tx) => {
+        const inserted = await tx
+          .insert(schema.agentRuns)
+          .values([
+            { id: runIds.chat, ...own, surface: "chat", spec: {} },
+            { id: runIds.apiChat, ...own, surface: "api-chat", spec: {} },
+            { id: runIds.external, ...own, surface: "external", spec: {} },
+          ])
+          .returning({
+            id: schema.agentRuns.id,
+            publicId: schema.agentRuns.publicId,
+          });
+        const byId = new Map(inserted.map((r) => [r.id, r.publicId]));
+        const ids = {
+          chat: byId.get(runIds.chat)!,
+          apiChat: byId.get(runIds.apiChat)!,
+          external: byId.get(runIds.external)!,
+        };
+        await tx
+          .insert(schema.runTotals)
+          .values([
+            row(ids.chat, "ledger"),
+            row(ids.apiChat, "ledger"),
+            row(ids.external, "ledger"),
+            row(session, "tacho"),
+          ]);
+        return ids;
+      });
+      const read = await withSystemDb((tx) =>
+        tx
+          .select({ runId: schema.runTotals.runId })
+          .from(schema.runTotals)
+          .where(
+            and(
+              eq(schema.runTotals.orgId, own.orgId),
+              eq(schema.runTotals.workspaceId, own.workspaceId),
+              sql`not ${inAppRunTotal()}`,
+            ),
+          ),
+      );
+      // A wrapped session's `tse_…` id never names an `agent_runs` row.
+      expect(read.map((r) => r.runId).sort()).toEqual(
+        [publicIds.external, session].sort(),
+      );
+    } finally {
+      await withSystemDb(async (tx) => {
+        await tx
+          .delete(schema.runTotals)
+          .where(eq(schema.runTotals.workspaceId, own.workspaceId));
+        await tx
+          .delete(schema.agentRuns)
+          .where(inArray(schema.agentRuns.id, Object.values(runIds)));
+      });
     }
   });
 });

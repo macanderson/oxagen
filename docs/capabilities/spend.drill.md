@@ -39,6 +39,10 @@ One operator, agent or tool over a trailing window: the Spend drill page (Missio
 | `byTool` | object[] | `{ name, calls, runs }`, most calls first |
 | `unmeteredRuns` | object, optional | `{ total, byHarness: [{ harness, runs }] }`: the key's wrapped runs in the window whose rollup found no model call, by harness, the same count `get_spend` answers for the workspace. Absent on a tool drill, which carries no money |
 
+## The in-app assistant
+
+A drill leaves the in-app assistant's runs out, so it matches its row on `get_spend`, which carries the assistant's spend in a row of its own. The share's divisor keeps them, because it is the workspace's whole spend, the figure the `get_spend` total shows. The assistant's row opens no drill, and a drill on its key finds no run (ADR-235, amended 2026-10-02).
+
 ## Honesty
 
 A tool drill counts that tool's own calls on each run and carries no money: `cost`, `proven`, `accepted`, the averages and the share are null, since no frame prices a tool call and a share of the run would be a guess. Every priced figure carries its basis.
