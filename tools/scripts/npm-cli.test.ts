@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  isAlreadyPublished,
   latestCorrection,
   manifestProblem,
   movesLatestForward,
@@ -9,9 +10,32 @@ import {
   planPublish,
   type PublishDeps,
   publishCliToNpm,
+  tarballUrl,
 } from "./lib/npm-cli";
 
 const TOKEN = "npm_test_token_value";
+
+describe("tarballUrl", () => {
+  it("names the file npm serves for a version", () => {
+    expect(tarballUrl("2.1.4-363")).toBe(
+      "https://registry.npmjs.org/@oxagen/cli/-/cli-2.1.4-363.tgz",
+    );
+  });
+});
+
+describe("isAlreadyPublished", () => {
+  it("reads npm's refusal to publish a version twice", () => {
+    expect(
+      isAlreadyPublished(
+        new Error(
+          "npm error 403 403 Forbidden - PUT https://registry.npmjs.org/@oxagen%2fcli - You cannot publish over the previously published versions: 2.1.4-9.",
+        ),
+      ),
+    ).toBe(true);
+    expect(isAlreadyPublished(new Error("E404 Not Found - PUT"))).toBe(false);
+    expect(isAlreadyPublished("not an error")).toBe(false);
+  });
+});
 
 describe("parseRegistryState", () => {
   it("reads the versions and the latest tag", () => {
@@ -362,6 +386,20 @@ describe("publishCliToNpm", () => {
       publishCliToNpm("2.1.4", deps(reg.npm, "2.1.4")),
     ).resolves.toBe("skipped");
     expect(reg.state.latest).toBe("2.1.4");
+  });
+
+  it("trusts npm's refusal over a stale read that does not list the version yet", async () => {
+    // npm's package list trailed the first real publish by four minutes, so
+    // a run started in that window misses a version another run published.
+    const reg = fakeRegistry({ versions: ["2.1.3"], latest: "2.1.3" }, "2.1.4-9", {
+      refusePublish: () =>
+        new Error(
+          "npm error 403 You cannot publish over the previously published versions: 2.1.4-9.",
+        ),
+    });
+    await expect(
+      publishCliToNpm("2.1.4-9", deps(reg.npm, "2.1.4-9")),
+    ).resolves.toBe("skipped");
   });
 
   it("fails with the way to replace the token, and keeps the token out of the message", async () => {

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { celebrate } from "@/components/install/celebrate";
+import { INSTALL_CMD } from "@/lib/install";
 
 /**
  * InstallCliButton — the site-wide floating "Install CLI" pill, mounted in the
@@ -15,7 +16,6 @@ import { celebrate } from "@/components/install/celebrate";
  * cycle.
  */
 
-const INSTALL_CMD = "curl -fsSL https://cli.oxagen.sh/install.sh | sh";
 
 const COOKIE = "ox-install-clicks";
 const FIRST_CELEBRATION_CLICK = 1;
