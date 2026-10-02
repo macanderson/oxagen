@@ -26,6 +26,7 @@
     "register": "Register an agent",
     "cliAuthorize": "Authorize the Oxagen CLI",
     "cliComplete": "The Oxagen CLI is signed in",
+    "steeringConnect": "GitHub connection",
     "fleet": "Fleet",
     "run": "Run",
     "agents": "Agents",

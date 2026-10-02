@@ -688,8 +688,10 @@ export const findingClaims = costSchema.table(
     detector: smallint("detector").notNull(),
     // The run's public id (`tse_…` or `arun_…`).
     runId: text("run_id").notNull(),
-    // The call's instant as the frame store wrote it, then `#` and its place
-    // among the run's calls at that instant (`frameKey` in @oxagen/billing).
+    // The call's instant as the frame store wrote it, then `#`, then the
+    // chain and `seq` of a wrapped call (`<uuid>:<seq>`), or a ledger call's
+    // place among the run's calls at that instant (`key` on billing's
+    // PricedRequestFrame, #4506).
     frameKey: text("frame_key").notNull(),
     frameAt: timestamp("frame_at", {
       withTimezone: true,

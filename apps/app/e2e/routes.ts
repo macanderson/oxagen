@@ -59,6 +59,12 @@ export const SIGNED_IN_ROUTES: readonly RouteRow[] = [
   { path: `/welcome/${org}/${ws}/wrap`, titleKey: "welcomeWrap" },
   { path: `/welcome/${org}/${ws}/run`, titleKey: "welcomeRun" },
   { path: `/welcome/${org}/${ws}/installer`, titleKey: "installer" },
+  // Where a GitHub install ends for a browser that can't open the organization
+  // that started the connect (#5151). The landing sends nobody here who can.
+  {
+    path: "/github/steering/result?steering=connected",
+    titleKey: "steeringConnect",
+  },
 ] as const;
 
 /**

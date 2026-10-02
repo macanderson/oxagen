@@ -711,6 +711,19 @@ export const routes = {
   /** Outcomes (roadmap mockups/pages/work-outcomes.md). */
   workOutcomes: (org: string, ws: string): SafePath =>
     pathOf(org, ws, "work", "outcomes"),
+  /**
+   * The steering connect's result page (#5151). The landing at
+   * `/github/steering` sends a person here when they can't open the
+   * organization the connect returns to, so the install never ends on a 404.
+   */
+  steeringConnectResult: (outcome: SteeringOutcome): SafePath =>
+    withQuery(mint("/github/steering/result"), {
+      steering: outcome.steering,
+      code:
+        outcome.steering === "error" && outcome.code !== null
+          ? outcome.code
+          : undefined,
+    }),
 };
 
 /** The Work page's tabs, in the order the strip draws them. */
@@ -720,6 +733,33 @@ export type WorkPageTab = (typeof WORK_PAGE_TABS)[number];
 /** Work setup's tabs, in the order the strip draws them. */
 export const WORK_SETUP_TABS = ["collectors", "priorities", "runtimes"] as const;
 export type WorkSetupTab = (typeof WORK_SETUP_TABS)[number];
+
+/**
+ * What a steering connect's callback reports on the query it returns with:
+ * `steering=connected`, or `steering=error` with a reason `code` when it has
+ * one (#5151).
+ */
+export type SteeringOutcome =
+  | { steering: "connected" }
+  | { steering: "error"; code: string | null };
+
+/**
+ * `path` with a steering connect's outcome set on its query, as the API's
+ * callback sent it before the landing existed (#5151). The path's own query
+ * and hash are kept. A `steering` or `code` already on it is replaced, so a
+ * stale `code` never sits beside `steering=connected`.
+ */
+export function withSteeringOutcome(
+  path: SafePath,
+  outcome: SteeringOutcome,
+): SafePath {
+  const url = new URL(path, SENTINEL_ORIGIN);
+  url.searchParams.set("steering", outcome.steering);
+  if (outcome.steering === "error" && outcome.code !== null)
+    url.searchParams.set("code", outcome.code);
+  else url.searchParams.delete("code");
+  return mint(`${url.pathname}${url.search}${url.hash}`);
+}
 
 /**
  * `raw` as a same-origin path (with its query and hash) when it is safe to
