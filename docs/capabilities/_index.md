@@ -39,7 +39,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [authorize_mcp_server](agent.mcp.authorize.complete.md) | [agent.mcp.authorize.complete.ts](../../packages/oxagen/src/contracts/agent.mcp.authorize.complete.ts) | api, mcp |
 | [bind_agent_environment](agent.environment.bind.md) | [agent.environment.bind.ts](../../packages/oxagen/src/contracts/agent.environment.bind.ts) | api, mcp |
 | [cite_memory](agent.memory.cite.md) | [agent.memory.cite.ts](../../packages/oxagen/src/contracts/agent.memory.cite.ts) | api, mcp, agent |
-| [commit_memory_import](agent.memory_import.commit.md) | [agent.memory_import.commit.ts](../../packages/oxagen/src/contracts/agent.memory_import.commit.ts) | api, mcp, agent |
+| [commit_memory_import](agent.memory_import.commit.md) | [agent.memory_import.commit.ts](../../packages/oxagen/src/contracts/agent.memory_import.commit.ts) | none |
 | [debug_execution](agent.debug.trace.md) | [agent.debug.trace.ts](../../packages/oxagen/src/contracts/agent.debug.trace.ts) | api, mcp, agent |
 | [delete_mcp_server](agent.mcp.delete.md) | [agent.mcp.delete.ts](../../packages/oxagen/src/contracts/agent.mcp.delete.ts) | api, mcp, agent |
 | [delete_memory](agent.memory.delete.md) | [agent.memory.delete.ts](../../packages/oxagen/src/contracts/agent.memory.delete.ts) | api, mcp, agent |
@@ -64,7 +64,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_memory_citations](agent.memory_citation.list.md) | [agent.memory_citation.list.ts](../../packages/oxagen/src/contracts/agent.memory_citation.list.ts) | api, mcp, agent |
 | [list_memory_promotions](agent.memory_promotion.list.md) | [agent.memory_promotion.list.ts](../../packages/oxagen/src/contracts/agent.memory_promotion.list.ts) | api, mcp, agent |
 | [move_agent](agent.move.md) | [agent.move.ts](../../packages/oxagen/src/contracts/agent.move.ts) | api, mcp, agent |
-| [parse_memory_import](agent.memory_import.parse.md) | [agent.memory_import.parse.ts](../../packages/oxagen/src/contracts/agent.memory_import.parse.ts) | api, mcp, agent |
+| [parse_memory_import](agent.memory_import.parse.md) | [agent.memory_import.parse.ts](../../packages/oxagen/src/contracts/agent.memory_import.parse.ts) | none |
 | [promote_memory](agent.memory.promote.md) | [agent.memory.promote.ts](../../packages/oxagen/src/contracts/agent.memory.promote.ts) | api, mcp, agent |
 | [recall_memory](agent.memory.recall.md) | [agent.memory.recall.ts](../../packages/oxagen/src/contracts/agent.memory.recall.ts) | api, mcp, agent |
 | [record_execution](agent.execution.record.md) | [agent.execution.record.ts](../../packages/oxagen/src/contracts/agent.execution.record.ts) | api, mcp |
@@ -219,7 +219,9 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_records](context.records.list.md) | [context.records.list.ts](../../packages/oxagen/src/contracts/context.records.list.ts) | api, mcp, agent |
 | [merge_context_pr](context.pr.merge.md) | [context.pr.merge.ts](../../packages/oxagen/src/contracts/context.pr.merge.ts) | api, agent |
 | [merge_pr_without_review](context.pr.merge_without_review.md) | [context.pr.merge_without_review.ts](../../packages/oxagen/src/contracts/context.pr.merge_without_review.ts) | api, agent |
+| [commit_markdown_import](steering.markdown_import.commit.md) | [steering.markdown_import.commit.ts](../../packages/oxagen/src/contracts/steering.markdown_import.commit.ts) | api, mcp, agent, cli |
 | [open_context_pr](context.pr.open.md) | [context.pr.open.ts](../../packages/oxagen/src/contracts/context.pr.open.ts) | api, agent |
+| [parse_markdown_import](steering.markdown_import.parse.md) | [steering.markdown_import.parse.ts](../../packages/oxagen/src/contracts/steering.markdown_import.parse.ts) | api, mcp, agent, cli |
 | [promote_context_record](context.record.promote.md) | [context.record.promote.ts](../../packages/oxagen/src/contracts/context.record.promote.ts) | api |
 | [propose_record](context.proposal.create.md) | [context.proposal.create.ts](../../packages/oxagen/src/contracts/context.proposal.create.ts) | api, mcp, agent |
 | [publish_context_record](context.record.publish.md) | [context.record.publish.ts](../../packages/oxagen/src/contracts/context.record.publish.ts) | api |

@@ -1,48 +1,75 @@
 name: ci-image
 
-# Builds and publishes the CI toolchain images (see .github/docker/ci/Dockerfile).
+# Builds and publishes the CI toolchain images (see .github/docker/ci/Dockerfile)
+# to ECR Public, for amd64 and arm64, and copies the service images CI starts.
 # CI jobs run inside these images instead of re-installing Node, pnpm, Atlas,
-# postgresql-client, and Playwright Chromium on every job.
+# postgresql-client, and Playwright Chromium on every job (ADR-246).
+#
+# ECR Public serves anonymous pulls to our own runners and to GitHub-hosted
+# ones alike, so the images work on both sides of the CI_RUNNERS switch. The
+# images were public GHCR packages under the `macanderson` user, which this
+# repository cannot push to, so their `:latest` stopped moving when the
+# repository changed owners.
+#
+# Each architecture builds natively on its own runner, pushes a staging tag,
+# and the `publish` job joins the two into one multi-architecture `:latest`
+# and `:sha-<commit>`. The same jobs publish a pnpm store per architecture to
+# S3, and the daily runner image build bakes it in.
 #
 # Rebuild triggers:
-#   - Dockerfile / this workflow changes (push to main)
-#   - .node-version (Node pin), root package.json (packageManager pnpm pin)
-#     or apps/app/package.json (@playwright/test pin) changes
-#   - weekly cron, so OS and security patches land
-#   - manual dispatch (also used to bootstrap the image from a branch before
-#     the first main merge)
+#   - Dockerfile / this workflow / the service image list changes (push to main)
+#   - .node-version (Node pin), root package.json (packageManager pnpm pin),
+#     apps/app/package.json (@playwright/test pin), or pnpm-lock.yaml changes
+#   - daily at 05:00 UTC, before the 07:00 runner image build, so OS patches
+#     and the newest lockfile reach the runner image the same day
+#   - manual dispatch
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 6 * * 1"
+    - cron: "0 5 * * *"
   push:
     branches: [main]
     paths:
       - ".github/docker/ci/**"
       - ".github/workflows/ci-image.yml"
+      - "infra/stacks-new/ci-runners/service-images.json"
       - ".node-version"
       - "package.json"
+      - "pnpm-lock.yaml"
       - "apps/app/package.json"
 
 permissions:
   contents: read
-  packages: write
+  id-token: write # to assume gha-ci-image
 
 concurrency:
   group: ci-image
   cancel-in-progress: false
 
+env:
+  AWS_REGION: us-east-1
+  ROLE: arn:aws:iam::916294258235:role/gha-ci-image
+  ASSETS_BUCKET: oxagen-ci-runners-916294258235
+
 jobs:
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    name: build (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner_arch: x64
+            runner: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-large-x64' || 'ubuntu-latest' }}
+          - arch: arm64
+            runner_arch: arm64
+            runner: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-large-arm64' || 'ubuntu-24.04-arm' }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
 
-      # The image must be built with the exact toolchain versions the repo
-      # pins, so read them from the repo instead of hard-coding them here.
-      # ATLAS_VERSION intentionally mirrors the env pin in pipeline.yml.
       - name: Resolve toolchain versions from repo pins
         id: versions
         run: |
@@ -56,50 +83,132 @@ jobs:
           echo "atlas=$ATLAS" >> "$GITHUB_OUTPUT"
           echo "Resolved node=$NODE pnpm=$PNPM playwright=$PLAYWRIGHT atlas=$ATLAS"
 
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          role-to-assume: ${{ env.ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sign in to ECR Public
+        id: registry
+        run: |
+          set -euo pipefail
+          alias=$(aws ecr-public describe-registries --region us-east-1 --query 'registries[0].aliases[0].name' --output text)
+          echo "registry=public.ecr.aws/$alias" >> "$GITHUB_OUTPUT"
+          aws ecr-public get-login-password --region us-east-1 \
+            | docker login --username AWS --password-stdin public.ecr.aws
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Build and push base image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .github/docker/ci
           target: base
+          platforms: linux/${{ matrix.arch }}
           push: true
-          tags: |
-            ghcr.io/macanderson/oxagen-ci-base:latest
-            ghcr.io/macanderson/oxagen-ci-base:sha-${{ github.sha }}
+          provenance: false
+          tags: ${{ steps.registry.outputs.registry }}/oxagen-ci-base:build-${{ matrix.arch }}
           build-args: |
             NODE_VERSION=${{ steps.versions.outputs.node }}
             PNPM_VERSION=${{ steps.versions.outputs.pnpm }}
             ATLAS_VERSION=${{ steps.versions.outputs.atlas }}
-          cache-from: type=gha,scope=ci-image
-          cache-to: type=gha,scope=ci-image,mode=max
 
       - name: Build and push e2e image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .github/docker/ci
           target: e2e
+          platforms: linux/${{ matrix.arch }}
           push: true
-          tags: |
-            ghcr.io/macanderson/oxagen-ci-e2e:latest
-            ghcr.io/macanderson/oxagen-ci-e2e:sha-${{ github.sha }}
+          provenance: false
+          tags: ${{ steps.registry.outputs.registry }}/oxagen-ci-e2e:build-${{ matrix.arch }}
           build-args: |
             NODE_VERSION=${{ steps.versions.outputs.node }}
             PNPM_VERSION=${{ steps.versions.outputs.pnpm }}
             ATLAS_VERSION=${{ steps.versions.outputs.atlas }}
             PLAYWRIGHT_VERSION=${{ steps.versions.outputs.playwright }}
-          cache-from: type=gha,scope=ci-image
-          cache-to: type=gha,scope=ci-image,mode=max
 
-      - name: Smoke-test published images
+      - name: Smoke-test the images
+        env:
+          REGISTRY: ${{ steps.registry.outputs.registry }}
+          ARCH: ${{ matrix.arch }}
         run: |
-          docker run --rm ghcr.io/macanderson/oxagen-ci-base:sha-${{ github.sha }} \
+          set -euo pipefail
+          docker run --rm "$REGISTRY/oxagen-ci-base:build-$ARCH" \
             sh -c 'node --version && pnpm --version && atlas version && psql --version && git --version'
-          docker run --rm ghcr.io/macanderson/oxagen-ci-e2e:sha-${{ github.sha }} \
+          docker run --rm "$REGISTRY/oxagen-ci-e2e:build-$ARCH" \
             sh -c 'ls "$PLAYWRIGHT_BROWSERS_PATH" | grep -q chromium'
+
+      # The runner image bakes this store in, so the day's first install on a
+      # cold runner copies packages from disk instead of downloading them. It
+      # is fetched inside the base image just built, so the pnpm that fills it
+      # is the pnpm every job runs.
+      - name: Publish the pnpm store
+        env:
+          REGISTRY: ${{ steps.registry.outputs.registry }}
+          ARCH: ${{ matrix.arch }}
+          # Not RUNNER_ARCH: GitHub sets that one itself (X64, ARM64), and it
+          # wins over a step's env, so the store landed under the wrong key.
+          STORE_ARCH: ${{ matrix.runner_arch }}
+        run: |
+          set -euo pipefail
+          store="$RUNNER_TEMP/pnpm-store"
+          mkdir -p "$store"
+          docker run --rm -v "$PWD:/repo" -v "$store:/store" -w /repo \
+            "$REGISTRY/oxagen-ci-base:build-$ARCH" \
+            pnpm fetch --store-dir /store
+          tar -C "$store" -I 'zstd -T0 -3' -cf "$RUNNER_TEMP/store.tar.zst" .
+          du -sh "$store" "$RUNNER_TEMP/store.tar.zst"
+          aws s3 cp "$RUNNER_TEMP/store.tar.zst" "s3://$ASSETS_BUCKET/pnpm-store/$STORE_ARCH.tar.zst" --only-show-errors
+
+  publish:
+    needs: build
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-small-arm64' || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: ${{ env.ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sign in to ECR Public
+        id: registry
+        run: |
+          set -euo pipefail
+          alias=$(aws ecr-public describe-registries --region us-east-1 --query 'registries[0].aliases[0].name' --output text)
+          echo "registry=public.ecr.aws/$alias" >> "$GITHUB_OUTPUT"
+          aws ecr-public get-login-password --region us-east-1 \
+            | docker login --username AWS --password-stdin public.ecr.aws
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Join both architectures under one tag
+        env:
+          REGISTRY: ${{ steps.registry.outputs.registry }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for image in oxagen-ci-base oxagen-ci-e2e; do
+            docker buildx imagetools create \
+              --tag "$REGISTRY/$image:latest" \
+              --tag "$REGISTRY/$image:sha-$SHA" \
+              "$REGISTRY/$image:build-amd64" \
+              "$REGISTRY/$image:build-arm64"
+            docker buildx imagetools inspect "$REGISTRY/$image:latest"
+          done
+
+      # Service containers come from our registry rather than Docker Hub, whose
+      # anonymous pull limit applies per address and AWS addresses are shared.
+      # imagetools copies every architecture of the source tag.
+      - name: Copy the service images
+        env:
+          REGISTRY: ${{ steps.registry.outputs.registry }}
+        run: |
+          set -euo pipefail
+          jq -r 'to_entries[] | "\(.key) \(.value)"' infra/stacks-new/ci-runners/service-images.json |
+            while read -r repo source; do
+              tag="${source##*:}"
+              docker buildx imagetools create --tag "$REGISTRY/$repo:$tag" "$source"
+            done

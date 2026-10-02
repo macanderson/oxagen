@@ -106,6 +106,48 @@ describe("checkPackage", () => {
     ).toEqual([]);
   });
 
+  describe("a report another checkout wrote", () => {
+    // 2026-10-01: the repository moved to oxageninc/product, and CI's checkout
+    // moved from /__w/oxagen/oxagen to /__w/product/product. Turbo replayed a
+    // cached report whose keys named the old root, and the guard failed main.
+    const old = "/__w/oxagen/oxagen";
+    const moved = {
+      [`${old}/apps/app/src/ui/avatar.tsx`]: entry,
+      [`${old}/apps/app/src/app/[org]/audit/page.tsx`]: entry,
+    };
+
+    it("is read against this checkout", () => {
+      const result = checkPackage("apps/app", io(moved));
+      expect(result.code).toBe(0);
+      expect(result.message).toContain("names 2 files, all under apps/app/src");
+    });
+
+    it("is read against this checkout only when the package path is known", () => {
+      const roots = [`${APP}/src`];
+      expect(offenders(moved, roots, () => true).outside).toHaveLength(2);
+      expect(
+        offenders(moved, roots, () => true, APP, "apps/app").outside,
+      ).toEqual([]);
+    });
+
+    it("still fails on another package's file", () => {
+      const foreign = `${old}/apps/app_deprecated/src/page.tsx`;
+      const report = { ...moved, [foreign]: entry };
+      const result = checkPackage("apps/app", io(report));
+      expect(result.code).toBe(1);
+      expect(result.message).toContain("1 outside apps/app/src");
+      expect(result.message).toContain(foreign);
+    });
+
+    it("still fails on a file that is not on disk here", () => {
+      const ghost = `${old}/apps/app/src/gone.tsx`;
+      const result = checkPackage("apps/app", io({ ...moved, [ghost]: entry }));
+      expect(result.code).toBe(1);
+      expect(result.message).toContain("1 not on disk");
+      expect(result.message).toContain(ghost);
+    });
+  });
+
   it("fails when there is no report, so it cannot pass empty", () => {
     const result = checkPackage("apps/app", io(undefined));
     expect(result.code).toBe(1);

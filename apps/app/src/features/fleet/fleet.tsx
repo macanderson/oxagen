@@ -50,17 +50,27 @@ type AgentRoster = Read<AgentPage & { complete: boolean }>;
  * of 50 would steer part of a larger workspace while the tile beside it
  * counts all of it. A later page that fails stops the walk and the roster
  * says it is incomplete; only the first page's failure fails the read.
+ *
+ * The walk includes retired agents. Retirement keeps an agent's runs and
+ * its key, so the runs table badges a retired agent's old runs with its
+ * harness; the steer roster leaves retired agents out.
  */
 async function readAgentRoster(
   ctx: WsCtx,
   source: DataSource,
 ): Promise<AgentRoster> {
-  const first = await source.agents.list(ctx, { cursor: null });
+  const first = await source.agents.list(ctx, {
+    cursor: null,
+    includeRetired: true,
+  });
   if (!first.ok) return first;
   const agents = [...first.value.agents];
   let next = first.value.nextCursor;
   for (let page = 1; next !== null && page < AGENT_PAGES_MAX; page += 1) {
-    const read = await source.agents.list(ctx, { cursor: next });
+    const read = await source.agents.list(ctx, {
+      cursor: next,
+      includeRetired: true,
+    });
     if (!read.ok) break;
     agents.push(...read.value.agents);
     next = read.value.nextCursor;
@@ -179,9 +189,18 @@ export async function Fleet({
   }
   const roster: FleetAgent[] = agents.ok
     ? agents.value.agents.flatMap((agent) =>
-        agent.agentKey === null ? [] : [{ agentKey: agent.agentKey }],
+        agent.agentKey === null || agent.status === "retired"
+          ? []
+          : [{ agentKey: agent.agentKey }],
       )
     : [];
+  const agentHarnesses: Record<string, string> = {};
+  if (agents.ok) {
+    for (const agent of agents.value.agents) {
+      if (agent.agentKey !== null)
+        agentHarnesses[agent.agentKey] = agent.harness;
+    }
+  }
   const canCommand = canCommandRun(ctx.orgRole, ctx.wsRole);
   const parked = approvals.ok ? [...parkedRunIds(approvals.value.items)] : [];
   return (
@@ -223,6 +242,7 @@ export async function Fleet({
         approvals={approvals}
         interjections={interjections}
         agentTotal={agents.ok ? agents.value.totals.identities : null}
+        agentHarnesses={agentHarnesses}
         liveRuns={runs.value.liveRuns ?? null}
         now={now}
         canCommand={canCommand}

@@ -1159,6 +1159,20 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./steering_repo.provision.retry"))
         .retrySteeringRepoProvisionHandler as CapabilityHandlerFn,
   );
+  // The Markdown import (#4907): parse files into steering records and Cedar
+  // policies, then open one steering PR with the rows a person kept.
+  registerHandler(
+    "parse_markdown_import",
+    async () =>
+      (await import("./markdown-import/index"))
+        .parseMarkdownImportHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "commit_markdown_import",
+    async () =>
+      (await import("./markdown-import/index"))
+        .commitMarkdownImportHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "import_workspace_steering",
     async () =>

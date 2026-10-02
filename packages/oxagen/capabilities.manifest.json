@@ -690,15 +690,9 @@
       "file": "agent.memory_import.commit.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": [],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
         "unit": true,
         "docs": true
       }
@@ -708,15 +702,9 @@
       "file": "agent.memory_import.parse.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": [],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
         "unit": true,
         "docs": true
       }
@@ -6430,6 +6418,46 @@
         "unit": true,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "commit_markdown_import",
+      "file": "steering.markdown_import.commit.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "parse_markdown_import",
+      "file": "steering.markdown_import.parse.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
