@@ -1,12 +1,12 @@
-// The Tool servers tab's three views. The Agents page absorbed the Tools page,
-// and its tab strip names five tabs (Agents, Tool servers, Policies, Runtimes,
+// The MCP servers tab's three views. The Agents page absorbed the Tools page,
+// and its tab strip names five tabs (Agents, MCP servers, Policies, Runtimes,
 // Off switches). The tool registry and the toolbelts carry no tab of their
-// own: they are views of Tool servers, beside the servers list, so the chain
+// own: they are views of MCP servers, beside the servers list, so the chain
 // the Tools page made readable (Provider → Tool → Toolbelt → Agent) stays one
 // click apart. The row is a `RouteTabs` row in the `pill` look
 // (ADR-243): a tablist with one tab stop and the arrow
 // keys, drawn smaller than the tab strip so it reads as part of the tab. The
-// selected view names the panel the Tool servers tab draws under the row
+// selected view names the panel the MCP servers tab draws under the row
 // (`SERVER_VIEW_PANEL`).
 //
 // Each count is one the record can stand behind. Servers counts the roster.
@@ -18,7 +18,7 @@ import { formatCount } from "@/ui/money-format";
 import { RouteTabs } from "@/ui/route-tabs";
 import { type ToolsAt, type ToolsTab, toolsLink } from "./view";
 
-/** The Tool servers views, in the order the row draws them. */
+/** The MCP servers views, in the order the row draws them. */
 const SERVER_VIEWS = ["providers", "tools", "toolbelts"] as const;
 type ServerView = (typeof SERVER_VIEWS)[number];
 

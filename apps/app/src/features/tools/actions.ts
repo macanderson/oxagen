@@ -415,7 +415,7 @@ export async function deleteApprovalRule(
   return result.ok ? { ok: true, value: { ruleId } } : result;
 }
 
-// ── Connections and tool servers (lane: connections) ────────────────────────
+// ── Connections and MCP servers (lane: connections) ─────────────────────────
 
 /** The fields the add-connection dialog collects. The secret never comes back. */
 export type ConnectionDraft = {
