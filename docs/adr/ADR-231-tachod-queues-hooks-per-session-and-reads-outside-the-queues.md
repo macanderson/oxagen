@@ -139,7 +139,9 @@ that chain in between is rolled back with it if the write fails.
   file rewritten in place, at the same size, while each awaited build reads
   it. The daemon never does that, since its rewrites go through a temp file
   and a rename, so the synchronous rebuild costs a one-off stall on a path that
-  needs outside tampering.
+  needs outside tampering. ADR-261 adds one write in place, the shipper's drop
+  of withdrawn bodies. It runs inside the shipper's drain after that drain's
+  read has returned, so it never overlaps the shipper's build.
 - A hook's git read that `stop` abandoned records the push as `harness_held`,
   which is what any failed read records.
 
