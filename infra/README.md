@@ -278,9 +278,9 @@ change, and a fork's pull request cannot mint an accepted token.
 | Repository | Publishes |
 | --- | --- |
 | `macanderson/stella` | `stella.oxagen.sh` (node) |
-| `macanderson/cgp-website` | `contextgraphprotocol.org` (S3 + CloudFront) |
-| `macanderson/context-graph-protocol` | that site's `/schema` and `/spec` prefixes |
-| `oxageninc/oxagen-platform` | `oxagen.sh` (S3 + CloudFront); `docs`, `app`, `api`, `mcp` (node) |
+| `oxageninc/cgp-website` | `contextgraphprotocol.org` (S3 + CloudFront) |
+| `oxageninc/context-graph-protocol` | that site's `/schema` and `/spec` prefixes |
+| `oxageninc/product` | `oxagen.sh` (S3 + CloudFront); `docs`, `app`, `api`, `mcp` (node) |
 
 `stacks-new/ci-deploy` holds the provider, the four roles and their policies —
 this is the live account's deploy path (`stacks/ci-deploy` is the equivalent

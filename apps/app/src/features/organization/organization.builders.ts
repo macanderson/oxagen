@@ -275,6 +275,7 @@ export function orgSource(reads: OrgReads): {
       priceBook: refuse,
       operatorRanking: refuse,
       unpricedModels: refuse,
+      unproductive: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },
     org: {

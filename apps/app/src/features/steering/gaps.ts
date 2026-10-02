@@ -1,4 +1,4 @@
-// The GitHub issues on macanderson/oxagen that track each Steering element
+// The GitHub issues on oxageninc/product that track each Steering element
 // with no backend yet (roadmap pages/steering.md, Backend gaps). An element
 // renders NotBacked with its issue until the backend lands and the element
 // comes off it; the number is printed so a reader can follow it.

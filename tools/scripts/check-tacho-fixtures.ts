@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 
 const EXPECTED_TRACE_FORMAT = "contextgraph-trace/0.1-sketch";
 const EXPECTED_UPSTREAM_REPOSITORY =
-  "https://github.com/macanderson/context-graph-protocol";
+  "https://github.com/oxageninc/context-graph-protocol";
 const EXPECTED_UPSTREAM_PATH = "contextgraph-trace/fixtures";
 const EXPECTED_UPSTREAM_COMMIT = "98e32ff217e4e0b8e9be078131d0a0728eb77c06";
 

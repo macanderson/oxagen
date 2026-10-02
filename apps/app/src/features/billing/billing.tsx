@@ -8,7 +8,7 @@
 //
 // Beneath Billable units sit Auto top-up, Buy governed actions and Token
 // balance. The rendered mock does not draw them. The spec describes them in
-// its text (Mac kept them on 2026-09-23, macanderson/oxagen-roadmap#67). They
+// its text (Mac kept them on 2026-09-23, oxageninc/roadmap#67). They
 // are how a prepaid organization pays, and the pay journey (e2e/pay.spec.ts)
 // buys through the second. None of their buttons is gold.
 //

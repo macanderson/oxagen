@@ -8,8 +8,8 @@
   2026-07-21 supersession note on ADR-016 where it retires a server-side exact
   code graph, and ADR-003's "`pgvector` is not used" for the code graph only.
 - **Related:** the code graph spec (`codegraph-spec.html` and
-  `codegraph-build-plan.md` in `macanderson/oxagen-roadmap`, PR
-  macanderson/oxagen-roadmap#195), ADR-018 (CLI sync, revoked), ADR-042
+  `codegraph-build-plan.md` in `oxageninc/roadmap`, PR
+  oxageninc/roadmap#195), ADR-018 (CLI sync, revoked), ADR-042
   (tenant data planes), ADR-194 (every embedding is voyage-4-large on one
   platform key).
 

@@ -10,7 +10,7 @@ Give each issue in the queue a priority, a model tier, a size, a kind, and an ar
 so a reader can understand it from the list without opening it.
 
 **Scope:** `$ARGUMENTS`.
-- Blank: every open issue in `macanderson/oxagen` labelled `TRIAGE`.
+- Blank: every open issue in `oxageninc/product` labelled `TRIAGE`.
 - Issue numbers: those issues only.
 - `--all`: every open issue, triaged or not. Use it only for a backlog sweep.
 - `--dry-run`: print the plan and write nothing.
@@ -35,7 +35,7 @@ Mac set this scheme on 2026-09-30 for oxagen and stella. Every label name is upp
    keep that label, because stella's backlog loop owns it.
 
 ```sh
-env -u CLICOLOR_FORCE -u FORCE_COLOR gh issue list --repo macanderson/oxagen --state open \
+env -u CLICOLOR_FORCE -u FORCE_COLOR gh issue list --repo oxageninc/product --state open \
   --label TRIAGE --limit 500 --json number,title,labels,body,url
 ```
 
@@ -235,14 +235,14 @@ You cannot edit it.
    GitHub's secondary rate limit:
 
    ```sh
-   gh issue edit <n> --repo macanderson/oxagen --title "<new title>" \
+   gh issue edit <n> --repo oxageninc/product --title "<new title>" \
      --add-label "P2,MODEL:T2,SIZE:SMALL,KIND:BUG,AREA:RUNS,JOB:EXPLAIN,PILLAR:RELIABILITY" \
      --remove-label "<labels that should go>"
    ```
 
    For attribution, save the body to a file, delete the attribution lines, show the diff, and
    write it back with `gh issue edit <n> --body-file <file>`. Edit a comment with
-   `gh api -X PATCH repos/macanderson/oxagen/issues/comments/<id> -F body=@<file>`. Use `-F`,
+   `gh api -X PATCH repos/oxageninc/product/issues/comments/<id> -F body=@<file>`. Use `-F`,
    which reads the file. `-f` would send the literal text `@<file>`.
 5. Read each issue back. Its title must match
    `^P[0-4] T[1-4] (XS|S|M|L|XL) (Bug|Feature|Improvement|Chore|Documentation|DevOps) \([A-Za-z ]+\): `,

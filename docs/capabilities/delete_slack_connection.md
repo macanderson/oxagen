@@ -12,7 +12,7 @@
 Contract: `packages/oxagen/src/contracts/org.slack_connection.delete.ts`
 Handler: `packages/handlers/src/org.slack_connection.delete.ts`
 App: the Slack section of Organization settings
-Issue: [#4608](https://github.com/macanderson/oxagen/issues/4608)
+Issue: [#4608](https://github.com/oxageninc/product/issues/4608)
 
 ## Intent
 

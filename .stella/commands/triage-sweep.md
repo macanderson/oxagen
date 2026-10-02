@@ -16,7 +16,7 @@ Target repo: **$ARGUMENTS**
 > cleanup PR. Where they overlap, `/backlog-triage` is the more specific tool and
 > wins.
 
-> **A repo's own triage rules win.** `macanderson/oxagen` keeps its rules in
+> **A repo's own triage rules win.** `oxageninc/product` keeps its rules in
 > `.claude/commands/triage-issues.md` (`/triage-issues`). Read that file in Phase 0
 > when the target repo has it, and follow it wherever it differs from this one.
 > There a triaged issue carries exactly one priority, one `MODEL:`, one `SIZE:`,

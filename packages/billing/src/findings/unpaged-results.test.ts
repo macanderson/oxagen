@@ -554,7 +554,7 @@ describe("context carry", () => {
     expect(finding!.savingMicros).toBe(7_800n + 15_600n);
   });
 
-  // #4544, https://github.com/macanderson/oxagen/pull/4536#discussion_r4116248066
+  // #4544, https://github.com/oxageninc/product/pull/4536#discussion_r4116248066
   it("prices a partly priced run's carries at the priced requests' rate and leaves the unpriced one uncovered", () => {
     // The run read 1,000,000 priced and 1,000,000 unpriced cache tokens, so
     // its cache read cost over its cache read tokens is 0.15 micros a token,
@@ -588,7 +588,7 @@ describe("context carry", () => {
     expect(finding!.evidence).toMatchObject({ calls: 3, coveredCalls: 2 });
   });
 
-  // #4544, https://github.com/macanderson/oxagen/pull/4536#discussion_r4116248066
+  // #4544, https://github.com/oxageninc/product/pull/4536#discussion_r4116248066
   it("leaves a partly priced run's result uncovered when the call's chain has no frames", () => {
     const r = run({ hasUnpriced: true });
     expect(
@@ -608,7 +608,7 @@ describe("context carry", () => {
     ).toEqual([]);
   });
 
-  // #4544, https://github.com/macanderson/oxagen/pull/4536#discussion_r4116188323
+  // #4544, https://github.com/oxageninc/product/pull/4536#discussion_r4116188323
   it("counts a carry when a request's total tokens fall and its input context grows", () => {
     // The request before the result sends 40,000 tokens and writes 15,000.
     // The next sends 46,000, 6,000 of them the result, and writes 1,000. Its
@@ -722,7 +722,7 @@ describe("carriesOf", () => {
     expect(carriesOf(chain, at(1), 6_000)).toEqual(chain);
   });
 
-  // #4544, https://github.com/macanderson/oxagen/pull/4536#discussion_r4116188323
+  // #4544, https://github.com/oxageninc/product/pull/4536#discussion_r4116188323
   it("compares input context, not total tokens", () => {
     const chain = [
       frame(r, 0.5, 40_000, { output: 15_000 }),
@@ -755,7 +755,7 @@ describe("carriesOf", () => {
     ]);
   });
 
-  // #4585, https://github.com/macanderson/oxagen/pull/4585#discussion_r4116779690
+  // #4585, https://github.com/oxageninc/product/pull/4585#discussion_r4116779690
   it("orders a compaction at the call's instant by seq", () => {
     const chain = [frame(r, 0.5, 40_000), frame(r, 2, 47_000)];
     const tied = (seq: number) => ({ ...compaction(r, 1), seq });

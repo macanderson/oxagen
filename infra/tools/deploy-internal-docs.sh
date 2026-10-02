@@ -7,7 +7,7 @@
 #     infra/tools/deploy-internal-docs.sh <site-out-dir>
 #
 # <site-out-dir> is a Next static export (`output: "export"`), e.g. `site/out`
-# from macanderson/tmp-oxagen-mockups. The `env -u` matters on a laptop that
+# from oxageninc/roadmap. The `env -u` matters on a laptop that
 # still exports the old account's static keys: this script refuses to run
 # against any account but 916294258235.
 #

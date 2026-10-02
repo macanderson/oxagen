@@ -166,7 +166,7 @@ export type RunChainGetDeps = RunReadDeps & {
   /**
    * Every attempt seal of a ledger run, oldest first — not only the latest,
    * which `readAllFrames` already walks past (finding 8,
-   * macanderson/oxagen#3370): a retried run's frame count and gaps span
+   * oxageninc/product#3370): a retried run's frame count and gaps span
    * every attempt, so the seals shown beside them must too.
    */
   ledgerSeals: (scope: RunScope, runId: string) => Promise<LedgerSeal[]>;
@@ -404,7 +404,7 @@ function sealAttestation(
  * attempt (a retry or a lease reclaim starts a new one), so this walks all of
  * them rather than the latest alone — matching `readAllFrames`, which already
  * reads every attempt's frames into `frameCount` and the gap analysis
- * (finding 8, macanderson/oxagen#3370). A wrapped session has no seal row of
+ * (finding 8, oxageninc/product#3370). A wrapped session has no seal row of
  * its own: the sealed columns on the session are its one seal. Its commitment
  * is `final_hash`, the hash `terminalPatch` writes at `agent_stop` over the
  * *whole* session — not the last periodic checkpoint's chain head, which the

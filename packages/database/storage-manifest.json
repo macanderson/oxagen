@@ -1911,6 +1911,16 @@
       "writes": []
     },
     {
+      "domain": "spend",
+      "name": "get_unproductive_spend",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "billing",
       "name": "get_usage_breakdown",
       "reads": [],

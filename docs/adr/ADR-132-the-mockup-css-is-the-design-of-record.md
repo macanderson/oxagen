@@ -7,7 +7,7 @@ Date: 2026-09-20
 
 ADR-130 chose the roadmap mockup's layout for the app. Three days of lanes then moved the app away from it without anyone deciding to. By 2026-09-20 the light theme had an ink primary button where the mockup has gold, an ink tab underline and an ink nav marker, grey bands behind every panel header and table header, a muted eyebrow, and four stat tiles that each page drew its own way. Every colour came from a house token, so no lint caught it: the drift was in which token a recipe named, not in a raw hex.
 
-The mockup is `mockups/src/engine.css` in `macanderson/roadmap`, with `mockups/v2/src/style.css` on top of it for the pages v2 redesigned. Both share one palette block. The app cannot import that file: it is a different repository, and the app's colours must stay the house kit's tokens so a reskin reaches every frontend.
+The mockup is `mockups/src/engine.css` in `oxageninc/roadmap`, with `mockups/v2/src/style.css` on top of it for the pages v2 redesigned. Both share one palette block. The app cannot import that file: it is a different repository, and the app's colours must stay the house kit's tokens so a reskin reaches every frontend.
 
 ## Decision
 

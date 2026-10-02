@@ -145,7 +145,7 @@ function tachoHarness(
 /**
  * `attemptSeals`, oldest first, stands in for `ledgerAllSealsQuery`: every
  * attempt seal the run carries, not only the latest (finding 8,
- * macanderson/oxagen#3370). Defaults to one attempt built from `sealOver`, the
+ * oxageninc/product#3370). Defaults to one attempt built from `sealOver`, the
  * same single-seal shape the harness offered before that fix.
  */
 function ledgerHarness(

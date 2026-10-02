@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The Run page's spine (macanderson/oxagen#3609). Four rules hold it to what
+// The Run page's spine (oxageninc/product#3609). Four rules hold it to what
 // the stores recorded, because breaking any one of them is how a console
 // starts overstating a run:
 //

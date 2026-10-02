@@ -17,7 +17,7 @@ import {
 
 /**
  * Which backend gap a not-recorded value stands for. Each key is one GitHub
- * issue on macanderson/oxagen, carried as `data-gap` so a reader of the DOM
+ * issue on oxageninc/product, carried as `data-gap` so a reader of the DOM
  * can find the change that fills it.
  */
 const GAPS = {

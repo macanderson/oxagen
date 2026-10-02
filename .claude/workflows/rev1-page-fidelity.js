@@ -1,7 +1,7 @@
 export const meta = {
   name: 'rev1-page-fidelity',
   description: 'Retired 2026-09-28 (ADR-226). Built rev1 pages to the rev1 mockup in oxagen-roadmap, which roadmap #234 removed',
-  whenToUse: 'When apps/app pages must match mockups/pages/<page>.md in macanderson/oxagen-roadmap exactly, in every state, desktop and mobile.',
+  whenToUse: 'When apps/app pages must match mockups/pages/<page>.md in oxageninc/roadmap exactly, in every state, desktop and mobile.',
   phases: [
     { title: 'Build', detail: 'one builder per lane in its own worktree: mock screenshots, build, backend-gap issues' },
     { title: 'Integrate', detail: 'merge each finished lane onto the session branch and push' },
@@ -45,7 +45,7 @@ HARD RULES (restate them to any subagent you spawn):
 - Read DEREGISTERED.md before removing a feature's files.
 - Never edit, commit to, or add files in the oxagen-roadmap clone. The spec and audit prompt are fixed. A deviation you cannot avoid is not written into the spec: list it under deviations in your result, and the PR lists it.
 - Plain-noun headings: no comma, mid-dot or not/never contrast in a heading or label; subtext under a heading is one sentence or nothing. Exactly one gold action per screen.
-- Open PRs that overlap this work (read their diffs with the GitHub MCP pull_request_read tool, loaded via ToolSearch, on macanderson/oxagen): #3776 "resurface existing Fleet, Run and Steering functions" and #3777 "resurface shell activity and organization sections". Do not duplicate what they add; build compatibly with them and name any overlap in your result.
+- Open PRs that overlap this work (read their diffs with the GitHub MCP pull_request_read tool, loaded via ToolSearch, on oxageninc/product): #3776 "resurface existing Fleet, Run and Steering functions" and #3777 "resurface shell activity and organization sections". Do not duplicate what they add; build compatibly with them and name any overlap in your result.
 `
 
 const MOCK_HOWTO = `
@@ -54,9 +54,9 @@ Screenshot every state the catalog lists for your pages, desktop (1440x900) and 
 `
 
 const ISSUE_RULES = `
-BACKEND GAPS: an element whose data or write has no backend today is rendered NotBacked and gets a GitHub issue on macanderson/oxagen (GitHub MCP issue_write, loaded with ToolSearch; search_issues first and reuse an open issue that already covers it: add a comment instead of a duplicate, naming this page's audit check). One issue per full change; group gaps that are one backend change. Issue shape:
+BACKEND GAPS: an element whose data or write has no backend today is rendered NotBacked and gets a GitHub issue on oxageninc/product (GitHub MCP issue_write, loaded with ToolSearch; search_issues first and reuse an open issue that already covers it: add a comment instead of a duplicate, naming this page's audit check). One issue per full change; group gaps that are one backend change. Issue shape:
 - Title: "Queued Improvement (<Area>): <what a person will be able to do>" (Area is the title name from the area table in .claude/commands/triage-issues.md, e.g. Steering, Fleet, Agents, Billing, Database; plain words, no code identifiers, 80 characters or fewer). Apply ONLY the "TRIAGE" label.
-- Body (clear-prose): Context (the page, the spec section in oxagen-roadmap mockups/pages/<spec>.md, the audit check numbers it fails), paths in this repo, what is missing in which store/contract/handler, proposed approach, and a "- [ ]" definition of done whose items include the backend work, the contract/API/MCP/CLI/docs parity, tests, wiring the page element off NotBacked, and, always last: "- [ ] Re-run mockups/pages/<spec>.audit-prompt.md (macanderson/oxagen-roadmap) against the build; every check prints PASS." Add an "Issue metadata" section: Estimated agent minutes, Impacts schema (Yes/No), Breaking change (Yes/No), Customer reported: No. Add no attribution footer.
+- Body (clear-prose): Context (the page, the spec section in oxagen-roadmap mockups/pages/<spec>.md, the audit check numbers it fails), paths in this repo, what is missing in which store/contract/handler, proposed approach, and a "- [ ]" definition of done whose items include the backend work, the contract/API/MCP/CLI/docs parity, tests, wiring the page element off NotBacked, and, always last: "- [ ] Re-run mockups/pages/<spec>.audit-prompt.md (oxageninc/roadmap) against the build; every check prints PASS." Add an "Issue metadata" section: Estimated agent minutes, Impacts schema (Yes/No), Breaking change (Yes/No), Customer reported: No. Add no attribution footer.
 `
 
 const LANES = [
@@ -236,7 +236,7 @@ const PR_TITLE = cfg.prTitle || `feat(app): match ${lanes.map(l => l.id).join(',
 log(`lanes: ${lanes.map(l => l.id).join(', ')} on ${BRANCH}`)
 
 // The roadmap repo is public; clone it once if this machine lacks it.
-await agent(`Run: test -d ${ROADMAP}/mockups/pages || (mkdir -p $(dirname ${ROADMAP}) && GIT_LFS_SKIP_SMUDGE=1 git clone --depth 1 https://github.com/macanderson/oxagen-roadmap ${ROADMAP}). Allow up to 10 minutes. Then run: test -d ${REPO}/node_modules || (cd ${REPO} && pnpm install --frozen-lockfile). Then: git -C ${REPO} checkout ${BRANCH} || git -C ${REPO} checkout -b ${BRANCH} origin/main. Report "ready" or the error.`, { label: 'setup', phase: 'Build', effort: 'low' })
+await agent(`Run: test -d ${ROADMAP}/mockups/pages || (mkdir -p $(dirname ${ROADMAP}) && GIT_LFS_SKIP_SMUDGE=1 git clone --depth 1 https://github.com/oxageninc/roadmap ${ROADMAP}). Allow up to 10 minutes. Then run: test -d ${REPO}/node_modules || (cd ${REPO} && pnpm install --frozen-lockfile). Then: git -C ${REPO} checkout ${BRANCH} || git -C ${REPO} checkout -b ${BRANCH} origin/main. Report "ready" or the error.`, { label: 'setup', phase: 'Build', effort: 'low' })
 
 let hubResolve
 const hubReady = new Promise(r => { hubResolve = r })

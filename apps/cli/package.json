@@ -20,10 +20,10 @@
     "metering",
     "knowledge-graph"
   ],
-  "homepage": "https://github.com/macanderson/oxagen#readme",
+  "homepage": "https://github.com/oxageninc/product#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/macanderson/oxagen.git",
+    "url": "git+https://github.com/oxageninc/product.git",
     "directory": "apps/cli"
   },
   "scripts": {
