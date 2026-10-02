@@ -35,7 +35,7 @@ A person makes this decision. The contract is not on the `agent` surface, so no 
 
 ## Roles
 
-Org Owner or Admin, or workspace Owner or Member, checked by the handler (`assertOrgRole`, INV-29). A row the mandate gate parked (ADR-059 decision 4) is answered by the office accountable for the consequence (MC spec §6.9): the caller also holds an org role the workspace's consequence roles name for every tag on the mandate (`assertConsequenceRole`), is one of the mandate's `approval.approvers` when the rule names any (`assertApprover`), and is not an agent principal. On any row, a call that carries the run the row records as raising the approval is refused. Every refusal comes before the ledger or the row is touched.
+Org Owner or Admin, or workspace Owner or Member, checked by the handler (`assertOrgRole`, INV-29). A row the mandate gate parked (ADR-059 decision 4) is answered by the office accountable for the consequence (MC spec §6.9): the caller also holds an org role the workspace's consequence roles name for every tag on the mandate (`assertConsequenceRole`), is one of the mandate's `approval.approvers` when the rule names any (`assertApprover`), and is not an agent principal. On any row, a call that carries the run the row records as raising the approval is refused. A row the in-app assistant parked is answered only by the person who asked, from its card in the assistant. Anyone else gets `approval_expired`, the same answer as an unknown id, because the workspace's readers leave the row out (ADR-235). Every refusal comes before the ledger or the row is touched.
 
 ## Billing
 
@@ -80,8 +80,8 @@ Fleet, by another person, or by expiry shows the same way in both places.
 | `forbidden` | `no_role_covers_all_tags` | On a row a mandate parked: no single org role is named for all of the mandate's impacts (403). |
 | `forbidden` | `not_an_approver` | On a row a mandate parked whose approval rule names `approvers`: the acting user is neither a `user:` entry nor holds a `role:` entry (403). |
 | `forbidden` | `agent_cannot_resolve_own_mandate` | On a row a mandate parked: the caller is an agent principal. A person answers (403). |
-| `forbidden` | `run_cannot_resolve_own_approval` | The call carries the run that raised the approval (`run_public_id` on the row, matched by the run's internal or public id). A person approves or denies it on Fleet (403). |
-| `conflict`  | `approval_expired`  | No pending row matched: unknown id, expired, already resolved, or another workspace (409). The call is not a governed action and is never billed. |
+| `forbidden` | `run_cannot_resolve_own_approval` | The call carries the run that raised the approval (`run_public_id` on the row, matched by the run's internal or public id). A person approves or denies it on Fleet. On a row the in-app assistant parked, the person who asked answers it in the assistant (403). |
+| `conflict`  | `approval_expired`  | No pending row matched: unknown id, expired, already resolved, or another workspace (409). An approval the in-app assistant parked answers the same to anyone but the person who asked. The call is not a governed action and is never billed. |
 
 ## SPEC references
 

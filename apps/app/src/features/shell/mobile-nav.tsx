@@ -520,7 +520,7 @@ export function NavDrawer({ data }: { data: ShellData }) {
         />
         <Dialog.Popup
           data-testid="nav-drawer"
-          className="fixed inset-y-0 left-0 z-50 flex w-[min(18.75rem,86vw)] flex-col overflow-y-auto border-r border-sidebar-border bg-sidebar-bg pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-sidebar-fg shadow-2xl md:hidden"
+          className="fixed inset-y-0 left-0 z-50 flex w-[min(18.75rem,86vw)] flex-col overflow-y-auto border-r border-sidebar-border bg-sidebar-bg pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-sidebar-fg shadow-pop md:hidden"
         >
           {/* The mock's drawer opens on the brand and the switchers; the
               scrim and Escape close it, so it carries no close row. */}

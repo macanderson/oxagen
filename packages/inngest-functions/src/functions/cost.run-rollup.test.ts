@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   rebuildRunTotals: vi.fn(),
   rebuildDailyTotals: vi.fn(),
   createFunction: vi.fn(),
+  isInAppRun: vi.fn(),
 }));
 
 vi.mock("@oxagen/billing", () => ({
@@ -15,6 +16,7 @@ vi.mock("../logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 vi.mock("../create-function", () => ({ createFunction: mocks.createFunction }));
+vi.mock("../lib/in-app-run", () => ({ isInAppRun: mocks.isInAppRun }));
 
 type Handler = (ctx: {
   event: { data: unknown };
@@ -45,6 +47,7 @@ describe("cost.run-rollup", () => {
   beforeEach(() => {
     mocks.rebuildRunTotals.mockReset();
     mocks.rebuildDailyTotals.mockReset().mockResolvedValue([]);
+    mocks.isInAppRun.mockReset().mockResolvedValue(false);
     sendEvent.mockClear();
   });
 
@@ -83,6 +86,65 @@ describe("cost.run-rollup", () => {
       name: "run/fit.requested",
       data: { orgId: "org-1", workspaceId: "ws-1", runId: "tse_abc" },
     });
+    // A Tacho session is never an in-app run, so nothing reads its surface.
+    expect(mocks.isInAppRun).not.toHaveBeenCalled();
+  });
+
+  // ADR-235, 2026-10-02 amendment. The workspace does not monitor the in-app
+  // assistant. Its run still gets both rows, because they count what the
+  // organization spent, and it gets no findings pass and no Model fit reading.
+  it("writes both rows for an in-app run and requests no findings and no Model fit", async () => {
+    mocks.rebuildRunTotals.mockResolvedValue({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      startedAt: new Date("2026-09-14T10:00:00.000Z"),
+      costMicros: 900n,
+      costBasis: "gateway_observed",
+    });
+    mocks.isInAppRun.mockResolvedValue(true);
+    const out = await handler!({
+      event: { data: { runId: "arun_assistant" } },
+      step,
+    });
+    expect(mocks.rebuildRunTotals).toHaveBeenCalledWith("arun_assistant");
+    expect(mocks.rebuildDailyTotals).toHaveBeenCalledWith({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      day: "2026-09-14",
+    });
+    expect(mocks.isInAppRun).toHaveBeenCalledWith(
+      { orgId: "org-1", workspaceId: "ws-1" },
+      "arun_assistant",
+    );
+    expect(sendEvent).not.toHaveBeenCalled();
+    expect(out).toEqual({ runId: "arun_assistant", rolledUp: true });
+  });
+
+  it("requests findings and a Model fit for a ledger run on another surface", async () => {
+    mocks.rebuildRunTotals.mockResolvedValue({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      startedAt: new Date("2026-09-14T10:00:00.000Z"),
+      costMicros: 900n,
+      costBasis: "gateway_observed",
+    });
+    const out = await handler!({
+      event: { data: { runId: "arun_external" } },
+      step,
+    });
+    expect(mocks.isInAppRun).toHaveBeenCalledWith(
+      { orgId: "org-1", workspaceId: "ws-1" },
+      "arun_external",
+    );
+    expect(sendEvent).toHaveBeenCalledWith("request-findings", {
+      name: "cost/findings.requested",
+      data: { orgId: "org-1", workspaceId: "ws-1" },
+    });
+    expect(sendEvent).toHaveBeenLastCalledWith("request-fit", {
+      name: "run/fit.requested",
+      data: { orgId: "org-1", workspaceId: "ws-1", runId: "arun_external" },
+    });
+    expect(out).toEqual({ runId: "arun_external", rolledUp: true });
   });
 
   it("drops a run no store has without touching the daily groups", async () => {

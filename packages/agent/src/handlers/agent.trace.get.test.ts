@@ -10,7 +10,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 import { withTenantDb } from "@oxagen/database";
+import { createOxagenAssistantBinding } from "@oxagen/oxagen/oxagen-assistant";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { agentTraceGetHandler } from "./agent.trace.get";
+import { ExecutionNotFoundError } from "./execution-errors";
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 interface ExecRow {
@@ -484,5 +488,155 @@ describe("agent.trace.get handler — turn metrics", () => {
     });
     const out = await agentTraceGetHandler({ executionId: "aex_root" }, CTX);
     expect(out.replayDeterministic).toBe(false);
+  });
+});
+
+// ADR-235: each turn of the in-app assistant records an execution under the
+// workspace's managed `interactive_chat` agent. That record is internal, so
+// only the assistant itself reads it back.
+describe("agent.trace.get handler: the in-app assistant's executions", () => {
+  beforeEach(() => vi.mocked(withTenantDb).mockReset());
+
+  const dialect = new PgDialect();
+  /** The NOT EXISTS test the handler adds, as the dialect renders it. */
+  const EXCLUSION =
+    /not exists \(select 1 from "agent"\."agents" where "agent"\."agents"\."id" = "agent"\."agent_executions"\."agent_id" and "agent"\."agents"\."agent_type" = \$(\d+)\)/u;
+
+  /** The OR the assistant's own call adds: the person who asked, as a param. */
+  const OWN = /"own_conversation"\."user_id" = \$(\d+)\)/u;
+
+  type TypedExec = ExecRow & { agentType: string | null; askedBy?: string };
+
+  /** True when the rendered WHERE leaves `interactive_chat` agents out. */
+  function hidesAssistant(rendered: { sql: string; params: unknown[] }) {
+    const match = EXCLUSION.exec(rendered.sql);
+    return (
+      match !== null &&
+      rendered.params[Number(match[1]) - 1] === "interactive_chat"
+    );
+  }
+
+  /** The person whose own assistant rows the WHERE keeps, if it keeps any. */
+  function askerOf(rendered: { sql: string; params: unknown[] }) {
+    const own = OWN.exec(rendered.sql);
+    return own === null ? undefined : rendered.params[Number(own[1]) - 1];
+  }
+
+  /**
+   * Like `setup`, but the execution reads render the WHERE they receive and
+   * apply the exclusion the way Postgres would. Steps and tool calls are
+   * empty.
+   */
+  function setupRendering(root: TypedExec, children: TypedExec[] = []) {
+    const wheres: Array<{ sql: string; params: unknown[] }> = [];
+    const visible = (rows: TypedExec[], hides: boolean, asker: unknown) =>
+      rows
+        .filter(
+          (r) =>
+            !(
+              hides &&
+              r.agentType === "interactive_chat" &&
+              (asker === undefined || r.askedBy !== asker)
+            ),
+        )
+        .map(({ agentType: _agentType, askedBy: _askedBy, ...r }) => r);
+    let dbCall = 0;
+    vi.mocked(withTenantDb).mockImplementation((fn) => {
+      if (typeof fn !== "function") return undefined as never;
+      const call = dbCall;
+      dbCall += 1;
+      let childBatchServed = false;
+      const tx = {
+        select: () => ({
+          from: () => ({
+            where: (cond: SQL) => {
+              if (call > 0) return { orderBy: () => Promise.resolve([]) };
+              const rendered = dialect.sqlToQuery(cond);
+              wheres.push(rendered);
+              const hides = hidesAssistant(rendered);
+              const asker = askerOf(rendered);
+              return {
+                limit: () => Promise.resolve(visible([root], hides, asker)),
+                orderBy: () => {
+                  if (childBatchServed) return Promise.resolve([]);
+                  childBatchServed = true;
+                  return Promise.resolve(visible(children, hides, asker));
+                },
+              };
+            },
+          }),
+        }),
+      };
+      return fn(tx as unknown as Parameters<typeof fn>[0]);
+    });
+    return wheres;
+  }
+
+  const ASSISTANT_AGENT = "00000000-0000-4000-8000-0000000000a1";
+  const assistantExec = (askedBy: string = CTX.userId!): TypedExec => ({
+    ...exec({
+      id: "aexuuid_assistant",
+      publicId: "aex_assistant",
+      agentId: ASSISTANT_AGENT,
+    }),
+    agentType: "interactive_chat",
+    askedBy,
+  });
+  const withBinding = () => ({
+    ...CTX,
+    oxagenAssistant: createOxagenAssistantBinding({
+      requestId: CTX.requestId,
+    }),
+  });
+
+  it("answers as not found when a caller without the binding asks for the assistant's execution", async () => {
+    const wheres = setupRendering(assistantExec());
+    await expect(
+      agentTraceGetHandler({ executionId: "aex_assistant" }, CTX),
+    ).rejects.toBeInstanceOf(ExecutionNotFoundError);
+    expect(wheres[0]!.sql).toMatch(EXCLUSION);
+    expect(wheres[0]!.params).toContain("interactive_chat");
+  });
+
+  it("returns the assistant the asker's own execution when the call carries its binding", async () => {
+    const wheres = setupRendering(assistantExec());
+    const out = await agentTraceGetHandler(
+      { executionId: "aex_assistant" },
+      withBinding(),
+    );
+    expect(out.executionId).toBe("aex_assistant");
+    for (const where of wheres) {
+      expect(where.sql).toMatch(OWN);
+      expect(where.params).toContain(CTX.userId);
+    }
+  });
+
+  it("answers as not found when the assistant asks for another person's execution (negative)", async () => {
+    setupRendering(assistantExec("u_2"));
+    await expect(
+      agentTraceGetHandler({ executionId: "aex_assistant" }, withBinding()),
+    ).rejects.toBeInstanceOf(ExecutionNotFoundError);
+  });
+
+  it("leaves an assistant execution out of another execution's tree", async () => {
+    const wheres = setupRendering({ ...exec(), agentType: "custom" }, [
+      {
+        ...assistantExec(),
+        parentExecutionId: "aexuuid_root",
+      },
+      {
+        ...exec({
+          id: "aexuuid_child",
+          publicId: "aex_child",
+          parentExecutionId: "aexuuid_root",
+        }),
+        agentType: null,
+      },
+    ]);
+    const out = await agentTraceGetHandler({ executionId: "aex_root" }, CTX);
+    expect(out.children.map((c) => c.executionId)).toEqual(["aex_child"]);
+    // The root read and the first child read both carry the exclusion.
+    expect(wheres.length).toBeGreaterThanOrEqual(2);
+    for (const where of wheres) expect(where.sql).toMatch(EXCLUSION);
   });
 });

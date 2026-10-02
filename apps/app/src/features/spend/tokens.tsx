@@ -6,7 +6,7 @@
 // three prompt-part columns are not recorded, and a row opens the agent page.
 // Each agent's avatar carries the harness it registered (#4871).
 import { useLocale, useTranslations } from "next-intl";
-import type { SpendReport } from "@/data/contracts/spend";
+import { ASSISTANT_SPEND_KEY, type SpendReport } from "@/data/contracts/spend";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { linkText, mono } from "@/ui/control-styles";
@@ -68,6 +68,7 @@ export function TokensSection({
   harnesses?: AgentHarnesses;
 }) {
   const t = useTranslations("spend.tokens");
+  const tMonth = useTranslations("spend.month");
   const locale = useLocale();
   const classes = sumClasses(month.rows);
   const total = totalOf(classes);
@@ -198,22 +199,28 @@ export function TokensSection({
                 return (
                   <tr key={row.key} data-key={row.key}>
                     <th scope="row" className={`${cell} text-left font-normal`}>
-                      <span className="flex min-w-0 items-center gap-2">
-                        <AgentMark
-                          agentKey={row.key}
-                          harness={harnessIn(harnesses, row.key)}
-                        />
-                        <SafeLink
-                          to={routes.agent(
-                            at.org,
-                            at.ws,
-                            row.key.split(".").pop() ?? row.key,
-                          )}
-                          className={`${linkText} ${mono}`}
-                        >
-                          {row.key}
-                        </SafeLink>
-                      </span>
+                      {/* The in-app assistant is no agent of the workspace's,
+                          so its row links nowhere (ADR-235). */}
+                      {row.key === ASSISTANT_SPEND_KEY ? (
+                        <span>{tMonth("assistant.label")}</span>
+                      ) : (
+                        <span className="flex min-w-0 items-center gap-2">
+                          <AgentMark
+                            agentKey={row.key}
+                            harness={harnessIn(harnesses, row.key)}
+                          />
+                          <SafeLink
+                            to={routes.agent(
+                              at.org,
+                              at.ws,
+                              row.key.split(".").pop() ?? row.key,
+                            )}
+                            className={`${linkText} ${mono}`}
+                          >
+                            {row.key}
+                          </SafeLink>
+                        </span>
+                      )}
                     </th>
                     <td className={numericCell}>
                       {formatCount(row.runs, locale)}

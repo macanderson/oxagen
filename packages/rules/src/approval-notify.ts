@@ -20,11 +20,24 @@
  * Any future writer of an approval row belongs behind this function too. The
  * shape that caused the bug is a fan-out attached to ONE caller rather than
  * to the row it describes.
+ *
+ * An approval the in-app assistant parked is the exception (ADR-235, ruled on
+ * 2026-10-01). Only the person who asked may answer it, so its writer names
+ * that one recipient. The predicate every reader uses to leave such a row
+ * out is exported here too, because this is the subpath the agent runtime,
+ * the handlers, and this package already share.
  */
 import { schema, type Tx } from "@oxagen/database";
 import { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.resolve";
 import { and, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import { logger } from "./logger";
+
+export {
+  approvalAskedBy,
+  inAppApproval,
+  inAppOnlyForAsker,
+  notInAppApproval,
+} from "./approval-in-app";
 
 /**
  * The IAM roles `resolve_approval` admits, read from its contract's
@@ -70,6 +83,13 @@ export interface ApprovalNotifyArgs {
   /** The tool's risk grade, as the approval row records it. */
   riskLevel: string;
   expiresAt: Date;
+  /**
+   * The people to tell, when the writer already knows who may answer. The
+   * in-app assistant's park passes the person who asked, because only they
+   * may answer it (ADR-235). Omit it and the row tells everyone
+   * `resolve_approval` admits in the workspace.
+   */
+  recipients?: readonly string[];
 }
 
 /**
@@ -80,11 +100,9 @@ export async function notifyApprovalRequested(
   tx: Tx,
   args: ApprovalNotifyArgs,
 ): Promise<void> {
-  const { approvers, truncated } = await approverUserIds(
-    tx,
-    args.orgId,
-    args.workspaceId,
-  );
+  const { approvers, truncated } = args.recipients
+    ? { approvers: [...new Set(args.recipients)], truncated: false }
+    : await approverUserIds(tx, args.orgId, args.workspaceId);
   if (truncated) {
     logger.warn(
       {

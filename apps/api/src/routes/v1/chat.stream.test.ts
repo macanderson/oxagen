@@ -19,7 +19,6 @@ interface Stream {
     onRun?: (r: { runId: string }) => void;
     onPart?: (p: unknown) => void;
     onApprovalRequired?: (e: unknown) => void;
-    onBudgetNotice?: (n: unknown) => void;
     onUsage?: (u: unknown) => void;
     abortSignal?: AbortSignal;
   };
@@ -264,6 +263,14 @@ describe("POST chat/stream — the turn on the wire", () => {
       tier: "fast",
       // Accepted and ignored (#4310): stella loads no workspace MCP server.
       activeServerIds: ["mcs_workspace"],
+      // Accepted and ignored (ADR-235): no customer-configured budget applies
+      // to the assistant.
+      budget: {
+        enabled: true,
+        limitUsd: 0.01,
+        mode: "enforce",
+        graceOveragePct: 0,
+      },
     }).then((r) => r.text());
     expect(mocks.invoke).toHaveBeenCalledWith(
       "ask_assistant",
@@ -285,7 +292,6 @@ describe("POST chat/stream — the turn on the wire", () => {
       tier: "fast",
       model: null,
       effort: null,
-      budget: null,
     });
   });
 
@@ -435,7 +441,7 @@ describe("POST chat/stream — the turn on the wire", () => {
     expect(done).toEqual(OUTPUT);
   });
 
-  it("forwards approval and budget notices as their SSE events", async () => {
+  it("forwards an approval as its SSE event", async () => {
     const parked = {
       approvalId: "apr_1",
       capability: "set_budget",
@@ -448,12 +454,6 @@ describe("POST chat/stream — the turn on the wire", () => {
         inputPreview: { usd: 5 },
         riskLevel: "high",
       });
-      mocks.stream!.hooks.onBudgetNotice?.({
-        state: "within_grace",
-        costUsd: 1.2,
-        limitUsd: 1,
-        mode: "grace",
-      });
       return { ...OUTPUT, parkedCards: [parked] };
     });
     const { events, done } = await readSse(await post({ content: "hi" }));
@@ -462,13 +462,9 @@ describe("POST chat/stream — the turn on the wire", () => {
       approvalId: "apr_1",
       capability: "set_budget",
     });
-    expect(events[1]).toEqual({
-      type: "budget-notice",
-      state: "within_grace",
-      costUsd: 1.2,
-      limitUsd: 1,
-      mode: "grace",
-    });
+    expect(events.map((e) => (e as { type: string }).type)).not.toContain(
+      "budget-notice",
+    );
     expect((done as { parkedCards: unknown }).parkedCards).toEqual([parked]);
   });
 

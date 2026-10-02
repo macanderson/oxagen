@@ -9,6 +9,11 @@
 // The component stays mounted once the repo is ready, so a dialog left open
 // shows every step done and the repository's link. While the job runs, the
 // page re-reads every 5 seconds.
+//
+// A ready repo still shows the line while an import that stopped after its
+// demote step has a `.oxagen/` tree to move (`pendingMove`, #5082). The old
+// repository no longer steers by then, so nothing else on the page says the
+// move is unfinished.
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
@@ -17,15 +22,15 @@ import { buttonSmall } from "@/ui/control-styles";
 import { LiveRefresh } from "@/ui/live-refresh";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { SteeringRepoProvisioning } from "./provisioning";
-import type { SteeringRepoView } from "./types";
+import { pendingMove, type SteeringRepoView } from "./types";
 
-type Pending = Exclude<SteeringRepoView["status"], "ready">;
-
-const TONE: Record<Pending, BadgeTone> = {
+const TONE: Record<SteeringRepoView["status"], BadgeTone> = {
   not_started: "approval",
   provisioning: "quiet",
   failed: "failed",
   blocked: "denied",
+  // A ready repo shows the line only for a pending move.
+  ready: "approval",
 };
 
 export function SteeringRepoSetup({
@@ -50,10 +55,13 @@ export function SteeringRepoSetup({
   const tStep = useTranslations("repositories.steeringRepo.provisioning.steps");
   const [open, setOpen] = useState(initiallyOpen);
   const status = view.status;
-  const legacy = view.legacySource?.fullName ?? null;
+  const moving = pendingMove(view);
+  const legacy = view.legacySource?.fullName ?? moving?.fullName ?? null;
+  const shown = status !== "ready" || moving !== null;
 
   let lead: string;
-  if (status === "ready") lead = "";
+  if (status === "ready")
+    lead = moving === null ? "" : t("lead.movePending", { legacy: moving.fullName });
   else if (status === "not_started")
     lead =
       legacy === null ? t("lead.notStarted") : t("lead.legacy", { legacy });
@@ -66,15 +74,16 @@ export function SteeringRepoSetup({
   return (
     <>
       <LiveRefresh active={status === "provisioning"} />
-      {status === "ready" ? null : (
+      {!shown ? null : (
         <div
           role="note"
           data-testid="steering-repo-setup-notice"
           data-status={status}
+          data-move={moving === null ? undefined : "pending"}
           className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-hl px-4 py-3"
         >
           <Badge tone={TONE[status]} dot={status === "provisioning" ? "pulse" : true}>
-            {t(`status.${status}`)}
+            {status === "ready" ? t("status.movePending") : t(`status.${status}`)}
           </Badge>
           <p className="min-w-0 flex-1 text-[13px] text-muted-foreground">
             {lead}
@@ -89,7 +98,11 @@ export function SteeringRepoSetup({
               setOpen(true);
             }}
           >
-            {canAct && status !== "provisioning" ? t("open.act") : t("open.view")}
+            {!canAct || status === "provisioning"
+              ? t("open.view")
+              : status === "ready"
+                ? t("open.finish")
+                : t("open.act")}
           </button>
         </div>
       )}

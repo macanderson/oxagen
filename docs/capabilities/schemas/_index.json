@@ -2179,6 +2179,17 @@
       "consumes": []
     },
     {
+      "name": "get_work_order_metrics",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_workspace_memory",
       "domain": "context",
       "surfaces": [
@@ -4211,6 +4222,17 @@
       "consumes": []
     },
     {
+      "name": "set_agent_cache_keep_alive",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "set_approval_rule_enabled",
       "domain": "approval_rule",
       "surfaces": [
@@ -4230,6 +4252,14 @@
         "mcp",
         "agent"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_assistant_switch",
+      "domain": "assistant",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []

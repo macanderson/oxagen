@@ -4,6 +4,7 @@ import {
   withTenantDb,
   withSystemDb,
 } from "@oxagen/database";
+import { IN_APP_AGENT_SURFACES } from "@oxagen/oxagen/contracts/run.list";
 import { runEnrichmentEnabled } from "@oxagen/oxagen/run-enrichment";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { SESSION_SUBJECT_MAX, SUMMARY_MAX_CHARS } from "@oxagen/recorder";
@@ -214,6 +215,12 @@ export function enrichmentPriority(
  * workspace recorded (#3784). The planner uses a partial index only when the
  * query's WHERE proves the index's predicate, so this and
  * `readableEnrichmentRun` render the index's literals and bind nothing.
+ *
+ * The sweep leaves out ledger runs on the in-app assistant's surfaces
+ * (`IN_APP_AGENT_SURFACES`). Each summary costs a paid model call, and the
+ * assistant's runs feed no workspace surface that would show one (ADR-235).
+ * The conjunct only narrows the WHERE, so the partial index still applies.
+ * `runEnrichmentCandidate` stays as it is, since it is the index's predicate.
  */
 export function sweepCandidates(
   tx: Parameters<Parameters<typeof withSystemDb>[0]>[0],
@@ -241,6 +248,9 @@ export function sweepCandidates(
         enrichableWorkspace(),
         dueForEnrichment(table, now),
         runEnrichmentCandidate(table),
+        table === schema.agentRuns
+          ? notInArray(schema.agentRuns.surface, [...IN_APP_AGENT_SURFACES])
+          : undefined,
       ),
     )
     .as("ranked");

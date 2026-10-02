@@ -27,6 +27,7 @@ import {
 
 let approverRows: Array<{ userId: string | null }> = [];
 let inserted: Array<{ table: unknown; values: unknown[] }> = [];
+let approverReads = 0;
 
 function fakeTx(): Tx {
   const limit = vi.fn(async () => approverRows);
@@ -35,7 +36,10 @@ function fakeTx(): Tx {
     where: () => ({ limit }),
   };
   return {
-    select: () => ({ from: () => chain }),
+    select: () => {
+      approverReads += 1;
+      return { from: () => chain };
+    },
     insert: (table: unknown) => ({
       values: async (values: unknown[]) => {
         inserted.push({ table, values });
@@ -55,6 +59,7 @@ const ARGS = {
 beforeEach(() => {
   approverRows = [];
   inserted = [];
+  approverReads = 0;
   warnSpy.mockClear();
 });
 
@@ -133,5 +138,51 @@ describe("notifyApprovalRequested", () => {
       }),
       expect.stringContaining("fan-out truncated"),
     );
+  });
+});
+
+describe("notifyApprovalRequested with named recipients", () => {
+  // The in-app assistant's park names the person who asked, because only
+  // they may answer it (ADR-235, ruled on 2026-10-01). Nobody else in the
+  // workspace is told, however many approvers it has.
+  it("tells only the people named, and reads no approvers", async () => {
+    approverRows = [{ userId: "u_owner" }, { userId: "u_admin" }];
+
+    await notifyApprovalRequested(fakeTx(), {
+      ...ARGS,
+      recipients: ["u_asker"],
+    });
+
+    expect(approverReads).toBe(0);
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]!.table).toBe(schema.notifications);
+    expect(inserted[0]!.values).toEqual([
+      {
+        orgId: "org_1",
+        workspaceId: "ws_1",
+        userId: "u_asker",
+        kind: "approval",
+        event: "approval.requested",
+        title: "Approval requested: issue_refund",
+        body: "Risk critical. Expires 2026-02-03T04:05:06.000Z.",
+        deepLink: null,
+      },
+    ]);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it("tells a named person once, and writes nothing for an empty list (negative)", async () => {
+    await notifyApprovalRequested(fakeTx(), {
+      ...ARGS,
+      recipients: ["u_asker", "u_asker"],
+    });
+    expect(inserted.flatMap((i) => i.values)).toEqual([
+      expect.objectContaining({ userId: "u_asker" }),
+    ]);
+
+    inserted = [];
+    await notifyApprovalRequested(fakeTx(), { ...ARGS, recipients: [] });
+    expect(inserted).toEqual([]);
+    expect(approverReads).toBe(0);
   });
 });

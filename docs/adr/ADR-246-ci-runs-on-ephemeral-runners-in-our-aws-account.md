@@ -465,3 +465,37 @@ facts from the build supersede the matching parts of the decisions above.
 The p95 of 78 seconds is for a burst larger than the warm pool, where every
 job waits for a new machine. A job that finds a warm runner starts in
 seconds.
+
+## Amendment of 2026-10-02: pool caps and smaller build runners
+
+The first four hours on these runners (2026-10-01 23:36Z to 2026-10-02
+03:15Z) changed three settings (#5070). These facts supersede the matching
+parts above.
+
+- **Both quotas filled.** During every backlog, spot use sat at its 300-vCPU
+  quota and on-demand use sat near its own 300. Only 15 to 20 large runners
+  ran jobs at once while 50 to 100 jobs waited. Jobs ran 2 to 5 times faster
+  than on GitHub's runners, but a full pull request still took a median 21
+  minutes.
+- **Deploys starved.** The deploy pool runs on on-demand only, and the CI
+  pools had taken that quota. Its scale-up failed with `VcpuLimitExceeded`
+  161 times in four hours, and `deploy oxagen.sh` waited a median 8.1 minutes
+  for a runner, against 0.1 before. `max_runners` in `terraform.tfvars` now
+  caps the CI pools at 22 large and 36 small runners. The cap alone didn't
+  protect deploys: half the large runners launched after it landed on
+  on-demand, and 22 large runners there would need 352 vCPUs, more than the
+  quota. So the large pools no longer fall back to on-demand and wait for
+  spot instead. The small pools still fall back, and at most they take 144
+  on-demand vCPUs, which leaves 96 for the deploy pool and 6 for production.
+  This reverses "on-demand fills in" for the large pools until the spot
+  quota rises.
+- **Build lanes on the small pool.** The three `build` lanes move to
+  `oxagen-small-<arch>`. Each finished in under 2 minutes on a 16-vCPU runner
+  and in 2 to 3 minutes on a 4-vCPU one, well inside `unit (app)`. Each move
+  frees 12 vCPUs for the jobs that use 16.
+- **Six warm large runners.** With #5056, which moves `rls-integration` and
+  `rds-compatibility` to the small pool, the large pool serves six jobs per
+  pull request (`checks`, `e2e`, and four `unit` lanes). Six stay warm
+  instead of ten.
+
+Raise `max_runners` when AWS approves the open quota cases.

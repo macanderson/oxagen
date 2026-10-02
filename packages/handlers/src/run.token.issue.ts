@@ -15,7 +15,8 @@ import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import { lockRunForControl } from "@oxagen/run-ledger";
 import { and, eq } from "drizzle-orm";
 import { generateApiKey } from "./lib/api-key-authz";
-import { runScope } from "./run.list";
+import { inAppRunReadable } from "./lib/run-read";
+import { ledgerIdentityQuery, runScope } from "./run.list";
 
 export const runTokenIssueHandler: CapabilityHandler<
   typeof runTokenIssue
@@ -43,6 +44,12 @@ export const runTokenIssueHandler: CapabilityHandler<
   return withTenantDb(async (tx) => {
     const run = await lockRunForControl(tx, scope, input.runId);
     if (!run)
+      throw new HandlerError({ code: "not_found", reason: "run_not_found" });
+    // An in-app run is `not_found` to everyone but the person who asked
+    // (ADR-235, item 5), before its status or its parties can say it exists.
+    // The read goes through this transaction, as `assertRunParty` explains.
+    const [ledgerRow] = await ledgerIdentityQuery(tx, scope, run.id);
+    if (ledgerRow && !inAppRunReadable(ledgerRow, userId))
       throw new HandlerError({ code: "not_found", reason: "run_not_found" });
     if (run.cancelled || !["pending", "running"].includes(run.status))
       throw new HandlerError({ code: "conflict", reason: "run_not_writable" });

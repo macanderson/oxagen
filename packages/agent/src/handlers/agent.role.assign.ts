@@ -10,7 +10,9 @@
 //      non-enterprise org, so the handler checks (INV-29).
 // Then, in one tenant-scoped transaction (guards and the write are atomic):
 //   3. Resolve the agent (workspace-scoped) and its delegated principal.
-//      Refuse a retired agent with `agent_retired`.
+//      Refuse the workspace's managed assistant agent with
+//      `agent_managed_read_only`: it is Oxagen's, and no customer role binds
+//      to it (ADR-235, item 13). Refuse a retired agent with `agent_retired`.
 //   4. Resolve the role by NAME (seeding is decoupled — spec §3.2).
 //   5. Assignability gate: system agent roles only among system roles.
 //   6. No tier gate (ADR-069). Custom roles were enterprise-only here, via the
@@ -38,6 +40,11 @@ import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq, isNull } from "drizzle-orm";
 import pino from "pino";
 import { canAccessACL, resolveOrgTier } from "@oxagen/billing";
+import { HandlerError } from "@oxagen/oxagen/handler-error";
+import {
+  isManagedAgentType,
+  MANAGED_AGENT_READONLY_CODE,
+} from "@oxagen/oxagen/interactive-agent";
 import { agentRoleAssign } from "@oxagen/oxagen/contracts/agent.role.assign";
 import type {
   AgentRoleAssignInput,
@@ -85,6 +92,16 @@ export async function agentRoleAssignHandler(
       input.agentId,
       ctx.workspaceId,
     );
+    // The managed assistant agent is Oxagen's (ADR-235, item 13). The refusal
+    // is the one the identity writes give it (`assertNotManaged` in
+    // @oxagen/handlers, which this package cannot import).
+    if (isManagedAgentType(agent.agentType)) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: MANAGED_AGENT_READONLY_CODE,
+        message: `Agent "${agent.slug}" is managed by Oxagen and cannot be changed.`,
+      });
+    }
     // A retired agent takes no new role. `revoke_agent_role` still removes
     // one from it.
     assertAgentNotRetired(agent);

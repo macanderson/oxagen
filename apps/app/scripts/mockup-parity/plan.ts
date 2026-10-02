@@ -3,7 +3,7 @@
 // address. CI-only audit tooling. It is pure, so plan.test.ts proves it with no
 // browser, and capture.ts drives Chromium over what it returns.
 //
-// It mirrors the design capture in macanderson/oxagen-roadmap
+// It mirrors the design capture in oxageninc/roadmap
 // (tools/capture-design.mjs), so the design artifact and the app artifacts
 // name the same states and the same files:
 //
@@ -64,7 +64,7 @@ const pageSchema = z.object({
     .default([]),
 });
 
-/** `mockups/pages/pages.json` in macanderson/oxagen-roadmap, as far as the capture reads it. */
+/** `mockups/pages/pages.json` in oxageninc/roadmap, as far as the capture reads it. */
 export const registrySchema = z.object({ pages: z.array(pageSchema) });
 export type Registry = z.infer<typeof registrySchema>;
 export type RegistryPage = z.infer<typeof pageSchema>;

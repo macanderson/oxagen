@@ -46,6 +46,7 @@ const identity = {
   registeredAt: "2026-09-13T10:00:00.000Z",
   firstFrameAt: null,
   costCenter: null,
+  cacheKeepAlive: true,
 };
 
 /** An agent whose active version sets no ceiling. */

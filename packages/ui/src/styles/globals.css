@@ -234,8 +234,9 @@
     /* ════════════════════════════════════════════════════════════════════════
      * CONTROLS — single global knobs (rounding + elevation). Flip in one place.
      * ════════════════════════════════════════════════════════════════════════ */
-    --ui-radius: 0.5rem; /* moderate rounding, matching the 20/96 corner the kit puts on its icon tile. */
-    --ui-shadow: 0 1px 2px oklch(0.15 0 0 / 0.07); /* subtle neutral shadow — hairline borders do the real work. */
+    --ui-radius: var(--ox-radius-base); /* the theme's corner base, radius.base in the kit's theme/theme.json */
+    --ui-shadow: var(--ox-shadow-ui-ink); /* the control hairline on paper; hairline borders do the real work. */
+    --ui-shadow-pop: var(--ox-shadow-pop-ink); /* under a menu, popover, dialog, drawer, or toast, on paper */
     --radius: var(--ui-radius);
 
     /* Absolute ink semantics (theme-independent). */
@@ -501,6 +502,10 @@
   .dark {
     color-scheme: dark;
 
+    /* The control and floating-surface shadows on ink. */
+    --ui-shadow: var(--ox-shadow-ui);
+    --ui-shadow-pop: var(--ox-shadow-pop);
+
     --background: var(--_stone-950);
     --foreground: var(--_ink-white);
     --card: var(--_stone-900);
@@ -638,6 +643,9 @@
   @media (prefers-color-scheme: dark) {
     :root:not(.light):not(.dark) {
       color-scheme: dark;
+
+      --ui-shadow: var(--ox-shadow-ui);
+      --ui-shadow-pop: var(--ox-shadow-pop);
 
       --background: var(--_stone-950);
       --foreground: var(--_ink-white);
@@ -944,17 +952,20 @@
   --color-badge-border: var(--badge-border);
 
   /*
-   * Radius scale — derives entirely from the --ui-radius master knob. At
-   * --ui-radius:0 every step clamps to 0 (square). This is why ~480 rounded-*
-   * sites needed no edits.
+   * Radius scale: each step is the kit's --ox-radius-<step> token, the theme's
+   * corner base (--ox-radius-base) times the step's multiplier in the kit's
+   * theme/theme.json. A theme change moves every rounded-* site with no edit
+   * here. `rounded-2xl` is a card, a popover, and a menu, and `rounded-4xl`
+   * is the pill a button and an input wear.
    */
-  --radius-xs: max(0px, calc(var(--radius) - 4px));
-  --radius-sm: max(0px, calc(var(--radius) - 3px));
-  --radius-md: max(0px, calc(var(--radius) - 2px));
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 16px);
+  --radius-xs: var(--ox-radius-xs);
+  --radius-sm: var(--ox-radius-sm);
+  --radius-md: var(--ox-radius-md);
+  --radius-lg: var(--ox-radius-lg);
+  --radius-xl: var(--ox-radius-xl);
+  --radius-2xl: var(--ox-radius-2xl);
+  --radius-3xl: var(--ox-radius-3xl);
+  --radius-4xl: var(--ox-radius-4xl);
 
   /*
    * Shadow scale — every step reads the --ui-shadow master knob. At
@@ -971,6 +982,10 @@
   --inset-shadow-2xs: var(--ui-shadow);
   --inset-shadow-xs: var(--ui-shadow);
   --inset-shadow-sm: var(--ui-shadow);
+  /* The deep shadow under floating chrome: a menu, popover, dialog, drawer,
+     or toast. Each theme block sets --ui-shadow-pop, so a dark theme from the
+     system setting gets it too, where a `dark:` class would not. */
+  --shadow-pop: var(--ui-shadow-pop);
 }
 
 /*
@@ -1010,7 +1025,7 @@
   h6 {
     font-family: var(--font-sans);
     font-weight: 600;
-    line-height: 1.4;
+    line-height: var(--ox-a-h4-leading);
   }
 
   h1,
@@ -1022,8 +1037,18 @@
        text-a-h1 utilities carry. */
     font-weight: var(--ox-weight-heading);
     letter-spacing: var(--ox-tracking-heading);
-    line-height: 1.12;
     text-wrap: balance;
+  }
+
+  /* Each heading takes its step's leading from the kit's app scale. */
+  h1 {
+    line-height: var(--ox-a-h1-leading);
+  }
+  h2 {
+    line-height: var(--ox-a-h2-leading);
+  }
+  h3 {
+    line-height: var(--ox-a-h3-leading);
   }
 
   code,
@@ -1081,7 +1106,9 @@
 
 /*
  * Utilities — FLAT surfaces, but MOTION RETAINED. No gradients, glows, mesh, or
- * glassmorphism; depth is a 1px border, never a shadow. Motion, however, is
+ * glassmorphism. A surface at rest (a card, a panel, a table) has a 1px border
+ * and no shadow. Floating chrome (a menu, popover, dialog, drawer, or toast)
+ * takes `shadow-pop`, and a control takes the hairline `shadow-sm`. Motion is
  * kept everywhere it existed: the helpers below (hover-lift, hover-glow ring,
  * animate-in, stream caret) plus the per-component transitions. The a11y
  * reduced-motion kill-switch still honors the OS setting. Restyle via the value
@@ -1139,7 +1166,7 @@
   /* Wide-tracked uppercase eyebrow label (sans). */
   .ox-eyebrow {
     font-family: var(--font-sans);
-    font-size: 0.75rem;
+    font-size: var(--ox-a-micro);
     font-weight: 600;
     letter-spacing: 0.16em;
     text-transform: uppercase;

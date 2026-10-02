@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The Steering hub over a fake DataSource (roadmap pages/steering.md): the
-// header with the governance chip and one gold action, the five tabs as path
+// header with the governance chip and one gold action, the six tabs as path
 // segments, the Library's shelf row and its All shelf, the empty, error,
 // denied and loading states, and each tab and shelf making only its own
 // reads: Records in its ok, filtered, empty and paged states, the Proposals
@@ -192,7 +192,7 @@ const tab = (name: string) =>
   screen.getByRole("tab", { name: new RegExp(`^${name}`) });
 
 describe("the hub", () => {
-  it("opens the Library's All shelf on the bare route with the five tabs as path segments, in order", async () => {
+  it("opens the Library's All shelf on the bare route with the six tabs as path segments, in order", async () => {
     const calls = await renderSteering();
     // The All shelf reads the whole list at the contract's bound.
     expect(calls.records).toEqual([
@@ -211,6 +211,7 @@ describe("the hub", () => {
         ]),
     ).toEqual([
       ["Library1", `${BASE}/library`, "true"],
+      ["Memories2", `${BASE}/memories`, "false"],
       ["Assignments", `${BASE}/assignments`, "false"],
       ["Gates", `${BASE}/gates`, "false"],
       ["Proposals3", `${BASE}/proposals`, "false"],
@@ -274,8 +275,8 @@ describe("the hub", () => {
     expect(tab("Gates")).toHaveAttribute("tabindex", "-1");
     library.focus();
     fireEvent.keyDown(library, { key: "ArrowRight" });
-    expect(tab("Assignments")).toHaveFocus();
-    fireEvent.keyDown(tab("Assignments"), { key: "End" });
+    expect(tab("Memories")).toHaveFocus();
+    fireEvent.keyDown(tab("Memories"), { key: "End" });
     expect(tab("Compiler")).toHaveFocus();
     fireEvent.keyDown(tab("Compiler"), { key: "ArrowRight" });
     expect(library).toHaveFocus();
@@ -839,7 +840,7 @@ describe("states", () => {
       ).toBeVisible();
       expect(document.querySelectorAll("[data-create]")).toHaveLength(1);
       expect(screen.getByTestId("governance-chip")).toBeVisible();
-      expect(screen.getAllByRole("tab")).toHaveLength(5);
+      expect(screen.getAllByRole("tab")).toHaveLength(6);
       expect(tab("Library")).toHaveTextContent(/^Library$/);
     },
   );
@@ -1031,6 +1032,41 @@ describe("Records", () => {
     } finally {
       window.removeEventListener(CREATE_EVENT, receive);
     }
+  });
+
+  // #4572 item 1: the card showed the record's tokens and no price. The
+  // server prices them at the weekly price the tool providers use, so 5,200
+  // tokens at 48,000 micros per 1,000 read $0.2496 here and on the
+  // providers table (providers.test.tsx).
+  it("prints the weekly price list_records priced, labelled estimate, and none for a record it did not price", async () => {
+    await renderSteering("/records", {
+      records: readOk({
+        records: [
+          publishedRecord({
+            contextTokens: 5_200,
+            weeklyPrice: {
+              micros: "249600",
+              currency: "USD",
+              basis: "estimated",
+            },
+          }),
+          publishedRecord({
+            id: "ctr_unpriced",
+            lineage: "ctx.a.unpriced",
+            contextTokens: 20,
+            weeklyPrice: null,
+          }),
+        ],
+        total: 2,
+      }),
+    });
+    const cards = within(section("Published records")).getAllByRole("article");
+    expect(cards).toHaveLength(2);
+    const [priced, unpriced] = cards;
+    const price = priced?.querySelector('[data-term="weekly-price"]');
+    expect(price).toHaveTextContent("$0.2496 a week (estimate)");
+    expect(unpriced?.querySelector('[data-term="weekly-price"]')).toBeNull();
+    expect(unpriced).not.toHaveTextContent("a week");
   });
 
   it("leads a card with the record's label and prints its statement under it (ADR-178)", async () => {
@@ -1309,6 +1345,9 @@ describe("Proposals", () => {
       deliveries: [],
       hub: [[ctx]],
       memories: [],
+      workspaceMemories: [],
+      workspaceMemory: [],
+      memoryPrRecords: [],
       tree: [],
     });
     const table = screen.getByRole("table", { name: "Proposals" });

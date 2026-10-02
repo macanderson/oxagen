@@ -1,6 +1,8 @@
 // The Steering hub (roadmap pages/steering.md; #2961): the header with the
-// governance chip, Import Markdown (#4913), and the one gold action, the five
+// governance chip, Import Markdown (#4913), and the one gold action, the six
 // tabs, the Library's shelf row, and the body of the tab or shelf in view.
+// The Memories tab (#4914) carries the count of waiting memories, which the
+// hub read makes on every view.
 //
 // Every tab reads the record registry first, because the Library's count sits
 // on the Library tab wherever the reader is, and because that read is the
@@ -32,6 +34,7 @@ import { AssignmentsTab } from "./tabs/assignments";
 import { CompilerTab } from "./tabs/compiler";
 import { GatesTab } from "./tabs/gates";
 import { InstructionsShelf } from "./tabs/instructions";
+import { MemoriesTab } from "./tabs/memories";
 import { MemoryShelf } from "./tabs/memory";
 import { OntologyShelf } from "./tabs/ontology";
 import { type ProposalStateCounts, ProposalsTab } from "./tabs/proposals";
@@ -53,6 +56,7 @@ async function Body({
   memories,
   repository,
   states,
+  readAt,
 }: {
   ctx: WsCtx;
   source: DataSource;
@@ -66,6 +70,8 @@ async function Body({
   repository: string | null;
   /** The Proposals filter counts, from the hub's own read; null when a count failed. */
   states: ProposalStateCounts | null;
+  /** The instant the hub read, which the Memories tab's relative times count from. */
+  readAt: string;
 }) {
   // The async bodies are awaited here rather than rendered as elements, so
   // each read runs before the hub returns and a test renders the result.
@@ -74,6 +80,8 @@ async function Body({
       return await AssignmentsTab({ ctx, source, at });
     case "gates":
       return await GatesTab({ ctx, source, at });
+    case "memories":
+      return await MemoriesTab({ ctx, source, at, view, readAt });
     case "compiler":
       return await CompilerTab({
         ctx,
@@ -311,6 +319,7 @@ export async function Steering({
         current={view.tab}
         counts={{
           library: records,
+          memories: hub.ok ? hub.value.memoriesWaiting : null,
           assignments: agents.ok ? agents.value.totals.enrolled : null,
           proposals: hub.ok ? hub.value.proposalsWaiting : null,
         }}
@@ -333,6 +342,7 @@ export async function Steering({
             memories: memoryPage,
             repository,
             states: hub.ok ? hub.value.states : null,
+            readAt,
           })
         )}
       </RouteTabPanel>

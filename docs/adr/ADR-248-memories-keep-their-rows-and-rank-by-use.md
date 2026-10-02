@@ -7,7 +7,8 @@
 - **Supersedes in part:** ADR-206 decision 6 step 3 (the age drop) and
   decision 7 (the purge), and two consequences of ADR-238 (a deleted file's
   memory, and the age clock).
-- **Related:** issue #4908 (lane MEM2), ADR-206, ADR-238, the memory
+- **Related:** issue #4908 (lane MEM2), issue #4910 (lane MEM3), ADR-206,
+  ADR-238, the memory
   collection spec (`memory-collection-spec.html` in oxageninc/roadmap,
   sections Use counting, Lifecycle, Data model, and Capabilities).
 
@@ -74,10 +75,14 @@ memory until one of those two deletes reached it (ADR-238).
 7. **A full scan retires what it no longer finds.** Each scan sends its
    folder and every memory file it found. Each waiting or promoted memory of
    the host's agent from a file under that folder that the scan did not list
-   retires. The daemon sends a scan only when it listed every folder without
-   an error, because a scan that missed a folder would retire every memory in
-   it. After such a scan the reader forgets the files it no longer found, so
-   a deleted file that comes back unchanged is sent again.
+   retires. The daemon sends a location's scan only when it listed every
+   folder of that location without an error, because a scan that missed a
+   folder would retire every memory in it. One location that could not be
+   read holds back its own scan and no other (MEM3). A location whose folder
+   is not there sends no scan, so a project with no subagent memories costs
+   no call, and the memories of a folder deleted whole retire as `unused`.
+   After a full read the reader forgets the files under that location it no
+   longer found, so a deleted file that comes back unchanged is sent again.
 8. **The curator fills its batch from the top of the ranking.** It ranks
    waiting memories by uses, then the newest use, then the newest capture,
    and groups them by lesson in that order. Only a memory with at least one
@@ -104,6 +109,25 @@ memory until one of those two deletes reached it (ADR-238).
     and the time the turn finished. A use no run fits is dropped, because
     Oxagen recorded no run for it. A cursor in the agent's
     `stella-memory-cursors.json` keeps a restart from counting a use twice.
+13. **Codex and Claude Code subagents are two more stores (MEM3).** A
+    Claude Code subagent keeps one memory per file in
+    `~/.claude/agent-memory/<name>/`, `<project>/.claude/agent-memory/<name>/`,
+    or `<project>/.claude/agent-memory-local/<name>/`. Tacho reads them like
+    project memory files, and a read of one is a `read` use. The project
+    folders are those of the Claude Code sessions the daemon's registry
+    holds. Codex keeps one memory per thread in `memories_1.sqlite`, table
+    `stage1_outputs`. Its source is `codex:thread/<thread_id>`, its statement
+    is the row's `description:` line, and its `rollout_slug` is its label.
+    The rest of the row is not sent, because no field holds it. Codex counts
+    its own uses in `usage_count`: each scan sends the rise since the count
+    the host last reported, in the report's `counts`, and the handler stores
+    it as a `harness_count` use with no run. The host keeps the reported
+    counts in `memory-counts.json`, so a restart sends only the rise since.
+    A memory the host sees for the first time sends its whole count once,
+    because those uses happened. Only the agent that enrolls Codex reads the
+    store, so two agents in one workspace do not both send one rise. A
+    daemon that stops between a report Oxagen took and the write of
+    `memory-counts.json` sends that rise again.
 
 ## Consequences
 

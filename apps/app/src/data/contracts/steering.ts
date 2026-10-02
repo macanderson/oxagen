@@ -1,11 +1,13 @@
 // The Steering page's view models (#2961; ADR-061; MC spec §10), from
-// list_records, list_proposals and get_context_pr. A record is in force
+// list_records, list_proposals and get_context_pr, and the Memories tab's
+// from the workspace memory reads (#4914). A record is in force
 // because a Context PR merged it; a proposal steers nothing; the Context PR
 // carries the state machine, its checks and what merge will do. Effect
 // metrics, retirement and promotion thresholds have no view model: they are
 // not in this release.
 import { z } from "zod";
 import { PublicId } from "./common";
+import { Cost } from "./money";
 
 const Count = z.number().int().nonnegative();
 const Instant = z.iso.datetime({ offset: true });
@@ -92,8 +94,23 @@ const PublishedRecord = z.object({
   publishedAt: Instant.nullable(),
 });
 
+/**
+ * A listed record, with what its line costs (#4572). Only list_records
+ * prices a record, so the record page's view model does not carry these.
+ */
+const ListedRecord = PublishedRecord.extend({
+  /** The tokens of the record's line in the signed bundle; null for a record the assembler drops. */
+  contextTokens: Count.nullable().optional(),
+  /**
+   * What those tokens cost the workspace over the last 7 days, an estimate
+   * the server priced at the weekly price the tool providers use (ADR-060).
+   * Null when the tokens are null or the week has no price.
+   */
+  weeklyPrice: Cost.nullable().optional(),
+});
+
 export const RecordPage = z.object({
-  records: z.array(PublishedRecord),
+  records: z.array(ListedRecord),
   /** Every record in force of the kind asked for, ignoring the page. */
   total: Count,
 });
@@ -458,8 +475,215 @@ export const SteeringHub = z.object({
    * merged and closed. Null when any of the three failed.
    */
   states: z.object({ open: Count, merged: Count, closed: Count }).nullable(),
+  /**
+   * The workspace memories waiting for a person, for the Memories tab's
+   * count. Null when the count failed, so the tab prints no figure.
+   */
+  memoriesWaiting: Count.nullable(),
 });
 export type SteeringHub = z.infer<typeof SteeringHub>;
+
+/**
+ * The eight kinds of steering-record/v1, the kinds a workspace memory and a
+ * memory PR's record carry. The registry's six context-record kinds are
+ * `RecordKind` above.
+ */
+const STEERING_RECORD_KINDS = [
+  "business-rule",
+  "code-rule",
+  "constraint",
+  "procedure",
+  "skill",
+  "fact",
+  "preference",
+  "memory",
+] as const;
+export const SteeringRecordKind = z.enum(STEERING_RECORD_KINDS);
+export type SteeringRecordKind = z.infer<typeof SteeringRecordKind>;
+
+/** Where a workspace memory is in its life (ADR-248), in the order the State filter lists them. */
+export const WORKSPACE_MEMORY_STATES = [
+  "waiting",
+  "in_pr",
+  "promoted",
+  "dismissed",
+  "retired",
+] as const;
+export const WorkspaceMemoryState = z.enum(WORKSPACE_MEMORY_STATES);
+export type WorkspaceMemoryState = z.infer<typeof WorkspaceMemoryState>;
+
+/** The harnesses whose memory stores Oxagen collects from an enrolled host. */
+export const MEMORY_HARNESSES = [
+  "claude-code",
+  "codex",
+  "cursor",
+  "stella",
+  "claude-desktop",
+] as const;
+export const MemoryHarness = z.enum(MEMORY_HARNESSES);
+export type MemoryHarness = z.infer<typeof MemoryHarness>;
+
+/** How a memory reached Oxagen: an agent's lesson, a pull request, the local gateway, or an import. */
+const MemoryCapture = z.enum([
+  "remember",
+  "pull_request",
+  "local_gateway",
+  "import",
+]);
+
+const MemoryPrStatus = z.enum(["open", "merged", "closed"]);
+
+/**
+ * One workspace memory (memory-collection spec, Memories tab; ADR-248), from
+ * `list_workspace_memories`: what an agent wrote in its harness's own memory
+ * store, or through `remember_lesson`. It steers only the agent that wrote
+ * it. `uses` counts the distinct runs that used it, and `useSignal` is false
+ * for a source that reports no use, so a zero reads as "No signal".
+ */
+export const WorkspaceMemory = z.object({
+  id: PublicId,
+  /** The memory file's frontmatter `name`, when it has one. */
+  label: z.string().nullable(),
+  /** The memory file's frontmatter `description`, when it has one. */
+  summary: z.string().nullable(),
+  statement: z.string(),
+  state: WorkspaceMemoryState,
+  capture: MemoryCapture,
+  /** The harness whose store holds it; null for a memory no harness holds. */
+  harness: MemoryHarness.nullable(),
+  /** The agent that wrote it, by its key (`org_ns.ws_ns.slug`); null when Oxagen could not tell. */
+  agent: z.string().nullable(),
+  /** `<harness>:<path>` for a harness memory file, a pull request URL, or null. */
+  source: z.string().nullable(),
+  repos: z.array(z.string()).nullable(),
+  /** A Claude Code memory file's type, such as `feedback`. */
+  memoryType: z.string().nullable(),
+  kind: SteeringRecordKind,
+  uses: Count,
+  useSignal: z.boolean(),
+  lastUsedAt: Instant.nullable(),
+  createdAt: Instant,
+  /** The steering record that carries it, once promoted. */
+  promotedLineage: z.string().nullable(),
+  /** The memory PR that last cited it. */
+  memoryPr: z
+    .object({
+      number: z.number().int().positive(),
+      url: z.string().min(1),
+      status: MemoryPrStatus,
+    })
+    .nullable(),
+});
+export type WorkspaceMemory = z.infer<typeof WorkspaceMemory>;
+
+/**
+ * One page of the Memories tab. Memories that say the same thing share a
+ * group, and the highest ranked one speaks for it. The page counts groups.
+ * `waiting` counts the workspace's waiting memories whatever the filters.
+ */
+export const WorkspaceMemoryPage = z.object({
+  groups: z.array(
+    z.object({
+      memory: WorkspaceMemory,
+      members: z.array(WorkspaceMemory).min(1),
+      uses: Count,
+      lastUsedAt: Instant.nullable(),
+    }),
+  ),
+  totalGroups: Count,
+  totalMemories: Count,
+  /** True when more memories matched than the list groups. */
+  truncated: z.boolean(),
+  waiting: Count,
+});
+export type WorkspaceMemoryPage = z.infer<typeof WorkspaceMemoryPage>;
+
+/** What one Memories read asks for; null leaves that filter off. */
+export type WorkspaceMemoryQuery = {
+  states: readonly WorkspaceMemoryState[];
+  harness: MemoryHarness | null;
+  /** An agent key. */
+  agent: string | null;
+  /** `<host>/<owner>/<name>`, such as `github.com/acme/api`. */
+  repository: string | null;
+  type: string | null;
+  limit: number;
+  offset: number;
+};
+
+/** A memory PR as one memory or the review card reads it. */
+const MemoryPullRequest = z.object({
+  number: z.number().int().positive(),
+  url: z.string().min(1),
+  repository: z.string().min(1),
+  branch: z.string().min(1),
+  status: MemoryPrStatus,
+  openedAt: Instant,
+  settledAt: Instant.nullable(),
+});
+
+/**
+ * One memory in full, for the Memories tab's drawer, from
+ * `get_workspace_memory`: where it came from, the runs that used it (newest
+ * first, at most 100 of `usesTotal`), and the memory PR that last cited it.
+ */
+export const WorkspaceMemoryDetail = z.object({
+  memory: WorkspaceMemory.extend({
+    /** The run that wrote it, or null for a memory with no run. */
+    run: z.string().nullable(),
+    /** `frame:<run>/<seq>` references, or URLs for a memory with no run. */
+    evidence: z.array(z.string()),
+    retiredAt: Instant.nullable(),
+    retiredReason: z.enum(["deleted", "unused"]).nullable(),
+  }),
+  uses: z.array(
+    z.object({
+      /** The run, or null for a use the harness counted with no run. */
+      run: z.string().nullable(),
+      signal: z.enum(["read", "harness_count", "citation"]),
+      count: z.number().int().positive(),
+      usedAt: Instant,
+    }),
+  ),
+  usesTotal: Count,
+  memoryPr: MemoryPullRequest.nullable(),
+});
+export type WorkspaceMemoryDetail = z.infer<typeof WorkspaceMemoryDetail>;
+
+/**
+ * The records one memory PR proposes or archives, for the memory PR review
+ * card, from `list_memory_pr_records`. `branchRead` is false for a settled
+ * PR or a branch that could not be read; each record then takes its title and
+ * summary from its first memory.
+ */
+export const MemoryPrRecords = z.object({
+  pullRequest: MemoryPullRequest,
+  branchRead: z.boolean(),
+  records: z.array(
+    z.object({
+      action: z.enum(["propose", "retire"]),
+      path: z.string().min(1),
+      lineage: z.string().min(1),
+      kind: SteeringRecordKind,
+      title: z.string(),
+      summary: z.string(),
+      /** The memories the record cites, in the order the PR cites them. A retirement cites none. */
+      memories: z.array(
+        z.object({
+          id: PublicId,
+          statement: z.string(),
+          agent: z.string().nullable(),
+          run: z.string().nullable(),
+          evidence: z.array(z.string()),
+          state: WorkspaceMemoryState,
+        }),
+      ),
+      /** The commit on the open PR's branch that removed the record, or null. */
+      dropped: z.object({ commitSha: z.string().min(1) }).nullable(),
+    }),
+  ),
+});
+export type MemoryPrRecords = z.infer<typeof MemoryPrRecords>;
 
 /**
  * The Library's Memory shelf (roadmap pages/steering-memory.md), from

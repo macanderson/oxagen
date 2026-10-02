@@ -39,6 +39,7 @@ export const conversationFilesList = registerCapability({
     "List the ready generated assets attached to a conversation, access-policy filtered, newest-first, keyset-paginated",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
+  inAppAssistant: true,
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   // File listing does not consume AI tokens — billing gate must not block this.

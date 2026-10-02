@@ -38,6 +38,7 @@ export const assistantEngineGet = registerCapability({
     "Probe the in-app agent's engine: its readiness state as the engine reported it, or unreachable after the attempts made, with the host the probe was aimed at.",
   mode: "sync",
   surfaces: ["api", "mcp"],
+  inAppAssistant: true,
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   mutates: false,

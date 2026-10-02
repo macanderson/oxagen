@@ -1,16 +1,16 @@
+import { ASSISTANT_SPEND_KEY } from "@oxagen/oxagen/contracts/spend.get";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import type { UnmeteredRuns } from "@oxagen/oxagen/contracts/spend.shared";
-import type { RunTotalsRecord } from "@oxagen/billing";
 import { describe, expect, it, vi } from "vitest";
 import { createSpendDrillHandler, trailingWindow } from "./spend.drill";
-import type { RunFilter, SpendScope } from "./spend.shared";
+import type { RunFilter, SpendRunRecord, SpendScope } from "./spend.shared";
 import { ctx, OPERATOR, pricedRun, run, SCOPE } from "./spend.test-support";
 
 const NOW = new Date("2026-09-14T15:00:00.000Z");
 
 /** A fake store that filters the rows the way the Postgres predicate does. */
 function harness(
-  rows: RunTotalsRecord[],
+  rows: SpendRunRecord[],
   unmetered: UnmeteredRuns = { total: 0, byHarness: [] },
 ) {
   const readRunTotals = vi.fn(
@@ -180,6 +180,43 @@ describe("get_spend_drill", () => {
       ctx(),
     );
     expect(out.share).toBe(1);
+  });
+});
+
+// ADR-235, 2026-10-02 amendment: the Spend page keeps the in-app assistant's
+// spend in a row of its own, so a drill on a customer key leaves it out, and
+// the share's divisor, the workspace's whole spend, keeps it.
+describe("get_spend_drill and the in-app assistant", () => {
+  it("leaves the assistant's runs out of an operator's drill, and keeps them in the share's divisor", async () => {
+    const h = harness([
+      pricedRun(400n, { startedAt: new Date("2026-09-13T01:00:00Z") }),
+      {
+        ...pricedRun(900n, { startedAt: new Date("2026-09-13T02:00:00Z") }),
+        inApp: true,
+      },
+    ]);
+    const out = await h.handler(
+      { kind: "operator", key: OPERATOR, days: 2 },
+      ctx(),
+    );
+    expect(out.total).toMatchObject({ cost: { micros: "400" }, runs: 1 });
+    expect(out.share).toBeCloseTo(400 / 1300, 10);
+    expect(() => spendDrill.output.parse(out)).not.toThrow();
+  });
+
+  it("answers an empty drill for the assistant row's key", async () => {
+    const h = harness([
+      {
+        ...pricedRun(900n, { startedAt: new Date("2026-09-13T02:00:00Z") }),
+        inApp: true,
+      },
+    ]);
+    const out = await h.handler(
+      { kind: "agent", key: ASSISTANT_SPEND_KEY, days: 2 },
+      ctx(),
+    );
+    expect(out.total).toMatchObject({ cost: null, runs: 0 });
+    expect(() => spendDrill.output.parse(out)).not.toThrow();
   });
 });
 

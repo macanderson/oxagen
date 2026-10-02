@@ -18,7 +18,7 @@ replacement) is enterprise-only.
 | Field | Type | Notes |
 | --- | --- | --- |
 | additionalInstructions | string? | Appended instructions (max 8000 chars, null to clear) (optional) |
-| overrides | object? | Full-replacement overrides for "conversation.title", "svg.generate", "image.analyze" (each max 4000 chars, null to clear all) (optional, enterprise-only) |
+| overrides | object? | Full-replacement overrides for "conversation.title", "svg.generate", "image.analyze" (each max 4000 chars, null to clear all) (optional, enterprise-only). The in-app assistant's conversation titler no longer reads the "conversation.title" override (ADR-235). |
 | autoImprovePrompts | boolean? | Toggle auto-improve-prompts (optional) |
 
 ## Output

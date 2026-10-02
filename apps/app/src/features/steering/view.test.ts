@@ -1,9 +1,12 @@
 // Which Steering view an address resolves to (roadmap pages/steering.md):
 // every tab and shelf as a path segment, every address written before the
 // five tabs landing where it lives now, the query values each view keeps,
-// and a 404 for a segment that names nothing.
+// the Memories filters and drawer (#4914), and a 404 for a segment that
+// names nothing.
 import { describe, expect, it } from "vitest";
 import {
+  memoriesLink,
+  memoryStates,
   proposalListFrom,
   resolveSteeringRoute,
   shelfLink,
@@ -32,6 +35,7 @@ describe("resolveSteeringRoute", () => {
           cursor: null,
           skillView: undefined,
           skill: null,
+          memories: null,
         },
       });
     }
@@ -47,7 +51,7 @@ describe("resolveSteeringRoute", () => {
     },
   );
 
-  it.each(["assignments", "gates", "proposals", "compiler"])(
+  it.each(["memories", "assignments", "gates", "proposals", "compiler"])(
     "opens /%s as its own tab with no shelf",
     (tab) => {
       expect(resolve([tab])).toMatchObject({
@@ -56,6 +60,88 @@ describe("resolveSteeringRoute", () => {
       });
     },
   );
+
+  it("opens Memories with Waiting and In PR and no other filter by default", () => {
+    expect(resolve(["memories"])).toMatchObject({
+      view: {
+        tab: "memories",
+        rows: 50,
+        offset: 0,
+        memories: {
+          state: "open",
+          harness: null,
+          agent: null,
+          repo: null,
+          type: null,
+          memory: null,
+        },
+      },
+    });
+    expect(memoryStates("open")).toEqual(["waiting", "in_pr"]);
+    expect(memoryStates("all")).toEqual([
+      "waiting",
+      "in_pr",
+      "promoted",
+      "dismissed",
+      "retired",
+    ]);
+    expect(memoryStates("dismissed")).toEqual(["dismissed"]);
+  });
+
+  it("reads each Memories filter, the page and the memory the drawer opens", () => {
+    expect(
+      resolve(["memories"], {
+        state: "dismissed",
+        harness: "codex",
+        agent: "acme.core.release-manager",
+        repo: "github.com/acme/platform",
+        type: "feedback",
+        memory: "mem_01k5rw3draft",
+        rows: "25",
+        offset: "25",
+      }),
+    ).toMatchObject({
+      view: {
+        rows: 25,
+        offset: 25,
+        memories: {
+          state: "dismissed",
+          harness: "codex",
+          agent: "acme.core.release-manager",
+          repo: "github.com/acme/platform",
+          type: "feedback",
+          memory: "mem_01k5rw3draft",
+        },
+      },
+    });
+  });
+
+  it("reads a Memories value the reads would refuse as no filter (negative)", () => {
+    expect(
+      resolve(["memories"], {
+        state: "lost",
+        harness: "aider",
+        agent: "a b",
+        repo: "github.com/../x",
+        type: "Feedback",
+        memory: "prp_01k5",
+      }),
+    ).toMatchObject({
+      view: {
+        memories: {
+          state: "open",
+          harness: null,
+          agent: null,
+          repo: null,
+          type: null,
+          memory: null,
+        },
+      },
+    });
+    expect(resolve(["records"], { state: "all" })).toMatchObject({
+      view: { memories: null },
+    });
+  });
 
   it("keeps the kind and the page on Records, and drops a kind it does not know", () => {
     expect(resolve(["records"], { kind: "rule", offset: "50" })).toMatchObject({
@@ -224,6 +310,12 @@ describe("resolveSteeringRoute", () => {
     [undefined, { tab: "settings" }, `${BASE}/gates`],
     [undefined, { tab: "deliveries" }, `${BASE}/assignments`],
     [undefined, { tab: "memory" }, `${BASE}/memory`],
+    [undefined, { tab: "memories" }, `${BASE}/memories`],
+    [
+      undefined,
+      { tab: "memories", state: "all", agent: "acme.core.release-manager" },
+      `${BASE}/memories?state=all&agent=acme.core.release-manager`,
+    ],
   ])("moves an old address %o %o to %s", (segments, query, to) => {
     expect(resolve(segments, query)).toEqual({ kind: "redirect", to });
   });
@@ -244,6 +336,7 @@ describe("resolveSteeringRoute", () => {
     [["gates", "x"]],
     [["proposals", "candidates"]],
     [["proposals", "prs", "prp_1", "x"]],
+    [["memories", "mem_01k5rw3draft"]],
     [["compiler", "a b"]],
     [["compiler", "a", "b"]],
     [["library", "bogus"]],
@@ -313,5 +406,42 @@ describe("links", () => {
     expect(
       steeringLink(AT, { tab: "proposals", state: "merged", rows: 25 }),
     ).toBe(`${BASE}/proposals?state=merged&rows=25`);
+  });
+
+  it("builds the Memories address with its filters, leaving the defaults off", () => {
+    expect(steeringLink(AT, { tab: "memories" })).toBe(`${BASE}/memories`);
+    expect(
+      steeringLink(AT, {
+        tab: "memories",
+        agent: "acme.core.release-manager",
+        memories: { state: "open", harness: "codex", memory: "mem_1" },
+      }),
+    ).toBe(
+      `${BASE}/memories?harness=codex&agent=acme.core.release-manager&memory=mem_1`,
+    );
+  });
+
+  it("starts the first page and closes the drawer when a Memories filter changes", () => {
+    const view = {
+      rows: 25,
+      offset: 50,
+      memories: {
+        state: "open",
+        harness: null,
+        agent: null,
+        repo: null,
+        type: null,
+        memory: "mem_1",
+      },
+    } as const;
+    expect(memoriesLink(AT, view, { type: "feedback" })).toBe(
+      `${BASE}/memories?rows=25&type=feedback`,
+    );
+    expect(memoriesLink(AT, view, { memory: "mem_2" })).toBe(
+      `${BASE}/memories?rows=25&offset=50&memory=mem_2`,
+    );
+    expect(memoriesLink(AT, view, { memory: null })).toBe(
+      `${BASE}/memories?rows=25&offset=50`,
+    );
   });
 });

@@ -80,6 +80,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [rotate_agent_credential](agent.credential.rotate.md) | [agent.credential.rotate.ts](../../packages/oxagen/src/contracts/agent.credential.rotate.ts) | api |
 | [save_memory](agent.memory.remember.md) | [agent.memory.remember.ts](../../packages/oxagen/src/contracts/agent.memory.remember.ts) | api, mcp, agent |
 | [search_mcp_registry](agent.mcp.registry.search.md) | [agent.mcp.registry.search.ts](../../packages/oxagen/src/contracts/agent.mcp.registry.search.ts) | api, mcp, agent |
+| [set_agent_cache_keep_alive](agent.cache_keep_alive.set.md) | [agent.cache_keep_alive.set.ts](../../packages/oxagen/src/contracts/agent.cache_keep_alive.set.ts) | api, mcp |
 | [set_mcp_enabled](agent.mcp.set_enabled.md) | [agent.mcp.set_enabled.ts](../../packages/oxagen/src/contracts/agent.mcp.set_enabled.ts) | api, mcp |
 | [start_mcp_authorization](agent.mcp.authorize.start.md) | [agent.mcp.authorize.start.ts](../../packages/oxagen/src/contracts/agent.mcp.authorize.start.ts) | api, mcp |
 | [suggest_promotion_rationales](agent.memory_promotion.rationales.md) | [agent.memory_promotion.rationales.ts](../../packages/oxagen/src/contracts/agent.memory_promotion.rationales.ts) | api, mcp, agent |
@@ -125,6 +126,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [record_reply_feedback](assistant.reply_feedback.record.md) | [assistant.reply_feedback.record.ts](../../packages/oxagen/src/contracts/assistant.reply_feedback.record.ts) | api, mcp |
 | [cancel_assistant_turn](assistant.turn.cancel.md) | [assistant.turn.cancel.ts](../../packages/oxagen/src/contracts/assistant.turn.cancel.ts) | api |
 | [upload_assistant_attachment](assistant.attachment.upload.md) | [assistant.attachment.upload.ts](../../packages/oxagen/src/contracts/assistant.attachment.upload.ts) | api, mcp |
+| [set_assistant_switch](assistant.switch.set.md) | [assistant.switch.set.ts](../../packages/oxagen/src/contracts/assistant.switch.set.ts) | none |
 
 ## Audit
 
@@ -590,6 +592,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_spend_drill](spend.drill.md) | [spend.drill.ts](../../packages/oxagen/src/contracts/spend.drill.ts) | api, mcp, agent |
 | [get_spend_per_merged_pr](spend.per_merged_pr.md) | [spend.per_merged_pr.ts](../../packages/oxagen/src/contracts/spend.per_merged_pr.ts) | api, agent |
 | [get_unproductive_spend](spend.unproductive.md) | [spend.unproductive.ts](../../packages/oxagen/src/contracts/spend.unproductive.ts) | api, agent |
+| [get_work_order_metrics](spend.work_order_metrics.md) | [spend.work_order_metrics.ts](../../packages/oxagen/src/contracts/spend.work_order_metrics.ts) | api, agent |
 | [list_cost_centers](cost_center.list.md) | [cost_center.list.ts](../../packages/oxagen/src/contracts/cost_center.list.ts) | api, mcp, agent |
 | [list_findings](finding.list.md) | [finding.list.ts](../../packages/oxagen/src/contracts/finding.list.ts) | api, mcp, agent, cli |
 | [list_waste](spend.waste.md) | [spend.waste.ts](../../packages/oxagen/src/contracts/spend.waste.ts) | api, mcp, agent |

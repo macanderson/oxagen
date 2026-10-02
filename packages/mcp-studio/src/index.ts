@@ -45,5 +45,8 @@ export * from "./execute";
 // Replay of recorded calls (lane M16).
 export * from "./replay";
 
+// Selection runs: which tool a model picks for each task (lane M16).
+export * from "./selection";
+
 // Search-mode ranking by embeddings (lane M15).
 export * from "./search";

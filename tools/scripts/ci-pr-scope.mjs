@@ -3,7 +3,7 @@
  * Whether a pipeline.yml run needs the heavy lanes (#4918).
  *
  * The `build`, `unit`, `e2e`, `rls-integration` and `rds-compatibility`
- * lanes, and `test` after them, take most of a pull request's CI minutes. Two
+ * lanes take most of a pull request's CI minutes. Two
  * kinds of pull request gain nothing from them:
  *
  * - A draft. Agents push a branch many times while they work, and each push
@@ -17,13 +17,16 @@
  * Run as a step of the `preflight` job, it writes `heavy=true` or
  * `heavy=false` to $GITHUB_OUTPUT. The lanes carry
  * `needs.preflight.outputs.heavy != 'false'` in their `if:`, so they run
- * unless this script said `false`, and report as skipped when it did.
+ * unless this script said `false`, and report as skipped when it did. The
+ * required `test` job always runs: it fails on a draft and passes on a
+ * documentation-only pull request, because GitHub counts a skipped required
+ * check as passed (#5094).
  *
  * It fails open. Every event other than a pull request gets `true`, and so
  * does a pull request whose file list cannot be read in full. The script
- * exits 0 whatever happens, because the `preflight` job must always succeed
- * (check-main-preflight.mjs): a failed preflight skips `checks` and `test`,
- * and a skipped required check reads as passing.
+ * exits 0 whatever happens. A failed preflight job runs every gated job
+ * (check-main-preflight.mjs), so a crash here would still test the pull
+ * request, but it would also run the heavy lanes on a draft.
  */
 import { appendFileSync } from "node:fs";
 import { isEntrypoint } from "./lib/is-entrypoint.mjs";

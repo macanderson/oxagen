@@ -125,6 +125,8 @@ jobs:
   preview:
     if: github.event.inputs.target == 'preview'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    # Without a limit a hung job holds a runner for 360 minutes.
+    timeout-minutes: 20
     # Uses the GitHub Environment of the same name if it exists, so its secrets
     # resolve here; repo-level secrets still resolve when no environment secret
     # shadows them. It gates nothing.

@@ -92,7 +92,7 @@ export const textareaBase = `${fieldSkin} rounded-xl py-3`;
  * position of its own. `menuPopup` adds the 4px inset a menu's rows sit in.
  */
 export const menuSurface =
-  "relative isolate overflow-hidden rounded-2xl bg-menu-popup-bg/55 dark:bg-menu-popup-bg/70 text-menu-popup-fg shadow-2xl ring-1 ring-foreground/5 outline-none dark:ring-foreground/10 " +
+  "relative isolate overflow-hidden rounded-2xl bg-menu-popup-bg/55 dark:bg-menu-popup-bg/70 text-menu-popup-fg shadow-pop ring-1 ring-foreground/5 outline-none dark:ring-foreground/10 " +
   "before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-lg dark:before:backdrop-blur-2xl before:backdrop-saturate-150";
 export const menuPopup = `${menuSurface} p-1`;
 
@@ -122,7 +122,7 @@ export const menuLabel = "px-3 py-2.5 text-xs text-muted-foreground";
  * `relative` here would pull the popover back into the flow.
  */
 export const popoverSurface =
-  "isolate rounded-2xl bg-app-raised-bg/55 dark:bg-app-raised-bg/70 text-app-raised-fg shadow-2xl ring-1 ring-foreground/5 dark:ring-foreground/10 " +
+  "isolate rounded-2xl bg-app-raised-bg/55 dark:bg-app-raised-bg/70 text-app-raised-fg shadow-pop ring-1 ring-foreground/5 dark:ring-foreground/10 " +
   "before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-lg dark:before:backdrop-blur-2xl before:backdrop-saturate-150";
 
 /**

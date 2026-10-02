@@ -59,6 +59,11 @@ export interface CreateApprovalArgs {
    */
   runId?: string | null;
   ttlMs?: number;
+  /**
+   * The person who asked, set only by the in-app assistant's park
+   * (`approvalMode: "park"`). The row then stores the call to resume, and
+   * only this person is told it is waiting (ADR-235).
+   */
   resumeRequesterUserId?: string;
   /**
    * What the row asks a person for (ADR-175). The first-use consent gate
@@ -389,12 +394,16 @@ async function createResumableApproval(args: CreateApprovalArgs) {
       })
       .returning({ approvalId: a.id, approvalPublicId: a.publicId });
     if (!row) throw new ApprovalResumeError("approval_not_recorded");
+    // Only the in-app assistant parks a resumable approval, and only the
+    // person who asked may answer it (ADR-235, ruled on 2026-10-01). So the
+    // card goes to that person alone, not to every approver in the workspace.
     await notifyApprovalRequested(tx, {
       orgId: args.orgId,
       workspaceId: args.workspaceId,
       capabilityName: args.capabilityName,
       riskLevel: args.riskLevel,
       expiresAt,
+      recipients: [requesterUserId],
     });
     return { ...row, resolution: null, resumeStatus: "waiting", expiresAt };
   });

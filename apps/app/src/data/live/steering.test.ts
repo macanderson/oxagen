@@ -1,6 +1,7 @@
 // The steering port: kernel reads on the workspace ctx, each mapped into its
 // view model, with a refusal passed through and an unmappable record reported
-// once.
+// once. The workspace memory reads (#4914) send only the filters a caller
+// names.
 import { contextPrDiffGet } from "@oxagen/oxagen/contracts/context.pr.diff.get";
 import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
@@ -10,10 +11,17 @@ import { contextSteeringDeliveries } from "@oxagen/oxagen/contracts/context.stee
 import { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
+import { steeringMemoriesGet } from "@oxagen/oxagen/contracts/steering.memories.get";
+import { steeringMemoriesList } from "@oxagen/oxagen/contracts/steering.memories.list";
+import { steeringMemoryPrRecordsList } from "@oxagen/oxagen/contracts/steering.memory_pr_records.list";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   contextPrOutput,
   LINEAGE,
+  memoriesOutput,
+  memoryGetOutput,
+  memoryOutput,
+  memoryPrRecordsOutput,
   proposalOutput,
   RECORD_PATH,
   recordGetOutput,
@@ -453,7 +461,10 @@ describe("steering.hub", () => {
   /** Answers each contract the hub reads with what the case hands it. */
   function answer(
     by: Partial<
-      Record<"repos" | "tree" | "open" | "merged" | "closed", unknown>
+      Record<
+        "repos" | "tree" | "open" | "merged" | "closed" | "memories",
+        unknown
+      >
     >,
   ) {
     const route = (call: {
@@ -484,6 +495,11 @@ describe("steering.hub", () => {
           readOk({ proposals: [], total: totals[key] })
         );
       }
+      if (call.contract === steeringMemoriesList)
+        return (
+          by.memories ??
+          readOk({ ...memoriesOutput([memoryOutput()]), waiting: 7 })
+        );
       throw new Error("not a hub read");
     };
     // A throw inside the executor rejects, as the kernel's refusal would.
@@ -513,8 +529,14 @@ describe("steering.hub", () => {
         },
         proposalsWaiting: 9,
         states: { open: 9, merged: 4, closed: 2 },
+        memoriesWaiting: 7,
       }),
     );
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: steeringMemoriesList,
+      input: { states: ["waiting"], limit: 1, offset: 0 },
+      page: "steering",
+    });
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: repositoryTreeGet,
       input: { bindingId: "rpb_0a1b2c" },
@@ -578,5 +600,150 @@ describe("steering.hub", () => {
     const read = await steering.hub(ctx);
     expect(read.ok && read.value.states).toBeNull();
     expect(read.ok && read.value.proposalsWaiting).toBe(9);
+  });
+
+  it("prints no memories count when the memory read fails, and keeps the rest (negative)", async () => {
+    answer({ memories: readError("memory_store_unavailable", 503) });
+    const read = await steering.hub(ctx);
+    expect(read.ok && read.value.memoriesWaiting).toBeNull();
+    expect(read.ok && read.value.proposalsWaiting).toBe(9);
+  });
+});
+
+describe("steering.workspaceMemories", () => {
+  const every = {
+    states: ["waiting", "in_pr"],
+    harness: null,
+    agent: null,
+    repository: null,
+    type: null,
+    limit: 50,
+    offset: 0,
+  } as const;
+
+  it("sends the states and the page and maps each group", async () => {
+    kernelRead.mockResolvedValue(readOk(memoriesOutput()));
+    const read = await steering.workspaceMemories(ctx, every);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: steeringMemoriesList,
+      input: { states: ["waiting", "in_pr"], limit: 50, offset: 0 },
+      page: "steering",
+    });
+    expect(read.ok && read.value.groups[0]?.memory).toMatchObject({
+      id: "mem_01k5rw3draft",
+      memoryType: "feedback",
+      uses: 9,
+      useSignal: true,
+      memoryPr: null,
+    });
+    expect(read.ok && read.value.waiting).toBe(1);
+  });
+
+  it("sends each filter the caller names", async () => {
+    kernelRead.mockResolvedValue(readOk(memoriesOutput([])));
+    await steering.workspaceMemories(ctx, {
+      ...every,
+      states: ["dismissed"],
+      harness: "codex",
+      agent: "acme.core-platform.release-manager",
+      repository: "github.com/acme/platform",
+      type: "feedback",
+      offset: 50,
+    });
+    expect(kernelRead.mock.calls[0]?.[1]).toMatchObject({
+      input: {
+        states: ["dismissed"],
+        harness: "codex",
+        agent: "acme.core-platform.release-manager",
+        repository: "github.com/acme/platform",
+        type: "feedback",
+        limit: 50,
+        offset: 50,
+      },
+    });
+  });
+
+  it("passes a denial through without mapping (negative)", async () => {
+    kernelRead.mockResolvedValue(DENIED);
+    expect(await steering.workspaceMemories(ctx, every)).toEqual(DENIED);
+  });
+
+  it("answers record_unmappable and reports once for a memory the view refuses (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk(memoriesOutput([memoryOutput({ id: "mem_" })])),
+    );
+    const read = await steering.workspaceMemories(ctx, every);
+    expect(read).toEqual(readError("record_unmappable", 502));
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+});
+
+describe("steering.workspaceMemory", () => {
+  it("reads one memory with its uses and its memory PR", async () => {
+    kernelRead.mockResolvedValue(readOk(memoryGetOutput()));
+    const read = await steering.workspaceMemory(ctx, "mem_01k5rw3draft");
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: steeringMemoriesGet,
+      input: { memory_id: "mem_01k5rw3draft" },
+      page: "steering",
+    });
+    expect(read.ok && read.value.memory).toMatchObject({
+      state: "in_pr",
+      run: "tse_01k5rt2q",
+      retiredAt: null,
+    });
+    expect(read.ok && read.value.uses).toEqual([
+      {
+        run: "tse_01k5ru9a",
+        signal: "read",
+        count: 2,
+        usedAt: "2026-09-15T09:16:40.000Z",
+      },
+      {
+        run: null,
+        signal: "harness_count",
+        count: 3,
+        usedAt: "2026-09-15T09:16:40.000Z",
+      },
+    ]);
+    expect(read.ok && read.value.memoryPr).toEqual({
+      number: 59,
+      url: "https://github.com/acme/oxagen-core-platform/pull/59",
+      repository: "acme/oxagen-core-platform",
+      branch: "memory/2026-09-15",
+      status: "open",
+      openedAt: "2026-09-15T09:16:40.000Z",
+      settledAt: null,
+    });
+  });
+
+  it("passes a memory another workspace holds through as its 404 (negative)", async () => {
+    kernelRead.mockResolvedValue(readError("not_found", 404));
+    expect(await steering.workspaceMemory(ctx, "mem_other")).toEqual(
+      readError("not_found", 404),
+    );
+  });
+});
+
+describe("steering.memoryPrRecords", () => {
+  it("reads one memory PR's records by its number and names the dropped one's commit", async () => {
+    kernelRead.mockResolvedValue(readOk(memoryPrRecordsOutput()));
+    const read = await steering.memoryPrRecords(ctx, 59);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: steeringMemoryPrRecordsList,
+      input: { number: 59 },
+      page: "steering",
+    });
+    expect(read.ok && read.value.pullRequest.number).toBe(59);
+    expect(read.ok && read.value.records.map((r) => r.dropped)).toEqual([
+      null,
+      { commitSha: "4d5e6f7a8b9c0d1e" },
+    ]);
+    expect(read.ok && read.value.records[0]?.memories[0]?.state).toBe("in_pr");
+  });
+
+  it("passes a denial through without mapping (negative)", async () => {
+    kernelRead.mockResolvedValue(DENIED);
+    expect(await steering.memoryPrRecords(ctx, 59)).toEqual(DENIED);
   });
 });

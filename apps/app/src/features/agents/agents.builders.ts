@@ -123,6 +123,7 @@ export function agentDetail(overrides: DetailOverrides = {}): AgentDetail {
       registeredAt: "2026-09-01T10:00:00.000Z",
       firstFrameAt: "2026-09-02T10:00:00.000Z",
       costCenter: null,
+      cacheKeepAlive: true,
       ...identity,
     },
     credentials: [
@@ -667,6 +668,9 @@ export function agentsSource(reads: AgentReads) {
       freshness: refuse,
       layout: refuse,
       hub: refuse,
+      workspaceMemories: refuse,
+      workspaceMemory: refuse,
+      memoryPrRecords: refuse,
       deliveries: answer(reads.deliveries, "deliveries"),
       memories: refuse,
       tree: refuse,

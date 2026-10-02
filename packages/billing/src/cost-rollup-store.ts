@@ -21,6 +21,7 @@ import {
   type FrameRunRef,
   type ModelCallFrameRow,
 } from "@oxagen/telemetry";
+import { IN_APP_AGENT_SURFACES } from "@oxagen/oxagen/contracts/run.shared";
 import {
   MODEL_CALL_EVENT_TYPES,
   subagentSessionsQuery,
@@ -40,7 +41,7 @@ import {
   type AnyColumn,
   type SQL,
 } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { alias, getTableConfig } from "drizzle-orm/pg-core";
 import {
   createRunRollup,
   createDailyRollup,
@@ -48,12 +49,14 @@ import {
   type DailyTotalsRecord,
   type ModelCallFrame,
   type RunMeta,
+  type RunStandingResent,
   type RunTotalsRecord,
   type TokenCounts,
   type ToolCallFrame,
   ZERO_TOKENS,
 } from "./cost-rollup";
 import { readFileChanges } from "./findings-run-facts";
+import { resolveRunWorkOrder, type RunWorkOrder } from "./run-work-order";
 import {
   loadPriceBookSlice,
   withPriceBookSnapshot,
@@ -102,6 +105,43 @@ export function toolCallName(payload: AnyColumn | SQL): SQL<string | null> {
   return sql<
     string | null
   >`coalesce(${payload}->>'capability_name', ${payload}->>'tool_name')`;
+}
+
+/**
+ * True for a `cost.run_totals` row whose run is the in-app assistant's: an
+ * `agent_runs` row in the row's workspace on an in-app surface
+ * (`IN_APP_AGENT_SURFACES`). A Tacho session's id (`tse_…`) never names an
+ * `agent_runs` row, so a wrapped session's row is never in-app.
+ *
+ * The workspace does not monitor the assistant (ADR-235, 2026-10-02
+ * amendment). Every read that names a run takes this one predicate, so no two
+ * reads disagree on which rows are the assistant's. A total keeps the row,
+ * because it counts what the organization spent.
+ *
+ * It follows `inAppApproval()` in `@oxagen/rules`. The inner table's columns
+ * go in as identifiers under their own alias, so no query builder can rewrite
+ * them to the outer table's alias. The cast to citext lets the unique index on
+ * `agent_runs.public_id` serve the lookup. A function rather than a constant,
+ * for the reason `modelCallHidesTurn` gives.
+ */
+export function inAppRunTotal(): SQL<boolean> {
+  const totals = schema.runTotals;
+  const agentRuns = schema.agentRuns;
+  const runAlias = "in_app_run";
+  const inner = (c: { name: string }) =>
+    sql`${sql.identifier(runAlias)}.${sql.identifier(c.name)}`;
+  // The outer row's columns, named in full. Drizzle writes a single-table
+  // select list without table names, and inside this subquery a bare
+  // "org_id" or "workspace_id" would bind to the inner table's own column.
+  // The reader selects from `cost.run_totals` without an alias.
+  const table = getTableConfig(totals);
+  const outer = (c: { name: string }) =>
+    sql`${sql.identifier(table.schema ?? "public")}.${sql.identifier(table.name)}.${sql.identifier(c.name)}`;
+  const surfaces = sql.join(
+    IN_APP_AGENT_SURFACES.map((surface) => sql`${surface}`),
+    sql`, `,
+  );
+  return sql<boolean>`exists (select 1 from ${agentRuns} as ${sql.identifier(runAlias)} where ${inner(agentRuns.publicId)} = ${outer(totals.runId)}::citext and ${inner(agentRuns.orgId)} = ${outer(totals.orgId)} and ${inner(agentRuns.workspaceId)} = ${outer(totals.workspaceId)} and ${inner(agentRuns.surface)} in (${surfaces}))`;
 }
 const seals = schema.agentRunAttemptSeals;
 const sessions = schema.tachoSessions;
@@ -549,6 +589,36 @@ export function sumTokenSources(
   return sums;
 }
 
+/**
+ * Each source's tokens on a run's model calls after its first, split by
+ * whether the call read the prompt cache (#4572). The first call sent the
+ * prefix first, so the calls after it re-sent it: a call that read the cache
+ * re-read the prefix at the read rate, and a call that read nothing sent it
+ * uncached at the input rate. A source is null when no call reported it, as
+ * its sum is. Feed it the calls in the order the run made them.
+ */
+export function createStandingSplit() {
+  let first = true;
+  const split: RunStandingResent = {
+    toolDefinitionTokens: null,
+    contextFrameTokens: null,
+    steeringTokens: null,
+  };
+  const add = (call: PricedModelCall): void => {
+    const sentFirst = first;
+    first = false;
+    for (const member of SOURCE_MEMBERS) {
+      const tokens = call.sources?.[member];
+      if (tokens === null || tokens === undefined) continue;
+      const into = (split[member] ??= { cached: 0, uncached: 0 });
+      if (sentFirst) continue;
+      if (call.tokens.cache_read > 0) into.cached += tokens;
+      else into.uncached += tokens;
+    }
+  };
+  return { add, finish: (): RunStandingResent => split };
+}
+
 function toFrame(row: ModelCallFrameRow): PricedModelCall {
   return {
     at: new Date(row.at),
@@ -568,6 +638,8 @@ function toFrame(row: ModelCallFrameRow): PricedModelCall {
     basis: row.basis,
     // The chain places the tool calls the frame made (F17).
     ...(row.sessionUuid === undefined ? {} : { sessionUuid: row.sessionUuid }),
+    // A cache keep-alive is spend and no step (lane F32).
+    ...(row.cacheKeepAlive === true ? { cacheKeepAlive: true } : {}),
     sources: {
       toolDefinitionTokens: row.toolDefinitionTokens,
       contextFrameTokens: row.contextFrameTokens,
@@ -629,6 +701,12 @@ export interface RunRollupDeps {
    * classes read (F17). A run read without it counts no change.
    */
   readFileChanged?: (source: RunSource) => Promise<boolean>;
+  /**
+   * The run's parent work order: a send, or the run's direct work order,
+   * which this opens the first time it sees the run (F13, #4638). A run read
+   * without it keeps the work order its row already has.
+   */
+  resolveWorkOrder?: (source: RunSource) => Promise<RunWorkOrder>;
 }
 
 type Row = typeof totals.$inferSelect;
@@ -692,7 +770,18 @@ export function runTotalsRowToRecord(row: Row): StoredRunTotals {
     toolDefinitionTokens: row.toolDefinitionTokens,
     contextFrameTokens: row.contextFrameTokens,
     steeringTokens: row.steeringTokens,
+    // Absent on a row rolled up before F13, as on a record the rollup
+    // resolved no work order for.
+    ...workOrderOf(row),
   };
+}
+
+/** The row's work order and its kind, or nothing when the row names none. */
+function workOrderOf(row: Row): Pick<RunMeta, "workOrderId" | "workOrderKind"> {
+  const id = row.workOrderId ?? null;
+  const kind = row.workOrderKind;
+  if (id === null || (kind !== "send" && kind !== "direct")) return {};
+  return { workOrderId: id, workOrderKind: kind };
 }
 
 type ModelBreakdown = RunTotalsRecord["breakdown"]["models"][number];
@@ -704,7 +793,11 @@ const ZERO_COST_BY_CLASS = Object.fromEntries(
 
 type ModelBreakdownJson = Omit<
   ModelBreakdown,
-  "costMicros" | "costByClass" | "cacheSavingMicros" | "hasUnpriced"
+  | "costMicros"
+  | "costByClass"
+  | "cacheSavingMicros"
+  | "hasUnpriced"
+  | "keepAlive"
 > & {
   costMicros: string | null;
   costByClass: Record<keyof ModelBreakdown["costByClass"], string>;
@@ -712,6 +805,12 @@ type ModelBreakdownJson = Omit<
   cacheSavingMicros?: string | null;
   /** Absent on a row rolled up before #3271 residue G2. */
   hasUnpriced?: boolean;
+  /** Absent when the run sent no cache keep-alive on the model (lane F32). */
+  keepAlive?: {
+    calls: number;
+    tokens: ModelBreakdown["tokens"];
+    costMicros: string | null;
+  };
 };
 
 type ToolBreakdown = RunTotalsRecord["breakdown"]["tools"][number];
@@ -733,9 +832,11 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
     steps?: RunTotalsRecord["breakdown"]["steps"];
     /** Absent on a row rolled up before steps had a class (F17). */
     stepClasses?: RunTotalsRecord["breakdown"]["stepClasses"];
+    /** Absent on a row rolled up before the re-sent split was kept (#4572). */
+    standing?: RunTotalsRecord["breakdown"]["standing"];
   };
   return {
-    models: raw.models.map((m) => ({
+    models: raw.models.map(({ keepAlive, ...m }) => ({
       ...m,
       // A row rolled up before `server_tool_request` existed has no key for
       // it in either record. The rollup counted and priced none then, so both
@@ -760,6 +861,25 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
       // priced, so that is the fallback (never a mixed group, since a mixed
       // group was impossible before this PR seeded the first price book).
       hasUnpriced: m.hasUnpriced ?? m.costMicros === null,
+      // A row rolled up before the priced tokens were kept carries no key,
+      // and a rate then reads every call's tokens or none (#4572).
+      ...(m.pricedTokens === undefined
+        ? {}
+        : { pricedTokens: { ...ZERO_TOKENS, ...m.pricedTokens } }),
+      // A row rolled up before keep-alives were kept apart counts them as
+      // calls, and carries no key (lane F32).
+      ...(keepAlive === undefined
+        ? {}
+        : {
+            keepAlive: {
+              calls: keepAlive.calls,
+              tokens: { ...ZERO_TOKENS, ...keepAlive.tokens },
+              costMicros:
+                keepAlive.costMicros === null
+                  ? null
+                  : BigInt(keepAlive.costMicros),
+            },
+          }),
     })),
     // A row rolled up before result tokens were recorded carries neither
     // figure, so both read as not recorded until the run's next rollup.
@@ -777,13 +897,16 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
     // A row rolled up before steps had a class keeps no key, and a reader
     // takes the absent key as not recorded until the run's next rollup.
     ...(raw.stepClasses === undefined ? {} : { stepClasses: raw.stepClasses }),
+    // Likewise the re-sent split: a reader without it estimates the re-sent
+    // share from the source sums.
+    ...(raw.standing === undefined ? {} : { standing: raw.standing }),
   };
 }
 
 /** The breakdown as jsonb stores it: every bigint as a decimal string. */
 export function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
   return {
-    models: breakdown.models.map((m) => ({
+    models: breakdown.models.map(({ keepAlive, ...m }) => ({
       ...m,
       costMicros: m.costMicros === null ? null : m.costMicros.toString(),
       costByClass: Object.fromEntries(
@@ -791,6 +914,18 @@ export function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
       ),
       cacheSavingMicros:
         m.cacheSavingMicros === null ? null : m.cacheSavingMicros.toString(),
+      ...(keepAlive === undefined
+        ? {}
+        : {
+            keepAlive: {
+              calls: keepAlive.calls,
+              tokens: keepAlive.tokens,
+              costMicros:
+                keepAlive.costMicros === null
+                  ? null
+                  : keepAlive.costMicros.toString(),
+            },
+          }),
     })),
     tools: breakdown.tools.map(
       (t): ToolBreakdownJson => ({
@@ -804,6 +939,9 @@ export function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
     ...(breakdown.stepClasses === undefined
       ? {}
       : { stepClasses: breakdown.stepClasses }),
+    ...(breakdown.standing === undefined
+      ? {}
+      : { standing: breakdown.standing }),
   };
 }
 
@@ -962,6 +1100,8 @@ export async function writeRunTotals(
     toolDefinitionTokens: storedSource(sources?.toolDefinitionTokens),
     contextFrameTokens: storedSource(sources?.contextFrameTokens),
     steeringTokens: storedSource(sources?.steeringTokens),
+    workOrderId: record.workOrderId ?? null,
+    workOrderKind: record.workOrderKind ?? null,
     rolledUpAt,
   };
   // A person's acceptance is another lane's column: a first insert carries
@@ -981,6 +1121,11 @@ export async function writeRunTotals(
       set: {
         ...values,
         costCenter: sql`coalesce(${totals.costCenter}, excluded.cost_center)`,
+        // A rebuild that resolved no work order keeps the one the row has. A
+        // resolved one replaces it, so a send found later replaces the run's
+        // direct work order. The pair moves together.
+        workOrderId: sql`coalesce(excluded.work_order_id, ${totals.workOrderId})`,
+        workOrderKind: sql`case when excluded.work_order_id is null then ${totals.workOrderKind} else excluded.work_order_kind end`,
       },
       setWhere: sql`NOT ${regressesToIncomplete()} AND NOT ${reopensSealed()}`,
     });
@@ -1062,6 +1207,7 @@ const productionRunRollupDeps: RunRollupDeps = {
   write: upsertRunTotals,
   now: () => new Date(),
   readFileChanged: readRunFileChanged,
+  resolveWorkOrder: (source) => resolveRunWorkOrder(source),
 };
 
 /**
@@ -1104,25 +1250,30 @@ export async function rebuildRunTotals(
     orgId: source.meta.orgId,
     workspaceId: source.meta.workspaceId,
   };
-  const [carried, verdict, workerId, changedFile] = await Promise.all([
+  const [carried, verdict, workerId, changedFile, workOrder] = await Promise.all([
     deps.readCarried(publicId),
     deps.readVerdict(scope, publicId),
     deps.readWitnessedRun(scope, publicId),
     deps.readFileChanged?.(source) ?? false,
+    deps.resolveWorkOrder?.(source) ?? null,
   ]);
   const sources: RunTokenSources = { ...NO_RUN_TOKEN_SOURCES };
+  const standing = createStandingSplit();
   // A witness run is a run of its own whose cost belongs to the worker's
   // operator (spec §8.5 "Stamping"), so its row names that operator, and is
   // charged back to the worker's cost center for the same reason.
   const worker = workerId === null ? null : await deps.loadRunSource(workerId);
+  const own = workOrder
+    ? { ...source.meta, workOrderId: workOrder.id, workOrderKind: workOrder.kind }
+    : source.meta;
   const meta = worker
     ? {
-        ...source.meta,
+        ...own,
         operatorPrincipalId: worker.meta.operatorPrincipalId,
         operatorKey: worker.meta.operatorKey,
         costCenter: worker.meta.costCenter,
       }
-    : source.meta;
+    : own;
   const accumulator = createRunRollup({
     meta,
     carried: { verdict, accepted: carried?.accepted ?? null },
@@ -1131,7 +1282,10 @@ export async function rebuildRunTotals(
   const readModels = async (load: RunRollupDeps["loadPriceBook"]) => {
     const consumeModels = async (calls: PricedModelCall[]) => {
       const book = await load(runPriceSlice(source.meta.orgId, calls));
-      for (const call of calls) accumulator.addModel(call, book);
+      for (const call of calls) {
+        accumulator.addModel(call, book);
+        standing.add(call);
+      }
       const batchSources = sumTokenSources(calls);
       for (const member of SOURCE_MEMBERS) {
         const value = batchSources[member];
@@ -1149,7 +1303,11 @@ export async function rebuildRunTotals(
   };
   if (deps.streamToolCalls) await deps.streamToolCalls(source, consumeTools);
   else await consumeTools(await deps.readToolCalls(source));
-  const record = accumulator.finish();
+  const built = accumulator.finish();
+  const record: RunTotalsRecord = {
+    ...built,
+    breakdown: { ...built.breakdown, standing: standing.finish() },
+  };
   await deps.write(record, deps.now(), sources);
   return record;
 }

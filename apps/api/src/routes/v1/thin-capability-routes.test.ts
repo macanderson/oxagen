@@ -60,6 +60,7 @@ import { agentMemoryPromotionRationales } from "@oxagen/oxagen/contracts/agent.m
 import { agentRegister } from "@oxagen/oxagen/contracts/agent.register";
 import { agentMove } from "@oxagen/oxagen/contracts/agent.move";
 import { agentToolbeltAssign } from "@oxagen/oxagen/contracts/agent.toolbelt.assign";
+import { agentCacheKeepAliveSet } from "@oxagen/oxagen/contracts/agent.cache_keep_alive.set";
 import { runtimeCreate } from "@oxagen/oxagen/contracts/runtime.create";
 import { runtimeList } from "@oxagen/oxagen/contracts/runtime.list";
 import { runtimeUpdate } from "@oxagen/oxagen/contracts/runtime.update";
@@ -169,6 +170,7 @@ import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/contracts/audit.log.query"
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { spendOperatorRanking } from "@oxagen/oxagen/contracts/spend.operator_ranking";
 import { spendUnproductive } from "@oxagen/oxagen/contracts/spend.unproductive";
+import { spendWorkOrderMetrics } from "@oxagen/oxagen/contracts/spend.work_order_metrics";
 import { spendOperatorPseudonymsSet } from "@oxagen/oxagen/contracts/spend.operator_pseudonyms.set";
 import { spendPerMergedPr } from "@oxagen/oxagen/contracts/spend.per_merged_pr";
 import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
@@ -223,6 +225,7 @@ import { agentSuspendRoute } from "./agent.suspend";
 import { agentToolbeltGetRoute } from "./agent.toolbelt.get";
 import { agentMoveRoute } from "./agent.move";
 import { agentToolbeltAssignRoute } from "./agent.toolbelt.assign";
+import { agentCacheKeepAliveSetRoute } from "./agent.cache_keep_alive.set";
 import { runtimeCreateRoute } from "./runtime.create";
 import { runtimeListRoute } from "./runtime.list";
 import { runtimeUpdateRoute } from "./runtime.update";
@@ -305,6 +308,7 @@ import { auditEventsExportRoute } from "./audit.events.export";
 import { spendWasteListRoute } from "./spend.waste";
 import { spendOperatorRankingRoute } from "./spend.operator_ranking";
 import { spendUnproductiveRoute } from "./spend.unproductive";
+import { spendWorkOrderMetricsRoute } from "./spend.work_order_metrics";
 import { spendOperatorPseudonymsSetRoute } from "./spend.operator_pseudonyms.set";
 import { spendPerMergedPrRoute } from "./spend.per_merged_pr";
 import { findingDismissRoute } from "./finding.dismiss";
@@ -707,6 +711,16 @@ const ROUTES: ThinRoute[] = [
     capability: agentToolbeltAssign.name,
     body: { agentId: "agt_1", toolbeltId: "tbt_0123456789abcdefghjkmn" },
     invalidBody: { agentId: "agt_1" },
+    status: 200,
+  },
+  {
+    file: "agent.cache_keep_alive.set",
+    route: agentCacheKeepAliveSetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: agentCacheKeepAliveSet.name,
+    body: { agent: "release-bot", cacheKeepAlive: false },
+    invalidBody: { agent: "release-bot", cacheKeepAlive: "off" },
+    jsonGuard: true,
     status: 200,
   },
   {
@@ -1930,6 +1944,16 @@ const ROUTES: ThinRoute[] = [
     route: spendUnproductiveRoute as unknown as Hono<never>,
     method: "POST",
     capability: spendUnproductive.name,
+    body: { period: { from: "2026-09-01", to: "2026-09-30" } },
+    invalidBody: { period: { from: "2026-09-30", to: "2026-09-01" } },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "spend.work_order_metrics",
+    route: spendWorkOrderMetricsRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: spendWorkOrderMetrics.name,
     body: { period: { from: "2026-09-01", to: "2026-09-30" } },
     invalidBody: { period: { from: "2026-09-30", to: "2026-09-01" } },
     jsonGuard: true,

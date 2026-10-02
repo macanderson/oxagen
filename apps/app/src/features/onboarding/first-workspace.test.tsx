@@ -111,6 +111,7 @@ const PROVISIONING: SteeringRepoRead = {
     legacySource: null,
     connection: null,
     connectionChoices: [],
+    importRun: null,
   },
 };
 

@@ -31,7 +31,7 @@ import {
   type PricedRequestFrame,
   type ToolCallObservation,
 } from "./findings";
-import type { FrameClassPrices } from "./findings/shared";
+import { resultMeasure, type FrameClassPrices } from "./findings/shared";
 
 const ORG = "00000000-0000-4000-8000-000000000001";
 const WS = "00000000-0000-4000-8000-000000000002";
@@ -232,6 +232,72 @@ describe("runInputPrice", () => {
     const noInput = run();
     noInput.breakdown.models[0]!.tokens.input_uncached = 0;
     expect(runInputPrice(noInput)).toBeNull();
+  });
+});
+
+/**
+ * #4572 item 7: a run whose model made a second call the book could not
+ * price. Its tokens count both calls, 6,000 input tokens, and its cost only
+ * the priced one, 9,000 micros for 3,000. The old rate read 1.5 micros a
+ * token, half the 3 the priced call paid.
+ */
+function withUnpricedCall(r: RunTotalsRecord): RunTotalsRecord {
+  const [model] = r.breakdown.models;
+  model!.tokens = { ...model!.tokens, input_uncached: 6_000 };
+  model!.calls = 2;
+  model!.hasUnpriced = true;
+  model!.pricedTokens = { ...ZERO_TOKENS, input_uncached: 3_000 };
+  return r;
+}
+
+describe("the input rate of a run with an unpriced call (#4572)", () => {
+  it("reads the rate over the priced calls' tokens", () => {
+    expect(runInputPrice(withUnpricedCall(run()))).toEqual({
+      micros: 9_000n,
+      tokens: 3_000n,
+    });
+  });
+
+  it("has no rate for a row with no priced tokens, rather than a low one", () => {
+    const legacy = withUnpricedCall(run());
+    delete legacy.breakdown.models[0]!.pricedTokens;
+    expect(runInputPrice(legacy)).toBeNull();
+  });
+
+  // resultMeasure is the shared caller. The unpaged-results detector also
+  // leaves a partly priced run uncovered (#4544), so it reads no rate there.
+  it("prices a result at the priced calls' rate in resultMeasure", () => {
+    const r = withUnpricedCall(run());
+    const tokens = UNPAGED_RESULT_TOKENS + 1_000;
+    const measure = resultMeasure(r, tokens, () => PAGE_TOKENS);
+    // At 1.5 micros a token both sides read half these.
+    expect(measure.micros).toEqual({
+      measured: BigInt(tokens * 3),
+      counterfactual: BigInt(PAGE_TOKENS * 3),
+    });
+    const legacy = withUnpricedCall(run());
+    delete legacy.breakdown.models[0]!.pricedTokens;
+    expect(resultMeasure(legacy, tokens, () => PAGE_TOKENS).micros).toBeNull();
+  });
+
+  it("prices the cache writes' counterfactual at the priced calls' rate", () => {
+    const r = withUnpricedCall(
+      run({
+        cacheWriteMicros: 40_000n,
+        tokens: {
+          ...ZERO_TOKENS,
+          input_uncached: 6_000,
+          cache_write_5m: 8_000,
+        },
+      }),
+    );
+    const [finding] = detect({ runs: [r] });
+    // 8,000 written tokens at 3 micros, not 1.5: a saving of 16,000, not
+    // 28,000.
+    expect(finding).toMatchObject({
+      kind: "cache_writes_never_read",
+      savingMicros: 40_000n - 24_000n,
+    });
   });
 });
 

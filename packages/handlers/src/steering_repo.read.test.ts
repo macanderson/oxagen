@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  STEERING_IMPORT_STEP_NAMES,
   STEERING_REPO_STEP_NAMES,
   steeringRepoGet,
 } from "@oxagen/oxagen/contracts/steering_repo.get";
@@ -18,6 +19,11 @@ import {
   type SteeringRepoState,
 } from "./steering_repo.provision";
 import type { RepoHealthDetail } from "./steering-repo/health";
+import {
+  IMPORT_STEPS,
+  initialImportState,
+  type SteeringImportState,
+} from "./steering-repo/import-run";
 import type { LegacySteeringSource } from "./steering-repo/legacy-source";
 import type { SteeringConnection } from "./steering_repo.provision";
 import { steeringRepositoryKey } from "./steering-repo/publisher";
@@ -68,6 +74,7 @@ function deps(over: Partial<SteeringRepoReadDeps> = {}) {
     readHealth: vi.fn(async () => detail() as RepoHealthDetail | null),
     readLegacySource: vi.fn(async () => null as LegacySteeringSource | null),
     readConnection: vi.fn(async () => null as SteeringConnection | null),
+    readImport: vi.fn(async () => null as SteeringImportState | null),
     ...over,
   };
 }
@@ -78,6 +85,10 @@ const read = (d: SteeringRepoReadDeps, ctx = TEST_CTX) =>
 describe("get_steering_repo contract", () => {
   it("lists the provisioning steps the job runs, in order", () => {
     expect([...STEERING_REPO_STEP_NAMES]).toEqual([...STEERING_REPO_STEPS]);
+  });
+
+  it("lists the import run's steps, in order", () => {
+    expect([...STEERING_IMPORT_STEP_NAMES]).toEqual([...IMPORT_STEPS]);
   });
 
   it("is a workspace read on api, mcp and agent that takes nothing", () => {
@@ -118,9 +129,11 @@ describe("get_steering_repo", () => {
       legacySource: null,
       connection: null,
       connectionChoices: [],
+      importRun: null,
     });
     expect(steeringRepoGet.output.parse(out)).toEqual(out);
     expect(d.readState).toHaveBeenCalledWith({ orgId: "org_1", workspaceId: "ws_1" });
+    expect(d.readImport).toHaveBeenCalledWith({ orgId: "org_1", workspaceId: "ws_1" });
     expect(d.readPublishedVersion).toHaveBeenCalledWith(
       { orgId: "org_1", workspaceId: "ws_1" },
       "github.com/acme/oxagen-platform",
@@ -322,5 +335,91 @@ describe("steeringRepoPublicationKey", () => {
     expect(steeringRepoUrl("gitlab", "acme/sub/oxagen")).toBe(
       "https://gitlab.com/acme/sub/oxagen",
     );
+  });
+});
+
+describe("get_steering_repo import run (#5082)", () => {
+  const SOURCE = {
+    head_id: "rbh_1",
+    connection_id: "conn_1",
+    owner: "acme",
+    name: "platform",
+    full_name: "acme/platform",
+    default_branch: "main",
+    commit: "0123abc",
+    relinked: "github.com/acme/platform",
+  };
+
+  it("answers a run that stopped after demote while the steering repo is ready", async () => {
+    const stopped: SteeringImportState = {
+      ...initialImportState(new Date("2026-10-01T17:46:00Z")),
+      status: "failed",
+      step: "demote",
+      source: SOURCE,
+      error: { code: "steering_repo_provision_failed", message: "The bind failed." },
+    };
+    const out = await read(deps({ readImport: vi.fn(async () => stopped) }));
+    expect(out.status).toBe("ready");
+    expect(out.importRun).toEqual({
+      status: "failed",
+      step: "demote",
+      source: { fullName: "acme/platform", url: "https://github.com/acme/platform" },
+      pullRequests: [],
+      cleanup: null,
+      error: { code: "steering_repo_provision_failed", message: "The bind failed." },
+    });
+    expect(steeringRepoGet.output.parse(out)).toEqual(out);
+  });
+
+  it("answers a finished run with its steering PRs and the cleanup PR", async () => {
+    const done: SteeringImportState = {
+      ...initialImportState(new Date("2026-10-01T17:46:00Z")),
+      status: "done",
+      step: "cleanup",
+      outcome: "imported",
+      source: SOURCE,
+      steering_repository: "acme/oxagen-platform",
+      pull_requests: [
+        {
+          branch: "workspace/import-oxagen",
+          number: 4,
+          url: "https://github.com/acme/oxagen-platform/pull/4",
+        },
+      ],
+      cleanup: { number: 9, url: "https://github.com/acme/platform/pull/9" },
+    };
+    const out = await read(deps({ readImport: vi.fn(async () => done) }));
+    expect(out.importRun).toEqual({
+      status: "done",
+      step: "cleanup",
+      source: { fullName: "acme/platform", url: "https://github.com/acme/platform" },
+      pullRequests: [
+        {
+          number: 4,
+          url: "https://github.com/acme/oxagen-platform/pull/4",
+          branch: "workspace/import-oxagen",
+        },
+      ],
+      cleanup: { number: 9, url: "https://github.com/acme/platform/pull/9" },
+      error: null,
+    });
+    expect(steeringRepoGet.output.parse(out)).toEqual(out);
+  });
+
+  it("answers the run on a workspace with no provisioning state", async () => {
+    const waiting: SteeringImportState = {
+      ...initialImportState(new Date("2026-10-01T17:46:00Z")),
+      status: "waiting",
+      outcome: "needs_choices",
+    };
+    const out = await read(
+      deps({
+        readState: vi.fn(async () => null),
+        readImport: vi.fn(async () => waiting),
+      }),
+    );
+    expect(out.status).toBe("not_started");
+    expect(out.importRun).toMatchObject({ status: "waiting", step: null, source: null });
+    expect(steeringRepoGet.output.parse(out)).toEqual(out);
   });
 });

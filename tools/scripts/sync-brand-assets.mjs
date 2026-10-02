@@ -57,6 +57,13 @@
  * kit change lands on main, the check fails here until someone runs this
  * script and commits the result. The kit's fan-out workflow opens that PR.
  *
+ * `--check` also runs the literal guard in lib/brand-literals.mjs: each
+ * stylesheet it lists must take its corners, shadows, font sizes, and page
+ * wrap from the kit's tokens, so a theme change reaches every site with no
+ * hand edit (oxageninc/brand#63, #5104). A literal is listed as `literal`
+ * with its line and the token to use, and an allowlist entry that excuses
+ * nothing is listed as `keep`.
+ *
  * SURFACE_MARKS lists the marks each app may carry. The product shows the
  * wordmark where a word fits and the hive where the slot is square. The kit
  * also ships a lockup, and no app selects it. Stella uses its wordmark and
@@ -74,6 +81,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { INK_TOKENS } from "../../apps/web/scripts/lib/theme.mjs";
+import { GUARDED, literalDrift } from "./lib/brand-literals.mjs";
 import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -698,6 +706,13 @@ function webTheme(kit) {
  * asterisk of stella). The hive keeps each outline and gold cell from the kit.
  */
 function marks(kit) {
+  // The gold lands in generated TypeScript as a string literal. Anything but a
+  // `#rrggbb` colour here would be code in a module the server imports, so a
+  // kit value of any other shape fails the sync, as the grounds already do.
+  const gold = kit?.gold?.hex;
+  if (typeof gold !== "string" || !/^#[0-9A-Fa-f]{6}$/.test(gold)) {
+    throw new Error(`house kit gold is not a #rrggbb colour: ${JSON.stringify(gold)}`);
+  }
   const read = (name) => readFileSync(svg(name), "utf8");
   const viewBox = (src) => src.match(/viewBox="([^"]+)"/)[1];
   const pathData = (src, cls) =>
@@ -767,7 +782,7 @@ function marks(kit) {
  */
 
 /** The kit's gold, pinned. It marks identity, and it is never a surface or a state. */
-export const BRAND_GOLD = "${kit.gold.hex}";
+export const BRAND_GOLD = "${gold}";
 
 export interface WordmarkGeometry {
   /** The kit's own viewBox. Do not re-fit it. */
@@ -831,11 +846,46 @@ function desktopIcons() {
   return reason;
 }
 
+/**
+ * The literal guard, in a check only: every corner, shadow, font size, or
+ * page wrap a guarded stylesheet writes as a literal instead of a kit token.
+ * The kit's own house-tokens.css names the nearest token in each message.
+ */
+function literals() {
+  if (!CHECK) return;
+  let tokens = "";
+  try {
+    tokens = readFileSync(join(BRAND, "tokens/house-tokens.css"), "utf8");
+  } catch {
+    // The kit was read above, so a missing token file only loses the sizes
+    // each message names. The guard itself does not depend on them.
+  }
+  const files = new Map(
+    GUARDED.map(({ path }) => [path, committed(path)?.toString("utf8") ?? null]),
+  );
+  const { hits, stale } = literalDrift(files, { tokens });
+  for (const h of hits) {
+    drifted.push({
+      kind: "literal",
+      path: h.path,
+      why: `line ${h.line}: ${h.prop}: ${h.value}; use ${h.use}`,
+    });
+  }
+  for (const k of stale) {
+    drifted.push({
+      kind: "keep",
+      path: k.path,
+      why: `the allowlist in tools/scripts/lib/brand-literals.mjs keeps ${k.prop} ${k.value}, which the file no longer writes; remove the entry`,
+    });
+  }
+}
+
 /* ── run ─────────────────────────────────────────────────────────────────── */
 
 const HOW_TO_FIX =
   "Run node tools/scripts/sync-brand-assets.mjs --brand <kit> and commit the result. " +
-  "If the desktop icons are stale, also run pnpm --filter @oxagen/desktop icons.";
+  "If the desktop icons are stale, also run pnpm --filter @oxagen/desktop icons. " +
+  "For a literal, write the token the line names, or name the literal and its reason in KEEP in tools/scripts/lib/brand-literals.mjs.";
 
 if (isEntrypoint(import.meta.url)) {
   for (const surface of Object.keys(SURFACE_MARKS)) {
@@ -887,6 +937,7 @@ if (isEntrypoint(import.meta.url)) {
     only: /^(favicon-\d+\.png|icon-\d+\.png|maskable(-light)?-\d+\.png|apple-touch-icon.*\.png|favicon.*\.ico)$/,
   });
   const desktop = desktopIcons();
+  literals();
 
   const kitName = `brand kit ${kit.version} at ${BRAND}`;
   if (CHECK) {

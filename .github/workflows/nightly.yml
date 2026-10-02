@@ -7,8 +7,12 @@ on:
   # signal). Use the schedule for the daily full-tree regression sweep.
   workflow_dispatch: {}
 
-# Atlas is baked into the ghcr.io/macanderson/oxagen-ci-* images (pin lives in
-# pipeline.yml's ATLAS_VERSION, read by ci-image.yml at image build time).
+# Atlas is baked into the oxagen-ci-* images (pin lives in pipeline.yml's
+# ATLAS_VERSION, read by ci-image.yml at image build time). The images and the
+# service images come from the same registry expressions pipeline.yml uses:
+# ECR Public when CI_IMAGE_REGISTRY is set, and the frozen GHCR images and
+# Docker Hub otherwise. Hard-coded GHCR images left this full sweep on a
+# toolchain that no longer tracked .node-version, pnpm or Playwright.
 env:
   # Container jobs: see the identical block in pipeline.yml — git in the
   # bind-mounted workspace trips "dubious ownership" without this.
@@ -23,10 +27,7 @@ jobs:
   full:
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ghcr.io/macanderson/oxagen-ci-base:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
     # 90, as pipeline.yml's `test` job: at the bounded concurrency below the
     # full suite outlasts 30 minutes (#4266).
     timeout-minutes: 90
@@ -45,7 +46,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        image: ${{ vars.CI_IMAGE_REGISTRY && format('{0}/mirror/postgres:16-alpine', vars.CI_IMAGE_REGISTRY) || 'postgres:16-alpine' }}
         env:
           POSTGRES_USER: oxagen
           POSTGRES_PASSWORD: oxagen
@@ -59,7 +60,7 @@ jobs:
           --health-retries 10
 
       clickhouse:
-        image: clickhouse/clickhouse-server:24.8-alpine
+        image: ${{ vars.CI_IMAGE_REGISTRY && format('{0}/mirror/clickhouse-server:24.8-alpine', vars.CI_IMAGE_REGISTRY) || 'clickhouse/clickhouse-server:24.8-alpine' }}
         env:
           CLICKHOUSE_DB: oxagen
           # Do NOT set CLICKHOUSE_USER/PASSWORD: overriding the built-in
@@ -77,7 +78,7 @@ jobs:
           --health-retries 10
 
       neo4j:
-        image: neo4j:5.24-community
+        image: ${{ vars.CI_IMAGE_REGISTRY && format('{0}/mirror/neo4j:5.24-community', vars.CI_IMAGE_REGISTRY) || 'neo4j:5.24-community' }}
         env:
           NEO4J_AUTH: neo4j/oxagen-dev
         ports:
@@ -193,10 +194,7 @@ jobs:
   e2e:
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ghcr.io/macanderson/oxagen-ci-e2e:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-e2e:latest
     # 75m, measured rather than guessed. This job runs the whole Playwright
     # suite in one shard, where pipeline.yml splits the same 121 tests across
     # four jobs that take ~7m each; it also builds apps/app first, and while
@@ -214,7 +212,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        image: ${{ vars.CI_IMAGE_REGISTRY && format('{0}/mirror/postgres:16-alpine', vars.CI_IMAGE_REGISTRY) || 'postgres:16-alpine' }}
         env:
           POSTGRES_USER: oxagen
           POSTGRES_PASSWORD: oxagen
@@ -228,7 +226,7 @@ jobs:
           --health-retries 10
 
       clickhouse:
-        image: clickhouse/clickhouse-server:24.8-alpine
+        image: ${{ vars.CI_IMAGE_REGISTRY && format('{0}/mirror/clickhouse-server:24.8-alpine', vars.CI_IMAGE_REGISTRY) || 'clickhouse/clickhouse-server:24.8-alpine' }}
         env:
           CLICKHOUSE_DB: oxagen
           CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
@@ -242,7 +240,7 @@ jobs:
           --health-retries 10
 
       neo4j:
-        image: neo4j:5.24-community
+        image: ${{ vars.CI_IMAGE_REGISTRY && format('{0}/mirror/neo4j:5.24-community', vars.CI_IMAGE_REGISTRY) || 'neo4j:5.24-community' }}
         env:
           NEO4J_AUTH: neo4j/oxagen-dev
         ports:

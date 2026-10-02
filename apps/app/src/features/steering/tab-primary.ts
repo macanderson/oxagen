@@ -10,12 +10,15 @@
 // - Proposals with no proposal in the state shown: the empty state carries
 //   no gold, so the header holds none either. A Context PR's own actions sit
 //   on its page (#5077), outside this hub.
+// - Memories with no memory in any state: "No memories yet" has no action,
+//   and the header holds none.
 //
 // Each read here is the one the body makes next, with the same input, so the
 // kernel's per-request read table answers the body without a second invoke
 // (server/kernel.ts, readsThisRequest).
 import type { DataSource } from "@/data/ports";
 import type { WsCtx } from "@/server/viewer";
+import { EVERY_MEMORY } from "./memories/query";
 import type { SteeringView } from "./view";
 
 /**
@@ -55,6 +58,12 @@ export async function bodyTakesHeaderGold({
         state: view.state ?? "open",
       });
       return page.ok && page.value.total === 0 ? "empty" : null;
+    }
+    case "memories": {
+      // The tab's own read of every state, so the body's ask is the same
+      // input and the kernel answers it once.
+      const every = await source.steering.workspaceMemories(ctx, EVERY_MEMORY);
+      return every.ok && every.value.totalMemories === 0 ? "empty" : null;
     }
     case "gates":
     case "library":

@@ -55,6 +55,10 @@ Only public ids leave the handler.
 - **Pending only:** `resolution IS NULL AND expires_at > now()`. A resolved or
   expired approval is not listed.
 - **Workspace-bound:** rows are filtered on the context's org and workspace.
+- **In-app approvals:** a row the in-app assistant parked (its run is an
+  `agent_runs` row on the `chat` or `api-chat` surface) belongs to the person
+  who asked (ADR-235). With no `runId` the queue leaves it out, and under its
+  run's `runId` only the person who asked sees it.
 - **`runId`:** filters on `approval_requests.run_public_id`. The writer
   resolves the run it holds (an internal `agent_runs` id) to its public one at
   write time. It is a public id because both kinds of run this product tracks

@@ -2,7 +2,9 @@
 // The steering repo setup on the repositories page (#4875): one line under
 // the header while the repo is not ready, and the setup dialog it opens, with
 // what setup does and each step. The dialog opens on its own at
-// `?setup=steering`, and an owner starts setup from it.
+// `?setup=steering`, and an owner starts setup from it. A ready repo keeps the
+// line while an import that stopped after its demote step has a tree to move
+// (#5082).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
@@ -15,6 +17,7 @@ import {
   LEGACY_SOURCE,
   notStartedSteeringRepo,
   steeringRepoView,
+  stoppedImport,
 } from "./steering-repo.builders";
 import type { SteeringRepoView } from "./types";
 
@@ -148,5 +151,102 @@ describe("the steering repo setup", () => {
     expect(
       await screen.findByTestId("steering-repo-ready"),
     ).toHaveTextContent("The steering repo is ready at acme/oxagen-core-platform");
+  });
+
+  it("keeps the line on a ready repo while a stopped import has a tree to move, and finishes it through the import (#5082)", async () => {
+    actions.importWorkspaceSteering.mockResolvedValue({
+      ok: true,
+      value: {
+        outcome: "imported",
+        steeringRepository: "acme/oxagen-core-platform",
+        pullRequests: [
+          {
+            branch: "workspace/import-oxagen",
+            number: 4,
+            url: "https://github.com/acme/oxagen-core-platform/pull/4",
+          },
+        ],
+        cleanup: { number: 9, url: "https://github.com/acme/agent-harness/pull/9" },
+        leftForAPerson: 0,
+        rulesNeedingKind: [],
+        constraintsNeedingEffect: [],
+      },
+    });
+    setup(steeringRepoView({ importRun: stoppedImport() }));
+    const notice = screen.getByTestId("steering-repo-setup-notice");
+    expect(notice).toHaveAttribute("data-status", "ready");
+    expect(notice).toHaveAttribute("data-move", "pending");
+    expect(notice).toHaveTextContent("Move pending");
+    expect(notice).toHaveTextContent(
+      "The records in acme/agent-harness's .oxagen/ tree have not moved to the steering repo yet.",
+    );
+    const open = within(notice).getByTestId("steering-repo-setup-open");
+    expect(open).toHaveTextContent("Finish the move");
+    await userEvent.click(open);
+    const dialog = await screen.findByTestId("steering-repo-setup-dialog");
+    expect(
+      within(dialog).getByTestId("steering-repo-setup-intro"),
+    ).toHaveTextContent("move the records in acme/agent-harness's .oxagen/ tree");
+    expect(within(dialog).getByTestId("steering-repo-finish-move")).toHaveTextContent(
+      "acme/agent-harness no longer steers this workspace, and its .oxagen/ records have not moved yet.",
+    );
+    await userEvent.click(
+      within(dialog).getByTestId("steering-repo-finish-move-action"),
+    );
+    expect(actions.importWorkspaceSteering).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+    );
+    expect(actions.retrySteeringRepoProvision).not.toHaveBeenCalled();
+    expect(
+      await within(dialog).findByTestId("steering-repo-import-outcome"),
+    ).toHaveTextContent(
+      "Oxagen created acme/oxagen-core-platform and opened 1 steering PR. Merge them in order, then the cleanup PR.",
+    );
+    expect(within(dialog).queryByTestId("steering-repo-finish-move")).toBeNull();
+  });
+
+  it("sends a failed bind after the demote to the import, never a retry (#5082)", async () => {
+    actions.importWorkspaceSteering.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "steering_repo_provision_failed",
+    });
+    setup(
+      failedSteeringRepo(
+        "bind_repository",
+        { code: "step_failed", message: "The bind failed." },
+        { importRun: stoppedImport() },
+      ),
+      { initiallyOpen: true },
+    );
+    const dialog = await screen.findByTestId("steering-repo-setup-dialog");
+    const move = within(dialog).getByTestId("steering-repo-retry");
+    expect(move).toHaveTextContent("Move steering");
+    await userEvent.click(move);
+    expect(actions.importWorkspaceSteering).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+    );
+    expect(actions.retrySteeringRepoProvision).not.toHaveBeenCalled();
+  });
+
+  it("draws no line once the import is done, and offers a member no finish (negative)", async () => {
+    setup(
+      steeringRepoView({
+        importRun: stoppedImport({ status: "done", step: "cleanup", error: null }),
+      }),
+    );
+    expect(screen.queryByTestId("steering-repo-setup-notice")).toBeNull();
+    cleanup();
+    setup(steeringRepoView({ importRun: stoppedImport() }), {
+      canAct: false,
+      initiallyOpen: true,
+    });
+    expect(screen.getByTestId("steering-repo-setup-open")).toHaveTextContent(
+      "View setup",
+    );
+    await screen.findByTestId("steering-repo-setup-dialog");
+    expect(screen.queryByTestId("steering-repo-finish-move")).toBeNull();
   });
 });

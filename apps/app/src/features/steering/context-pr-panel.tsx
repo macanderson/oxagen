@@ -7,14 +7,18 @@
 // Under the team and regulated modes the panel also offers Approve, and Merge
 // without review to an owner while no one has approved (#4518). A check
 // finding on a managed block shows the drift and a Restore block button. A PR
-// on a `memory/` branch lists its records, each with a Drop button.
+// on a `memory/` branch lists its records from list_memory_pr_records
+// (#4914), each with a Drop button, or the read's failure in their place.
 import { useLocale, useTranslations } from "next-intl";
-import type { ContextPr, ProposalStatus } from "@/data/contracts/steering";
-import type { Read } from "@/data/read";
+import type {
+  ContextPr,
+  MemoryPrRecords,
+  ProposalStatus,
+} from "@/data/contracts/steering";
+import { type Read, readError } from "@/data/read";
 import { mono } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
-import { type MemoryPrRecord, MemoryPrReview } from "./memory-pr-review";
-import { NotBacked } from "./not-backed";
+import { MemoryPrReview } from "./memory-pr-review";
 import { SteeringReadFailure } from "./read-failure";
 import { Fact, Facts, Section, useDate } from "./section";
 import type { SteeringAt } from "./view";
@@ -146,8 +150,11 @@ export function ContextPrPanel({
   approvals?: number;
   /** The findings the checks left, when the read carries them. */
   findings?: readonly SteeringPrFinding[];
-  /** A memory PR's records, from list_memory_pr_records (#4518). */
-  memoryRecords?: readonly MemoryPrRecord[];
+  /**
+   * A memory PR's records, from list_memory_pr_records (#4914), read when the
+   * PR is open on a `memory/` branch. Without one the records are not drawn.
+   */
+  memoryRecords?: Read<MemoryPrRecords> | null;
   /** The viewer is an owner, or holds `pr.merge_without_review`. */
   canMergeWithoutReview?: boolean;
 }) {
@@ -175,6 +182,15 @@ export function ContextPrPanel({
   const drift = open && pr !== null ? driftOf(findings ?? []) : [];
   const memoryBranch =
     open && pr !== null && pr.branch.startsWith("memory/") ? pr.branch : null;
+  // The records are read by the PR's number. A memory PR of that number on
+  // another branch is not this one, so its records are not drawn here.
+  const records =
+    memoryRecords === undefined || memoryRecords === null
+      ? null
+      : memoryRecords.ok &&
+          memoryRecords.value.pullRequest.branch !== memoryBranch
+        ? readError("not_found", 404)
+        : memoryRecords;
   return (
     <Section id="steering-pr" title={t("title")} data-status={status}>
       {/* The page header carries the state badge and the link to the host. */}
@@ -238,23 +254,25 @@ export function ContextPrPanel({
           />
         </div>
       ))}
-      {memoryBranch === null ? null : (
+      {memoryBranch === null || records === null ? null : (
         <div data-memory-pr="" className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold text-foreground">
             {t("memory.title")}
           </h3>
-          {memoryRecords === undefined ? (
-            <NotBacked
-              what={t("memory.notBacked")}
-              issue={0}
-              testId="memory-pr-records-not-backed"
-            />
+          {records.ok ? (
+            records.value.records.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {t("memory.empty")}
+              </p>
+            ) : (
+              <MemoryPrReview
+                at={at}
+                branch={memoryBranch}
+                records={records.value.records}
+              />
+            )
           ) : (
-            <MemoryPrReview
-              at={at}
-              branch={memoryBranch}
-              records={memoryRecords}
-            />
+            <SteeringReadFailure read={records} section={t("memory.title")} />
           )}
         </div>
       )}

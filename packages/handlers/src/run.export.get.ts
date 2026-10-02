@@ -6,7 +6,8 @@
 // (`not_found` otherwise, and the query filters on org and workspace as well
 // as RLS). The download URL is minted only for a `ready` row, signed over the
 // row's own bundle digest, and expires after
-// `RUN_EXPORT_DOWNLOAD_TTL_SECONDS`.
+// `RUN_EXPORT_DOWNLOAD_TTL_SECONDS`. An export of an in-app run is
+// `not_found` to everyone but the person who asked (ADR-235, item 5).
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import {
@@ -18,6 +19,7 @@ import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { runScope } from "./run.list";
+import { canReadRunId, type InAppRunReadDeps } from "./lib/run-read";
 import {
   mintRunExportDownloadToken,
   runExportDownloadSecret,
@@ -39,7 +41,7 @@ export interface RunExportRow {
   error: string | null;
 }
 
-export interface RunExportGetDeps {
+export interface RunExportGetDeps extends InAppRunReadDeps {
   readExport: (scope: {
     orgId: string;
     workspaceId: string;
@@ -62,7 +64,13 @@ export function createRunExportGetHandler(
     );
     const scope = runScope(ctx);
     const row = await deps.readExport({ ...scope, exportId: input.exportId });
-    if (!row) {
+    if (
+      !row ||
+      !(await canReadRunId(ctx, row.runPublicId, {
+        readLedgerRun: deps.readLedgerRun,
+        actingUserId: async () => actingUserId,
+      }))
+    ) {
       throw new HandlerError({
         code: "not_found",
         reason: "run_export_not_found",

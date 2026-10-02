@@ -87,7 +87,7 @@
 
 .ox-mermaid svg {
   font-family: var(--font-mono) !important;
-  font-size: 12px !important;
+  font-size: var(--ox-a-micro) !important;
 }
 .ox-mermaid p {
   margin: 0 !important;
@@ -294,15 +294,11 @@
 
 /* Terminal window chrome. Intentionally always-dark (like a real terminal) in
    both light and dark mode — fixed literal colours so the panel never washes
-   out on the light page. */
+   out on the light page. A panel at rest takes no shadow (the house rule), so
+   the window is drawn by its hairline alone. */
 .lp-term {
   border: 1px solid rgb(255 255 255 / 0.12);
   background: color-mix(in srgb, var(--ox-panel, #18181B) 94%, transparent);
-  box-shadow:
-    0 1px 0 0 rgb(255 255 255 / 0.06) inset,
-    0 30px 80px -28px
-    color-mix(in oklch, var(--_ember-c, #F1CE65) 42%, transparent),
-    0 18px 50px -30px rgb(0 0 0 / 0.7);
   backdrop-filter: blur(8px);
 }
 

@@ -59,6 +59,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - rotate_agent_credential
 - save_memory
 - search_mcp_registry
+- set_agent_cache_keep_alive
 - set_mcp_enabled
 - start_mcp_authorization
 - suggest_promotion_rationales
@@ -95,6 +96,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - get_assistant_reply
 - record_reply_feedback
 - render_chart
+- set_assistant_switch
 - upload_assistant_attachment
 
 ## audit
@@ -504,6 +506,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - get_spend_drill
 - get_spend_per_merged_pr
 - get_unproductive_spend
+- get_work_order_metrics
 - list_cost_centers
 - list_findings
 - list_waste

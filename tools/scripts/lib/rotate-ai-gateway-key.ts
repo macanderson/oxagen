@@ -1,15 +1,177 @@
 /**
- * rotate-ai-gateway-key lib — pure core for the AI Gateway key rotation
+ * rotate-ai-gateway-key lib: the pure core of the AI Gateway key rotation
  * script (`tools/scripts/rotate-ai-gateway-key.ts`).
  *
- * Everything here is side-effect free so it can be unit tested: parsing the
- * `vercel.tokens.json` credential file, rewriting AI_GATEWAY_API_KEY inside
- * dotenv content without disturbing the rest of the file, extracting the
- * plaintext key from the Vercel `POST /v1/api-keys` response, and resolving
- * a team slug to a team id.
+ * Nothing here calls Vercel or AWS, so every function is tested without a
+ * network. It reads the command line, parses the `vercel.tokens.json`
+ * credential file, finds the plaintext key in Vercel's `POST /v1/api-keys`
+ * response, resolves a team slug to a team id, names the parameter that holds
+ * the key in each environment (ADR-240), and writes the message for a run that
+ * stops partway.
  */
 
-const ENV_KEY = "AI_GATEWAY_API_KEY";
+import { parseArgs } from "node:util";
+import { withoutSeparator, type ParsedArgs } from "../env-pull";
+import { parsePushTarget, targetPrefix } from "../env-push";
+import { DEFAULT_REGION, type AwsTarget } from "./parameter-store";
+
+/** The variable the gateway key is saved as, in every environment. */
+export const GATEWAY_KEY_NAME = "AI_GATEWAY_API_KEY";
+
+// ── command line ─────────────────────────────────────────────────────────────
+
+/**
+ * An environment that holds a gateway key. `staging` is the registry's
+ * `preview`, kept under `/oxagen/staging`.
+ */
+export type RotateEnv = "development" | "staging" | "production";
+
+/** The order a run saves in, so a failure stops before production. */
+const ENV_ORDER: readonly RotateEnv[] = ["development", "staging", "production"];
+
+export const ROTATE_USAGE = [
+  "Usage: pnpm vercel:rotate-ai-key <team-slug> --env <environments> " +
+    "[--dry-run] [--profile <name>] [--region <region>]",
+  "       pnpm vercel:rotate-ai-key --init",
+  "<environments> is development, staging, or production. Repeat --env, or " +
+    "separate names with commas: --env staging,production.",
+].join("\n");
+
+export type RotateCommand =
+  | { mode: "init" }
+  | ({
+      mode: "rotate";
+      /** The Vercel team slug, which picks the token in vercel.tokens.json. */
+      slug: string;
+      /** Each environment to save a new key in, in ENV_ORDER. */
+      envs: RotateEnv[];
+      dryRun: boolean;
+    } & AwsTarget);
+
+/**
+ * Read every `--env` value. Each one may hold several names separated by
+ * commas. `preview` is read as staging, as env:push reads it. The result has
+ * no repeats and follows ENV_ORDER.
+ */
+function readEnvs(values: readonly string[]): ParsedArgs<RotateEnv[]> {
+  if (values.length === 0) {
+    return {
+      ok: false,
+      message: "--env is required. Name development, staging, or production.",
+    };
+  }
+  const chosen = new Set<RotateEnv>();
+  for (const value of values) {
+    for (const piece of value.split(",")) {
+      const name = piece.trim();
+      const target = parsePushTarget(name);
+      if (target === "operator") {
+        return {
+          ok: false,
+          message:
+            `${GATEWAY_KEY_NAME} has one value per environment, so it does ` +
+            "not go under operator. Name development, staging, or production.",
+        };
+      }
+      if (target === undefined) {
+        return {
+          ok: false,
+          message:
+            name === ""
+              ? "--env holds an empty name. Separate names with one comma, " +
+                "such as --env staging,production."
+              : `--env must be development, staging, or production, not ${name}.`,
+        };
+      }
+      chosen.add(target);
+    }
+  }
+  return { ok: true, options: ENV_ORDER.filter((env) => chosen.has(env)) };
+}
+
+/** Read the command line. Pure, so each refusal is tested. */
+export function parseRotateArgs(
+  args: readonly string[],
+): ParsedArgs<RotateCommand> {
+  let flags: {
+    env?: string[];
+    "dry-run"?: boolean;
+    init?: boolean;
+    profile?: string;
+    region?: string;
+  };
+  let positionals: string[];
+  try {
+    const parsed = parseArgs({
+      args: withoutSeparator(args),
+      options: {
+        env: { type: "string", multiple: true },
+        "dry-run": { type: "boolean" },
+        init: { type: "boolean" },
+        profile: { type: "string" },
+        region: { type: "string" },
+      },
+      strict: true,
+      allowPositionals: true,
+    });
+    flags = parsed.values;
+    positionals = parsed.positionals;
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  if (flags.init) {
+    const hasOthers =
+      positionals.length > 0 ||
+      flags.env !== undefined ||
+      flags["dry-run"] !== undefined ||
+      flags.profile !== undefined ||
+      flags.region !== undefined;
+    if (hasOthers) {
+      return {
+        ok: false,
+        message: "--init runs on its own. Run it with no team slug and no other flag.",
+      };
+    }
+    return { ok: true, options: { mode: "init" } };
+  }
+
+  const [slug, ...extra] = positionals;
+  if (slug === undefined) {
+    return { ok: false, message: "Name the Vercel team slug, such as oxagen." };
+  }
+  if (extra.length > 0) {
+    return {
+      ok: false,
+      message: `Name one team slug. The command named ${positionals.length}.`,
+    };
+  }
+
+  const envs = readEnvs(flags.env ?? []);
+  if (!envs.ok) return envs;
+
+  if (flags.region === "") {
+    return { ok: false, message: "--region needs a region name." };
+  }
+  if (flags.profile === "") {
+    return { ok: false, message: "--profile needs a profile name." };
+  }
+
+  return {
+    ok: true,
+    options: {
+      mode: "rotate",
+      slug,
+      envs: envs.options,
+      dryRun: flags["dry-run"] ?? false,
+      profile: flags.profile,
+      region: flags.region ?? DEFAULT_REGION,
+    },
+  };
+}
 
 // ── vercel.tokens.json ───────────────────────────────────────────────────────
 
@@ -72,46 +234,12 @@ export function tokenForSlug(
   if (!match) {
     const known = entries.map((e) => `"${e.slug}"`).join(", ") || "(none)";
     throw new Error(
-      `no token for org slug "${slug}" in vercel.tokens.json — known slugs: ${known}`,
+      `vercel.tokens.json has no token for the team slug "${slug}". ` +
+        `It has tokens for: ${known}. Add an entry for "${slug}", or run with ` +
+        "--init to seed the file from your Vercel CLI login.",
     );
   }
   return match;
-}
-
-// ── dotenv rewriting ─────────────────────────────────────────────────────────
-
-export interface EnvUpsertResult {
-  content: string;
-  /** "replaced" if an assignment existed, "appended" if the key was added. */
-  action: "replaced" | "appended";
-}
-
-/**
- * Set `AI_GATEWAY_API_KEY=<value>` in dotenv `content`, preserving every other
- * line byte-for-byte. Replaces all existing assignments of the key (commented
- * lines are left alone); appends at the end when absent. Output always ends
- * with a trailing newline.
- */
-export function upsertGatewayKey(
-  content: string,
-  value: string,
-): EnvUpsertResult {
-  const assignment = `${ENV_KEY}=${value}`;
-  // Anchored to line start: never rewrites `# AI_GATEWAY_API_KEY=...` comments
-  // or other keys that merely contain the name as a suffix.
-  const keyLine = new RegExp(`^${ENV_KEY}=.*$`, "gm");
-  if (keyLine.test(content)) {
-    // Function replacement, not a string one: a `$` in the key would otherwise
-    // be read as a replacement pattern (`$&`, `$1`, `$$`) and corrupt the value.
-    const next = content.replace(keyLine, () => assignment);
-    return {
-      content: next.endsWith("\n") ? next : `${next}\n`,
-      action: "replaced",
-    };
-  }
-  const base =
-    content.length === 0 || content.endsWith("\n") ? content : `${content}\n`;
-  return { content: `${base}${assignment}\n`, action: "appended" };
 }
 
 // ── Vercel API response mining ───────────────────────────────────────────────
@@ -119,8 +247,8 @@ export function upsertGatewayKey(
 /**
  * Extract the plaintext AI Gateway key from the `POST /v1/api-keys` response.
  * Prefers well-known field names, then falls back to a recursive scan for the
- * `vck_` prefix Vercel uses for gateway keys — the response shape is not
- * covered by a published schema, so we stay defensive.
+ * `vck_` prefix Vercel uses for gateway keys. No published schema covers the
+ * response shape, so the scan stays defensive.
  */
 export function extractGatewayKey(response: unknown): string | null {
   const preferred = ["key", "token", "secret", "value", "plaintext"];
@@ -171,8 +299,8 @@ export interface VercelTeam {
 
 /**
  * Pick the team matching `slug` from a `GET /v2/teams` payload. Throws with
- * the accessible slugs when absent — the usual cause is using the other
- * login's token.
+ * the slugs the token can reach when it is absent. The usual cause is the
+ * other login's token.
  */
 export function resolveTeam(teamsResponse: unknown, slug: string): VercelTeam {
   const teams =
@@ -192,12 +320,72 @@ export function resolveTeam(teamsResponse: unknown, slug: string): VercelTeam {
     .filter((s): s is string => typeof s === "string")
     .join(", ");
   throw new Error(
-    `token cannot access a team with slug "${slug}" — accessible teams: ${accessible || "(none)"}. ` +
-      "Each Vercel login has its own token; check vercel.tokens.json.",
+    `The token for "${slug}" cannot reach a team with that slug. ` +
+      `It can reach these teams: ${accessible || "(none)"}. ` +
+      "Each Vercel login has its own token, so check that vercel.tokens.json " +
+      `holds the token of the login that owns "${slug}".`,
   );
 }
 
 /** Mask a secret for log output: first 8 chars + length. */
 export function maskSecret(secret: string): string {
   return `${secret.slice(0, 8)}… (${secret.length} chars)`;
+}
+
+// ── Parameter Store ──────────────────────────────────────────────────────────
+
+/** The parameter that holds the gateway key in one environment (ADR-240). */
+export function gatewayKeyParameter(env: RotateEnv): string {
+  return `${targetPrefix(env)}/${GATEWAY_KEY_NAME}`;
+}
+
+/**
+ * The name a new key gets in Vercel. It names the environment and the day, so
+ * the dashboard shows which key is new and which old key to delete.
+ */
+export function gatewayKeyName(env: RotateEnv, now: Date): string {
+  return `oxagen-${env}-${now.toISOString().slice(0, 10)}`;
+}
+
+export interface RotationFailure {
+  slug: string;
+  /** The environments whose parameter already holds a new key. */
+  saved: readonly RotateEnv[];
+  /** The environment the run stopped at. */
+  failed: RotateEnv;
+  /**
+   * The Vercel name of a key the run created for `failed` that no parameter
+   * holds. Undefined when the run stopped before Vercel created one.
+   */
+  strandedKey?: string;
+  /** `failed` and every environment after it, which a second run needs. */
+  rerun: readonly RotateEnv[];
+  /** What went wrong. It must hold no key. */
+  cause: string;
+}
+
+/**
+ * The error for a run that stopped partway: where it stopped, why, what it
+ * already saved, any key it left in Vercel, and the command that finishes the
+ * job. The script never prints a key, so a key Vercel created that reached no
+ * parameter cannot be recovered. The message says to delete it.
+ */
+export function rotationFailureMessage(failure: RotationFailure): string {
+  const lines = [`The rotation stopped at ${failure.failed}.`, failure.cause];
+  lines.push(
+    failure.saved.length > 0
+      ? `These environments already hold a new key: ${failure.saved.join(", ")}.`
+      : "No environment got a new key.",
+  );
+  if (failure.strandedKey !== undefined) {
+    lines.push(
+      `Vercel holds a new key named ${failure.strandedKey} that no parameter ` +
+        "holds. Delete it in the Vercel dashboard, under AI Gateway, API keys.",
+    );
+  }
+  lines.push(
+    "Fix the cause, then run " +
+      `\`pnpm vercel:rotate-ai-key ${failure.slug} --env ${failure.rerun.join(",")}\`.`,
+  );
+  return lines.join("\n");
 }

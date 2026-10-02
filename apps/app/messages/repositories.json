@@ -664,6 +664,10 @@
         "ready": "The steering repo is ready at",
         "moveSteering": "Move steering",
         "moving": "Moving steering…",
+        "finishMove": {
+          "body": "{legacy} no longer steers this workspace, and its .oxagen/ records have not moved yet. Finish the move to open the steering PRs and the cleanup PR. Nothing moves until you merge them.",
+          "action": "Finish the move"
+        },
         "create": "Create the steering repo",
         "starting": "Setting up…",
         "startNote": "Oxagen creates the repo on your GitHub organization or GitLab group. This takes up to a minute.",
@@ -742,18 +746,21 @@
           "not_started": "Not set up",
           "provisioning": "Setting up",
           "failed": "Setup failed",
-          "blocked": "Setup stopped"
+          "blocked": "Setup stopped",
+          "movePending": "Move pending"
         },
         "lead": {
           "notStarted": "This workspace has no steering repo yet.",
           "legacy": "{legacy} still steers this workspace through its .oxagen/ tree.",
           "provisioning": "Oxagen is creating the steering repo.",
           "failed": "Setup failed at {step}.",
-          "blocked": "Setup stopped at {step}."
+          "blocked": "Setup stopped at {step}.",
+          "movePending": "The records in {legacy}'s .oxagen/ tree have not moved to the steering repo yet."
         },
         "open": {
           "act": "Set up",
-          "view": "View setup"
+          "view": "View setup",
+          "finish": "Finish the move"
         },
         "intro": {
           "create": "Oxagen creates a private steering repo for this workspace, seeds it, applies its prescribed settings, and binds it here. Steering records live in it from then on.",

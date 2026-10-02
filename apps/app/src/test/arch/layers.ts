@@ -444,6 +444,14 @@ const PLATFORM_NAMED_ROWS: Readonly<
     "@oxagen/oxagen/steering-repo/record-force": ["clampForce", "forcesFor"],
     "@oxagen/oxagen/steering-repo/record-kind": ["RECORD_KINDS"],
   },
+  // Promote on the Memories tab offers each draft only the forces its kind
+  // allows and starts it at the kind's default, with the rule
+  // promote_memories enforces, and offers the kinds the contract takes
+  // (#4914). Both modules import only zod and a type.
+  "src/features/steering/memories/drafts.ts": {
+    "@oxagen/oxagen/steering-repo/record-force": ["clampForce", "forcesFor"],
+    "@oxagen/oxagen/steering-repo/record-kind": ["RECORD_KINDS"],
+  },
   // The import compares the rows of several parse calls with the steering
   // check's own pass, on the server only, as the CLI does (#5030).
   "src/features/steering/import/reconcile.ts": {

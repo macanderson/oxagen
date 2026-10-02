@@ -359,6 +359,65 @@ describe("approval runtime", () => {
     expect(insertMock).not.toHaveBeenCalledWith(schema.notifications);
   });
 
+  // ADR-235, ruled on 2026-10-01: an approval the in-app assistant parks
+  // belongs to the person who asked. Only they may answer it, so only they
+  // are told, however many approvers the workspace has.
+  it("tells only the person who asked about a resumable approval, and reads no approvers", async () => {
+    const ORG = "0192d4a8-0000-7000-8000-000000000001";
+    const WORKSPACE = "0192d4a8-0000-7000-8000-000000000002";
+    const ASKER = "0192d4a8-0000-7000-8000-000000000003";
+    const MESSAGE = "0192d4a8-0000-7000-8000-000000000005";
+    const CONVERSATION = "0192d4a8-0000-7000-8000-000000000006";
+    approverRows = [{ userId: "u_owner" }, { userId: "u_admin" }];
+    vi.stubEnv(
+      "AUTH_TOKEN_ENCRYPTION_KEY",
+      Buffer.alloc(32, 7).toString("base64"),
+    );
+    // The resumable park reads the asker's conversation and any live row for
+    // the same call through the relational API.
+    Object.assign(fakeDb, {
+      query: {
+        messages: {
+          findFirst: async () => ({
+            id: MESSAGE,
+            conversationId: CONVERSATION,
+          }),
+        },
+        conversations: {
+          findFirst: async () => ({ id: CONVERSATION, userId: ASKER }),
+        },
+        approvalRequests: { findFirst: async () => undefined },
+      },
+    });
+    try {
+      await createApprovalRequest({
+        orgId: ORG,
+        workspaceId: WORKSPACE,
+        messageId: MESSAGE,
+        capabilityName: "set_budget",
+        inputPreview: { amount: 5 },
+        digestInput: { amount: 5 },
+        riskLevel: "high",
+        resumeRequesterUserId: ASKER,
+      });
+    } finally {
+      delete (fakeDb as Record<string, unknown>).query;
+      vi.unstubAllEnvs();
+    }
+    expect(insertMock).toHaveBeenCalledTimes(2);
+    expect(insertMock).toHaveBeenLastCalledWith(schema.notifications);
+    const rows = insertedValues[1] as Array<Record<string, unknown>>;
+    expect(rows.map((r) => r.userId)).toEqual([ASKER]);
+    expect(rows[0]).toMatchObject({
+      orgId: ORG,
+      workspaceId: WORKSPACE,
+      event: "approval.requested",
+      title: "Approval requested: set_budget",
+    });
+    // The fan-out to the workspace's approvers never ran.
+    expect(fromMock).not.toHaveBeenCalledWith(schema.principals);
+  });
+
   it("notifyResolution issues pg_notify on the approval channel", async () => {
     await notifyResolution({
       approvalId: "appr_1",

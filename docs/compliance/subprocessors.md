@@ -38,7 +38,8 @@ These receive repository content or build output, not customer data. List them f
 | Vercel AI Gateway, then Anthropic | Repository and PR diffs for release notes and the vision gate | Unverified | [Release script](../../tools/scripts/release.ts), [vision gate](../../tools/scripts/vision-gate.mjs) |
 | OpenRouter | Nightly end-to-end model calls | Unverified | [Nightly](../../.github/workflows/nightly.yml) |
 | Amazon Web Services | Turborepo cache entries from CI, which expire after 14 days: the log of every cached task, build outputs, coverage reports, and Playwright reports and test results | `us-east-1` ([providers](../../infra/stacks-new/ci-deploy/providers.tf)) | [Cache bucket](../../infra/stacks-new/ci-deploy/turbo-cache.tf), [cached outputs](../../turbo.json), [cache action](../../.github/actions/turbo-cache/action.yml), [ADR-207](../adr/ADR-207-ci-runs-its-own-turbo-cache-on-s3.md) |
-| Vercel | Environment variables and gateway key rotation | Unverified | [Env manager](../../tools/env-manager/src/vercel.ts) |
+| Vercel | AI Gateway key rotation | Unverified | [Rotation script](../../tools/scripts/rotate-ai-gateway-key.ts) |
+| Amazon Web Services | Every secret and setting, in SSM Parameter Store (ADR-240) | `us-east-1` | [Parameter Store client](../../tools/scripts/lib/parameter-store.ts), [ADR-240](../adr/ADR-240-parameter-store-holds-every-secret-and-setting.md) |
 | Linear | Release notes and CI failure tickets | Unverified | [Linear release](../../.github/workflows/linear-release.yml), [ticket script](../../tools/scripts/ensure-e2e-failure-ticket.ts) |
 | npm registry and Apple notarization | The published CLI package and signed desktop builds | Unverified | [Release](../../.github/workflows/release.yml), [desktop](../../.github/workflows/desktop.yml) |
 | Stripe | Catalog sync from CI with a live key | Unverified | [Stripe sync](../../.github/workflows/stripe-sync.yml) |

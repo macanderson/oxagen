@@ -42,6 +42,8 @@ import { agentCredentialRotate } from "./agent.credential.rotate";
 import { agentSuspend } from "./agent.suspend";
 import { agentRetire } from "./agent.retire";
 import { agentToolbeltGet } from "./agent.toolbelt.get";
+// Lane F32: the per-agent switch for the model proxy's cache keep-alive.
+import { agentCacheKeepAliveSet } from "./agent.cache_keep_alive.set";
 import { tachoIncidentList } from "./tacho.incident.list";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { mandateGrant } from "./mandate.grant";
@@ -126,6 +128,7 @@ import { spendOperatorRanking } from "./spend.operator_ranking";
 import { spendOperatorPseudonymsSet } from "./spend.operator_pseudonyms.set";
 import { spendPerMergedPr } from "./spend.per_merged_pr";
 import { spendUnproductive } from "./spend.unproductive";
+import { spendWorkOrderMetrics } from "./spend.work_order_metrics";
 import { skillConfigGet } from "./skill.config.get";
 import { skillConfigUpdate } from "./skill.config.update";
 import { skillSearchPreview } from "./skill.search.preview";
@@ -166,6 +169,7 @@ import { assistantReplyGet } from "./assistant.reply.get";
 import { assistantReplyFeedbackRecord } from "./assistant.reply_feedback.record";
 import { assistantTurnCancel } from "./assistant.turn.cancel";
 import { assistantChartRender } from "./assistant.chart.render";
+import { assistantSwitchSet } from "./assistant.switch.set";
 import { toolsSearch } from "./tools.search";
 import { toolsLoad } from "./tools.load";
 import { shellNavCountsGet } from "./shell.nav_counts.get";
@@ -524,6 +528,9 @@ export {
   toolbeltSlugSchema,
 } from "./toolbelt.shared";
 export type { ToolbeltKind, ToolbeltRef } from "./toolbelt.shared";
+// The surfaces an in-app agent turn runs on (ADR-235). Not a capability, so
+// exported here to satisfy the file-coverage guard.
+export { IN_APP_AGENT_SURFACES } from "./run.shared";
 // Who an operator is, shared by the rows that name one (get_spend). Not a
 // capability, so exported here to satisfy the file-coverage guard.
 export { operatorFactsSchema } from "./operator.shared";
@@ -826,6 +833,7 @@ export {
   agentSuspend,
   agentRetire,
   agentToolbeltGet,
+  agentCacheKeepAliveSet,
   tachoIncidentList,
   agentApprovalResolve,
   mandateGrant,
@@ -940,6 +948,7 @@ export {
   assistantReplyFeedbackRecord,
   assistantTurnCancel,
   assistantChartRender,
+  assistantSwitchSet,
   toolsSearch,
   toolsLoad,
   shellNavCountsGet,
@@ -962,6 +971,7 @@ export {
   spendOperatorPseudonymsSet,
   spendPerMergedPr,
   spendUnproductive,
+  spendWorkOrderMetrics,
   configurationCloneGet,
   configurationClonePropose,
   skillConfigGet,
@@ -1289,6 +1299,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   agentSuspend,
   agentRetire,
   agentToolbeltGet,
+  agentCacheKeepAliveSet,
   tachoIncidentList,
   agentApprovalResolve,
   mandateGrant,
@@ -1400,6 +1411,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   assistantReplyFeedbackRecord,
   assistantTurnCancel,
   assistantChartRender,
+  assistantSwitchSet,
   toolsSearch,
   toolsLoad,
   shellNavCountsGet,
@@ -1422,6 +1434,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   spendOperatorPseudonymsSet,
   spendPerMergedPr,
   spendUnproductive,
+  spendWorkOrderMetrics,
   configurationCloneGet,
   configurationClonePropose,
   skillConfigGet,

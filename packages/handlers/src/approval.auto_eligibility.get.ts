@@ -6,6 +6,10 @@
 // page shows the decision that was made rather than what today's rules would
 // say about it (INV-10).
 //
+// An approval the in-app assistant parked belongs to the person who asked
+// (ADR-235, ruled on 2026-10-01). For anyone else it reads as not found, the
+// same answer an approval in another workspace gets.
+//
 // audit-exempt: read-only; the kernel's capability.invoke_* row is the audit.
 
 import { schema, withTenantDb } from "@oxagen/database";
@@ -14,6 +18,7 @@ import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { approvalAutoEligibilityGet } from "@oxagen/oxagen/contracts/approval.auto_eligibility.get";
 import { isApprovalPublicId } from "@oxagen/oxagen/contracts/agent.approval.resolve";
 import { isFloorReason } from "@oxagen/rules";
+import { inAppOnlyForAsker } from "@oxagen/rules/approval-notify";
 import { and, eq } from "drizzle-orm";
 import { requireWorkspace } from "./_approval_rule";
 
@@ -23,8 +28,9 @@ export const approvalAutoEligibilityGetHandler: CapabilityHandler<
   typeof approvalAutoEligibilityGet
 > = async (input, ctx) => {
   const workspaceId = requireWorkspace(ctx, "get_auto_eligibility");
+  const actingUserId = await resolveActingUserId(ctx);
   await assertOrgRole(
-    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { ...ctx, userId: actingUserId },
     { org: ["Owner", "Admin", "Member"] },
   );
 
@@ -42,6 +48,7 @@ export const approvalAutoEligibilityGetHandler: CapabilityHandler<
         byId,
         eq(ar.orgId, ctx.orgId),
         eq(ar.workspaceId, workspaceId),
+        inAppOnlyForAsker(actingUserId),
       ),
       columns: {
         autoRuleId: true,

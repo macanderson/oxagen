@@ -1104,6 +1104,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./kill_switch.list"))
         .killSwitchListHandler as CapabilityHandlerFn,
   );
+  // Oxagen's own switch on its in-app assistant. It is platformOnly and on no
+  // surface, like set_org_billing_terms (INV-31).
+  registerHandler(
+    "set_assistant_switch",
+    async () =>
+      (await import("./assistant.switch.set"))
+        .assistantSwitchSetHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "publish_context_record",
     async () =>
@@ -1807,6 +1815,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./agent.toolbelt.assign"))
         .agentToolbeltAssignHandler as CapabilityHandlerFn,
   );
+  // Lane F32: the per-agent switch for the model proxy's cache keep-alive.
+  registerHandler(
+    "set_agent_cache_keep_alive",
+    async () =>
+      (await import("./agent.cache_keep_alive.set"))
+        .agentCacheKeepAliveSetHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "create_runtime",
     async () =>
@@ -2058,6 +2073,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./spend.unproductive"))
         .spendUnproductiveHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_work_order_metrics",
+    async () =>
+      (await import("./spend.work_order_metrics"))
+        .spendWorkOrderMetricsHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_clone_draft",

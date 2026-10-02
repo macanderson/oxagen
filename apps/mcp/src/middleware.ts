@@ -80,6 +80,10 @@ setSecurityEventEmitter((kernelEvent) => {
     ip: null, // not available at kernel level — enrich at surface layer
     userAgent: null,
     requestId: kernelEvent.requestId,
+    // Oxagen's in-app assistant made this call for the actor (ADR-235).
+    ...(kernelEvent.oxagenAssistant
+      ? { detail: { oxagenAssistant: true as const } }
+      : {}),
   });
 
   // xmcp exposes no request-level error hook (its only middleware is the

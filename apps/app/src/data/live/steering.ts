@@ -1,7 +1,8 @@
 // The steering port on the kernel (ARCHITECTURE.md §3.3; #2961): the records
-// in force, the proposals and one proposal's Context PR, each a noBillingGate
-// kernelRead on the workspace ctx, mapped into its view model and parsed at
-// the boundary.
+// in force, the proposals and one proposal's Context PR, and the workspace
+// memories with one memory and one memory PR's records (#4914), each a
+// noBillingGate kernelRead on the workspace ctx, mapped into its view model
+// and parsed at the boundary.
 import "server-only";
 import { agentMemoryList } from "@oxagen/oxagen/contracts/agent.memory.list";
 import { contextPrDiffGet } from "@oxagen/oxagen/contracts/context.pr.diff.get";
@@ -14,12 +15,16 @@ import { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steer
 import { contextSteeringLayout } from "@oxagen/oxagen/contracts/context.steering.layout";
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
+import { steeringMemoriesGet } from "@oxagen/oxagen/contracts/steering.memories.get";
+import { steeringMemoriesList } from "@oxagen/oxagen/contracts/steering.memories.list";
+import { steeringMemoryPrRecordsList } from "@oxagen/oxagen/contracts/steering.memory_pr_records.list";
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import {
   ContextPr,
   ContextPrDiff,
   MemoryPage,
+  MemoryPrRecords,
   OxagenTree,
   ProposalPage,
   type ProposalState,
@@ -30,6 +35,8 @@ import {
   SteeringDeliveries,
   SteeringHub,
   SteeringLayout,
+  WorkspaceMemoryDetail,
+  WorkspaceMemoryPage,
 } from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
@@ -38,12 +45,15 @@ import {
   toContextPr,
   toContextPrDiff,
   toMemoryPage,
+  toMemoryPrRecords,
   toOxagenTree,
   toProposalPage,
   toRecordDetail,
   toRecordPage,
   toSteeringFreshness,
   toSteeringLayout,
+  toWorkspaceMemoryDetail,
+  toWorkspaceMemoryPage,
 } from "./mappers/steering";
 
 /** The view model parsed from a mapped record, or record_unmappable reported once. */
@@ -232,6 +242,59 @@ export const steering: DataSource["steering"] = {
         )
       : read;
   },
+  async workspaceMemories(ctx, q) {
+    const read = await kernelRead(ctx, {
+      contract: steeringMemoriesList,
+      input: {
+        states: [...q.states],
+        limit: q.limit,
+        offset: q.offset,
+        ...(q.harness === null ? {} : { harness: q.harness }),
+        ...(q.agent === null ? {} : { agent: q.agent }),
+        ...(q.repository === null ? {} : { repository: q.repository }),
+        ...(q.type === null ? {} : { type: q.type }),
+      },
+      page: "steering",
+    });
+    return read.ok
+      ? parsed(
+          WorkspaceMemoryPage,
+          toWorkspaceMemoryPage(read.value),
+          ctx.orgId,
+          "workspaceMemories",
+        )
+      : read;
+  },
+  async workspaceMemory(ctx, memoryId) {
+    const read = await kernelRead(ctx, {
+      contract: steeringMemoriesGet,
+      input: { memory_id: memoryId },
+      page: "steering",
+    });
+    return read.ok
+      ? parsed(
+          WorkspaceMemoryDetail,
+          toWorkspaceMemoryDetail(read.value),
+          ctx.orgId,
+          "workspaceMemory",
+        )
+      : read;
+  },
+  async memoryPrRecords(ctx, prNumber) {
+    const read = await kernelRead(ctx, {
+      contract: steeringMemoryPrRecordsList,
+      input: { number: prNumber },
+      page: "steering",
+    });
+    return read.ok
+      ? parsed(
+          MemoryPrRecords,
+          toMemoryPrRecords(read.value),
+          ctx.orgId,
+          "memoryPrRecords",
+        )
+      : read;
+  },
   async freshness(ctx) {
     const read = await kernelRead(ctx, {
       contract: contextSteeringFreshness,
@@ -278,6 +341,10 @@ export const steering: DataSource["steering"] = {
    * through list_proposals' `state`. The waiting count is null when the open
    * count failed, and the filter counts are null when any of the three
    * failed: a partial set would print a number nobody counted.
+   *
+   * The memories waiting come from one row of list_workspace_memories, whose
+   * `waiting` counts the workspace's waiting memories whatever the filters.
+   * It is null when that read failed.
    */
   async hub(ctx) {
     const count = (state: ProposalState) =>
@@ -311,11 +378,16 @@ export const steering: DataSource["steering"] = {
           }
         : { state: "unread", code: failureCode(tree) };
     };
-    const [mode, open, merged, closed] = await Promise.all([
+    const [mode, open, merged, closed, memories] = await Promise.all([
       governance(),
       count("open"),
       count("merged"),
       count("closed"),
+      kernelRead(ctx, {
+        contract: steeringMemoriesList,
+        input: { states: ["waiting"], limit: 1, offset: 0 },
+        page: "steering",
+      }),
     ]);
     const proposalsWaiting = open.ok ? open.value.total : null;
     const states =
@@ -328,7 +400,12 @@ export const steering: DataSource["steering"] = {
         : null;
     return parsed(
       SteeringHub,
-      { governance: mode, proposalsWaiting, states },
+      {
+        governance: mode,
+        proposalsWaiting,
+        states,
+        memoriesWaiting: memories.ok ? memories.value.waiting : null,
+      },
       ctx.orgId,
       "hub",
     );

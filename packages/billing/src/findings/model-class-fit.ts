@@ -27,6 +27,10 @@
  * The counterfactual swaps each model that has a smaller class for that
  * class's model at list price, and keeps every other model at its measured
  * cost. Cited at the run's agent, or at its operator when it names no agent.
+ *
+ * A cache keep-alive the proxy sent while the run waited (lane F32) is left
+ * out of both sides. It held one model's prompt cache, and a cache belongs to
+ * one model, so no lighter model could have read it.
  */
 import { MODEL_CLASS_LADDERS } from "@oxagen/oxagen/run-fit";
 import {
@@ -182,10 +186,34 @@ function repriceAt(
   return scaled === null ? null : divideHalfEven(scaled, MILLION);
 }
 
-/** Every token the run carried; a server tool request counts requests, so it is left out. */
-function runTokens(run: RunTotalsRecord): number {
-  const { server_tool_request: _requests, ...tokens } = run.tokens;
+/** Every token in a count; a server tool request counts requests, so it is left out. */
+function tokenSum(counts: TokenCounts): number {
+  const { server_tool_request: _requests, ...tokens } = counts;
   return Object.values(tokens).reduce((sum, n) => sum + n, 0);
+}
+
+/** Every token the run carried, less its cache keep-alives' (lane F32). */
+function runTokens(run: RunTotalsRecord): number {
+  let tokens = tokenSum(run.tokens);
+  for (const m of run.breakdown.models)
+    if (m.keepAlive !== undefined) tokens -= tokenSum(m.keepAlive.tokens);
+  return tokens;
+}
+
+/**
+ * A model's breakdown less its cache keep-alives (lane F32): the tokens and
+ * the cost of the calls the agent made. Null when a keep-alive went unpriced,
+ * so its share of the cost cannot be taken out.
+ */
+function withoutKeepAlives(m: ModelBreakdown): ModelBreakdown | null {
+  const kept = m.keepAlive;
+  if (kept === undefined) return m;
+  if (kept.costMicros === null || m.costMicros === null) return null;
+  const tokens = { ...m.tokens };
+  for (const c of Object.keys(tokens) as (keyof TokenCounts)[])
+    tokens[c] = Math.max(0, tokens[c] - kept.tokens[c]);
+  const { keepAlive: _kept, ...rest } = m;
+  return { ...rest, tokens, costMicros: m.costMicros - kept.costMicros };
 }
 
 /**
@@ -204,7 +232,9 @@ export function measureRun(book: PriceBook, run: RunTotalsRecord): Measure {
   if (run.costBasis === null || run.costBasis === "estimated") return uncovered;
   let measured = 0n;
   let counterfactual = 0n;
-  for (const m of run.breakdown.models) {
+  for (const model of run.breakdown.models) {
+    const m = withoutKeepAlives(model);
+    if (m === null) return uncovered;
     if (m.costMicros === null || m.hasUnpriced) return uncovered;
     measured += m.costMicros;
     const lighter = lighterModel(m);
@@ -269,10 +299,10 @@ export function measureSteps(
 
 /**
  * The model calls of a run whose steps only read: every frame the pass read
- * for the run except those that made a call that may write. A frame that made
- * no tool call is read-only. Null when the pass read no frame for the run, or
- * when a call that may write came before the run's first frame read, since
- * no frame can hold that edit.
+ * for the run except those that made a call that may write, and its cache
+ * keep-alives. A frame that made no tool call is read-only. Null when the
+ * pass read no frame for the run, or when a call that may write came before
+ * the run's first frame read, since no frame can hold that edit.
  */
 export function readOnlyFrames(
   view: RunView,
@@ -289,7 +319,9 @@ export function readOnlyFrames(
     if (request.frame === null) return null;
     edits.add(request.frame);
   }
-  return frames.filter((f) => !edits.has(f));
+  // A cache keep-alive made no tool call, so it reads as read-only. It only
+  // held one model's cache, which no lighter model could read (lane F32).
+  return frames.filter((f) => !edits.has(f) && f.cacheKeepAlive !== true);
 }
 
 /** What a cited run's figure covers: the whole run, or its read-only steps. */
@@ -354,7 +386,7 @@ function detectWith(
         models: run.breakdown.models.map((m) => ({
           model: m.model,
           provider: m.provider,
-          micros: m.costMicros ?? 0n,
+          micros: withoutKeepAlives(m)?.costMicros ?? 0n,
         })),
       });
       // The finding is about the run's model as a whole, not a call.

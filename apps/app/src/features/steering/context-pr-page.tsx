@@ -273,6 +273,12 @@ export async function ContextPrPage({
     offset: from.offset ?? undefined,
   });
   const open = status !== "merged" && status !== "rejected";
+  // A Context PR open on a `memory/` branch is a memory PR, and its records
+  // are read by its number (list_memory_pr_records, #4914).
+  const memoryRecords =
+    pr !== null && pr.branch.startsWith("memory/") && open
+      ? await source.steering.memoryPrRecords(ctx, pr.number)
+      : null;
   const prUrl = pr === null ? null : parsePullRequestUrl(pr.url);
   const repositoryUrl =
     pr === null ? null : repositoryUrlOf(pr.url, pr.repository);
@@ -326,6 +332,7 @@ export async function ContextPrPage({
       <ContextPrPanel
         at={at}
         read={read}
+        memoryRecords={memoryRecords}
         canMergeWithoutReview={canMergeWithoutReview(ctx)}
       />
       <Suspense fallback={<DiffLoading />}>

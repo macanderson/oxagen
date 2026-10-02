@@ -72,6 +72,7 @@ A read that starts at the page cursor or at any frame's own cursor repeats nothi
 ## Errors
 
 - `not_found` (404): the id belongs to no run in the caller's workspace, whichever store minted it, or it names a witness run and the caller holds an API key (ADR-064).
+- `not_found` (404), the same answer: the id names one of the in-app assistant's turns (a ledger run on the `chat` or `api-chat` surface) and the caller is not the person who asked it (ADR-235). The caller is the signed-in user, or the creator of the API key. The other run readers that take a run id answer such a run as they answer an id they do not know.
 - `not_found` (404), reason `chain_not_found`: `sessionUuid` names no subagent chain under this run, or the run is a ledger run.
 - `invalid_input` (400): a cursor this capability did not write, or a cursor minted on another chain than the one read.
 

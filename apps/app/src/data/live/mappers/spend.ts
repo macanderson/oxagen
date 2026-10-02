@@ -176,6 +176,10 @@ export function toOperatorRanking(
       unproductiveShare: row.unproductiveShare,
       runs: row.runs,
       topRuns: row.topRuns,
+      doneWorkOrders: row.doneWorkOrders,
+      topDoneWorkOrders: row.topDoneWorkOrders,
+      unassignedShare: row.unassignedShare,
+      topUnassignedRuns: row.topUnassignedRuns,
     })),
   };
 }

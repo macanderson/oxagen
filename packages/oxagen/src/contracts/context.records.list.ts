@@ -12,12 +12,38 @@ import {
   publishedSharingScopeSchema,
   recordKindSchema,
 } from "./context.steering.shared";
+import { costSchema } from "./spend.shared";
+
+/**
+ * A listed record, with what its line costs the workspace (#4572). The
+ * fields are added here, not to `publishedRecordSchema`, because only the
+ * list prices a record.
+ */
+const listedRecordSchema = publishedRecordSchema.extend({
+  /**
+   * The tokens of the line the signed bundle carries for the record,
+   * `- <statement> (<kind>; <lineage>)`, in the assembler's unit. Null for a
+   * record with no force or no statement, which the assembler drops before
+   * counting.
+   */
+  contextTokens: z.number().int().nonnegative().nullable().default(null),
+  /**
+   * What `contextTokens` cost the workspace over the last 7 days, an
+   * estimate: the tokens at the weekly price per 1,000 that
+   * `list_mcp_servers` prices each provider's definitions at, so a record
+   * and a provider of the same size cost the same. Null when
+   * `contextTokens` is null, when the week has no price (no call, a call
+   * with no rate in the book, or rates in two currencies), or when the price
+   * read failed.
+   */
+  weeklyPrice: costSchema.nullable().default(null),
+});
 
 export const contextRecordsList = registerCapability({
   name: "list_records",
   domain: "context",
   description:
-    "List the workspace's published steering records with kind, force, constraint effect, scope, lineage, commit and path, filtered by kind, scope, status or lineage",
+    "List the workspace's published steering records with kind, force, constraint effect, scope, lineage, commit, path, token count and weekly price, filtered by kind, scope, status or lineage",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -47,7 +73,7 @@ export const contextRecordsList = registerCapability({
     .strict(),
   output: z
     .object({
-      records: z.array(publishedRecordSchema),
+      records: z.array(listedRecordSchema),
       /** The count ignoring limit/offset. */
       total: z.number().int().nonnegative(),
     })

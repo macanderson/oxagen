@@ -13,7 +13,7 @@ import type { ContextPr } from "@/data/contracts/steering";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { readOk } from "@/data/read";
-import { AT, contextPr } from "@/test/steering-views";
+import { AT, contextPr, memoryPrRecords } from "@/test/steering-views";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
@@ -350,44 +350,65 @@ describe("a drifted managed block", () => {
 });
 
 describe("a memory PR", () => {
+  const BRANCH = "memory/2026-09-27-release-lessons";
   const memoryPr = (records?: PanelProps["memoryRecords"]) => {
     const base = contextPr("checks_passed");
     if (base.pr === null) throw new Error("fixture has a pull request");
     return renderPanel(
-      readOk({
-        ...base,
-        pr: { ...base.pr, branch: "memory/2026-09-27-release-lessons" },
-      }),
+      readOk({ ...base, pr: { ...base.pr, branch: BRANCH } }),
       records === undefined ? {} : { memoryRecords: records },
     );
   };
+  const onBranch = (overrides: Parameters<typeof memoryPrRecords>[0] = {}) => {
+    const read = memoryPrRecords(overrides);
+    return readOk({
+      ...read,
+      pullRequest: { ...read.pullRequest, branch: BRANCH },
+    });
+  };
 
-  it("says no read returns its records yet when none arrive", () => {
-    memoryPr();
+  it("lists each record list_memory_pr_records answers, with a Drop button", () => {
+    memoryPr(onBranch());
     expect(
       screen.getByRole("heading", { name: "Memory records" }),
     ).toBeInTheDocument();
-    const notBacked = screen.getByTestId("memory-pr-records-not-backed");
-    expect(notBacked).toHaveTextContent(
-      "Not recorded yet: the records on this memory branch and the memories each one cites. It needs list_memory_pr_records.",
-    );
+    expect(
+      screen.getByRole("heading", { level: 4, name: "Draft releases only" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Drop Draft releases only" }),
+    ).toBeEnabled();
+    expect(screen.queryByTestId("memory-pr-records-not-backed")).toBeNull();
   });
 
-  it("lists each record with a Drop button when the records arrive", () => {
-    memoryPr([
-      {
-        path: ".oxagen/memory/release.no-reread-changelog.toml",
-        lineage: "mem.release.no-reread-changelog",
-        title: "Do not re-read the changelog",
-        summary: "Agents read CHANGELOG.md once per release run.",
-        memories: [],
-        dropped: null,
-      },
-    ]);
-    expect(screen.queryByTestId("memory-pr-records-not-backed")).toBeNull();
+  it("says the memory PR proposes no record when it holds none", () => {
+    memoryPr(onBranch({ records: [] }));
     expect(
-      screen.getByRole("button", { name: "Drop Do not re-read the changelog" }),
-    ).toBeEnabled();
+      document.querySelector("[data-memory-pr]"),
+    ).toHaveTextContent("This memory PR proposes no record.");
+  });
+
+  it("names the read's failure in place of the records (negative)", () => {
+    memoryPr(readError("memory_store_unavailable", 503));
+    expect(
+      document.querySelector("[data-memory-pr]"),
+    ).toHaveTextContent(
+      "Memory records could not be loaded: memory_store_unavailable.",
+    );
+    expect(screen.queryByRole("button", { name: /^Drop / })).toBeNull();
+  });
+
+  it("draws no records of a memory PR with the same number on another branch (negative)", () => {
+    memoryPr(readOk(memoryPrRecords()));
+    expect(
+      document.querySelector("[data-memory-pr]"),
+    ).toHaveTextContent("Memory records could not be loaded: not_found.");
+    expect(screen.queryByRole("heading", { level: 4 })).toBeNull();
+  });
+
+  it("draws no memory section when no read of the records arrives (negative)", () => {
+    memoryPr();
+    expect(document.querySelector("[data-memory-pr]")).toBeNull();
   });
 
   it("shows no memory section on a steering PR from a steering branch (negative)", () => {

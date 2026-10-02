@@ -2,8 +2,17 @@
 // resolved first, cursor-paged. The row-level mapping and the reasons every
 // null is null are on the contract
 // (packages/oxagen/src/contracts/agent.approval.list_resolved.ts).
+//
+// An approval the in-app assistant parked belongs to the person who asked
+// (ADR-235, ruled on 2026-10-01). The workspace's history leaves it out.
+// Under the run that parked it, only the person who asked sees it.
 import { schema, withTenantDb } from "@oxagen/database";
+import { resolveActingUserId } from "@oxagen/iam/org-role";
 import { isFloorReason } from "@oxagen/rules";
+import {
+  inAppOnlyForAsker,
+  notInAppApproval,
+} from "@oxagen/rules/approval-notify";
 import { and, desc, eq, gte, isNotNull, lt, lte, or, sql } from "drizzle-orm";
 import type {
   AgentApprovalListResolvedInput,
@@ -186,6 +195,16 @@ export async function agentApprovalListResolvedHandler(
   ctx: CapabilityContext,
 ): Promise<AgentApprovalListResolvedOutput> {
   const after = decodeResolvedCursor(input.cursor);
+  // The person an in-app approval may show to. Read only when a run is
+  // named, because the workspace's history shows no in-app row to anyone.
+  const actingUserId =
+    input.runId === undefined
+      ? null
+      : await resolveActingUserId({
+          orgId: ctx.orgId,
+          userId: ctx.userId,
+          apiKeyId: ctx.apiKeyId,
+        });
   const rows: QueriedRow[] = await withTenantDb((tx) =>
     tx.query.approvalRequests.findMany({
       where: and(
@@ -193,8 +212,17 @@ export async function agentApprovalListResolvedHandler(
         eq(ar.workspaceId, ctx.workspaceId),
         isNotNull(ar.resolution),
         isNotNull(ar.resolvedAt),
-        // One run's resolved calls, when the caller names one.
-        input.runId === undefined ? undefined : eq(ar.runPublicId, input.runId),
+        // One run's resolved calls, when the caller names one, and under an
+        // in-app run only the rows of the person who asked. With no run
+        // named, no in-app row. Both predicates are correlated subqueries
+        // (`approval-in-app.ts` in @oxagen/rules): a relational read cannot
+        // filter on its `with` relations, and the requester is one of them.
+        input.runId === undefined
+          ? notInAppApproval()
+          : and(
+              eq(ar.runPublicId, input.runId),
+              inAppOnlyForAsker(actingUserId),
+            ),
         input.since === undefined
           ? undefined
           : gte(ar.resolvedAt, new Date(input.since)),

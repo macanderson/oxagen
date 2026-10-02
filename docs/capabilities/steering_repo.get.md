@@ -39,8 +39,11 @@ None. The org and workspace come from the capability context.
 | `legacySource` | `{ fullName, url, provider }` or null | the code repository that still steers the workspace through its `.oxagen/` tree. [import_workspace_steering](steering_repo.import.md) moves that steering to a steering repo when `provider` is `github`, and refuses a GitLab repository (`steering_import_provider_unsupported`) |
 | `connection` | `{ provider, id, name, kind }` or null | where the organization creates its steering repos: the stored GitHub installation or GitLab group. `kind` is `user` for the owner's own personal GitHub account and `organization` otherwise. Null before one is chosen |
 | `connectionChoices` | array | the GitHub organizations, personal account, and GitLab groups to choose from when setup stopped with `choose_connection`, each shaped like `connection`. Empty otherwise |
+| `importRun` | `{ status, step, source, pullRequests, cleanup, error }` or null | the workspace's last [import_workspace_steering](steering_repo.import.md) run, null when none ran. `status` is `running`, `waiting`, `done`, or `failed`. `step` is the last import step that finished. `source` is `{ fullName, url }` of the repository whose `.oxagen/` tree the run moves. `pullRequests` holds `{ number, url, branch }` for each import steering PR, and `cleanup` is `{ number, url }` of the cleanup PR |
 
 The steps, in the order provisioning runs them, are `pick_connection`, `create_repository`, `add_to_installation`, `write_first_commit`, `apply_settings`, `register_webhook`, `publish_version`, and `bind_repository`.
+
+The import steps, in order, are `record_source`, `demote`, `provision`, `import`, and `cleanup`.
 
 `expected` and `actual` are rendered as text: `unset` for a missing value, otherwise JSON cut at 120 characters.
 
@@ -49,12 +52,19 @@ The steps, in the order provisioning runs them, are `pick_connection`, `create_r
 - **Provisioning** comes from the `steering_repo` key of the workspace's settings, which the provisioning job writes.
 - **The published version** comes from the steering publication of the repository. Provisioning records version 1 as a host deployment in `publish_version`. In a workspace, `bind_repository` then publishes the first commit through the version store as version 1, so the first merged steering PR publishes version 2 (#4732). An organization's repository has no bind step, so its version store holds nothing until the first publish. Until a publication exists, the read answers 1 once `publish_version` has finished.
 - **Health and differences** come from the last health read. With no read yet, `health` is null and `differences` is empty.
+- **The import run** comes from the `steering_import` key of the same settings, which `import_workspace_steering` writes.
 
 ## No provisioning state
 
 A workspace with no `steering_repo` state answers `status: "not_started"` with every other provisioning field null and no differences (#4875). Before #4875 it answered `provisioning`, which read the same as a setup whose job was queued. The read does not fail, because the banner that calls it sits on every page of the workspace.
 
 A workspace made before steering repos existed has no state, and its old main repository still steers it. `legacySource` names that repository. Setup for such a workspace runs through [import_workspace_steering](steering_repo.import.md), because provisioning stops with `steering_import_required` while a code repository holds the workspace's steering head.
+
+## Pending move
+
+An import run can stop after its `demote` step, for example when provisioning fails at `bind_repository`. The old repository no longer steers the workspace by then, so `legacySource` reads null. If provisioning then finishes through [retry_steering_repo_provision](steering_repo.provision.retry.md), `status` reads `ready` while the `.oxagen/` tree still sits in the old repository and no steering PR is open (#5082).
+
+`importRun` shows that state: `source` is set, `step` is not null, and `status` is not `done`. Call `import_workspace_steering` again to finish the move. The run resumes at the step that stopped, skips provisioning because the repo is ready, and opens the steering PRs and the cleanup PR. The Repositories page shows the move as pending and offers Finish the move.
 
 ## Changing the connection
 

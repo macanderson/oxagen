@@ -355,6 +355,7 @@ import { agentRetireRoute } from "./routes/v1/agent.retire";
 import { agentToolbeltGetRoute } from "./routes/v1/agent.toolbelt.get";
 import { agentMoveRoute } from "./routes/v1/agent.move";
 import { agentToolbeltAssignRoute } from "./routes/v1/agent.toolbelt.assign";
+import { agentCacheKeepAliveSetRoute } from "./routes/v1/agent.cache_keep_alive.set";
 import { runtimeCreateRoute } from "./routes/v1/runtime.create";
 import { runtimeListRoute } from "./routes/v1/runtime.list";
 import { runtimeUpdateRoute } from "./routes/v1/runtime.update";
@@ -372,6 +373,7 @@ import { spendOperatorRankingRoute } from "./routes/v1/spend.operator_ranking";
 import { spendOperatorPseudonymsSetRoute } from "./routes/v1/spend.operator_pseudonyms.set";
 import { spendPerMergedPrRoute } from "./routes/v1/spend.per_merged_pr";
 import { spendUnproductiveRoute } from "./routes/v1/spend.unproductive";
+import { spendWorkOrderMetricsRoute } from "./routes/v1/spend.work_order_metrics";
 import { skillConfigGetRoute } from "./routes/v1/skill.config.get";
 import { skillConfigUpdateRoute } from "./routes/v1/skill.config.update";
 import { skillSearchPreviewRoute } from "./routes/v1/skill.search.preview";
@@ -920,6 +922,9 @@ orgScoped.route("/spend/operators/pseudonyms", spendOperatorPseudonymsSetRoute);
 // Spend per merged pull request, per agent (spend spec, detector 8; F26).
 orgScoped.route("/spend/per-merged-pr", spendPerMergedPrRoute);
 orgScoped.route("/spend/unproductive", spendUnproductiveRoute);
+// The operator and work order metrics and unassigned spend, per week
+// (managers only; spend spec, Operator productivity; F33).
+orgScoped.route("/spend/work-order-metrics", spendWorkOrderMetricsRoute);
 orgScoped.route("/spend/statement/export", spendStatementExportRoute);
 // Cost-center chargeback (ADR-142). The list, create, delete, and statement
 // are organization-level (`scoped: false`). Set writes the active workspace or
@@ -1113,6 +1118,9 @@ orgScoped.route("/agents/retire", agentRetireRoute);
 orgScoped.route("/agents/move", agentMoveRoute);
 orgScoped.route("/agents/toolbelt/assign", agentToolbeltAssignRoute);
 orgScoped.route("/agents/toolbelt", agentToolbeltGetRoute);
+// The per-agent cache keep-alive switch (lane F32). Session auth; the org
+// role is checked in the handler.
+orgScoped.route("/agents/cache-keep-alive/set", agentCacheKeepAliveSetRoute);
 orgScoped.route("/agents", agentListRoute);
 // Runtimes, toolbelts and tool state (ADR-198). Session auth; the role is
 // checked in each write handler.
