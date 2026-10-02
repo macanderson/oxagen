@@ -94,7 +94,8 @@ name (`contextForHarness` and `RUNTIME_FOR_HARNESS` in
   `observe`, `harness`, `gateway`, and `contained` (ADR-095).
 - The model proxy forwards prompt bodies to the vendor. Oxagen receives
   digests, counts, latency, and status, and the bodies themselves only under
-  the `content_exact` retention mode (ADR-094).
+  the `content_exact` retention mode. That mode is the default for a workspace
+  with no retention policy (ADR-100).
 
 ## Tests
 
@@ -266,11 +267,19 @@ The collector also stands between a wrapped harness and its model vendor
 It serves a second loopback listener, on the port after the collector's unless
 `host.json` pins `model_proxy_port`, and forwards each request to the vendor.
 The prompt goes from your machine to the vendor you chose. Oxagen receives a
-frame for each call: digests, token counts, latency and status. The request
-and response bodies go with it only when the workspace's retention mode is
-`content_exact`; under `digest_only`, the default, the frame carries their
-digests and no body. The vendor credential stays on the machine and is never
-written to a frame or a log.
+frame for each call: digests, token counts, latency and status. The
+workspace's retention policy decides whether the request and response bodies
+go with it (ADR-100, ADR-058):
+
+- A workspace with no retention policy gets the bodies. The default is
+  `content_exact` with every kind of content.
+- A `digest_only` policy keeps the bodies off the frame. Oxagen gets only
+  their digests.
+
+The daemon cuts secrets out of a body before it digests it. It drops a body
+over `TACHO_MAX_BODY_BYTES`, and it keeps a body only when its signed policy
+bundle allows that kind of content. The vendor credential stays on the machine
+and is never written to a frame or a log.
 
 | Harness | File and key | Value written | Logins covered |
 |---|---|---|---|

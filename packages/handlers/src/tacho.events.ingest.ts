@@ -820,16 +820,17 @@ export function enforcementTierOf(
   // This is the second road to `gateway`, and it stands on different evidence
   // from the first, so say which. The MCP road above is the control plane's own
   // record of a call it served. For model traffic no such record can exist:
-  // the proxy's whole design is that the prompt goes from the machine to the
-  // vendor and never to Oxagen, so the only witness is the daemon, and its
-  // testimony is the frame it sealed. What makes that more than a claim is
-  // that the chain verifies, so the frame is part of the hash-linked record
-  // and not an attribute somebody set, and that `isObservedModelCall` requires
-  // the collector's own source and fidelity, which a record posted through the
-  // local OTLP endpoint cannot carry. It is host-attested, and the word
-  // ADR-095 allows for it is exactly that narrow: "observed" metering and
-  // "enforced" budgets on routed traffic, never "enforced" against the
-  // machine's operator.
+  // the proxy sends the call from the machine straight to the vendor, and no
+  // Oxagen server is on that path. A body may reach Oxagen later on the frame
+  // (ADR-100), but only as the daemon's report. So the only witness is the
+  // daemon, and its testimony is the frame it sealed. What makes that more
+  // than a claim is that the chain verifies, so the frame is part of the
+  // hash-linked record and not an attribute somebody set, and that
+  // `isObservedModelCall` requires the collector's own source and fidelity,
+  // which a record posted through the local OTLP endpoint cannot carry. It is
+  // host-attested, and the word ADR-095 allows for it is exactly that narrow:
+  // "observed" metering and "enforced" budgets on routed traffic, never
+  // "enforced" against the machine's operator.
   //
   // It is computed from traffic. A host whose harness config has the base URL
   // written and whose run went around the proxy has no such frame, and stays
