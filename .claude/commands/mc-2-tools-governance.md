@@ -8,7 +8,7 @@ Independent of session 1. It owns the app half of #2970 and the remainder of #29
 
 Read `oxagen-roadmap:docs/oxagen/mission-control/BUILD-CHUNKS.md` first. Its section for this session lists the lanes, what is already built on main, and the "Done when" boxes. The workflow sandbox has no filesystem access, so you scout inline, then hand the facts to the workflow.
 
-`oxagen-roadmap:<path>` means `<path>` in https://github.com/macanderson/oxagen-roadmap. Check it out beside this repository (`~/Projects/oxagen-roadmap`, or `../oxagen-roadmap` in a cloud session). The build plan, the gap inventory, and the product spec moved there on 2026-09-23 (#3895).
+`oxagen-roadmap:<path>` means `<path>` in https://github.com/oxageninc/roadmap. Check it out beside this repository (`~/Projects/oxagen-roadmap`, or `../oxagen-roadmap` in a cloud session). The build plan, the gap inventory, and the product spec moved there on 2026-09-23 (#3895).
 
 Then read `docs/adr/ADR-226-the-v3-mockup-and-the-brand-kit-are-the-design-of-record.md`. It names the design of record: the v3 mockup in `oxagen-roadmap:mockups/` at the commit it pins sets layout and behavior, and the brand kit's tokens (`packages/ui/src/styles/house-tokens.css`) set colour, type, and marks. Read the mockup at that pin, not at `main`. The workflow's lanes get the same pointer.
 

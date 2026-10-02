@@ -5,11 +5,15 @@ import {
   spendOperatorRanking,
 } from "@oxagen/oxagen/contracts/spend.operator_ranking";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  type FrameTimeSpend,
+  type FrameTimeSpendDeps,
+  readFrameTimeSpend,
+} from "./lib/frame-time-spend";
 import { operatorPseudonym } from "./lib/operator-pseudonyms";
 import {
   createOperatorRankingHandler,
   type OperatorRankingDeps,
-  type OperatorSpend,
   runsByOperator,
 } from "./spend.operator_ranking";
 import { ctx, SCOPE } from "./spend.test-support";
@@ -62,20 +66,26 @@ function facts(id: string): OperatorFacts {
 function harness(
   claims: UnproductiveClaim[],
   over: {
-    spend?: OperatorSpend[];
+    spend?: FrameTimeSpend[];
+    partial?: (string | null)[];
     policy?: { pseudonyms: boolean; salt: string | null };
-    workspaceRole?: string | null;
+    readOperatorSpend?: OperatorRankingDeps["readOperatorSpend"];
   } = {},
 ) {
   const deps = {
     readClaims: vi.fn(async () => claims),
-    readOperatorSpend: vi.fn(async () => over.spend ?? []),
+    readOperatorSpend: vi.fn(
+      over.readOperatorSpend ??
+        (async () => ({
+          rows: over.spend ?? [],
+          partial: new Set(over.partial ?? []),
+        })),
+    ),
     readOperatorFacts: vi.fn(
       async (_scope: unknown, ids: readonly string[]) =>
         new Map(ids.map((id) => [id, facts(id)])),
     ),
     readPolicy: vi.fn(async () => over.policy ?? { pseudonyms: false, salt: null }),
-    readWorkspaceRole: vi.fn(async () => over.workspaceRole ?? null),
   } satisfies OperatorRankingDeps;
   return { deps, handler: createOperatorRankingHandler(deps) };
 }
@@ -189,6 +199,21 @@ describe("get_operator_ranking figures", () => {
       null,
       null,
       0.25,
+    ]);
+  });
+
+  it("gives no unproductive share to an operator whose spend misses an unpriced run", async () => {
+    const out = await harness(claims, {
+      spend: [
+        { operatorKey: ANA, currency: "USD", micros: 6_000n },
+        { operatorKey: BEN, currency: "USD", micros: 1_900n },
+      ],
+      partial: [BEN, null],
+    }).handler({ period: PERIOD }, ctx());
+    expect(out.operators.map((o) => o.unproductiveShare)).toEqual([
+      0.25,
+      null,
+      null,
     ]);
   });
 
@@ -334,18 +359,22 @@ describe("get_operator_ranking roles", () => {
   it.each<[string, RoleFixture]>([
     ["an org Owner", { org: "Owner" }],
     ["an org Admin", { org: "Admin" }],
-    ["the workspace Owner", { org: "Member", workspace: "Owner" }],
-    ["a workspace Owner with no org role", { org: null, workspace: "Owner" }],
+    ["an org Admin who is a workspace Member", { org: "Admin", workspace: "Member" }],
   ])("lets %s read the ranking", async (_label, roles) => {
     roleGate.roles = roles;
     const out = await harness(claims).handler({ period: PERIOD }, ctx());
     expect(out.operators).toHaveLength(1);
   });
 
+  // No person holds a workspace IAM role yet (#3198), so in an Enterprise
+  // org the kernel refuses a workspace Owner before the handler runs. The
+  // ranking names org roles only, and refuses the same people on every tier.
   it.each<[string, RoleFixture]>([
     ["an org Member", { org: "Member" }],
     ["an org Billing member", { org: "Billing" }],
     ["a workspace Member", { org: null, workspace: "Member" }],
+    ["a workspace Owner who is an org Member", { org: "Member", workspace: "Owner" }],
+    ["a workspace Owner with no org role", { org: null, workspace: "Owner" }],
     ["a workspace Admin who is an org Member", { org: "Member", workspace: "Admin" }],
   ])("denies %s before reading anything", async (_label, roles) => {
     roleGate.roles = roles;
@@ -358,47 +387,81 @@ describe("get_operator_ranking roles", () => {
     expect(h.deps.readPolicy).not.toHaveBeenCalled();
   });
 
-  // No person holds a workspace IAM role yet (#3198), so the handler reads the
-  // workspace Owner from the membership row when the IAM check refuses.
-  it("lets the workspace's membership Owner read the ranking", async () => {
-    roleGate.roles = { org: "Member" };
-    const h = harness(claims, { workspaceRole: "owner" });
-    const out = await h.handler({ period: PERIOD }, ctx());
-    expect(out.operators).toHaveLength(1);
-    expect(h.deps.readWorkspaceRole).toHaveBeenCalledWith(
-      SCOPE,
-      ctx().userId,
-    );
-  });
-
-  it.each<[string, string | null]>([
-    ["a membership Member", "member"],
-    ["a membership Admin", "admin"],
-    ["a person with no membership row", null],
-  ])("denies %s whom the IAM check refused", async (_label, role) => {
-    roleGate.roles = { org: "Member" };
-    const h = harness(claims, { workspaceRole: role });
-    await expect(h.handler({ period: PERIOD }, ctx())).rejects.toMatchObject({
-      code: "forbidden",
-      reason: "org_role_required",
-    });
-    expect(h.deps.readClaims).not.toHaveBeenCalled();
-  });
-
-  it("does not read the membership row when the IAM check allows", async () => {
-    roleGate.roles = { org: "Admin" };
-    const h = harness(claims, { workspaceRole: "member" });
-    await h.handler({ period: PERIOD }, ctx());
-    expect(h.deps.readWorkspaceRole).not.toHaveBeenCalled();
-  });
-
-  it("refuses a call with no acting person without reading the membership row", async () => {
+  it("refuses a call with no acting person", async () => {
     roleGate.roles = { org: null };
-    const h = harness(claims, { workspaceRole: "owner" });
+    const h = harness(claims);
     await expect(
       h.handler({ period: PERIOD }, { ...ctx(), userId: null }),
     ).rejects.toMatchObject({ code: "forbidden", reason: "no_principal" });
-    expect(h.deps.readWorkspaceRole).not.toHaveBeenCalled();
+    expect(h.deps.readClaims).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The share's two sides count frames by the time they ran (#4574): the claims
+ * reader filters on frame_at, and the spend reader prices a run that crosses
+ * the period's edge by its frames inside the period.
+ */
+describe("get_operator_ranking share window", () => {
+  const SEP_1 = new Date("2026-09-01T00:00:00.000Z");
+  const OCT_1 = new Date("2026-10-01T00:00:00.000Z");
+
+  // Ana's run 1 started on August 31 and ran into September: 9,000 priced in
+  // all, 1,000 of it on September 1. Her run 2 ran inside September: 3,000.
+  // Ben's run 3 started on September 30 and ran into October: 8,000 in all,
+  // 2,000 of it on September 30. Postgres sorts the runs into the two lists
+  // (frame-time-spend.pg.test.ts runs that SQL).
+  const contained = [{ operatorKey: ANA, currency: "USD", micros: 3_000n }];
+  const crossing = [
+    { runId: runId(1), operatorKey: ANA, currency: "USD", costMicros: 9_000n },
+    { runId: runId(3), operatorKey: BEN, currency: "USD", costMicros: 8_000n },
+  ];
+  // Run 1's claimed frame ran on September 1, and run 3's on September 30.
+  const claims = [claim(1, "f1", ANA, 1_000n), claim(3, "f1", BEN, 500n)];
+  const inPeriod = new Map([
+    [runId(1), 1_000n],
+    [runId(3), 2_000n],
+  ]);
+
+  function spendDeps() {
+    return {
+      readRuns: vi.fn(async () => ({ contained, crossing })),
+      priceRunFrames: vi.fn(
+        async (_scope: unknown, id: string) => inPeriod.get(id) ?? null,
+      ),
+      reportPriceFailure: vi.fn(),
+    } satisfies FrameTimeSpendDeps;
+  }
+
+  it("divides by the frames that ran in the period for a run that crosses its first day", async () => {
+    const deps = spendDeps();
+    const out = await harness(claims, {
+      readOperatorSpend: (scope, window, keys) =>
+        readFrameTimeSpend(deps, scope, window, keys),
+    }).handler({ period: PERIOD }, ctx());
+    const ana = out.operators.find(
+      (o) => o.operator.kind === "named" && o.operator.key === ANA,
+    );
+    // 1,000 over (1,000 from run 1 on September 1 + 3,000 from run 2).
+    expect(ana?.unproductiveShare).toBe(0.25);
+    expect(deps.priceRunFrames).toHaveBeenCalledWith(SCOPE, runId(1), {
+      start: SEP_1,
+      end: OCT_1,
+    });
+  });
+
+  it("divides by the frames that ran in the period for a run that crosses its last day", async () => {
+    const deps = spendDeps();
+    const out = await harness(claims, {
+      readOperatorSpend: (scope, window, keys) =>
+        readFrameTimeSpend(deps, scope, window, keys),
+    }).handler({ period: PERIOD }, ctx());
+    const ben = out.operators.find(
+      (o) => o.operator.kind === "named" && o.operator.key === BEN,
+    );
+    // 500 over the 2,000 run 3 spent on September 30, not its 8,000 in all.
+    expect(ben?.unproductiveShare).toBe(0.25);
+    expect(deps.priceRunFrames).toHaveBeenCalledTimes(2);
   });
 });
 

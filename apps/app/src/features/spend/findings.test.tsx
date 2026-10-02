@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
-// Findings when the listed total is unknown and there are more findings than
-// the legend names: each share reads "not recorded" and never a guessed
-// percentage, the smaller findings roll into one legend entry, the list sorts
-// by saving and by kind, an operator the rollup cannot name is shown by id,
-// and a filter that hides every card says so. The pager under the cards holds
-// Rows per page, turns to the next ten and shows every card at 25. Evidence
-// with no runs says so, and closing it returns to the list.
+// The Findings hero leads with the month's unproductive spend and its share of
+// the month's spend, side by side (counting rule 5), with what detectors 2, 3,
+// and 5 price and what detector 4 estimates beside it and out of it (rules 2
+// and 3). A read that did not answer says why in the hero, and the list still
+// shows. When the listed total is unknown each card's share reads "not
+// recorded" and never a guessed percentage, the list sorts by saving and by
+// kind, an operator the rollup cannot name is shown by id, and a filter that
+// hides every card says so. The pager under the cards holds Rows per page,
+// turns to the next ten and shows every card at 25. Evidence with no runs
+// says so, and closing it returns to the list.
 import {
   cleanup,
   render,
@@ -21,8 +24,9 @@ import type {
   SpendFinding,
   SpendFindings,
   SpendReport,
+  UnproductiveSpend,
 } from "@/data/contracts/spend";
-import { readOk } from "@/data/read";
+import { type Read, readError, readOk } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { IntlProvider } from "@/test/intl";
 import { pickOption } from "@/test/select";
@@ -133,6 +137,22 @@ const OPERATORS: SpendReport["rows"] = [
   },
 ];
 
+const usd = (micros: string) => ({ micros, currency: "USD" });
+
+/** $12.34 unproductive of $100.00 spent: 12.34%. */
+const HEADLINE: UnproductiveSpend = {
+  period: { from: "2026-09-01", to: "2026-09-15" },
+  unproductive: usd("12340000"),
+  spend: usd("100000000"),
+  share: 0.1234,
+  parts: [
+    { detector: 2, saving: usd("4000000"), findings: 2 },
+    { detector: 3, saving: usd("2500000"), findings: 1 },
+    { detector: 5, saving: usd("6000000"), findings: 3 },
+  ],
+  estimate: { saving: usd("15000000"), findings: 4 },
+};
+
 beforeEach(() => {
   nav.push.mockReset();
   nav.replace.mockReset();
@@ -145,10 +165,14 @@ afterEach(async () => {
   }
 });
 
-function section(saving: SpendFindings["saving"]) {
+function section(
+  saving: SpendFindings["saving"],
+  headline: Read<UnproductiveSpend> = readOk(HEADLINE),
+) {
   render(
     <IntlProvider>
       <FindingsSection
+        headline={headline}
         findings={listing(saving)}
         operators={OPERATORS}
         at={AT}
@@ -163,19 +187,80 @@ const order = () =>
     li.getAttribute("data-finding"),
   );
 
-describe("Findings with an unknown total", () => {
-  it("prints no share it cannot divide for, rolls the ninth into the legend's tail, and names an unnamed operator by id", () => {
+describe("Findings hero", () => {
+  it("leads with the headline and its share of the month's spend, side by side", () => {
     section(null);
     const hero = screen.getByTestId("spend-findings-hero");
-    expect(hero.textContent).toContain("1 smaller findings");
     expect(
-      hero.querySelectorAll('[data-recorded="false"]').length,
-    ).toBeGreaterThanOrEqual(9);
-    // No slice is drawn for a share nobody computed.
-    expect(hero.querySelector("span[data-finding]")).toBeNull();
+      within(hero).getByRole("heading", { name: "Unproductive spend" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("spend-headline")).toHaveTextContent("$12.34");
+    expect(screen.getByTestId("spend-headline-share")).toHaveTextContent(
+      /12(\.3)?%/,
+    );
+    expect(hero).toHaveTextContent(/of \$100(\.00)? spent this month\./);
+    expect(hero).not.toHaveTextContent("Savings identified");
+  });
+
+  it("shows the parts and the estimate beside the headline and adds none of them to it", () => {
+    section(null);
+    const parts = screen.getByTestId("spend-headline-parts");
+    const figure = (detector: string) => {
+      const row = parts.querySelector(`[data-detector="${detector}"]`);
+      if (row === null) throw new Error(`no detector ${detector}`);
+      return row;
+    };
+    expect(figure("2")).toHaveTextContent("Standing context");
+    expect(figure("2")).toHaveTextContent("$4.00");
+    expect(figure("2")).toHaveTextContent("2 findings");
+    expect(figure("3")).toHaveTextContent("Cache rewrites");
+    expect(figure("3")).toHaveTextContent("1 finding");
+    expect(figure("5")).toHaveTextContent("Context carry");
+    expect(figure("4")).toHaveTextContent("Model class fit");
+    expect(figure("4")).toHaveTextContent("Estimated");
+    expect(figure("4")).toHaveTextContent("$15.00");
+    // $4.00 + $2.50 + $6.00 + $15.00 is not added to the $12.34 headline.
+    expect(screen.getByTestId("spend-headline")).toHaveTextContent("$12.34");
+    expect(parts.parentElement).toHaveTextContent(
+      /none of them adds to unproductive spend/,
+    );
+  });
+
+  it("prints no share when the month's spend has no single figure (negative)", () => {
+    section(null, readOk({ ...HEADLINE, spend: null, share: null }));
+    expect(
+      screen
+        .getByTestId("spend-headline-share")
+        .querySelector('[data-recorded="false"]'),
+    ).not.toBeNull();
+    expect(screen.getByTestId("spend-findings-hero")).toHaveTextContent(
+      /No share: this month’s spend has no single priced figure\./,
+    );
+  });
+
+  it("says why no figure was built for a month in two currencies, and keeps the list (negative)", () => {
+    section(null, readError("unproductive_mixed_currency", 409));
+    const hero = screen.getByTestId("spend-findings-hero");
+    expect(hero).toHaveTextContent(/more than one currency/);
+    expect(screen.queryByTestId("spend-headline")).toBeNull();
+    expect(screen.queryByTestId("spend-headline-parts")).toBeNull();
+    expect(order()).toHaveLength(9);
+  });
+
+  it("says the headline did not answer in the hero, and keeps the list (negative)", () => {
+    section(null, readError("findings_store_unavailable", 503));
+    expect(screen.queryByTestId("spend-headline")).toBeNull();
+    expect(order()).toHaveLength(9);
+  });
+});
+
+describe("Findings with an unknown total", () => {
+  it("prints no share it cannot divide for and names an unnamed operator by id", () => {
+    section(null);
     const first = document.querySelector('li[data-finding="fnd_0a"]');
     expect(first?.textContent).toContain("prn_ghost");
     expect(first?.textContent).toContain("at stake");
+    expect(first?.textContent).not.toMatch(/of identified/);
   });
 
   it("sorts by saving, high first, and by kind", async () => {
@@ -218,23 +303,13 @@ describe("Findings with an unknown total", () => {
   });
 });
 
-describe("Findings with a known total", () => {
-  it("prints the tail's share as the sum of the findings it rolls up", () => {
-    section({ micros: "45000000", currency: "USD", basis: "gateway_observed" });
-    const hero = screen.getByTestId("spend-findings-hero");
-    const tail = within(hero).getByText("1 smaller findings").closest("li");
-    // The ninth finding saves 1 of 45.
-    expect(tail?.textContent).toMatch(/2(\.\d)?%/);
-    expect(hero.querySelectorAll("span[data-finding]")).toHaveLength(9);
-  });
-});
-
 describe("Findings pager", () => {
   it("draws Rows under the cards, turns to the next ten, and shows every card at 25", async () => {
     const user = userEvent.setup();
     render(
       <IntlProvider>
         <FindingsSection
+          headline={readOk(HEADLINE)}
           findings={{
             window: WINDOW,
             saving: {

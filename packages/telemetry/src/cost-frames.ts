@@ -1197,6 +1197,27 @@ export interface ObservedModelRow {
    * differed, instead of a fixed class list judged by one snapshot.
    */
   classes: ObservedModelClassRow[];
+  /**
+   * The model's calls per price-boundary bucket, and how many of them read
+   * the prompt cache. Present only when {@link readObservedModels} was asked
+   * for `callBuckets`.
+   */
+  callBuckets?: ObservedCallBucketRow[];
+}
+
+/**
+ * One price-boundary bucket of one observed model's calls. The class rows
+ * cannot say how many calls read nothing from the cache, because one call can
+ * use both `input_uncached` and `cache_read`. This row counts the calls once
+ * each.
+ */
+export interface ObservedCallBucketRow {
+  /** Model calls in the bucket. */
+  calls: number;
+  /** Of those calls, the ones that read anything from the prompt cache. */
+  cacheReadCalls: number;
+  /** RFC 3339: the bucket's first call. */
+  firstSeen: string;
 }
 
 /**
@@ -1352,6 +1373,13 @@ export async function readObservedModels(args: {
    * size also bounds the `models` array the class-bucket read receives.
    */
   page?: { afterModel?: string; size: number };
+  /**
+   * Also count each model's calls per bucket, and the calls that read the
+   * cache ({@link ObservedModelRow.callBuckets}). The weekly standing context
+   * price in @oxagen/billing prices a call that read nothing from the cache
+   * at the input rate of its own bucket. One more query runs when this is set.
+   */
+  callBuckets?: boolean;
 }): Promise<ObservedModelRow[]> {
   const ch = clickhouse();
   const withTacho = (args.frameStores ?? "all") === "all";
@@ -1628,6 +1656,17 @@ export async function readObservedModels(args: {
     classesByModel.set(r.model, list);
   }
 
+  const bucketsByModel =
+    args.callBuckets === true
+      ? await readCallBuckets({
+          withTacho,
+          tachoWhere,
+          workspace,
+          until,
+          params: { ...baseParams, models, boundaries },
+        })
+      : null;
+
   return summaryRows.map((r) => ({
     model: r.model,
     provider: r.provider === "" ? null : r.provider,
@@ -1636,5 +1675,92 @@ export async function readObservedModels(args: {
     firstSeen: r.first_seen,
     lastSeen: r.last_seen,
     classes: classesByModel.get(r.model) ?? [],
+    ...(bucketsByModel === null
+      ? {}
+      : { callBuckets: bucketsByModel.get(r.model) ?? [] }),
   }));
+}
+
+/**
+ * Each model's calls per price-boundary bucket, and the calls that read the
+ * cache, for {@link readObservedModels} `callBuckets`. It reads the rows the
+ * summary counted: the same stores, filters, and models. A call counts as a
+ * cache read when it read at least one token from the cache, the rule the
+ * class rows use for `cache_read`.
+ */
+async function readCallBuckets(args: {
+  withTacho: boolean;
+  tachoWhere: string;
+  workspace: string;
+  until: string;
+  params: Record<string, unknown>;
+}): Promise<Map<string, ObservedCallBucketRow[]>> {
+  const tachoCte = `,
+      tc AS (
+        SELECT
+          c.model                                   AS model,
+          ${bucketIndexExpr("c.ts")}                 AS bucket_index,
+          toInt64(coalesce(c.cache_read_tokens, 0)) AS cache_read,
+          c.ts                                      AS ts
+        FROM (
+          SELECT
+            toString(model) AS model,
+            toDateTime64(ts, 3, 'UTC') AS ts,
+            cache_read_tokens
+          FROM tacho_events FINAL
+          WHERE ${args.tachoWhere}
+            AND model IN {models:Array(String)}
+        ) AS c
+      )`;
+  const result = await clickhouse().query({
+    query: `
+      WITH gw AS (
+        SELECT
+          toString(model)                                         AS model,
+          ${bucketIndexExpr("toDateTime64(created_at, 3, 'UTC')")} AS bucket_index,
+          toInt64(coalesce(cached_tokens, 0))                     AS cache_read,
+          toDateTime64(created_at, 3, 'UTC')                      AS ts
+        FROM metered_token_usage
+        WHERE org_id = {orgId:UUID}
+          AND created_at >= {since:DateTime64(3)}
+          ${args.until.replace("{col}", "created_at")}
+          AND model IN {models:Array(String)}
+          ${args.workspace}
+      )${args.withTacho ? tachoCte : ""},
+      unioned AS (
+        SELECT model, bucket_index, cache_read, ts FROM gw
+        ${args.withTacho ? "UNION ALL\n        SELECT model, bucket_index, cache_read, ts FROM tc" : ""}
+      )
+      SELECT
+        model,
+        bucket_index                                            AS bucket_index,
+        count()                                                 AS calls,
+        countIf(cache_read > 0)                                 AS cache_read_calls,
+        formatDateTime(min(ts), '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS first_seen
+      FROM unioned
+      GROUP BY model, bucket_index
+      ORDER BY model, bucket_index
+    `,
+    query_params: args.params,
+    format: "JSONEachRow",
+  });
+  type BucketRow = {
+    model: string;
+    bucket_index: string | number;
+    calls: string | number;
+    cache_read_calls: string | number;
+    first_seen: string;
+  };
+  const rows = (await result.json()) as BucketRow[];
+  const byModel = new Map<string, ObservedCallBucketRow[]>();
+  for (const r of rows) {
+    const list = byModel.get(r.model) ?? [];
+    list.push({
+      calls: Number(r.calls),
+      cacheReadCalls: Number(r.cache_read_calls),
+      firstSeen: r.first_seen,
+    });
+    byModel.set(r.model, list);
+  }
+  return byModel;
 }

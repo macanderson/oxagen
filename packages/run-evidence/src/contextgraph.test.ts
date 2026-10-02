@@ -125,7 +125,7 @@ describe("locked Context Graph fixtures", () => {
       "cargo test -p contextgraph-conformance --test golden_fixtures",
     );
     expect(manifest.upstream_repository).toBe(
-      "https://github.com/macanderson/context-graph-protocol",
+      "https://github.com/oxageninc/context-graph-protocol",
     );
     expect(manifest.upstream_commit).toBe(
       "9fb559aa4d3ec4cf062e59dab113eae4e175c5fa",

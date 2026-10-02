@@ -50,9 +50,29 @@ describe("host memory use contract", () => {
     ).toBe(true);
   });
 
+  it("takes a Stella citation whose path is a memory's lineage", () => {
+    expect(
+      contract.input.parse({
+        ...input,
+        uses: [
+          {
+            ...use,
+            harness: "stella",
+            path: "mem_3f9a1c0b7e2d4a5c6b8e9f01",
+            signal: "citation",
+          },
+        ],
+      }).uses[0]?.signal,
+    ).toBe("citation");
+    // A use that names no signal is a read, and parses without one.
+    expect(contract.input.parse(input).uses[0]).toEqual(use);
+  });
+
   it("refuses a malformed use", () => {
     for (const patch of [
       { harness: "vim" },
+      { signal: "harness_count" },
+      { signal: "cite" },
       { path: "" },
       { path: "p".repeat(1025) },
       { session_uuid: "tse_1" },

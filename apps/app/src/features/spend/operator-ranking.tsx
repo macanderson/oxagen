@@ -1,11 +1,12 @@
 // Spend › Findings › Operator ranking (D15, #2962; spec "Operator
 // ranking"), under the findings it coaches from: the workspace's operators by
-// unproductive spend for the period, highest first, from get_operator_ranking. An org Owner or Admin, or the
-// workspace's Owner, reads it, and anyone else sees who can. Only an org
-// Owner or Admin sees the pseudonym switch. Each figure links to its
-// definition under the table, and each operator's runs link to their Cost
-// tab. The panel reports the record and gives no verdict on the person. The
-// operator rows and the row for runs with no operator sum to the total row.
+// unproductive spend for the period, highest first, from get_operator_ranking.
+// An org Owner or Admin reads it and sets its pseudonym switch, and anyone
+// else sees who can. Each figure links to its definition under the table, and
+// each operator's runs link to their Cost tab. The panel reports the record
+// and gives no verdict on the person. The operator rows and the row for runs
+// with no operator sum to the total row, which equals the hero's headline.
+// The switch stays in reach when the ranking does not load (#4574).
 // With the workspace's pseudonyms on, a stable pseudonym replaces each name,
 // and the share, the run count and the runs are hidden: each could match a
 // pseudonym to a named row on the Month tab grouped by operator.
@@ -34,25 +35,20 @@ import type { SpendAt } from "./view";
 const MIXED_CURRENCY = "ranking_mixed_currency";
 
 /**
- * Who reads the ranking: an org Owner or Admin, or the workspace's Owner, the
- * roles get_operator_ranking's defaultRoles allow and its handler asserts. The
- * page asks for every role the kernel grants, so it never gates narrower than
- * the check it guards (`WsCtx.wsRole`, #3143). No person holds a workspace IAM
- * role yet (#3198), so the handler reads the workspace Owner from the same
- * membership row `wsRole` comes from.
+ * Who reads the ranking: an org Owner or Admin, the roles
+ * get_operator_ranking's defaultRoles allow and its handler asserts. No person
+ * holds a workspace IAM role yet (#3198), so the kernel could not admit a
+ * workspace Owner in an Enterprise org, and the ranking names no workspace
+ * role on any tier.
  */
-export function canReadOperatorRanking(
-  ctx: Pick<WsCtx, "orgRole" | "wsRole">,
-): boolean {
-  return (
-    ctx.orgRole === "owner" || ctx.orgRole === "admin" || ctx.wsRole === "owner"
-  );
+export function canReadOperatorRanking(ctx: Pick<WsCtx, "orgRole">): boolean {
+  return ctx.orgRole === "owner" || ctx.orgRole === "admin";
 }
 
 /**
- * Who sets the pseudonyms: an org Owner or Admin, the narrower pair
- * set_operator_pseudonyms asserts. A workspace Owner reads the ranking but
- * does not see the switch.
+ * Who sets the pseudonyms: an org Owner or Admin, the pair
+ * set_operator_pseudonyms asserts. The page asks for the ranking only for
+ * the same two roles, so a reader who sees the ranking also sees the switch.
  */
 export function canSetOperatorPseudonyms(
   ctx: Pick<WsCtx, "orgRole">,
@@ -83,9 +79,18 @@ export function OperatorRankingSection({
     );
   }
   if (!ranking.ok) {
+    // The refusal carries no setting, so the switch offers both choices.
     if (ranking.reason === "error" && ranking.code === MIXED_CURRENCY) {
       return (
-        <Panel id="spend-ranking" title={t("title")}>
+        <Panel
+          id="spend-ranking"
+          title={t("title")}
+          action={
+            canSetPseudonyms ? (
+              <OperatorPseudonymsToggle at={at} pseudonyms={null} />
+            ) : undefined
+          }
+        >
           <Empty>{t("mixedCurrency")}</Empty>
         </Panel>
       );
