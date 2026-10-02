@@ -21,6 +21,15 @@ describe("list_proposals contract", () => {
     ).toBe(true);
   });
 
+  it("filters by the state a pull request list names (#5077)", () => {
+    for (const state of ["open", "merged", "closed"]) {
+      expect(contextProposalList.input.safeParse({ state }).success).toBe(true);
+    }
+    expect(
+      contextProposalList.input.safeParse({ state: "rejected" }).success,
+    ).toBe(false);
+  });
+
   it("answers each proposal with its support, its PR (or null) and its check tally (or null)", () => {
     const out = contextProposalList.output.parse({
       proposals: [

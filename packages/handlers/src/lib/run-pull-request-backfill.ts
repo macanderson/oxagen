@@ -15,6 +15,11 @@
 // with a null state, and the page says "status unknown". A forge that answers
 // 403, 404 or 410 is the same: the workspace's credentials cannot read it.
 // Any other failure throws, and the durable function retries.
+//
+// When the run opened the pull request (the link came from a `pr_open` call),
+// a fourth step puts the Oxagen block and the `oxagen` label on it
+// (run-pull-request-badge.ts, ADR-252). That step never throws: a failure is
+// logged and reported in the result, and the row and its state stand.
 import { schema, withTenantDb } from "@oxagen/database";
 import { createGitHubClient, GitHubApiError } from "@oxagen/github";
 import { resolveGitHubToken } from "@oxagen/github/workspace-token";
@@ -26,6 +31,12 @@ import { logger } from "../logger";
 import { installationIdOf } from "../repository.github-connection";
 import { findWorkspaceGitLabConnection } from "../repository.gitlab-connection";
 import { resolveGitLabCredential } from "./gitlab-credential";
+import {
+  badgeInstallationToken,
+  markRunPullRequest,
+  type PullRequestBadgeOutcome,
+  runPageUrl,
+} from "./run-pull-request-badge";
 import {
   applyForgeState,
   type ForgeKey,
@@ -58,6 +69,14 @@ export interface PullRequestBackfillDeps {
     forge: ForgeState,
     seenAt: Date,
   ): Promise<number>;
+  /**
+   * Put the Oxagen block and the `oxagen` label on a GitHub pull request the
+   * run opened (ADR-252). Called only for a link a `pr_open` call recorded.
+   */
+  markOpened(
+    scope: Scope,
+    link: { key: ForgeKey; rootSessionUuid: string },
+  ): Promise<PullRequestBadgeOutcome>;
   now(): Date;
 }
 
@@ -72,6 +91,8 @@ export type PullRequestBackfillResult = {
   outcome: PullRequestBackfillOutcome;
   /** Rows the read's state was written to. */
   rows: number;
+  /** What the badge step did. Present only for a link the run opened. */
+  badge?: PullRequestBadgeOutcome;
 };
 
 export async function backfillRunPullRequest(
@@ -85,10 +106,48 @@ export async function backfillRunPullRequest(
   if (sessionId === null) return { outcome: "no_session", rows: 0 };
   await deps.insertRow(scope, { sessionId, url: request.url, key });
   const read = await deps.readForge(scope, key);
-  if (read === "no_connection" || read === "unreadable")
-    return { outcome: read, rows: 0 };
-  const rows = await deps.apply(scope, key, read, deps.now());
-  return { outcome: "recorded", rows };
+  const result: PullRequestBackfillResult =
+    read === "no_connection" || read === "unreadable"
+      ? { outcome: read, rows: 0 }
+      : {
+          outcome: "recorded",
+          rows: await deps.apply(scope, key, read, deps.now()),
+        };
+  if (request.opened !== true) return result;
+  return {
+    ...result,
+    badge: await markOpenedSafely(deps, scope, key, request.rootSessionUuid),
+  };
+}
+
+/**
+ * The badge step, kept apart from the row and its state. A failure is logged
+ * and reported as `failed`, and the backfill still answers what it recorded,
+ * so a GitHub error on the description never costs the run its link.
+ */
+async function markOpenedSafely(
+  deps: PullRequestBackfillDeps,
+  scope: Scope,
+  key: ForgeKey,
+  rootSessionUuid: string,
+): Promise<PullRequestBadgeOutcome> {
+  if (key.provider !== "github")
+    return { status: "skipped", reason: "not_github" };
+  try {
+    return await deps.markOpened(scope, { key, rootSessionUuid });
+  } catch (err) {
+    logger.warn(
+      {
+        err,
+        orgId: scope.orgId,
+        workspaceId: scope.workspaceId,
+        repository: key.repository,
+        number: key.number,
+      },
+      "run.pull-request-backfill: could not put the Oxagen block on a pull request the run opened; the link and its state are recorded",
+    );
+    return { status: "failed" };
+  }
 }
 
 /** A forge answer that says the credentials cannot see the pull request. */
@@ -140,15 +199,9 @@ export function githubConnectionOf(
   return unnamed?.id ?? null;
 }
 
-/**
- * The workspace's connected GitHub source that reads `owner`'s repositories.
- * Work order evidence reads through the same source (work-records/evidence.ts).
- */
-export async function githubConnectionFor(
-  scope: Scope,
-  owner: string,
-): Promise<string | null> {
-  const rows = await withTenantDb((tx) =>
+/** The workspace's connected GitHub sources, newest first. */
+function githubConnectionRows(scope: Scope): Promise<GithubConnectionRow[]> {
+  return withTenantDb((tx) =>
     tx
       .select({
         id: connections.id,
@@ -167,7 +220,118 @@ export async function githubConnectionFor(
       )
       .orderBy(desc(connections.createdAt)),
   );
-  return githubConnectionOf(rows, owner);
+}
+
+/**
+ * The workspace's connected GitHub source that reads `owner`'s repositories.
+ * Work order evidence reads through the same source (work-records/evidence.ts).
+ */
+export async function githubConnectionFor(
+  scope: Scope,
+  owner: string,
+): Promise<string | null> {
+  return githubConnectionOf(await githubConnectionRows(scope), owner);
+}
+
+/**
+ * The GitHub App installation that reaches `owner`'s repositories, weighed as
+ * `githubConnectionOf` weighs sources, among the sources that carry one. A
+ * source with only a person's OAuth token is never used here: the block is
+ * the app's text, so the app writes it, not a person's account.
+ * @internal Exported for its unit test.
+ */
+export function githubInstallationOf(
+  rows: readonly GithubConnectionRow[],
+  owner: string,
+): string | null {
+  const apps = rows.filter(
+    (row) => installationIdOf(row.deliveryConfig) !== null,
+  );
+  const id = githubConnectionOf(apps, owner);
+  const row = apps.find((candidate) => candidate.id === id);
+  return row ? installationIdOf(row.deliveryConfig) : null;
+}
+
+/**
+ * The run's page for a root session, or null when the deployment names no
+ * app origin (`APP_URL`) or the session or workspace is gone.
+ */
+async function runPageFor(
+  scope: Scope,
+  rootSessionUuid: string,
+): Promise<string | null> {
+  const appUrl = process.env["APP_URL"];
+  if (!appUrl) return null;
+  const [session] = await withTenantDb((tx) =>
+    tx
+      .select({ runId: schema.tachoSessions.publicId })
+      .from(schema.tachoSessions)
+      .where(
+        and(
+          eq(schema.tachoSessions.orgId, scope.orgId),
+          eq(schema.tachoSessions.workspaceId, scope.workspaceId),
+          eq(schema.tachoSessions.sessionUuid, rootSessionUuid),
+          isNull(schema.tachoSessions.parentSessionUuid),
+        ),
+      )
+      .limit(1),
+  );
+  if (session === undefined) return null;
+  const [slugs] = await withTenantDb((tx) =>
+    tx
+      .select({
+        orgSlug: schema.organizations.slug,
+        workspaceSlug: schema.workspaces.slug,
+      })
+      .from(schema.workspaces)
+      .innerJoin(
+        schema.organizations,
+        eq(schema.organizations.id, schema.workspaces.orgId),
+      )
+      .where(
+        and(
+          eq(schema.workspaces.id, scope.workspaceId),
+          eq(schema.workspaces.orgId, scope.orgId),
+        ),
+      )
+      .limit(1),
+  );
+  return slugs === undefined
+    ? null
+    : runPageUrl(appUrl, { ...slugs, runId: session.runId });
+}
+
+/**
+ * Put the block and the label on a GitHub pull request the run opened, with
+ * the installation token of the app installation that reaches its owner.
+ */
+async function markOpenedOnGithub(
+  scope: Scope,
+  link: { key: ForgeKey; rootSessionUuid: string },
+): Promise<PullRequestBadgeOutcome> {
+  const [owner = "", repo = ""] = link.key.repository.split("/");
+  const installationId = githubInstallationOf(
+    await githubConnectionRows(scope),
+    owner,
+  );
+  if (installationId === null)
+    return { status: "skipped", reason: "no_installation" };
+  const token = await badgeInstallationToken(installationId, repo);
+  if (token === null) return { status: "skipped", reason: "no_app" };
+  if (token === "refused") return { status: "skipped", reason: "refused" };
+  const runUrl = await runPageFor(scope, link.rootSessionUuid);
+  try {
+    const marks = await markRunPullRequest(
+      createGitHubClient({ token }),
+      { owner, repo, number: link.key.number },
+      runUrl,
+    );
+    return { status: "marked", ...marks };
+  } catch (err) {
+    if (err instanceof GitHubApiError && unreadableStatus(err.status))
+      return { status: "skipped", reason: "refused" };
+    throw err;
+  }
 }
 
 async function readGithub(scope: Scope, key: ForgeKey): Promise<ForgeRead> {
@@ -251,6 +415,19 @@ export const pullRequestBackfillDeps: PullRequestBackfillDeps = {
       "run.pull-request-backfill: read a linked pull request's state",
     );
     return written.length;
+  },
+  async markOpened(scope, link) {
+    const outcome = await markOpenedOnGithub(scope, link);
+    logger.info(
+      {
+        orgId: scope.orgId,
+        workspaceId: scope.workspaceId,
+        number: link.key.number,
+        badge: outcome,
+      },
+      "run.pull-request-backfill: marked a pull request the run opened",
+    );
+    return outcome;
   },
   now: () => new Date(),
 };

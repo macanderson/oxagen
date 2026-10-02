@@ -362,6 +362,24 @@ describe("guardProblems", () => {
     expect(condition).toContain("needs.deploy-node.result == 'success'");
   });
 
+  it("publishes the CLI to npm past a dormant staging job, after every service shipped", () => {
+    // The same trap as the installers: without `!cancelled()` the job's
+    // condition is `success()`, and a skipped `staging` would stop every
+    // publish (ADR-253).
+    const start = pipeline.indexOf("\n  publish-cli:\n");
+    expect(start).toBeGreaterThan(-1);
+    const end = pipeline.indexOf("\n  manual-app-deploy:\n", start);
+    const job = pipeline.slice(start, end);
+    const condition = job.slice(
+      job.indexOf("\n    if:"),
+      job.indexOf("\n    needs:"),
+    );
+    expect(condition).toContain("!cancelled()");
+    expect(condition).toContain("needs.deploy-node.result == 'success'");
+    expect(job).toContain("needs: [deploy-node]");
+    expect(job).toContain("gh workflow run npm.yml");
+  });
+
   it("fails when one step after the order step loses its gate", () => {
     const gate = `        if: ${SHIP_GATE}`;
     const at = pipeline.lastIndexOf(gate);
