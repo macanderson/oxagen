@@ -336,11 +336,12 @@ describe("a model call the proxy did not carry", () => {
       chain.ingestTranscriptLine(assistantRecord("req_t", 1)),
     );
     const otel = modelCalls(chain.ingestOtlp(apiRequest("req_t")));
+    expect(block).toHaveLength(1);
+    expect(otel).toHaveLength(1);
     for (const row of [...block, ...otel]) {
       expect(row.attrs[LLM_CALL_DUPLICATE_OF_ATTR]).toBe("transcript");
       expectNoSources(row);
     }
-    expect(block).toHaveLength(1);
   });
 
   it("adds nothing before a steering manifest seals", () => {
