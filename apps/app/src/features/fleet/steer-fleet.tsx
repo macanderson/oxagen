@@ -167,6 +167,8 @@ export function SteerFleetDialog({
     return {
       value: agent.agentKey,
       label: agent.agentKey,
+      // The agent's avatar with the harness it registered (#4871).
+      icon: { agent: agent.agentKey, harness: agent.harness ?? null },
       detail:
         run === undefined
           ? t("idle")

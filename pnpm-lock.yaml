@@ -387,6 +387,9 @@ importers:
       '@oxagen/rules':
         specifier: workspace:*
         version: link:../../packages/rules
+      '@oxagen/steering-check':
+        specifier: workspace:*
+        version: link:../../packages/steering-check
       '@oxagen/storage':
         specifier: workspace:*
         version: link:../../packages/storage

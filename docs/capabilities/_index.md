@@ -638,6 +638,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_studio_tools](tool.studio.tools.list.md) | [tool.studio.tools.list.ts](../../packages/oxagen/src/contracts/tool.studio.tools.list.ts) | api, mcp |
 | [list_tool_declarations](tool.declaration.list.md) | [tool.declaration.list.ts](../../packages/oxagen/src/contracts/tool.declaration.list.ts) | api, agent, mcp |
 | [list_tool_versions](tool.version.list.md) | [tool.version.list.ts](../../packages/oxagen/src/contracts/tool.version.list.ts) | api, mcp, agent |
+| [migrate_tools_to_steering](tool.steering.migrate.md) | [tool.steering.migrate.ts](../../packages/oxagen/src/contracts/tool.steering.migrate.ts) | api, mcp, cli |
 | [open_studio_review](tool.studio.review.open.md) | [tool.studio.review.open.ts](../../packages/oxagen/src/contracts/tool.studio.review.open.ts) | api, mcp |
 | [publish_tool_declaration](tool.declaration.publish.md) | [tool.declaration.publish.ts](../../packages/oxagen/src/contracts/tool.declaration.publish.ts) | api |
 | [revoke_relay](tool.relay.revoke.md) | [tool.relay.revoke.ts](../../packages/oxagen/src/contracts/tool.relay.revoke.ts) | api, mcp |

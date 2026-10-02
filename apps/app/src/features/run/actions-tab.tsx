@@ -271,7 +271,23 @@ function GovernedActions({
   const elsewhere = [...matches.byFrame.entries()].flatMap(([seq, item]) =>
     seq === openSeq || isDecided(item) ? [] : [{ item, seq }],
   );
-  const cards = { mandates, now, org: place.org, ws: place.ws };
+  // Every call parked on the run is its agent's, so each card's avatar carries
+  // the harness the run header names: the one the session recorded, else the
+  // one the agent registered (#4871).
+  const harness =
+    run.harness?.name ??
+    (props.agent?.ok === true ? props.agent.value.identity.harness : null);
+  const agentHarnesses =
+    run.agentKey === null || harness === null
+      ? {}
+      : { [run.agentKey]: harness };
+  const cards = {
+    mandates,
+    agentHarnesses,
+    now,
+    org: place.org,
+    ws: place.ws,
+  };
   const parkedElsewhere = (
     <ParkedElsewhere
       pending={pending}

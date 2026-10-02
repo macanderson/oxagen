@@ -47,8 +47,18 @@ const MANDATES = routes.tools("acme", "core-platform", { tab: "policy" });
 const AGENTS: AgentChoices = {
   ok: true,
   agents: [
-    { id: "agt_invoicebot", slug: "invoice-bot", name: "Invoice bot" },
-    { id: "agt_releasebot", slug: "release-bot", name: "Release bot" },
+    {
+      id: "agt_invoicebot",
+      slug: "invoice-bot",
+      name: "Invoice bot",
+      harness: "codex",
+    },
+    {
+      id: "agt_releasebot",
+      slug: "release-bot",
+      name: "Release bot",
+      harness: "claude-code",
+    },
   ],
   partial: false,
 };
@@ -156,7 +166,7 @@ describe("GrantMandate", () => {
       within(within(form).getByRole("listbox"))
         .getAllByRole("option")
         .map((option) => option.textContent),
-    ).toEqual(["Invoice botinvoice-bot", "Release botrelease-bot"]);
+    ).toEqual(["INInvoice botinvoice-bot", "RERelease botrelease-bot"]);
     // The page already holds every agent, so nothing is read.
     expect(choices.chooseAgents).not.toHaveBeenCalled();
     for (const box of within(form).getAllByRole("checkbox"))
@@ -265,6 +275,37 @@ describe("GrantMandate", () => {
     expect(
       within(dialog()).queryByRole("button", { name: "Grant the mandate" }),
     ).toBeNull();
+  });
+
+  it("badges each agent's avatar with the harness it registered (#4871)", async () => {
+    draw();
+    const user = await open();
+    await user.click(within(dialog()).getByRole("combobox", { name: "Agent" }));
+    const options = within(within(dialog()).getByRole("listbox")).getAllByRole(
+      "option",
+    );
+    expect(
+      options.map(
+        (option) =>
+          option
+            .querySelector("[data-harness-badge]")
+            ?.getAttribute("data-harness-badge") ?? null,
+      ),
+    ).toEqual(["codex", "claude-code"]);
+  });
+
+  it("draws no badge on an option the server sent without a harness (negative)", async () => {
+    choices.chooseAgents.mockResolvedValue(
+      loaded([{ value: "agt_docsbot", label: "Docs bot" }]),
+    );
+    draw({ agents: { ...AGENTS, partial: true } });
+    const user = await open();
+    await user.click(within(dialog()).getByRole("combobox", { name: "Agent" }));
+    const option = await within(
+      await within(dialog()).findByRole("listbox"),
+    ).findByRole("option");
+    expect(option).toHaveTextContent("Docs bot");
+    expect(option.querySelector("[data-harness-badge]")).toBeNull();
   });
 
   it("reads every agent when the page holds only the first page", async () => {

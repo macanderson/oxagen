@@ -49,11 +49,11 @@ UI, and Monaspace Neon for code, and the app loads the kit's faces.
 The mockup is read at one commit:
 
 ```
-oxageninc/roadmap @ bfd267fc88679fa8a88bc6a185112850c81e6581, path mockups/
+oxageninc/roadmap @ 4eedf94560e05ed6574f44ae56d803f77f9094ce, path mockups/
 ```
 
-This is the last `main` commit that touched `mockups/` (roadmap #283,
-2026-10-01 03:00 UTC). Every other file that sends an agent to the mockup
+This is the last `main` commit that touched `mockups/` (roadmap #293,
+2026-10-01 05:44 UTC). Every other file that sends an agent to the mockup
 points here instead of repeating the SHA.
 
 Amended 2026-09-29: the pin moves from roadmap #261 (`8a4c0a45`) to roadmap
@@ -79,9 +79,16 @@ and prompts (#275), the organization steering repo named `oxagen-config` (#277),
 the Phase 1 Work lifecycle and its error states (#278), and the house brand
 synced from `oxagen-brand` (#283).
 
+Amended 2026-10-01 (later): the pin moves from roadmap #283 (`bfd267fc`) to
+roadmap #293 (`4eedf945`). The new commit badges every agent the mockup lists
+with its harness, as the app does after #4872 and #4929, and gives every table
+the app's pager: 5, 10, 25, 50, or All rows, 10 by default. It also carries the
+Memories tab and the import review grid (roadmap #297) and the house brand at
+kit 2.5.0 (#301).
+
 To read a file at the pin, run
-`git -C ../oxagen-roadmap show bfd267fc88679fa8a88bc6a185112850c81e6581:mockups/README.md`,
-or open `https://github.com/oxageninc/roadmap/tree/bfd267fc88679fa8a88bc6a185112850c81e6581/mockups`.
+`git -C ../oxagen-roadmap show 4eedf94560e05ed6574f44ae56d803f77f9094ce:mockups/README.md`,
+or open `https://github.com/oxageninc/roadmap/tree/4eedf94560e05ed6574f44ae56d803f77f9094ce/mockups`.
 
 Moving the pin is a permitted amendment to this ADR. A pull request changes the
 SHA and the date on the pin line, and names the mockup changes the new commit

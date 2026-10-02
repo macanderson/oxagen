@@ -4,7 +4,11 @@ import {
 } from "@oxagen/oxagen/contracts/run.cost";
 import { describe, expect, it, vi } from "vitest";
 import type { BaselineRun } from "./lib/run-cost-baseline";
-import { createRunCostHandler, provisionalOf } from "./run.cost";
+import {
+  createRunCostHandler,
+  noProgressHitOf,
+  provisionalOf,
+} from "./run.cost";
 import { ctx, pricedRun, run, SCOPE } from "./spend.test-support";
 
 const ROLLED_UP_AT = new Date("2026-09-10T12:31:00.000Z");
@@ -457,5 +461,91 @@ describe("provisionalOf", () => {
         baseline: null,
       }),
     ).not.toThrow();
+  });
+});
+
+describe("get_run_cost no-progress hits (#4490)", () => {
+  const DETECTED = new Date("2026-10-01T12:00:00.000Z");
+  const stored = {
+    tool: "Bash",
+    loop: 1,
+    repeats: 24,
+    limitRepeats: 20,
+    atCall: 20,
+    mode: "enforced",
+    outcome: "would_pause",
+    pauseBlock: "host_offline",
+    detectedAt: DETECTED,
+  };
+
+  it("answers each loop with its count, mode, outcome, and why an enforced limit could not pause the run", async () => {
+    const row = pricedRun(10n);
+    const hit = noProgressHitOf(stored);
+    const readNoProgressHits = vi.fn(async () => [hit]);
+    const handler = createRunCostHandler({
+      readRunTotalsByIds: async () =>
+        new Map([[row.runId, { ...row, rolledUpAt: ROLLED_UP_AT }]]),
+      readBaseline: noBaseline,
+      readNoProgressHits,
+    });
+    const out = await handler({ runId: row.runId }, ctx());
+    expect(readNoProgressHits).toHaveBeenCalledWith(SCOPE, row.runId);
+    expect(out.noProgressHits).toEqual([
+      {
+        tool: "Bash",
+        loop: 1,
+        repeats: 24,
+        limit: 20,
+        atCall: 20,
+        mode: "enforced",
+        outcome: "would_pause",
+        pauseBlock: "host_offline",
+        detectedAt: DETECTED.toISOString(),
+      },
+    ]);
+    expect(() => runCostGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers the hits before the rollup has a row", async () => {
+    const handler = createRunCostHandler({
+      readRunTotalsByIds: async () => new Map(),
+      readBaseline: noBaseline,
+      readNoProgressHits: async () => [],
+    });
+    const runId = "tse_0000000000000000000005";
+    expect(await handler({ runId }, ctx())).toEqual({
+      runId,
+      rollup: null,
+      baseline: null,
+      noProgressHits: [],
+    });
+  });
+
+  it("reads a paused hit and an observe hit with no block", () => {
+    expect(
+      noProgressHitOf({ ...stored, outcome: "paused", pauseBlock: null }),
+    ).toMatchObject({ outcome: "paused", pauseBlock: null });
+    expect(
+      noProgressHitOf({
+        ...stored,
+        mode: "observe",
+        outcome: "would_pause",
+        pauseBlock: null,
+      }),
+    ).toMatchObject({ mode: "observe", outcome: "would_pause", pauseBlock: null });
+  });
+
+  it("reads an unknown stored value as the reading that claims the least (negative)", () => {
+    expect(
+      noProgressHitOf({
+        ...stored,
+        mode: "strict",
+        outcome: "paused",
+        pauseBlock: "host_offline",
+      }),
+    ).toMatchObject({ mode: "observe", outcome: "would_pause", pauseBlock: null });
+    expect(
+      noProgressHitOf({ ...stored, pauseBlock: "host_on_fire" }).pauseBlock,
+    ).toBeNull();
   });
 });
