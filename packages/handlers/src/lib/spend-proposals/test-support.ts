@@ -15,7 +15,7 @@ export const SCOPE = {
 export const SUBAGENT_CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000aa";
 
 const SPIN_WHY =
-  "On 2 runs, a call ran 20 or more times in a row and returned the same result each time. 140 turns made only those repeats.";
+  "On 2 runs, a call ran 20 or more times in a row and returned the same result each time. 140 calls came from turns that made only those repeats.";
 
 /**
  * One agent's `spin_loops` finding over two runs. Run `tse_a` looped on its

@@ -138,11 +138,14 @@ export interface HookHandlerDeps {
    * Which credential a successful `git push` went out with (ADR-151). The
    * daemon answers from the host's GitHub custody receipts
    * (`pushCredentialBasis` in `./push-basis`). Absent, every push is
-   * `harness_held`, because nothing then shows the proxy carried it.
+   * `harness_held`, because nothing then shows the proxy carried it. The
+   * harness session id lets the daemon judge a contained run's push by the
+   * repository its launcher named (ADR-254).
    */
   pushCredentialBasis?: (
     command: string,
     cwd: string | undefined,
+    harnessSessionId: string,
   ) => Promise<TachoCredentialBasis>;
   /**
    * The repository a session runs in, read from its `origin` remote
@@ -891,7 +894,11 @@ async function gitPushBasis(
   // The registry keeps the session's working directory, and for Cursor it
   // keeps the explicit root over one inferred from the workspace list.
   try {
-    return await deps.pushCredentialBasis(command, record.cwd ?? input.cwd);
+    return await deps.pushCredentialBasis(
+      command,
+      record.cwd ?? input.cwd,
+      record.harnessSessionId,
+    );
   } catch {
     // A failed read proves nothing about the proxy, and the hook must still
     // record the push.

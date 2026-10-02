@@ -516,6 +516,63 @@ describe("get_finding_evidence", () => {
     expect(bare.finding).not.toHaveProperty("recommendation");
   });
 
+  // #5023: the card writes its text from the figures the job stored.
+  it("answers the kind's stored values, and no key on a row written before values were stored", async () => {
+    const values = {
+      kind: "spin_loops" as const,
+      tool: "Bash",
+      repeats: 42,
+    };
+    const row = findingRow({
+      kind: "spin_loops",
+      level: "agent",
+      subject: "reviewer",
+      fingerprint: "spin_loops|agent|reviewer",
+      citedFrames: evidence({ values }),
+    });
+    const handler = createFindingEvidenceHandler({
+      read: async () => row,
+      readRunNames: readRunNames(),
+    });
+    const out = await handler({ findingId: FINDING_ID }, ctx());
+    expect(out.finding.values).toEqual(values);
+    expect(findingEvidenceGet.output.parse(out).finding.values).toEqual(
+      values,
+    );
+
+    // A row the job wrote before it stored values carries none, never zeros.
+    const older = await createFindingEvidenceHandler({
+      read: async () => findingRow(),
+      readRunNames: readRunNames(),
+    })({ findingId: FINDING_ID }, ctx());
+    expect(older.finding).not.toHaveProperty("values");
+  });
+
+  it("drops stored values that do not parse or name another kind, so the list still answers (negative)", async () => {
+    const wrongKind = findingRow({
+      citedFrames: evidence({
+        values: { kind: "spin_loops", tool: "Bash", repeats: 42 },
+      }),
+    });
+    const malformed = findingRow({
+      kind: "spin_loops",
+      level: "agent",
+      subject: "reviewer",
+      fingerprint: "spin_loops|agent|reviewer",
+      citedFrames: evidence({
+        values: { kind: "spin_loops", tool: "", repeats: -1 } as never,
+      }),
+    });
+    for (const row of [wrongKind, malformed]) {
+      const out = await createFindingEvidenceHandler({
+        read: async () => row,
+        readRunNames: readRunNames(),
+      })({ findingId: FINDING_ID }, ctx());
+      expect(out.finding).not.toHaveProperty("values");
+      expect(() => findingEvidenceGet.output.parse(out)).not.toThrow();
+    }
+  });
+
   it("refuses an id with no finding in the workspace as not found", async () => {
     const read = vi.fn(async () => null);
     const names = readRunNames();

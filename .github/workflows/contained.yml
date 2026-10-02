@@ -108,19 +108,11 @@ jobs:
           done
           cat "$RUNNER_TEMP/tachod.log"; exit 1
 
-      # One repository, one run. The launcher refuses a token that reaches
-      # more, keeps it outside the container, and revokes it when the run ends.
-      - name: Mint the run's GitHub token
-        id: github-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ vars.OXAGEN_CONTAINED_APP_ID }}
-          private-key: ${{ secrets.OXAGEN_CONTAINED_APP_PRIVATE_KEY }}
-          repositories: ${{ github.event.repository.name }}
-
+      # One repository, one run, and no token in this job. The daemon's Git
+      # custody gets a token from the workspace's GitHub App for each request
+      # and revokes it after (ADR-254). The repository must be bound to the
+      # workspace in OXAGEN_WORKSPACE.
       - name: Review this pull request, contained
-        env:
-          OXAGEN_CONTAINED_GITHUB_TOKEN: ${{ steps.github-token.outputs.token }}
         run: >-
           $TACHO run --contained
           --image oxagen/contained-claude-code:${{ github.sha }}

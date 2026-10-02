@@ -6,7 +6,8 @@
  * through that proxy is `gateway_brokered`: the daemon attached a scoped
  * installation token the harness never saw. Any other push is
  * `harness_held`: a personal token, a keychain helper, an SSH key, or a URL
- * with a token in it.
+ * with a token in it. A contained run has no receipt, so its push is judged
+ * against the one repository the run named (ADR-254).
  *
  * The answer is client-attested, like every hook record (ADR-040 section 4).
  * It comes from the command line, the receipt, and the remote's push URLs as
@@ -14,7 +15,7 @@
  * used. The proof is the `token_use` frame the proxy seals, and this
  * attribute lets a reader count the pushes that have none.
  */
-import { resolve } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import { gitSubcommand, tokenizeSimpleCommand } from "../claude-code/tools";
 import type { HostFile } from "../host/host-file";
 import type { ExecAsync } from "../host/service";
@@ -103,6 +104,14 @@ export function gitPushTarget(command: string): GitPushTarget | undefined {
 export interface PushBasisDeps {
   /** The host file's custody receipts, read when the push is recorded. */
   receipts: () => readonly CustodyReceipt[];
+  /**
+   * The one repository a contained run named, when the push ran in a session
+   * the contained launcher started (ADR-254). Such a session has no custody
+   * receipt. Its container has no network, Git there rewrites
+   * `https://github.com/` to the launcher's bridge, and the bridge sends only
+   * this repository's requests to the Git custody proxy.
+   */
+  containedRepository?: string;
   execAsync: ExecAsync;
 }
 
@@ -122,6 +131,8 @@ export async function pushCredentialBasis(
   cwd: string | undefined,
   deps: PushBasisDeps,
 ): Promise<TachoCredentialBasis> {
+  if (deps.containedRepository !== undefined)
+    return containedPushBasis(command, cwd, deps.containedRepository, deps);
   const receipts = deps.receipts();
   if (cwd === undefined || receipts.length === 0)
     return TACHO_CREDENTIAL_HARNESS_HELD;
@@ -136,6 +147,47 @@ export async function pushCredentialBasis(
   const remote = target.remote ?? (await defaultPushRemote(dir, deps));
   const urls = await pushUrls(dir, remote, deps);
   return urls.length > 0 && urls.every((url) => url === receipt.url)
+    ? TACHO_CREDENTIAL_GATEWAY_BROKERED
+    : TACHO_CREDENTIAL_HARNESS_HELD;
+}
+
+/** `owner/name`, lowercased, of an `https://github.com/` remote URL. */
+function githubRepositoryOf(url: string): string | undefined {
+  const match =
+    /^https:\/\/github\.com\/([A-Za-z0-9-]+\/[A-Za-z0-9._-]+?)(?:\.git)?$/.exec(
+      url,
+    );
+  return match?.[1]?.toLowerCase();
+}
+
+/**
+ * The basis for a `git push` in a contained run (ADR-254). The push is
+ * `gateway_brokered` when it ran in the run's checkout and every push URL Git
+ * reports is the run's repository on `https://github.com/`, because the
+ * container reaches that URL only through the custody proxy. The host reads
+ * the same `.git/config` the container writes, so a remote the agent pointed
+ * elsewhere is seen. Anything else is `harness_held`, which claims nothing.
+ */
+async function containedPushBasis(
+  command: string,
+  cwd: string | undefined,
+  repository: string,
+  deps: PushBasisDeps,
+): Promise<TachoCredentialBasis> {
+  const target = gitPushTarget(command);
+  if (cwd === undefined || target === undefined)
+    return TACHO_CREDENTIAL_HARNESS_HELD;
+  // A directory outside the checkout is not one the container sees at the
+  // same path, so nothing here can read its remotes.
+  const dir = target.chdir.reduce((from, to) => resolve(from, to), cwd);
+  const inside = relative(cwd, dir);
+  if (inside.startsWith("..") || isAbsolute(inside))
+    return TACHO_CREDENTIAL_HARNESS_HELD;
+  const remote = target.remote ?? (await defaultPushRemote(dir, deps));
+  const urls = await pushUrls(dir, remote, deps);
+  const wanted = repository.toLowerCase();
+  return urls.length > 0 &&
+    urls.every((url) => githubRepositoryOf(url) === wanted)
     ? TACHO_CREDENTIAL_GATEWAY_BROKERED
     : TACHO_CREDENTIAL_HARNESS_HELD;
 }

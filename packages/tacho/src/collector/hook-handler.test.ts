@@ -5,7 +5,7 @@
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { digestBytes, digestJcs, type JsonValue } from "../digest";
 import { translateCursorPayload } from "../claude-code/cursor-adapter";
 import { verifyChain } from "../chain";
@@ -1639,6 +1639,21 @@ describe("the credential basis on a git_push frame (#3788)", () => {
     );
     const push = outcome.events.find((event) => event.kind === "command");
     expect(push?.attrs?.["oxagen.credential_basis"]).toBe("harness_held");
+  });
+
+  it("names the harness session to the custody reader, so a contained run's push is judged by its repository", async () => {
+    const { deps } = harness();
+    const reader = vi.fn(async () => "gateway_brokered" as const);
+    const outcome = await handleHookEvent(
+      payloads["codex"]?.(BROKERED),
+      {},
+      { ...deps, pushCredentialBasis: reader },
+      undefined,
+      "codex",
+    );
+    expect(reader).toHaveBeenCalledWith(BROKERED, "/repo", "codex-push");
+    const push = outcome.events.find((event) => event.kind === "command");
+    expect(push?.attrs?.["oxagen.credential_basis"]).toBe("gateway_brokered");
   });
 });
 

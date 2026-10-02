@@ -116,12 +116,22 @@ function whereOf(stats: BustStats): string {
   return `The first change was in ${list(named)}.${unknown}`;
 }
 
-function topPart(stats: BustStats | undefined): string | null {
+/** The part most busts began in, and how many; on a tie, the label that sorts first. */
+function topEntry(stats: BustStats | undefined): [string, number] | null {
   if (stats === undefined) return null;
   let top: [string, number] | null = null;
   for (const entry of stats.parts)
-    if (top === null || entry[1] > top[1]) top = entry;
-  return top?.[0] ?? null;
+    if (
+      top === null ||
+      entry[1] > top[1] ||
+      (entry[1] === top[1] && entry[0] < top[0])
+    )
+      top = entry;
+  return top;
+}
+
+function topPart(stats: BustStats | undefined): string | null {
+  return topEntry(stats)?.[0] ?? null;
 }
 
 export const cacheBusts: Detector = {
@@ -145,9 +155,17 @@ export const cacheBusts: Detector = {
       evidence.coveredCalls === evidence.calls
         ? "The rewrites"
         : `The ${evidence.coveredCalls.toLocaleString("en-US")} of ${plural(evidence.calls, "rewrite", "rewrites")} with a price`;
+    const first = topEntry(stats);
     return {
       why: `${group.subject} rewrote its cache ${plural(evidence.calls, "time", "times")} because the start of the prompt changed. ${whereOf(stats)} ${priced} cost ${premium} more than reading the cache back.`,
       fix: `Keep the start of the prompt for ${group.subject} the same from one request to the next. ${move}, or change it between runs.`,
+      values: {
+        kind: "cache_busts",
+        firstChange: first?.[0] ?? null,
+        firstChangeBusts: first?.[1] ?? null,
+        pricedBusts: evidence.coveredCalls,
+        unknownBusts: stats.unknown,
+      },
     };
   },
 };

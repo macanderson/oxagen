@@ -265,7 +265,7 @@ Runs one agent session under Oxagen control. Everything after `--` is the agent'
 | `--contained` | Start Claude Code or Codex in the contained launcher. |
 | `--image <ref>` | With `--contained`: the image. `OXAGEN_CONTAINED_IMAGE` also sets it. |
 | `--workspace <dir>` | With `--contained`: the repository root to mount at `/workspace`. Defaults to the current directory. This is a directory, not the workspace slug `enroll` takes. |
-| `--github-repository <owner/name>` | With `--contained`: the one repository the run may reach, with a token in `OXAGEN_CONTAINED_GITHUB_TOKEN`. |
+| `--github-repository <owner/name>` | With `--contained`: the one repository the run may fetch and push. Oxagen's Git custody gets the credential for each request, so you mint no token. The workspace must have the repository bound. |
 
 The command exits with the agent's own exit code. It exits 1 when the machine is not enrolled, when Oxagen refuses the session, or when the command cannot start. It exits 2 when no command follows `--`, when the custom agent's name is invalid, or when the harness is not wrapped on this machine. See [Wrap a custom agent](/docs/cli/wrap-an-agent#wrap-a-custom-agent).
 

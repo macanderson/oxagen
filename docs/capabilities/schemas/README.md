@@ -191,6 +191,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - promote_context_record
 - promote_memories
 - propose_record
+- propose_steering
 - publish_context_record
 - read_steering
 - refresh_context_pr
