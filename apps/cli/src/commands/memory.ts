@@ -1,54 +1,57 @@
 /**
- * `oxagen memory` + `oxagen remember` — manage the workspace's agent memories
- * from the shell.
+ * `oxagen memory`: the workspace's memories, the lessons agents wrote in
+ * their harnesses' own memory stores, which Oxagen collects from enrolled
+ * hosts (memory-collection spec; ADR-245).
  *
- *   oxagen memory list [--class OBSERVATION|RULE|FACT] [--kind k] [--min-enforcement n] [--min-citations n] [--sort createdAt|citations] [--json]
+ *   oxagen memory list [--state s] [--harness h] [--agent a] [--repository r] [--type t] [--limit n] [--offset n] [--json]
  *   oxagen memory show <id> [--json]
- *   oxagen memory edit <id> [--lesson t] [--kind k] [--source s]
- *   oxagen memory salience <id> [--confidence n] [--enforcement n] [--status s]
- *   oxagen memory promote <id> --to rule|fact [--enforcement n] [--rationale "…"]
- *   oxagen memory demote <id> --to rule|observation [--enforcement n] [--rationale "…"]
- *   oxagen memory dismiss <id> [--restore]
- *   oxagen memory candidates [--limit n]
- *   oxagen memory citations [--days n] [--limit n]
- *   oxagen memory rm <id>
- *   oxagen remember <text...> [--class c] [--kind k] [--enforcement n] [--node ref]
+ *   oxagen memory promote <ids...> [--one-record] [--statement t] [--kind k] [--force f] [--effect e] [--repo r] [--no-same-text] [--json]
+ *   oxagen memory dismiss <ids...> [--restore] [--json]
+ *   oxagen memory import <files...> [--node r] [--yes] [--json]
  *
- * Every command delegates to lib/memory-client (the shared transport +
- * formatters the REPL slash commands also use) and exits non-zero with a
- * friendly message on an API/auth error.
+ * A memory steers only the agent that wrote it, through its harness. It
+ * reaches other agents only once a person promotes it into a steering record
+ * and the memory PR merges. list, show, promote, and dismiss call
+ * list_workspace_memories, get_workspace_memory, promote_memories, and
+ * dismiss_memories through lib/workspace-memory-client.
+ *
+ * The in-app assistant's own memory store in Neo4j has no command here. Its
+ * capabilities stay on the API and MCP. `oxagen memory import` still writes
+ * to that store until it moves to the Markdown import (#4907).
  */
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
+import type { MemoryDraftRecord } from "@oxagen/oxagen/contracts/steering.memories.shared";
 import { ApiError } from "../lib/api.js";
 import {
-  listMemories,
-  rememberMemory,
-  updateMemory,
-  deleteMemory,
-  promoteMemory,
-  demoteMemory,
-  dismissPromotion,
-  citationStats,
-  promotionCandidates,
   parseImportMemories,
   commitImportMemories,
-  formatMemoryLines,
-  formatMemoryDetail,
-  formatRememberResult,
-  formatPromoteResult,
-  formatDemoteResult,
-  formatDismissResult,
-  formatCitationStats,
-  formatPromotionCandidates,
   formatImportDrafts,
   formatImportResults,
-  RECOMMENDED_MEMORY_KINDS,
-  MEMORY_CLASSES,
-  type MemoryClass,
-  type MemoryStatus,
 } from "../lib/memory-client.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
+import {
+  dismissWorkspaceMemories,
+  formatDismissResult,
+  formatPromoteResult,
+  formatWorkspaceMemories,
+  formatWorkspaceMemory,
+  getWorkspaceMemory,
+  listWorkspaceMemories,
+  promoteWorkspaceMemories,
+  WORKSPACE_MEMORY_STATES,
+} from "../lib/workspace-memory-client.js";
+
+/**
+ * The capabilities `oxagen memory list|show|promote|dismiss` call, by their
+ * registered names, through the routes in lib/workspace-memory-client.
+ */
+export const MEMORY_COMMAND_CAPABILITIES = [
+  "list_workspace_memories",
+  "get_workspace_memory",
+  "promote_memories",
+  "dismiss_memories",
+] as const;
 
 /**
  * Print an error and diverge — exit(1) for the one-shot `oxagen memory …` CLI
@@ -62,38 +65,6 @@ function fail(message: string, writer: CommandWriter = stdoutWriter): never {
   writer.writeErr(message);
   if (writer === stdoutWriter) process.exit(1);
   throw new Error(message);
-}
-
-// memoryKind is an open string per the two-axis model: it is passed through
-// unvalidated. RECOMMENDED_MEMORY_KINDS exists only to hint the flag's help
-// text — it is deliberately not an allow-list.
-
-function parseClass(
-  v: string | undefined,
-  writer: CommandWriter,
-): MemoryClass | undefined {
-  if (v === undefined) return undefined;
-  const upper = v.toUpperCase();
-  if (!MEMORY_CLASSES.includes(upper as MemoryClass)) {
-    fail(
-      `Invalid class "${v}". Use one of: ${MEMORY_CLASSES.join(", ")}.`,
-      writer,
-    );
-  }
-  return upper as MemoryClass;
-}
-
-function parseStatus(
-  v: string | undefined,
-  writer: CommandWriter,
-): MemoryStatus | undefined {
-  if (v === undefined) return undefined;
-  const upper = v.toUpperCase();
-  const STATUSES = ["ACTIVE", "SUPERSEDED", "RETRACTED", "ARCHIVED"];
-  if (!STATUSES.includes(upper)) {
-    fail(`Invalid status "${v}". Use one of: ${STATUSES.join(", ")}.`, writer);
-  }
-  return upper as MemoryStatus;
 }
 
 function parseIntOpt(
@@ -112,299 +83,162 @@ function handleApiError(err: unknown, writer: CommandWriter): never {
   fail(err instanceof Error ? err.message : String(err), writer);
 }
 
-function parseSort(
-  v: string | undefined,
+/** A comma-separated or repeated option, as a list of values. */
+function listOpt(v: string | string[] | undefined): string[] {
+  if (v === undefined) return [];
+  return (Array.isArray(v) ? v : [v])
+    .flatMap((part) => part.split(","))
+    .map((part) => part.trim())
+    .filter((part) => part !== "");
+}
+
+const HARNESSES = ["claude-code", "codex", "cursor", "stella", "claude-desktop"];
+const KINDS = [
+  "business-rule",
+  "code-rule",
+  "constraint",
+  "procedure",
+  "fact",
+  "preference",
+  "memory",
+];
+const FORCES = ["must", "should", "may", "info"];
+const EFFECTS = ["require", "forbid"];
+
+function oneOf<T extends string>(
+  value: string | undefined,
+  allowed: readonly string[],
+  flag: string,
   writer: CommandWriter,
-): "createdAt" | "citationCount" | undefined {
-  if (v === undefined) return undefined;
-  if (v === "createdAt" || v === "citations" || v === "citationCount") {
-    return v === "citations" ? "citationCount" : v;
-  }
-  fail(`Invalid --sort "${v}". Use "createdAt" or "citations".`, writer);
+): T | undefined {
+  if (value === undefined) return undefined;
+  if (!allowed.includes(value))
+    fail(`Invalid ${flag} "${value}". Use one of: ${allowed.join(", ")}.`, writer);
+  return value as T;
 }
 
 export interface MemoryListCliOptions {
-  class?: string;
-  kind?: string;
-  minEnforcement?: string;
-  minCitations?: string;
-  sort?: string;
-  node?: string;
+  state?: string | string[];
+  harness?: string;
+  agent?: string;
+  repository?: string;
+  type?: string;
   limit?: string;
   offset?: string;
   json?: boolean;
 }
 
+/**
+ * `oxagen memory list`: the workspace's memories ranked by uses, then the
+ * newest use, then the newest capture, one row per group of memories that
+ * say the same thing. Waiting and in-PR memories unless `--state` names
+ * others.
+ */
 export async function handleMemoryList(
   opts: MemoryListCliOptions,
   writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
+  const states = listOpt(opts.state);
+  for (const state of states)
+    oneOf(state, WORKSPACE_MEMORY_STATES, "--state", writer);
+  const harness = oneOf<string>(opts.harness, HARNESSES, "--harness", writer);
   try {
-    const result = await listMemories({
-      memoryClass: parseClass(opts.class, writer),
-      memoryKind: opts.kind,
-      minEnforcement: parseIntOpt(
-        opts.minEnforcement,
-        "--min-enforcement",
-        writer,
-      ),
-      minCitations: parseIntOpt(opts.minCitations, "--min-citations", writer),
-      sort: parseSort(opts.sort, writer),
-      nodeRef: opts.node,
-      limit: opts.limit ? parseInt(opts.limit, 10) : undefined,
-      offset: opts.offset ? parseInt(opts.offset, 10) : undefined,
+    const result = await listWorkspaceMemories({
+      states:
+        states.length === 0
+          ? undefined
+          : (states as (typeof WORKSPACE_MEMORY_STATES)[number][]),
+      harness,
+      agent: opts.agent,
+      repository: opts.repository,
+      type: opts.type,
+      limit: parseIntOpt(opts.limit, "--limit", writer),
+      offset: parseIntOpt(opts.offset, "--offset", writer),
     });
     if (opts.json) {
       writer.write(JSON.stringify(result, null, 2));
       return;
     }
-    writer.write(formatMemoryLines(result));
+    writer.write(formatWorkspaceMemories(result));
   } catch (err) {
     handleApiError(err, writer);
   }
 }
 
+/** `oxagen memory show <id>`: one memory with its source, its uses, and its memory PR. */
 export async function handleMemoryShow(
-  idOrPublicId: string,
+  id: string,
   opts: { json?: boolean },
   writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   try {
-    // No get-by-id capability exists; fetch a page and resolve client-side by
-    // full id or publicId (or an unambiguous short-id prefix).
-    const { memories } = await listMemories({ limit: 200 });
-    const match =
-      memories.find(
-        (m) => m.id === idOrPublicId || m.publicId === idOrPublicId,
-      ) ?? memories.find((m) => m.id.startsWith(idOrPublicId));
-    if (!match) {
-      fail(
-        `No memory matching "${idOrPublicId}" in this workspace (searched the latest 200).`,
-        writer,
-      );
-    }
+    const result = await getWorkspaceMemory(id);
     if (opts.json) {
-      writer.write(JSON.stringify(match, null, 2));
+      writer.write(JSON.stringify(result, null, 2));
       return;
     }
-    writer.write(formatMemoryDetail(match));
-  } catch (err) {
-    handleApiError(err, writer);
-  }
-}
-
-export interface MemoryEditCliOptions {
-  lesson?: string;
-  kind?: string;
-  source?: string;
-  json?: boolean;
-}
-
-export async function handleMemoryEdit(
-  id: string,
-  opts: MemoryEditCliOptions,
-  writer: CommandWriter = stdoutWriter,
-): Promise<void> {
-  if (!opts.lesson && !opts.kind && !opts.source) {
-    fail(
-      "Nothing to edit. Pass at least one of --lesson, --kind, or --source.",
-      writer,
-    );
-  }
-  try {
-    const updated = await updateMemory({
-      memoryId: id,
-      lesson: opts.lesson,
-      memoryKind: opts.kind,
-      source: opts.source,
-    });
-    if (opts.json) {
-      writer.write(JSON.stringify(updated, null, 2));
-      return;
-    }
-    writer.write(
-      `✓ Updated memory ${updated.id}.\n${formatMemoryDetail(updated)}`,
-    );
-  } catch (err) {
-    handleApiError(err, writer);
-  }
-}
-
-export interface MemorySalienceCliOptions {
-  confidence?: string;
-  enforcement?: string;
-  status?: string;
-  json?: boolean;
-}
-
-/**
- * `oxagen memory salience <id>` — adjust a memory's confidence/enforcement
- * scores or lifecycle status. Class changes go through `oxagen memory promote`
- * (the only path that can move a memory up the confidence ladder).
- */
-export async function handleMemorySalience(
-  id: string,
-  opts: MemorySalienceCliOptions,
-  writer: CommandWriter = stdoutWriter,
-): Promise<void> {
-  if (!opts.confidence && !opts.enforcement && !opts.status) {
-    fail(
-      "Nothing to update. Pass at least one of --confidence, --enforcement, or --status.",
-      writer,
-    );
-  }
-  let confidenceScore: number | undefined;
-  if (opts.confidence !== undefined) {
-    confidenceScore = Number(opts.confidence);
-    if (
-      Number.isNaN(confidenceScore) ||
-      confidenceScore < 0 ||
-      confidenceScore > 100
-    ) {
-      fail(
-        `Invalid --confidence "${opts.confidence}". Use a number between 0 and 100.`,
-        writer,
-      );
-    }
-  }
-  let enforcementScore: number | undefined;
-  if (opts.enforcement !== undefined) {
-    enforcementScore = Number(opts.enforcement);
-    if (
-      !Number.isInteger(enforcementScore) ||
-      enforcementScore < 1 ||
-      enforcementScore > 100
-    ) {
-      fail(
-        `Invalid --enforcement "${opts.enforcement}". Use an integer between 1 and 100.`,
-        writer,
-      );
-    }
-  }
-  const status = parseStatus(opts.status, writer);
-  try {
-    const updated = await updateMemory({
-      memoryId: id,
-      confidenceScore,
-      enforcementScore,
-      status,
-    });
-    if (opts.json) {
-      writer.write(JSON.stringify(updated, null, 2));
-      return;
-    }
-    writer.write(
-      `✓ Salience updated — class ${updated.memoryClass}, confidence ${updated.confidenceScore.toFixed(1)}, enforcement ${updated.enforcementScore ?? "—"} (${updated.id}).`,
-    );
+    writer.write(formatWorkspaceMemory(result));
   } catch (err) {
     handleApiError(err, writer);
   }
 }
 
 export interface MemoryPromoteCliOptions {
-  to?: string;
-  enforcement?: string;
-  rationale?: string;
+  /** Cite every id in one record, for memories that say the same thing. */
+  oneRecord?: boolean;
+  statement?: string;
+  kind?: string;
+  force?: string;
+  effect?: string;
+  repo?: string | string[];
+  /** Commander sets this false for `--no-same-text`. */
+  sameText?: boolean;
   json?: boolean;
 }
 
 /**
- * `oxagen memory promote <id> --to rule|fact [--rationale "…"]` — move a memory
- * up the confidence ladder, recording an auditable :Promotion event. FACT
- * requires human confirmation server-side, which this CLI invocation provides.
- * The rationale is optional.
+ * `oxagen memory promote <ids...>`: draft steering records from waiting
+ * memories, on the open memory PR or a new one. One record per id, or one
+ * record that cites every id with `--one-record`. Each record also cites the
+ * waiting memories that say the same thing unless `--no-same-text`.
  */
 export async function handleMemoryPromote(
-  id: string,
+  ids: string[],
   opts: MemoryPromoteCliOptions,
   writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
-  if (!opts.to) fail("Missing --to. Use `--to rule` or `--to fact`.", writer);
-  const toClass = opts.to.toUpperCase();
-  if (toClass !== "RULE" && toClass !== "FACT") {
-    fail(`Invalid --to "${opts.to}". Use "rule" or "fact".`, writer);
-  }
-  let enforcementScore: number | undefined;
-  if (opts.enforcement !== undefined) {
-    enforcementScore = Number(opts.enforcement);
-    if (
-      !Number.isInteger(enforcementScore) ||
-      enforcementScore < 1 ||
-      enforcementScore > 100
-    ) {
-      fail(
-        `Invalid --enforcement "${opts.enforcement}". Use an integer between 1 and 100.`,
-        writer,
-      );
-    }
-  }
+  if (ids.length === 0)
+    fail("Nothing to promote. Pass one or more memory ids, such as `oxagen memory promote mem_…`.", writer);
+  const records = opts.oneRecord ? 1 : ids.length;
+  if (opts.statement !== undefined && records > 1)
+    fail(
+      "--statement sets one record's body. Pass one id, or add --one-record to cite every id in one record.",
+      writer,
+    );
+  const kind = oneOf<NonNullable<MemoryDraftRecord["kind"]>>(opts.kind, KINDS, "--kind", writer);
+  const force = oneOf<NonNullable<MemoryDraftRecord["force"]>>(opts.force, FORCES, "--force", writer);
+  const effect = oneOf<NonNullable<MemoryDraftRecord["effect"]>>(opts.effect, EFFECTS, "--effect", writer);
+  const repos = listOpt(opts.repo);
+  const shared: Omit<MemoryDraftRecord, "memory_ids"> = {
+    ...(opts.statement === undefined ? {} : { statement: opts.statement }),
+    ...(kind === undefined ? {} : { kind }),
+    ...(force === undefined ? {} : { force }),
+    ...(effect === undefined ? {} : { effect }),
+    ...(repos.length === 0 ? {} : { repos }),
+  };
+  const drafts: MemoryDraftRecord[] = opts.oneRecord
+    ? [{ memory_ids: ids, ...shared }]
+    : ids.map((id) => ({ memory_ids: [id], ...shared }));
   try {
-    const updated = await promoteMemory({
-      memoryId: id,
-      toClass,
-      enforcementScore,
-      rationale: opts.rationale,
+    const result = await promoteWorkspaceMemories({
+      drafts,
+      same_text: opts.sameText !== false,
     });
     if (opts.json) {
-      writer.write(JSON.stringify(updated, null, 2));
+      writer.write(JSON.stringify(result, null, 2));
       return;
     }
-    writer.write(formatPromoteResult(updated));
-  } catch (err) {
-    handleApiError(err, writer);
-  }
-}
-
-export interface MemoryDemoteCliOptions {
-  to?: string;
-  enforcement?: string;
-  rationale?: string;
-  json?: boolean;
-}
-
-/**
- * `oxagen memory demote <id> --to rule|observation [--enforcement n] [--rationale "…"]`
- * — move a memory down the confidence ladder, recording an auditable :Demotion
- * event. Demoting to OBSERVATION clears enforcement; the server rejects a
- * non-downward target.
- */
-export async function handleMemoryDemote(
-  id: string,
-  opts: MemoryDemoteCliOptions,
-  writer: CommandWriter = stdoutWriter,
-): Promise<void> {
-  if (!opts.to)
-    fail("Missing --to. Use `--to rule` or `--to observation`.", writer);
-  const toClass = opts.to.toUpperCase();
-  if (toClass !== "RULE" && toClass !== "OBSERVATION") {
-    fail(`Invalid --to "${opts.to}". Use "rule" or "observation".`, writer);
-  }
-  let enforcementScore: number | undefined;
-  if (opts.enforcement !== undefined) {
-    enforcementScore = Number(opts.enforcement);
-    if (
-      !Number.isInteger(enforcementScore) ||
-      enforcementScore < 1 ||
-      enforcementScore > 100
-    ) {
-      fail(
-        `Invalid --enforcement "${opts.enforcement}". Use an integer between 1 and 100.`,
-        writer,
-      );
-    }
-  }
-  try {
-    const updated = await demoteMemory({
-      memoryId: id,
-      toClass,
-      enforcementScore,
-      rationale: opts.rationale,
-    });
-    if (opts.json) {
-      writer.write(JSON.stringify(updated, null, 2));
-      return;
-    }
-    writer.write(formatDemoteResult(updated));
+    writer.write(formatPromoteResult(result));
   } catch (err) {
     handleApiError(err, writer);
   }
@@ -416,94 +250,25 @@ export interface MemoryDismissCliOptions {
 }
 
 /**
- * `oxagen memory dismiss <id> [--restore]` — drop a memory out of the promotion
- * candidate queue (or restore it) without archiving the memory.
+ * `oxagen memory dismiss <ids...>`: set memories aside, so the curator does
+ * not propose their statements again without new evidence. `--restore`
+ * brings dismissed memories back.
  */
 export async function handleMemoryDismiss(
-  id: string,
+  ids: string[],
   opts: MemoryDismissCliOptions,
   writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
+  if (ids.length === 0)
+    fail("Nothing to dismiss. Pass one or more memory ids, such as `oxagen memory dismiss mem_…`.", writer);
+  const restore = opts.restore === true;
   try {
-    const result = await dismissPromotion({
-      memoryId: id,
-      restore: opts.restore,
-    });
+    const result = await dismissWorkspaceMemories({ memory_ids: ids, restore });
     if (opts.json) {
       writer.write(JSON.stringify(result, null, 2));
       return;
     }
-    writer.write(formatDismissResult(result));
-  } catch (err) {
-    handleApiError(err, writer);
-  }
-}
-
-export interface MemoryCitationsCliOptions {
-  days?: string;
-  limit?: string;
-  json?: boolean;
-}
-
-/**
- * `oxagen memory citations [--days n] [--limit n]` — workspace-wide citation
- * analytics: totals, influence/compliance breakdowns, and the most-cited /
- * least-useful / most-violated memories plus most-cited graph nodes.
- */
-export async function handleMemoryCitations(
-  opts: MemoryCitationsCliOptions,
-  writer: CommandWriter = stdoutWriter,
-): Promise<void> {
-  try {
-    const result = await citationStats({
-      days: parseIntOpt(opts.days, "--days", writer),
-      limit: parseIntOpt(opts.limit, "--limit", writer),
-    });
-    if (opts.json) {
-      writer.write(JSON.stringify(result, null, 2));
-      return;
-    }
-    writer.write(formatCitationStats(result));
-  } catch (err) {
-    handleApiError(err, writer);
-  }
-}
-
-export interface MemoryCandidatesCliOptions {
-  limit?: string;
-  json?: boolean;
-}
-
-/** `oxagen memory candidates` — the OBSERVATIONs most ready to promote. */
-export async function handleMemoryCandidates(
-  opts: MemoryCandidatesCliOptions,
-  writer: CommandWriter = stdoutWriter,
-): Promise<void> {
-  try {
-    const result = await promotionCandidates({
-      limit: parseIntOpt(opts.limit, "--limit", writer),
-    });
-    if (opts.json) {
-      writer.write(JSON.stringify(result, null, 2));
-      return;
-    }
-    writer.write(formatPromotionCandidates(result));
-  } catch (err) {
-    handleApiError(err, writer);
-  }
-}
-
-export async function handleMemoryRemove(
-  id: string,
-  writer: CommandWriter = stdoutWriter,
-): Promise<void> {
-  try {
-    const { deleted } = await deleteMemory(id);
-    if (deleted) {
-      writer.write(`✓ Deleted memory ${id}.`);
-    } else {
-      fail(`No memory ${id} found in this workspace.`, writer);
-    }
+    writer.write(formatDismissResult(result, restore));
   } catch (err) {
     handleApiError(err, writer);
   }
@@ -598,58 +363,3 @@ export async function handleMemoryImport(
     handleApiError(err, writer);
   }
 }
-
-export interface RememberCliOptions {
-  class?: string;
-  kind?: string;
-  enforcement?: string;
-  node?: string;
-  json?: boolean;
-}
-
-export async function handleRemember(
-  text: string,
-  opts: RememberCliOptions,
-  writer: CommandWriter = stdoutWriter,
-): Promise<void> {
-  const trimmed = text.trim();
-  if (!trimmed)
-    fail(
-      'Nothing to remember. Pass the memory text, e.g. `oxagen remember "…"`.',
-      writer,
-    );
-  let enforcementScore: number | undefined;
-  if (opts.enforcement !== undefined) {
-    enforcementScore = Number(opts.enforcement);
-    if (
-      !Number.isInteger(enforcementScore) ||
-      enforcementScore < 1 ||
-      enforcementScore > 100
-    ) {
-      fail(
-        `Invalid --enforcement "${opts.enforcement}". Use an integer between 1 and 100.`,
-        writer,
-      );
-    }
-  }
-  try {
-    // source is omitted so the server defaults it to "user" for a human capture.
-    const result = await rememberMemory({
-      text: trimmed,
-      memoryClass: parseClass(opts.class, writer),
-      memoryKind: opts.kind,
-      enforcementScore,
-      nodeRef: opts.node,
-    });
-    if (opts.json) {
-      writer.write(JSON.stringify(result, null, 2));
-      return;
-    }
-    writer.write(formatRememberResult(result));
-  } catch (err) {
-    handleApiError(err, writer);
-  }
-}
-
-// Re-exported for command registration help text (e.g. `--kind <k>` hints).
-export { RECOMMENDED_MEMORY_KINDS };

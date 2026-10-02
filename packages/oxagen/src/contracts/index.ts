@@ -317,6 +317,11 @@ import { contextRecordsAppend } from "./context.records.append";
 import { contextProposalCreate } from "./context.proposal.create";
 import { contextProposalList } from "./context.proposal.list";
 import { contextProposalDismiss } from "./context.proposal.dismiss";
+import { steeringMemoriesList } from "./steering.memories.list";
+import { steeringMemoriesGet } from "./steering.memories.get";
+import { steeringMemoriesPromote } from "./steering.memories.promote";
+import { steeringMemoriesDismiss } from "./steering.memories.dismiss";
+import { steeringMemoryPrRecordsList } from "./steering.memory_pr_records.list";
 import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
 import { contextPrMerge } from "./context.pr.merge";
@@ -566,6 +571,23 @@ export type {
 } from "./context.steering.shared";
 export { contextPrSchema } from "./context.pr.open";
 export type { ContextPr } from "./context.pr.open";
+// The shapes the workspace memory contracts share (memory-collection spec).
+// Not a capability, so exported here to satisfy the file-coverage guard.
+export {
+  memoryDraftRecordSchema,
+  promotableKindSchema,
+  workspaceMemoryGroupSchema,
+  workspaceMemoryIdSchema,
+  workspaceMemorySchema,
+  workspaceMemoryStateSchema,
+} from "./steering.memories.shared";
+export type {
+  MemoryDraftRecord,
+  PromotableKind,
+  WorkspaceMemory,
+  WorkspaceMemoryGroup,
+  WorkspaceMemoryState,
+} from "./steering.memories.shared";
 // Finding vocabulary (ADR-062): a finding, its evidence and the decision
 // input. The shared file is not a capability, so it is exported here to
 // satisfy the check-contracts file-coverage guard.
@@ -1034,6 +1056,11 @@ export {
   contextProposalCreate,
   contextProposalList,
   contextProposalDismiss,
+  steeringMemoriesList,
+  steeringMemoriesGet,
+  steeringMemoriesPromote,
+  steeringMemoriesDismiss,
+  steeringMemoryPrRecordsList,
   contextPrOpen,
   contextPrGet,
   contextPrMerge,
@@ -1481,6 +1508,11 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextProposalCreate,
   contextProposalList,
   contextProposalDismiss,
+  steeringMemoriesList,
+  steeringMemoriesGet,
+  steeringMemoriesPromote,
+  steeringMemoriesDismiss,
+  steeringMemoryPrRecordsList,
   contextPrOpen,
   contextPrGet,
   contextPrMerge,
