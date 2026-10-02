@@ -456,3 +456,82 @@ describe("builtinArgSets", () => {
     expect(builtinArgSets("apply_patch", { input: "not a patch" })).toEqual([{}]);
   });
 });
+
+// Mac's ruling of 2026-10-01: the open-source Stella coding agent a customer
+// runs as a CLI is a customer agent, governed exactly like Claude Code and
+// Codex (ADR-235). A workspace decision rule compiles to a forbid with no
+// principal (`packages/policy/src/decision-rules.ts`), so it binds every
+// harness's agent. Each harness names the same act in its own words, and each
+// gets the same answer.
+describe("evaluateHookCall: a workspace rule binds the Stella CLI like Claude Code and Codex", () => {
+  const RULES = {
+    "ws.no-shell": `@id("ws.no-shell")
+forbid (principal, action == Action::"builtin__shell", resource);`,
+    "ws.src-needs-approval": `@id("ws.src-needs-approval")
+@decision("require_approval")
+forbid (principal, action == Action::"builtin__write_file", resource)
+when { context.args has path && context.args.path like "src/*" }
+unless { context.approval.granted };`,
+  };
+  const PATCH = [
+    "*** Begin Patch",
+    "*** Update File: src/index.ts",
+    "@@",
+    "-a",
+    "+b",
+    "*** End Patch",
+  ].join("\n");
+  const HARNESSES = [
+    {
+      harness: "claude-code",
+      shell: { toolName: "Bash", toolInput: { command: "ls" } },
+      write: { toolName: "Write", toolInput: { file_path: "src/index.ts", content: "b" } },
+    },
+    {
+      harness: "codex",
+      shell: { toolName: "shell", toolInput: { command: ["bash", "-lc", "ls"] } },
+      write: { toolName: "apply_patch", toolInput: { input: PATCH } },
+    },
+    {
+      harness: "stella",
+      shell: { toolName: "bash", toolInput: { command: "ls" } },
+      write: { toolName: "write_file", toolInput: { path: "src/index.ts", content: "b" } },
+    },
+  ] as const;
+
+  it.each(HARNESSES)("refuses $harness's shell", ({ harness, shell }) => {
+    const verdict = evaluateHookCall(
+      call({ cedar: testCedarBundle(RULES, ["ws.src-needs-approval"]), harness, ...shell }),
+    );
+    expect(verdict).toMatchObject({
+      decision: "deny",
+      reasons: ["ws.no-shell"],
+      action: "builtin__shell",
+    });
+    expect(verdict?.principals).toHaveLength(1);
+  });
+
+  it.each(HARNESSES)("sends $harness's write under src/ to a person", ({ harness, write }) => {
+    const verdict = evaluateHookCall(
+      call({ cedar: testCedarBundle(RULES, ["ws.src-needs-approval"]), harness, ...write }),
+    );
+    expect(verdict).toMatchObject({
+      decision: "require_approval",
+      reasons: ["ws.src-needs-approval"],
+      action: "builtin__write_file",
+    });
+  });
+
+  it("gives the three harnesses one answer per act", () => {
+    const cedar = testCedarBundle(RULES, ["ws.src-needs-approval"]);
+    const answers = (act: "shell" | "write") =>
+      HARNESSES.map((h) => {
+        const verdict = evaluateHookCall(call({ cedar, harness: h.harness, ...h[act] }));
+        return [verdict?.decision, verdict?.action, verdict?.reasons];
+      });
+    for (const act of ["shell", "write"] as const) {
+      const [first, ...rest] = answers(act);
+      for (const answer of rest) expect(answer).toEqual(first);
+    }
+  });
+});

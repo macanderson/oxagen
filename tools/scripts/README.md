@@ -34,6 +34,7 @@ and docs generators, backfills, release tooling, and local dev helpers.
 |---|---|---|---|
 | `pnpm check:*`, `pnpm db:*`, `pnpm docs:*`, `pnpm release:*`, `pnpm dev`, `pnpm env:check` | boundary | `tools/scripts/*.{ts,mjs}` | Root `package.json` |
 | Pipeline steps (`check-main-preflight.mjs`, `check-deploy-tip.mjs`, `check-stale-merge-base.mjs`, `check-coverage-gates.mjs`, `build-env.ts`, `seed-platform.ts`) | boundary | `tools/scripts/` | `.github/workflows/pipeline.yml` |
+| SSM Parameter Store through the AWS CLI (`env-pull.ts`, `env-push.ts`, `lib/parameter-store.ts`) | boundary | `tools/scripts/` | `pnpm env:pull` and `pnpm env:push` (ADR-240). Values never go on a command line |
 | ClickHouse and Neo4j migrations (`db-migrate.ts`) | boundary | `tools/scripts/db-migrate.ts` | `.github/workflows/pipeline.yml` (with `DB_MIGRATE_STORES=clickhouse,neo4j`) and `.github/workflows/store-migrate.yml` |
 | Store migration tunnel (`coordinatorTunnel`) | export | `tools/scripts/store-migrate-coordinator.mjs` | `.github/workflows/store-migrate.yml` |
 | Staged-file typecheck | boundary | `tools/scripts/typecheck-staged.mjs` | `lefthook.yml` pre-commit |

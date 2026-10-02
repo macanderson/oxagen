@@ -1,6 +1,6 @@
 # Fail CI when this repo's copies of the brand kit fall behind the kit.
 #
-# macanderson/oxagen-brand is the one source for every colour, face, mark, and
+# oxageninc/brand is the one source for every colour, face, mark, and
 # icon Oxagen and Stella ship. tools/scripts/sync-brand-assets.mjs copies the
 # files this repo uses byte for byte, and its --check lists every file that
 # differs, is missing, or should not be here. This job runs that check
@@ -31,15 +31,17 @@ permissions:
 jobs:
   brand-drift:
     name: Brand drift
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
 
       - name: Check out the brand kit
         uses: actions/checkout@v5
         with:
-          repository: macanderson/oxagen-brand
+          repository: oxageninc/brand
           ref: main
           path: .brand-kit
           persist-credentials: false
@@ -49,8 +51,29 @@ jobs:
           node-version: 24
 
       - name: Brand files match the kit
+        env:
+          EVENT: ${{ github.event_name }}
         run: |
-          node tools/scripts/sync-brand-assets.mjs --brand .brand-kit --check || {
-            echo "::error::Brand files differ from macanderson/oxagen-brand main. Run node tools/scripts/sync-brand-assets.mjs --brand <kit checkout> and commit the result."
-            exit 1
-          }
+          if out=$(node tools/scripts/sync-brand-assets.mjs --brand .brand-kit --check 2>&1); then echo "$out"; exit 0; fi
+          echo "$out"
+          # Drift fails a push to main, the daily run, and a manual run. A pull request fails only
+          # when it changes a file that differs from the kit, the sync script, or this workflow.
+          # Any other pull request passes with a warning: a kit change is not that pull request's
+          # doing, and the kit's fan-out opens the sync pull request that fixes it
+          # (oxageninc/brand#53).
+          if [ "$EVENT" = pull_request ]; then
+            flat=" $(printf '%s' "$out" | tr '\n\t' '  ') "
+            touched=""
+            while IFS= read -r f; do
+              [ -n "$f" ] || continue
+              case "$f" in tools/scripts/sync-brand-assets.mjs|.github/workflows/brand-drift.yml) touched="$f"; break ;; esac
+              case "$flat" in *" $f "*) touched="$f"; break ;; esac
+            done < <(git diff --name-only HEAD^1 HEAD)
+            if [ -z "$touched" ]; then
+              echo "::warning::The brand files here differ from oxageninc/brand main. This pull request changes none of them, so the check passes. The kit's fan-out opens the sync pull request."
+              exit 0
+            fi
+            echo "::error::This pull request changes $touched, and the brand files differ from oxageninc/brand main."
+          fi
+          echo "::error::Run node tools/scripts/sync-brand-assets.mjs --brand <oxageninc/brand checkout> and commit the result. If the desktop icons are stale, also run pnpm --filter @oxagen/desktop icons."
+          exit 1

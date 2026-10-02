@@ -1,6 +1,12 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { z } from "zod";
 
+// Many tests here call vi.resetModules() and import ./materialize-tools
+// again. Each takes 2 to 5 seconds on a busy CI runner with coverage on, so
+// the 5-second default fails them. A test that times out keeps running and
+// breaks the next test's spy counts (#5037).
+vi.setConfig({ testTimeout: 30_000 });
+
 // Fixed capability fixture: one non-agent (excluded), one low-risk agent,
 // one high-risk agent, one non-agent.* agent-surface capability (form.fill).
 const FIXTURE = [
@@ -387,10 +393,9 @@ vi.mock("@oxagen/iam", async () => {
 import {
   materializeTools,
   digestInputFor,
-  type ApprovalRequiredEvent,
   type MaterializeOptions,
 } from "./materialize-tools";
-import { ApprovalPendingError } from "./approval-pending";
+import { createOxagenAssistantBinding } from "@oxagen/oxagen/oxagen-assistant";
 import { decideCapabilityForBelt } from "./toolbelt";
 import { resourceScopeDigestOf, type ActiveEmergencyDeny } from "@oxagen/iam";
 import type { RegistryCapability } from "../registry-loader";
@@ -3417,13 +3422,15 @@ describe("materializeTools role rule", () => {
 // capability. The kernel's rules gate throws it from invoke(). stella's turn
 // has an approval channel, so under park mode the call waits for a person
 // with the rule named, where it used to fail with the rule's error.
+// ADR-235: the workspace's decision rules do not govern Stella, so no rule
+// parks a Stella call. A turn an API key starts keeps the rules, and its
+// calls cannot park, so a rule's answer ends the call as a refusal. Before,
+// a rule that asked for a person parked the call with the rule's digest
+// (#4226).
 describe("materializeTools — a call a decision rule sends to a person", () => {
   const RULE_DIGEST = "a".repeat(64);
-  /**
-   * What the rules gate throws: `DecisionRuleApprovalRequiredError`. Null
-   * leaves the digest unset, as the gate does for input it cannot encode.
-   */
-  const ruleRequiresApproval = (digest: string | null) =>
+  /** What the rules gate throws: `DecisionRuleApprovalRequiredError`. */
+  const ruleRequiresApproval = () =>
     Object.assign(
       new Error(
         'decision rule "approve-medium" requires approval: medium refunds need a person',
@@ -3432,7 +3439,7 @@ describe("materializeTools — a call a decision rule sends to a person", () => 
         name: "DecisionRuleApprovalRequiredError",
         code: "decision_rule_approval_required",
         ruleIds: ["approve-medium"],
-        approvalDigest: digest ?? undefined,
+        approvalDigest: RULE_DIGEST,
       },
     );
   const PARK_CTX = { ...CTX, messageId: "msg_rule" };
@@ -3447,87 +3454,18 @@ describe("materializeTools — a call a decision rule sends to a person", () => 
     killSwitchMocks.check.mockResolvedValue(null);
   });
 
-  it("parks the call with the rule named on the row and its digest sealed", async () => {
-    vi.mocked(invoke).mockRejectedValueOnce(ruleRequiresApproval(RULE_DIGEST));
-    mocks.createApprovalRequest.mockResolvedValueOnce({
-      approvalId: "appr_rule",
-      approvalPublicId: "apr_rule",
-    });
-    const events: ApprovalRequiredEvent[] = [];
-    const { tools } = await materializeTools(PARK_CTX, {
-      approvalMode: "park",
-      onApprovalRequired: (e) => events.push(e),
-    });
-    await expect(call(tools, "capA")({ x: "1" })).rejects.toSatisfy(
-      (e) =>
-        e instanceof ApprovalPendingError &&
-        e.capability === "capA" &&
-        e.approvalPublicId === "apr_rule",
-    );
-    expect(invoke).toHaveBeenCalledTimes(1);
-    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
-    expect(mocks.createApprovalRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        orgId: CTX.orgId,
-        workspaceId: CTX.workspaceId,
-        messageId: "msg_rule",
-        capabilityName: "capA",
-        inputPreview: { x: "1" },
-        digestInput: { x: "1" },
-        resumeRequesterUserId: CTX.userId,
-        ruleIds: ["approve-medium"],
-        ruleDigest: RULE_DIGEST,
-      }),
-    );
-    // The turn collects the card from this event (assistant-turn.ts).
-    expect(events).toEqual([
-      expect.objectContaining({
-        approvalId: "appr_rule",
-        approvalPublicId: "apr_rule",
-        capability: "capA",
-        expiresAt: expect.any(String),
-      }),
-    ]);
-    // A parked call is not a failure in `tool_invocations`.
-    expect(mocks.insertToolInvocation).toHaveBeenCalledWith(
-      expect.objectContaining({
-        capability_name: "capA",
-        status: "parked",
-        error_class: null,
-      }),
-    );
-  });
-
-  const refusalCases: {
-    name: string;
-    opts: MaterializeOptions;
-    ctx: Parameters<typeof materializeTools>[0];
-    digest: string | null;
-  }[] = [
-    { name: "outside park mode", opts: {}, ctx: PARK_CTX, digest: RULE_DIGEST },
-    {
-      name: "with no digest to prove the approval",
-      opts: { approvalMode: "park" },
-      ctx: PARK_CTX,
-      digest: null,
-    },
-    {
-      name: "with no message to attach the row to",
-      opts: { approvalMode: "park" },
-      ctx: CTX,
-      digest: RULE_DIGEST,
-    },
+  it.each([
+    { name: "in park mode", ctx: PARK_CTX, opts: { approvalMode: "park" } },
     {
       name: "for an API key's call",
-      opts: { approvalMode: "park" },
       ctx: { ...PARK_CTX, apiKeyId: "key_1" },
-      digest: RULE_DIGEST,
+      opts: { approvalMode: "park" },
     },
-  ];
-  it.each(refusalCases)(
-    "keeps the rule's refusal $name (negative)",
-    async ({ opts, ctx, digest }) => {
-      const refusal = ruleRequiresApproval(digest);
+    { name: "outside park mode", ctx: PARK_CTX, opts: {} },
+  ] as const)(
+    "ends the call with the rule's refusal $name and parks nothing",
+    async ({ ctx, opts }) => {
+      const refusal = ruleRequiresApproval();
       vi.mocked(invoke).mockRejectedValueOnce(refusal);
       const { tools } = await materializeTools(ctx, opts);
       await expect(call(tools, "capA")({ x: "1" })).rejects.toBe(refusal);
@@ -3545,5 +3483,61 @@ describe("materializeTools — a call a decision rule sends to a person", () => 
     });
     await expect(call(tools, "capA")({ x: "1" })).rejects.toBe(other);
     expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
+  });
+});
+
+// ADR-235: `tool_invocations` feeds the workspace's "calls 30d" count, and the
+// workspace does not monitor Stella. Stella's turn passes
+// `feedsWorkspaceToolCounts: false`, and a call then writes no row. Any other
+// caller's call, completed or refused, writes one as before.
+describe("materializeTools — the workspace's tool call counts", () => {
+  const call = (tools: Record<string, unknown>, name: string) =>
+    (tools[name] as { execute: (i: unknown) => Promise<unknown> }).execute;
+
+  beforeEach(() => {
+    vi.mocked(invoke).mockReset().mockResolvedValue({ ok: true });
+    mocks.insertToolInvocation.mockClear();
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([]);
+    killSwitchMocks.check.mockResolvedValue(null);
+  });
+
+  it.each([
+    { name: "a session", ctx: { ...CTX, messageId: "msg_turn" } },
+    {
+      name: "an API key",
+      ctx: { ...CTX, messageId: "msg_turn", apiKeyId: "key_1" },
+    },
+  ])(
+    "writes no row for a call of a Stella turn $name starts, completed or refused",
+    async ({ ctx }) => {
+      const { tools } = await materializeTools(ctx, {
+        feedsWorkspaceToolCounts: false,
+      });
+      await call(tools, "capA")({ x: "1" });
+      vi.mocked(invoke).mockRejectedValueOnce(new Error("refused"));
+      await expect(call(tools, "capA")({ x: "2" })).rejects.toThrow(
+        "refused",
+      );
+      expect(invoke).toHaveBeenCalledTimes(2);
+      expect(mocks.insertToolInvocation).not.toHaveBeenCalled();
+    },
+  );
+
+  it("writes a row for any other caller's call (negative)", async () => {
+    const { tools } = await materializeTools({ ...CTX, messageId: "msg_1" });
+    await call(tools, "capA")({ x: "1" });
+    vi.mocked(invoke).mockRejectedValueOnce(new Error("refused"));
+    await expect(call(tools, "capA")({ x: "2" })).rejects.toThrow("refused");
+    expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(2);
+  });
+
+  it("writes a row when a context claims a Stella binding without the option (negative)", async () => {
+    const { tools } = await materializeTools({
+      ...CTX,
+      messageId: "msg_1",
+      oxagenAssistant: createOxagenAssistantBinding({ requestId: "r" }),
+    });
+    await call(tools, "capA")({ x: "1" });
+    expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
   });
 });

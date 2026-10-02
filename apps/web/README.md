@@ -24,8 +24,9 @@ committed.
   ([`apps/docs`](../docs/README.md)); the S3 bucket and CloudFront
   distribution (`infra/stacks-new/ci-deploy/`).
 - **Depends on:** No `@oxagen/*` dependencies. Its npm packages are build-time
-  `devDependencies`, and the browser gets no JavaScript beyond
-  `assets/oxagen.js`.
+  `devDependencies`. The browser runs `assets/oxagen.js` and the Google
+  Analytics and LinkedIn Insight tags, which the build adds to every page
+  from `scripts/lib/analytics.mjs`.
 - **Used by:** no workspace package imports it. CI's `deploy-web` job in
   `.github/workflows/pipeline.yml` publishes `dist/`.
 
@@ -115,6 +116,15 @@ Never put `--` before the filename. Each build module has a co-located
   no code, it shows the lead form instead, and `?e=field-manual` or
   `?e=page-flip-reader` (default) picks which edition to ask for. A lead who
   lost their email can request a new link via `/v1/cms/book/resend`.
+- `terms/index.html` and `privacy/index.html`, the terms of service and the
+  privacy policy, served at `/terms` and `/privacy`. Each carries the site
+  shell, a contents list built from its section ids, and a summary box, and
+  `assets/legal.css` sets the long-form text. The privacy policy states what
+  the code does: what a run records, the service providers
+  (`docs/compliance/subprocessors.md`), the cookies, the retention periods
+  (`docs/compliance/data-retention.md`), and the Global Privacy Control
+  check in `scripts/lib/analytics.mjs`. A change to any of those changes the
+  policy in the same pull request, with a new "Last updated" date.
 - `research/deterministic-systems-optimizations-for-ai-agents/author.jpg`:
   the author headshot the page-flip edition loads. It lives here rather than
   inside the seed HTML because Chromium misplaces images inside multi-column

@@ -188,7 +188,10 @@ export async function admitServed(run: ServedRun): Promise<Admission> {
     return { admitted: true };
   } catch (error) {
     if (error instanceof GauExhaustedError) {
-      return { admitted: false, reason: error.reason === "free_no_payment_method" ? "no_payment_method" : "units_exhausted" };
+      // A spent, expired or missing signup grant asks for a plan; the Free
+      // row's monthly allowance, when an operator has turned the plan rule
+      // off, renews (ADR-241, signup grant).
+      return { admitted: false, reason: error.reason === "monthly_allowance_used" ? "units_exhausted" : "subscription_required" };
     }
     if (error instanceof BillingSuspendedError) return { admitted: false, reason: "suspended" };
     throw error;

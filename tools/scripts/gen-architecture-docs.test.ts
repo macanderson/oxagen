@@ -9,10 +9,13 @@ import {
   collectApiRoutes,
   collectCaddy,
   collectCapabilities,
+  collectCi,
   collectCli,
   collectClickHouse,
   collectCompose,
+  collectEnv,
   collectInngest,
+  collectParameterPrefixes,
   collectManifest,
   collectMcpTools,
   collectPostgresEdges,
@@ -457,6 +460,82 @@ describe("collectors", () => {
       "merge_group",
       "push",
     ]);
+  });
+
+  it("lists every CI_REGISTRY entry with the workflow and action files that read it", async () => {
+    const root = scratch();
+    file(root, ".github/workflows/a.yml", "env:\n  T: ${{ secrets.FOO }}\n");
+    file(
+      root,
+      ".github/workflows/b.yaml",
+      "jobs:\n  x:\n    if: vars.BAR == 'true'\n    env:\n      T: ${{ secrets.FOO }}\n",
+    );
+    // A whole-line comment is not a read, and neither is a file that is not
+    // a workflow or an action.
+    file(root, ".github/workflows/c.yml", "# set secrets.UNREAD first\n");
+    file(root, ".github/workflows/notes.md", "${{ secrets.UNREAD }}\n");
+    file(root, ".github/actions/ship/action.yml", "env:\n  B: ${{ vars.BAR }}\n");
+    file(root, ".github/actions/ship/helper.yml", "${{ secrets.UNREAD }}\n");
+    const ci = await collectCi(root, {
+      CI_REGISTRY: {
+        FOO: {
+          kind: "secret",
+          description: "foo",
+          environment: "production",
+          refresh: { how: "Roll it." },
+        },
+        BAR: {
+          kind: "variable",
+          description: "bar",
+          refresh: { how: "Set it.", command: "echo bar" },
+        },
+        UNREAD: { kind: "secret", description: "u", refresh: { how: "x" } },
+      },
+      ciSaveCommand: (name) => `save ${name}`,
+    });
+    expect(ci.map((c) => [c.name, c.workflows])).toEqual([
+      ["BAR", [".github/actions/ship/action.yml", ".github/workflows/b.yaml"]],
+      ["FOO", [".github/workflows/a.yml", ".github/workflows/b.yaml"]],
+      ["UNREAD", []],
+    ]);
+    expect(ci[1]).toMatchObject({
+      kind: "secret",
+      environment: "production",
+      refresh: { how: "Roll it." },
+      saveCommand: "save FOO",
+    });
+  });
+
+  it("reads CI_REGISTRY from @oxagen/config by default, with a gh save command per entry", async () => {
+    const ci = await collectCi(scratch());
+    expect(ci.length).toBeGreaterThan(0);
+    for (const c of ci) {
+      expect(c.saveCommand, c.name).toMatch(
+        c.kind === "secret" ? /^gh secret set / : /^gh variable set /,
+      );
+      expect(c.saveCommand).toContain(c.name);
+      expect(c.workflows).toEqual([]);
+    }
+  });
+
+  it("gives an environment value three parameter names, an operator value one, and the rest none", async () => {
+    const want: Record<string, number> = { environment: 3, operator: 1 };
+    for (const e of await collectEnv()) {
+      expect(e.parameterNames, e.key).toHaveLength(want[e.store] ?? 0);
+      for (const p of e.parameterNames)
+        expect(p.endsWith(`/${e.key}`), p).toBe(true);
+    }
+  });
+
+  it("reads one Parameter Store prefix per registry environment, and the operator prefix", async () => {
+    const { environments, operator } = await collectParameterPrefixes();
+    expect(Object.keys(environments).sort()).toEqual([
+      "development",
+      "preview",
+      "production",
+    ]);
+    for (const prefix of [...Object.values(environments), operator])
+      expect(prefix).toMatch(/^\/oxagen\/[a-z]+$/);
   });
 
   it("binds handlers registered with either lazy-import shape", () => {

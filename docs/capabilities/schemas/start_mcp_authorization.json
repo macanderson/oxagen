@@ -122,6 +122,24 @@
             "items": {
               "type": "string"
             }
+          },
+          "steeringPr": {
+            "type": "object",
+            "properties": {
+              "number": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              }
+            },
+            "required": [
+              "number",
+              "url"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [

@@ -25,8 +25,9 @@ retention posture is never a charge.
 ## Where it is read
 
 The Billing page (`/[org]/billing`, `apps/app/src/data/live/billing.ts`) reads
-the included window and the per-GB-month price for its Retained evidence tile,
-Evidence retention line, Retained evidence meter and price list, and
+`includedDays` for its Retained evidence tile, Evidence retention line, and
+Retained evidence meter. It reads `includedMonths` and the per-GB-month price
+for its price list, and
 `extendedRetentionEnabled` to state that retention added nothing this period.
 It prints the evidence volume as not recorded: this capability reports only the
 volume beyond the included window, and nothing measures that yet.
@@ -40,6 +41,7 @@ None (`{}`). Reads the caller's active org scope.
 | Field | Type | Notes |
 |---|---|---|
 | `includedMonths` | `number` | Months of evidence retention included on every paid tier. |
+| `includedDays` | `number` | Days of evidence this organisation's billing basis includes today. A subscriber, or an organisation approved for invoice billing, gets the paid tiers' months at 30 days each. An organisation with no subscription gets 30 days, on its signup grant or past it (ADR-241). |
 | `effectiveRetentionDays` | `number \| null` | The longest retention window any of this organisation's pinned retention policies declares, in days, or `null` when none is pinned yet. Null means the organisation has not declared one — not that evidence is kept forever. |
 | `extendedRetentionEnabled` | `boolean` | Whether this organisation pays for retention beyond the included window. `false` is the default and means nothing accrues (spec §7.4). |
 | `usdPerGbMonth` | `number` | Extended-retention rate. |

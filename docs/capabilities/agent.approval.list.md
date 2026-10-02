@@ -39,7 +39,7 @@ Each item:
 | Field            | Type             | Source                                                                                      |
 | ---------------- | ---------------- | ------------------------------------------------------------------------------------------- |
 | `id`             | `string`         | `agent.approval_requests.public_id` (`apr_…`), the id `resolve_approval` accepts.          |
-| `runId`          | `string \| null` | The run the call was parked in (`approval_requests.run_public_id`, #3286). Null when no run was in scope, or when the writer records none yet. |
+| `runId`          | `string \| null` | The run the call was parked in (`approval_requests.run_public_id`, #3286). Null when no run was in scope. |
 | `tool`           | `string`         | `approval_requests.capability_name`.                                                        |
 | `requester`      | `string \| null` | `auth.users.public_id` (`usr_…`) of the person whose conversation turn parked the call, through `message_id` → `chat.messages` → `chat.conversations.user_id`. Null when that chain is not readable. |
 | `createdAt`      | RFC 3339         | `approval_requests.created_at`.                                                             |
@@ -65,10 +65,9 @@ Only public ids leave the handler.
   and an agent rule that asks). Each reads the run when the call parks, so an
   approval raised inside an in-app assistant turn names the run that turn
   opened, although the run opens after the turn's tools are built.
-- **Mandate gate:** the mandate gate does not thread a run through yet, so a
-  call it parks records null. A run whose calls were all parked by the mandate
-  gate answers an empty page. That is the truth about the record, not a
-  filter that was ignored.
+- **Mandate gate:** a call a mandate parks records the run it was made in,
+  read from the gate's run id the way an auto-approval receipt reads it
+  (#3478). A call made outside any run records null.
 - **Paging:** the cursor is the last row's `(expires_at, public_id)`, so a
   page after the cursor has no duplicate and no gap even when several rows
   share an expiry.

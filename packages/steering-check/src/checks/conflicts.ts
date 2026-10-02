@@ -9,9 +9,29 @@ import type { Finding, SteeringTree } from "../types";
 const find = finder("conflicts");
 
 /** Two statements this alike say the same thing. */
-const NEAR_DUPLICATE_SIMILARITY = 0.9;
+export const NEAR_DUPLICATE_SIMILARITY = 0.9;
 /** A statement this short is compared only for an exact match. */
-const NEAR_DUPLICATE_MIN_WORDS = 8;
+export const NEAR_DUPLICATE_MIN_WORDS = 8;
+
+/**
+ * One statement to compare: a record's lineage, kind, effect, and statement.
+ * The Markdown import (packages/handlers/src/markdown-import/) compares its
+ * statements with the same test, so the import and this check agree.
+ */
+export interface ComparedStatement {
+  lineage: string;
+  kind: string;
+  effect: string | null;
+  statement: string;
+}
+
+/** Two statements that say the same thing, and whether they are constraints with opposite effects. */
+export interface StatementMatch<T extends ComparedStatement> {
+  a: T;
+  b: T;
+  /** True for two constraints on the same statement where one requires and one forbids. */
+  opposite: boolean;
+}
 
 /** One active record: a file in the tree, or a published record from elsewhere. */
 interface Active {
@@ -20,7 +40,10 @@ interface Active {
   effect: string | null;
   /** The file in the tree, or null for a published record the tree does not hold. */
   file: RecordFile | null;
-  words: string[];
+}
+
+interface Compared<T> {
+  entry: T;
   set: ReadonlySet<string>;
   normalized: string;
 }
@@ -34,19 +57,13 @@ function wordsOf(statement: string): string[] {
     .filter((word) => word !== "");
 }
 
-function active(
-  lineage: string,
-  kind: string,
-  effect: string | null,
-  file: RecordFile | null,
-  statement: string,
-): Active {
-  const words = wordsOf(statement);
-  return { lineage, kind, effect, file, words, set: new Set(words), normalized: words.join(" ") };
+function compared<T extends ComparedStatement>(entry: T): Compared<T> {
+  const words = wordsOf(entry.statement);
+  return { entry, set: new Set(words), normalized: words.join(" ") };
 }
 
 /** How alike two statements are: 1 for the same words, 0 for none in common. */
-function similarity(a: Active, b: Active): number {
+function similarity<T>(a: Compared<T>, b: Compared<T>): number {
   if (a.normalized === b.normalized) return 1;
   if (a.set.size < NEAR_DUPLICATE_MIN_WORDS || b.set.size < NEAR_DUPLICATE_MIN_WORDS) return 0;
   let shared = 0;
@@ -54,7 +71,7 @@ function similarity(a: Active, b: Active): number {
   return shared / (a.set.size + b.set.size - shared);
 }
 
-function opposite(a: Active, b: Active): boolean {
+function opposite(a: ComparedStatement, b: ComparedStatement): boolean {
   return (
     a.kind === "constraint" &&
     b.kind === "constraint" &&
@@ -64,9 +81,44 @@ function opposite(a: Active, b: Active): boolean {
   );
 }
 
+/**
+ * Every pair of statements that say the same thing: an exact match of their
+ * words, or a word-set overlap of NEAR_DUPLICATE_SIMILARITY or more when both
+ * have at least NEAR_DUPLICATE_MIN_WORDS distinct words. Each pair appears
+ * once, with the statement that has fewer distinct words as `a`.
+ */
+export function similarStatements<T extends ComparedStatement>(
+  entries: readonly T[],
+): StatementMatch<T>[] {
+  // A pair can only reach the threshold when the two word counts are close,
+  // so sorting by size lets the inner loop stop early.
+  const bySize = entries.map(compared).sort((a, b) => a.set.size - b.set.size);
+  const matches: StatementMatch<T>[] = [];
+  for (let i = 0; i < bySize.length; i += 1) {
+    const a = bySize[i] as Compared<T>;
+    for (let j = i + 1; j < bySize.length; j += 1) {
+      const b = bySize[j] as Compared<T>;
+      if (a.normalized !== b.normalized && a.set.size < b.set.size * NEAR_DUPLICATE_SIMILARITY) break;
+      if (similarity(a, b) < NEAR_DUPLICATE_SIMILARITY) continue;
+      matches.push({ a: a.entry, b: b.entry, opposite: opposite(a.entry, b.entry) });
+    }
+  }
+  return matches;
+}
+
+function active(
+  lineage: string,
+  kind: string,
+  effect: string | null,
+  file: RecordFile | null,
+  statement: string,
+): Active & ComparedStatement {
+  return { lineage, kind, effect, file, statement };
+}
+
 /** Every active record the tree holds, and every published one it does not. */
-function activeRecords(tree: SteeringTree, index: TreeEnv["index"]): Active[] {
-  const records: Active[] = [];
+function activeRecords(tree: SteeringTree, index: TreeEnv["index"]): (Active & ComparedStatement)[] {
+  const records: (Active & ComparedStatement)[] = [];
   const held = new Set<string>();
   for (const file of recordFiles(tree)) {
     if (file.lineage !== null) held.add(file.lineage);
@@ -91,9 +143,9 @@ function place(
   return { line: recordFieldLine(file, tree.get(file.path) as string, field), field };
 }
 
-function pairFinding(tree: SteeringTree, file: RecordFile, self: Active, other: Active): Finding {
+function pairFinding(tree: SteeringTree, file: RecordFile, self: Active, other: Active, isOpposite: boolean): Finding {
   const where = other.file ? `${other.lineage} in ${other.file.path}` : `the published record ${other.lineage}`;
-  if (opposite(self, other)) {
+  if (isOpposite) {
     return find({
       rule: "opposite-constraint",
       path: file.path,
@@ -149,20 +201,10 @@ function flips(tree: SteeringTree, env: TreeEnv): Finding[] {
 }
 
 export const conflictsCheck: TreeCheck = (tree, env) => {
-  const records = activeRecords(tree, env.index);
-  // A pair can only reach the threshold when the two word counts are close,
-  // so sorting by size lets the inner loop stop early.
-  const bySize = [...records].sort((a, b) => a.set.size - b.set.size);
   const findings: Finding[] = [];
-  for (let i = 0; i < bySize.length; i += 1) {
-    const a = bySize[i] as Active;
-    for (let j = i + 1; j < bySize.length; j += 1) {
-      const b = bySize[j] as Active;
-      if (a.normalized !== b.normalized && a.set.size < b.set.size * NEAR_DUPLICATE_SIMILARITY) break;
-      if (similarity(a, b) < NEAR_DUPLICATE_SIMILARITY) continue;
-      if (a.file) findings.push(pairFinding(tree, a.file, a, b));
-      if (b.file) findings.push(pairFinding(tree, b.file, b, a));
-    }
+  for (const { a, b, opposite: isOpposite } of similarStatements(activeRecords(tree, env.index))) {
+    if (a.file) findings.push(pairFinding(tree, a.file, a, b, isOpposite));
+    if (b.file) findings.push(pairFinding(tree, b.file, b, a, isOpposite));
   }
   return [...findings, ...flips(tree, env)];
 };

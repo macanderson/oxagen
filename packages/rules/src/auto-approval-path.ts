@@ -28,13 +28,13 @@ import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { loadRuleSetIn, lockDecisionRulesIn } from "./rule-store";
 import { policyApprover } from "@oxagen/oxagen/approval-rules/schemas";
-import { and, eq } from "drizzle-orm";
 import {
   evaluateAutoApproval,
   type AutoApprovalOutcome,
 } from "./auto-approval";
 import { buildAutoApprovalSubject, inputDigest } from "./call-facts";
 import { logger } from "./logger";
+import { resolveRunPublicId } from "./run-public-id";
 import type { RuleSet, Verdict } from "./types";
 
 export interface AutoApproveArgs {
@@ -58,31 +58,6 @@ export interface AutoApproveArgs {
   };
   /** Test seam. */
   now?: () => Date;
-}
-
-/**
- * The run's public id (`arun_…`), for the receipt's `run_public_id` column.
- * Null when no run was in scope, or when the given id does not resolve to a
- * run in this org and workspace: a fabricated or stale id must never be
- * written as if it named a real run.
- */
-async function resolveRunPublicId(
-  tx: Parameters<Parameters<typeof withTenantDb>[0]>[0],
-  args: { orgId: string; workspaceId: string; runId: string | null },
-): Promise<string | null> {
-  if (!args.runId) return null;
-  const [row] = await tx
-    .select({ publicId: schema.agentRuns.publicId })
-    .from(schema.agentRuns)
-    .where(
-      and(
-        eq(schema.agentRuns.id, args.runId),
-        eq(schema.agentRuns.orgId, args.orgId),
-        eq(schema.agentRuns.workspaceId, args.workspaceId),
-      ),
-    )
-    .limit(1);
-  return row?.publicId ?? null;
 }
 
 /** What the evaluator said, and what writing the answer down will take. */

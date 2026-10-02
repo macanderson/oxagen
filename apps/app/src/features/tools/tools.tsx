@@ -20,6 +20,7 @@ import type { Read } from "@/data/read";
 import { EMPTY_HARNESS_INDEX, readAgentHarnessIndex } from "@/features/agent-harness";
 import type { WsCtx } from "@/server/viewer";
 import { panel, statStrip, statTile } from "@/ui/control-styles";
+import { RouteTabPanel } from "@/ui/route-tabs";
 import { ImportProvider } from "./import-provider";
 import type { LedgerGrant } from "./mandates-ledger";
 import { Policy } from "./policy";
@@ -28,7 +29,7 @@ import { Registry } from "./registry";
 import { ToolsEmpty, ToolsPageFailure } from "./states";
 import { StubAction } from "./stub-action";
 import { Switches, switchesOn } from "./switches";
-import { isServerView, ServerViews } from "./tabs";
+import { isServerView, SERVER_VIEW_PANEL, ServerViews } from "./tabs";
 import { Toolbelts } from "./toolbelts";
 import {
   parseToolsView,
@@ -404,7 +405,16 @@ export async function ToolsBody({
           providers={roster === null ? null : roster.length}
         />
       )}
-      {await TabBody({ ctx, source, view, at })}
+      {serverView === null ? (
+        await TabBody({ ctx, source, view, at })
+      ) : (
+        <RouteTabPanel
+          panel={SERVER_VIEW_PANEL}
+          className="flex flex-col gap-4"
+        >
+          {await TabBody({ ctx, source, view, at })}
+        </RouteTabPanel>
+      )}
     </div>
   );
 }

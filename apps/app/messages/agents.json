@@ -956,7 +956,8 @@
             "model_class_fit": "Model class fit",
             "repeated_instructions": "Repeated instructions",
             "recurring_runs": "Recurring runs",
-            "spend_with_no_outcome": "Spend with no outcome"
+            "spend_with_no_outcome": "Spend with no outcome",
+            "retry_loops": "Retry loops"
           }
         }
       },

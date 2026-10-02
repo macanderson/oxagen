@@ -209,12 +209,6 @@ importers:
       '@eslint/js':
         specifier: 9.39.5
         version: 9.39.5
-      '@oxagen/config':
-        specifier: workspace:*
-        version: link:packages/config
-      '@oxagen/oxagen':
-        specifier: workspace:*
-        version: link:packages/oxagen
       '@types/node':
         specifier: 25.9.8
         version: 25.9.8
@@ -393,6 +387,9 @@ importers:
       '@oxagen/rules':
         specifier: workspace:*
         version: link:../../packages/rules
+      '@oxagen/steering-check':
+        specifier: workspace:*
+        version: link:../../packages/steering-check
       '@oxagen/storage':
         specifier: workspace:*
         version: link:../../packages/storage

@@ -12,14 +12,13 @@
  *   oxagen memory candidates [--limit n]
  *   oxagen memory citations [--days n] [--limit n]
  *   oxagen memory rm <id>
+ *   oxagen memory import <files...> [--yes] [--json]
  *   oxagen remember <text...> [--class c] [--kind k] [--enforcement n] [--node ref]
  *
  * Every command delegates to lib/memory-client (the shared transport +
  * formatters the REPL slash commands also use) and exits non-zero with a
  * friendly message on an API/auth error.
  */
-import { readFile } from "node:fs/promises";
-import { basename } from "node:path";
 import { ApiError } from "../lib/api.js";
 import {
   listMemories,
@@ -31,8 +30,6 @@ import {
   dismissPromotion,
   citationStats,
   promotionCandidates,
-  parseImportMemories,
-  commitImportMemories,
   formatMemoryLines,
   formatMemoryDetail,
   formatRememberResult,
@@ -41,28 +38,17 @@ import {
   formatDismissResult,
   formatCitationStats,
   formatPromotionCandidates,
-  formatImportDrafts,
-  formatImportResults,
   RECOMMENDED_MEMORY_KINDS,
   MEMORY_CLASSES,
   type MemoryClass,
   type MemoryStatus,
 } from "../lib/memory-client.js";
-import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
-
-/**
- * Print an error and diverge — exit(1) for the one-shot `oxagen memory …` CLI
- * contract, or throw for the REPL's inline capture-execution seam (any
- * `writer` other than the real stdout means we're running inside the
- * Ink-mounted REPL, where `process.exit` would tear down the whole session).
- * The message is already written to `writer` before either path is taken, so
- * the REPL bridge's catch-all can just use the accumulated captured output.
- */
-function fail(message: string, writer: CommandWriter = stdoutWriter): never {
-  writer.writeErr(message);
-  if (writer === stdoutWriter) process.exit(1);
-  throw new Error(message);
-}
+import {
+  stdoutWriter,
+  failCommand as fail,
+  type CommandWriter,
+} from "../lib/capture-writer.js";
+import { readImportDocuments, runMarkdownImport } from "../lib/markdown-import.js";
 
 // memoryKind is an open string per the two-axis model: it is passed through
 // unvalidated. RECOMMENDED_MEMORY_KINDS exists only to hint the flag's help
@@ -510,21 +496,30 @@ export async function handleMemoryRemove(
 }
 
 export interface MemoryImportCliOptions {
-  node?: string;
-  /** Commit the parsed drafts. Without it, the command only previews them. */
+  /** Open the steering PR. Without it, the command only previews the records. */
   yes?: boolean;
   json?: boolean;
 }
 
 /**
- * `oxagen memory import <files...>` — bulk-import markdown skill files / rule
- * docs into the workspace AgentMemory graph.
+ * The capabilities `oxagen memory import` calls, by their registered names:
+ * parse_markdown_import, then commit_markdown_import on --yes.
+ */
+export const MEMORY_IMPORT_CAPABILITIES = [
+  "parse_markdown_import",
+  "commit_markdown_import",
+] as const;
+
+/**
+ * `oxagen memory import <files...>`: read Markdown files into steering
+ * records (parse_markdown_import, target records). Each statement gets a kind,
+ * a force with the words that justify it, its source line, and any duplicate
+ * or conflict with a published record.
  *
- * Two phases mirror the parse → commit capability pair: every file is read and
- * sent to agent.memory.import.parse, which classifies atomic draft memories.
- * Importing is gated behind --yes (safe by default), so a bare invocation
- * previews the drafts table and writes nothing — the editable review grid is the
- * app's job; the CLI's review is the printed table plus an explicit --yes.
+ * A bare call previews the records and writes nothing. --yes opens one
+ * steering PR with every row marked add (commit_markdown_import). The
+ * batching, the matching between calls, the preview, and the commit live in
+ * lib/markdown-import, which `oxagen steering import` shares.
  */
 export async function handleMemoryImport(
   files: string[],
@@ -533,70 +528,20 @@ export async function handleMemoryImport(
 ): Promise<void> {
   if (files.length === 0) {
     fail(
-      "Nothing to import. Pass one or more markdown files, e.g. `oxagen memory import rules.md`.",
+      "Nothing to import. Pass one or more Markdown files, such as `oxagen memory import CLAUDE.md`.",
       writer,
     );
   }
-
-  // Read every file; collect read failures rather than aborting the batch.
-  const documents: { filename: string; content: string }[] = [];
-  const unreadable: string[] = [];
-  for (const path of files) {
-    try {
-      const content = await readFile(path, "utf8");
-      if (content.trim().length === 0) {
-        unreadable.push(`${path} (empty)`);
-        continue;
-      }
-      documents.push({ filename: basename(path), content });
-    } catch {
-      unreadable.push(path);
-    }
-  }
-  if (unreadable.length > 0) {
-    writer.writeErr(
-      `⚠ Skipped unreadable/empty files:\n  ${unreadable.join("\n  ")}`,
-    );
-  }
-  if (documents.length === 0) {
-    fail("No readable, non-empty documents to import.", writer);
-  }
-
-  try {
-    const parsed = await parseImportMemories(documents, opts.node);
-
-    // Preview-only (no --yes): print drafts (or JSON) and stop without writing.
-    if (!opts.yes) {
-      if (opts.json) {
-        writer.write(JSON.stringify(parsed, null, 2));
-        return;
-      }
-      writer.write(formatImportDrafts(parsed.drafts));
-      for (const s of parsed.skipped) {
-        writer.writeErr(`  · skipped ${s.filename}: ${s.reason}`);
-      }
-      if (parsed.drafts.length > 0) {
-        writer.write("\nRe-run with --yes to import these memories.");
-      }
-      return;
-    }
-
-    if (parsed.drafts.length === 0) {
-      fail(
-        "No memories could be extracted from the supplied documents.",
-        writer,
-      );
-    }
-
-    const result = await commitImportMemories(parsed.drafts);
-    if (opts.json) {
-      writer.write(JSON.stringify(result, null, 2));
-      return;
-    }
-    writer.write(formatImportResults(result));
-  } catch (err) {
-    handleApiError(err, writer);
-  }
+  const documents = await readImportDocuments(
+    files.map((path) => ({ path })),
+    "records",
+    writer,
+  );
+  await runMarkdownImport(
+    documents,
+    { policies: false, yes: opts.yes, json: opts.json },
+    writer,
+  );
 }
 
 export interface RememberCliOptions {

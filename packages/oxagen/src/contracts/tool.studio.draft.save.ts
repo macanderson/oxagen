@@ -65,6 +65,12 @@ export const studioServerNameSchema = z
 export const studioToolNameSchema = z.string().min(1).max(128);
 const toolSchema = studioToolNameSchema;
 
+/**
+ * The largest result cap tools.toml takes, in bytes: `MAX_RESULT_BYTES_LIMIT`
+ * in `@oxagen/mcp-studio`, 1 MiB. This package cannot import that one.
+ */
+export const STUDIO_MAX_RESULT_BYTES = 1_048_576;
+
 /** One staged edit. Studio's DraftOp, field for field. */
 export const studioDraftOpSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("import"), tool: toolSchema }).strict(),
@@ -99,6 +105,29 @@ export const studioDraftOpSchema = z.discriminatedUnion("kind", [
       raw: z.string().max(262_144),
       /** What the model would receive after shaping: the recorded result, as JSON. */
       shaped: z.string().max(262_144),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("cap"),
+      tool: toolSchema,
+      /** tools.toml's `max_result_bytes`: the result's size cap after select and redact. */
+      maxResultBytes: z.number().int().min(1).max(STUDIO_MAX_RESULT_BYTES),
+      /**
+       * True sets tools.toml's `paginate` to the paging pattern import found
+       * for the tool, and false removes it. Absent leaves it as it is.
+       */
+      paging: z.boolean().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("expose"),
+      /**
+       * server.toml's `[exposure] mode`: `direct` sends every tool definition
+       * on every request, and `search` sends the server's three search tools.
+       */
+      mode: z.enum(["direct", "search"]),
     })
     .strict(),
 ]);
@@ -248,7 +277,7 @@ export const toolStudioDraftSave = registerCapability({
   name: "save_studio_draft",
   domain: "tool",
   description:
-    "Save Studio's staged edits to one server folder as a draft: tools to import or remove, their classification and description, saved tests, server.toml, and the definition or tool list they import from. The draft holds no credential, and Review opens a steering PR from it.",
+    "Save Studio's staged edits to one server folder as a draft: tools to import or remove, their classification, description, result cap, and paging, saved tests, the server's exposure mode, server.toml, and the definition or tool list they import from. The draft holds no credential, and Review opens a steering PR from it.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs"],

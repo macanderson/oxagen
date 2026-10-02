@@ -143,7 +143,7 @@ describe("Tools › policy", () => {
     ).toHaveLength(0);
     // Policies is no view of Tool servers, so the views row is not drawn.
     expect(
-      screen.queryByRole("navigation", { name: "Tool server views" }),
+      screen.queryByRole("tablist", { name: "Tool server views" }),
     ).not.toBeInTheDocument();
   });
 

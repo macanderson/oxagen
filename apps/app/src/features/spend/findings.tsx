@@ -260,7 +260,7 @@ export function FindingsSection({
       ) : (
         <FindingsList
           findings={findings.findings}
-          shares={shares}
+          spend={findings.spend}
           names={names}
           harnesses={harnesses}
           at={at}

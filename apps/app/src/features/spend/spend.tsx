@@ -32,6 +32,7 @@ import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { PageHeader } from "@/ui/page-header";
+import { RouteTabPanel } from "@/ui/route-tabs";
 import { BudgetDialog } from "./budget-dialog";
 import { CostCenterTable } from "./cost-centers";
 import { DrillSection } from "./drill";
@@ -48,7 +49,7 @@ import { PricingSection } from "./pricing";
 import { SpendEmpty, SpendReadFailure, SpendSectionFailure } from "./states";
 import { SummaryTiles } from "./summary";
 import { BudgetsTable, TaskTable, ToolSection } from "./tables";
-import { SpendTabs } from "./tabs";
+import { SPEND_PANEL, SpendTabs } from "./tabs";
 import { TokensSection } from "./tokens";
 import { monthToDate, type SpendAt, type SpendView } from "./view";
 import { WasteSection } from "./waste";
@@ -209,21 +210,23 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
           ...(budgets.ok ? { budgets: budgets.value.length } : {}),
         }}
       />
-      {
-        await body({
-          ctx,
-          source,
-          view,
-          at,
-          period,
-          month: month.value,
-          findings,
-          waste,
-          budgets,
-          harnesses,
-          failure: inTab,
-        })
-      }
+      <RouteTabPanel panel={SPEND_PANEL} className="flex flex-col gap-4">
+        {
+          await body({
+            ctx,
+            source,
+            view,
+            at,
+            period,
+            month: month.value,
+            findings,
+            waste,
+            budgets,
+            harnesses,
+            failure: inTab,
+          })
+        }
+      </RouteTabPanel>
     </>
   );
 }
@@ -335,7 +338,14 @@ async function body({
     }
     case "waste":
       if (!waste.ok) return <SpendReadFailure read={waste} {...failure} />;
-      return <WasteSection waste={waste.value} month={month} at={at} />;
+      return (
+        <WasteSection
+          waste={waste.value}
+          findings={listed(findings)}
+          month={month}
+          at={at}
+        />
+      );
     case "budgets": {
       if (!budgets.ok) return <SpendReadFailure read={budgets} {...failure} />;
       const gateway = await source.spend.gatewayPolicy(ctx);

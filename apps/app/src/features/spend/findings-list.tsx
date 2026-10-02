@@ -4,29 +4,21 @@
 // Finding A to Z) above the cards, and under them the shared pager with Rows
 // per page, the range, Previous and Next. Filtering runs over the open
 // findings the server listed, largest saving first, so a finding's rank is its
-// place in that list and never changes with a filter. Each card names who the
-// finding is about, the finding, what it cites, the amount at stake and its
-// share of the identified total, and opens Evidence and Fix. A finding about
-// an agent draws the agent's avatar with its registered harness (#4871).
+// place in that list and never changes with a filter. Each card is the one
+// the spend spec draws for its kind (./finding-card.tsx): its amount and its
+// share of the workspace's spend first, then its finding text, what it cites,
+// Evidence and Fix. A finding about an agent draws the agent's avatar with its
+// registered harness (#4871).
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
-import { byMicrosDescending } from "@/data/contracts/money";
+import { byMicrosDescending, type Cost } from "@/data/contracts/money";
 import type { SpendFinding } from "@/data/contracts/spend";
-import { routes } from "@/shared/safe-path";
-import { buttonSecondary, mono, panel } from "@/ui/control-styles";
-import { useFormatter } from "@/ui/formatter";
+import { panel } from "@/ui/control-styles";
 import { ListSelect } from "@/ui/list-select";
-import { Money } from "@/ui/money";
-import {
-  formatCount,
-  formatMoney,
-  formatRatio,
-  ratioWidth,
-} from "@/ui/money-format";
-import { SafeLink } from "@/ui/navigation";
+import { formatCount } from "@/ui/money-format";
 import { RowsPager } from "@/ui/pagination";
-import { type AgentHarnesses, AgentMark, harnessIn } from "./agent-mark";
-import { FixDialog } from "./fix-dialog";
+import type { AgentHarnesses } from "./agent-mark";
+import { FindingCard } from "./finding-card";
 import type { SpendAt } from "./view";
 
 const LEVELS = ["all", "agent", "operator", "tool", "workspace"] as const;
@@ -38,7 +30,7 @@ type Level = (typeof LEVELS)[number];
 type Confidence = (typeof CONFIDENCES)[number];
 type Sort = (typeof SORTS)[number];
 
-type Ranked = { finding: SpendFinding; rank: number; share: number | null };
+type Ranked = { finding: SpendFinding; rank: number };
 
 // A filter is the shared list select (`ui/list-select.tsx`).
 function Filter<T extends string>({
@@ -73,147 +65,16 @@ function Filter<T extends string>({
   );
 }
 
-function Card({
-  item,
-  names,
-  harnesses,
-  at,
-}: {
-  item: Ranked;
-  names: Readonly<Record<string, string>>;
-  harnesses: AgentHarnesses;
-  at: SpendAt;
-}) {
-  const t = useTranslations("spend");
-  const locale = useLocale();
-  const format = useFormatter();
-  const { finding, rank, share } = item;
-  const who =
-    finding.level === "operator"
-      ? (names[finding.subject] ?? finding.subject)
-      : finding.subject;
-  const day = (iso: string) =>
-    format.dateTime(new Date(iso), { dateStyle: "medium" });
-  return (
-    <li
-      data-finding={finding.id}
-      data-confidence={finding.confidence}
-      data-level={finding.level}
-      className={`${panel} grid gap-4 p-4 md:grid-cols-[2rem_minmax(0,1fr)_220px]`}
-    >
-      <span className={`${mono} text-[12px] text-muted-foreground`}>
-        {formatCount(rank, locale)}
-      </span>
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-[15px] font-semibold">
-            {t(`findings.kind.${finding.kind}`)}
-          </h3>
-          <span className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground">
-            {t(`findings.level.${finding.level}`)}
-          </span>
-          <span
-            className={`rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${finding.confidence === "high" ? "border-success/45 text-success" : "border-link/45 text-link"}`}
-          >
-            {t(`findings.confidence.${finding.confidence}`)}
-          </span>
-        </div>
-        <p className="text-[12px] text-muted-foreground">
-          {t(`findings.kindDefinition.${finding.kind}`)}
-        </p>
-        {finding.level === "agent" ? (
-          <p className="flex min-w-0 items-center gap-2 text-[12.5px]">
-            <AgentMark
-              agentKey={finding.subject}
-              harness={harnessIn(harnesses, finding.subject)}
-              size={20}
-            />
-            <span className={`${mono} min-w-0 truncate`}>{who}</span>
-          </p>
-        ) : (
-          <p
-            className={`text-[12.5px] ${finding.level === "operator" ? "" : mono}`}
-          >
-            {who}
-          </p>
-        )}
-        <p className="text-[13px]">{finding.why}</p>
-        <p className={`${mono} text-[11px] text-muted-foreground`}>
-          {t("findings.evidenceLine", {
-            runs: formatCount(finding.runs, locale),
-            calls: formatCount(finding.calls, locale),
-            from: day(finding.window.from),
-            to: day(finding.window.to),
-          })}
-        </p>
-      </div>
-      <div className="flex flex-col items-start gap-1.5 md:items-end">
-        <span className="text-2xl font-bold tabular-nums">
-          <Money value={finding.saving} />
-        </span>
-        <span className="text-[11.5px] text-muted-foreground">
-          {share === null
-            ? t("findings.atStakeUnknown")
-            : t("findings.atStake", { share: formatRatio(share, locale) })}
-        </span>
-        <span
-          aria-hidden="true"
-          className="block h-1 w-full overflow-hidden rounded-full bg-muted md:w-48"
-        >
-          <span
-            className="block h-full bg-link"
-            style={{ width: ratioWidth(share ?? 0) }}
-          />
-        </span>
-        <span className="flex flex-wrap gap-2 pt-1">
-          <SafeLink
-            to={routes.spend(at.org, at.ws, {
-              tab: "findings",
-              finding: finding.id,
-            })}
-            className={buttonSecondary}
-          >
-            {t("findings.evidence.open")}
-          </SafeLink>
-          <FixDialog
-            at={at}
-            findingId={finding.id}
-            fix={finding.fix}
-            contextDescription={t("findings.fix.draft", {
-              id: finding.id,
-              subject: finding.subject,
-              from: finding.window.from,
-              to: finding.window.to,
-              amount: formatMoney(finding.saving, {
-                locale,
-                precision: "exact",
-              }),
-              currency: finding.saving.currency,
-              basis:
-                finding.saving.basis === null
-                  ? t("basisNotRecorded")
-                  : t(`basis.${finding.saving.basis}`),
-              runs: formatCount(finding.runs, locale),
-              calls: formatCount(finding.calls, locale),
-              fix: finding.fix,
-              why: finding.why,
-            })}
-          />
-        </span>
-      </div>
-    </li>
-  );
-}
-
 export function FindingsList({
   findings,
-  shares,
+  spend,
   names,
   harnesses = {},
   at,
 }: {
   findings: readonly SpendFinding[];
-  shares: readonly (number | null)[];
+  /** The workspace's priced spend over the findings' window, each card's share is of; null when none was recorded. */
+  spend: Cost | null;
   /** An operator finding's subject is a `prn_…` id; this is the person's name for it. */
   names: Readonly<Record<string, string>>;
   /** An agent finding's subject is an agent key; this is its harness by key. */
@@ -231,7 +92,6 @@ export function FindingsList({
   const ranked: Ranked[] = findings.map((finding, index) => ({
     finding,
     rank: index + 1,
-    share: shares[index] ?? null,
   }));
   const kindOf = (item: Ranked) => t(`kind.${item.finding.kind}`);
   const shown = ranked
@@ -308,11 +168,13 @@ export function FindingsList({
       ) : (
         <ol aria-label={t("list")} className="flex flex-col gap-2.5">
           {slice.map((item) => (
-            <Card
+            <FindingCard
               key={item.finding.id}
-              item={item}
+              finding={item.finding}
+              rank={item.rank}
               names={names}
               harnesses={harnesses}
+              spend={spend}
               at={at}
             />
           ))}

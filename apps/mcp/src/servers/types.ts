@@ -209,7 +209,7 @@ export interface ServedCallRecord {
 }
 
 /** Why billing refused a governed action. */
-export type AdmissionRefusal = "units_exhausted" | "no_payment_method" | "suspended";
+export type AdmissionRefusal = "units_exhausted" | "subscription_required" | "suspended";
 
 /** Whether billing lets the organization take one more governed action. */
 export type Admission = { admitted: true } | { admitted: false; reason: AdmissionRefusal };

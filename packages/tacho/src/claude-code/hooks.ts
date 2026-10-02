@@ -208,6 +208,8 @@ const PROMOTED = new Set([
   "error_type",
   "prompt",
   "user_input",
+  "prompt_source",
+  "prompt_origin",
   "source",
   "trigger",
   "reason",
@@ -524,10 +526,22 @@ export function normalizeHook(
     case "UserPromptSubmit":
     case "UserPromptExpansion": {
       const prompt = str(input["prompt"]) ?? str(input["user_input"]);
+      // Who sent the prompt, in Claude Code's values, where a harness
+      // adapter could tell (Codex's `withCodexPromptSource`). Claude Code's
+      // own hook carries neither member: its transcript copy of the prompt
+      // does (`transcript.ts`). The adapters write short constants, so a
+      // source past the envelope's 512-character bound is junk, and it is
+      // left out rather than have the envelope refuse the whole event.
+      const promptSource = str(input["prompt_source"]);
+      const promptOrigin = input["prompt_origin"];
       const body: BodyOf<"turn_start"> = {
         ...(prompt !== undefined
           ? { prompt_digest: digestText(prompt), prompt_length: prompt.length }
           : {}),
+        ...(promptSource !== undefined && promptSource.length <= 512
+          ? { prompt_source: promptSource }
+          : {}),
+        ...(isRecord(promptOrigin) ? { prompt_origin: promptOrigin } : {}),
         ...(str(input["command_name"]) !== undefined
           ? { command_name: str(input["command_name"]) }
           : {}),

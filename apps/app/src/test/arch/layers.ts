@@ -431,6 +431,23 @@ const PLATFORM_NAMED_ROWS: Readonly<
       "STEERING_DIR",
       "recordFileName",
     ],
+    // The forces a kind may carry are the rule the import contracts enforce
+    // (#4907), so the wizard reads the same function rather than a copy. The
+    // module imports only zod and a type.
+    "@oxagen/oxagen/steering-repo/record-force": ["forcesFor"],
+  },
+  // The Markdown import's statement grid narrows a row's force to the forces
+  // its kind allows, with the rule commit_markdown_import enforces, and
+  // offers the eight kinds the contract takes (#4913). Both modules import
+  // only zod and a type.
+  "src/features/steering/import/rows.ts": {
+    "@oxagen/oxagen/steering-repo/record-force": ["clampForce", "forcesFor"],
+    "@oxagen/oxagen/steering-repo/record-kind": ["RECORD_KINDS"],
+  },
+  // The import compares the rows of several parse calls with the steering
+  // check's own pass, on the server only, as the CLI does (#5030).
+  "src/features/steering/import/reconcile.ts": {
+    "@oxagen/steering-check": ["markImportMatches"],
   },
   // The On disk panel strips the steering tree's folder from each path, and
   // reads the folder's name from the one module that names every steering

@@ -13,9 +13,15 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const __dbMock = { ...real, withTenantDb: mocks.withTenantDb };
   return { ...__dbMock, withOrgDb: __dbMock.withTenantDb };
 });
+// The real role gate, answered from `roleGate.roles`; the default caller is
+// an org Owner.
+vi.mock("@oxagen/iam/org-role", async () =>
+  (await import("./test-utils/org-role-gate")).orgRoleModule(),
+);
 
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import { eventDelivery, repositoryListHandler } from "./repository.list";
+import { resetRoleGate, roleGate } from "./test-utils/org-role-gate";
 
 const BOUND_AT = new Date("2026-09-15T12:06:00.000Z");
 const LINKED_AT = new Date("2026-09-17T09:00:00.000Z");
@@ -69,6 +75,50 @@ function wire(rows: unknown[]): void {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  resetRoleGate();
+});
+
+// Witness for the role gate (#3340 finding 3). The kernel's IAM check allows
+// every capability for a non-enterprise org, so without the handler's
+// assertContractRole call these callers would read the list.
+describe("list_repositories role gate", () => {
+  it("refuses a workspace Viewer and reads no tenant data", async () => {
+    roleGate.roles = { org: null, workspace: "Viewer" };
+    await expect(repositoryListHandler({}, makeCTX())).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "org_role_required",
+    });
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("refuses an org Billing member with no workspace role and reads no tenant data", async () => {
+    roleGate.roles = { org: "Billing", workspace: null };
+    await expect(repositoryListHandler({}, makeCTX())).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "org_role_required",
+    });
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("lists for an org Owner", async () => {
+    wire([MAIN]);
+    const out = await repositoryListHandler({}, makeCTX());
+    expect(out.repositories.map((r) => r.fullName)).toEqual(["acme/widgets"]);
+  });
+
+  it("lists for a workspace Member, a role the contract grants", async () => {
+    roleGate.roles = { org: null, workspace: "Member" };
+    wire([MAIN]);
+    const out = await repositoryListHandler({}, makeCTX());
+    expect(out.repositories).toHaveLength(1);
+  });
+
+  it("refuses a call that resolves to no user", async () => {
+    await expect(
+      repositoryListHandler({}, makeCTX({ userId: null, apiKeyId: null })),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "no_principal" });
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+  });
 });
 
 describe("list_repositories", () => {

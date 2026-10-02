@@ -6,6 +6,10 @@
 // and applies the draft's ops in order, so a second Review of the same draft
 // writes the same files.
 //
+// Two ops change more than a tool's entry. A cap op sets a tool's result cap
+// and its auto paging in tools.toml, and an expose op sets server.toml's
+// exposure mode. server.toml is written again only when the mode changes.
+//
 // The build is pure. The Review handler reads the folders and the
 // credentials, and opens the PR.
 import { HandlerError } from "@oxagen/oxagen";
@@ -64,6 +68,8 @@ import {
 
 type TestOp = Extract<StudioDraftOp, { kind: "test" }>;
 type ClassifyOp = Extract<StudioDraftOp, { kind: "classify" }>;
+type CapOp = Extract<StudioDraftOp, { kind: "cap" }>;
+type ExposeOp = Extract<StudioDraftOp, { kind: "expose" }>;
 
 /** A tool's classification in the contract's words. */
 export interface StudioClassification {
@@ -109,6 +115,10 @@ export interface BuiltFolder {
   reclassified: { tool: string; before: StudioClassification; after: StudioClassification }[];
   described: string[];
   tested: string[];
+  /** The keys whose result cap or paging the draft changed. */
+  capped: string[];
+  /** The exposure mode the draft set, or null when it left server.toml's mode as it was. */
+  exposure: McpServer["exposure"]["mode"] | null;
   tokens: { definitions: number; budget: number };
   findings: {
     rule: string;
@@ -419,15 +429,31 @@ interface Staged {
   classify: Map<string, { identity: Identity; op: ClassifyOp }>;
   describe: Map<string, { identity: Identity; description: string }>;
   tests: { identity: Identity; op: TestOp }[];
+  cap: Map<string, { identity: Identity; op: CapOp }>;
+  /** The exposure mode the last expose op set, or undefined when the draft sets none. */
+  exposure: ExposeOp["mode"] | undefined;
 }
 
 /**
  * The ops in order. An import and a remove of one tool cancel each other,
- * and a later classify or describe of a tool replaces an earlier one.
+ * and a later classify, describe, or cap of a tool replaces an earlier one.
+ * An expose op names no tool, and the last one wins.
  */
 function stage(ops: readonly StudioDraftOp[], resolve: Resolver): Staged {
-  const staged: Staged = { imports: new Map(), removed: new Set(), classify: new Map(), describe: new Map(), tests: [] };
+  const staged: Staged = {
+    imports: new Map(),
+    removed: new Set(),
+    classify: new Map(),
+    describe: new Map(),
+    tests: [],
+    cap: new Map(),
+    exposure: undefined,
+  };
   for (const op of ops) {
+    if (op.kind === "expose") {
+      staged.exposure = op.mode;
+      continue;
+    }
     const identity = resolve.identify(op.tool);
     switch (op.kind) {
       case "import":
@@ -447,9 +473,36 @@ function stage(ops: readonly StudioDraftOp[], resolve: Resolver): Staged {
       case "test":
         staged.tests.push({ identity, op });
         break;
+      case "cap":
+        staged.cap.set(identity.id, { identity, op });
+        break;
     }
   }
   return staged;
+}
+
+/**
+ * An entry with a cap op applied. Paging on takes the paging pattern import
+ * found for the tool, and a tool with none is refused. Paging off removes
+ * `paginate`, and `max_items` with it unless a gRPC server stream still reads
+ * it.
+ */
+function capped(entry: ToolsEntry, key: string, op: CapOp, upstream: UpstreamTool | undefined): ToolsEntry {
+  const next: ToolsEntry = { ...entry, max_result_bytes: op.maxResultBytes };
+  if (op.paging === true) {
+    const style = upstream?.paging?.style;
+    if (style === undefined) {
+      throw refuse(
+        "tool_paging_missing",
+        `${key} has no paging pattern, so the gateway cannot page its results. Stage its cap with paging left as it is, then Review.`,
+      );
+    }
+    next.paginate = style;
+  } else if (op.paging === false) {
+    delete next.paginate;
+    if (next.method === undefined) delete next.max_items;
+  }
+  return next;
 }
 
 // ── Files ────────────────────────────────────────────────────────────────────
@@ -503,7 +556,7 @@ export function buildFolder(input: BuildInput): BuiltFolder {
       `${draft.server} has no server.toml on the production branch, and the draft holds none. Set up the server's connection, then Review.`,
     );
   }
-  const server = parsedOrRefuse(parseServerToml(serverText), "server_toml_invalid", "server.toml");
+  let server = parsedOrRefuse(parseServerToml(serverText), "server_toml_invalid", "server.toml");
   if (server.name !== draft.server) {
     throw refuse(
       "server_name_mismatch",
@@ -548,6 +601,19 @@ export function buildFolder(input: BuildInput): BuiltFolder {
   const resolve = resolver(kind, before, offered);
   const staged = stage(draft.ops, resolve);
 
+  // The exposure mode. server.toml is written again only when the draft
+  // changes the mode, so a draft that sets the mode in force keeps its text.
+  let serverOut = serverText;
+  let exposure: BuiltFolder["exposure"] = null;
+  if (staged.exposure !== undefined && staged.exposure !== server.exposure.mode) {
+    exposure = staged.exposure;
+    serverOut = `${schemaDirective("mcp-server/v1")}\n${stringify({
+      ...server,
+      exposure: { ...server.exposure, mode: staged.exposure },
+    })}`;
+    server = parsedOrRefuse(parseServerToml(serverOut), "server_toml_invalid", "server.toml");
+  }
+
   const pending = [...staged.imports.values()];
   if (source === null && pending.length > 0) {
     throw refuse(
@@ -562,7 +628,7 @@ export function buildFolder(input: BuildInput): BuiltFolder {
       `The source does not offer ${notOffered.map(identityName).join(", ")}. Import the server's tools again, or remove the tool from the draft.`,
     );
   }
-  const unknownEdits = [...staged.classify.values(), ...staged.describe.values(), ...staged.tests]
+  const unknownEdits = [...staged.classify.values(), ...staged.describe.values(), ...staged.cap.values(), ...staged.tests]
     .map(({ identity }) => identity)
     .filter((identity) => identity.kind === "unknown");
   if (unknownEdits.length > 0) {
@@ -608,6 +674,12 @@ export function buildFolder(input: BuildInput): BuiltFolder {
   const reclassified: BuiltFolder["reclassified"] = [];
   const accepted = new Set<string>();
   const described: string[] = [];
+  const cappedKeys: string[] = [];
+  /** The upstream tool an existing key selects, for its paging pattern. */
+  const upstreamOf = (key: string, entry: ToolsEntry): UpstreamTool | undefined => {
+    const name = entrySelects(kind, key, entry);
+    return name === undefined ? undefined : offered.find((tool) => selectedName(tool) === name);
+  };
 
   // Existing entries first, in tools.toml's order, then the new ones.
   for (const [key, entry] of Object.entries(after)) {
@@ -624,6 +696,15 @@ export function buildFolder(input: BuildInput): BuiltFolder {
     if (description !== undefined && description !== after[key]?.description) {
       after[key] = { ...(after[key] as ToolsEntry), description };
       described.push(key);
+    }
+    const cap = staged.cap.get(`key:${key}`);
+    if (cap !== undefined) {
+      const current = after[key] as ToolsEntry;
+      const next = capped(current, key, cap.op, upstreamOf(key, current));
+      if (canonicalText(next) !== canonicalText(current)) {
+        after[key] = next;
+        cappedKeys.push(key);
+      }
     }
   }
   const importedKeys: string[] = [];
@@ -651,7 +732,13 @@ export function buildFolder(input: BuildInput): BuiltFolder {
       entry.description = description;
       described.push(key);
     }
-    after[key] = entry as ToolsEntry;
+    const cap = staged.cap.get(identity.id);
+    if (cap === undefined) {
+      after[key] = entry as ToolsEntry;
+    } else {
+      after[key] = capped(entry as ToolsEntry, key, cap.op, identity.upstream);
+      cappedKeys.push(key);
+    }
     importedKeys.push(key);
   }
 
@@ -739,7 +826,7 @@ export function buildFolder(input: BuildInput): BuiltFolder {
 
   // The files.
   const files = new Map<string, string>();
-  files.set(SERVER_TOML_NAME, serverText);
+  files.set(SERVER_TOML_NAME, serverOut);
   files.set(
     TOOLS_TOML_NAME,
     toolsText !== undefined && canonicalText(tools) === canonicalText(previousTools) ? toolsText : tomlFile(tools),
@@ -785,6 +872,8 @@ export function buildFolder(input: BuildInput): BuiltFolder {
     reclassified,
     described,
     tested,
+    capped: cappedKeys,
+    exposure,
     tokens: { definitions: compiled.tokens.definitions, budget: compiled.exposure.definition_budget },
     findings,
     tools: compiled.tools,

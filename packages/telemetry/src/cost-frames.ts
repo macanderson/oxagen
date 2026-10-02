@@ -6,7 +6,8 @@
  * `token_usage` row keyed on the run it ran for (`execution_step_id`), priced
  * by the gateway: `gateway_observed`. A wrapped agent's call is one
  * `tacho_events` row of kind `llm_call`, reported by the harness:
- * `client_attested`. Both come back in one shape with the token classes of
+ * `client_attested`, unless the loopback model proxy carried the call and sealed
+ * it with `oxagen.metering: observed`, which reads `gateway_observed`. Both come back in one shape with the token classes of
  * spec §12.6, so the rollup prices them the same way.
  *
  * The tacho table receives the same model call from more than one source
@@ -67,6 +68,8 @@ import type { ClickHouseSettings } from "@clickhouse/client";
 import {
   LLM_CALL_DUPLICATE_OF_ATTR,
   LLM_CALL_TOKEN_SOURCES,
+  TACHO_METERING_ATTR,
+  TACHO_METERING_OBSERVED,
   SYSTEM_CONTEXT_PARTS_MAX,
   systemContextPartSchema,
   type SystemContextPart,
@@ -181,6 +184,14 @@ interface ToolCallFrameRow {
   isMutating: boolean | null;
   /** The tool-result tokens the OTel span of the same tool use recorded. */
   resultTokens: number | null;
+  /**
+   * When the hook recorded the call (RFC 3339), and the chain it ran on
+   * (`session_uuid`, the root session on the root's own chain). The rollup
+   * places each call under the model call that made it (F17). Absent when
+   * the read returned neither.
+   */
+  at?: string;
+  sessionUuid?: string;
 }
 
 /** The `tool_status` values a rollup grades on; `cancelled` is left out on purpose. */
@@ -356,6 +367,22 @@ const RUN_SESSIONS = "session_uuid IN {sessionUuids:Array(UUID)}";
 const PROXY_SIGHTING = "source = 'collector' AND fidelity = 'proxy'";
 
 /**
+ * The metering mark the loopback proxy seals on every call it carries
+ * (`oxagen.metering: observed`). A row written before the mark existed, or by
+ * a source the proxy never saw, reads an empty string. The names are fixed
+ * constants, so they sit in the SQL as literals and add no query parameters.
+ */
+const METERING_VALUE = `attrs['${TACHO_METERING_ATTR}']`;
+
+/**
+ * The proxy saw the call when the priced row carries the mark or the proxy
+ * sighting joined back to it does. The proxy sighting can be the unpriced one
+ * (an OTel or hook row sealed the call first), so the join is read too. Returns
+ * 1 for a call the proxy observed and 0 otherwise.
+ */
+const FRAME_PROXY_OBSERVED = `toUInt8(c.metering = '${TACHO_METERING_OBSERVED}' OR r.metering = '${TACHO_METERING_OBSERVED}' OR q.metering = '${TACHO_METERING_OBSERVED}')`;
+
+/**
  * The proxy sighting's token sources and system context, grouped on one
  * call id, for the join named `alias` on `c.<key>`. Keyed on each id apart
  * for the reason the transcript joins are (`TRANSCRIPT_THINKING`). The
@@ -372,6 +399,7 @@ function proxySightingJoin(
           max(tool_definition_tokens) AS tool_definitions,
           max(context_frame_tokens) AS context_frames,
           max(steering_tokens) AS steering,
+          max(${METERING_VALUE}) AS metering,
           max(system_context_digest) AS context_digest,
           argMax(system_context_parts, (system_context_digest, length(system_context_parts))) AS context_parts
         FROM tacho_events FINAL
@@ -577,14 +605,16 @@ export async function readModelCallFrames(args: {
         ${proxiedCount("context_frame_tokens", "context_frames")} AS context_frame_tokens,
         ${proxiedCount("steering_tokens", "steering")} AS steering_tokens,
         ${FRAME_CONTEXT_DIGEST} AS system_context_digest,
-        ${consume === undefined ? FRAME_CONTEXT_PARTS : "NULL"} AS system_context_parts
+        ${consume === undefined ? FRAME_CONTEXT_PARTS : "NULL"} AS system_context_parts,
+        ${FRAME_PROXY_OBSERVED} AS proxy_observed
       FROM (
         SELECT
           ts, seq, session_uuid, model, provider, input_tokens, output_tokens,
           cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens,
           thinking_tokens, web_search_requests, cost_usd_micros, request_id,
           message_id, tool_definition_tokens, context_frame_tokens,
-          steering_tokens, system_context_digest, system_context_parts
+          steering_tokens, system_context_digest, system_context_parts,
+          ${METERING_VALUE} AS metering
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
@@ -660,6 +690,7 @@ export async function readModelCallFrames(args: {
     steering_tokens?: string | number | null;
     system_context_digest?: string | null;
     system_context_parts?: string | null;
+    proxy_observed?: string | number | null;
   };
   return consumeFrames<Row, ModelCallFrameRow>(result, (r) => {
     const parts = parseSystemContextParts(r.system_context_parts);
@@ -675,7 +706,12 @@ export async function readModelCallFrames(args: {
       reasoning: Number(r.reasoning),
       serverToolRequests: Number(r.server_tool_request),
       reportedCostMicros: r.cost_micros,
-      basis: "client_attested",
+      // A call the loopback proxy carried is gateway_observed. A row with no
+      // mark (older rows, or a call the proxy never saw) stays client_attested.
+      basis:
+        Number(r.proxy_observed ?? 0) === 1
+          ? "gateway_observed"
+          : "client_attested",
       sessionUuid: r.session_uuid,
       toolDefinitionTokens: nullableCount(r.tool_definition_tokens),
       contextFrameTokens: nullableCount(r.context_frame_tokens),
@@ -718,10 +754,12 @@ export async function readTachoToolCallFrames(args: {
         h.tool_input_digest                                            AS input_digest,
         h.tool_output_digest                                           AS output_digest,
         h.tool_is_mutating                                             AS is_mutating,
+        formatDateTime(h.ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC')           AS at,
+        toString(h.session_uuid)                                       AS session_uuid,
         r.result_tokens                                                AS result_tokens
         ${consume === undefined ? "" : ", h.repeated AS repeated"}
       FROM (
-        SELECT ts, seq, tool_name, tool_status, tool_input_digest,
+        SELECT ts, seq, session_uuid, tool_name, tool_status, tool_input_digest,
                tool_output_digest, tool_is_mutating, tool_use_id
                ${consume === undefined ? "" : `,
                  tool_name != '' AND tool_input_digest != '' AND tool_output_digest != '' AND
@@ -771,6 +809,8 @@ export async function readTachoToolCallFrames(args: {
     output_digest: string;
     is_mutating: boolean | null;
     result_tokens: string | number | null;
+    at?: string;
+    session_uuid?: string;
   };
   return consumeFrames<Row, ToolCallFrameRow>(result, (r) => ({
     name: r.name === "" ? null : r.name,
@@ -780,6 +820,8 @@ export async function readTachoToolCallFrames(args: {
     outputDigest: r.output_digest === "" ? null : r.output_digest,
     isMutating: r.is_mutating,
     resultTokens: r.result_tokens === null ? null : Number(r.result_tokens),
+    ...(r.at === undefined ? {} : { at: r.at }),
+    ...(r.session_uuid === undefined ? {} : { sessionUuid: r.session_uuid }),
   }), consume);
 }
 
@@ -877,12 +919,27 @@ export interface ToolCallObservationRow {
   at: string;
   seq: number;
   tool: string;
+  /**
+   * Empty when the hook recorded no input. Such a call is kept: it may have
+   * done new work, so the request that made it must not read as all repeats
+   * (#4506).
+   */
   inputDigest: string;
   /** Empty when the hook recorded no output. */
   outputDigest: string;
   isMutating: boolean | null;
   /** The result tokens the OTel tool span recorded for the same tool use; null when none did. */
   resultTokens: number | null;
+  /**
+   * `tool_status` when it is `ok`, `error` or `rejected`, as
+   * {@link ToolCallFrameRow} reads it; null for any other value.
+   */
+  status: ToolCallFrameRow["status"];
+  /**
+   * `tool_error_class`, the first line of the error the hook recorded for a
+   * failed call; null when it recorded none.
+   */
+  errorClass: string | null;
 }
 
 /** ClickHouse DateTime64 params want a space-separated, Z-less string. */
@@ -893,10 +950,11 @@ function chDateTime(at: Date): string {
 /**
  * A workspace's tool calls over [from, to), newest first, at most `limit`
  * (Mission Control spec §12.8; ADR-062). The hook source carries a call once
- * with its input and output digests and the classifier's mutating flag; the
- * OTel tool span of the same tool use carries its result tokens, joined on
- * `tool_use_id`. Throws on a degraded store: the findings job retries rather
- * than detecting over missing frames.
+ * with its input and output digests, the classifier's mutating flag, its
+ * status, and the error class of a failed call; the OTel tool span of the
+ * same tool use carries its result tokens, joined on `tool_use_id`. A call
+ * the hook recorded no input for is read too (#4506). Throws on a degraded
+ * store: the findings job retries rather than detecting over missing frames.
  */
 export async function readTachoToolCallObservations(args: {
   orgId: string;
@@ -917,11 +975,13 @@ export async function readTachoToolCallObservations(args: {
         h.tool_input_digest                                            AS input_digest,
         h.tool_output_digest                                           AS output_digest,
         h.tool_is_mutating                                             AS is_mutating,
-        r.result_tokens                                                AS result_tokens
+        r.result_tokens                                                AS result_tokens,
+        h.tool_status                                                  AS status,
+        h.tool_error_class                                             AS error_class
       FROM (
         SELECT root_session_uuid, session_uuid, ts, seq, tool_name,
                tool_input_digest, tool_output_digest, tool_is_mutating,
-               tool_use_id
+               tool_use_id, tool_status, tool_error_class
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
@@ -931,7 +991,6 @@ export async function readTachoToolCallObservations(args: {
           AND ts < {to:DateTime64(3)}
           AND ${receivedFrom("from")}
           AND tool_name != ''
-          AND tool_input_digest != ''
         ORDER BY ts DESC, seq DESC
         LIMIT {limit:UInt32}
       ) AS h
@@ -970,6 +1029,8 @@ export async function readTachoToolCallObservations(args: {
     output_digest: string;
     is_mutating: boolean | null;
     result_tokens: string | number | null;
+    status: string;
+    error_class: string;
   };
   const rows = (await result.json()) as Row[];
   return rows.map((r) => ({
@@ -982,6 +1043,74 @@ export async function readTachoToolCallObservations(args: {
     outputDigest: r.output_digest,
     isMutating: r.is_mutating,
     resultTokens: r.result_tokens === null ? null : Number(r.result_tokens),
+    status: toolFrameStatus(r.status),
+    errorClass: r.error_class === "" ? null : r.error_class,
+  }));
+}
+
+/** One `oxagen:file_changed` frame of a wrapped run, as the findings job reads it. */
+export interface FileChangeRow {
+  rootSessionUuid: string;
+  /** The chain the frame was recorded on; equal to `rootSessionUuid` on the root's own chain. */
+  sessionUuid: string;
+  /** RFC 3339, to the microsecond the store printed. */
+  at: string;
+  seq: number;
+}
+
+/**
+ * A workspace's `oxagen:file_changed` frames over [from, to), newest first,
+ * at most `limit`. A harness writes one when a file it watches changes on
+ * disk, whoever changed it. The findings job reads them to tell whether a
+ * file changed between two identical failing calls, since the second call
+ * may then fail for a new reason. Throws on a degraded store.
+ */
+export async function readTachoFileChanges(args: {
+  orgId: string;
+  workspaceId: string;
+  from: Date;
+  to: Date;
+  limit: number;
+}): Promise<FileChangeRow[]> {
+  const ch = clickhouse();
+  const result = await ch.query({
+    query: `
+      SELECT
+        toString(root_session_uuid)                                  AS root_session_uuid,
+        toString(session_uuid)                                       AS session_uuid,
+        formatDateTime(ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC')           AS at,
+        seq                                                          AS seq
+      FROM tacho_events FINAL
+      WHERE org_id = {orgId:UUID}
+        AND workspace_id = {workspaceId:UUID}
+        AND kind = 'oxagen:file_changed'
+        AND ts >= {from:DateTime64(3)}
+        AND ts < {to:DateTime64(3)}
+        AND ${receivedFrom("from")}
+      ORDER BY ts DESC, seq DESC
+      LIMIT {limit:UInt32}
+    `,
+    query_params: {
+      orgId: args.orgId,
+      workspaceId: args.workspaceId,
+      from: chDateTime(args.from),
+      to: chDateTime(args.to),
+      limit: args.limit,
+    },
+    format: "JSONEachRow",
+  });
+  type Row = {
+    root_session_uuid: string;
+    session_uuid: string;
+    at: string;
+    seq: string | number;
+  };
+  const rows = (await result.json()) as Row[];
+  return rows.map((r) => ({
+    rootSessionUuid: r.root_session_uuid,
+    sessionUuid: r.session_uuid,
+    at: r.at,
+    seq: Number(r.seq),
   }));
 }
 

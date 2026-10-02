@@ -105,6 +105,7 @@ const {
   carriedFrom,
   uninvoicedGau,
   assertGauAvailable,
+  bucketBasis,
   GauExhaustedError,
 } = await import("./gau-bucket");
 const { BillingSuspendedError } = await import("./dunning");
@@ -570,12 +571,35 @@ describe("readBucket", () => {
 // ── assertGauAvailable ────────────────────────────────────────────────────────
 
 describe("assertGauAvailable", () => {
-  const exhausted = (reason: string | null) => (e: unknown) =>
+  const exhausted = (reason: string) => (e: unknown) =>
     e instanceof GauExhaustedError &&
     e.code === "gau_exhausted" &&
     e.reason === reason;
 
-  it("refuses a suspended org in prepaid mode before reading anything else", async () => {
+  // The grant a signup on 2026-09-10 received: 33,000 for 30 days.
+  const GRANT = {
+    grantedGau: 33_000,
+    grantedAt: new Date("2026-09-10T00:00:00.000Z"),
+    expiresAt: new Date("2026-10-10T00:00:00.000Z"),
+  };
+  const onGrant = (over: Record<string, unknown> = {}) =>
+    mocks.resolveGauEntitlement.mockResolvedValue({
+      terms: FREE_TERMS,
+      subscription: null,
+      grant: GRANT,
+      subscriptionRequiredAfterGrant: true,
+      ...over,
+    });
+  const grantBucket = (usedGau: number) =>
+    seedBucket({
+      periodStart: GRANT.grantedAt,
+      periodEnd: GRANT.expiresAt,
+      includedGau: GRANT.grantedGau,
+      usedGau,
+    });
+  const AFTER_GRANT = new Date("2026-10-12T00:00:00.000Z");
+
+  it("refuses a suspended org before reading anything else", async () => {
     mocks.assertOrgCanConsume.mockRejectedValue(
       new BillingSuspendedError(null),
     );
@@ -585,9 +609,12 @@ describe("assertGauAvailable", () => {
     expect(mocks.readOrgBillingSettings).not.toHaveBeenCalled();
   });
 
-  it("refuses a suspended org in invoice billing too", async () => {
-    mocks.readOrgBillingSettings.mockResolvedValue({
-      approvedForInvoiceBilling: true,
+  it("refuses a suspended subscriber too", async () => {
+    mocks.resolveGauEntitlement.mockResolvedValue({
+      terms: SCALE_TERMS,
+      subscription: MONTH_SUB,
+      grant: null,
+      subscriptionRequiredAfterGrant: true,
     });
     mocks.assertOrgCanConsume.mockRejectedValue(
       new BillingSuspendedError(null),
@@ -606,136 +633,121 @@ describe("assertGauAvailable", () => {
     expect(mocks.resolveGauEntitlement).not.toHaveBeenCalled();
   });
 
-  it("admits a prepaid org with remaining > 0", async () => {
-    seedBucket({ includedGau: 50_000, usedGau: 49_999 });
-    await expect(assertGauAvailable(ORG, NOW)).resolves.toBeUndefined();
-  });
-
-  it("refuses a prepaid org at remaining = 0 with gau_exhausted and no reason", async () => {
-    seedBucket({ includedGau: 50_000, usedGau: 50_000 });
-    await expect(assertGauAvailable(ORG, NOW)).rejects.toSatisfy(
-      exhausted(null),
-    );
-  });
-
-  it("refuses an overdrawn prepaid org and reports the stored negative figure", async () => {
-    seedBucket({ includedGau: 50_000, usedGau: 50_007 });
-    const err = await assertGauAvailable(ORG, NOW).catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(GauExhaustedError);
-    expect((err as InstanceType<typeof GauExhaustedError>).remainingGau).toBe(
-      -7,
-    );
-    expect((err as InstanceType<typeof GauExhaustedError>).periodEnd).toEqual(
-      CAL_SEP.end,
-    );
-  });
-
-  it("Free with no default payment method at remaining ≤ 0 → reason free_no_payment_method", async () => {
-    mocks.resolveGauEntitlement.mockResolvedValue({
-      terms: FREE_TERMS,
-      subscription: null,
-    });
-    mocks.readDefaultPaymentMethod.mockResolvedValue(null);
-    seedBucket({ includedGau: 5_000, usedGau: 5_000 });
-    await expect(assertGauAvailable(ORG, NOW)).rejects.toSatisfy(
-      exhausted("free_no_payment_method"),
-    );
-    expect(mocks.readDefaultPaymentMethod).toHaveBeenCalledWith(ORG);
-  });
-
-  it("Free with a saved default card at remaining ≤ 0 → gau_exhausted with no reason (the prepaid path)", async () => {
-    mocks.resolveGauEntitlement.mockResolvedValue({
-      terms: FREE_TERMS,
-      subscription: null,
-    });
-    mocks.readDefaultPaymentMethod.mockResolvedValue({
-      stripePaymentMethodId: "pm_1",
-      brand: "visa",
-      last4: "4242",
-    });
-    seedBucket({ includedGau: 5_000, usedGau: 5_000 });
-    await expect(assertGauAvailable(ORG, NOW)).rejects.toSatisfy(
-      exhausted(null),
-    );
-  });
-
-  it("Free with a card and remaining > 0 → admitted", async () => {
-    mocks.resolveGauEntitlement.mockResolvedValue({
-      terms: FREE_TERMS,
-      subscription: null,
-    });
-    mocks.readDefaultPaymentMethod.mockResolvedValue({
-      stripePaymentMethodId: "pm_1",
-      brand: "visa",
-      last4: "4242",
-    });
-    seedBucket({ includedGau: 5_000, usedGau: 4_000 });
-    await expect(assertGauAvailable(ORG, NOW)).resolves.toBeUndefined();
-    expect(mocks.readDefaultPaymentMethod).not.toHaveBeenCalled();
-  });
-
-  it("the reason comes from the resolved terms: a negotiated agreement on a free-tier org is not the published Free tier", async () => {
-    mocks.resolveGauEntitlement.mockResolvedValue({
-      terms: {
-        ...FREE_TERMS,
-        source: "negotiated",
-        agreementRef: "MSA-1",
-        effectiveFrom: NOW,
-        effectiveTo: null,
-      },
-      subscription: null,
-    });
-    mocks.readDefaultPaymentMethod.mockResolvedValue(null);
-    seedBucket({ includedGau: 5_000, usedGau: 5_000 });
-    await expect(assertGauAvailable(ORG, NOW)).rejects.toSatisfy(
-      exhausted(null),
-    );
-  });
-
-  it("a Build org with no card at remaining ≤ 0 carries no reason", async () => {
-    mocks.resolveGauEntitlement.mockResolvedValue({
-      terms: BUILD_TERMS,
-      subscription: null,
-    });
-    seedBucket({ includedGau: 50_000, usedGau: 50_000 });
-    await expect(assertGauAvailable(ORG, NOW)).rejects.toSatisfy(
-      exhausted(null),
-    );
-  });
-
-  it("with no bucket row it reads the virtual bucket with the previous month's carry and admits on it", async () => {
-    seedBucket({
-      periodStart: CAL_AUG.start,
-      periodEnd: CAL_AUG.end,
-      includedGau: 50_000,
-      purchasedGau: 5_000,
-      carriedGau: 0,
-      usedGau: 52_000,
-    });
-    mocks.resolveGauEntitlement.mockResolvedValue({
-      terms: { ...BUILD_TERMS, includedGauPerMonth: 0 },
-      subscription: null,
-    });
-    await expect(assertGauAvailable(ORG, NOW)).resolves.toBeUndefined();
-    expect(store.buckets).toHaveLength(1);
-  });
-
-  it("uses the subscription's period, not the calendar month", async () => {
+  it("never refuses a subscriber past its allowance: overage is billed on its invoice", async () => {
     mocks.resolveGauEntitlement.mockResolvedValue({
       terms: SCALE_TERMS,
       subscription: MONTH_SUB,
+      grant: null,
+      subscriptionRequiredAfterGrant: true,
     });
-    // A row for the calendar month is not this org's bucket; its period is
-    // the subscription's, and no row exists for it yet.
-    seedBucket({ includedGau: 300_000, usedGau: 300_000 });
+    seedBucket({
+      periodStart: MONTH_SUB.currentPeriodStart,
+      periodEnd: MONTH_SUB.currentPeriodEnd,
+      includedGau: 300_000,
+      usedGau: 900_000,
+    });
     await expect(assertGauAvailable(ORG, NOW)).resolves.toBeUndefined();
   });
 
-  it("never writes to gau_buckets or org_billing_settings and never calls the provider", async () => {
-    mocks.resolveGauEntitlement.mockResolvedValue({
-      terms: FREE_TERMS,
-      subscription: null,
+  it("admits an org on its signup grant while units are left", async () => {
+    onGrant();
+    grantBucket(32_999);
+    await expect(assertGauAvailable(ORG, NOW)).resolves.toBeUndefined();
+  });
+
+  it("admits a new org on the grant's virtual bucket before its first action", async () => {
+    onGrant();
+    await expect(assertGauAvailable(ORG, NOW)).resolves.toBeUndefined();
+    expect(store.buckets).toHaveLength(0);
+  });
+
+  it("refuses an org whose grant is spent, and says to add a card and choose a plan", async () => {
+    onGrant();
+    grantBucket(33_000);
+    const err = await assertGauAvailable(ORG, NOW).catch((e: unknown) => e);
+    expect(err).toSatisfy(exhausted("signup_grant_used"));
+    const refused = err as InstanceType<typeof GauExhaustedError>;
+    expect(refused.message).toMatch(/add a card and choose a plan/);
+    expect(refused.remainingGau).toBe(0);
+    expect(refused.periodEnd).toEqual(GRANT.expiresAt);
+  });
+
+  it("keeps refusing a spent grant after the org saves a card with no subscription", async () => {
+    onGrant();
+    mocks.readDefaultPaymentMethod.mockResolvedValue({
+      stripePaymentMethodId: "pm_1",
+      brand: "visa",
+      last4: "4242",
     });
+    grantBucket(33_000);
+    await expect(assertGauAvailable(ORG, NOW)).rejects.toSatisfy(
+      exhausted("signup_grant_used"),
+    );
+  });
+
+  it("refuses an org whose grant expired with units left", async () => {
+    onGrant();
+    grantBucket(10);
+    await expect(assertGauAvailable(ORG, AFTER_GRANT)).rejects.toSatisfy(
+      exhausted("signup_grant_expired"),
+    );
+  });
+
+  it("keeps refusing an expired grant after the org saves a card with no subscription", async () => {
+    onGrant();
+    mocks.readDefaultPaymentMethod.mockResolvedValue({
+      stripePaymentMethodId: "pm_1",
+      brand: "visa",
+      last4: "4242",
+    });
+    await expect(assertGauAvailable(ORG, AFTER_GRANT)).rejects.toSatisfy(
+      exhausted("signup_grant_expired"),
+    );
+    expect(mocks.readDefaultPaymentMethod).not.toHaveBeenCalled();
+  });
+
+  it("admits an expired-grant org once it subscribes", async () => {
+    onGrant({ terms: BUILD_TERMS, subscription: MONTH_SUB });
+    await expect(
+      assertGauAvailable(ORG, new Date("2026-09-20T00:00:00.000Z")),
+    ).resolves.toBeUndefined();
+  });
+
+  it("refuses an org with no grant row and no subscription", async () => {
+    onGrant({ grant: null });
+    await expect(assertGauAvailable(ORG, NOW)).rejects.toSatisfy(
+      exhausted("no_signup_grant"),
+    );
+  });
+
+  it("with the subscription rule cleared, falls back to the Free row's monthly allowance after the grant", async () => {
+    onGrant({ subscriptionRequiredAfterGrant: false });
+    // The month after the grant starts at the grant's expiry.
+    seedBucket({
+      periodStart: GRANT.expiresAt,
+      periodEnd: new Date("2026-11-01T00:00:00.000Z"),
+      includedGau: 5_000,
+      usedGau: 4_000,
+    });
+    await expect(assertGauAvailable(ORG, AFTER_GRANT)).resolves.toBeUndefined();
+  });
+
+  it("with the subscription rule cleared, refuses past the monthly allowance", async () => {
+    onGrant({ subscriptionRequiredAfterGrant: false });
+    seedBucket({
+      periodStart: GRANT.expiresAt,
+      periodEnd: new Date("2026-11-01T00:00:00.000Z"),
+      includedGau: 5_000,
+      usedGau: 5_000,
+    });
+    await expect(assertGauAvailable(ORG, AFTER_GRANT)).rejects.toSatisfy(
+      exhausted("monthly_allowance_used"),
+    );
+  });
+
+  it("never writes to gau_buckets or org_billing_settings and never calls the provider", async () => {
+    onGrant();
+    await assertGauAvailable(ORG, AFTER_GRANT).catch(() => undefined);
     await assertGauAvailable(ORG, NOW).catch(() => undefined);
     expect(writes()).toEqual([]);
     expect(store.buckets).toHaveLength(0);
@@ -746,18 +758,81 @@ describe("assertGauAvailable", () => {
 
   it("GauExhaustedError carries the code the API and the app classify by", () => {
     const err = new GauExhaustedError({
-      reason: null,
+      reason: "signup_grant_expired",
       remainingGau: 0,
       periodEnd: CAL_SEP.end,
     });
     expect(err.code).toBe("gau_exhausted");
     expect(err.name).toBe("GauExhaustedError");
-    const withReason = new GauExhaustedError({
-      reason: "free_no_payment_method",
-      remainingGau: 0,
-      periodEnd: CAL_SEP.end,
+    expect(err.message).toMatch(/add a card and choose a plan/i);
+  });
+});
+
+describe("bucketBasis", () => {
+  const GRANT = {
+    grantedGau: 33_000,
+    grantedAt: new Date("2026-09-10T00:00:00.000Z"),
+    expiresAt: new Date("2026-10-10T00:00:00.000Z"),
+  };
+
+  it("measures a subscriber against its subscription's month and plan allowance", () => {
+    const basis = bucketBasis(
+      { terms: SCALE_TERMS, subscription: MONTH_SUB, grant: GRANT },
+      NOW,
+    );
+    expect(basis.kind).toBe("subscription");
+    expect(basis.period).toEqual(periodFor(MONTH_SUB, NOW));
+    expect(basis.terms.includedGauPerMonth).toBe(
+      SCALE_TERMS.includedGauPerMonth,
+    );
+  });
+
+  it("measures an org on its grant against the grant's window and size", () => {
+    const basis = bucketBasis(
+      { terms: FREE_TERMS, subscription: null, grant: GRANT },
+      NOW,
+    );
+    expect(basis).toMatchObject({
+      kind: "signup_grant",
+      period: { start: GRANT.grantedAt, end: GRANT.expiresAt },
+      terms: { includedGauPerMonth: 33_000 },
     });
-    expect(withReason.message).toMatch(/add a payment method/i);
+  });
+
+  it("starts the month after the grant at the grant's expiry, with no allowance while a subscription is required", () => {
+    const basis = bucketBasis(
+      {
+        terms: FREE_TERMS,
+        subscription: null,
+        grant: GRANT,
+        subscriptionRequiredAfterGrant: true,
+      },
+      new Date("2026-10-12T00:00:00.000Z"),
+    );
+    expect(basis).toMatchObject({
+      kind: "after_signup_grant",
+      period: {
+        start: GRANT.expiresAt,
+        end: new Date("2026-11-01T00:00:00.000Z"),
+      },
+      terms: { includedGauPerMonth: 0 },
+    });
+  });
+
+  it("uses the whole calendar month once the grant ended in an earlier month", () => {
+    const basis = bucketBasis(
+      {
+        terms: FREE_TERMS,
+        subscription: null,
+        grant: GRANT,
+        subscriptionRequiredAfterGrant: false,
+      },
+      new Date("2026-11-12T00:00:00.000Z"),
+    );
+    expect(basis.period.start).toEqual(new Date("2026-11-01T00:00:00.000Z"));
+    expect(basis.terms.includedGauPerMonth).toBe(
+      FREE_TERMS.includedGauPerMonth,
+    );
   });
 });
 

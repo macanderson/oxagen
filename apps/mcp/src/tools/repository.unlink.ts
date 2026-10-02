@@ -13,9 +13,12 @@ export const schema = {
 export const metadata: ToolMetadata = {
   name: repositoryUnlink.name,
   description: repositoryUnlink.description,
+  // Destructive: the handler deletes the repository's head and drops it
+  // from the workspace, so a client that confirms destructive tools asks a
+  // person first (#3340 finding 5).
   annotations: {
     readOnlyHint: false,
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: true,
   },
 };

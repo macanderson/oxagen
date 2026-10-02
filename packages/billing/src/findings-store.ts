@@ -12,7 +12,9 @@
 import { schema, withSystemDb, type Tx } from "@oxagen/database";
 import {
   readModelCallFrames,
+  readTachoFileChanges,
   readTachoToolCallObservations,
+  type FileChangeRow,
   type FrameRunRef,
   type ModelCallFrameRow,
   type ToolCallObservationRow,
@@ -25,6 +27,7 @@ import {
   isNull,
   lt,
   ne,
+  notExists,
   notInArray,
   sql,
 } from "drizzle-orm";
@@ -35,16 +38,21 @@ import {
   type ModelCallFrame,
   type RunTotalsRecord,
 } from "./cost-rollup";
-import { runPriceSlice, runTotalsRowToRecord } from "./cost-rollup-store";
+import { runTotalsRowToRecord } from "./cost-rollup-store";
 import {
   type ClaimRow,
   countClaims,
   detectFindings,
+  DETECTORS,
   FINDINGS_WINDOW_DAYS,
   instructionProposals,
   microsOf,
+  replayClaims,
   runsWithRepeats,
+  runsWithRetries,
+  type DetectInput,
   type DetectReads,
+  type FindingClaim,
   type FindingDraft,
   type InstructionProposal,
   type FrameClassPrice,
@@ -71,6 +79,7 @@ import {
   loadPriceBookSlice,
   resolvePriceEntryFromClassBook,
   type PriceBook,
+  type PriceBookSlice,
   type PriceTokenClass,
 } from "./price-book";
 import type { OutcomeRow } from "./run-pr-outcomes";
@@ -88,6 +97,14 @@ export const TOOL_CALL_READ_MAX = 200_000;
  * counts it (ADR-208, ADR-210).
  */
 export const FRAME_RUNS_READ_MAX = 200;
+/**
+ * Model-call frames one pass holds across every run it reads (#4506). A run
+ * whose frames would pass it is not read, and `frameCoverage.capped` counts
+ * it with the runs past `FRAME_RUNS_READ_MAX`.
+ */
+export const FRAME_READ_MAX_FRAMES = 200_000;
+/** File-change frames one pass reads, newest first. */
+export const FILE_CHANGE_READ_MAX = 200_000;
 /** Model-call frame reads one pass runs at once. */
 const FRAME_READ_CONCURRENCY = 8;
 /** Claim rows one insert statement carries. */
@@ -122,6 +139,17 @@ interface FindingsPassDeps {
     to: Date;
     limit: number;
   }) => Promise<ToolCallObservationRow[]>;
+  /**
+   * The window's `oxagen:file_changed` frames, newest first, at most
+   * `limit`; absent, the pass reads none and retry loops find nothing.
+   */
+  readFileChangeRows?: (args: {
+    orgId: string;
+    workspaceId: string;
+    from: Date;
+    to: Date;
+    limit: number;
+  }) => Promise<FileChangeRow[]>;
   /** Each named run's priced model-call frames in time order, by run public id. */
   readFrames: (
     scope: FindingsScope,
@@ -182,6 +210,20 @@ interface FindingsPassDeps {
     decidedSince: ReadonlyMap<string, Date>,
     drafts: readonly FindingDraft[],
   ) => Promise<number>;
+  /**
+   * The applied findings of a claiming kind with no claim rows whose window
+   * ends at or after `since`; absent, the pass backfills none.
+   */
+  readUnclaimedApplied?: (
+    scope: FindingsScope,
+    kinds: readonly string[],
+    since: Date,
+  ) => Promise<UnclaimedApplied[]>;
+  /** Stores the claims a pass replayed for applied findings. */
+  writeClaimBackfill?: (
+    scope: FindingsScope,
+    backfill: readonly ClaimBackfill[],
+  ) => Promise<void>;
 }
 
 /**
@@ -191,7 +233,7 @@ interface FindingsPassDeps {
  */
 export function toolWindowStart(
   windowStart: Date,
-  rows: readonly ToolCallObservationRow[],
+  rows: readonly { at: string }[],
   limit: number,
 ): Date {
   if (rows.length < limit) return windowStart;
@@ -225,9 +267,35 @@ export function toObservations(
       isMutating: r.isMutating,
       resultTokens: r.resultTokens,
       sessionUuid: r.sessionUuid === r.rootSessionUuid ? null : r.sessionUuid,
+      status: r.status,
+      errorClass: r.errorClass,
     });
   }
   return out;
+}
+
+/**
+ * Each run's file change times in microseconds, ascending, from the window's
+ * `oxagen:file_changed` frames whose root session the window's runs name.
+ * The read covers `from` onward: the window's start, or the oldest frame read
+ * when the read hit its cap.
+ */
+export function fileChangeTimesOf(
+  rows: readonly FileChangeRow[],
+  runIdBySession: ReadonlyMap<string, string>,
+  windowStart: Date,
+  limit: number,
+): NonNullable<DetectInput["fileChangeTimes"]> {
+  const byRun = new Map<string, number[]>();
+  for (const r of rows) {
+    const runId = runIdBySession.get(r.rootSessionUuid);
+    if (runId === undefined) continue;
+    const list = byRun.get(runId) ?? [];
+    list.push(microsOf(r.at));
+    byRun.set(runId, list);
+  }
+  for (const list of byRun.values()) list.sort((a, b) => a - b);
+  return { from: toolWindowStart(windowStart, rows, limit), byRun };
 }
 
 /**
@@ -554,30 +622,99 @@ export function pricedFrames(
   return out;
 }
 
-async function readFrames(
+/**
+ * Each run's rows from `read`, in the order the runs are given, while the
+ * rows the pass holds stay at or under `cap` (#4506). A batch of
+ * `concurrency` runs is read at once and admitted in order. The first run
+ * whose rows would pass the cap is dropped whole, since a detector needs all
+ * of a run's frames. Every run after it is dropped too, and no later batch is
+ * read. `peak` is the most rows the pass kept. The batch in flight adds at
+ * most `concurrency` runs' rows until it is admitted or dropped.
+ */
+export async function readFrameRows<T>(
+  runs: readonly FrameRead[],
+  read: (run: FrameRead) => Promise<T[]>,
+  cap: number,
+  concurrency: number = FRAME_READ_CONCURRENCY,
+): Promise<{ rows: Map<string, T[]>; peak: number }> {
+  const rows = new Map<string, T[]>();
+  let held = 0;
+  let peak = 0;
+  for (let i = 0; i < runs.length; i += concurrency) {
+    const batch = runs.slice(i, i + concurrency);
+    const results = await Promise.all(batch.map((r) => read(r)));
+    for (let j = 0; j < batch.length; j += 1) {
+      const got = results[j] ?? [];
+      if (held + got.length > cap) return { rows, peak };
+      held += got.length;
+      peak = Math.max(peak, held);
+      rows.set(batch[j]!.runId, got);
+    }
+  }
+  return { rows, peak };
+}
+
+/** The price book slice that covers every row: their models and their span. */
+function rowsPriceSlice(
+  orgId: string,
+  rows: Iterable<readonly ModelCallFrameRow[]>,
+): PriceBookSlice {
+  let from = Number.POSITIVE_INFINITY;
+  let to = Number.NEGATIVE_INFINITY;
+  const models = new Set<string>();
+  for (const list of rows)
+    for (const row of list) {
+      models.add(row.model);
+      const at = new Date(row.at).getTime();
+      if (at < from) from = at;
+      if (at > to) to = at;
+    }
+  if (models.size === 0) {
+    const epoch = new Date(0);
+    return { orgId, models: [], from: epoch, to: epoch };
+  }
+  return { orgId, models: [...models], from: new Date(from), to: new Date(to) };
+}
+
+/**
+ * The named runs' priced model-call frames, by run public id, holding at most
+ * `cap` frames (#4506). A run left out by the cap is absent from the answer,
+ * and the pass counts it as capped. Each run's rows are priced and released
+ * in turn, so the pass never holds a second copy of every frame.
+ */
+export async function readPricedFrames(
   scope: FindingsScope,
   runs: readonly FrameRead[],
+  cap: number = FRAME_READ_MAX_FRAMES,
 ): Promise<Map<string, PricedRequestFrame[]>> {
-  const read: { run: FrameRead; rows: ModelCallFrameRow[] }[] = [];
-  for (let i = 0; i < runs.length; i += FRAME_READ_CONCURRENCY) {
-    const batch = runs.slice(i, i + FRAME_READ_CONCURRENCY);
-    const rows = await Promise.all(
-      batch.map((r) => readModelCallFrames({ ...scope, run: r.ref })),
-    );
-    batch.forEach((run, j) => read.push({ run, rows: rows[j] ?? [] }));
-  }
-  const all = read.flatMap((r) => r.rows).map(toModelCallFrame);
-  const book = await loadPriceBookSlice(runPriceSlice(scope.orgId, all));
+  const { rows } = await readFrameRows(
+    runs,
+    (r) => readModelCallFrames({ ...scope, run: r.ref }),
+    cap,
+  );
+  const book = await loadPriceBookSlice(
+    rowsPriceSlice(scope.orgId, rows.values()),
+  );
   const classIndex = indexPriceBookByClass(book);
   const out = new Map<string, PricedRequestFrame[]>();
-  for (const { run, rows } of read) {
+  for (const run of runs) {
+    const list = rows.get(run.runId);
+    if (list === undefined) continue;
+    rows.delete(run.runId);
     const root = run.ref.kind === "tacho" ? run.ref.rootSessionUuid : null;
     out.set(
       run.runId,
-      pricedFrames(book, scope.orgId, rows, root, classIndex),
+      pricedFrames(book, scope.orgId, list, root, classIndex),
     );
   }
   return out;
+}
+
+function readFrames(
+  scope: FindingsScope,
+  runs: readonly FrameRead[],
+): Promise<Map<string, PricedRequestFrame[]>> {
+  return readPricedFrames(scope, runs);
 }
 
 /**
@@ -849,11 +986,137 @@ export async function readUnproductiveSpend(
   return countClaims(await readUnproductiveClaims(tx, scope, window));
 }
 
+/** An applied finding with no claim rows, as the backfill reads it. */
+export interface UnclaimedApplied {
+  id: string;
+  fingerprint: string;
+  citedRuns: readonly string[];
+  currency: string;
+}
+
+/** The claims a pass replayed for one applied finding. */
+export interface ClaimBackfill {
+  findingId: string;
+  currency: string;
+  claims: FindingClaim[];
+}
+
+/** The kinds whose findings claim frames: those of detectors 1, 7, and 8. */
+export const CLAIMING_KINDS: readonly string[] = DETECTORS.filter(
+  (d) => d.counting !== null,
+).flatMap((d) => d.kinds);
+
+/**
+ * The claims an applied finding gets from a replay of the pass (#4506): the
+ * frames the replay claims under the finding's fingerprint, in the runs the
+ * finding cited. A finding applied before `cost.finding_claims` existed has
+ * no claim rows, and a pass replaces open findings only, so without this the
+ * headline leaves out the frames it priced. A finding the replay gives no
+ * claim is left out.
+ */
+export function claimBackfill(
+  unclaimed: readonly UnclaimedApplied[],
+  replayed: ReadonlyMap<string, readonly FindingClaim[]>,
+): ClaimBackfill[] {
+  const out: ClaimBackfill[] = [];
+  for (const f of unclaimed) {
+    const cited = new Set(f.citedRuns);
+    const claims = (replayed.get(f.fingerprint) ?? []).filter((c) =>
+      cited.has(c.runId),
+    );
+    if (claims.length > 0)
+      out.push({ findingId: f.id, currency: f.currency, claims });
+  }
+  return out;
+}
+
+/**
+ * The workspace's applied findings of `kinds` that hold no claim row, and
+ * whose window ends at or after `since`: an older one's runs are out of the
+ * pass's window, so a replay cannot find its frames.
+ */
+export async function readUnclaimedApplied(
+  scope: FindingsScope,
+  kinds: readonly string[],
+  since: Date,
+): Promise<UnclaimedApplied[]> {
+  if (kinds.length === 0) return [];
+  // tenancy: the scheduled findings job runs outside a tenant scope, and both
+  // tables are filtered by the pass's orgId and workspaceId.
+  return withSystemDb((tx) =>
+    tx
+      .select({
+        id: findings.id,
+        fingerprint: findings.fingerprint,
+        citedRuns: findings.citedRuns,
+        currency: findings.currency,
+      })
+      .from(findings)
+      .where(
+        and(
+          eq(findings.orgId, scope.orgId),
+          eq(findings.workspaceId, scope.workspaceId),
+          eq(findings.status, "applied"),
+          inArray(findings.kind, [...kinds]),
+          gte(findings.windowEnd, since),
+          notExists(
+            tx
+              .select({ id: claims.id })
+              .from(claims)
+              .where(
+                and(
+                  eq(claims.orgId, scope.orgId),
+                  eq(claims.workspaceId, scope.workspaceId),
+                  eq(claims.findingId, findings.id),
+                ),
+              ),
+          ),
+        ),
+      ),
+  );
+}
+
+/**
+ * Store the claims a pass replayed for applied findings. A claim already
+ * stored for the same finding, run, and frame is kept, so a second pass
+ * writes nothing new.
+ */
+export async function writeClaimBackfill(
+  scope: FindingsScope,
+  backfill: readonly ClaimBackfill[],
+): Promise<void> {
+  const rows = backfill.flatMap((b) =>
+    b.claims.map((c) => ({
+      orgId: scope.orgId,
+      workspaceId: scope.workspaceId,
+      findingId: b.findingId,
+      detector: c.detector,
+      runId: c.runId,
+      frameKey: c.frameKey,
+      frameAt: c.frameAt,
+      operatorKey: c.operatorKey,
+      costMicros: c.costMicros,
+      currency: b.currency,
+    })),
+  );
+  if (rows.length === 0) return;
+  // tenancy: the scheduled findings job runs outside a tenant scope, and every
+  // row it writes carries the pass's orgId and workspaceId.
+  await withSystemDb(async (tx) => {
+    for (let i = 0; i < rows.length; i += CLAIM_INSERT_CHUNK)
+      await tx
+        .insert(claims)
+        .values(rows.slice(i, i + CLAIM_INSERT_CHUNK))
+        .onConflictDoNothing();
+  });
+}
+
 const productionDeps: FindingsPassDeps = {
   now: () => new Date(),
   readRuns,
   readRootSessions,
   readToolCalls: readTachoToolCallObservations,
+  readFileChangeRows: readTachoFileChanges,
   readFrames,
   readDecisions,
   readRunRefs,
@@ -862,6 +1125,8 @@ const productionDeps: FindingsPassDeps = {
   readCompactions,
   readOutcomes,
   write: writeFindings,
+  readUnclaimedApplied,
+  writeClaimBackfill,
   readPrompts: (scope, window, runIdBySession, runIds) =>
     readRunPrompts(scope, window, runIdBySession, runIds, readFrames),
   openProposals: openInstructionProposals,
@@ -869,12 +1134,14 @@ const productionDeps: FindingsPassDeps = {
 
 /**
  * One findings pass over a workspace's trailing window: read the run rows,
- * the tool calls, and each run's first prompt, file changes, compactions, and
- * outcomes; read and price the model-call frames of up to
- * `FRAME_RUNS_READ_MAX` runs; detect; and replace the open findings and their
- * claims. The pass also reads the window's operator prompts and opens a
- * proposal for each instruction repeated across runs. Throws when a store is
- * degraded: the job retries rather than writing findings from missing frames.
+ * the tool calls, the file change frames, and each run's first prompt, file
+ * changes, compactions, and outcomes; read and price the model-call frames of
+ * up to `FRAME_RUNS_READ_MAX` runs and `FRAME_READ_MAX_FRAMES` frames; detect;
+ * and replace the open findings and their claims. The pass then gives each
+ * applied finding with no claim row the claims a replay finds for it. It also
+ * reads the window's operator prompts and opens a proposal for each
+ * instruction repeated across runs. Throws when a store is degraded: the job
+ * retries rather than writing findings from missing frames.
  */
 export async function runFindingsPass(
   scope: FindingsScope,
@@ -882,21 +1149,37 @@ export async function runFindingsPass(
 ): Promise<{ findings: number }> {
   const end = deps.now();
   const start = new Date(end.getTime() - FINDINGS_WINDOW_DAYS * DAY_MS);
-  const [runs, runIdBySession, rows, decidedSince] = await Promise.all([
-    deps.readRuns(scope, { start, end }),
-    deps.readRootSessions(scope, start),
-    deps.readToolCalls({
-      ...scope,
-      from: start,
-      to: end,
-      limit: TOOL_CALL_READ_MAX,
-    }),
-    deps.readDecisions(scope),
-  ]);
+  const [runs, runIdBySession, rows, decidedSince, changeRows] =
+    await Promise.all([
+      deps.readRuns(scope, { start, end }),
+      deps.readRootSessions(scope, start),
+      deps.readToolCalls({
+        ...scope,
+        from: start,
+        to: end,
+        limit: TOOL_CALL_READ_MAX,
+      }),
+      deps.readDecisions(scope),
+      deps.readFileChangeRows?.({
+        ...scope,
+        from: start,
+        to: end,
+        limit: FILE_CHANGE_READ_MAX,
+      }),
+    ]);
   const runIds = new Set(runs.map((r) => r.runId));
   const toolCalls = toObservations(rows, runIdBySession).filter((c) =>
     runIds.has(c.runId),
   );
+  const fileChangeTimes =
+    changeRows === undefined
+      ? undefined
+      : fileChangeTimesOf(
+          changeRows,
+          runIdBySession,
+          start,
+          FILE_CHANGE_READ_MAX,
+        );
   const rootByRun = tachoRoots(runs, runIdBySession);
   const [stored, firstPrompts, fileChanges, compactions, outcomes] =
     await Promise.all([
@@ -910,16 +1193,32 @@ export async function runFindingsPass(
       deps.readOutcomes?.(scope, [...runIds]) ??
         new Map<string, OutcomeRow[]>(),
     ]);
+  // A run with a retry loop is ranked with the runs that repeat, so its
+  // retries are priced too.
+  const ranked = runsWithRepeats(toolCalls);
+  for (const [runId, n] of runsWithRetries(toolCalls, fileChangeTimes))
+    ranked.set(runId, (ranked.get(runId) ?? 0) + n);
   const { reads, coverage } = planFrameReads(
     runs,
     frameSources(runs, rows, runIdBySession, stored),
-    runsWithRepeats(toolCalls),
+    ranked,
     FRAME_RUNS_READ_MAX,
   );
   const frames =
     reads.length === 0
       ? new Map<string, PricedRequestFrame[]>()
       : await deps.readFrames(scope, reads);
+  // A planned run the frame cap left unread is absent from the answer, and
+  // counts as capped (#4506).
+  const unread = reads.filter((r) => !frames.has(r.runId)).length;
+  const frameCoverage =
+    unread === 0
+      ? coverage
+      : {
+          ...coverage,
+          read: coverage.read - unread,
+          capped: coverage.capped + unread,
+        };
   // A workspace with no runs in the window has no prompt to read.
   const prompts =
     runIds.size === 0
@@ -936,11 +1235,19 @@ export async function runFindingsPass(
     fileChanges,
     compactions,
     outcomes,
-    frameCoverage: coverage,
+    frameCoverage,
+    ...(fileChangeTimes ? { fileChangeTimes } : {}),
     ...(prompts ? { prompts } : {}),
   };
   const drafts = detectFindings(input);
   const written = await deps.write(scope, end, decidedSince, drafts);
+  const unclaimed =
+    (await deps.readUnclaimedApplied?.(scope, CLAIMING_KINDS, start)) ?? [];
+  if (unclaimed.length > 0) {
+    const released = new Set(unclaimed.map((f) => f.fingerprint));
+    const backfill = claimBackfill(unclaimed, replayClaims(input, released));
+    if (backfill.length > 0) await deps.writeClaimBackfill?.(scope, backfill);
+  }
   await deps.openProposals?.(scope, instructionProposals(prompts, runs));
   return { findings: written };
 }

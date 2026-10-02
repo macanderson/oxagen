@@ -1,7 +1,7 @@
 # The mockup parity capture (#4818): builds the app at a ref, seeds it with
 # the audit's personas, and screenshots every state the page registry names,
 # as each persona, in the dark and light themes and at phone width. The
-# /mockup-parity-audit skill in macanderson/oxagen-roadmap dispatches it twice:
+# /mockup-parity-audit skill in the roadmap repository dispatches it twice:
 # label before at main, and label after at the audit's fix pull request.
 #
 # It runs only in CI. Nothing in this repository is built or served on the
@@ -11,10 +11,15 @@
 #   dispatch       ref: the commit or branch to capture
 #                  label: before or after, which names the artifact
 #                  pages: page slugs, comma-separated, or empty for every page
-#                  registry_ref: the oxagen-roadmap ref to read the registry at
+#                  registry_ref: the roadmap repository's ref to read the registry at
 #   pull request   that changes this workflow or apps/app/scripts/mockup-parity:
 #                  every page at the pull request's merge commit, dark desktop
 #                  only, so a broken capture fails before it merges
+#
+# The registry is mockups/pages/pages.json in <this repository's owner>/roadmap,
+# which is private. The job reads it with the ROADMAP_READ_TOKEN secret: a
+# fine-grained token with Contents read on that repository. Without it the job
+# fails at Download the page registry and says what to add.
 #
 # The artifact mockup-parity-<label> (mockup-parity-pr on a pull request)
 # holds <slug>/<state>.<theme>.<viewport>.png and manifest.json. The manifest
@@ -40,7 +45,7 @@ on:
         required: false
         default: ""
       registry_ref:
-        description: "The oxagen-roadmap ref to read mockups/pages/pages.json at"
+        description: "The roadmap repository's ref to read mockups/pages/pages.json at"
         required: false
         default: main
   pull_request:
@@ -92,7 +97,7 @@ env:
 
 jobs:
   capture:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     # The container, services, job env, and the setup steps down to Seed e2e
     # are copied from pipeline.yml's e2e job, which is their source. Keep them
     # in step with it.
@@ -222,6 +227,64 @@ jobs:
           fi
           echo "COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
+      # The page registry lives in the roadmap repository, which is private, so
+      # this reads it through the contents API with ROADMAP_READ_TOKEN. The
+      # workflow's own token reads only this repository. The repository is
+      # <this repository's owner>/roadmap, so moving both repositories together
+      # needs no edit here, and curl -L follows GitHub's redirect after a
+      # rename. The first ref that answers 200 wins: registry_ref when given,
+      # then on a pull request the roadmap branch with this branch's name, then
+      # main. It runs before the build, so a missing token fails in seconds.
+      - name: Download the page registry
+        id: registry
+        env:
+          REGISTRY_REF: ${{ inputs.registry_ref }}
+          HEAD_REF: ${{ steps.inputs.outputs.head_ref }}
+          ROADMAP_REPOSITORY: ${{ github.repository_owner }}/roadmap
+          ROADMAP_READ_TOKEN: ${{ secrets.ROADMAP_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          fix="Add a fine-grained token with Contents read on $ROADMAP_REPOSITORY as the ROADMAP_READ_TOKEN repository secret: gh secret set ROADMAP_READ_TOKEN -R $GITHUB_REPOSITORY"
+          if [ -z "$ROADMAP_READ_TOKEN" ]; then
+            echo "::error::The ROADMAP_READ_TOKEN secret is missing, so this job cannot read the page registry in $ROADMAP_REPOSITORY, which is private. $fix"
+            echo "The ROADMAP_READ_TOKEN secret is missing, so the page registry in \`$ROADMAP_REPOSITORY\` cannot be read. $fix" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          # Prints the HTTP status, or 000 when curl reaches nothing.
+          gh_get() {
+            curl -sS -L -o "$1" -w '%{http_code}' --max-time 30 --retry 2 \
+              -H "Authorization: Bearer $ROADMAP_READ_TOKEN" \
+              -H "Accept: application/vnd.github.raw+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$ROADMAP_REPOSITORY$2" || true
+          }
+          # A token that cannot see the repository gets 404 for every ref, the
+          # same answer as a ref that does not exist, so the repository is
+          # asked first.
+          code=$(gh_get /dev/null "")
+          if [ "$code" != "200" ]; then
+            echo "::error::ROADMAP_READ_TOKEN cannot read $ROADMAP_REPOSITORY (HTTP $code). $fix"
+            echo "ROADMAP_READ_TOKEN cannot read \`$ROADMAP_REPOSITORY\` (HTTP $code). $fix" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          out="$RUNNER_TEMP/pages.json"
+          candidates=()
+          if [ -n "$REGISTRY_REF" ]; then candidates+=("$REGISTRY_REF"); fi
+          if [ -n "$HEAD_REF" ]; then candidates+=("$HEAD_REF"); fi
+          candidates+=("main")
+          for ref in "${candidates[@]}"; do
+            code=$(gh_get "$out" "/contents/mockups/pages/pages.json?ref=$ref")
+            if [ "$code" = "200" ]; then
+              echo "The registry is $ROADMAP_REPOSITORY's mockups/pages/pages.json at $ref."
+              echo "Registry: \`$ROADMAP_REPOSITORY\` at \`$ref\`." >> "$GITHUB_STEP_SUMMARY"
+              echo "ref=$ref" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "$ROADMAP_REPOSITORY at $ref answered $code."
+          done
+          echo "::error::No candidate ref of $ROADMAP_REPOSITORY has mockups/pages/pages.json: ${candidates[*]}"
+          exit 1
+
       # The billing page reads the Stripe test account when the repository has
       # its key, as the e2e job's page-load test does. Unlike there, a missing
       # key is not an error: no capture starts a payment, and the page then
@@ -268,35 +331,6 @@ jobs:
       # the ids the capture paths name (apps/app/scripts/mockup-parity).
       - name: Seed the audit personas
         run: pnpm --filter @oxagen/app seed:audit
-
-      # The first ref that answers 200: registry_ref when given, then on a pull
-      # request the roadmap branch with this branch's name, then main.
-      - name: Download the page registry
-        id: registry
-        env:
-          REGISTRY_REF: ${{ inputs.registry_ref }}
-          HEAD_REF: ${{ steps.inputs.outputs.head_ref }}
-        run: |
-          set -euo pipefail
-          out="$RUNNER_TEMP/pages.json"
-          candidates=()
-          if [ -n "$REGISTRY_REF" ]; then candidates+=("$REGISTRY_REF"); fi
-          if [ -n "$HEAD_REF" ]; then candidates+=("$HEAD_REF"); fi
-          candidates+=("main")
-          for ref in "${candidates[@]}"; do
-            url="https://raw.githubusercontent.com/macanderson/oxagen-roadmap/$ref/mockups/pages/pages.json"
-            # curl prints 000 when it reaches nothing; `|| true` keeps that.
-            code=$(curl -sS -o "$out" -w '%{http_code}' --max-time 30 --retry 2 "$url" || true)
-            if [ "$code" = "200" ]; then
-              echo "The registry is oxagen-roadmap's mockups/pages/pages.json at $ref."
-              echo "Registry: oxagen-roadmap at \`$ref\`." >> "$GITHUB_STEP_SUMMARY"
-              echo "ref=$ref" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            echo "oxagen-roadmap at $ref answered $code."
-          done
-          echo "::error::No candidate ref of oxagen-roadmap has mockups/pages/pages.json: ${candidates[*]}"
-          exit 1
 
       # `next start` on the build above, in the background: this is CI, where a
       # server is allowed. The environment reaches it whole because pnpm runs

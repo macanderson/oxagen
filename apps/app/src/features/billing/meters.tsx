@@ -14,7 +14,13 @@ import type { EvidenceRetention, GauBucket } from "@/data/contracts/billing";
 import { type ListRow, ListTable } from "@/ui/list-table";
 import { formatCount } from "@/ui/money-format";
 import { cell } from "@/ui/table";
-import { NotRecordedValue, PanelNote, Section } from "./section";
+import {
+  isoDate,
+  NotRecordedValue,
+  PanelNote,
+  retentionDaysBelowPaid,
+  Section,
+} from "./section";
 
 export function Meters({
   bucket,
@@ -29,13 +35,26 @@ export function Meters({
   const count = (n: number) => formatCount(n, locale);
   const notRecorded = <NotRecordedValue>{t("notRecorded")}</NotRecordedValue>;
   const governedValue = count(bucket.usedGau);
-  const governedNote = t("meters.governedNote", {
-    included: count(bucket.includedGau),
-  });
+  // An organization on its signup grant reads the grant: its size, what is
+  // left, and the day it ends. Past the grant, the note says when it ended
+  // (ADR-241, signup grant; #3844).
+  const grant = bucket.signupGrant;
+  const governedNote =
+    grant !== null && grant.active
+      ? t("meters.grantNote", {
+          left: count(Math.max(0, grant.remainingGau)),
+          granted: count(grant.grantedGau),
+          expires: isoDate(grant.expiresAt),
+        })
+      : grant !== null && bucket.basis === "after_signup_grant"
+        ? t("meters.grantEndedNote", { expires: isoDate(grant.expiresAt) })
+        : t("meters.governedNote", { included: count(bucket.includedGau) });
   const retainedValue = notRecorded;
-  const retainedNote = t("meters.retainedNote", {
-    months: count(retention.includedMonths),
-  });
+  const retainedDays = retentionDaysBelowPaid(retention);
+  const retainedNote =
+    retainedDays === null
+      ? t("meters.retainedNote", { months: count(retention.includedMonths) })
+      : t("meters.retainedDaysNote", { days: count(retainedDays) });
   const row = (
     name: string,
     meter: string,

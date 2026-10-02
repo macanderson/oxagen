@@ -9,6 +9,7 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
+import type { EnvName } from "@oxagen/config";
 // A relative import, as gen-rls-migration.ts reads the tenant policy: the file
 // imports only `node:crypto`, and `pnpm gate` runs this collector, so a package
 // import would have to be declared in the root package.json.
@@ -100,6 +101,12 @@ export interface InngestFunction {
   retries?: number;
 }
 
+/** How to get a new value: where it is issued, and the command that mints it. */
+export interface Refresh {
+  how: string;
+  command?: string;
+}
+
 export interface EnvVar {
   key: string;
   group: string;
@@ -109,6 +116,37 @@ export interface EnvVar {
   services: string[];
   requiredIn: string[];
   valueOrigin: string;
+  /** Where the value is kept (ADR-240): environment, operator, ci, registry, or shell. */
+  store: string;
+  refresh?: Refresh;
+  /**
+   * The Parameter Store names that hold it, in `ENV_NAMES` order with
+   * duplicates removed. One name for an operator value, empty when no
+   * parameter holds it.
+   */
+  parameterNames: string[];
+}
+
+/** A GitHub Actions secret or variable from `CI_REGISTRY`. */
+export interface CiVar {
+  name: string;
+  kind: "secret" | "variable";
+  description: string;
+  /** The GitHub environment that holds it, when it is not a repository value. */
+  environment?: string;
+  refresh: Refresh;
+  /** The workflow and action files that read it, relative to the root, sorted. */
+  workflows: string[];
+  /** The command that saves a new value where CI reads it (`ciSaveCommand`). */
+  saveCommand: string;
+}
+
+/** The Parameter Store prefixes, from `@oxagen/config`. */
+export interface ParameterPrefixes {
+  /** Registry environment name to the prefix that holds its `environment` values. */
+  environments: Record<string, string>;
+  /** The prefix that holds `operator` values. */
+  operator: string;
 }
 
 export interface Workflow {
@@ -155,6 +193,8 @@ export interface Model {
   cli: CliCommand[];
   inngest: InngestFunction[];
   env: EnvVar[];
+  ci: CiVar[];
+  parameterPrefixes: ParameterPrefixes;
   workflows: Workflow[];
   adrs: Adr[];
   caddy: CaddyRoute[];
@@ -664,10 +704,52 @@ export function collectInngest(root: string): InngestFunction[] {
 
 // ── Environment contract ─────────────────────────────────────────────────────
 
+/** The `ENV_REGISTRY` fields the atlas reads. */
+interface RegistryEntry {
+  group: string;
+  description: string;
+  secret: boolean;
+  clientExposed: boolean;
+  services: readonly string[];
+  requiredIn: readonly string[];
+  valueOrigin: string;
+  refresh?: Refresh;
+}
+
+/** The `CI_REGISTRY` fields the atlas reads. */
+export interface CiRegistryEntry {
+  kind: "secret" | "variable";
+  description: string;
+  environment?: string;
+  refresh: Refresh;
+}
+
+/** Where `collectCi` reads the inventory from: `@oxagen/config`, or a test's fixture. */
+export interface CiSource {
+  CI_REGISTRY: Readonly<Record<string, CiRegistryEntry>>;
+  ciSaveCommand(name: string): string | undefined;
+}
+
+/**
+ * The parts of `@oxagen/config` the atlas reads. The annotation below checks
+ * the module against it, so a renamed export fails the typecheck here.
+ */
+interface ConfigModule extends CiSource {
+  ENV_REGISTRY: Readonly<Record<string, RegistryEntry>>;
+  ENV_NAMES: readonly EnvName[];
+  PARAMETER_PREFIXES: Readonly<Record<EnvName, string>>;
+  OPERATOR_PARAMETER_PREFIX: string;
+  storeOf(key: string): string | undefined;
+  parameterName(key: string, env: EnvName): string | undefined;
+}
+
+async function loadConfig(): Promise<ConfigModule> {
+  const cfg: ConfigModule = await import("@oxagen/config");
+  return cfg;
+}
+
 export async function collectEnv(): Promise<EnvVar[]> {
-  const cfg = (await import("@oxagen/config")) as {
-    ENV_REGISTRY: Record<string, Omit<EnvVar, "key">>;
-  };
+  const cfg = await loadConfig();
   return Object.entries(cfg.ENV_REGISTRY)
     .map(([key, v]) => ({
       key,
@@ -675,11 +757,90 @@ export async function collectEnv(): Promise<EnvVar[]> {
       description: v.description,
       secret: !!v.secret,
       clientExposed: !!v.clientExposed,
-      services: [...(v.services ?? [])].sort(),
-      requiredIn: [...(v.requiredIn ?? [])].sort(),
+      services: [...v.services].sort(),
+      requiredIn: [...v.requiredIn].sort(),
       valueOrigin: v.valueOrigin,
+      store: cfg.storeOf(key) ?? "shell",
+      refresh: v.refresh,
+      parameterNames: [
+        ...new Set(
+          cfg.ENV_NAMES.map((name) => cfg.parameterName(key, name)).filter(
+            (p): p is string => p !== undefined,
+          ),
+        ),
+      ],
     }))
     .sort(by((e) => `${e.group} ${e.key}`));
+}
+
+export async function collectParameterPrefixes(): Promise<ParameterPrefixes> {
+  const cfg = await loadConfig();
+  return {
+    environments: { ...cfg.PARAMETER_PREFIXES },
+    operator: cfg.OPERATOR_PARAMETER_PREFIX,
+  };
+}
+
+// ── CI inventory ─────────────────────────────────────────────────────────────
+
+/**
+ * The files under `.github` that can read a secret or a variable: the
+ * workflows, and every `action.yml` under `.github/actions`. The same set
+ * `pnpm env:check` reads, so the two agree on who reads what.
+ */
+function ciFiles(root: string): string[] {
+  const list = (rel: string): string[] => {
+    const dir = join(root, rel);
+    return existsSync(dir) ? readdirSync(dir).sort() : [];
+  };
+  const out: string[] = [];
+  for (const f of list(".github/workflows")) {
+    const rel = `.github/workflows/${f}`;
+    if (/\.ya?ml$/.test(f) && statSync(join(root, rel)).isFile()) out.push(rel);
+  }
+  const walk = (rel: string): void => {
+    for (const f of list(rel)) {
+      const child = `${rel}/${f}`;
+      if (statSync(join(root, child)).isDirectory()) walk(child);
+      else if (/^action\.ya?ml$/.test(f)) out.push(child);
+    }
+  };
+  walk(".github/actions");
+  return out.sort();
+}
+
+/**
+ * Every entry in `CI_REGISTRY`, with the workflow files that read it. A read
+ * is `secrets.NAME` or `vars.NAME` on a line that is not a whole-line comment.
+ * `source` defaults to `@oxagen/config`.
+ */
+export async function collectCi(
+  root: string,
+  source?: CiSource,
+): Promise<CiVar[]> {
+  const { CI_REGISTRY, ciSaveCommand } = source ?? (await loadConfig());
+  const readers = new Map<string, Set<string>>();
+  for (const file of ciFiles(root)) {
+    for (const line of read(join(root, file)).split("\n")) {
+      if (/^\s*#/.test(line)) continue;
+      for (const m of line.matchAll(/\b(?:secrets|vars)\.([A-Za-z_]\w*)/g)) {
+        const files = readers.get(m[1]!) ?? new Set<string>();
+        files.add(file);
+        readers.set(m[1]!, files);
+      }
+    }
+  }
+  return Object.entries(CI_REGISTRY)
+    .map(([name, meta]) => ({
+      name,
+      kind: meta.kind,
+      description: meta.description,
+      environment: meta.environment,
+      refresh: meta.refresh,
+      workflows: [...(readers.get(name) ?? [])].sort(),
+      saveCommand: ciSaveCommand(name) ?? "",
+    }))
+    .sort(by((c) => c.name));
 }
 
 // ── GitHub workflows ─────────────────────────────────────────────────────────
@@ -884,6 +1045,8 @@ export async function collectModel(root: string): Promise<Model> {
     cli: collectCli(root),
     inngest: collectInngest(root),
     env: await collectEnv(),
+    ci: await collectCi(root),
+    parameterPrefixes: await collectParameterPrefixes(),
     workflows: collectWorkflows(root),
     adrs: collectAdrs(root),
     caddy: collectCaddy(root),
