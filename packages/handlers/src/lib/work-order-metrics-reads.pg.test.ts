@@ -27,8 +27,10 @@ const at = (iso: string) => new Date(iso);
 describe.skipIf(!enabled)("the work order metrics reads against Postgres", () => {
   const tag = crypto.randomUUID().replace(/-/g, "").slice(0, 10);
   const orgId = crypto.randomUUID();
+  // organizations_namespace_check and its workspace twin: 2 to 6 lowercase
+  // letters or digits.
   const namespace = () =>
-    `m${crypto.randomUUID().replace(/-/g, "").slice(0, 6)}`;
+    `m${crypto.randomUUID().replace(/-/g, "").slice(0, 5)}`;
   const orgNamespace = namespace();
   const wsNamespace = namespace();
   const operatorUser = crypto.randomUUID();
