@@ -70,13 +70,34 @@ async function orderByPublicId(tx: Tx, scope: WorkScope, publicId: string): Prom
   return { ...row, publicId: String(row.publicId) };
 }
 
-/** Refuse a host that is not the target of the send. */
-function assertTargetHost(order: OrderRow, host: ClaimingHost): void {
+/**
+ * Refuse a host that is not the target of the send: the send's `work_order`
+ * command must have been addressed to this host, on the send's runtime. The
+ * command row is what names the host, because a host enrolled on the same
+ * runtime with no agent of its own would pass a runtime check alone.
+ */
+async function assertTargetHost(tx: Tx, scope: WorkScope, order: OrderRow, host: ClaimingHost): Promise<void> {
   if (host.runtimeId !== order.runtimeId) {
     throw new WorkRecordError("forbidden", "This work order went to another runtime. This host must not start it.");
   }
   if (host.agentId !== null && host.agentId !== order.agentId) {
     throw new WorkRecordError("forbidden", "This work order went to another agent. This host must not start it.");
+  }
+  const commands = schema.tachoControlCommands;
+  const [command] = await tx
+    .select({ hostId: commands.hostId })
+    .from(commands)
+    .where(
+      and(
+        eq(commands.orgId, scope.orgId),
+        eq(commands.workspaceId, scope.workspaceId),
+        eq(commands.idempotencyKey, order.key),
+        eq(commands.command, "work_order"),
+      ),
+    )
+    .limit(1);
+  if (command === undefined || command.hostId !== host.id) {
+    throw new WorkRecordError("forbidden", "This work order was sent to another machine. This host must not start it.");
   }
 }
 
@@ -140,7 +161,7 @@ export function returnedReasonBefore(orders: readonly OrderProjection[], send: n
  */
 export async function claimWorkOrder(tx: Tx, scope: WorkScope, host: ClaimingHost, orderPublicId: string, now: Date): Promise<ClaimAnswer> {
   const row = await orderByPublicId(tx, scope, orderPublicId);
-  assertTargetHost(row, host);
+  await assertTargetHost(tx, scope, row, host);
   const write: WorkWrite = await appendFacts(tx, scope, {
     itemId: row.itemId,
     facts: [runtimeFact("claimed", row, host.publicId, now.toISOString(), `claimed:${row.id}`, { host: host.publicId })],
@@ -155,6 +176,12 @@ export async function claimWorkOrder(tx: Tx, scope: WorkScope, host: ClaimingHos
   const order = orderOf(write, row.id);
   if (order.closed) {
     throw new WorkRecordError("not_allowed", `Send ${order.send} has ended (${order.delivery}). This host must not start it.`);
+  }
+  // A repeat claim answers a host whose first answer was lost. Once a run is
+  // linked, the first answer was not lost: a run already started, and a
+  // second one must not.
+  if (order.runIds.length > 0) {
+    throw new WorkRecordError("not_allowed", `Run ${order.runIds[0]} already started for send ${order.send}. This host must not start another.`);
   }
 
   const brief = write.briefs.find((stored) => stored.briefId === order.briefId);
@@ -196,10 +223,11 @@ export async function claimWorkOrder(tx: Tx, scope: WorkScope, host: ClaimingHos
  */
 export async function rejectWorkOrder(tx: Tx, scope: WorkScope, host: ClaimingHost, orderPublicId: string, reason: string, now: Date): Promise<{ repeat: boolean }> {
   const row = await orderByPublicId(tx, scope, orderPublicId);
-  assertTargetHost(row, host);
+  await assertTargetHost(tx, scope, row, host);
   const before = await readWorkItem(tx, scope, row.itemId);
   const current = orderOf(before, row.id);
-  if (current.delivery === "rejected") return { repeat: true };
+  // A send that already ended, whatever ended it, has nothing left to refuse.
+  if (current.delivery === "rejected" || current.closed) return { repeat: true };
   if (current.runIds.length > 0) {
     throw new WorkRecordError("not_allowed", "A run is linked to this work order. Its end is the record, not a rejection.");
   }
@@ -228,7 +256,11 @@ export interface RunLinkInput {
   at: Date;
 }
 
-/** What a link attempt did. */
+/**
+ * What a link attempt did. A run that names a send another run already holds
+ * (`already_linked`), or a send that ended (`ended`), is cancelled: one send
+ * runs once.
+ */
 export type RunLinkOutcome = "linked" | "repeat" | "not_claimed" | "already_linked" | "ended";
 
 /**
@@ -239,14 +271,29 @@ export type RunLinkOutcome = "linked" | "repeat" | "not_claimed" | "already_link
  */
 export async function linkWorkOrderRun(tx: Tx, scope: WorkScope, input: RunLinkInput): Promise<RunLinkOutcome> {
   const row = await orderByPublicId(tx, scope, input.workOrder);
-  assertTargetHost(row, input.host);
+  await assertTargetHost(tx, scope, row, input.host);
   const before = await readWorkItem(tx, scope, row.itemId);
   const current = orderOf(before, row.id);
   const claim = claimOf(before.facts, row.id);
   if (claim === undefined || claim.kind !== "claimed" || claim.data.host !== input.host.publicId) return "not_claimed";
   if (current.runIds.includes(input.runId)) return "repeat";
-  if (current.runIds.length > 0) return "already_linked";
-  if (current.closed) return "ended";
+  // This host claimed the send, so a run it starts for the send is the
+  // send's. A second run, or a run of a send that ended, would do the work
+  // again or do work nobody asked for: it is stopped at its next boundary.
+  const duplicate = current.runIds.length > 0 ? "already_linked" : current.closed ? "ended" : null;
+  if (duplicate !== null) {
+    await queueRunCancel(tx, scope, {
+      workOrder: row.publicId,
+      orderKey: row.key,
+      runId: input.runId,
+      reason:
+        duplicate === "already_linked"
+          ? `Run ${current.runIds[0]} already does send ${current.send}. This run stops so the work runs once.`
+          : `Send ${current.send} has ended (${current.delivery}). This run stops because nobody asked for it.`,
+      userId: null,
+    });
+    return duplicate;
+  }
   const write = await appendFacts(tx, scope, {
     itemId: row.itemId,
     facts: [runtimeFact("run_linked", row, input.host.publicId, input.at.toISOString(), `run_linked:${row.id}`, {}, { runId: input.runId })],

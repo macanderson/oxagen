@@ -58,12 +58,15 @@ the change that handles the command.
 The host claims the order with `claim_work_order`, using its host key, before
 any run starts. The claim is the handshake:
 
-- The order must have gone to this host's runtime and agent.
+- The order's `work_order` command must have been addressed to this host, on
+  the order's runtime. The command row names the host, so a second machine
+  enrolled on the same runtime is refused.
 - One host holds a send. The store keeps one `claimed` fact per order, and the
-  claim is read back under the row lock, so a second host is refused.
+  claim is read back under the row lock, so a second claimant is refused.
 - A host that claims again after a lost answer gets the same claim and the same
-  first prompt back, and nothing new is recorded. It never needs a second run to
-  find out what happened.
+  first prompt back, and nothing new is recorded. Once a run is linked, a
+  repeat claim is refused: the first answer was not lost, and a run already
+  started.
 - A send that ended (withdrawn, stopped, returned, or rejected) refuses the
   claim, so the host does not start it.
 
@@ -84,7 +87,8 @@ The run names its work order on its frames (`oxagen.work_order.id`, the
 attribute F13's rollup already reads). Ingest links a new root run to the order
 only when the run's host is the host that claimed it, and the first run to link
 wins. A name alone links nothing, because any process on the host could write
-it.
+it. A second run that names the same send, or a run that names a send that
+already ended, gets a `cancel` when it links, so one send runs once.
 
 ### Results
 
@@ -99,6 +103,11 @@ it.
 - A stop is a `cancel` to the linked run. The send reads stopping until the
   host reports the cancel applied, then stopped. A stop asked for before the run
   links reaches the run when it links.
+- A send no runtime claimed can be withdrawn at once. A claimed send is stopped
+  first. When a stop was asked for and no run ever linked, because the host went
+  away after its claim, a person may then withdraw the send. Ending it is that
+  person's explicit decision, never a timeout, and a run that links later is
+  cancelled, so a crashed claimant cannot release the send into a second run.
 
 The checks a base branch requires come from two reads: the branch's protection
 summary and its rulesets. They are recorded only when both reads succeeded. An

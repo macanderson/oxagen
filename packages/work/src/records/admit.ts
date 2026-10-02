@@ -184,10 +184,20 @@ export function admitDecision(item: WorkItemProjection, action: WorkItemDecision
     case "send":
       return admitSend(item, action);
     case "withdraw": {
+      // A send no runtime claimed is Oxagen's, so it can be withdrawn at once.
+      // A claimed send is stopped first. If the runtime claimed it, a stop was
+      // asked for, and no run ever linked (the host went away), a person may
+      // then withdraw it: the send ends, and a run that links later is
+      // cancelled when it does (ADR-250), so nothing runs it twice.
       const order = findOrder(item, action.orderId);
       if (order.delivery === "withdrawn") return REPEAT;
-      if (order.closed || order.delivery !== "waiting_for_claim") {
-        refuse("not_allowed", "Only a send no runtime has claimed can be withdrawn. Stop the run instead.");
+      if (order.closed) refuse("not_allowed", "This send is over.");
+      if (order.runIds.length > 0) refuse("not_allowed", "A run is linked to this send. Stop the run instead.");
+      if (order.delivery !== "waiting_for_claim" && order.delivery !== "stopping") {
+        refuse(
+          "not_allowed",
+          "A runtime claimed this send. Stop it first. If the runtime never confirms the stop, withdraw the send then.",
+        );
       }
       return ADMITTED;
     }

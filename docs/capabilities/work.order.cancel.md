@@ -31,13 +31,13 @@ Withdraw a send that no runtime has claimed. The send ends at once and no run st
 
 ## Semantics
 
-The send's delivery becomes `withdrawn` and its `work_order` command is cancelled. A claim the host makes after this is refused, so no run starts. A send a runtime already claimed is stopped with [stop_work_order](work.order.stop.md) instead. Withdrawing a send that is already withdrawn changes nothing and answers `repeat: true`.
+The send's delivery becomes `withdrawn` and its `work_order` command is cancelled. A claim the host makes after this is refused, so no run starts. A send a runtime already claimed is stopped with [stop_work_order](work.order.stop.md) instead. When a stop was asked for and no run ever linked, because the host went away after its claim, the send can then be withdrawn, and a run that links later is cancelled. Withdrawing a send that is already withdrawn changes nothing and answers `repeat: true`.
 
 A refusal answers with a code:
 
 - `conflict` (409) carries a `reason`:
   - `stale_version`: the item changed since the version the person read. Read the item again.
-  - `not_allowed`: a runtime already claimed the send, or the send is over. Stop the run instead.
+  - `not_allowed`: a runtime claimed the send and no stop was asked for, a run is linked, or the send is over. Stop the run instead.
 - `not_found` (404): the workspace has no such work item, or the item has no such send.
 - `forbidden` (403): the caller is not a signed-in person, is an agent run, or holds no role the action takes.
 - A body that does not match the input answers 400 before the handler runs.

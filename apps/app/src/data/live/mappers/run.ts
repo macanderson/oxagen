@@ -672,41 +672,49 @@ type CommandListOutput = ContractOutput<typeof tachoCommandList>;
 /**
  * `list_commands` as the delivery report reads it (#2953). The requested mode
  * and the mode achieved stay two fields, never one (INV-10), and a blank
- * issuer name reads as none, since the view refuses an empty one.
+ * issuer name reads as none, since the view refuses an empty one. A
+ * `work_order` command is addressed to a host, never to a run (ADR-250), so a
+ * run's delivery report leaves it out. The Work page reads the send.
  */
 export function toCommandReport(
   out: CommandListOutput,
 ): z.input<typeof CommandReport> {
   return {
-    commands: out.commands.map((command) => ({
-      id: command.id,
-      runId: command.runId,
-      agentKey: command.agentKey,
-      command: command.command,
-      status: command.status,
-      requestedMode: command.requestedMode,
-      deliveryMode: command.deliveryMode,
-      degradedReason: command.degradedReason,
-      reason: command.reason,
-      issuedAt: command.issuedAt,
-      expiresAt: command.expiresAt,
-      sentAt: command.sentAt,
-      acknowledgedAt: command.acknowledgedAt,
-      appliedAt: command.appliedAt,
-      appliedAtSeq: command.appliedAtSeq,
-      detail: command.detail,
-      issuedBy:
-        command.issuedBy === null
-          ? null
-          : {
-              id: command.issuedBy.id,
-              name:
-                command.issuedBy.name === null ||
-                command.issuedBy.name.trim() === ""
-                  ? null
-                  : command.issuedBy.name,
-            },
-      text: command.text,
-    })),
+    commands: out.commands.flatMap((command) => {
+      const kind = command.command;
+      if (kind === "work_order") return [];
+      return [
+        {
+          id: command.id,
+          runId: command.runId,
+          agentKey: command.agentKey,
+          command: kind,
+          status: command.status,
+          requestedMode: command.requestedMode,
+          deliveryMode: command.deliveryMode,
+          degradedReason: command.degradedReason,
+          reason: command.reason,
+          issuedAt: command.issuedAt,
+          expiresAt: command.expiresAt,
+          sentAt: command.sentAt,
+          acknowledgedAt: command.acknowledgedAt,
+          appliedAt: command.appliedAt,
+          appliedAtSeq: command.appliedAtSeq,
+          detail: command.detail,
+          issuedBy:
+            command.issuedBy === null
+              ? null
+              : {
+                  id: command.issuedBy.id,
+                  name:
+                    command.issuedBy.name === null ||
+                    command.issuedBy.name.trim() === ""
+                      ? null
+                      : command.issuedBy.name,
+                },
+          text: command.text,
+        },
+      ];
+    }),
   };
 }
