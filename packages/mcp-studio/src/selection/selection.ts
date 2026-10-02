@@ -67,6 +67,11 @@ export type SelectionReply = z.output<typeof selectionReplySchema>;
  * The run checks the reply against selectionReplySchema, so an
  * implementation may pass a parsed answer through as it came. A reply that
  * does not fit counts as malformed. A rejection stops the run.
+ *
+ * The run asks up to SELECTION_CONCURRENCY tasks at once, so choose() must
+ * take several calls at the same time. When the signal aborts, choose()
+ * should reject promptly. The run does not wait for it: it stops at once and
+ * reports the task as not_run.
  */
 export interface SelectionModel {
   choose(request: SelectionRequest, signal?: AbortSignal): Promise<unknown>;
@@ -79,10 +84,11 @@ export interface SelectionModel {
  * - miss: the model picked another tool, or picked none when one fits.
  * - malformed: the reply could not be read, or it named a tool the server does not offer.
  * - skipped: the task expects a tool the server does not offer, so the run did not ask the model.
+ * - not_run: the signal aborted before the model answered, so the task has no result.
  */
 export type SelectionOutcome =
   | { status: "hit" | "miss"; chosen: string | null }
-  | { status: "malformed" | "skipped"; reason: string };
+  | { status: "malformed" | "skipped" | "not_run"; reason: string };
 
 export type SelectionCaseResult = {
   /** The task's place in the run, from 1: its line in tests/selection.jsonl. */
@@ -92,27 +98,41 @@ export type SelectionCaseResult = {
   expected: string | null;
 } & SelectionOutcome;
 
-/** How many tasks came out each way. hits, misses, malformed, and skipped add up to total. */
+/** How many tasks came out each way. hits, misses, malformed, skipped, and notRun add up to total. */
 export interface SelectionCounts {
   total: number;
   hits: number;
   misses: number;
   malformed: number;
   skipped: number;
+  notRun: number;
 }
 
 export interface SelectionReport {
   /** One result per task, in the order the tasks were given. */
   cases: SelectionCaseResult[];
   counts: SelectionCounts;
+  /**
+   * True when the signal aborted before every task had a result. Each task
+   * without one is not_run. False when every task finished, even if the
+   * signal aborted afterward.
+   */
+  stopped: boolean;
 }
 
 /**
  * The most tasks one selection run asks. Each task is one model call, billed
- * to the workspace, so the cap bounds what one click can spend. It also keeps
- * a run, which asks one task at a time, well inside a request's time limit.
+ * to the workspace, so the cap bounds what one click can spend.
  */
 export const SELECTION_TASKS_MAX = 50;
+
+/**
+ * The most model calls one selection run has waiting at once. Fifty tasks
+ * take ten rounds, so a model that answers in 6 seconds finishes a full run in
+ * about a minute. A small number keeps one run from flooding the provider or
+ * the workspace's rate limit.
+ */
+export const SELECTION_CONCURRENCY = 5;
 
 export const SELECTION_RUN_ERROR_CODES = ["no_tools", "duplicate_tool", "too_many_tasks", "model_failed"] as const;
 export type SelectionRunErrorCode = (typeof SELECTION_RUN_ERROR_CODES)[number];
@@ -123,7 +143,7 @@ export type SelectionRunErrorCode = (typeof SELECTION_RUN_ERROR_CODES)[number];
  * - no_tools: the server offers no tool, so there is nothing to choose from.
  * - duplicate_tool: two tools share a name, so a reply could not say which one the model picked.
  * - too_many_tasks: the run has more than SELECTION_TASKS_MAX tasks. It asks the model nothing.
- * - model_failed: the model call for one task failed. The run asks no more tasks.
+ * - model_failed: the model call for one task failed. The run starts no more tasks.
  */
 export class SelectionRunError extends Error {
   readonly code: SelectionRunErrorCode;
@@ -178,24 +198,71 @@ function judge(reply: unknown, expected: string | null, offered: ReadonlySet<str
   return { status: chosen === expected ? "hit" : "miss", chosen };
 }
 
-const COUNT_KEY = { hit: "hits", miss: "misses", malformed: "malformed", skipped: "skipped" } as const;
+const COUNT_KEY = {
+  hit: "hits",
+  miss: "misses",
+  malformed: "malformed",
+  skipped: "skipped",
+  not_run: "notRun",
+} as const;
 
 function countOutcomes(cases: readonly SelectionCaseResult[]): SelectionCounts {
-  const counts: SelectionCounts = { total: cases.length, hits: 0, misses: 0, malformed: 0, skipped: 0 };
+  const counts: SelectionCounts = { total: cases.length, hits: 0, misses: 0, malformed: 0, skipped: 0, notRun: 0 };
   for (const result of cases) counts[COUNT_KEY[result.status]] += 1;
   return counts;
+}
+
+/** The reason a task without a result gives. */
+const NOT_RUN_REASON = "The run stopped before the model answered this task, so it has no result.";
+
+/** How one model call ended. */
+type Asked = { kind: "answer"; reply: unknown } | { kind: "failed"; error: unknown } | { kind: "stopped" };
+
+const STOPPED: Asked = { kind: "stopped" };
+
+/** A promise that resolves to STOPPED when the signal aborts. It never settles otherwise. */
+function whenAborted(signal: AbortSignal): Promise<Asked> {
+  if (signal.aborted) return Promise.resolve(STOPPED);
+  return new Promise<Asked>((resolve) => signal.addEventListener("abort", () => resolve(STOPPED), { once: true }));
+}
+
+/**
+ * Ask the model about one task. It settles when the model answers or fails,
+ * or when `aborted` resolves, whichever comes first, so a call that ignores
+ * the signal cannot hold the run past it. A call that fails after the signal
+ * aborted counts as stopped, not failed.
+ */
+function ask(
+  model: SelectionModel,
+  request: SelectionRequest,
+  signal: AbortSignal | undefined,
+  aborted: Promise<Asked> | null,
+): Promise<Asked> {
+  const call = new Promise<unknown>((resolve) => resolve(model.choose(request, signal))).then(
+    (reply): Asked => ({ kind: "answer", reply }),
+    (error: unknown): Asked => (signal?.aborted === true ? STOPPED : { kind: "failed", error }),
+  );
+  return aborted === null ? call : Promise.race([call, aborted]);
 }
 
 /**
  * Ask the model which tool fits each task, and report each hit and miss.
  *
  * Before it asks anything, the run refuses a server with no tools, two tools
- * with one name, and more than SELECTION_TASKS_MAX tasks.
+ * with one name, and more than SELECTION_TASKS_MAX tasks. A task that expects
+ * a tool the server does not offer is skipped without a model call.
  *
- * The run asks one task at a time, in order, so a failed model call stops it
- * before it spends more. It throws a SelectionRunError with code
- * model_failed, which holds the tasks finished so far. When the signal
- * aborts, the run throws the signal's reason and asks no more tasks.
+ * The run asks up to SELECTION_CONCURRENCY tasks at once, and starts the next
+ * task as each answer comes back. Every call gets the caller's signal.
+ *
+ * When the signal aborts, the run starts no new task and stops waiting for
+ * the calls still out. It returns the tasks that finished, marks every other
+ * task not_run, and sets stopped. The caller aborts the signal at the run's
+ * deadline, so a slow model still returns the answers already billed.
+ *
+ * A failed model call stops the run from starting more tasks. The calls
+ * already out finish, and then the run throws a SelectionRunError with code
+ * model_failed, which holds the tasks that finished.
  */
 export async function runSelection(
   tools: readonly EffectiveDefinition[],
@@ -223,31 +290,49 @@ export async function runSelection(
     );
   }
 
-  const results: SelectionCaseResult[] = [];
-  for (const [index, test] of cases.entries()) {
-    signal?.throwIfAborted();
-    const line = index + 1;
-    const task = { line, task: test.task, expected: test.expect };
-    if (test.expect !== null && !offered.has(test.expect)) {
-      results.push({
-        ...task,
-        status: "skipped",
-        reason: `The server does not offer ${test.expect}, so the run did not ask the model. Import the tool, or correct the task's expect.`,
-      });
-      continue;
+  const tasks = cases.map((test, index) => ({ line: index + 1, task: test.task, expected: test.expect }));
+  // A result for each task once it has one. A skipped task costs nothing, so
+  // it gets its result before any model call and keeps it if the run stops.
+  const results = tasks.map((task): SelectionCaseResult | undefined =>
+    task.expected !== null && !offered.has(task.expected)
+      ? {
+          ...task,
+          status: "skipped",
+          reason: `The server does not offer ${task.expected}, so the run did not ask the model. Import the tool, or correct the task's expect.`,
+        }
+      : undefined,
+  );
+  const queue = tasks.filter((_, index) => results[index] === undefined);
+
+  const aborted = signal === undefined ? null : whenAborted(signal);
+  // Each failed call, in the order it failed. The first one stops the run.
+  const failures: { line: number; error: unknown }[] = [];
+  let next = 0;
+  // Each worker takes the next task in file order until none is left, a call
+  // has failed, or the signal has aborted.
+  async function worker(): Promise<void> {
+    while (failures.length === 0 && signal?.aborted !== true) {
+      const task = queue[next];
+      if (task === undefined) return;
+      next += 1;
+      const asked = await ask(model, { instructions: SELECTION_INSTRUCTIONS, task: task.task, tools }, signal, aborted);
+      if (asked.kind === "answer") results[task.line - 1] = { ...task, ...judge(asked.reply, task.expected, offered) };
+      if (asked.kind === "failed") failures.push({ line: task.line, error: asked.error });
     }
-    let reply: unknown;
-    try {
-      reply = await model.choose({ instructions: SELECTION_INSTRUCTIONS, task: test.task, tools }, signal);
-    } catch (error) {
-      signal?.throwIfAborted();
-      throw new SelectionRunError(
-        "model_failed",
-        `The model call for task ${line} failed, so the run stopped after ${results.length} of ${cases.length} tasks.`,
-        { line, completed: results, cause: error },
-      );
-    }
-    results.push({ ...task, ...judge(reply, test.expect, offered) });
   }
-  return { cases: results, counts: countOutcomes(results) };
+  await Promise.all(Array.from({ length: Math.min(SELECTION_CONCURRENCY, queue.length) }, worker));
+
+  const finished = results.filter((result): result is SelectionCaseResult => result !== undefined);
+  const failure = failures[0];
+  if (failure !== undefined) {
+    throw new SelectionRunError(
+      "model_failed",
+      `The model call for task ${failure.line} failed, so the run stopped with ${finished.length} of ${cases.length} tasks finished.`,
+      { line: failure.line, completed: finished, cause: failure.error },
+    );
+  }
+  const report = tasks.map(
+    (task, index): SelectionCaseResult => results[index] ?? { ...task, status: "not_run", reason: NOT_RUN_REASON },
+  );
+  return { cases: report, counts: countOutcomes(report), stopped: finished.length < tasks.length };
 }

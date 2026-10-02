@@ -14,6 +14,9 @@ import { studioServerNameSchema } from "./tool.studio.draft.save";
  * folder the way list_studio_findings does, so the run offers the tools as
  * Studio shows them, draft edits included. It reads tests/selection.jsonl
  * from the production branch, because Review does not write that file.
+ *
+ * The run asks a few tasks at once. At its deadline it returns the tasks that
+ * finished, marks the rest not_run, and sets stoppedAtDeadline (#5171).
  */
 
 const taskSchema = {
@@ -26,7 +29,8 @@ const taskSchema = {
 
 /**
  * One task's result. A hit or a miss names the tool the model picked, or null
- * when it picked none. A malformed reply or a skipped task says why instead.
+ * when it picked none. A malformed reply, a skipped task, or a task the run
+ * did not finish says why instead.
  */
 export const studioSelectionCaseSchema = z.union([
   z.object({
@@ -37,8 +41,8 @@ export const studioSelectionCaseSchema = z.union([
   }),
   z.object({
     ...taskSchema,
-    /** malformed: the reply could not be read, or named a tool the server does not offer. skipped: the task expects a tool the server does not offer, so the run did not ask. */
-    status: z.enum(["malformed", "skipped"]),
+    /** malformed: the reply could not be read, or named a tool the server does not offer. skipped: the task expects a tool the server does not offer, so the run did not ask. not_run: the run reached its deadline before the model answered. */
+    status: z.enum(["malformed", "skipped", "not_run"]),
     reason: z.string(),
   }),
 ]);
@@ -48,7 +52,7 @@ export const toolStudioSelectionRun = registerCapability({
   name: "run_studio_selection",
   domain: "tool",
   description:
-    "Run a server folder's selection tests: ask the workspace's model to pick one of the server's tools for each task in tests/selection.jsonl, and count the hits and misses. Runs only when asked. Each task is one model call, billed as in-app agent spend, and one run asks at most 50 tasks.",
+    "Run a server folder's selection tests: ask the workspace's model to pick one of the server's tools for each task in tests/selection.jsonl, and count the hits and misses. Runs only when asked. Each task is one model call, billed as in-app agent spend, and one run asks at most 50 tasks. A run that reaches its deadline returns the tasks that finished and marks the rest not run.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -75,16 +79,20 @@ export const toolStudioSelectionRun = registerCapability({
     revision: z.number().int().min(1).nullable(),
     /** The model the run asked, or null when it asked nothing. */
     model: z.string().nullable(),
-    /** How many tasks came out each way. hits, misses, malformed, and skipped add up to total. */
+    /** How many tasks came out each way. hits, misses, malformed, skipped, and notRun add up to total. */
     counts: z.object({
       total: z.number().int().min(0),
       hits: z.number().int().min(0),
       misses: z.number().int().min(0),
       malformed: z.number().int().min(0),
       skipped: z.number().int().min(0),
+      /** Tasks the run did not finish before its deadline. Defaults to 0, so an output from before #5171 still parses. */
+      notRun: z.number().int().min(0).default(0),
     }),
     /** One result per task, in the order of tests/selection.jsonl. */
     cases: z.array(studioSelectionCaseSchema),
+    /** True when the run reached its deadline before every task finished. Each task it did not finish is not_run. */
+    stoppedAtDeadline: z.boolean().default(false),
   }),
 });
 

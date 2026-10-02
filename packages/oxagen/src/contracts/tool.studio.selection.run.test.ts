@@ -49,13 +49,14 @@ describe("run_studio_selection output", () => {
     basis: "published" as const,
     revision: null,
     model: "fast-model",
-    counts: { total: 4, hits: 1, misses: 1, malformed: 1, skipped: 1 },
+    counts: { total: 4, hits: 1, misses: 1, malformed: 1, skipped: 1, notRun: 0 },
     cases: [
       { line: 1, task: "Refund $40 of charge ch_3P9.", expected: "billing__create_refund", status: "hit" as const, chosen: "billing__create_refund" },
       { line: 2, task: "Write a haiku.", expected: null, status: "miss" as const, chosen: "billing__list_charges" },
       { line: 3, task: "List charges.", expected: "billing__list_charges", status: "malformed" as const, reason: "The reply did not parse." },
       { line: 4, task: "Void an invoice.", expected: "billing__void_invoice", status: "skipped" as const, reason: "The server does not offer it." },
     ],
+    stoppedAtDeadline: false,
   };
 
   it("carries each task's result and the counts", () => {
@@ -63,14 +64,40 @@ describe("run_studio_selection output", () => {
   });
 
   it("takes a run that asked nothing", () => {
-    const empty = { ...out, model: null, counts: { total: 0, hits: 0, misses: 0, malformed: 0, skipped: 0 }, cases: [] };
+    const empty = {
+      ...out,
+      model: null,
+      counts: { total: 0, hits: 0, misses: 0, malformed: 0, skipped: 0, notRun: 0 },
+      cases: [],
+    };
     expect(toolStudioSelectionRun.output.parse(empty)).toEqual(empty);
+  });
+
+  it("carries a run that stopped at its deadline, with the tasks it did not run", () => {
+    const stopped = {
+      ...out,
+      counts: { total: 5, hits: 1, misses: 1, malformed: 1, skipped: 1, notRun: 1 },
+      cases: [
+        ...out.cases,
+        { line: 5, task: "Refund charge ch_9.", expected: "billing__create_refund", status: "not_run" as const, reason: "The run stopped." },
+      ],
+      stoppedAtDeadline: true,
+    };
+    expect(toolStudioSelectionRun.output.parse(stopped)).toEqual(stopped);
+  });
+
+  it("parses an output from before the deadline fields, and fills their defaults", () => {
+    const { stoppedAtDeadline: _flag, ...older } = out;
+    const { notRun: _notRun, ...olderCounts } = out.counts;
+
+    expect(toolStudioSelectionRun.output.parse({ ...older, counts: olderCounts })).toEqual(out);
   });
 
   it.each([
     ["a hit with no chosen tool field", { line: 1, task: "t", expected: null, status: "hit" }],
     ["a malformed reply with no reason", { line: 1, task: "t", expected: null, status: "malformed" }],
     ["an unknown status", { line: 1, task: "t", expected: null, status: "error", reason: "x" }],
+    ["a task the run did not finish with no reason", { line: 1, task: "t", expected: null, status: "not_run" }],
     ["a line of 0", { line: 0, task: "t", expected: null, status: "hit", chosen: null }],
   ])("refuses %s", (_label, entry) => {
     expect(toolStudioSelectionRun.output.safeParse({ ...out, cases: [entry] }).success).toBe(false);

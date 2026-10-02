@@ -202,7 +202,7 @@ describe("run_studio_selection", () => {
       basis: "published",
       revision: null,
       model: "fast-model",
-      counts: { total: 2, hits: 1, misses: 1, malformed: 0, skipped: 0 },
+      counts: { total: 2, hits: 1, misses: 1, malformed: 0, skipped: 0, notRun: 0 },
       cases: [
         {
           line: 1,
@@ -219,6 +219,7 @@ describe("run_studio_selection", () => {
           chosen: "billing__list_charges",
         },
       ],
+      stoppedAtDeadline: false,
     };
     mocks.invoke.mockResolvedValue(output);
 

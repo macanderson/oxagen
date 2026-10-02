@@ -1,7 +1,7 @@
 {
   "name": "run_studio_selection",
   "domain": "tool",
-  "description": "Run a server folder's selection tests: ask the workspace's model to pick one of the server's tools for each task in tests/selection.jsonl, and count the hits and misses. Runs only when asked. Each task is one model call, billed as in-app agent spend, and one run asks at most 50 tasks.",
+  "description": "Run a server folder's selection tests: ask the workspace's model to pick one of the server's tools for each task in tests/selection.jsonl, and count the hits and misses. Runs only when asked. Each task is one model call, billed as in-app agent spend, and one run asks at most 50 tasks. A run that reaches its deadline returns the tasks that finished and marks the rest not run.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -91,6 +91,11 @@
           "skipped": {
             "type": "integer",
             "minimum": 0
+          },
+          "notRun": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
           }
         },
         "required": [
@@ -177,7 +182,8 @@
                   "type": "string",
                   "enum": [
                     "malformed",
-                    "skipped"
+                    "skipped",
+                    "not_run"
                   ]
                 },
                 "reason": {
@@ -195,6 +201,10 @@
             }
           ]
         }
+      },
+      "stoppedAtDeadline": {
+        "type": "boolean",
+        "default": false
       }
     },
     "required": [

@@ -1,8 +1,9 @@
 // run.test.ts: run_studio_selection over an in-memory steering repo. The
 // build is the real one, and the billing folder comes from
 // packages/mcp-studio/fixtures. The store, the host, and the model are fakes,
-// so no test spends a token.
-import { describe, expect, it, vi } from "vitest";
+// so no test spends a token. The deadline tests run on fake timers, so none
+// of them waits.
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
@@ -28,6 +29,7 @@ vi.mock("@oxagen/ai", () => ({
 import { readFileSync } from "node:fs";
 import { TooManyToolsForProviderError } from "@oxagen/agent/runtime/tool-budget";
 import {
+  SELECTION_CONCURRENCY,
   SELECTION_INSTRUCTIONS,
   SELECTION_TASKS_MAX,
   type SelectionRequest,
@@ -159,6 +161,60 @@ function byTask(answers: Record<string, string | null>): FakeModel {
   return fakeModel((request) => ({ tool: answers[request.task] ?? null }));
 }
 
+interface SlowModel extends FakeModel {
+  /** The most calls that waited for an answer at once. */
+  peak: () => number;
+}
+
+/**
+ * A model that picks the refund tool `ms` milliseconds of fake time after
+ * each request, the way a slow model answers. An abort rejects a waiting call
+ * at once with the signal's reason, as a request through @oxagen/ai does.
+ */
+function slowModel(ms: number): SlowModel {
+  const requests: SelectionRequest[] = [];
+  const signals: (AbortSignal | undefined)[] = [];
+  let waiting = 0;
+  let peak = 0;
+  return {
+    requests,
+    signals,
+    peak: () => peak,
+    model: {
+      modelId: () => (requests.length === 0 ? null : "slow-model"),
+      choose(request, signal) {
+        requests.push(request);
+        signals.push(signal);
+        waiting += 1;
+        peak = Math.max(peak, waiting);
+        return new Promise((resolve, reject) => {
+          const onAbort = (): void => {
+            clearTimeout(timer);
+            waiting -= 1;
+            reject(signal?.reason);
+          };
+          const timer = setTimeout(() => {
+            waiting -= 1;
+            signal?.removeEventListener("abort", onAbort);
+            resolve({ tool: REFUND });
+          }, ms);
+          signal?.addEventListener("abort", onAbort, { once: true });
+        });
+      },
+    },
+  };
+}
+
+/** A signal that aborts SELECTION_RUN_DEADLINE_MS of fake time from now, as the production deadline does. */
+function fakeDeadline(): AbortSignal {
+  const controller = new AbortController();
+  setTimeout(
+    () => controller.abort(new DOMException("The operation was aborted due to timeout", "TimeoutError")),
+    SELECTION_RUN_DEADLINE_MS,
+  );
+  return controller.signal;
+}
+
 interface RigOptions {
   tree?: Tree;
   draft?: StoredStudioDraft | null;
@@ -218,11 +274,12 @@ describe("run_studio_selection runs the folder's selection tests", () => {
       basis: "published",
       revision: null,
       model: "fast-model",
-      counts: { total: 2, hits: 2, misses: 0, malformed: 0, skipped: 0 },
+      counts: { total: 2, hits: 2, misses: 0, malformed: 0, skipped: 0, notRun: 0 },
       cases: [
         { line: 1, task: REFUND_TASK, expected: REFUND, status: "hit", chosen: REFUND },
         { line: 2, task: CHARGES_TASK, expected: CHARGES, status: "hit", chosen: CHARGES },
       ],
+      stoppedAtDeadline: false,
     });
     expect(toolStudioSelectionRun.output.parse(out)).toStrictEqual(out);
     expect(r.fake.requests.map((request) => request.task)).toStrictEqual([REFUND_TASK, CHARGES_TASK]);
@@ -269,7 +326,7 @@ describe("run_studio_selection runs the folder's selection tests", () => {
     const r = rig({ tree, model: model.model });
     const out = await r.run();
 
-    expect(out.counts).toStrictEqual({ total: 7, hits: 2, misses: 3, malformed: 1, skipped: 1 });
+    expect(out.counts).toStrictEqual({ total: 7, hits: 2, misses: 3, malformed: 1, skipped: 1, notRun: 0 });
     expect(out.cases.map((entry) => [entry.line, entry.status])).toStrictEqual([
       [1, "hit"],
       [2, "miss"],
@@ -331,7 +388,7 @@ describe("run_studio_selection runs the folder's selection tests", () => {
     const out = await r.run();
 
     expect(out.model).toBeNull();
-    expect(out.counts).toStrictEqual({ total: 1, hits: 0, misses: 0, malformed: 0, skipped: 1 });
+    expect(out.counts).toStrictEqual({ total: 1, hits: 0, misses: 0, malformed: 0, skipped: 1, notRun: 0 });
     expect(r.fake.requests).toHaveLength(0);
   });
 
@@ -438,23 +495,6 @@ describe("run_studio_selection refuses", () => {
     );
   });
 
-  it("a run that passes its deadline, and says the finished tasks are billed", async () => {
-    const controller = new AbortController();
-    const model = fakeModel(() => {
-      controller.abort();
-      throw new Error("The request was aborted.");
-    });
-    const r = rig({ model: model.model, deadline: controller.signal });
-    const err = await refusal(r.run());
-
-    expect(err.code).toBe("conflict");
-    expect(err.reason).toBe("selection_timed_out");
-    expect(err.message).toBe(
-      `The selection run for billing took longer than ${SELECTION_RUN_DEADLINE_MS / 1000} seconds, so it stopped and reported nothing. The tasks it finished are still billed. Remove tasks from tests/selection.jsonl, then run it again.`,
-    );
-    expect(model.requests).toHaveLength(1);
-  });
-
   it("a server with no draft and no folder, before it reads the tests or calls the model", async () => {
     const r = rig({ tree: {} });
     const err = await refusal(r.run());
@@ -482,14 +522,94 @@ describe("run_studio_selection refuses", () => {
 });
 
 describe("run_studio_selection and a failed model call", () => {
-  it("passes the model's own error through and asks no more tasks", async () => {
+  it("passes the model's own error through and starts no more tasks", async () => {
     const failure = new Error("The provider answered 503.");
     const model = fakeModel(() => {
       throw failure;
     });
-    const r = rig({ model: model.model });
+    const r = rig({ tree: withSelection(refundTasks(SELECTION_CONCURRENCY + 2)), model: model.model });
 
     await expect(r.run()).rejects.toBe(failure);
-    expect(model.requests).toHaveLength(1);
+    expect(model.requests).toHaveLength(SELECTION_CONCURRENCY);
+  });
+});
+
+// ── The deadline ─────────────────────────────────────────────────────────────
+
+describe("run_studio_selection at its deadline", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /**
+   * Start a run of `tasks` refund tasks on `model`, under a fake deadline, and
+   * resolve once its first calls are out. The run comes back in an object, so
+   * awaiting this does not wait for the run.
+   */
+  async function startSlowRun(tasks: number, model: SlowModel) {
+    // Only the timers are fake, so the folder build runs as it always does.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const r = rig({ tree: withSelection(refundTasks(tasks)), model: model.model, deadline: fakeDeadline() });
+    const run = r.run();
+    await vi.waitFor(() => expect(model.requests.length).toBeGreaterThan(0));
+    return { run };
+  }
+
+  it("asks at most SELECTION_CONCURRENCY tasks at once, so the issue's slow run finishes: 50 tasks at 6 seconds each", async () => {
+    const model = slowModel(6_000);
+    const { run } = await startSlowRun(SELECTION_TASKS_MAX, model);
+    expect(model.requests).toHaveLength(SELECTION_CONCURRENCY);
+
+    await vi.advanceTimersByTimeAsync((SELECTION_TASKS_MAX / SELECTION_CONCURRENCY) * 6_000);
+    const out = await run;
+
+    expect(model.peak()).toBe(SELECTION_CONCURRENCY);
+    expect(out.stoppedAtDeadline).toBe(false);
+    expect(out.counts).toStrictEqual({
+      total: SELECTION_TASKS_MAX,
+      hits: SELECTION_TASKS_MAX,
+      misses: 0,
+      malformed: 0,
+      skipped: 0,
+      notRun: 0,
+    });
+    expect(model.requests).toHaveLength(SELECTION_TASKS_MAX);
+  });
+
+  it("returns the tasks that finished and names the tasks it did not run", async () => {
+    // Four rounds of five answer by 200 seconds. The fifth round is still out
+    // at the 240-second deadline, and the run never asks the last 25 tasks.
+    const model = slowModel(50_000);
+    const { run } = await startSlowRun(SELECTION_TASKS_MAX, model);
+
+    await vi.advanceTimersByTimeAsync(SELECTION_RUN_DEADLINE_MS);
+    const out = await run;
+
+    const answered = 4 * SELECTION_CONCURRENCY;
+    expect(out.stoppedAtDeadline).toBe(true);
+    expect(out.model).toBe("slow-model");
+    expect(out.counts).toStrictEqual({
+      total: SELECTION_TASKS_MAX,
+      hits: answered,
+      misses: 0,
+      malformed: 0,
+      skipped: 0,
+      notRun: SELECTION_TASKS_MAX - answered,
+    });
+    expect(out.cases.slice(0, answered).every((entry) => entry.status === "hit")).toBe(true);
+    expect(out.cases.slice(answered)).toStrictEqual(
+      refundTasks(SELECTION_TASKS_MAX)
+        .slice(answered)
+        .map((task, index) => ({
+          line: answered + index + 1,
+          task: task.task,
+          expected: REFUND,
+          status: "not_run",
+          reason: "The run stopped before the model answered this task, so it has no result.",
+        })),
+    );
+    // The fifth round was cut off at the deadline. Nothing after it was asked.
+    expect(model.requests).toHaveLength(answered + SELECTION_CONCURRENCY);
+    expect(toolStudioSelectionRun.output.parse(out)).toStrictEqual(out);
   });
 });

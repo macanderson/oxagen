@@ -39,8 +39,11 @@ The model sees the task and the tool list, and answers with one tool's full name
 | `basis` | `draft` or `published` | `draft` when the run offered the saved draft's tools, `published` when it offered the production folder's |
 | `revision` | integer or null | the draft revision the run offered, or null for the production folder |
 | `model` | string or null | the model the run asked, or null when it asked nothing |
-| `counts` | object | `total`, `hits`, `misses`, `malformed`, and `skipped`. The last four add up to `total` |
+| `counts` | object | `total`, `hits`, `misses`, `malformed`, `skipped`, and `notRun`. The last five add up to `total` |
 | `cases` | array | one result per task, in file order |
+| `stoppedAtDeadline` | boolean | true when the run reached its deadline before every task finished. Each task it did not finish is `not_run` |
+
+`counts.notRun` and `stoppedAtDeadline` arrived with #5171. Both have defaults (0 and false), so a caller that reads an output without them still parses it.
 
 Each case holds `line` (its line in the file, from 1), `task`, `expected` (the tool name, or null), and a `status`:
 
@@ -50,6 +53,7 @@ Each case holds `line` (its line in the file, from 1), `task`, `expected` (the t
 | `miss` | the model picked another tool, or picked none when one fits | `chosen`: the tool it picked, or null |
 | `malformed` | the reply could not be read, or it named a tool the server does not offer | `reason` |
 | `skipped` | the task expects a tool the server does not offer, so the run did not ask the model | `reason` |
+| `not_run` | the run reached its deadline before the model answered this task | `reason` |
 
 A skipped task costs nothing. Two runs can give different results, because each run asks the model again.
 
@@ -68,7 +72,8 @@ None in the steering repo or the draft store. Each model call writes a token usa
 ## Limits
 
 - One run asks at most 50 tasks. A file with more is refused before any model call.
-- The run asks one task at a time, in order. A run that takes longer than 240 seconds stops and reports nothing. The tasks it finished are still billed.
+- The run asks up to 5 tasks at once, in file order, and starts the next task as each answer comes back. A model that takes 6 seconds a task finishes 50 tasks in about a minute.
+- The run's deadline is 240 seconds, which leaves time before the 300-second limit on a request. At the deadline the run starts no new task and cuts off the calls still waiting. It returns each task that finished, marks the others `not_run`, and sets `stoppedAtDeadline`. A call cut off at the deadline gets no answer, and `@oxagen/ai` voids its usage, so it is not charged as agent spend.
 - A provider may cap how many tools one request carries, such as OpenAI's 128. A server with more tools than the workspace's model takes is refused before any model call.
 - Each answer is at most 1,024 output tokens.
 
@@ -87,10 +92,9 @@ None in the steering repo or the draft store. Each model call writes a token usa
 | `conflict` (409) | `selection_tests_invalid`: a line of `tests/selection.jsonl` does not parse. The message names up to three lines |
 | `conflict` (409) | `too_many_tasks`: the file holds more than 50 tasks |
 | `conflict` (409) | `too_many_tools_for_provider`: the server offers more tools than the workspace's model takes in one request |
-| `conflict` (409) | `selection_timed_out`: the run took longer than 240 seconds |
 | `conflict` (409) | `no_tools` or `duplicate_tool`: the folder offers no tool, or two tools share a name |
 | `conflict` (409) | any refusal list_studio_findings returns when it builds the folder, such as `production_branch_missing`, `folder_invalid`, or `source_required` |
 | `gau_exhausted`, `budget_exceeded` (402) | the organization's month of governed actions is used up, or a spend ceiling is reached. Either refuses the call before the handler runs |
 | `invalid_input` (400) | `server` is missing or malformed, or the input carries another field |
 
-A model call that fails for another reason passes its error through. The run asks no more tasks, and each task it finished is still billed.
+A model call that fails for another reason passes its error through. The run starts no more tasks and waits for the calls already out. Each task that finished is still billed. A run that reaches its deadline is not an error: it returns what finished, as Limits says.
