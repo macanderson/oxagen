@@ -23,6 +23,20 @@
  * `budgetTokens`, the UTF-8 byte count over four, the unit the steering
  * assembler already budgets in. Each count carries its basis beside it.
  *
+ * What each path can measure (ADR-062, amendment of 2026-10-02):
+ *
+ * - The loopback proxy records the request, so a proxied call carries the
+ *   tool definition count, the steering count, the system context digest,
+ *   and its parts ({@link SystemContextTracker.measure}).
+ * - An OTel `api_request` record and a transcript `assistant` record carry
+ *   usage and ids, never the request. On a session the proxy did not carry,
+ *   the counted row of a call carries the steering count alone
+ *   ({@link SystemContextTracker.measureUnseen}). The manifest says what
+ *   steering the session was delivered, whichever path saw the call. The
+ *   tool definitions and the system context stay absent. A digest over the
+ *   steering parts alone would read as the whole context, and a change to a
+ *   tool would look like no change.
+ *
  * The proxy stores a request with the part its session's prior holds cut
  * out (`request-prefix.ts`). A cut request names the call that holds the cut
  * fields by that call's full digest, so this module remembers what each
@@ -574,12 +588,8 @@ export class SystemContextTracker {
     attrs: Record<string, string> | undefined,
     turn: string,
   ): SystemContextMeasure {
-    const facts: TokenSourceFacts = {};
+    const facts = this.steeringFacts();
     const steering = this.steering;
-    if (steering !== undefined) {
-      facts.steering_tokens = steering.tokens;
-      facts.steering_tokens_basis = "estimated";
-    }
     const recorded = requestOf(content);
     const resolved =
       recorded === undefined
@@ -628,6 +638,28 @@ export class SystemContextTracker {
       this.listed.push(digest);
       if (this.listed.length > LISTED_PER_TURN) this.listed.shift();
     });
+  }
+
+  /**
+   * The token sources of a model call whose request the recorder never saw:
+   * the counted OTel or transcript row of a call the proxy did not carry
+   * (#4493). Only the steering count is known without the request. The tool
+   * definition count, the context frame count, and the system context stay
+   * absent, never zero. Nothing changes on the tracker, so there is nothing
+   * to commit.
+   */
+  measureUnseen(): TokenSourceFacts {
+    return this.checked(this.steeringFacts(), {}, () => {}).facts;
+  }
+
+  /** The steering count and its basis, or nothing before a manifest seals. */
+  private steeringFacts(): TokenSourceFacts {
+    const steering = this.steering;
+    if (steering === undefined) return {};
+    return {
+      steering_tokens: steering.tokens,
+      steering_tokens_basis: "estimated",
+    };
   }
 
   /**

@@ -3,13 +3,18 @@
  * frames (#4493), sealed through `sealCollectorEvent` the way the loopback
  * proxy seals them: which members a proxied call carries, where its steering
  * comes from, when a turn lists its parts, and what a rollback or a restart
- * keeps.
+ * keeps. The last block covers a call the proxy did not carry, which reaches
+ * the chain as an OTel or transcript record and never shows its request.
  */
 import { describe, expect, it } from "vitest";
 import { jcs } from "../digest";
 import type { TachoEvent } from "../envelope";
 import { type DraftContent, jsonContent } from "../evidence/frame-body";
 import type { ClaudeCodeContext } from "./context";
+import {
+  countsLlmCallUsage,
+  LLM_CALL_DUPLICATE_OF_ATTR,
+} from "./llm-call-dedupe";
 import { SessionRecorder } from "./recorder";
 
 const ID = "4493aaaa-2222-3333-4444-555555555555";
@@ -206,5 +211,174 @@ describe("when the recorder lists a call's system context", () => {
 
   it("writes no system context state before a call or a manifest", () => {
     expect(recorder().state()).not.toHaveProperty("systemContext");
+  });
+});
+
+const TS_NANOS = "1790380800000000000";
+const MODEL = "claude-opus-4-5";
+
+/** The members only a recorder that saw the request can set. */
+const REQUEST_MEMBERS = [
+  "tool_definition_tokens",
+  "tool_definition_tokens_basis",
+  "context_frame_tokens",
+  "context_frame_tokens_basis",
+  "system_context_digest",
+  "system_context_parts",
+] as const;
+
+function kv(key: string, value: string | number) {
+  return typeof value === "number"
+    ? { key, value: { intValue: String(value) } }
+    : { key, value: { stringValue: value } };
+}
+
+/** Claude Code's OTel `api_request` record for one model call. */
+function apiRequest(request: string) {
+  const attrs: Record<string, string | number> = {
+    model: MODEL,
+    request_id: request,
+    input_tokens: 10,
+    output_tokens: 5,
+  };
+  return {
+    resourceLogs: [
+      {
+        resource: { attributes: [kv("os.type", "linux")] },
+        scopeLogs: [
+          {
+            logRecords: [
+              {
+                timeUnixNano: TS_NANOS,
+                body: { stringValue: "claude_code.api_request" },
+                attributes: Object.entries(attrs).map(([k, v]) => kv(k, v)),
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+/** The transcript's `assistant` record for one content block of a call. */
+function assistantRecord(request: string, block: number): string {
+  return JSON.stringify({
+    type: "assistant",
+    uuid: `u-${request}-${block}`,
+    requestId: request,
+    timestamp: at,
+    message: {
+      model: MODEL,
+      id: `msg-${request}`,
+      content: [{ type: "text", text: `block ${block}` }],
+      usage: {
+        input_tokens: 10,
+        output_tokens: 5,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      },
+    },
+  });
+}
+
+function withManifest(): SessionRecorder {
+  const chain = recorder();
+  chain.sealCollectorEvent("steering.manifest", MANIFEST, {
+    hook_event_name: "SessionStart",
+  });
+  return chain;
+}
+
+function modelCalls(events: readonly TachoEvent[]): TachoEvent[] {
+  return events.filter((event) => event.kind === "llm_call");
+}
+
+function expectSteeringOnly(event: TachoEvent): void {
+  expect(body(event)["steering_tokens"]).toBe(40);
+  expect(body(event)["steering_tokens_basis"]).toBe("estimated");
+  for (const member of REQUEST_MEMBERS)
+    expect(body(event)).not.toHaveProperty(member);
+}
+
+function expectNoSources(event: TachoEvent): void {
+  expect(body(event)).not.toHaveProperty("steering_tokens");
+  expect(body(event)).not.toHaveProperty("steering_tokens_basis");
+  for (const member of REQUEST_MEMBERS)
+    expect(body(event)).not.toHaveProperty(member);
+}
+
+describe("a model call the proxy did not carry", () => {
+  it("carries the steering count alone on its counted transcript row", () => {
+    const [row] = modelCalls(
+      withManifest().ingestTranscriptLine(assistantRecord("req_t", 0)),
+    );
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+    expect(countsLlmCallUsage(row)).toBe(true);
+    expectSteeringOnly(row);
+  });
+
+  it("carries the steering count alone on its counted OTel row", () => {
+    const [row] = modelCalls(withManifest().ingestOtlp(apiRequest("req_o")));
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+    expect(row.source).toBe("otel_log");
+    expect(countsLlmCallUsage(row)).toBe(true);
+    expectSteeringOnly(row);
+  });
+
+  it("adds nothing to a later sighting of the same call", () => {
+    const chain = withManifest();
+    chain.ingestTranscriptLine(assistantRecord("req_t", 0));
+    // A second content block of the same message, then OTel's record of it.
+    const block = modelCalls(
+      chain.ingestTranscriptLine(assistantRecord("req_t", 1)),
+    );
+    const otel = modelCalls(chain.ingestOtlp(apiRequest("req_t")));
+    for (const row of [...block, ...otel]) {
+      expect(row.attrs[LLM_CALL_DUPLICATE_OF_ATTR]).toBe("transcript");
+      expectNoSources(row);
+    }
+    expect(block).toHaveLength(1);
+  });
+
+  it("adds nothing before a steering manifest seals", () => {
+    const chain = recorder();
+    const rows = modelCalls([
+      ...chain.ingestTranscriptLine(assistantRecord("req_t", 0)),
+      ...chain.ingestOtlp(apiRequest("req_o")),
+    ]);
+    expect(rows).toHaveLength(2);
+    for (const row of rows) expectNoSources(row);
+  });
+
+  it("adds nothing to a subagent's row, whose chain was delivered no manifest", () => {
+    const chain = withManifest();
+    const rows = modelCalls(
+      chain.ingestTranscriptLine(assistantRecord("req_s", 0), "agent-a"),
+    );
+    expect(rows).toHaveLength(1);
+    for (const row of rows) {
+      expect(row.subagent?.subagent_id).toBe("agent-a");
+      expectNoSources(row);
+    }
+  });
+
+  it("gives the OTel row and the proxy row of one call the same steering count", () => {
+    const chain = withManifest();
+    const [otel] = modelCalls(chain.ingestOtlp(apiRequest("req_p")));
+    // The proxy seals as the response ends, so OTel can be first. The proxy
+    // row is then the stamped one, and a reader joins it back for the
+    // tool definitions and the system context.
+    const proxied = call(chain, { request_id: "req_p" });
+    expect(proxied.attrs[LLM_CALL_DUPLICATE_OF_ATTR]).toBe("otel_log");
+    expect(otel).toBeDefined();
+    if (otel === undefined) return;
+    expect(body(otel)["steering_tokens"]).toBe(
+      body(proxied)["steering_tokens"],
+    );
+    expect(body(proxied)["tool_definition_tokens"]).toBeGreaterThan(0);
+    expect(body(proxied)["system_context_digest"]).toMatch(/^sha256:/);
   });
 });

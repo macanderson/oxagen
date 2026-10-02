@@ -712,6 +712,22 @@ describe("the steering a session was delivered", () => {
     });
   });
 
+  it("counts steering alone for a call whose request it never saw", () => {
+    const on = tracker();
+    expect(on.measureUnseen()).toEqual({});
+    on.noteSteeringManifest(MANIFEST);
+    expect(on.measureUnseen()).toEqual({
+      steering_tokens: 65,
+      steering_tokens_basis: "estimated",
+    });
+    // Measuring an unseen call lists nothing, so the turn's next proxied
+    // call still lists its parts.
+    expect(on.state().listed).toBeUndefined();
+    expect(
+      measured(on, exchange(request())).facts.system_context_parts,
+    ).toBeDefined();
+  });
+
   it("reads a manifest that included nothing as zero steering, not absent", () => {
     const on = tracker();
     on.noteSteeringManifest({ items: [MANIFEST.items[2]] });

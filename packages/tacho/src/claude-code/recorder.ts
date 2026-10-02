@@ -1400,6 +1400,25 @@ export class SessionRecorder {
   }
 
   /**
+   * The body of an OTel or transcript model call, with the token sources the
+   * recorder knows without the call's request (#4493). Only the counted row,
+   * the first sighting of its call, takes them. A stamped duplicate is never
+   * summed, and the rollup joins a stamped proxy row back for the members the
+   * counted row lacks. The steering count is the one source known without
+   * the request, so the tool definitions and the system context stay absent
+   * (ADR-062, amendment of 2026-10-02). A member the producer set itself
+   * wins, as on a proxied call.
+   */
+  private withUnseenRequestSources(
+    body: Record<string, unknown>,
+    attrs: Readonly<Record<string, string>>,
+  ): Record<string, unknown> {
+    if (attrs[LLM_CALL_DUPLICATE_OF_ATTR] !== undefined) return body;
+    const facts = this.systemContext.measureUnseen();
+    return Object.keys(facts).length === 0 ? body : { ...facts, ...body };
+  }
+
+  /**
    * The attrs a `tool_call` carries, or undefined when the chain already
    * holds this call and the row must not be sealed at all.
    *
@@ -1924,7 +1943,9 @@ export class SessionRecorder {
     }
     const event = this.seal(
       draft.kind,
-      draft.body,
+      draft.kind === "llm_call" && draft.source === "otel_log"
+        ? this.withUnseenRequestSources(draft.body, duplicate)
+        : draft.body,
       {
         ts: draft.ts,
         source: draft.source,
@@ -2003,6 +2024,8 @@ export class SessionRecorder {
         body = withoutUsage(body);
         duplicate = { [LLM_CALL_DUPLICATE_OF_ATTR]: "transcript" };
       }
+      if (draft.kind === "llm_call")
+        body = this.withUnseenRequestSources(body, duplicate);
       let content = draft.content;
       if (this.isSealedPrompt(draft.kind, body)) {
         // The turn's `turn_start` holds this text already. The record's own
