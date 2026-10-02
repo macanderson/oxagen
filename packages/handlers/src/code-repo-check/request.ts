@@ -9,11 +9,16 @@
 //
 // The request is one `code-repo/check.requested` event per workspace. Its id
 // names the head and base commits, so a redelivered webhook asks once.
+//
+// A pull request that closes sends the same event with `closed` set, so the
+// job settles the statements the check stored for it (ADR-263): closed
+// without merging they go, and merged they stay. Its id names the close.
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import type { GitLabMergeRequestEvent } from "@oxagen/gitlab";
 import type {
   CodeRepoCheckRequest,
   CodeRepoProvider,
+  CodeRepoPullRequestClose,
 } from "@oxagen/inngest-functions/code-repo-check-runner";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNull } from "drizzle-orm";
@@ -39,6 +44,12 @@ export interface PullRequestHead {
   url: string;
   headSha: string;
   base: string;
+}
+
+/** How a pull request closed, and the commit a merge made when the host names it. */
+export interface PullRequestClose {
+  closed: CodeRepoPullRequestClose;
+  mergeCommitSha: string | null;
 }
 
 /** One binding head for a repository. */
@@ -147,26 +158,26 @@ const str = (v: unknown): string | null =>
 const idOf = (v: unknown): string | null =>
   typeof v === "number" || (typeof v === "string" && v.length > 0) ? String(v) : null;
 
-/**
- * The pull request a GitHub `pull_request` delivery names, or null when the
- * action cannot change what the check reads or the pull request is closed.
- */
-export function githubPullRequestHead(body: Record<string, unknown>): PullRequestHead | null {
-  if (!GITHUB_ACTIONS.has(str(body.action) ?? "")) return null;
-  const pr = (body.pull_request ?? {}) as {
-    number?: unknown;
-    state?: unknown;
-    html_url?: unknown;
-    head?: { sha?: unknown };
-    base?: { sha?: unknown };
-  };
+type GitHubPullRequest = {
+  number?: unknown;
+  state?: unknown;
+  merged?: unknown;
+  merge_commit_sha?: unknown;
+  html_url?: unknown;
+  head?: { sha?: unknown };
+  base?: { sha?: unknown };
+};
+
+/** The pull request a GitHub delivery names in the given state, or null when a field is missing. */
+function githubHeadOf(body: Record<string, unknown>, state: "open" | "closed"): PullRequestHead | null {
+  const pr = (body.pull_request ?? {}) as GitHubPullRequest;
   const repository = (body.repository ?? {}) as { id?: unknown; full_name?: unknown };
   const repositoryId = idOf(repository.id);
   const fullName = str(repository.full_name);
   const number = typeof pr.number === "number" && Number.isInteger(pr.number) ? pr.number : null;
   const headSha = str(pr.head?.sha);
   const base = str(pr.base?.sha);
-  if (pr.state !== "open" || !repositoryId || !fullName || number === null || !headSha || !base)
+  if (pr.state !== state || !repositoryId || !fullName || number === null || !headSha || !base)
     return null;
   return {
     repositoryId,
@@ -175,6 +186,36 @@ export function githubPullRequestHead(body: Record<string, unknown>): PullReques
     url: str(pr.html_url) ?? `https://github.com/${fullName}/pull/${number}`,
     headSha,
     base,
+  };
+}
+
+/**
+ * The pull request a GitHub `pull_request` delivery names, or null when the
+ * action cannot change what the check reads or the pull request is closed.
+ */
+export function githubPullRequestHead(body: Record<string, unknown>): PullRequestHead | null {
+  if (!GITHUB_ACTIONS.has(str(body.action) ?? "")) return null;
+  return githubHeadOf(body, "open");
+}
+
+/**
+ * The pull request a GitHub `closed` delivery names, and whether it merged,
+ * or null for any other delivery.
+ */
+export function githubPullRequestClose(
+  body: Record<string, unknown>,
+): { head: PullRequestHead; close: PullRequestClose } | null {
+  if (str(body.action) !== "closed") return null;
+  const head = githubHeadOf(body, "closed");
+  if (head === null) return null;
+  const pr = (body.pull_request ?? {}) as GitHubPullRequest;
+  const merged = pr.merged === true;
+  return {
+    head,
+    close: {
+      closed: merged ? "merged" : "unmerged",
+      mergeCommitSha: merged ? str(pr.merge_commit_sha) : null,
+    },
   };
 }
 
@@ -203,6 +244,32 @@ export function gitlabMergeRequestHead(
   };
 }
 
+/** The GitLab merge request actions that close one. */
+const GITLAB_CLOSE_ACTIONS = new Set(["close", "merge"]);
+
+/**
+ * The merge request a GitLab `close` or `merge` delivery names, and whether
+ * it merged, or null for any other delivery or one that names no head commit.
+ */
+export function gitlabMergeRequestClose(
+  event: GitLabMergeRequestEvent,
+  body: unknown,
+): { head: PullRequestHead; close: PullRequestClose } | null {
+  if (!GITLAB_CLOSE_ACTIONS.has(event.action ?? "")) return null;
+  if ((event.state !== "merged" && event.state !== "closed") || event.lastCommitSha === null)
+    return null;
+  const head = gitlabMergeRequestHead({ ...event, state: "opened", action: null }, body);
+  if (head === null) return null;
+  const merged = event.state === "merged";
+  return {
+    head,
+    close: {
+      closed: merged ? "merged" : "unmerged",
+      mergeCommitSha: merged ? event.mergeCommitSha : null,
+    },
+  };
+}
+
 /**
  * The workspaces that link a repository. None when any workspace holds it as
  * its steering repo, so a steering PR is never checked twice.
@@ -228,16 +295,20 @@ export async function linkedScopes(
   return [...scopes.values()];
 }
 
-/** One check request for one workspace. */
+/** One check request for one workspace, or with `close`, one settlement. */
 export function checkEvent(
   scope: CheckScope,
   provider: CodeRepoProvider,
   head: PullRequestHead,
   credential: { installationId: number } | { connectionId: string },
+  close: PullRequestClose | null = null,
 ): CodeRepoCheckEvent {
   const prefix = `${scope.workspaceId}:${provider}:${head.repositoryId}`;
   return {
-    id: `code-repo-check:${prefix}:${head.number}:${head.headSha}:${head.base}`,
+    id:
+      close === null
+        ? `code-repo-check:${prefix}:${head.number}:${head.headSha}:${head.base}`
+        : `code-repo-check:${prefix}:${head.number}:${close.closed}:${head.headSha}`,
     name: "code-repo/check.requested",
     data: {
       orgId: scope.orgId,
@@ -252,6 +323,8 @@ export function checkEvent(
       installationId: "installationId" in credential ? credential.installationId : null,
       connectionId: "connectionId" in credential ? credential.connectionId : null,
       key: `${prefix}:${head.number}`,
+      closed: close?.closed ?? null,
+      mergeCommitSha: close?.mergeCommitSha ?? null,
     },
   };
 }
@@ -263,10 +336,13 @@ export async function githubCodeCheckRequests(
 ): Promise<CodeRepoCheckEvent[]> {
   const installationId = Number(args.installationId);
   if (!Number.isInteger(installationId) || installationId <= 0) return [];
-  const head = githubPullRequestHead(args.body);
+  const closed = githubPullRequestClose(args.body);
+  const head = closed?.head ?? githubPullRequestHead(args.body);
   if (head === null) return [];
   const scopes = await linkedScopes("github", head.repositoryId, deps);
-  return scopes.map((scope) => checkEvent(scope, "github", head, { installationId }));
+  return scopes.map((scope) =>
+    checkEvent(scope, "github", head, { installationId }, closed?.close ?? null),
+  );
 }
 
 /**
@@ -284,12 +360,19 @@ export async function gitlabCodeCheckRequest(
   },
   deps: Pick<LinkedScopeDeps, "headsOnPlane"> = postgresLinkedScopes,
 ): Promise<CodeRepoCheckEvent | null> {
-  const head = gitlabMergeRequestHead(args.event, args.body);
+  const closed = gitlabMergeRequestClose(args.event, args.body);
+  const head = closed?.head ?? gitlabMergeRequestHead(args.event, args.body);
   if (head === null) return null;
   const rows = await deps.headsOnPlane(args.scope, "gitlab", head.repositoryId);
   if (rows.some((row) => row.role === "steering")) return null;
   if (!rows.some((row) => row.role === "linked")) return null;
-  return checkEvent(args.scope, "gitlab", head, { connectionId: args.connectionId });
+  return checkEvent(
+    args.scope,
+    "gitlab",
+    head,
+    { connectionId: args.connectionId },
+    closed?.close ?? null,
+  );
 }
 
 /** Send the requests. Answers how many were sent. */
