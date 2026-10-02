@@ -16,12 +16,20 @@ export interface PullRequestBackfillRequest {
   rootSessionUuid: string;
   /** The https URL as the frame recorded it. */
   url: string;
+  /**
+   * True when a `pr_open` call recorded the link, so the run opened the pull
+   * request. The backfill then puts the Oxagen block and label on it
+   * (ADR-252).
+   */
+  opened?: boolean;
 }
 
 /** What the runner did, for the function's step output. */
 export interface PullRequestBackfillOutcome {
   outcome: string;
   rows: number;
+  /** What the badge step did, for a link the run opened (ADR-252). */
+  badge?: unknown;
 }
 
 export type PullRequestBackfillRunner = (

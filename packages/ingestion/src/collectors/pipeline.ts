@@ -315,7 +315,7 @@ export interface CollectResult {
   before: StoredWorkItem | null;
   /** True when the stored item is newer than the one fetched, so nothing was written. */
   stale: boolean;
-  /** True when the record is outside the collector's scope, so nothing was written. */
+  /** True when nothing was written because the record is outside the collector's scope, or the provider closed it before Oxagen stored it. */
   skipped: boolean;
 }
 
@@ -372,7 +372,9 @@ export function taintedFields(input: WorkItemInput): TaintedField[] {
  * Map one fetched item and upsert it. The subject, description, and requester
  * pass through the screen before the store sees them. An item the store holds
  * a newer copy of is left alone, because a late delivery must not undo a
- * later change.
+ * later change. A record the provider closed before Oxagen stored it is
+ * skipped, so a collector brings in open work and never a repository's
+ * closed history.
  */
 export async function collectItem(
   ports: CollectorPorts,
@@ -393,6 +395,13 @@ export async function collectItem(
       skipped: true,
     };
   const before = await ports.store.findItem(collector.id, mapped.providerId);
+  // A record the provider had already closed before Oxagen ever stored it is
+  // history, not work: the first read of a repository would otherwise make a
+  // work item, and a triage run, for every issue it ever closed. It is
+  // skipped like a record outside the scope. An item Oxagen already holds
+  // still takes its closing, so the item shows the provider's status.
+  if (before === null && mapped.statusCategory === "closed")
+    return { providerId: mapped.providerId, change: null, before, stale: false, skipped: true };
   if (before && isNewer(before.sourceUpdatedAt, mapped.sourceUpdatedAt))
     return { providerId: mapped.providerId, change: null, before, stale: true, skipped: false };
   const { value: screened } = await ports.screen({

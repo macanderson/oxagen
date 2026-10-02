@@ -30,6 +30,7 @@ vi.mock("./actions", () => ({
   approveContextPr: vi.fn(),
   mergePrWithoutReview: vi.fn(),
   restoreManagedBlock: vi.fn(),
+  revertSteeringPr: vi.fn(),
   dropMemoryRecord: vi.fn(),
 }));
 
@@ -54,6 +55,8 @@ const merge = () =>
 const approve = () => screen.queryByRole("button", { name: "Approve" });
 const mergeWithoutReview = () =>
   screen.queryByRole("button", { name: "Merge without review" });
+const revert = () =>
+  screen.queryByRole("button", { name: "Revert pull request" });
 
 afterEach(async () => {
   try {
@@ -223,6 +226,25 @@ describe("after merge", () => {
     expect(panel.querySelector("[data-on-merge]")).toBeNull();
     expect(merge()).toBeNull();
     expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
+  });
+
+  it("offers Revert pull request on a merged steering PR (#4449)", () => {
+    const panel = renderState("merged");
+    expect(revert()).toBeEnabled();
+    expect(panel.querySelector("[data-merged]")).toContainElement(revert());
+  });
+
+  it("offers no revert before the merge, on a dismissed proposal, or on a governance change (negative)", () => {
+    for (const read of [
+      contextPr("checks_passed"),
+      contextPr("rejected"),
+      // revert_steering_pr refuses a governance change (ADR-232).
+      contextPr("merged", { kind: "governance" }),
+    ]) {
+      renderPanel(readOk(read));
+      expect(revert()).toBeNull();
+      cleanup();
+    }
   });
 });
 

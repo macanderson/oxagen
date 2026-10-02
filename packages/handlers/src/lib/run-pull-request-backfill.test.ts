@@ -7,6 +7,10 @@ const mocks = vi.hoisted(() => ({
   // The tenant scope each withTenantDb call ran in, in call order.
   scopes: [] as ({ orgId: string; workspaceId: string } | null)[],
   getPullRequest: vi.fn(),
+  updatePullRequest: vi.fn(),
+  createLabel: vi.fn(),
+  addLabels: vi.fn(),
+  getInstallationToken: vi.fn(),
   getMergeRequest: vi.fn(),
   resolveGitHubToken: vi.fn(),
   findWorkspaceGitLabConnection: vi.fn(),
@@ -36,7 +40,13 @@ vi.mock("@oxagen/github", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@oxagen/github")>();
   return {
     ...actual,
-    createGitHubClient: () => ({ getPullRequest: mocks.getPullRequest }),
+    getInstallationToken: mocks.getInstallationToken,
+    createGitHubClient: () => ({
+      getPullRequest: mocks.getPullRequest,
+      updatePullRequest: mocks.updatePullRequest,
+      createLabel: mocks.createLabel,
+      addLabels: mocks.addLabels,
+    }),
   };
 });
 vi.mock("@oxagen/github/workspace-token", () => ({
@@ -61,9 +71,11 @@ vi.mock("../logger", () => ({
 
 import { GitHubApiError } from "@oxagen/github";
 import { GitLabApiError } from "@oxagen/gitlab";
+import { logger } from "../logger";
 import {
   backfillRunPullRequest,
   githubConnectionOf,
+  githubInstallationOf,
   type GithubConnectionRow,
   type PullRequestBackfillDeps,
   pullRequestBackfillDeps,
@@ -103,12 +115,18 @@ beforeEach(() => {
   mocks.scopes = [];
   for (const fn of [
     mocks.getPullRequest,
+    mocks.updatePullRequest,
+    mocks.createLabel,
+    mocks.addLabels,
+    mocks.getInstallationToken,
     mocks.getMergeRequest,
     mocks.resolveGitHubToken,
     mocks.findWorkspaceGitLabConnection,
     mocks.resolveGitLabCredential,
   ])
     fn.mockReset();
+  vi.mocked(logger.warn).mockClear();
+  vi.unstubAllEnvs();
 });
 
 function fakeDeps(over: Partial<PullRequestBackfillDeps> = {}) {
@@ -123,6 +141,13 @@ function fakeDeps(over: Partial<PullRequestBackfillDeps> = {}) {
       }),
     ),
     apply: vi.fn(() => Promise.resolve(1)),
+    markOpened: vi.fn(() =>
+      Promise.resolve({
+        status: "marked" as const,
+        block: "added" as const,
+        label: "added" as const,
+      }),
+    ),
     now: () => new Date("2026-09-25T10:00:05Z"),
     ...over,
   };
@@ -185,6 +210,75 @@ describe("backfillRunPullRequest", () => {
       rows: 0,
     });
     expect(deps.insertRow).not.toHaveBeenCalled();
+  });
+
+  it("marks a pull request the run opened, after its state is recorded (ADR-252)", async () => {
+    const deps = fakeDeps();
+    expect(
+      await backfillRunPullRequest(deps, { ...REQUEST, opened: true }),
+    ).toEqual({
+      outcome: "recorded",
+      rows: 1,
+      badge: { status: "marked", block: "added", label: "added" },
+    });
+    expect(deps.markOpened).toHaveBeenCalledWith(SCOPE, {
+      key: GH_KEY,
+      rootSessionUuid: REQUEST.rootSessionUuid,
+    });
+    expect(deps.apply).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves alone a pull request the run only linked (negative)", async () => {
+    const deps = fakeDeps();
+    const result = await backfillRunPullRequest(deps, REQUEST);
+    expect(result).not.toHaveProperty("badge");
+    expect(deps.markOpened).not.toHaveBeenCalled();
+    await backfillRunPullRequest(deps, { ...REQUEST, opened: false });
+    expect(deps.markOpened).not.toHaveBeenCalled();
+  });
+
+  it("keeps the link and its state when the badge step fails (negative)", async () => {
+    const deps = fakeDeps({
+      markOpened: () => Promise.reject(new GitHubApiError(502, "bad gateway")),
+    });
+    expect(
+      await backfillRunPullRequest(deps, { ...REQUEST, opened: true }),
+    ).toEqual({ outcome: "recorded", rows: 1, badge: { status: "failed" } });
+    expect(deps.insertRow).toHaveBeenCalledTimes(1);
+    expect(deps.apply).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ repository: "acme/api", number: 42 }),
+      expect.stringContaining("the link and its state are recorded"),
+    );
+  });
+
+  it("asks nothing of GitLab for a merge request the run opened", async () => {
+    const deps = fakeDeps();
+    expect(
+      await backfillRunPullRequest(deps, {
+        ...REQUEST,
+        url: "https://gitlab.com/acme/platform/api/-/merge_requests/9",
+        opened: true,
+      }),
+    ).toEqual({
+      outcome: "recorded",
+      rows: 1,
+      badge: { status: "skipped", reason: "not_github" },
+    });
+    expect(deps.markOpened).not.toHaveBeenCalled();
+  });
+
+  it("still marks the pull request when the state read finds no connection", async () => {
+    const deps = fakeDeps({
+      readForge: () => Promise.resolve("no_connection" as const),
+    });
+    expect(
+      await backfillRunPullRequest(deps, { ...REQUEST, opened: true }),
+    ).toEqual({
+      outcome: "no_connection",
+      rows: 0,
+      badge: { status: "marked", block: "added", label: "added" },
+    });
   });
 });
 
@@ -433,5 +527,227 @@ describe("githubConnectionOf", () => {
     };
     expect(githubConnectionOf([bare], "acme")).toBeNull();
     expect(githubConnectionOf([], "acme")).toBeNull();
+  });
+});
+
+describe("githubInstallationOf", () => {
+  const modern: GithubConnectionRow = {
+    id: "modern",
+    deliveryConfig: { installationId: 12345 },
+    oauthAccountId: null,
+  };
+
+  it("takes the installation of a source that names the owner first", () => {
+    expect(githubInstallationOf([modern, CONNECTION], "acme")).toBe("777");
+  });
+
+  it("passes over a person's OAuth source for an app installation", () => {
+    const oauth: GithubConnectionRow = {
+      id: "oauth",
+      deliveryConfig: { owner: "acme" },
+      oauthAccountId: "acct",
+    };
+    expect(githubInstallationOf([oauth, modern], "acme")).toBe("12345");
+  });
+
+  it("answers null with no installation that reaches the owner (negative)", () => {
+    const oauth: GithubConnectionRow = {
+      id: "oauth",
+      deliveryConfig: {},
+      oauthAccountId: "acct",
+    };
+    const other: GithubConnectionRow = {
+      id: "other",
+      deliveryConfig: { owner: "globex", installationId: "9" },
+      oauthAccountId: null,
+    };
+    expect(githubInstallationOf([oauth], "acme")).toBeNull();
+    expect(githubInstallationOf([other], "acme")).toBeNull();
+    expect(githubInstallationOf([], "acme")).toBeNull();
+  });
+});
+
+describe("pullRequestBackfillDeps.markOpened", () => {
+  const LINK = { key: GH_KEY, rootSessionUuid: REQUEST.rootSessionUuid };
+
+  function withApp() {
+    vi.stubEnv("GITHUB_APP_ID", "123");
+    vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "pem");
+    mocks.getInstallationToken.mockResolvedValue({
+      token: "ghs_app",
+      expiresAt: Date.now() + 3_600_000,
+    });
+    mocks.updatePullRequest.mockResolvedValue({ number: 42, htmlUrl: "u" });
+    mocks.createLabel.mockResolvedValue("created");
+    mocks.addLabels.mockResolvedValue(["oxagen"]);
+  }
+
+  it("marks the pull request with a token scoped to its repository, linked to the run", async () => {
+    withApp();
+    vi.stubEnv("APP_URL", "https://app.oxagen.sh");
+    mocks.answers = [
+      [CONNECTION],
+      [{ runId: "tse_01J9ZQ3" }],
+      [{ orgSlug: "acme", workspaceSlug: "core" }],
+    ];
+    mocks.getPullRequest.mockResolvedValue({
+      body: "Fixes the retry budget.",
+      labels: ["bug"],
+    });
+    expect(await pullRequestBackfillDeps.markOpened(SCOPE, LINK)).toEqual({
+      status: "marked",
+      block: "added",
+      label: "added",
+    });
+    expect(mocks.getInstallationToken).toHaveBeenCalledWith({
+      appId: "123",
+      privateKey: "pem",
+      installationId: "777",
+      repositories: ["api"],
+      permissions: { pull_requests: "write", metadata: "read" },
+    });
+    const write = mocks.updatePullRequest.mock.calls[0]?.[0] as {
+      body: string;
+    };
+    expect(write).toMatchObject({ owner: "acme", repo: "api", number: 42 });
+    expect(write).not.toHaveProperty("title");
+    expect(write.body).toContain(
+      "](https://app.oxagen.sh/acme/core/runs/tse_01J9ZQ3)",
+    );
+    expect(write.body.endsWith("\n\nFixes the retry budget.")).toBe(true);
+    expect(mocks.addLabels).toHaveBeenCalledWith({
+      owner: "acme",
+      repo: "api",
+      number: 42,
+      labels: ["oxagen"],
+    });
+    // The session is the root of its run, in this workspace.
+    expect(mocks.statements[1]?.sql).toContain('"parent_session_uuid" is null');
+    expect(mocks.statements[1]?.params).toEqual(
+      expect.arrayContaining([SCOPE.workspaceId, REQUEST.rootSessionUuid]),
+    );
+    // A person's OAuth token never writes the block.
+    expect(mocks.resolveGitHubToken).not.toHaveBeenCalled();
+  });
+
+  it("writes the badge with no link when the deployment names no app origin", async () => {
+    withApp();
+    vi.stubEnv("APP_URL", "");
+    mocks.answers = [[CONNECTION]];
+    mocks.getPullRequest.mockResolvedValue({ body: null, labels: [] });
+    await pullRequestBackfillDeps.markOpened(SCOPE, LINK);
+    const write = mocks.updatePullRequest.mock.calls[0]?.[0] as {
+      body: string;
+    };
+    expect(write.body).toContain(
+      "![oxagen: agent run](https://brand.oxagen.cloud/github-badges/shield-oxagen-agent-run.svg)",
+    );
+    expect(write.body).not.toContain("/runs/");
+    // No session or workspace read without an origin to link.
+    expect(mocks.statements).toHaveLength(1);
+  });
+
+  it("skips a workspace whose GitHub source is only a person's OAuth token (negative)", async () => {
+    withApp();
+    mocks.answers = [
+      [{ id: "oauth", deliveryConfig: { owner: "acme" }, oauthAccountId: "acct" }],
+    ];
+    expect(await pullRequestBackfillDeps.markOpened(SCOPE, LINK)).toEqual({
+      status: "skipped",
+      reason: "no_installation",
+    });
+    expect(mocks.getInstallationToken).not.toHaveBeenCalled();
+    expect(mocks.getPullRequest).not.toHaveBeenCalled();
+  });
+
+  it("skips when the deployment has no GitHub App settings (negative)", async () => {
+    vi.stubEnv("GITHUB_APP_ID", "");
+    vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "");
+    mocks.answers = [[CONNECTION]];
+    expect(await pullRequestBackfillDeps.markOpened(SCOPE, LINK)).toEqual({
+      status: "skipped",
+      reason: "no_app",
+    });
+    expect(mocks.getPullRequest).not.toHaveBeenCalled();
+  });
+
+  it("skips when GitHub will not mint a token for the repository (negative)", async () => {
+    withApp();
+    mocks.getInstallationToken.mockRejectedValue(
+      new Error(
+        "GitHub App token mint failed (422): There is at least one repository that does not exist or is not accessible to the parent installation.",
+      ),
+    );
+    mocks.answers = [[CONNECTION]];
+    expect(await pullRequestBackfillDeps.markOpened(SCOPE, LINK)).toEqual({
+      status: "skipped",
+      reason: "refused",
+    });
+    expect(mocks.getPullRequest).not.toHaveBeenCalled();
+  });
+
+  it("skips when GitHub refuses the edit (negative)", async () => {
+    withApp();
+    mocks.answers = [[CONNECTION]];
+    mocks.getPullRequest.mockResolvedValue({ body: "", labels: [] });
+    mocks.updatePullRequest.mockRejectedValue(
+      new GitHubApiError(403, "Resource not accessible by integration"),
+    );
+    expect(await pullRequestBackfillDeps.markOpened(SCOPE, LINK)).toEqual({
+      status: "skipped",
+      reason: "refused",
+    });
+  });
+
+  it("throws any other GitHub failure, which the backfill reports as failed (negative)", async () => {
+    withApp();
+    mocks.answers = [[CONNECTION]];
+    mocks.getPullRequest.mockRejectedValue(new GitHubApiError(502, "bad"));
+    await expect(
+      pullRequestBackfillDeps.markOpened(SCOPE, LINK),
+    ).rejects.toBeInstanceOf(GitHubApiError);
+  });
+});
+
+describe("runPullRequestBackfill for a pull request the run opened", () => {
+  it("records the link, then marks the pull request, all in the event's tenant scope", async () => {
+    vi.stubEnv("GITHUB_APP_ID", "123");
+    vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "pem");
+    vi.stubEnv("APP_URL", "https://app.oxagen.sh");
+    const modern = {
+      id: "conn-modern",
+      deliveryConfig: { installationId: 12345 },
+      oauthAccountId: null,
+    };
+    mocks.answers = [
+      [{ id: "sid" }],
+      [],
+      [modern],
+      [{ id: "r1" }],
+      [modern],
+      [{ runId: "tse_01J9ZQ3" }],
+      [{ orgSlug: "acme", workspaceSlug: "core" }],
+    ];
+    mocks.resolveGitHubToken.mockResolvedValue("ghs_token");
+    mocks.getInstallationToken.mockResolvedValue({
+      token: "ghs_app",
+      expiresAt: Date.now() + 3_600_000,
+    });
+    mocks.getPullRequest.mockResolvedValue({
+      state: "open",
+      draft: false,
+      body: null,
+      labels: [],
+    });
+    mocks.updatePullRequest.mockResolvedValue({ number: 42, htmlUrl: "u" });
+    mocks.createLabel.mockResolvedValue("exists");
+    mocks.addLabels.mockResolvedValue(["oxagen"]);
+    expect(await runPullRequestBackfill({ ...REQUEST, opened: true })).toEqual({
+      outcome: "recorded",
+      rows: 1,
+      badge: { status: "marked", block: "added", label: "added" },
+    });
+    expect(mocks.scopes).toHaveLength(7);
+    for (const scope of mocks.scopes) expect(scope).toEqual(SCOPE);
   });
 });

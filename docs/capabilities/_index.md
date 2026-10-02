@@ -231,6 +231,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [promote_context_record](context.record.promote.md) | [context.record.promote.ts](../../packages/oxagen/src/contracts/context.record.promote.ts) | api |
 | [propose_record](context.proposal.create.md) | [context.proposal.create.ts](../../packages/oxagen/src/contracts/context.proposal.create.ts) | api, mcp, agent |
 | [publish_context_record](context.record.publish.md) | [context.record.publish.ts](../../packages/oxagen/src/contracts/context.record.publish.ts) | api |
+| [revert_steering_pr](context.pr.revert.md) | [context.pr.revert.ts](../../packages/oxagen/src/contracts/context.pr.revert.ts) | api, mcp, agent, cli |
 
 ## Control
 

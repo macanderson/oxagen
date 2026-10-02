@@ -78,18 +78,25 @@ const RANK: Readonly<Record<CheckConclusion, number>> = {
 
 /**
  * Each check's conclusion on the commit, one per name. Check runs and legacy
- * statuses are both read. When two reports share a name, the latest check run
- * wins, and between a check run and a status the less successful one wins, so
- * a disagreement fails closed. Pure.
+ * statuses are both read. Within one app, a re-run's latest result stands.
+ * Between apps that report the same name, and between a check run and a
+ * status, the less successful result wins, so a job named after a required
+ * check cannot pass it for the app the branch requires. Pure.
  */
 export function observedChecksOf(checks: GitHubCiChecks): ObservedCheck[] {
   const byName = new Map<string, ObservedCheck>();
   const time = (value: string | null) => (value === null ? 0 : Date.parse(value) || 0);
+  const latestPerApp = new Map<string, ObservedCheck>();
   for (const run of checks.checkRuns) {
     const conclusion: CheckConclusion = run.status !== "completed" || run.conclusion === null ? "pending" : run.conclusion;
     const at = run.completedAt ?? run.startedAt;
-    const prior = byName.get(run.name);
-    if (prior === undefined || time(at) >= time(prior.at)) byName.set(run.name, { name: run.name, conclusion, at });
+    const key = JSON.stringify([run.name, run.appName ?? ""]);
+    const prior = latestPerApp.get(key);
+    if (prior === undefined || time(at) >= time(prior.at)) latestPerApp.set(key, { name: run.name, conclusion, at });
+  }
+  for (const check of latestPerApp.values()) {
+    const prior = byName.get(check.name);
+    if (prior === undefined || RANK[check.conclusion] > RANK[prior.conclusion]) byName.set(check.name, check);
   }
   for (const status of checks.statuses) {
     const conclusion: CheckConclusion = status.state === "error" ? "failure" : status.state;
@@ -112,7 +119,13 @@ export interface EvidenceSummary {
   head: string | null;
   /** The checks required on the head, or null when they could not be read. */
   requiredChecks: string[] | null;
-  /** Why the required checks could not be read, when they could not. */
+  /**
+   * Whether every check on the head was read now. False when the read failed
+   * or GitHub's answer was cut short, so a result recorded earlier may be out
+   * of date.
+   */
+  checksRead: boolean;
+  /** Why the required checks or the check results could not be read, when they could not. */
   unreadReason: string | null;
 }
 
@@ -135,12 +148,15 @@ export function evidenceFacts(
   const facts: FactInput<FactKind>[] = [];
   const pr = order.pullRequest;
   if (pr === null || read.pull === null) {
-    return { facts, summary: { head: order.head, requiredChecks: null, unreadReason: pr === null ? "no pull request" : "pull request unreadable" } };
+    return { facts, summary: { head: order.head, requiredChecks: null, checksRead: false, unreadReason: pr === null ? "no pull request" : "pull request unreadable" } };
   }
   const base = { source: "provider" as const, itemRevision: 1, orderId: order.orderId, actor: "github", repository: pr.repository, prNumber: pr.number };
+  // Every key names the pull request: a send can move from one pull request
+  // to another, and each one's head, merge, and close are its own.
+  const prKey = `${order.orderId}:${pr.repository.toLowerCase()}#${pr.number}`;
   const head = read.pull.headSha;
   if (head !== null && head !== order.head) {
-    facts.push({ ...base, kind: "head_observed", headSha: head, occurredAt: read.pull.updatedAt, dedupeKey: `head_observed:${order.orderId}:${head}`, data: {} });
+    facts.push({ ...base, kind: "head_observed", headSha: head, occurredAt: read.pull.updatedAt, dedupeKey: `head_observed:${prKey}:${head}`, data: {} });
   }
   if (read.pull.merged && read.pull.mergeCommitSha !== null && head !== null) {
     facts.push({
@@ -148,13 +164,13 @@ export function evidenceFacts(
       kind: "merged",
       headSha: head,
       occurredAt: read.pull.mergedAt ?? read.pull.updatedAt,
-      dedupeKey: `merged:${order.orderId}`,
+      dedupeKey: `merged:${prKey}`,
       data: { merge_commit: read.pull.mergeCommitSha },
     });
   } else if (read.pull.state === "closed" && !read.pull.merged) {
-    facts.push({ ...base, kind: "pr_closed", occurredAt: read.pull.updatedAt, dedupeKey: `pr_closed:${order.orderId}`, data: {} });
+    facts.push({ ...base, kind: "pr_closed", occurredAt: read.pull.updatedAt, dedupeKey: `pr_closed:${prKey}`, data: {} });
   }
-  if (head === null) return { facts, summary: { head: null, requiredChecks: null, unreadReason: "no head commit" } };
+  if (head === null) return { facts, summary: { head: null, requiredChecks: null, checksRead: false, unreadReason: "no head commit" } };
 
   let requiredChecks: string[] | null = null;
   let unreadReason: string | null = null;
@@ -176,6 +192,10 @@ export function evidenceFacts(
       });
     }
   }
+  const checksRead = read.checks !== null && read.checks.complete !== false;
+  if (unreadReason === null && !checksRead) {
+    unreadReason = read.checks === null ? "check results not read" : "GitHub returned only part of the check results";
+  }
   if (read.checks !== null) {
     for (const check of observedChecksOf(read.checks)) {
       const at = check.at ?? now;
@@ -189,7 +209,7 @@ export function evidenceFacts(
       });
     }
   }
-  return { facts, summary: { head, requiredChecks, unreadReason } };
+  return { facts, summary: { head, requiredChecks, checksRead, unreadReason } };
 }
 
 function failure(error: unknown): string {
