@@ -20,7 +20,7 @@ import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { buttonSecondary, panel } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
-import type { MemoryAgents } from "../memories/cells";
+import type { MemoryAgent, MemoryAgents } from "../memories/cells";
 import { MemoriesPanel } from "../memories/panel";
 import {
   EVERY_MEMORY,
@@ -131,7 +131,7 @@ export async function MemoriesTab({
   // An agent the first page of the registry does not hold reads by its key.
   const byKey: MemoryAgents = agents.ok
     ? Object.fromEntries(
-        agents.value.agents.flatMap((agent) =>
+        agents.value.agents.flatMap((agent): [string, MemoryAgent][] =>
           agent.agentKey === null
             ? []
             : [
