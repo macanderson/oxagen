@@ -104,7 +104,7 @@ export async function getSpendBudgetsAction(
     const ctx = buildCtx(g.orgId, g.workspaceId, g.userId);
     // { surface: "agent" } — the contract's `surfaces` is
     // ["api","mcp","agent","cli"] and does not include "app" (mirrors
-    // ../agent-defaults/page.tsx's get_budget_policy call).
+    // ../agent-defaults/page.tsx's get_model_settings call).
     const out = (await runInTenantScope(
       { orgId: g.orgId, workspaceId: g.workspaceId },
       () => invoke("get_spend_budget", {}, ctx, { surface: "agent" }),

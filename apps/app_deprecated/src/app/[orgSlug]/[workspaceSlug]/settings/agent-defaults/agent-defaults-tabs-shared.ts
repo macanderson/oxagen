@@ -12,14 +12,9 @@
  * server/client boundary.
  */
 
-export type AgentDefaultsTab = "models" | "budget" | "prompts" | "memory";
+export type AgentDefaultsTab = "models" | "prompts" | "memory";
 
-const TAB_VALUES: AgentDefaultsTab[] = [
-  "models",
-  "budget",
-  "prompts",
-  "memory",
-];
+const TAB_VALUES: AgentDefaultsTab[] = ["models", "prompts", "memory"];
 
 export function isAgentDefaultsTab(
   value: string | undefined,

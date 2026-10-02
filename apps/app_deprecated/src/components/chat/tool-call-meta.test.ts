@@ -127,7 +127,7 @@ describe("toolCallIcon — domain icons", () => {
     expect(toolCallIcon("search_nodes")).toBe(Search);
     expect(toolCallIcon("recall_memory")).toBe(Brain);
     expect(toolCallIcon("query_audit_log")).toBe(ScrollText);
-    expect(toolCallIcon("get_budget_policy")).toBe(CreditCard);
+    expect(toolCallIcon("get_spend_budget")).toBe(CreditCard);
     expect(toolCallIcon("resolve_consent")).toBe(ShieldCheck);
   });
 

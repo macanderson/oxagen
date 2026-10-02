@@ -1,11 +1,10 @@
 "use client";
 
 /**
- * AgentDefaultsTabs — client wrapper providing the four in-page sub-tabs for
- * Workspace → Settings → Agent Defaults: Models · Budget · Prompts · Memory
- * Policy.
+ * AgentDefaultsTabs — client wrapper providing the three in-page sub-tabs for
+ * Workspace → Settings → Agent Defaults: Models · Prompts · Memory Policy.
  *
- * All four panels' data is fetched up front by the parent Server Component
+ * All three panels' data is fetched up front by the parent Server Component
  * (in parallel) and passed in as fully-resolved `ReactNode`s, so switching
  * sub-tabs is a pure client toggle — no re-fetch, no flash. The active tab
  * mirrors the `?tab=` search param ("models" is the default and — mirroring
@@ -37,7 +36,6 @@ import {
 export interface AgentDefaultsTabsProps {
   initialTab: AgentDefaultsTab;
   modelsPanel: React.ReactNode;
-  budgetPanel: React.ReactNode;
   promptsPanel: React.ReactNode;
   memoryPanel: React.ReactNode;
 }
@@ -45,7 +43,6 @@ export interface AgentDefaultsTabsProps {
 export function AgentDefaultsTabs({
   initialTab,
   modelsPanel,
-  budgetPanel,
   promptsPanel,
   memoryPanel,
 }: AgentDefaultsTabsProps) {
@@ -60,7 +57,7 @@ export function AgentDefaultsTabs({
     setTab(next);
     // "models" is the default — keep its URL bare (no ?tab=) so the canonical
     // route from @/lib/routes (`workspace.settings.agentDefaults`) stays the
-    // one users land on/share; the other three sub-tabs append the param.
+    // one users land on/share; the other sub-tabs append the param.
     router.replace(next === "models" ? pathname : `${pathname}?tab=${next}`, {
       scroll: false,
     });
@@ -70,14 +67,12 @@ export function AgentDefaultsTabs({
     <Tabs value={tab} onValueChange={handleTabChange}>
       <TabsList variant="underline" className="mb-6 relative">
         <TabsTab value="models">Models</TabsTab>
-        <TabsTab value="budget">Budget</TabsTab>
         <TabsTab value="prompts">Prompts</TabsTab>
         <TabsTab value="memory">Memory Policy</TabsTab>
         <TabsIndicator />
       </TabsList>
 
       <TabsPanel value="models">{modelsPanel}</TabsPanel>
-      <TabsPanel value="budget">{budgetPanel}</TabsPanel>
       <TabsPanel value="prompts">{promptsPanel}</TabsPanel>
       <TabsPanel value="memory">{memoryPanel}</TabsPanel>
     </Tabs>

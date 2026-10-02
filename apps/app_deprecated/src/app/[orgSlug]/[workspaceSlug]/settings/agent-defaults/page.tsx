@@ -1,18 +1,18 @@
 /**
  * page.tsx — Workspace → Settings → Agent Defaults.
  *
- * One page with four in-page sub-tabs (Models · Budget · Prompts · Memory
- * Policy), controlled by `?tab=`. See ./agent-defaults-tabs.tsx.
+ * One page with three in-page sub-tabs (Models · Prompts · Memory Policy),
+ * controlled by `?tab=`. See ./agent-defaults-tabs.tsx.
  *
  * All sub-tab reads run in parallel (one Promise.all): the shared
- * owner/admin role lookup + get_model_settings + get_budget_policy +
- * get_prompt_settings share ONE runInTenantScope; the self-contained
+ * owner/admin role lookup + get_model_settings + get_prompt_settings share
+ * ONE runInTenantScope; the self-contained
  * readMemoryPolicyAction (which already wraps its own scope and never throws)
  * runs alongside. Each sub-tab keeps its own independent save + feedback —
  * there is no cross-tab save.
  */
 import type { Metadata } from "next";
-import { Cpu, Wallet } from "lucide-react";
+import { Cpu } from "lucide-react";
 import { and, eq } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -24,7 +24,6 @@ import { resolvePrompt } from "@oxagen/ai";
 // is one copy, in @oxagen/agent, and this preview renders exactly it.
 import { buildChatSystemPrompt } from "@oxagen/agent";
 import type { WorkspaceModelSettingsReadOutput } from "@oxagen/oxagen/contracts/workspace.model_settings.read";
-import type { WorkspaceBudgetPolicyReadOutput } from "@oxagen/oxagen/contracts/workspace.budget_policy.read";
 import type { ModelDefaultsValue } from "@/components/settings/model-defaults-fields";
 import {
   resolveOrg,
@@ -34,7 +33,6 @@ import {
 import { getSessionOrRedirect } from "@/lib/session";
 import { getEnterpriseAccess } from "@/lib/enterprise";
 import { WorkspaceModelsForm } from "./models-form";
-import { WorkspaceBudgetForm } from "./budget-form";
 import { PromptSettingsForm } from "./prompt-settings-form";
 import { SystemPromptReadonly } from "./system-prompt-readonly";
 import type { PromptSettingsReadOutput } from "./prompt-settings-action";
@@ -84,36 +82,32 @@ export default async function AgentDefaultsPage({
   };
 
   const [
-    { roleRows, modelSettings, budgetPolicy, promptSettings },
+    { roleRows, modelSettings, promptSettings },
     enterpriseAccess,
     memoryPolicy,
   ] = await Promise.all([
     runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-      const [roleRows, modelSettings, budgetPolicy, promptSettings] =
-        await Promise.all([
-          withTenantDb((tx) =>
-            tx
-              .select({ role: schema.workspaceUsers.role })
-              .from(schema.workspaceUsers)
-              .where(
-                and(
-                  eq(schema.workspaceUsers.workspaceId, ws.id),
-                  eq(schema.workspaceUsers.userId, session.user.id),
-                ),
-              )
-              .limit(1),
-          ),
-          invoke("get_model_settings", {}, ctx, {
-            surface: "agent",
-          }) as Promise<WorkspaceModelSettingsReadOutput>,
-          invoke("get_budget_policy", {}, ctx, {
-            surface: "agent",
-          }) as Promise<WorkspaceBudgetPolicyReadOutput>,
-          invoke("get_prompt_settings", {}, ctx, {
-            surface: "agent",
-          }) as Promise<PromptSettingsReadOutput>,
-        ]);
-      return { roleRows, modelSettings, budgetPolicy, promptSettings };
+      const [roleRows, modelSettings, promptSettings] = await Promise.all([
+        withTenantDb((tx) =>
+          tx
+            .select({ role: schema.workspaceUsers.role })
+            .from(schema.workspaceUsers)
+            .where(
+              and(
+                eq(schema.workspaceUsers.workspaceId, ws.id),
+                eq(schema.workspaceUsers.userId, session.user.id),
+              ),
+            )
+            .limit(1),
+        ),
+        invoke("get_model_settings", {}, ctx, {
+          surface: "agent",
+        }) as Promise<WorkspaceModelSettingsReadOutput>,
+        invoke("get_prompt_settings", {}, ctx, {
+          surface: "agent",
+        }) as Promise<PromptSettingsReadOutput>,
+      ]);
+      return { roleRows, modelSettings, promptSettings };
     }),
     getEnterpriseAccess(org.id),
     readMemoryPolicyAction({ orgSlug, workspaceSlug }),
@@ -170,36 +164,6 @@ export default async function AgentDefaultsPage({
               workspaceSlug={workspaceSlug}
             />
           </div>
-        </div>
-      }
-      budgetPanel={
-        <div className="flex flex-col gap-5 max-w-2xl">
-          <div className="flex items-start gap-3">
-            <Wallet
-              className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <div>
-              <p className="text-sm font-semibold text-foreground">
-                Workspace turn budget
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Govern the per-turn dollar budget every member in this workspace
-                runs under. A <strong>hard ceiling</strong> clamps every
-                member&apos;s effective budget — they cannot exceed it and the
-                enforcement mode can only get stricter. A{" "}
-                <strong>default</strong> only seeds a member who hasn&apos;t set
-                their own budget; they can still raise or lower it.
-              </p>
-            </div>
-          </div>
-
-          <WorkspaceBudgetForm
-            initial={budgetPolicy}
-            canEdit={canEdit}
-            orgSlug={orgSlug}
-            workspaceSlug={workspaceSlug}
-          />
         </div>
       }
       promptsPanel={

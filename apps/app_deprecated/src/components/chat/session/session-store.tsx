@@ -121,7 +121,7 @@ export function ChatSessionProvider({
   const defaults = React.useMemo(
     () => seedSessionState(seed),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed is a fresh object each RSC render; its fields are stable for the mount
-    [seed.defaultAgentId, seed.textModel, seed.textTier, seed.budgetUsd],
+    [seed.defaultAgentId, seed.textModel, seed.textTier],
   );
 
   // SSR-safe initial state (no localStorage on the server): defaults, then

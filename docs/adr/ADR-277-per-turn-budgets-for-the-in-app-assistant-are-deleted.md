@@ -52,7 +52,7 @@ Delete these files:
   `workspace.budget_policy.write.md`, and their generated schemas;
 - in `apps/app_deprecated`, the composer's per-turn budget control
   (`budget-control.tsx`, `budget-actions.ts`) and the budget form on the
-  agent defaults page (`budget-form.tsx`, `budget-action.ts`).
+  agent defaults page (`budget-form.tsx`, `budget-action.ts` and its test).
 
 Drop the storage in one migration, `20261002233000_drop_assistant_turn_budgets.sql`:
 the `workspace.workspace_budget_policy` table and the four `per_turn_budget_*`
@@ -67,7 +67,12 @@ Change these to match:
 - `packages/billing/src/turn-budget.ts` loses the workspace governance merge
   (`resolveEffectiveTurnBudget`, `GovernedBudget`, `strictestMode`).
 - The deprecated app's chat route accepts the `budget` field and ignores it, as
-  the REST route does. It builds no budget guard.
+  the REST route does. It builds no budget guard and sends no `budget-tick` or
+  `budget-notice` event. The deprecated app's client sends no `budget` field,
+  and its session settings, Agent defaults Budget tab, and approval card for a
+  budget pause are gone.
+- The REST chat route's event type drops the `budget-notice` variant, which
+  nothing emitted.
 - The `budget.set` permission in `permission-catalog.ts` names only
   `get_spend_budget` and `set_spend_budget`.
 - The v2 design contracts stop absorbing the four names. `set_budget` has no

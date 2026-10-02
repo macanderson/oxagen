@@ -143,10 +143,6 @@ vi.mock("./mcp-server-picker", () => ({
   McpServerPicker: () => <div data-testid="mcp-server-picker" />,
 }));
 
-vi.mock("./budget-control", () => ({
-  BudgetControl: () => <div data-testid="budget-control" />,
-}));
-
 vi.mock("@/components/ui/button", () => ({
   Button: ({
     children,
@@ -259,11 +255,10 @@ const BASE_SEED: SessionSeed = {
   defaultAgentId: null,
   textModel: null,
   textTier: "fast",
-  budgetUsd: null,
 };
 
 /** A sibling that exposes a button to mutate the session store directly —
- * the condensed v2Mobile row has no model/effort/budget controls of its own
+ * the condensed v2Mobile row has no model/effort controls of its own
  * to drive a real divergence from defaults, so tests use this to simulate
  * "the user changed something in the session-settings drawer". */
 function DirtyTrigger() {
@@ -324,12 +319,11 @@ describe("MessageComposer — chat_ux_v2 mobile row", () => {
     ).toBeInTheDocument();
   });
 
-  it("hides the model/agent/effort/budget/MCP/overflow controls in the condensed row", () => {
+  it("hides the model/agent/effort/MCP/overflow controls in the condensed row", () => {
     mockViewport.isMobile = true;
     renderWithSession();
     expect(screen.queryByTestId("model-picker")).not.toBeInTheDocument();
     expect(screen.queryByTestId("agent-selector")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("budget-control")).not.toBeInTheDocument();
     expect(screen.queryByTestId("mcp-server-picker")).not.toBeInTheDocument();
     expect(screen.queryByTestId("select-trigger")).not.toBeInTheDocument();
     expect(
@@ -510,12 +504,11 @@ describe("MessageComposer — chat_ux_v2 desktop condensed row", () => {
     expect(dot.className).toContain("bg-primary");
   });
 
-  it("hides the legacy model/agent/effort/budget/MCP/collapse/generate controls", () => {
+  it("hides the legacy model/agent/effort/MCP/collapse/generate controls", () => {
     mockViewport.isMobile = false;
     renderWithSession();
     expect(screen.queryByTestId("model-picker")).not.toBeInTheDocument();
     expect(screen.queryByTestId("agent-selector")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("budget-control")).not.toBeInTheDocument();
     expect(screen.queryByTestId("mcp-server-picker")).not.toBeInTheDocument();
     expect(screen.queryByTestId("select-trigger")).not.toBeInTheDocument();
     expect(
@@ -661,7 +654,6 @@ describe("MessageComposer — legacy mobile toolbar is unchanged without chat_ux
       screen.queryByTestId("composer-v2-mobile-row"),
     ).not.toBeInTheDocument();
     expect(screen.getByTestId("model-picker")).toBeInTheDocument();
-    expect(screen.getByTestId("budget-control")).toBeInTheDocument();
     // Manual media-generation toggles were removed — media intent is now
     // inferred from the prompt server-side, so no "Generate image/video" button.
     expect(
@@ -676,39 +668,5 @@ describe("MessageComposer — legacy mobile toolbar is unchanged without chat_ux
     expect(
       screen.getByRole("button", { name: "Send message" }),
     ).toBeInTheDocument();
-  });
-});
-
-describe("MessageComposer — v2 wallet gate", () => {
-  it("disables send with inline copy when the cap exceeds the wallet balance", () => {
-    mockViewport.isMobile = true;
-    renderWithSession({ walletBalanceUsd: 1 }, { ...BASE_SEED, budgetUsd: 2 });
-    expect(
-      screen.getByText(
-        "Wallet balance is below your cap. Add funds or lower the cap.",
-      ),
-    ).toBeInTheDocument();
-    const textarea = screen.getByPlaceholderText("Send a message…");
-    fireEvent.change(textarea, { target: { value: "hello" } });
-    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
-  });
-
-  it("no gate when the wallet covers the cap or no cap is set", () => {
-    mockViewport.isMobile = true;
-    renderWithSession({ walletBalanceUsd: 5 }, { ...BASE_SEED, budgetUsd: 2 });
-    expect(screen.queryByTestId("wallet-gate-hint")).toBeNull();
-    cleanup();
-    mockViewport.isMobile = true;
-    renderWithSession({ walletBalanceUsd: 1 }, BASE_SEED);
-    expect(screen.queryByTestId("wallet-gate-hint")).toBeNull();
-  });
-
-  it("an unknown balance (null) never blocks sending", () => {
-    mockViewport.isMobile = true;
-    renderWithSession(
-      { walletBalanceUsd: null },
-      { ...BASE_SEED, budgetUsd: 2 },
-    );
-    expect(screen.queryByTestId("wallet-gate-hint")).toBeNull();
   });
 });

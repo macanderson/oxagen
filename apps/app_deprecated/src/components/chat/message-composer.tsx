@@ -33,13 +33,10 @@ import type { ResolvedTierCatalog, EffortLevel } from "@oxagen/ai/catalog";
 import {
   ModelPicker,
   defaultModelState,
-  applyWorkspaceBudgetGovernance,
   type ComposerModelState,
-  type WorkspaceBudgetGovernance,
 } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
 import { McpServerPicker } from "./mcp-server-picker";
-import { BudgetControl } from "./budget-control";
 import { useSessionModelState } from "./session/session-bridges";
 import { FOCUS_COMPOSER_EVENT } from "./agent-picker/focus-composer-event";
 import { useChatSessionContext } from "./session/session-store";
@@ -146,18 +143,6 @@ function toUploadedMeta(
       mimeType: a.mimeType,
       url: a.url,
     }));
-}
-
-/** Build the per-turn budget wire payload from a model-state snapshot. Shared
- * by buildFormData (live submit) and dispatchQueued (queued-message drain) so
- * the two send paths can never drift on the budget shape. */
-function budgetPayload(modelSnapshot: ComposerModelState) {
-  return {
-    enabled: modelSnapshot.budgetEnabled,
-    limitUsd: modelSnapshot.budgetEnabled ? modelSnapshot.budgetUsd : null,
-    mode: modelSnapshot.budgetMode,
-    graceOveragePct: modelSnapshot.budgetGracePct,
-  };
 }
 
 export interface ComposerAction {
@@ -351,8 +336,6 @@ export function MessageComposer({
   availableAgents,
   defaultAgentId,
   onSetDefaultAgent,
-  workspaceBudgetGovernance,
-  walletBalanceUsd = null,
   onInputHasContentChange,
   orgSlug,
   workspaceSlug,
@@ -393,18 +376,6 @@ export function MessageComposer({
   /** Toggle the workspace default agent from the picker's star. Omitted ⇒ star hidden. */
   onSetDefaultAgent?: (agentId: string | null) => void;
   /**
-   * Workspace-level per-turn budget governance, resolved
-   * server-side via `workspace.budget.policy.read`. Null/omitted ⇒ no
-   * governance — the composer behaves exactly as before this feature.
-   */
-  workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
-  /**
-   * Org wallet balance in USD for the v2 wallet gate: when a per-turn cap is
-   * set higher than the balance, send disables with inline copy. Null/omitted
-   * ⇒ no gate (balance unknown never blocks sending).
-   */
-  walletBalanceUsd?: number | null;
-  /**
    * Called whenever the textarea transitions between empty and non-empty.
    * `true`  → user has typed content (hide suggested prompts).
    * `false` → input is empty / cleared (show suggested prompts).
@@ -427,25 +398,12 @@ export function MessageComposer({
 }) {
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
-  // Seed once at mount, applying any workspace budget governance
-  // on top of the server-resolved default — a "default" governance pre-fills
-  // an unset control, a "ceiling" clamps it. Governance is resolved
-  // server-side and doesn't change over the composer's lifetime. When the
-  // chat_ux_v2 session provider wraps the tree, model/effort/budget/generate
-  // live in the unified session store (see session-bridges.tsx); otherwise
-  // this behaves as the plain local state it always was.
-  const seededInitialModelState = React.useMemo(
-    () =>
-      applyWorkspaceBudgetGovernance(
-        initialModelState ?? defaultModelState,
-        workspaceBudgetGovernance ?? null,
-      ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once; both inputs are server-resolved and stable for the mount
-    [],
-  );
+  // Seeded once at mount from the server-resolved default. When the
+  // chat_ux_v2 session provider wraps the tree, model/tier/effort live in the
+  // unified session store (see session-bridges.tsx); otherwise this is plain
+  // local state.
   const [model, setModel] = useSessionModelState(
-    seededInitialModelState,
-    workspaceBudgetGovernance ?? null,
+    initialModelState ?? defaultModelState,
   );
   const [activeServerIds, setActiveServerIds] = React.useState<Set<string>>(
     new Set(),
@@ -523,15 +481,6 @@ export function MessageComposer({
   const v2Active = chatSession !== null;
   const v2Mobile = isMobile && v2Active;
   const v2Desktop = !isMobile && v2Active;
-
-  // v2 wallet gate: a per-turn cap the wallet can't cover blocks sending —
-  // the fix is the user's (add funds, or lower the cap in session settings),
-  // so this disables send with inline copy rather than failing the turn.
-  const walletGateBlocked =
-    v2Active &&
-    walletBalanceUsd != null &&
-    chatSession.state.budgetUsd !== null &&
-    walletBalanceUsd < chatSession.state.budgetUsd;
 
   // v2: the agent picker hands focus to the composer after a pick (see
   // agent-picker/focus-composer-event.ts) so "pick → type" is seamless.
@@ -1171,7 +1120,6 @@ export function MessageComposer({
     if (activeServerIds.size > 0) {
       fd.set("activeServerIds", JSON.stringify([...activeServerIds]));
     }
-    fd.set("budget", JSON.stringify(budgetPayload(modelSnapshot)));
     if (selectedAgentId) fd.set("agentId", selectedAgentId);
     return fd;
   }
@@ -1198,7 +1146,6 @@ export function MessageComposer({
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (disabled) return;
-    if (walletGateBlocked) return;
     // Never submit while an upload is still in flight — the model would
     // otherwise resolve an attachment the server hasn't finished persisting.
     if (hasInFlightUploads(attachments)) return;
@@ -1310,7 +1257,6 @@ export function MessageComposer({
       if (currentActiveServerIds.size > 0) {
         fd.set("activeServerIds", JSON.stringify([...currentActiveServerIds]));
       }
-      fd.set("budget", JSON.stringify(budgetPayload(ms)));
       const currentAgentId = selectedAgentIdRef.current;
       if (currentAgentId) fd.set("agentId", currentAgentId);
       // Defer the dispatch out of the caller (effect / event handler) so the
@@ -1486,7 +1432,7 @@ export function MessageComposer({
       return;
     }
 
-    if (pending || disabled || walletGateBlocked) return;
+    if (pending || disabled) return;
 
     if (enterToSubmit) {
       if (!e.shiftKey) {
@@ -1539,24 +1485,6 @@ export function MessageComposer({
         <SelectItem value="high">High effort</SelectItem>
       </SelectPopup>
     </Select>
-  );
-
-  const budgetControl = (
-    <BudgetControl
-      budgetEnabled={model.budgetEnabled}
-      budgetUsd={model.budgetUsd}
-      budgetMode={model.budgetMode}
-      budgetGracePct={model.budgetGracePct}
-      governance={workspaceBudgetGovernance}
-      onChange={(patch) =>
-        setModel((s) =>
-          applyWorkspaceBudgetGovernance(
-            { ...s, ...patch },
-            workspaceBudgetGovernance ?? null,
-          ),
-        )
-      }
-    />
   );
 
   // Shared send-button aria-label — used by both the v2 condensed row
@@ -1718,14 +1646,6 @@ export function MessageComposer({
         {disabled && disabledReason ? (
           <p className="text-xs text-muted-foreground">{disabledReason}</p>
         ) : null}
-        {walletGateBlocked && !collapsed ? (
-          <p
-            className="text-xs text-destructive"
-            data-testid="wallet-gate-hint"
-          >
-            Wallet balance is below your cap. Add funds or lower the cap.
-          </p>
-        ) : null}
 
         {/* v2 condensed row: ONE row replaces the entire toolbar below — plus
           (attach) / textarea / cog (session settings, conditional on
@@ -1802,7 +1722,6 @@ export function MessageComposer({
                 pending ||
                 disabled ||
                 uploadsInFlight ||
-                walletGateBlocked ||
                 // Empty input disables send (attachments alone still send).
                 (inputEmpty && visibleAttachments.length === 0)
               }
@@ -1880,23 +1799,14 @@ export function MessageComposer({
                 mode — Oxagen governs agents, it does not run them. Attaching an
                 image or video for the model to READ is the paperclip above. */}
 
-                  {!isMobile && (
-                    <>
-                      {/* MCP server activation picker — only when servers are available */}
-                      {(availableMcpServers?.length ?? 0) > 0 && (
-                        <McpServerPicker
-                          servers={availableMcpServers!}
-                          activeServerIds={activeServerIds}
-                          onActiveServerIdsChange={setActiveServerIds}
-                        />
-                      )}
-
-                      {/* Per-turn dollar budget — off by default. Every change is
-                    re-clamped against workspace governance so a
-                    "ceiling" can never be exceeded, even transiently, by a
-                    member's own edit. */}
-                      {budgetControl}
-                    </>
+                  {/* MCP server activation picker — desktop only, and only when
+                    servers are available. */}
+                  {!isMobile && (availableMcpServers?.length ?? 0) > 0 && (
+                    <McpServerPicker
+                      servers={availableMcpServers!}
+                      activeServerIds={activeServerIds}
+                      onActiveServerIdsChange={setActiveServerIds}
+                    />
                   )}
 
                   {/* Mobile: overflow controls live in a bottom sheet. */}
@@ -1926,9 +1836,7 @@ export function MessageComposer({
                   type="submit"
                   // Disabled while any attachment upload is still in flight — sending
                   // now would resolve a publicId the server hasn't finished persisting.
-                  disabled={
-                    pending || disabled || uploadsInFlight || walletGateBlocked
-                  }
+                  disabled={pending || disabled || uploadsInFlight}
                   size="sm"
                   aria-label={
                     isStreaming && pendingPromptBehavior === "interrupt"
@@ -2017,8 +1925,7 @@ export function MessageComposer({
             <SheetHeader className="mb-2">
               <SheetTitle className="text-sm">Composer options</SheetTitle>
               <SheetDescription className="sr-only">
-                Model, generation, MCP server, and budget controls for this
-                turn.
+                Model, agent, effort, and MCP server controls for this turn.
               </SheetDescription>
             </SheetHeader>
             <SheetPanel className="gap-1">
@@ -2060,10 +1967,6 @@ export function MessageComposer({
                   />
                 </div>
               )}
-              <div className="flex min-h-11 items-center justify-between gap-2">
-                <span className="text-sm">Per-turn budget</span>
-                {budgetControl}
-              </div>
             </SheetPanel>
           </SheetPopup>
         </Sheet>
