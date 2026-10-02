@@ -1,77 +1,104 @@
 ---
 name: clear-prose
-description: Writing rules for anything a person will read from Oxagen or Stella, whatever the surface. Use whenever you write or edit a page, doc, post, email, README, changelog, UI string, error message, CLI output, or commit message, even if the request does not mention prose or style. Pairs with oxagen-branding, which owns positioning, vocabulary, and the visual system; this skill owns the sentences.
+description: >
+  Rules for writing anything people will read from Oxagen or Stella. Use these
+  when writing or editing a page, doc, post, email, README, changelog, UI text,
+  error message, CLI output, or commit message.
 ---
 
 # Clear prose
 
-The voice is a senior engineer who has read the logs and is telling you what
-happened. Plain, specific, unhurried, a little dry. State the fact, name the
-number, stop.
+Use these rules any time you write for a reader: a web page, doc, post, email,
+changelog, UI text, commit message, or anything else someone will read.
 
-## Rules that never bend
+Start with what the reader needs—give the answer, fact, or step up front.
+Match the structure to the task. Do not add a generic introduction if it does
+not help.
 
-1. **No em dashes, no en dashes as separators, no double hyphens standing in
-   for one.** Use a period, a comma, a colon, or parentheses.
-2. **No exclamation points.**
-3. **Active voice, actor first.** "The wrapper locks the dod," not "the dod is
-   locked by the wrapper."
-4. **One idea per sentence.** A semicolon means two sentences.
-5. **Sentence case** for headings, buttons, labels, and table headers.
-6. **Oxford comma.**
-7. **Say "you," never "users."** Say Oxagen or Stella, not "we," in product
-   copy.
-8. **Numbers over adjectives.** "Two hooks, sixty seconds" beats "fast setup."
-   Numerals when the number is data, words when it opens a sentence.
-9. **Every claim is one the record can back.** Never strengthen a claim past
-   the evidence. A held dod is done. Proven is the witness's word.
-10. **Open on the reader's situation**, not on what the product is.
+**Audience and reading level**
+- Write at a fifth-grade reading level. Use short sentences, familiar words,
+  and plain names. Aim for clarity without a childish tone.
+- Explain technical terms the first time you use them.
+- Use examples anyone can understand.
 
-## Cut these on sight
+**Voice and tone**
+- Sound like an experienced technical writer. Be helpful and direct.
+- Use contractions and natural sentence flow.
+- Include details and rhythm if they help, but keep it clear.
 
-- Filler openers: "In today's world," "As AI agents become," "With the rise
-  of," "It's no secret that," "We believe," "We're on a mission."
-- Words that mean nothing: seamless, robust, powerful, revolutionary,
-  cutting-edge, next-generation, game-changing, best-in-class, world-class,
-  enterprise-grade, comprehensive, holistic, end-to-end, turnkey, frictionless,
-  effortless, magic.
-- Intensifiers: very, really, truly, genuinely, incredibly, extremely, deeply,
-  highly, super.
-- Emotional and fear sells: excited, thrilled, delighted, passionate, finally,
-  imagine, rogue, unchecked, safeguard, liability.
-- Consultant verbs: leverage, utilize, enable you to, in order to.
-- Category words owned by others: observability, evals, guardrails, trust
-  layer, safety layer.
-- Overclaims: guaranteed, always and never about outcomes, 100 percent,
-  eliminates, AI-powered.
+# Writing rules
 
 The full use and avoid lists, with replacements, are in the branding skill's
 `references/words.md`, which lives in `oxageninc/brand` under
 `skills/oxagen-branding/`. The stub at `.claude/skills/oxagen-branding/` says
 how to read it from `main`.
 
-## Shape of a piece
+- Always use plain nouns or noun phrases for names, headings, section labels,
+  and table headers. For example: "Steering records" or "Deleted steering
+  records," not "The records that steer."
+- Use sentence case for headings, labels, buttons, and table headers.
+- Use verbs for action elements like buttons or commands. For example:
+  "Delete record," "Save changes."
+- Use one name for each concept. Do not switch between "record," "entry,"
+  and "resource" for the same thing.
+- Write what something is, not just what you think someone might mean.
+- Avoid inventing new terms for things with existing names.
+- Spell out abbreviations or acronyms the first time. Only use them later if
+  helpful.
 
-1. The reader's situation, in their words.
-2. What happens instead, in one line.
-3. How it works, in order, with the mechanism named.
-4. The proof: a number, a record, a command that runs.
-5. One next step.
+## Actions and sentences
 
-## Docs, specifically
+- Use direct, active voice. "The agent deletes the record," not "The record is
+  deleted by the agent."
+- Keep subject and verb close together.
+- Describe steps in the order they happen. For example: "Choose a file, then
+  select Upload."
+- When explaining why something happened, put the cause before the effect when
+  that makes the explanation easier to follow.
+- Give each sentence one idea.
+- Vary sentence length for flow, but keep most under 20 words.
+- Make references clear. Use the actual name instead of "it" or "they" if the
+  meaning is unclear.
+- Use numbers for steps in a process, priorities, or items readers may need
+  to reference later. Use bullets for unordered lists.
 
-Second person, imperative, one step per sentence. Working command first, the
-reason in one line after. Code, commands, paths, ids, and verdict words in
-monospace. No marketing language in a doc.
+## Claims, facts, and technical language
 
-## UI strings and errors
+- State facts directly: "Only admins can delete records."
+- Make only claims the evidence supports. Never invent numbers or remove
+  uncertainty to make a sentence sound stronger.
+- Replace vague claims with specifics, if true: "Setup takes three steps."
+- Use technical terms only if needed. Explain unfamiliar words the first time.
+- Give everyday examples if the concept is hard.
+- Do not add empty introductions ("It is important to note"), empty praise
+  ("robust"), or slogans.
+- Do not use metaphors or clever labels for actions or instructions. Prefer
+  direct labels: "Activity history," not "Your work’s memory."
 
-Terse, present tense, a fragment where a fragment reads faster. An error says
-what happened, then what to do, in that order. Never apologize.
+## Words and punctuation to avoid
 
-## Before shipping
+- Avoid industry jargon or brand terms unless required and accurate.
+- Do not use "very," "powerful," "eliminates," or similar claims unless
+  precise and true.
+- Use em dashes and exclamation points very sparingly, if at all. Prefer other
+  punctuation and sentence structures in almost all cases.
+- Do not ban words just for existing—cut empty or unsupported uses.
 
-Run `pnpm check:prose`. It scans the website and the docs for em dashes,
-exclamation points, and the avoid list, and fails on any hit. Then read the
-piece once and ask: does the first sentence name the reader's situation, can
-every claim be shown, is there a word that could go?
+## Errors and messages
+
+- Make error messages helpful. Say what went wrong and what to do now.
+- Always include any facts readers need about costs, loss of access or data,
+  and recovery—even if the message is longer as a result.
+
+## Review
+
+- Do all section headings and labels use plain nouns or noun phrases?
+- Do buttons and commands use clear verbs?
+- Does each concept have the same name throughout?
+- Is the reading level simple enough for a fifth grader to understand?
+- Can the reader always tell who does what and why?
+- Are unfamiliar technical terms explained in plain language?
+- Can any words be removed without losing meaning or natural flow?
+
+Is the text free of extra words while preserving meaning and natural flow?
+If the answer to any is **no, edit until it is clear**.

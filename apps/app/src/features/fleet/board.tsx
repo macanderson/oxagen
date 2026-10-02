@@ -118,6 +118,13 @@ import { WaitingTile } from "./waiting-tile";
 /** An agent the steer dialog can address. */
 export type FleetAgent = { agentKey: string };
 
+/**
+ * Each registered agent's harness, by agent key. A run the ledger recorded
+ * carries no harness of its own, so its row badges the agent's avatar with
+ * the harness the agent registered, as the run's own header does.
+ */
+export type AgentHarnesses = Readonly<Record<string, string>>;
+
 type Place = { org: string; ws: string };
 
 // ── Tiles ────────────────────────────────────────────────────────────────
@@ -420,6 +427,7 @@ function RunRowView({
   org,
   ws,
   exporting,
+  agentHarnesses,
   onPause,
   onExport,
 }: {
@@ -427,6 +435,7 @@ function RunRowView({
   columns: readonly FleetColumn[];
   now: number;
   exporting: boolean;
+  agentHarnesses: AgentHarnesses;
   onPause: (run: RunRow) => void;
   onExport: (run: RunRow) => void;
 } & Place) {
@@ -485,7 +494,12 @@ function RunRowView({
           <td key={column} className={`${cell} min-w-48`}>
             <AgentCard
               agentKey={run.agentKey}
-              harness={run.harness?.name}
+              harness={
+                run.harness?.name ??
+                (run.agentKey === null
+                  ? undefined
+                  : agentHarnesses[run.agentKey])
+              }
               notRecorded={t("notRecorded")}
               sub={
                 run.harness
@@ -1054,6 +1068,7 @@ export function FleetBoard({
   list: askedList,
   total,
   totalBound,
+  agentHarnesses = {},
   org,
   ws,
 }: {
@@ -1082,6 +1097,8 @@ export function FleetBoard({
   /** The runs that match, across the workspace; null past `totalBound`; absent when not counted. */
   total?: number | null;
   totalBound?: number;
+  /** Each registered agent's harness, for the rows whose run recorded none. */
+  agentHarnesses?: AgentHarnesses;
 } & Place) {
   const t = useTranslations("fleet.runs");
   const pauseT = useTranslations("fleet.pause");
@@ -1326,6 +1343,7 @@ export function FleetBoard({
                     org={org}
                     ws={ws}
                     exporting={exportingId === row.run.id}
+                    agentHarnesses={agentHarnesses}
                     onPause={(run) => {
                       setPausing(run);
                     }}

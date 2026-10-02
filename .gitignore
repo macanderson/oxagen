@@ -233,3 +233,6 @@ apps/docs/public/architecture/
 .ds-sync/
 ds-bundle/
 packages/ui/index.d.ts
+
+# scratch directory
+.scratch/

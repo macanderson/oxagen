@@ -28,6 +28,8 @@ function harness(
     unmetered?: UnmeteredRuns;
     names?: Record<string, string>;
     harnesses?: Record<string, string>;
+    /** The harness each agent registered, by agent key; absent leaves the dep out. */
+    agentHarnesses?: Record<string, string>;
   } = {},
 ) {
   const readDailyTotals = vi.fn(async () => over.daily ?? []);
@@ -48,12 +50,17 @@ function harness(
   const readRunHarnesses = vi.fn(
     async () => new Map(Object.entries(over.harnesses ?? {})),
   );
+  const agentHarnesses = over.agentHarnesses;
+  const readAgentHarnesses = vi.fn(
+    async () => new Map(Object.entries(agentHarnesses ?? {})),
+  );
   const handler = createSpendGetHandler({
     readDailyTotals,
     readRunTotals,
     readUnmeteredRuns,
     readRunNames,
     readRunHarnesses,
+    ...(agentHarnesses === undefined ? {} : { readAgentHarnesses }),
   });
   return {
     handler,
@@ -62,6 +69,7 @@ function harness(
     readUnmeteredRuns,
     readRunNames,
     readRunHarnesses,
+    readAgentHarnesses,
   };
 }
 
@@ -469,6 +477,27 @@ describe("get_spend day series and top runs", () => {
       top.map((entry) => entry.runId),
     );
     expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+
+  it("names the agent's registered harness on a top run that recorded none, and keeps a recorded one", async () => {
+    const ledger = pricedRun(900n);
+    const wrapped = pricedRun(800n);
+    const h = harness({
+      daily: [daily({ groupKind: "agent", groupKey: "acme.core.cc" })],
+      runs: [ledger, wrapped],
+      harnesses: { [wrapped.runId]: "codex" },
+      agentHarnesses: { "acme.core.cc": "claude-code" },
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
+    const top = out.rows[0]?.topRuns ?? [];
+    expect(top.find((r) => r.runId === ledger.runId)?.harness).toBe(
+      "claude-code",
+    );
+    expect(top.find((r) => r.runId === wrapped.runId)?.harness).toBe("codex");
+    expect(h.readAgentHarnesses).toHaveBeenCalledWith(SCOPE, [
+      "acme.core.cc",
+      "acme.core.cc",
+    ]);
   });
 
   it("gives a model row's runs that model's part of each run", async () => {

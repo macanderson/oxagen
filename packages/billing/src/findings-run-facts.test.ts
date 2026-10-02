@@ -128,17 +128,17 @@ describe("readFirstPrompts", () => {
           root: ROOT,
           at: "2026-09-10T10:00:00.123456Z",
           prompt_digest: "sha256:p",
-          prompt_source: "typed",
-          prompt_origin: "",
-          command_name: "",
+          first_source: "typed",
+          first_origin: "",
+          first_command: "",
         },
         {
           root: "00000000-0000-4000-8000-0000000000ff",
           at: "2026-09-10T10:00:00.000000Z",
           prompt_digest: "sha256:q",
-          prompt_source: null,
-          prompt_origin: null,
-          command_name: null,
+          first_source: null,
+          first_origin: null,
+          first_command: null,
         },
       ],
     } as never);
@@ -150,8 +150,11 @@ describe("readFirstPrompts", () => {
     };
     expect(call.query).toContain("kind = 'turn_start'");
     expect(call.query).toContain("LIMIT 1 BY root_session_uuid");
-    // No alias names a column, so the filters read the stored uuids.
-    expect(call.query).not.toMatch(/AS (root_session_uuid|session_uuid)\b/);
+    // No alias names a column, so the filters read the stored uuids and the
+    // aggregates read the stored prompt facts.
+    expect(call.query).not.toMatch(
+      /AS (root_session_uuid|session_uuid|prompt_digest|prompt_source|prompt_origin|command_name)\b/,
+    );
     expect(call.params).toEqual({
       roots: [ROOT],
       from: "2026-08-28 00:00:00.000",

@@ -2,7 +2,10 @@
 // steering-repo-spec, Steering PR flow).
 //
 // Studio's Review, M10's sync, and M13's server folder writer each change
-// files under tools/servers/<name>/. They all open the steering PR here.
+// files under tools/servers/<name>/. They all open the steering PR here. The
+// Markdown import (markdown-import/commit.ts) opens its steering/import-<date>
+// PR through the same flow, with its own branch rule
+// (createSteeringPullRequestOpener).
 //
 // Without `existing`:
 //   1. Refuse a branch outside tools/, a path outside the branch's folder,
@@ -133,16 +136,13 @@ function refuse(reason: string, message: string): HandlerError {
   return new HandlerError({ code: "conflict", reason, message });
 }
 
-/** Why the arguments cannot become one tools steering PR, or null. */
-export function toolsPullRequestRefusal(
+/**
+ * Why a list of files cannot be one steering PR's commit, or null: no files,
+ * more than 299, a path named twice, or a path the branch may not change.
+ */
+export function steeringFilesRefusal(
   args: Pick<ToolsPullRequestArgs, "branch" | "files">,
 ): { reason: string; message: string } | null {
-  if (!args.branch.startsWith(TOOLS_BRANCH_PREFIX)) {
-    return {
-      reason: "branch_prefix",
-      message: `${args.branch} does not start with ${TOOLS_BRANCH_PREFIX}. A tools steering PR changes only tools/.`,
-    };
-  }
   if (args.files.length === 0) {
     return {
       reason: "no_files",
@@ -169,6 +169,42 @@ export function toolsPullRequestRefusal(
   return branchScopeRefusal(args.branch, paths);
 }
 
+/** Why the arguments cannot become one tools steering PR, or null. */
+export function toolsPullRequestRefusal(
+  args: Pick<ToolsPullRequestArgs, "branch" | "files">,
+): { reason: string; message: string } | null {
+  if (!args.branch.startsWith(TOOLS_BRANCH_PREFIX)) {
+    return {
+      reason: "branch_prefix",
+      message: `${args.branch} does not start with ${TOOLS_BRANCH_PREFIX}. A tools steering PR changes only tools/.`,
+    };
+  }
+  return steeringFilesRefusal(args);
+}
+
+/**
+ * One kind of steering PR this opener writes: tools/ PRs here, and the
+ * Markdown import's steering/import-<date> PRs (markdown-import/commit.ts).
+ * The kind names the PR in messages and refuses the arguments it cannot take.
+ */
+export interface SteeringPullRequestKind {
+  /** The prefix of the reasons the opener refuses with, such as `tools` in tools_branch_exists. */
+  reasonPrefix: string;
+  /** What a message calls the PR, such as "tools steering PR". */
+  noun: string;
+  /** Why the arguments cannot become this kind of PR, or null. */
+  refusal: (
+    args: Pick<ToolsPullRequestArgs, "branch" | "files">,
+  ) => { reason: string; message: string } | null;
+}
+
+/** The tools steering PR: Studio's Review, M10's sync, and M13's server folder writer. */
+export const TOOLS_PULL_REQUEST: SteeringPullRequestKind = {
+  reasonPrefix: "tools",
+  noun: "tools steering PR",
+  refusal: toolsPullRequestRefusal,
+};
+
 /** The check run's title and summary for one report. */
 export function checkRunText(report: CheckReport): {
   conclusion: "success" | "failure";
@@ -194,6 +230,17 @@ export function checkRunText(report: CheckReport): {
 
 export function createToolsPullRequestOpener(
   deps: ToolsPullRequestDeps,
+): ToolsPullRequestOpener {
+  return createSteeringPullRequestOpener(deps, TOOLS_PULL_REQUEST);
+}
+
+/**
+ * An opener for one kind of many-file steering PR. The flow is the one the
+ * header describes for tools PRs. Only the refusal and the words differ.
+ */
+export function createSteeringPullRequestOpener(
+  deps: ToolsPullRequestDeps,
+  kind: SteeringPullRequestKind,
 ): ToolsPullRequestOpener {
   /** Run the checks on `head` and report them on the host. */
   async function reportChecks(
@@ -305,7 +352,7 @@ export function createToolsPullRequestOpener(
 
   return {
     async open(scope, args) {
-      const refusal = toolsPullRequestRefusal(args);
+      const refusal = kind.refusal(args);
       if (refusal) throw refuse(refusal.reason, refusal.message);
 
       const host = deps.host();
@@ -314,7 +361,7 @@ export function createToolsPullRequestOpener(
       if (layout.layout !== "steering") {
         throw refuse(
           "steering_repo_required",
-          `${repo.fullName} has no steering/governance.toml on ${repo.defaultBranch}. Set up the steering repo before you open a tools steering PR.`,
+          `${repo.fullName} has no steering/governance.toml on ${repo.defaultBranch}. Set up the steering repo before you open a ${kind.noun}.`,
         );
       }
       const production = repo.defaultBranch;
@@ -329,7 +376,7 @@ export function createToolsPullRequestOpener(
       if (args.existing === undefined) {
         if ((await host.branchHead(repo, args.branch)) !== null) {
           throw refuse(
-            "tools_branch_exists",
+            `${kind.reasonPrefix}_branch_exists`,
             `${args.branch} already exists. Add to its open PR, or delete the branch and try again.`,
           );
         }
@@ -383,22 +430,22 @@ export function createToolsPullRequestOpener(
       });
       if (open === null || open.number !== args.existing.number) {
         throw refuse(
-          "tools_pr_not_open",
-          `No open PR #${args.existing.number} merges ${args.branch} into ${production}. Open a new tools steering PR instead.`,
+          `${kind.reasonPrefix}_pr_not_open`,
+          `No open PR #${args.existing.number} merges ${args.branch} into ${production}. Open a new ${kind.noun} instead.`,
         );
       }
       const parent = await host.branchHead(repo, args.branch);
       if (parent === null) {
         throw refuse(
-          "tools_branch_missing",
-          `${args.branch} is gone from ${repo.fullName}. Open a new tools steering PR instead.`,
+          `${kind.reasonPrefix}_branch_missing`,
+          `${args.branch} is gone from ${repo.fullName}. Open a new ${kind.noun} instead.`,
         );
       }
       // The files hold only what differs from the branch at `at`. On any
       // other head, the commit would drop or undo what the new commits wrote.
       if (args.at !== undefined && parent !== args.at) {
         throw refuse(
-          "tools_branch_moved",
+          `${kind.reasonPrefix}_branch_moved`,
           `${args.branch} moved while the files were built. Read the branch again and retry.`,
         );
       }
@@ -430,31 +477,35 @@ export const toolsSteeringHost: () => ToolsPullRequestHost = (() => {
   return () => (host ??= createSteeringHost());
 })();
 
+/**
+ * What a steering PR opener reads from the workspace: its steering host, its
+ * published index, and the names the references check resolves against.
+ */
+export const workspaceSteeringPullRequestDeps: ToolsPullRequestDeps = {
+  host: toolsSteeringHost,
+  readIndex: async (scope) => {
+    const { postgresTachoPublished } = await import(
+      "./tacho.published.postgres"
+    );
+    const { indexRecords } = await import("./context.steering.index.get");
+    const delivery = await postgresTachoPublished.published({
+      ...scope,
+      runId: null,
+    });
+    return delivery.workspace === null
+      ? null
+      : { records: indexRecords(delivery.workspace) };
+  },
+  readContext: async (scope) => {
+    const { readCheckContext } = await import("./context.steering.index.get");
+    return readCheckContext(scope);
+  },
+  now: () => new Date(),
+};
+
 /** The opener over the workspace's steering host and published index. */
 export const toolsPullRequestOpener: ToolsPullRequestOpener =
-  createToolsPullRequestOpener({
-    host: toolsSteeringHost,
-    readIndex: async (scope) => {
-      const { postgresTachoPublished } = await import(
-        "./tacho.published.postgres"
-      );
-      const { indexRecords } = await import("./context.steering.index.get");
-      const delivery = await postgresTachoPublished.published({
-        ...scope,
-        runId: null,
-      });
-      return delivery.workspace === null
-        ? null
-        : { records: indexRecords(delivery.workspace) };
-    },
-    readContext: async (scope) => {
-      const { readCheckContext } = await import(
-        "./context.steering.index.get"
-      );
-      return readCheckContext(scope);
-    },
-    now: () => new Date(),
-  });
+  createToolsPullRequestOpener(workspaceSteeringPullRequestDeps);
 
 /**
  * M13's SteeringPrOpener (@oxagen/agent/runtime/steering-pr) over a tools
