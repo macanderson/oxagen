@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { GitLabApiError, type GitLabClient } from "@oxagen/gitlab";
 import {
   CLOSED_ON_GITLAB,
+  gitlabObservedEvent,
   handleGitLabWebhook,
   type GitLabWebhookDeps,
   type WebhookConnection,
@@ -540,5 +541,77 @@ describe("GitLab webhook: the Oxagen check on a code repository (S2b, #5058)", (
       expect.objectContaining({ connectionId: CONNECTION.id, iid: 7 }),
       expect.stringContaining("could not request the Oxagen check"),
     );
+  });
+});
+
+describe("GitLab webhook: the pull request sync (ADR-288)", () => {
+  it("asks once per merge request delivery, with the scope, the connection, and the event", async () => {
+    const { deps } = world({});
+    const requestForgeSync = vi.fn(async () => undefined);
+    deps.requestForgeSync = requestForgeSync;
+    await deliver(deps, mrEvent({}));
+    expect(requestForgeSync).toHaveBeenCalledTimes(1);
+    expect(requestForgeSync).toHaveBeenCalledWith(
+      { orgId: CONNECTION.orgId, workspaceId: CONNECTION.workspaceId },
+      CONNECTION,
+      expect.objectContaining({ kind: "merge_request", iid: 7 }),
+    );
+  });
+
+  it("asks nothing for a push (negative)", async () => {
+    const { deps } = world({});
+    const requestForgeSync = vi.fn(async () => undefined);
+    deps.requestForgeSync = requestForgeSync;
+    await deliver(deps, {
+      object_kind: "push",
+      ref: "refs/heads/feature",
+      project: { id: 4242, path_with_namespace: "acme/platform/rules", default_branch: "main" },
+    });
+    expect(requestForgeSync).not.toHaveBeenCalled();
+  });
+
+  it("logs a failed request and answers the delivery as before (negative)", async () => {
+    const { deps, state } = world({ mrState: "closed" });
+    deps.requestForgeSync = vi.fn(async () => {
+      throw new Error("event bus down");
+    });
+    vi.mocked(logger.error).mockClear();
+    await expect(deliver(deps, mrEvent({ state: "closed" }))).resolves.toEqual({
+      status: 200,
+      outcome: "proposal_rejected",
+    });
+    expect(state.rejected).toEqual([{ id: "p-7", reason: CLOSED_ON_GITLAB }]);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: CONNECTION.id, iid: 7 }),
+      expect.stringContaining("could not ask the forge sync"),
+    );
+  });
+
+  it("names the merge request by the connection's project path, with an id per head and update", () => {
+    const scope = { orgId: CONNECTION.orgId, workspaceId: CONNECTION.workspaceId };
+    const event = {
+      kind: "merge_request" as const,
+      projectId: "4242",
+      projectPathWithNamespace: "Acme/Platform/Rules",
+      iid: 7,
+      action: "update",
+      state: "opened",
+      sourceBranch: "feature",
+      targetBranch: "main",
+      lastCommitSha: "abc123",
+      updatedAt: "2026-09-23T10:00:00Z",
+      mergeCommitSha: null,
+    };
+    expect(gitlabObservedEvent(scope, CONNECTION, event)).toEqual({
+      name: "forge/pull-request.observed",
+      id: `forge-mr-delivery:${CONNECTION.workspaceId}:gitlab:4242:7:abc123:2026-09-23T10:00:00Z`,
+      data: {
+        ...scope,
+        provider: "gitlab",
+        repository: "acme/platform/rules",
+        number: 7,
+        pullKey: `${CONNECTION.workspaceId}:gitlab:acme/platform/rules#7`,
+      },
+    });
   });
 });

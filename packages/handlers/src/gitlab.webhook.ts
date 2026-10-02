@@ -26,6 +26,7 @@ import {
   type GitLabClient,
   type GitLabMergeRequestEvent,
 } from "@oxagen/gitlab";
+import { FORGE_PULL_REQUEST_OBSERVED_EVENT } from "@oxagen/inngest-functions/events";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import type { ProposalStatus } from "@oxagen/oxagen/contracts/context.steering.shared";
@@ -33,6 +34,8 @@ import {
   decryptGitLabCredential,
   GITLAB_PROVIDER,
 } from "./lib/gitlab-credential";
+import type { ForgePullRequestObservedEvent } from "./forge.pull-request.webhook";
+import { pullKeyOf } from "./lib/forge-pull-requests/facts";
 import { logger } from "./logger";
 import {
   applyForgeState,
@@ -118,6 +121,16 @@ export interface GitLabWebhookDeps {
     connection: WebhookConnection,
     event: GitLabMergeRequestEvent,
     body: unknown,
+  ): Promise<void>;
+  /**
+   * Ask the pull request sync for the merge request (ADR-288): its stored
+   * record, the diff of its head, and its links. A failure is logged.
+   * Absent, nothing is asked.
+   */
+  requestForgeSync?(
+    scope: WebhookScope,
+    connection: WebhookConnection,
+    event: GitLabMergeRequestEvent,
   ): Promise<void>;
 }
 
@@ -260,6 +273,59 @@ async function requestCodeCheck(
   }
 }
 
+/**
+ * The forge sync request for a merge request delivery (ADR-288). It names no
+ * facts: the sync reads the merge request once, for its merge base and its
+ * author, which the delivery's summary does not carry. The id names the
+ * head and GitLab's `updated_at`, so a redelivered delivery asks once.
+ */
+export function gitlabObservedEvent(
+  scope: WebhookScope,
+  connection: Pick<WebhookConnection, "projectId" | "projectPath">,
+  event: GitLabMergeRequestEvent,
+): ForgePullRequestObservedEvent {
+  const repository = connection.projectPath.toLowerCase();
+  return {
+    name: FORGE_PULL_REQUEST_OBSERVED_EVENT,
+    id: [
+      "forge-mr-delivery",
+      scope.workspaceId,
+      "gitlab",
+      connection.projectId,
+      String(event.iid),
+      event.lastCommitSha ?? "nohead",
+      event.updatedAt,
+    ].join(":"),
+    data: {
+      orgId: scope.orgId,
+      workspaceId: scope.workspaceId,
+      provider: "gitlab",
+      repository,
+      number: event.iid,
+      pullKey: pullKeyOf(scope.workspaceId, "gitlab", repository, event.iid),
+    },
+  };
+}
+
+/** Ask the forge sync for the merge request; a failure never fails the delivery. */
+async function requestForgeSync(
+  deps: GitLabWebhookDeps,
+  scope: WebhookScope,
+  connection: WebhookConnection,
+  event: GitLabMergeRequestEvent,
+): Promise<void> {
+  const request = deps.requestForgeSync;
+  if (!request) return;
+  try {
+    await request(scope, connection, event);
+  } catch (err) {
+    logger.error(
+      { err, connectionId: connection.id, iid: event.iid },
+      "gitlab.webhook: could not ask the forge sync for the merge request; its next delivery asks again",
+    );
+  }
+}
+
 /** Why a proposal is rejected when its merge request closes on GitLab. */
 export const CLOSED_ON_GITLAB = "Merge request closed on GitLab";
 
@@ -332,6 +398,9 @@ export async function handleGitLabWebhook(
       // A merge request in a linked code repository gets the Oxagen check,
       // posted as a commit status with the connection's token.
       await requestCodeCheck(deps, scope, connection, event, req.body);
+      // The merge request's stored record, its head's diff, and its links
+      // (ADR-288).
+      await requestForgeSync(deps, scope, connection, event);
       // Any merge can change the production branch, whether or not Oxagen
       // opened the merge request. The payload's word is enough to ask: the
       // sync reads the branch, and finds nothing when nothing merged.
@@ -532,6 +601,10 @@ export function gitlabWebhookDeps(): GitLabWebhookDeps {
         body,
       });
       if (request !== null) await requestCodeRepoChecks([request]);
+    },
+    async requestForgeSync(scope, connection, event) {
+      const { eventClient } = await import("./event-client");
+      await eventClient.send([gitlabObservedEvent(scope, connection, event)]);
     },
     async requestSync(scope, reason) {
       // A request that cannot be sent must not fail the delivery: GitLab
