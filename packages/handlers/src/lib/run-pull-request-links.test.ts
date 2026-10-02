@@ -54,6 +54,54 @@ describe("pullRequestLinkEvents", () => {
     ).toBe(events[0]?.id);
   });
 
+  it("marks a link a pr_open call recorded as one the run opened, with its own id", () => {
+    // A pull request opened through a GitHub MCP server seals a network
+    // frame, and one opened from the shell seals a command frame.
+    for (const kind of ["network", "command"]) {
+      const [event] = pullRequestLinkEvents(SCOPE, [
+        { ...frame({ "pr.url": URL_A }, kind), body: { effect_kind: "pr_open" } },
+      ]);
+      expect(event?.data).toEqual({
+        ...SCOPE,
+        rootSessionUuid: ROOT,
+        url: URL_A,
+        opened: true,
+      });
+      expect(event?.id).toMatch(/^run-pr-opened:[0-9a-f-]{36}:[0-9a-f]{32}$/);
+    }
+  });
+
+  it("sends one opened event when a batch both opens and links the same pull request", () => {
+    for (const frames of [
+      [
+        frame({ "pr.url": URL_A }, "oxagen:pr_link"),
+        { ...frame({ "pr.url": URL_A }, "network"), body: { effect_kind: "pr_open" } },
+      ],
+      [
+        { ...frame({ "pr.url": URL_A }, "network"), body: { effect_kind: "pr_open" } },
+        frame({ "pr.url": URL_A }, "oxagen:pr_link"),
+      ],
+    ]) {
+      const events = pullRequestLinkEvents(SCOPE, frames);
+      expect(events).toHaveLength(1);
+      expect(events[0]?.data.opened).toBe(true);
+      expect(events[0]?.id).toMatch(/^run-pr-opened:/);
+    }
+  });
+
+  it.each([
+    ["a pr_link frame", frame({ "pr.url": URL_A }, "oxagen:pr_link")],
+    [
+      "another effect",
+      { ...frame({ "pr.url": URL_A }, "command"), body: { effect_kind: "git_push" } },
+    ],
+    ["a body that is not an object", { ...frame({ "pr.url": URL_A }), body: "pr_open" }],
+  ])("does not call %s a pull request the run opened (negative)", (_label, f) => {
+    const [event] = pullRequestLinkEvents(SCOPE, [f]);
+    expect(event?.data.opened).toBeUndefined();
+    expect(event?.id).toMatch(/^run-pr-linked:/);
+  });
+
   it.each([
     ["no link", frame({})],
     [
