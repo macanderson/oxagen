@@ -43,12 +43,15 @@
  * drains later. This file used to say the hook appended here, which is why
  * `dropBodies` and `purgeBodiesOutsideMandate` explain what they rely on: a
  * read-filter-rewrite is safe only for a single writer, and a second writer
- * would need a tombstone rather than a rewrite.
+ * would need a tombstone rather than a rewrite. `dropBodiesAsync` awaits its
+ * reads, so the daemon's own appends land between them. It overwrites lines
+ * in place instead, and checks each line just before it writes.
  */
 import {
   appendFileSync,
   closeSync,
   fdatasyncSync,
+  fstatSync,
   fsyncSync,
   openSync,
   existsSync,
@@ -78,9 +81,11 @@ import {
 } from "./fs";
 import {
   type BodyIndex,
+  type BodyLocation,
   BodyIndexStore,
   parseStoredBody,
   readLinesFrom,
+  readLinesFromAsync,
   readTailLine,
   type StoredBody,
 } from "./wal-index";
@@ -91,6 +96,19 @@ import {
  * plane fetch or a `/status` request waits for a slice and not for a batch.
  */
 const BODY_READ_SLICE = 32;
+
+/**
+ * Bytes of body lines `dropBodiesAsync` checks and overwrites between two
+ * turns of the event loop. A slice always takes at least one line, and a line
+ * is never split, so one long body can make a slice longer than this.
+ */
+const BODY_DROP_SLICE_BYTES = 1024 * 1024;
+
+/** Scans `dropBodiesAsync` makes of one session before it uses `dropBodies`. */
+const BODY_DROP_SCANS = 3;
+
+/** The byte that ends every line of a WAL file. */
+const NEWLINE = 10;
 
 /**
  * The first read when an event file is read back from its end. An event line
@@ -933,10 +951,12 @@ export class Wal {
    * returns, and `bodiesOfSession` reports `body_index_unusable` only when
    * that read also finds its index disagreeing with the file. Reaching this
    * takes a file rewritten in place, at the same size, while each awaited
-   * build ran, which the daemon never does, since its rewrites go through a
-   * temp file and a rename. Shipping those events without bodies instead
-   * marked them shipped and lost the stored content for good, and a one-off
-   * stall on a path that needs outside tampering costs less than that.
+   * build ran. The daemon's sweeps rewrite through a temp file and a rename.
+   * `dropBodiesAsync` does write in place, but only the shipper calls it,
+   * after this read has returned, and the shipper runs one drain at a time.
+   * Shipping those events without bodies instead marked them shipped and lost
+   * the stored content for good, and a one-off stall on a path that needs
+   * outside tampering costs less than that.
    */
   async bodiesForAsync(events: readonly TachoEvent[]): Promise<TachoBody[]> {
     const found = new Map<string, TachoBody>();
@@ -1072,22 +1092,209 @@ export class Wal {
    * here. A body file with a second writer would need a tombstone instead,
    * because a read-filter-rename loses a line appended between the read and
    * the rename.
+   *
+   * This reads the whole body file on the synchronous path. The shipper
+   * calls `dropBodiesAsync`, which uses this only as its last resort.
    */
   dropBodies(events: readonly TachoEvent[]): number {
-    const wanted = new Map<string, Set<string>>();
-    for (const event of events) {
-      const idems = wanted.get(event.session_uuid) ?? new Set<string>();
-      idems.add(event.event_id_idem);
-      wanted.set(event.session_uuid, idems);
-    }
     let dropped = 0;
-    for (const [session, idems] of wanted) {
+    for (const [session, idems] of Wal.idemsBySession(events)) {
       dropped += this.rewriteBodies(
         session,
         (stored) => stored !== undefined && !idems.has(stored.event_id_idem),
       );
     }
     return dropped;
+  }
+
+  /**
+   * Delete the stored bytes of these events' bodies without holding the
+   * daemon's thread on a large file (ADR-231), and report how many lines
+   * went. The shipper calls this when a proven mandate withdraws a body from
+   * its batch.
+   *
+   * `dropBodies` reads the whole body file and rewrites it on the synchronous
+   * path, and a long session's file holds gigabytes. This finds the withdrawn
+   * lines with a scan that awaits every read. Then it overwrites each line in
+   * place with spaces, a slice at a time, with a turn of the event loop
+   * between slices. Every reader skips a line of spaces, so the body reads as
+   * gone. The file keeps its size until `compact` removes it, and no copy of
+   * it is written to a disk that may be nearly full.
+   *
+   * The scan's offsets can be stale by the time a slice runs. Hooks append
+   * between the scan's reads, a failed append is cut back, and a narrowing
+   * sweep can rewrite the file. So a slice reads each line again, in the same
+   * synchronous stretch as the write, and overwrites it only when it is still
+   * one whole stored body for one of these events. A line that is not is left
+   * alone, and the session is scanned again. After `BODY_DROP_SCANS` scans
+   * that each found a line out of place, the rest goes through `dropBodies`
+   * on the synchronous path. Reaching that takes a rewrite of the file during
+   * every scan.
+   *
+   * The scan finds every copy of a body, as `dropBodies` does. It does not
+   * remove a torn line, which `dropBodies` does: a line still being appended
+   * can look torn to an awaited read. `purgeBodiesOutsideMandate` removes torn
+   * lines on a narrowing.
+   */
+  async dropBodiesAsync(events: readonly TachoEvent[]): Promise<number> {
+    let dropped = 0;
+    for (const [session, idems] of Wal.idemsBySession(events)) {
+      let settled = false;
+      for (let scan = 0; scan < BODY_DROP_SCANS && !settled; scan += 1) {
+        const pass = await this.blankBodies(session, idems);
+        dropped += pass.blanked;
+        settled = !pass.moved;
+      }
+      if (!settled)
+        dropped += this.dropBodies(
+          events.filter((event) => event.session_uuid === session),
+        );
+    }
+    return dropped;
+  }
+
+  /**
+   * One scan of `dropBodiesAsync` over one session: find every line that
+   * holds one of these bodies, then overwrite each line that still does.
+   * `moved` says a line the scan found held something else by the time its
+   * slice ran.
+   */
+  private async blankBodies(
+    session: string,
+    idems: ReadonlySet<string>,
+  ): Promise<{ blanked: number; moved: boolean }> {
+    const path = this.bodyFileFor(session);
+    if (!existsSync(path)) return { blanked: 0, moved: false };
+    const found: BodyLocation[] = [];
+    try {
+      for await (const line of readLinesFromAsync(path)) {
+        // A read off the main thread can see part of an append still being
+        // written, and that part has no newline yet. It is no body to drop.
+        if (!line.terminated) continue;
+        const stored = parseStoredBody(line.text);
+        if (stored !== undefined && idems.has(stored.event_id_idem))
+          found.push({
+            offset: line.offset,
+            length: line.end - line.offset - 1,
+          });
+      }
+    } catch (error) {
+      // Removed between the check above and the open: its bodies went with it.
+      if ((error as NodeJS.ErrnoException).code === "ENOENT")
+        return { blanked: 0, moved: false };
+      throw error;
+    }
+    let blanked = 0;
+    let moved = false;
+    for (let next = 0; next < found.length; ) {
+      if (next > 0) await new Promise((resolve) => setImmediate(resolve));
+      const slice = this.blankSlice(path, found, next, idems);
+      // The file is gone, and every body in it.
+      if (slice === undefined) break;
+      blanked += slice.blanked;
+      moved ||= slice.moved;
+      next = slice.next;
+    }
+    // Once, at the end. The shipper reads nothing while it waits for this,
+    // and an index dropped on every slice would restart, slice after slice,
+    // an awaited build some other caller is running.
+    if (blanked > 0) this.bodyIndexes.invalidate(session);
+    return { blanked, moved };
+  }
+
+  /**
+   * One synchronous stretch of `blankBodies`: from `from`, overwrite each
+   * found line that still holds one of these bodies, until the slice has
+   * taken `BODY_DROP_SLICE_BYTES`. Nothing else can touch the file while it
+   * runs. Answers undefined when the file is gone.
+   */
+  private blankSlice(
+    path: string,
+    found: readonly BodyLocation[],
+    from: number,
+    idems: ReadonlySet<string>,
+  ): { blanked: number; moved: boolean; next: number } | undefined {
+    let fd: number;
+    try {
+      fd = openSync(path, "r+");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+      throw error;
+    }
+    let blanked = 0;
+    let moved = false;
+    let next = from;
+    try {
+      const size = fstatSync(fd).size;
+      let taken = 0;
+      while (next < found.length && taken < BODY_DROP_SLICE_BYTES) {
+        const at = found[next] as BodyLocation;
+        next += 1;
+        taken += at.length;
+        if (!Wal.holdsBodyOf(fd, size, at, idems)) {
+          moved = true;
+          continue;
+        }
+        Wal.overwriteWithSpaces(fd, at);
+        blanked += 1;
+      }
+      // The withdrawn content must not come back after a crash.
+      if (blanked > 0) fdatasyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    return { blanked, moved, next };
+  }
+
+  /**
+   * Whether the bytes at `at` are still one whole stored body for one of
+   * `idems`: the start of the file or a newline before them, a newline right
+   * after them, and a line between that parses and names one of the events.
+   * Costs a read of that one line.
+   */
+  private static holdsBodyOf(
+    fd: number,
+    size: number,
+    at: BodyLocation,
+    idems: ReadonlySet<string>,
+  ): boolean {
+    const start = at.offset === 0 ? 0 : at.offset - 1;
+    const end = at.offset + at.length + 1;
+    if (at.length <= 0 || end > size) return false;
+    const buffer = Buffer.allocUnsafe(end - start);
+    let filled = 0;
+    while (filled < buffer.length) {
+      const read = readSync(
+        fd,
+        buffer,
+        filled,
+        buffer.length - filled,
+        start + filled,
+      );
+      if (read <= 0) return false;
+      filled += read;
+    }
+    if (at.offset > 0 && buffer[0] !== NEWLINE) return false;
+    if (buffer[buffer.length - 1] !== NEWLINE) return false;
+    const stored = parseStoredBody(
+      buffer.subarray(at.offset - start, buffer.length - 1).toString("utf8"),
+    );
+    return stored !== undefined && idems.has(stored.event_id_idem);
+  }
+
+  /** Overwrite the bytes at `at` with spaces, leaving its newline. */
+  private static overwriteWithSpaces(fd: number, at: BodyLocation): void {
+    const spaces = Buffer.alloc(Math.min(at.length, 64 * 1024), " ");
+    let written = 0;
+    while (written < at.length) {
+      written += writeSync(
+        fd,
+        spaces,
+        0,
+        Math.min(spaces.length, at.length - written),
+        at.offset + written,
+      );
+    }
   }
 
   /** Sessions that have a body file, whether or not they have an event file. */
@@ -1588,16 +1795,16 @@ export class Wal {
    * Erase every stored body whose class `retention` does not cover, in every
    * session this host holds, and answer how many were erased.
    *
-   * Why this exists beside `dropBodies`. `dropBodies` reaches the bodies of
-   * the events in a drain's batch, which is every body the shipper still has
-   * an unshipped event for. Two kinds of body sit outside that reach: one
-   * whose event already shipped, since `markShipped` advanced the cursor past
-   * it, and one in a session the drain is not looking at. `compact` frees
-   * those only once their session is sealed, fully shipped, and older than
-   * the retention window, so a session that never seals kept them for as long
-   * as the host ran, or for ever on a host that never came back. This sweep
-   * walks every session and every stored line, so a narrowing reaches all of
-   * them.
+   * Why this exists beside `dropBodiesAsync`. The shipper's drop reaches the
+   * bodies of the events in a drain's batch, which is every body the shipper
+   * still has an unshipped event for. Two kinds of body sit outside that
+   * reach: one whose event already shipped, since `markShipped` advanced the
+   * cursor past it, and one in a session the drain is not looking at.
+   * `compact` frees those only once their session is sealed, fully shipped,
+   * and older than the retention window, so a session that never seals kept
+   * them for as long as the host ran, or for ever on a host that never came
+   * back. This sweep walks every session and every stored line, so a
+   * narrowing reaches all of them.
    *
    * The write is the one in `rewriteBodies`, which `dropBodies` uses as well:
    * atomic, and safe because these files have one writer. The module header

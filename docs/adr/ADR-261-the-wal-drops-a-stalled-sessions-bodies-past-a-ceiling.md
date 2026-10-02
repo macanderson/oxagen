@@ -166,6 +166,41 @@ that can seal on the daemon's chain is running, the way the sweep and the
 checkpoint skip a busy session, because such a task can stand between a chain
 mark and its WAL write.
 
+### The shipper's drop of withdrawn bodies
+
+When a proven mandate withdraws a class, the shipper drops the withdrawn
+bodies of its batch from disk. It called `Wal.dropBodies`, which reads the
+whole body file and writes a copy without those lines, all on the daemon's
+only thread. A long session's file holds gigabytes, and ADR-231 rules out a
+read that size on that thread. The drop now runs off it.
+
+The shipper now calls `Wal.dropBodiesAsync`. It finds the withdrawn lines
+with a scan that awaits every read. Then it writes spaces over each line, in
+slices of about a megabyte with a turn of the event loop between them. Every
+reader skips a line of spaces, so the body reads as gone, and the index is
+built again on the next read.
+
+It writes in place rather than through a copy and a rename for two reasons:
+
+1. Hooks append to the file while the scan waits on its reads. A copy made by
+   such a scan misses those lines unless it catches up before the rename, and
+   a failed append that is cut back can leave the copy with bytes the file no
+   longer holds.
+2. A copy of a multi-gigabyte file needs that much free disk, on the disk
+   the ceiling exists to protect.
+
+The cost is the disk. The file keeps its size until `compact` removes the
+session, which it does for any session that ships.
+
+The scan's offsets can be stale by the time a slice runs, so a slice reads
+each line again just before it writes, in the same synchronous stretch, and
+writes only over a line that still holds one whole withdrawn body. A line
+that moved is left alone, and the session is scanned again. After three
+scans that each found a line out of place, the drop falls back to
+`Wal.dropBodies`. Reaching that takes a rewrite of the file during every
+scan. The drop runs only inside the shipper's drain, after that drain has
+read its bodies, so it never writes while the shipper's index build reads.
+
 ### What a person sees
 
 The daemon keeps what the last check saw in `wal/ceiling.json`: the ceiling,
@@ -201,10 +236,9 @@ daemon's health report, which is a wire type, is unchanged.
   while the stalled sessions hold more than the ceiling.
 - A journaled terminal batch that retries after a drop writes its own few
   bodies again, because `appendRecovered` finds no stored body to skip.
-- `Shipper` still calls `Wal.dropBodies` on the drain path when a proven
-  mandate withdraws a class, and that rewrite reads the whole body file on the
-  daemon's thread. This ADR does not change it. It runs only on a narrowing,
-  not on every drain.
+- The shipper's drop of withdrawn bodies leaves their lines as spaces, so it
+  frees no disk until `compact` removes the session. The ceiling counts those
+  bytes like any others.
 
 ## Alternatives considered
 

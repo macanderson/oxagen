@@ -152,10 +152,12 @@ The first two are closed on the hook path:
   stays in its session's body file after the batch is acknowledged, whether
   the control plane stored or refused it. `Wal.compact` removes the file once
   the session is sealed, fully shipped, and older than `walRetainMs`. The
-  shipper does not drop bodies batch by batch: `Wal.dropBodies` rewrites the
-  whole body file and invalidates its offset index, so a drop after every
-  200-event batch would make a drain's cost grow with the square of its
-  backlog, which is the cost #3694 removed. A mandate that narrows drops what
+  shipper does not drop bodies batch by batch: a drop reads the whole body
+  file and invalidates its offset index, so a drop after every 200-event
+  batch would make a drain's cost grow with the square of its backlog, which
+  is the cost #3694 removed. The one drop on the drain, of bodies a proven
+  mandate withdrew, is `Wal.dropBodiesAsync`, which awaits its reads
+  (ADR-261). A mandate that narrows drops what
   is already on disk rather than racing the drain (`docs/specs/tacho/spec.md`
   §3.1 says what a narrowing reaches). A mandate that cannot be proven, an
   unverifiable bundle or one past its signed window, withholds the body from
