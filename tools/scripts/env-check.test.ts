@@ -31,18 +31,18 @@ function makeInput(overrides: Partial<ReconcileInput> = {}): ReconcileInput {
       "DATABASE_URL",
       "LOG_LEVEL",
       "AI_GATEWAY_API_KEY",
-      "VERCEL_TOKEN",
+      "NPM_TOKEN",
     ]),
     schemaKeySet: new Set(["DATABASE_URL"]),
     // DATABASE_URL → api,app,mcp (has services)
     // LOG_LEVEL → api,app,mcp (has services, unvalidated)
     // AI_GATEWAY_API_KEY → api,app,mcp (has services — potentially dead)
-    // VERCEL_TOKEN → [] (tooling-only, no services)
+    // NPM_TOKEN → [] (tooling-only, no services)
     registryServiceMap: new Map([
       ["DATABASE_URL", ["api", "app", "mcp"]],
       ["LOG_LEVEL", ["api", "app", "mcp"]],
       ["AI_GATEWAY_API_KEY", ["api", "app", "mcp"]],
-      ["VERCEL_TOKEN", []],
+      ["NPM_TOKEN", []],
     ]),
     ...overrides,
   };
@@ -110,7 +110,7 @@ describe("reconcile — dead classification", () => {
   it("tooling-only (services: []) vars are NOT dead even if unreferenced", () => {
     const input = makeInput({ referenced: new Map() });
     const report = reconcile(input);
-    expect(report.dead.some((f) => f.key === "VERCEL_TOKEN")).toBe(false);
+    expect(report.dead.some((f) => f.key === "NPM_TOKEN")).toBe(false);
   });
 
   it("a schema key is dead unless something actually reads it (#2823)", () => {

@@ -15,9 +15,8 @@ and docs generators, backfills, release tooling, and local dev helpers.
   [`@oxagen/config`](../../packages/config/README.md), the Postgres schema and
   migrations in [`@oxagen/database`](../../packages/database/README.md), and
   the app's UI bindings in `apps/app/capability-ui-map.json`. It also does not
-  own the SEA compiler ([`tools/sea`](../sea/README.md)), the package-manager
-  templates ([`tools/packaging`](../packaging/README.md)), or the env
-  manager UI ([`tools/env-manager`](../env-manager/README.md)).
+  own the SEA compiler ([`tools/sea`](../sea/README.md)) or the package-manager
+  templates ([`tools/packaging`](../packaging/README.md)).
 - **Depends on:** `@oxagen/config` (env), `@oxagen/database`,
   `@oxagen/ontology`, and `@oxagen/telemetry` (the three stores, for
   migrations, seeds, and backfills), `@oxagen/oxagen` and `@oxagen/handlers`

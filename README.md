@@ -143,7 +143,7 @@ oxagen/
 │   skills, and agent-artifacts packages are gone. stella-engine-client is a
 │   client for the external Stella engine; it does not embed that engine.)
 │
-├── tools/           scripts (dev orchestration, CI checks), env-manager, codemods
+├── tools/           scripts (dev orchestration, CI checks, env pull and push), codemods
 └── docs/            VISION.md, capability registry, ADRs, SCRs, specs
 ```
 
