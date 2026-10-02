@@ -263,6 +263,8 @@ describe("promote_memories", () => {
     expect(mocks.promote).toHaveBeenCalledWith(promoteDeps, scope, {
       drafts: input.drafts,
       sameText: false,
+      // The memory PR's proposal row names the person who promoted (#5122).
+      author: { userId: "user_1", source: "user:user_1" },
     });
     expect(out).toEqual({
       pull_request: { number: 7, url: "https://github.com/acme/steering/pull/7", branch: "memory/2026-10-01", opened: true },
