@@ -1895,12 +1895,15 @@ function diffRefused(err: GitHubApiError): boolean {
  */
 async function readCapped(res: Response, max: number): Promise<Uint8Array | null> {
   if (res.body === null) return new Uint8Array(0);
-  const reader = res.body.getReader();
+  const reader = (res.body as ReadableStream<Uint8Array>).getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
   for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
+    const { done, value } = (await reader.read()) as {
+      done: boolean;
+      value?: Uint8Array;
+    };
+    if (done || value === undefined) break;
     total += value.byteLength;
     if (total > max) {
       await reader.cancel();

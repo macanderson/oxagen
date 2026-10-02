@@ -41,8 +41,12 @@ export interface ForgePullRequestFacts {
   sourceUpdatedAt: string | null;
 }
 
-/** One `forge/pull-request.observed` event's data. */
-export interface ForgePullRequestSyncRequest {
+/**
+ * One `forge/pull-request.observed` event's data. A type alias, not an
+ * interface, so it is assignable to the event client's
+ * `Record<string, unknown>` data.
+ */
+export type ForgePullRequestSyncRequest = {
   orgId: string;
   workspaceId: string;
   provider: "github" | "gitlab";
@@ -60,7 +64,7 @@ export interface ForgePullRequestSyncRequest {
     /** True when a `pr_open` call recorded the link, so the run opened it. */
     opened: boolean;
   };
-}
+};
 
 /** What the first step did. */
 export interface ForgePullRequestUpsert {

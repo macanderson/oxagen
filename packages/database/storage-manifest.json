@@ -17978,6 +17978,7 @@
           "name": "pull_request_id",
           "nullable": false,
           "primaryKey": false,
+          "references": "postgres:forge.pull_requests",
           "type": "uuid"
         },
         {
@@ -18108,6 +18109,7 @@
           "name": "pull_request_id",
           "nullable": false,
           "primaryKey": false,
+          "references": "postgres:forge.pull_requests",
           "type": "uuid"
         },
         {
@@ -18160,6 +18162,7 @@
           "name": "pull_request_id",
           "nullable": false,
           "primaryKey": false,
+          "references": "postgres:forge.pull_requests",
           "type": "uuid"
         },
         {
