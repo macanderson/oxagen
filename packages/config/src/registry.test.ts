@@ -1,16 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { baseEnvSchema } from "./env";
+import { CI_REGISTRY, ciSaveCommand } from "./ci-registry";
 import {
   ENV_REGISTRY,
   ENV_NAMES,
+  OPERATOR_PARAMETER_PREFIX,
+  PARAMETER_PREFIXES,
   SERVICE_NAMES,
   clientKeys,
   isValidated,
+  keysInStore,
+  parameterName,
   registryKeys,
   renderEnvExample,
   requiredKeysFor,
   secretKeys,
   staticValueFor,
+  storeOf,
 } from "./registry";
 
 const SCHEMA_KEYS = Object.keys(baseEnvSchema.shape);
@@ -292,5 +298,95 @@ describe("ADR-131 per-organisation key provisioning", () => {
     expect(ENV_REGISTRY.AUTH_TOKEN_ENCRYPTION_KEY?.services).toEqual(
       expect.arrayContaining(["api", "app", "mcp"]),
     );
+  });
+});
+
+// ADR-240: Parameter Store holds every value, and the registry says where each
+// one lives and how to mint a new one. The Architecture Atlas renders both.
+describe("value stores and refresh steps", () => {
+  it("gives every stored variable a refresh step", () => {
+    const missing = [
+      ...keysInStore("environment"),
+      ...keysInStore("operator"),
+    ].filter((k) => !ENV_REGISTRY[k]?.refresh?.how.trim());
+    expect(
+      missing,
+      `stored variables with no refresh: ${missing.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("keeps a static value in the registry and nowhere else", () => {
+    for (const [key, meta] of Object.entries(ENV_REGISTRY)) {
+      if (meta.valueOrigin === "static")
+        expect(storeOf(key), `${key} is static`).toBe("registry");
+      else expect(storeOf(key), `${key} is not static`).not.toBe("registry");
+    }
+  });
+
+  it("lists every CI-held variable in CI_REGISTRY", () => {
+    const missing = keysInStore("ci").filter((k) => !(k in CI_REGISTRY));
+    expect(
+      missing,
+      `ci-store keys absent from CI_REGISTRY: ${missing.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("stores a variable a service reads unless it is declared shell-only", () => {
+    for (const [key, meta] of Object.entries(ENV_REGISTRY)) {
+      if (meta.services.length === 0 || meta.valueOrigin === "static") continue;
+      expect(["environment", "shell"], `${key} store`).toContain(storeOf(key));
+    }
+  });
+
+  it("names one parameter per environment, and one for an operator value", () => {
+    expect(parameterName("STRIPE_SECRET_KEY", "development")).toBe(
+      "/oxagen/development/STRIPE_SECRET_KEY",
+    );
+    expect(parameterName("STRIPE_SECRET_KEY", "preview")).toBe(
+      "/oxagen/staging/STRIPE_SECRET_KEY",
+    );
+    expect(parameterName("STRIPE_SECRET_KEY", "production")).toBe(
+      "/oxagen/production/STRIPE_SECRET_KEY",
+    );
+    expect(parameterName("NPM_TOKEN", "production")).toBe(
+      `${OPERATOR_PARAMETER_PREFIX}/NPM_TOKEN`,
+    );
+    expect(parameterName("CLICKHOUSE_DATABASE", "production")).toBeUndefined();
+    expect(parameterName("GITLAB_TOKEN", "development")).toBeUndefined();
+  });
+
+  it("maps every environment to a prefix under /oxagen", () => {
+    for (const env of ENV_NAMES)
+      expect(PARAMETER_PREFIXES[env]).toMatch(/^\/oxagen\/[a-z]+$/);
+  });
+});
+
+describe("CI_REGISTRY", () => {
+  it("describes every entry and says how to refresh it", () => {
+    for (const [name, meta] of Object.entries(CI_REGISTRY)) {
+      expect(name, `${name} name`).toMatch(/^[A-Z][A-Z0-9_]*$/);
+      expect(
+        meta.description.trim().length,
+        `${name}.description`,
+      ).toBeGreaterThan(0);
+      expect(meta.refresh.how.trim().length, `${name}.refresh`).toBeGreaterThan(
+        0,
+      );
+    }
+  });
+
+  it("never lists GitHub's own token", () => {
+    expect("GITHUB_TOKEN" in CI_REGISTRY).toBe(false);
+  });
+
+  it("saves a secret with gh secret set and a variable with gh variable set", () => {
+    expect(ciSaveCommand("NPM_TOKEN")).toBe("gh secret set NPM_TOKEN");
+    expect(ciSaveCommand("STRIPE_SECRET_KEY")).toBe(
+      "gh secret set STRIPE_SECRET_KEY --env production",
+    );
+    expect(ciSaveCommand("STAGING_ENABLED")).toMatch(
+      /^gh variable set STAGING_ENABLED --body /,
+    );
+    expect(ciSaveCommand("NOT_A_CI_VALUE")).toBeUndefined();
   });
 });

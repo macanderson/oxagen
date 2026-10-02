@@ -4,7 +4,7 @@
 
 ## Boundary
 
-- **Owns:** the Zod runtime schema for environment variables (`baseEnvSchema`) and its readers `loadEnv` and `requireEnv`; the registry `ENV_REGISTRY`, which records each variable's services, origin, and documentation and renders `.env.example`; the outbound URL guard `assertPublicHttpUrl`; and the shared domain constants (organisation types, industries, employee sizes, countries, US states, local ports, `platformVersion()`).
+- **Owns:** the Zod runtime schema for environment variables (`baseEnvSchema`) and its readers `loadEnv` and `requireEnv`; the registry `ENV_REGISTRY`, which records each variable's services, origin, store, refresh steps, and documentation and renders `.env.example`; the CI inventory `CI_REGISTRY`; the outbound URL guard `assertPublicHttpUrl`; and the shared domain constants (organisation types, industries, employee sizes, countries, US states, local ports, `platformVersion()`).
 - **Does not own:** the store clients that read `DATABASE_URL`, `NEO4J_URI`, and `CLICKHOUSE_URL` ([`@oxagen/database`](../database/README.md), [`@oxagen/ontology`](../ontology/README.md), [`@oxagen/telemetry`](../telemetry/README.md)), secret storage ([`@oxagen/crypto`](../crypto/README.md) and [`@oxagen/plugins`](../plugins/README.md)), or the deploy-time environment catalog (`tools/env-manager`).
 - **Depends on:** no `@oxagen/*` runtime dependencies.
 - **Used by:** `apps/api`, `apps/mcp`, `apps/app_deprecated`, `@oxagen/agent`, `@oxagen/ai`, `@oxagen/auth`, `@oxagen/billing`, `@oxagen/database`, `@oxagen/handlers`, `@oxagen/inngest-functions`, `@oxagen/notifications`, `@oxagen/ontology`, `@oxagen/oxagen`, `@oxagen/storage`, `@oxagen/telemetry`, `tools/env-manager`, and `tools/scripts`.
@@ -31,7 +31,8 @@
 - Every key in `baseEnvSchema` has an `ENV_REGISTRY` entry. `registry.test.ts` asserts it.
 - A workflow variable a Turbo task reads must also appear in that task's `env[]` in `turbo.json`.
 - `assertPublicHttpUrl` rejects private, loopback, link-local, and metadata addresses in the URL as typed. It does not re-check after DNS resolves, so it does not close a DNS-rebinding window.
-- ADR-004 keeps configuration in environment variables rather than a secret manager.
+- Processes read configuration from their environment. The values live in SSM Parameter Store (ADR-240, which supersedes ADR-004): the nodes read it at container start, and `pnpm env:pull` writes the development copy into `.env.local`.
+- Every `ENV_REGISTRY` entry a service reads or a maintainer keeps has a `refresh` step, and `storeOf()` says which prefix holds it. `registry.test.ts` asserts both. `CI_REGISTRY` (`src/ci-registry.ts`) does the same for every GitHub secret and variable a workflow reads, and `pnpm env:check` keeps it in step with `.github/`.
 
 ## Tests
 

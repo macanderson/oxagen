@@ -3211,6 +3211,25 @@ type Messages = {
         search: string;
         compileError: string;
       };
+      exposure: {
+        title: string;
+        staged: string;
+        modes: {
+          direct: string;
+          search: string;
+        };
+        bodies: {
+          direct: string;
+          search: string;
+        };
+      };
+      calls: {
+        title: string;
+        counts: string;
+        unrecorded: string;
+        missing: string;
+        uncalled: string;
+      };
     };
     panel: {
       classification: string;
@@ -3240,6 +3259,20 @@ type Messages = {
       draftNotBuilt: string;
       draftFailed: string;
       draftError: string;
+      cap: string;
+      capTokens: string;
+      capUnread: string;
+      capHint: string;
+      capInvalid: string;
+      capImportFirst: string;
+      paging: string;
+      pagingChoice: {
+        keep: string;
+        on: string;
+        off: string;
+      };
+      pagingHint: string;
+      pagingNone: string;
       shaping: string;
       shapingMissing: string;
       hidden: string;
@@ -3405,6 +3438,7 @@ type Messages = {
         title: string;
         unstage: string;
         unstageNamed: string;
+        unstageExposure: string;
       };
       ops: {
         import: string;
@@ -3412,6 +3446,8 @@ type Messages = {
         classify: string;
         describe: string;
         test: string;
+        cap: string;
+        expose: string;
       };
       files: {
         title: string;
@@ -3425,6 +3461,7 @@ type Messages = {
         tokensUnmeasured: string;
         tokensAdded: string;
         tokensRemoved: string;
+        exposure: string;
         columns: {
           change: string;
           tool: string;
@@ -3438,6 +3475,7 @@ type Messages = {
         fields: {
           classification: string;
           description: string;
+          cap: string;
         };
       };
       findings: {
@@ -3504,6 +3542,7 @@ type Messages = {
           tool_key_collision: string;
           test_invalid: string;
           test_holds_credential: string;
+          tool_paging_missing: string;
         };
       };
       review: {
@@ -10424,6 +10463,171 @@ type Messages = {
     create: {
       skill: string;
       record: string;
+    };
+    import: {
+      button: string;
+      title: string;
+      intro: string;
+      review: string;
+      reviewPending: string;
+      parsing: string;
+      back: string;
+      commit: string;
+      commitPending: string;
+      cancel: string;
+      close: string;
+      drop: {
+        label: string;
+        chooseFiles: string;
+        chooseFolder: string;
+        filesInput: string;
+        folderInput: string;
+        reading: string;
+        none: string;
+        tooMany: string;
+        unreadable: string;
+        ignored: string;
+      };
+      files: {
+        label: string;
+        columns: {
+          file: string;
+          target: string;
+          path: string;
+          status: string;
+        };
+        lines: string;
+        targetLabel: string;
+        count: string;
+        from: string;
+        out: string;
+      };
+      targets: {
+        records: string;
+        policies: string;
+        skip: string;
+        memories: string;
+        memoriesHint: string;
+      };
+      paths: {
+        records: string;
+        policies: string;
+        none: string;
+      };
+      status: {
+        ready: string;
+        skipped: string;
+        notRead: string;
+        statements: string;
+        rules: string;
+        cedarError: string;
+        cedarProblem: string;
+        matchesPolicy: string;
+        replacesPolicy: string;
+      };
+      reasons: {
+        index: string;
+        links: string;
+        memory: string;
+        empty: string;
+        tooLarge: string;
+        pathTooLong: string;
+      };
+      grid: {
+        intro: string;
+        tokens: string;
+        label: string;
+        columns: {
+          import: string;
+          statement: string;
+          kind: string;
+          force: string;
+          words: string;
+          source: string;
+          marks: string;
+        };
+        importLabel: string;
+        kindLabel: string;
+        effectLabel: string;
+        forceLabel: string;
+        conflictLabel: string;
+        fromFrontmatter: string;
+        yourChoice: string;
+        tokensPerRequest: string;
+        quoted: string;
+        none: string;
+        kept: string;
+        notRead: string;
+        statements: string;
+        rules: string;
+        empty: string;
+        unmatched: string;
+        summary: string;
+        out: string;
+        open: string;
+        tooMany: string;
+      };
+      why: {
+        chosen: string;
+        only: string;
+        points: string;
+        capped: string;
+        default: string;
+      };
+      kinds: {
+        "business-rule": string;
+        "code-rule": string;
+        constraint: string;
+        procedure: string;
+        skill: string;
+        fact: string;
+        preference: string;
+        memory: string;
+      };
+      effects: {
+        require: string;
+        forbid: string;
+      };
+      marks: {
+        duplicate: string;
+        conflict: string;
+        update: string;
+        replaced: string;
+        matches: string;
+        conflictsWith: string;
+        replacedBy: string;
+        rowRef: string;
+      };
+      choices: {
+        choose: string;
+        keep: string;
+        replace: string;
+      };
+      done: {
+        opened: string;
+        counts: string;
+        link: string;
+      };
+      failure: {
+        denied: string;
+        conflictUnresolved: string;
+        policyInvalid: string;
+        nothingToImport: string;
+        duplicateLineage: string;
+        duplicatePath: string;
+        tooManyFiles: string;
+        branchesExhausted: string;
+        branchMoved: string;
+        steeringRepoRequired: string;
+        refused: string;
+        tooLarge: string;
+        invalidInput: string;
+        invalid: string;
+        pendingApproval: string;
+        exhausted: string;
+        unavailable: string;
+        billing: string;
+      };
     };
     deliveries: {
       title: string;

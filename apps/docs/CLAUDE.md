@@ -6,7 +6,7 @@ touches words:
 
 - **`oxagen-branding`** owns positioning and vocabulary.
   `.claude/skills/oxagen-branding/SKILL.md` is a stub that reads the skill
-  from `macanderson/oxagen-brand` on `main`. Use the product's words exactly as `references/words.md`
+  from `oxageninc/brand` on `main`. Use the product's words exactly as `references/words.md`
   defines them: run, turn, step, frame, operator, agent, workspace, governed
   action. Read `references/examples.md` for the docs introduction pattern.
 - **`clear-prose`** (`.claude/skills/clear-prose/`) owns the sentences. Docs

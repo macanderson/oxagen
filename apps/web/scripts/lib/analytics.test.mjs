@@ -40,6 +40,16 @@ describe("linkedInInsightTag", () => {
     expect(tag).toContain("window.lintrk");
   });
 
+  it("skips the loader when the browser sends Global Privacy Control", () => {
+    const tag = linkedInInsightTag();
+    const guard = tag.indexOf(
+      "if (navigator.globalPrivacyControl === true) return;",
+    );
+    expect(guard).toBeGreaterThan(-1);
+    // The guard runs before the loader appends insight.min.js.
+    expect(guard).toBeLessThan(tag.indexOf("insight.min.js"));
+  });
+
   it("takes an override partner id", () => {
     expect(linkedInInsightTag("42")).toContain('_linkedin_partner_id = "42"');
   });
