@@ -140,8 +140,8 @@
     margin-right: auto;
     max-width: 38%;
     color: var(--muted-foreground);
-    /* The app scale's smallest step, and the kit's UI weight. */
-    font-size: var(--ox-a-micro);
+    /* The app's 14px floor (the body step), and the kit's UI weight. */
+    font-size: var(--ox-a-body);
     font-weight: var(--ox-weight-heading);
     letter-spacing: 0.08em;
     text-transform: uppercase;

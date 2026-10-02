@@ -65,6 +65,14 @@
      tokens: the theme's corner base (0.45rem, shadcn's base-maia preset) times
      each step's multiplier. `rounded-4xl` is the pill a maia button and input
      wear; `rounded-2xl` is a card, a popover and a menu. */
+  /* Text in the app is never smaller than 14px, the house body step. Mac set
+     this floor on 2026-10-02, along with the rule that a class never writes a
+     size of its own (src/test/arch/type-scale.test.ts). `text-sm` reads the
+     body token. `text-xs` keeps its name but renders at the floor too, with
+     the line height of `text-sm`. */
+  --text-xs: var(--ox-a-body);
+  --text-xs--line-height: var(--text-sm--line-height);
+  --text-sm: var(--ox-a-body);
 }
 
 @layer base {
@@ -273,19 +281,21 @@
   padding: 22px 24px 80px;
 }
 
+/* The mockup sets a 13px cell and a 10.5px header. Both take the 14px floor,
+   the house body step, so a table reads at the size of the page's text. */
 [data-shell-page] table {
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: var(--ox-a-body);
 }
 
-/* `th { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase;
-   color:var(--dim); background:var(--panel) }` — the header is flat on the
-   panel; the caps and the tracking mark it, not a band of grey. */
+/* `th { letter-spacing:.09em; text-transform:uppercase; color:var(--dim);
+   background:var(--panel) }` — the header is flat on the panel; the caps and
+   the tracking mark it, not a band of grey. */
 [data-shell-page] table thead th {
   padding: 9px 12px;
   white-space: nowrap;
   background: var(--panel);
-  font-size: 10.5px;
+  font-size: var(--ox-a-body);
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;

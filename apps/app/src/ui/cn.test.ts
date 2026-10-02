@@ -10,7 +10,7 @@ describe("cn", () => {
     expect(cn("px-2 text-sm", "px-4")).toBe("text-sm px-4");
   });
 
-  it.each(["text-a-h1", "text-a-h3", "text-a-micro", "text-m-h1", "text-m-body"])(
+  it.each(["text-a-h1", "text-a-h3", "text-a-body", "text-m-h1", "text-m-body"])(
     "keeps %s beside a text colour",
     (size) => {
       expect(cn(size, "text-app-panel-fg")).toBe(`${size} text-app-panel-fg`);

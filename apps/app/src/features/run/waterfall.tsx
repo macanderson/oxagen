@@ -50,10 +50,14 @@ import type { RunMetrics } from "./metrics";
 import { NoValue, Panel, PanelBody } from "./parts";
 import type { Place } from "./tab-props";
 
-/** `wfChart`'s frame: `W=760, H=264, pl=56, pr=64, pt=36, pb=44`. */
+/**
+ * `wfChart`'s frame: `W=760, H=264, pl=56, pr=64, pt=36, pb=44`. The side
+ * pads are wider here, 72 and 80, because the labels are 14px (the app's
+ * floor) where the mockup set 10px to 11px, and a money label needs the room.
+ */
 const W = 760;
 const H = 264;
-const PAD = { left: 56, right: 64, top: 36, bottom: 44 } as const;
+const PAD = { left: 72, right: 80, top: 36, bottom: 44 } as const;
 const INNER_W = W - PAD.left - PAD.right;
 const INNER_H = H - PAD.top - PAD.bottom;
 /** `bw = min(64, gap * 0.62)`: a bar's width in its slot. */
@@ -62,8 +66,15 @@ const BAR_SHARE = 0.62;
 /** Gridlines at a quarter of the dearest turn each: `for(i=0;i<=4;i++)`. */
 const GRID_STEPS = 4;
 
-/** `.wf-svg { width:100%; min-width:520px; height:auto; display:block }` */
-const chartSvg = "block h-auto w-full min-w-[520px]";
+/**
+ * `.wf-svg { width:100%; height:auto; display:block }`. The chart scales with
+ * its panel, and its labels scale with it. It is never drawn narrower than its
+ * own 760 units, where the mockup allowed 520px, so a label set at the 14px
+ * floor never renders under 14px. The panel scrolls sideways instead.
+ */
+const chartSvg = "block h-auto w-full min-w-[760px]";
+/** Every label in the chart: the body token, in the chart's own units. */
+const chartText = "text-sm";
 /** `rect.wf-bar { fill:var(--st-approval); opacity:.8 }`; a turn carrying a finding would take `--st-denied`. */
 const barFill = "fill-info opacity-80";
 /** The chart's legend: `.row { gap:14px; margin-top:10px; font-size:11.5px; color:var(--muted) }`. */
@@ -207,10 +218,9 @@ function Chart({
                 />
                 <text
                   x={PAD.left - 8}
-                  y={at(y + 3.5)}
+                  y={at(y + 5)}
                   textAnchor="end"
-                  fontSize={10.5}
-                  className="fill-dim"
+                  className={`${chartText} fill-dim`}
                 >
                   {value === null ? null : money(value)}
                 </text>
@@ -271,8 +281,7 @@ function Chart({
                   x={at(x(index))}
                   y={at(Math.min(top, base - 2) - 6)}
                   textAnchor="middle"
-                  fontSize={10.5}
-                  className="fill-foreground"
+                  className={`${chartText} fill-foreground`}
                 >
                   {money(row.cost)}
                 </text>
@@ -280,19 +289,17 @@ function Chart({
             )}
             <text
               x={at(x(index))}
-              y={base + 16}
+              y={base + 18}
               textAnchor="middle"
-              fontSize={11}
-              className="fill-muted-foreground"
+              className={`${chartText} fill-muted-foreground`}
             >
               {t("turnLabel", { turn })}
             </text>
             <text
               x={at(x(index))}
-              y={base + 30}
+              y={base + 36}
               textAnchor="middle"
-              fontSize={10}
-              className="fill-dim"
+              className={`${chartText} fill-dim`}
             >
               {row.cacheHit === null
                 ? t("cacheNotRecorded")
@@ -323,18 +330,16 @@ function Chart({
       })}
       <text
         x={W - PAD.right + 8}
-        y={at(end + 3.5)}
-        fontSize={11}
+        y={at(end + 5)}
         fontWeight={600}
-        className="fill-foreground"
+        className={`${chartText} fill-foreground`}
       >
         {money(total)}
       </text>
       <text
         x={W - PAD.right + 8}
-        y={at(end + 16)}
-        fontSize={10}
-        className="fill-dim"
+        y={at(end + 21)}
+        className={`${chartText} fill-dim`}
       >
         {complete ? t("total") : t("partial")}
       </text>

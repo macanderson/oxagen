@@ -154,6 +154,7 @@ Mac set this on 2026-10-02, replacing the rule of 2026-09-29. Aeonik is the hous
 - In the app, Space Grotesk reaches the page only through `--font-wordmark` and the `.ox-wordmark` class. Do not write `--ox-font-display`, `--font-wordmark`, or "Space Grotesk" in app source outside a comment. `apps/app/src/test/arch/design-record.test.ts` fails on each of them.
 - On oxagen.sh, `apps/web/assets/oxagen.css` sets h1 to h3 from `--font-hero` (the kit's `--ox-font-display`) and everything else from `--font-sans`. Its sizes come from the kit's marketing scale through the site's own ramp (`--fs-small`, `--fs-ui`, `--fs-nav`, `--fs-sec`), so no running text sits below 15px except captions and figure labels.
 - docs.oxagen.sh reads the app scale one step up (`--docs-step`, 8/7), so its body is 16px.
+- In the app, no text is smaller than 14px, and no class sets a size of its own (Mac, 2026-10-02). Size text with `text-sm` (14px), `text-base` and up, or `var(--ox-a-*)` in a stylesheet. `text-xs` renders at 14px too. Do not write `text-[13px]`, `text-a-micro`, or a `font-size` under 14px. `apps/app/src/test/arch/type-scale.test.ts` (INV-36) fails on each of them.
 
 ## Runtime checks that matter
 

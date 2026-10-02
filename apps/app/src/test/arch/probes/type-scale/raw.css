@@ -1,0 +1,12 @@
+/* Probe for type-scale.test.ts: lines 4 to 10 each set a size the floor
+   refuses. The comment on line 12 quotes the mockup and is not a size. */
+.a {
+  font-size: 13px;
+  font-size: 0.75rem;
+  font-size: var(--t-size, 12.5px);
+  font-size: 0.9em;
+  font-size: smaller;
+  --text-xs: 0.75rem;
+  font-size: var(--ox-a-micro);
+}
+/* `th { font-size: 10.5px }` */
