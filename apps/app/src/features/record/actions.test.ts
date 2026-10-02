@@ -77,6 +77,7 @@ const CONTEXT_PR = {
     review: null,
   },
   merged: null,
+  closed: null,
 };
 
 beforeEach(() => {

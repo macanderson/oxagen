@@ -128,6 +128,7 @@ describe("context.record.revise capability", () => {
         review: null,
       },
       merged: null,
+      closed: null,
     });
     expect(parsed.pr?.number).toBe(412);
   });
