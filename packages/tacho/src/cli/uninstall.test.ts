@@ -307,6 +307,49 @@ describe.skipIf(process.platform === "win32")(
       );
     });
 
+    it("empties no copy directory outside the app's bin directory (negative)", async () => {
+      const seed = seedHome();
+      const install = installDesktopApp(seed.home);
+      const rig = await enrollFromTheApp(seed, install);
+      rmSync(install.app, { recursive: true, force: true });
+      const copies = dirname(install.copy);
+      // Three `copy` entries the app never writes: a directory elsewhere,
+      // one that climbs out of the bin directory with `..` (built by hand,
+      // since `join` would fold the `..` away), and a link in the bin
+      // directory that points elsewhere. Each holds an `oxagen` and a
+      // `tacho` that are not Oxagen's to delete.
+      const elsewhere = join(seed.home, "tools", "2.1.3");
+      const climbed = [copies, "..", "..", "..", "..", "climbed"].join("/");
+      const linkedTo = join(seed.home, "linked-to");
+      const linked = join(copies, "2.0.0");
+      for (const dir of [elsewhere, join(seed.home, "climbed"), linkedTo])
+        for (const name of ["oxagen", "tacho"]) stub(join(dir, name));
+      symlinkSync(linkedTo, linked);
+      const config = JSON.parse(readFileSync(install.desktopJson, "utf8")) as {
+        journal: Array<{ kind: string; path: string }>;
+      };
+      config.journal.push(
+        { kind: "copy", path: elsewhere },
+        { kind: "copy", path: climbed },
+        { kind: "copy", path: linked },
+      );
+      writeFileSync(install.desktopJson, `${JSON.stringify(config, null, 2)}\n`);
+
+      const result = await uninstall({}, rig.deps);
+      expect(result.ok).toBe(false);
+      const left = result.left.join("\n");
+      for (const path of [elsewhere, climbed, linked])
+        expect(left).toContain(path);
+      for (const dir of [elsewhere, join(seed.home, "climbed"), linkedTo])
+        for (const name of ["oxagen", "tacho"])
+          expect(existsSync(join(dir, name)), join(dir, name)).toBe(true);
+      // What the app did write still went.
+      expect(existsSync(install.copy)).toBe(false);
+      expect(readFileSync(install.profile, "utf8")).not.toContain(
+        "# >>> oxagen >>>",
+      );
+    });
+
     it("removes the copies without a journal, and names the links to delete by hand", async () => {
       const seed = seedHome();
       // An app from before the journal: `desktop.json` lists what it

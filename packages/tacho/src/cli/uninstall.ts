@@ -37,7 +37,7 @@ import {
   statSync,
   unlinkSync,
 } from "node:fs";
-import { dirname, isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { agentIsLive, listAgents } from "../host/agents";
 import { writeFileAtomic } from "../host/fs";
 import type { CliDeps, CredentialOptions } from "./deps";
@@ -458,6 +458,48 @@ function versionDirs(copies: string): string[] {
 }
 
 /**
+ * The journal's `copy` directories this command may empty: each one under
+ * `copies`, where the app keeps its copies (`<data-local>/oxagen/bin/<version>`),
+ * that is a real directory and not a link to one. The journal is a file in
+ * the person's home directory, so a path in it is not trusted to delete
+ * anywhere else. Any other entry is named in `left`, and nothing in it is
+ * touched.
+ */
+function journaledCopies(
+  journal: readonly JournalEntry[],
+  copies: string,
+  tally: Tally,
+): string[] {
+  const dirs: string[] = [];
+  for (const entry of journal) {
+    if (entry.kind !== "copy") continue;
+    const rel = relative(copies, entry.path);
+    // The bin directory itself: the pass over it below covers it.
+    if (rel === "") continue;
+    if (isAbsolute(rel) || rel.split(sep)[0] === "..") {
+      tally.left.push(
+        `${entry.path} is not under ${copies}, where the Oxagen app keeps its copies, so the oxagen and tacho in it were left alone. Delete them by hand if they are Oxagen's`,
+      );
+      continue;
+    }
+    try {
+      if (!lstatSync(entry.path).isDirectory()) {
+        tally.left.push(
+          `${entry.path} is no longer the directory the Oxagen app made, left alone`,
+        );
+        continue;
+      }
+    } catch (error) {
+      if (errorCode(error) !== "ENOENT")
+        tally.left.push(`cannot read ${entry.path}: ${reasonOf(error)}`);
+      continue;
+    }
+    dirs.push(resolve(entry.path));
+  }
+  return dirs;
+}
+
+/**
  * Remove the two sidecars from `dir`, and nothing else in it. Windows does
  * not delete a program's file while the program runs, and this command
  * usually runs from the copy it is removing.
@@ -560,9 +602,7 @@ export async function uninstall(
 
   deps.out("Removing the per-user copies and Oxagen's settings");
   const copyDirs = new Set([
-    ...record.journal
-      .filter((entry) => entry.kind === "copy")
-      .map((entry) => entry.path),
+    ...journaledCopies(record.journal, places.copies, tally),
     ...versionDirs(places.copies),
   ]);
   for (const dir of copyDirs) {

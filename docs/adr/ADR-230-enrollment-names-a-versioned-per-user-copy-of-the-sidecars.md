@@ -183,10 +183,14 @@ the shell profile lines by hand.
       text, the marker block (by the same rule as `remove_path_block`), a fish
       file that opens with the begin marker, and the user PATH entry. Anything
       else is left and named.
-   3. It removes the two sidecars from each copy (journaled, or found under
-      `<data-local>/oxagen/bin`), the directories in `created` once they are
-      empty, the Tacho directory, and `~/.config/oxagen`. That is the same set
-      the app's own **Uninstall** removes.
+   3. It removes the two sidecars from each copy directory under
+      `<data-local>/oxagen/bin`, journaled or found there, then the
+      directories in `created` once they are empty, the Tacho directory, and
+      `~/.config/oxagen`. That is the same set the app's own **Uninstall**
+      removes. A `copy` entry that names a directory anywhere else, or a link
+      where a copy should be, is left and named. The journal is a file in the
+      person's home directory, so the command does not trust its paths to
+      delete outside the one directory the app keeps copies in.
 
    With no journal (an app from before this amendment, never launched since),
    the copies still go, and the command names the links and profile lines to
