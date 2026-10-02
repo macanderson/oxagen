@@ -128,6 +128,7 @@ import { spendOperatorRanking } from "./spend.operator_ranking";
 import { spendOperatorPseudonymsSet } from "./spend.operator_pseudonyms.set";
 import { spendPerMergedPr } from "./spend.per_merged_pr";
 import { spendUnproductive } from "./spend.unproductive";
+import { spendWorkOrderMetrics } from "./spend.work_order_metrics";
 import { skillConfigGet } from "./skill.config.get";
 import { skillConfigUpdate } from "./skill.config.update";
 import { skillSearchPreview } from "./skill.search.preview";
@@ -968,6 +969,7 @@ export {
   spendOperatorPseudonymsSet,
   spendPerMergedPr,
   spendUnproductive,
+  spendWorkOrderMetrics,
   configurationCloneGet,
   configurationClonePropose,
   skillConfigGet,
@@ -1428,6 +1430,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   spendOperatorPseudonymsSet,
   spendPerMergedPr,
   spendUnproductive,
+  spendWorkOrderMetrics,
   configurationCloneGet,
   configurationClonePropose,
   skillConfigGet,

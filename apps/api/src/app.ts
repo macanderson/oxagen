@@ -371,6 +371,7 @@ import { spendOperatorRankingRoute } from "./routes/v1/spend.operator_ranking";
 import { spendOperatorPseudonymsSetRoute } from "./routes/v1/spend.operator_pseudonyms.set";
 import { spendPerMergedPrRoute } from "./routes/v1/spend.per_merged_pr";
 import { spendUnproductiveRoute } from "./routes/v1/spend.unproductive";
+import { spendWorkOrderMetricsRoute } from "./routes/v1/spend.work_order_metrics";
 import { skillConfigGetRoute } from "./routes/v1/skill.config.get";
 import { skillConfigUpdateRoute } from "./routes/v1/skill.config.update";
 import { skillSearchPreviewRoute } from "./routes/v1/skill.search.preview";
@@ -919,6 +920,9 @@ orgScoped.route("/spend/operators/pseudonyms", spendOperatorPseudonymsSetRoute);
 // Spend per merged pull request, per agent (spend spec, detector 8; F26).
 orgScoped.route("/spend/per-merged-pr", spendPerMergedPrRoute);
 orgScoped.route("/spend/unproductive", spendUnproductiveRoute);
+// The operator and work order metrics and unassigned spend, per week
+// (managers only; spend spec, Operator productivity; F33).
+orgScoped.route("/spend/work-order-metrics", spendWorkOrderMetricsRoute);
 orgScoped.route("/spend/statement/export", spendStatementExportRoute);
 // Cost-center chargeback (ADR-142). The list, create, delete, and statement
 // are organization-level (`scoped: false`). Set writes the active workspace or

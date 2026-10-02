@@ -10,6 +10,9 @@
 // With the workspace's pseudonyms on, a stable pseudonym replaces each name,
 // and the share, the run count and the runs are hidden: each could match a
 // pseudonym to a named row on the Month tab grouped by operator.
+// Beside each name are its done work orders and its unassigned share (F33).
+// The done count stays under pseudonyms. The unassigned share and the work
+// orders and runs behind both are hidden like the unproductive share.
 import { useLocale, useTranslations } from "next-intl";
 import { ratioOfMicros } from "@/data/contracts/money";
 import type {
@@ -145,6 +148,8 @@ function RankingPanel({
             { label: t("columns.unproductive"), numeric: true },
             { label: t("columns.shareOfTotal"), numeric: true },
             { label: t("columns.unproductiveShare"), numeric: true },
+            { label: t("columns.doneWorkOrders"), numeric: true },
+            { label: t("columns.unassignedShare"), numeric: true },
             { label: t("columns.runs"), numeric: true },
             { label: t("columns.runsBehind") },
           ]}
@@ -180,6 +185,8 @@ function RankingPanel({
               )}
             </td>
             <td className={numericCell} />
+            <td className={numericCell} />
+            <td className={numericCell} />
             <td className={numericCell}>
               <a
                 href="#spend-ranking-def-runs"
@@ -205,6 +212,8 @@ function RankingPanel({
                 <Money value={ranking.unproductive} />
               </a>
             </td>
+            <td className={numericCell} />
+            <td className={numericCell} />
             <td className={numericCell} />
             <td className={numericCell} />
             <td className={numericCell} />
@@ -265,6 +274,82 @@ function RankingRow({
           >
             {formatRatio(row.unproductiveShare, locale)}
           </a>
+        )}
+      </td>
+      <td className={numericCell}>
+        <a
+          href="#spend-ranking-def-doneWorkOrders"
+          aria-describedby="spend-ranking-def-doneWorkOrders"
+          className={linkText}
+        >
+          {formatCount(row.doneWorkOrders, locale)}
+        </a>
+        {hidden || row.topDoneWorkOrders.length === 0 ? null : (
+          <details className="mt-1 text-left" data-evidence="done">
+            <summary className={`${linkText} cursor-pointer`}>
+              {t("doneBehind", { count: row.topDoneWorkOrders.length })}
+            </summary>
+            <ul className="mt-1 flex flex-col gap-1">
+              {row.topDoneWorkOrders.map((order) => (
+                <li key={order.workOrderId} className="flex flex-col gap-0.5">
+                  <span className="font-mono text-[11.5px]">
+                    {order.workOrderId}
+                  </span>
+                  {order.runs.map((runId) => (
+                    <SafeLink
+                      key={runId}
+                      to={routes.run(at.org, at.ws, runId, { tab: "cost" })}
+                      className={`${linkText} min-w-0 font-mono text-[11.5px] md:truncate`}
+                    >
+                      {runId}
+                    </SafeLink>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </td>
+      <td className={numericCell}>
+        {hidden ? (
+          <Hidden />
+        ) : row.unassignedShare === null ? (
+          <NotRecordedValue />
+        ) : (
+          <>
+            <a
+              href="#spend-ranking-def-unassignedShare"
+              aria-describedby="spend-ranking-def-unassignedShare"
+              className={linkText}
+            >
+              {formatRatio(row.unassignedShare, locale)}
+            </a>
+            {row.topUnassignedRuns.length === 0 ? null : (
+              <details className="mt-1 text-left" data-evidence="unassigned">
+                <summary className={`${linkText} cursor-pointer`}>
+                  {t("runsBehind", { count: row.topUnassignedRuns.length })}
+                </summary>
+                <ul className="mt-1 flex flex-col gap-1">
+                  {row.topUnassignedRuns.map((run) => (
+                    <li
+                      key={run.runId}
+                      className="flex items-baseline justify-between gap-3"
+                    >
+                      <SafeLink
+                        to={routes.run(at.org, at.ws, run.runId, {
+                          tab: "cost",
+                        })}
+                        className={`${linkText} min-w-0 font-mono text-[11.5px] md:truncate`}
+                      >
+                        {run.runId}
+                      </SafeLink>
+                      <Money value={run.unassigned} />
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </>
         )}
       </td>
       <td className={numericCell}>
@@ -375,6 +460,18 @@ function Definitions({ hidden }: { hidden: boolean }) {
         </dt>
         <dd id="spend-ranking-def-unproductiveShare">
           {t("definitions.unproductiveShare")}
+        </dd>
+        <dt className="font-medium text-foreground">
+          {t("columns.doneWorkOrders")}
+        </dt>
+        <dd id="spend-ranking-def-doneWorkOrders">
+          {t("definitions.doneWorkOrders")}
+        </dd>
+        <dt className="font-medium text-foreground">
+          {t("columns.unassignedShare")}
+        </dt>
+        <dd id="spend-ranking-def-unassignedShare">
+          {t("definitions.unassignedShare")}
         </dd>
         <dt className="font-medium text-foreground">{t("columns.runs")}</dt>
         <dd id="spend-ranking-def-runs">{t("definitions.runs")}</dd>
