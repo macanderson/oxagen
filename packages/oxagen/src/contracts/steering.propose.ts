@@ -67,10 +67,10 @@ export const steeringProposeInputSchema = z
     evidence: z
       .array(z.number().int().min(0))
       .max(STEERING_PROPOSE_EVIDENCE_MAX)
-      .default([])
       .describe(
         "Frame numbers in this run that show why the change is needed. Leave empty if you do not know them.",
-      ),
+      )
+      .default([]),
     files: z
       .array(steeringProposeFileSchema)
       .min(1)

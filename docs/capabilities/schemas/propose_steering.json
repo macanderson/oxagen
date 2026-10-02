@@ -41,6 +41,7 @@
           "minimum": 0
         },
         "maxItems": 20,
+        "description": "Frame numbers in this run that show why the change is needed. Leave empty if you do not know them.",
         "default": []
       },
       "files": {
