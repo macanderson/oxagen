@@ -218,6 +218,77 @@
         ],
         "additionalProperties": false
       },
+      "delivery": {
+        "type": "object",
+        "properties": {
+          "sends": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "claimed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "rejected": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "withdrawn": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "waiting": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "claim_minutes": {
+            "type": "object",
+            "properties": {
+              "median": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "p90": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sample": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "median",
+              "p90",
+              "sample"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "sends",
+          "claimed",
+          "rejected",
+          "withdrawn",
+          "waiting",
+          "claim_minutes"
+        ],
+        "additionalProperties": false
+      },
       "truncated": {
         "type": "boolean"
       },
@@ -247,13 +318,27 @@
                   "type": "null"
                 }
               ]
+            },
+            "entered": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sent": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "full_flow": {
+              "type": "boolean"
             }
           },
           "required": [
             "week",
             "accepted_merged",
             "returned",
-            "median_lead_hours"
+            "median_lead_hours",
+            "entered",
+            "sent",
+            "full_flow"
           ],
           "additionalProperties": false
         }
@@ -269,6 +354,7 @@
       "touches",
       "cost",
       "reopens",
+      "delivery",
       "truncated",
       "weeks"
     ],

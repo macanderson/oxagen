@@ -23,7 +23,7 @@ import {
   effectiveTriage,
 } from "@oxagen/work";
 import { type FactDataByKind, type FactKind, type WorkFact, reduceWorkItem } from "@oxagen/work/records";
-import { and, asc, count, desc, eq, gte, inArray, isNull, ne, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNull, lte, ne, or, type SQL, sql } from "drizzle-orm";
 import { readRunTotalsByIds } from "../../spend.shared";
 import { composeAgentKey } from "../run-item";
 import { takesWorkOrders } from "../tacho-host";
@@ -41,7 +41,7 @@ import {
   rowOf,
 } from "./derive";
 import { type DetailInput, type WorkItemDetail, detailOf } from "./detail";
-import { type OutcomeItem, REOPEN_WAIT_DAYS, computeOutcomes } from "./outcomes";
+import { type OutcomeItem, REOPEN_WAIT_DAYS, type SendOutcome, type WeekIntake, computeOutcomes } from "./outcomes";
 
 const items = schema.workItems;
 const facts = schema.workItemFacts;
@@ -705,21 +705,139 @@ export async function readWorkTargets(scope: WorkScope, userId: string | null, n
 /** The most items one outcomes read counts. */
 const OUTCOMES_ITEMS_MAX = 2000;
 
+/** The most sends one outcomes read counts for the delivery figures. */
+const OUTCOMES_SENDS_MAX = 2000;
+
+/** What the outcomes read loaded inside its tenant transaction. */
+interface OutcomesLoad {
+  items: OutcomeItem[];
+  sends: SendOutcome[];
+  intake: WeekIntake[];
+  truncated: boolean;
+}
+
+/**
+ * The sends a person made in the window, newest first and at most
+ * OUTCOMES_SENDS_MAX of them, each with what the runtime did: its first claim,
+ * and whether it was rejected or withdrawn. `truncated` says when there were
+ * more sends. Deleted items' sends are left out.
+ */
+async function sendsInWindow(
+  tx: Tx,
+  scope: WorkScope,
+  windowStart: Date,
+  now: Date,
+): Promise<{ sends: SendOutcome[]; truncated: boolean }> {
+  const requested = await tx
+    .select({ orderId: facts.orderId, occurredAt: facts.occurredAt })
+    .from(facts)
+    .innerJoin(items, eq(items.id, facts.itemId))
+    .where(
+      and(
+        eq(facts.orgId, scope.orgId),
+        eq(facts.workspaceId, scope.workspaceId),
+        isNull(items.deletedAt),
+        eq(facts.kind, "send_requested"),
+        gte(facts.occurredAt, windowStart),
+        lte(facts.occurredAt, now),
+      ),
+    )
+    .orderBy(desc(facts.occurredAt), desc(facts.id))
+    .limit(OUTCOMES_SENDS_MAX + 1);
+  const page = requested.slice(0, OUTCOMES_SENDS_MAX);
+  const orderIds = uuids(page.map((row) => row.orderId));
+  const outcomeRows =
+    orderIds.length === 0
+      ? []
+      : await tx
+          .select({ orderId: facts.orderId, kind: facts.kind, occurredAt: facts.occurredAt })
+          .from(facts)
+          .where(
+            and(
+              eq(facts.orgId, scope.orgId),
+              eq(facts.workspaceId, scope.workspaceId),
+              inArray(facts.orderId, orderIds),
+              inArray(facts.kind, ["claimed", "send_rejected", "send_withdrawn"]),
+            ),
+          );
+  const outcomeOf = new Map<string, { claimedAt: Date | null; rejected: boolean; withdrawn: boolean }>();
+  for (const row of outcomeRows) {
+    if (row.orderId === null) continue;
+    const entry = outcomeOf.get(row.orderId) ?? { claimedAt: null, rejected: false, withdrawn: false };
+    if (row.kind === "claimed" && (entry.claimedAt === null || row.occurredAt.getTime() < entry.claimedAt.getTime())) {
+      entry.claimedAt = row.occurredAt;
+    }
+    if (row.kind === "send_rejected") entry.rejected = true;
+    if (row.kind === "send_withdrawn") entry.withdrawn = true;
+    outcomeOf.set(row.orderId, entry);
+  }
+  const sends = page.map((row): SendOutcome => {
+    const entry = row.orderId === null ? undefined : outcomeOf.get(row.orderId);
+    return {
+      requestedAt: row.occurredAt.toISOString(),
+      claimedAt: iso(entry?.claimedAt ?? null),
+      rejected: entry?.rejected ?? false,
+      withdrawn: entry?.withdrawn ?? false,
+    };
+  });
+  return { sends, truncated: requested.length > OUTCOMES_SENDS_MAX };
+}
+
+/**
+ * The items that entered Work and the sends a person made in each UTC week of
+ * the window, counted in the database with no cap. An item enters Work with
+ * its first source reading, a collected or entered fact. Deleted items are
+ * left out.
+ */
+async function intakeByWeek(tx: Tx, scope: WorkScope, windowStart: Date, now: Date): Promise<WeekIntake[]> {
+  // occurred_at is timestamptz, so `at time zone 'UTC'` gives the UTC wall
+  // time, and date_trunc('week') gives its Monday, as weekStartOf does. The
+  // literals stay in the SQL text: a bound value would differ between SELECT
+  // and GROUP BY, and Postgres would refuse the grouping.
+  const week = sql<string>`to_char(date_trunc('week', ${facts.occurredAt} at time zone 'UTC'), 'YYYY-MM-DD')`;
+  const rows = await tx
+    .select({ week, kind: facts.kind, n: count() })
+    .from(facts)
+    .innerJoin(items, eq(items.id, facts.itemId))
+    .where(
+      and(
+        eq(facts.orgId, scope.orgId),
+        eq(facts.workspaceId, scope.workspaceId),
+        isNull(items.deletedAt),
+        inArray(facts.kind, ["collected", "entered", "send_requested"]),
+        gte(facts.occurredAt, windowStart),
+        lte(facts.occurredAt, now),
+      ),
+    )
+    .groupBy(week, facts.kind);
+  const byWeek = new Map<string, WeekIntake>();
+  for (const row of rows) {
+    const entry = byWeek.get(row.week) ?? { week: row.week, entered: 0, sent: 0 };
+    if (row.kind === "send_requested") entry.sent += Number(row.n);
+    else entry.entered += Number(row.n);
+    byWeek.set(row.week, entry);
+  }
+  return [...byWeek.values()];
+}
+
 /**
  * What the workspace's work finished in the last `days` days, counted from
  * the records (outcomes.ts). Reads the items with an acceptance or a merge
  * since the start of the reopen cohort, or a return or close in the window,
- * newest first and at most OUTCOMES_ITEMS_MAX of them (`truncated` says when
- * there were more), with their facts and their triage correction counts. The
- * check facts are left out: the figures read acceptances, merges, returns,
- * closes, and reopens, never a check, and a pull request's checks are most of
- * its facts. The caller runs inside the tenant scope.
+ * newest first and at most OUTCOMES_ITEMS_MAX of them, with their facts and
+ * their triage correction counts. The check facts are left out: the figures
+ * read acceptances, merges, returns, closes, and reopens, never a check, and a
+ * pull request's checks are most of its facts.
+ *
+ * For the pilot measures it also reads the sends in the window, at most
+ * OUTCOMES_SENDS_MAX of them, and each week's entered and sent counts, which
+ * have no cap. `truncated` says when the items or the sends ran past their
+ * cap. The caller runs inside the tenant scope.
  */
 export async function readWorkOutcomes(scope: WorkScope, days: number, now: Date): Promise<WorkOutcomesGetOutput> {
   const windowStart = new Date(now.getTime() - days * DAY_MS);
   const cohortStart = new Date(now.getTime() - (REOPEN_WAIT_DAYS + days) * DAY_MS);
-  let truncated = false;
-  const loaded = await withTenantDb(async (tx) => {
+  const loaded = await withTenantDb(async (tx): Promise<OutcomesLoad> => {
     const candidates = await tx
       .selectDistinct({ itemId: facts.itemId })
       .from(facts)
@@ -739,7 +857,6 @@ export async function readWorkOutcomes(scope: WorkScope, days: number, now: Date
       .orderBy(desc(facts.itemId))
       .limit(OUTCOMES_ITEMS_MAX + 1);
     const ids = candidates.slice(0, OUTCOMES_ITEMS_MAX).map((row) => row.itemId);
-    truncated = candidates.length > OUTCOMES_ITEMS_MAX;
     const factMap = await factsByItem(tx, scope, ids, ["checks_required", "check_observed"]);
     const correctionCounts =
       ids.length === 0
@@ -751,14 +868,22 @@ export async function readWorkOutcomes(scope: WorkScope, days: number, now: Date
             .where(and(eq(corrections.orgId, scope.orgId), eq(corrections.workspaceId, scope.workspaceId), inArray(decisions.itemId, ids)))
             .groupBy(decisions.itemId);
     const correctionsOf = new Map(correctionCounts.map((row) => [row.itemId, Number(row.n)]));
-    return ids.map((itemId): OutcomeItem => {
+    const outcomeItems = ids.map((itemId): OutcomeItem => {
       const list = factMap.get(itemId) ?? [];
       return { facts: list, projection: reduceWorkItem(list), corrections: correctionsOf.get(itemId) ?? 0 };
     });
+    const sent = await sendsInWindow(tx, scope, windowStart, now);
+    const intake = await intakeByWeek(tx, scope, windowStart, now);
+    return {
+      items: outcomeItems,
+      sends: sent.sends,
+      intake,
+      truncated: candidates.length > OUTCOMES_ITEMS_MAX || sent.truncated,
+    };
   });
   // Price only the runs of items done in the window: those are the ones the
   // cost figure sums.
-  const doneInWindow = loaded.filter((item) =>
+  const doneInWindow = loaded.items.filter((item) =>
     item.projection.orders.some((order) => {
       const at = doneAtOf(order);
       return at !== null && Date.parse(at) >= windowStart.getTime() && Date.parse(at) <= now.getTime();
@@ -768,5 +893,8 @@ export async function readWorkOutcomes(scope: WorkScope, days: number, now: Date
     scope,
     doneInWindow.flatMap((item) => itemRunIds(item.projection)),
   );
-  return { ...computeOutcomes({ now, days, items: loaded, runs }), truncated };
+  return {
+    ...computeOutcomes({ now, days, items: loaded.items, runs, sends: loaded.sends, intake: loaded.intake }),
+    truncated: loaded.truncated,
+  };
 }
