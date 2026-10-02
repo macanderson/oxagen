@@ -403,8 +403,10 @@ not carry a copy.
   decision as an ADR in `docs/adr/`; the ADR replaces the question.
 - **SCR-003 — Definition of
   done:** An issue closes only when every DoD checklist item is satisfied
-  and verified. Reference-grade includes tests, code comments, docs, and
-  CI — not just the implementation. A PR that advances an issue without
+  and verified. Reference-grade includes tests, code comments, and docs,
+  not just the implementation. Green CI is implied: branch protection
+  requires it, so a DoD never lists it, and the `dod` gate skips a box
+  that only says CI passes (Mac, 2026-10-02). A PR that advances an issue without
   finishing it links it with `Refs #N` rather than `Closes #N`: `Refs`
   does not close, so the merge gate does not hold that PR against the
   issue's DoD. A PR may carry both, and is gated only on what it closes. A

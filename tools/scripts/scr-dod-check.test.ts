@@ -775,8 +775,36 @@ describe("a DoD item that only says CI passes (oxagen#4200)", () => {
     "Full CI green on the PR that fixes this",
     "CI green on the PR that closes this.",
     "CI is green on the PR that adds this check.",
+    // Found unticked on open oxagen issues on 2026-10-02: a CI clause beside
+    // the rule that nothing runs locally, or a CI clause naming its checks.
+    "CI is green on the PR. No build, lint, or test is run on the laptop",
+    "CI is green on the PR. No build, lint, or test runs on the laptop.",
+    "CI is green. No build, test, or lint runs on the local machine",
+    "CI is green on the PR. Nothing is run on this machine",
+    "CI is green on the final head commit",
+    "Required CI checks pass",
+    "CI green on the closing PR",
+    "CI is green, including the brand check, the prose check, and coverage.",
+    "CI is green; nothing runs on this machine",
   ])("recognises %j", (item) => {
     expect(restatesCiStatus(item)).toBe(true);
+  });
+
+  // A clause about local runs alone says nothing about CI, so it is not a
+  // restatement of CI status and stays a gated item.
+  it("does not skip an item that only repeats the local-run rule", () => {
+    expect(restatesCiStatus("No build, lint, or test is run on the laptop")).toBe(false);
+  });
+
+  it("does not let a CI clause carry a sentence of real work past the gate", () => {
+    expect(
+      restatesCiStatus(
+        "Component tests cover the tabs. CI is green on the PR. No build, lint, or test is run on the laptop",
+      ),
+    ).toBe(false);
+    expect(
+      restatesCiStatus("Regression tests cover the shared renderer. Required CI checks pass"),
+    ).toBe(false);
   });
 
   // Each of these names work besides CI, so it stays a gated item.
