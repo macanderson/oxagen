@@ -39,7 +39,6 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { pluginForContract } from "@oxagen/oxagen/plugins";
 import { capabilityMutates } from "@oxagen/oxagen/types";
 import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
-import type { DecisionRuleApprovalRequiredError } from "@oxagen/rules";
 import { externalDecisionCheck } from "./external-tool-rules";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { checkConsent, recordConsent, DEFAULT_CONSENT_TTL_MS } from "./consent";
@@ -84,28 +83,6 @@ function byteSize(v: unknown): number {
   } catch {
     return 0;
   }
-}
-
-/**
- * The rules gate's `DecisionRuleApprovalRequiredError`, told by its code so
- * this module does not load the rules engine. Returns the rules that asked
- * for a person and the digest the gate accepts once one approves, or null for
- * any other error.
- */
-function ruleApprovalRequired(err: unknown): {
-  ruleIds: readonly string[];
-  approvalDigest: string | undefined;
-} | null {
-  if (!(err instanceof Error)) return null;
-  const e = err as Partial<
-    Pick<DecisionRuleApprovalRequiredError, "code" | "ruleIds" | "approvalDigest">
-  >;
-  if (e.code !== "decision_rule_approval_required") return null;
-  return {
-    ruleIds: Array.isArray(e.ruleIds) ? e.ruleIds : [],
-    approvalDigest:
-      typeof e.approvalDigest === "string" ? e.approvalDigest : undefined,
-  };
 }
 
 /**
@@ -245,6 +222,13 @@ export interface MaterializeOptions {
    * `governed-turn`, `approval-resume` and `tools.load` rely on.
    */
   capabilitiesOnly?: boolean;
+  /**
+   * False skips the `tool_invocations` row each call writes, which feeds the
+   * workspace's "calls 30d" count. The in-app assistant's turn passes false
+   * on every adapter, a turn an API key starts included, because the
+   * workspace does not monitor Stella (ADR-235). Absent or true keeps the row.
+   */
+  feedsWorkspaceToolCounts?: boolean;
   /**
    * Called immediately after an approval request is created and BEFORE
    * `waitForApproval` blocks. Lets the stream route emit an
@@ -634,6 +618,13 @@ export async function materializeTools(
     opts.killSwitchGate ??
     createKillSwitchGate(ctx, undefined, opts.actingAgent ?? null);
 
+  // `tool_invocations` feeds one reader, the "calls 30d" count on the
+  // workspace's tool registry (`countRecentToolInvocations`). The workspace
+  // does not monitor Stella (ADR-235), so Stella's turn turns the write off.
+  // Its row could not be told apart later: `surface` holds the transport and
+  // `message_id` the person's message. The run ledger keeps Stella's receipts.
+  const feedsWorkspaceToolCounts = opts.feedsWorkspaceToolCounts !== false;
+
   // Register a tool under a model-safe alias and record the reverse mapping.
   // Sanitizing collapses distinct chars to "_", so two real names could in
   // principle map to one alias; disambiguate deterministically with a numeric
@@ -973,133 +964,79 @@ export async function materializeTools(
             // this call's ledger row by it (ADR-165): a retried tool call bills
             // once. Without an id the context goes through unchanged.
             const toolCallId = modelToolCallId(options);
-            let result: unknown;
-            try {
-              result = await invoke(
-                cap.name,
-                input,
-                toolCallId === null ? ctx : { ...ctx, toolCallId },
-                {
-                  surface: "agent",
-                  // Read fresh at call time, same reasoning as the
-                  // manual-approval runId above: the in-app assistant opens
-                  // its run only after materializing tools, so ctx.agentRun is
-                  // unset when these closures are built (finding 9, #3370).
-                  // Without this, an auto-approved call's receipt (#3153)
-                  // attaches to no run.
-                  runId: opts.runIdRef?.current ?? agentRun?.runId ?? null,
-                },
-              );
-            } catch (err) {
-              const rule = ruleApprovalRequired(err);
-              if (rule === null || opts.approvalMode !== "park") throw err;
-              // A workspace decision rule sent this call to a person (#4226).
-              // The turn parks it the way the contract gate above does, with
-              // the rule named on the row and the digest the rules gate
-              // accepts once the person approves. The call cannot be parked
-              // without a digest to prove the approval, a message to attach
-              // it to, or a person's own context to resume as. The rule's
-              // refusal then stands.
-              if (
-                rule.approvalDigest === undefined ||
-                !ctx.messageId ||
-                !ctx.userId ||
-                ctx.apiKeyId ||
-                ctx.agentRun
-              ) {
-                throw err;
-              }
-              const approval = await runInTenantScope(
-                { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-                () =>
-                  createApprovalRequest({
-                    orgId: ctx.orgId,
-                    workspaceId: ctx.workspaceId,
-                    messageId: ctx.messageId!,
-                    runId: opts.runIdRef?.current ?? agentRun?.runId ?? null,
-                    capabilityName: cap.name,
-                    inputPreview: input,
-                    digestInput: digestInputFor(cap, input),
-                    riskLevel,
-                    resumeRequesterUserId: ctx.userId!,
-                    ruleIds: rule.ruleIds,
-                    ruleDigest: rule.approvalDigest,
-                  }),
-              );
-              const expiresAt = (
-                approval.expiresAt ?? new Date(Date.now() + APPROVAL_TTL_MS)
-              ).toISOString();
-              if (approval.resolution) {
-                return {
-                  approvalId: approval.approvalId,
-                  resolution: approval.resolution,
-                  execution: approval.resumeStatus,
-                };
-              }
-              opts.onApprovalRequired?.({
-                approvalId: approval.approvalId,
-                approvalPublicId: approval.approvalPublicId,
-                capability: cap.name,
-                inputPreview: input,
-                riskLevel,
-                expiresAt,
-              });
-              throw new ApprovalPendingError(
-                cap.name,
-                approval.approvalId,
-                expiresAt,
-                approval.approvalPublicId,
-              );
-            }
+            // A workspace decision rule no longer parks a call here. The
+            // in-app turn is the one `park` caller, and its calls skip the
+            // rules (ADR-235). A turn an API key starts keeps them, and its
+            // calls cannot park, so a rule's refusal ends the call.
+            const result = await invoke(
+              cap.name,
+              input,
+              toolCallId === null ? ctx : { ...ctx, toolCallId },
+              {
+                surface: "agent",
+                // Read fresh at call time, same reasoning as the
+                // manual-approval runId above: the in-app assistant opens
+                // its run only after materializing tools, so ctx.agentRun is
+                // unset when these closures are built (finding 9, #3370).
+                // Without this, an auto-approved call's receipt (#3153)
+                // attaches to no run.
+                runId: opts.runIdRef?.current ?? agentRun?.runId ?? null,
+              },
+            );
             // every tool invocation lands one row in ClickHouse
             // `tool_invocations` with surface + provider. Failure-isolated.
-            try {
-              await insertToolInvocation(
-                buildInvocationPayload(
-                  {
-                    invocationId,
-                    ctx,
-                    capabilityName: cap.name,
-                    riskLevel,
-                    requiredApproval: requiresApproval ? 1 : 0,
-                    inputBytes,
-                  },
-                  {
-                    status: "completed",
-                    outputBytes: byteSize(result),
-                    latencyMs: Date.now() - startedAt,
-                  },
-                ),
-              );
-            } catch {
-              /* telemetry must never fail the call */
+            // Stella's calls land none (ADR-235): see `feedsWorkspaceToolCounts`.
+            if (feedsWorkspaceToolCounts) {
+              try {
+                await insertToolInvocation(
+                  buildInvocationPayload(
+                    {
+                      invocationId,
+                      ctx,
+                      capabilityName: cap.name,
+                      riskLevel,
+                      requiredApproval: requiresApproval ? 1 : 0,
+                      inputBytes,
+                    },
+                    {
+                      status: "completed",
+                      outputBytes: byteSize(result),
+                      latencyMs: Date.now() - startedAt,
+                    },
+                  ),
+                );
+              } catch {
+                /* telemetry must never fail the call */
+              }
             }
             return result;
           } catch (err) {
             // The approval gate above throws its park inside this try, so a
             // parked call ends here too, and is recorded as parked.
             const ended = thrownOutcome(err, "UnknownError");
-            try {
-              await insertToolInvocation(
-                buildInvocationPayload(
-                  {
-                    invocationId,
-                    ctx,
-                    capabilityName: cap.name,
-                    riskLevel,
-                    requiredApproval: requiresApproval ? 1 : 0,
-                    inputBytes,
-                  },
-                  {
-                    status: ended.status,
-                    outputBytes: 0,
-                    latencyMs: Date.now() - startedAt,
-                    errorClass: ended.error_class,
-                  },
-                ),
-              );
-            } catch {
-              /* swallow */
+            if (feedsWorkspaceToolCounts) {
+              try {
+                await insertToolInvocation(
+                  buildInvocationPayload(
+                    {
+                      invocationId,
+                      ctx,
+                      capabilityName: cap.name,
+                      riskLevel,
+                      requiredApproval: requiresApproval ? 1 : 0,
+                      inputBytes,
+                    },
+                    {
+                      status: ended.status,
+                      outputBytes: 0,
+                      latencyMs: Date.now() - startedAt,
+                      errorClass: ended.error_class,
+                    },
+                  ),
+                );
+              } catch {
+                /* swallow */
+              }
             }
             throw err;
           }

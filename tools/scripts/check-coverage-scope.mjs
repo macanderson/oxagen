@@ -33,6 +33,30 @@ import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 export const REPORT = join("coverage", "coverage-final.json");
 
 /**
+ * Read a key another checkout wrote as this checkout's path to the file.
+ *
+ * Turbo replays a cached coverage report with the absolute paths of the
+ * checkout that first ran the suite. On 2026-10-01 the repository moved from
+ * macanderson/oxagen to oxageninc/product, CI's checkout moved from
+ * /__w/oxagen/oxagen to /__w/product/product, and every replayed apps/app
+ * report named 862 files outside apps/app/src. A key that holds
+ * `/<pkgRel>/src/` names this package's file under any root, so it is read
+ * against `pkgDir`. A key that does not hold it is returned unchanged.
+ *
+ * @param {string} abs the key, resolved
+ * @param {string} pkgDir
+ * @param {string} [pkgRel] the package's path from the repository root,
+ *   such as `apps/app`
+ */
+function rebase(abs, pkgDir, pkgRel) {
+  if (!pkgRel) return abs;
+  const marker = `/${pkgRel}/src/`;
+  const at = abs.lastIndexOf(marker);
+  if (at === -1) return abs;
+  return join(pkgDir, "src", abs.slice(at + marker.length));
+}
+
+/**
  * The files a report names that it should not.
  *
  * @param {Record<string, unknown>} report parsed coverage-final.json
@@ -43,6 +67,8 @@ export const REPORT = join("coverage", "coverage-final.json");
  *   against. Vitest writes absolute keys, which this leaves unchanged. A
  *   relative key belongs to the package, never to whatever directory the
  *   process started in (#4664 item 10).
+ * @param {string} [pkgRel] the package's path from the repository root. With
+ *   it, a key another checkout wrote is read against this one (`rebase`).
  * @returns {{ outside: string[], missing: string[], total: number }}
  */
 export function offenders(
@@ -50,17 +76,21 @@ export function offenders(
   srcRoots,
   exists,
   pkgDir = dirname(srcRoots[0] ?? "."),
+  pkgRel,
 ) {
+  function inside(abs) {
+    return srcRoots.some((root) => {
+      const rel = relative(root, abs);
+      return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+    });
+  }
   const outside = [];
   const missing = [];
   const files = Object.keys(report);
   for (const file of files) {
-    const abs = resolve(pkgDir, file);
-    const inside = srcRoots.some((root) => {
-      const rel = relative(root, abs);
-      return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
-    });
-    if (!inside) outside.push(file);
+    let abs = resolve(pkgDir, file);
+    if (!inside(abs)) abs = rebase(abs, pkgDir, pkgRel);
+    if (!inside(abs)) outside.push(file);
     else if (!exists(abs)) missing.push(file);
   }
   return { outside, missing, total: files.length };
@@ -103,7 +133,18 @@ export function checkPackage(pkgDir, { cwd, read, exists, realpath }) {
     const real = realpath(src);
     if (real !== src) roots.push(real);
   }
-  const { outside, missing, total } = offenders(report, roots, exists, dir);
+  const fromRoot = relative(cwd, dir);
+  const pkgRel =
+    fromRoot && !fromRoot.startsWith("..") && !isAbsolute(fromRoot)
+      ? fromRoot
+      : undefined;
+  const { outside, missing, total } = offenders(
+    report,
+    roots,
+    exists,
+    dir,
+    pkgRel,
+  );
   if (total === 0) {
     return {
       code: 1,
