@@ -147,6 +147,7 @@ describe("readModelCallFrames", () => {
       "system_context_parts",
       "proxy_observed",
       "cache_keep_alive",
+      "backfilled",
       "seq",
     ]);
     expect(query_params).toEqual({
@@ -314,6 +315,52 @@ describe("readModelCallFrames", () => {
       "sources",
       "workspaceId",
     ]);
+  });
+
+  // ADR-161: a call `oxagen agent backfill` rebuilt from a transcript carries
+  // `oxagen.record_basis: "backfill"`. Its cost is an estimate, whatever the
+  // proxy mark says.
+  it("prices a backfilled call as estimated", async () => {
+    const base = {
+      at: "2026-09-14T10:00:00.000Z",
+      model: "claude-sonnet-5",
+      provider: "anthropic",
+      input_uncached: "10",
+      cache_read: "0",
+      cache_write_5m: "0",
+      cache_write_1h: "0",
+      output: "5",
+      reasoning: "0",
+      server_tool_request: "0",
+      cost_micros: null,
+      session_uuid: RUN,
+    };
+    answer([
+      { ...base, backfilled: 1 },
+      { ...base, backfilled: "1", proxy_observed: 1 },
+      { ...base, backfilled: 0 },
+      // A row from before the mark existed carries no figure at all.
+      { ...base },
+    ]);
+    const frames = await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
+    });
+    expect(frames.map((f) => f.basis)).toEqual([
+      "estimated",
+      "estimated",
+      "client_attested",
+      "client_attested",
+    ]);
+
+    // Read off the priced row with no new query parameter.
+    const { query, query_params } = lastQuery();
+    expect(query).toContain("attrs['oxagen.record_basis'] AS record_basis");
+    expect(query).toContain(
+      "toUInt8(c.record_basis = 'backfill') AS backfilled",
+    );
+    expect(query_params).not.toHaveProperty("recordBasisAttr");
   });
 
   // #4506 pass 4 and pass 6: a chain numbers its llm_call and tool_call
