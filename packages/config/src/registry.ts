@@ -3,12 +3,17 @@ import { baseEnvSchema } from "./env";
 // ─────────────────────────────────────────────────────────────────────────────
 // Canonical environment-variable registry — the single source of truth for
 // "what every variable is, which deployable surfaces need it, where its value
-// comes from, and how it's documented."
+// is kept, how to refresh it, and how it's documented."
 //
 // Everything else derives from this:
 //   - `.env.example`            → `renderEnvExample()` (generated, never hand-edited)
-//   - env-manager deploy catalog → `tools/env-manager/src/catalog.ts`
+//   - the build environment     → `tools/scripts/build-env.ts`
+//   - local `.env.local` files  → `tools/scripts/env-pull.ts` (ADR-240)
 //   - the static CI checker      → `tools/scripts/env-check.ts`
+//   - the Architecture Atlas inventory → `tools/scripts/lib/archdocs/`
+//
+// Values live in SSM Parameter Store (ADR-240). This file says which variables
+// exist and where each one's value is kept. It holds only the static values.
 //
 // The Zod `baseEnvSchema` (env.ts) remains the *runtime validator*; this registry
 // is a documentation/deployment superset of it. A variable is "schema-validated"
@@ -17,10 +22,13 @@ import { baseEnvSchema } from "./env";
 // asserts every schema key has a registry entry.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** A deployable Vercel project surface. */
+/** A deployable surface that reads its environment at build or start. */
 export type ServiceName = "api" | "app" | "mcp" | "website" | "admin" | "docs";
 
-/** A deployment environment (matches Vercel's three targets). */
+/**
+ * A deployment environment. `preview` is the staging stack, whose parameters
+ * live under `/oxagen/staging` (`PARAMETER_PREFIXES`).
+ */
 export type EnvName = "development" | "preview" | "production";
 
 export const SERVICE_NAMES: readonly ServiceName[] = [
@@ -38,29 +46,72 @@ export const ENV_NAMES: readonly EnvName[] = [
 ];
 
 /**
- * Where a variable's value originates when the env-manager deploys it.
+ * Where a variable's value originates.
  *  - `static`:   a literal baked into this registry (`staticValue` per env or shared).
- *  - `generate`: a fresh random secret minted by the env-manager (kept consistent
- *                across an env+key so e.g. api and app share one auth secret).
- *  - `manual`:   the operator supplies the value (paste-a-secret in the UI, or set
- *                it on a provider dashboard). The env-manager never invents it.
+ *  - `generate`: a random secret Oxagen mints itself. One value per environment,
+ *                shared by every service that reads it, so api and app agree on
+ *                one auth secret. `refresh` gives the command that mints it.
+ *  - `manual`:   a vendor or an operator issues the value (an API key, an OAuth
+ *                client, a connection string). `refresh` says where.
  */
 export type ValueOrigin = "static" | "generate" | "manual";
 
+/**
+ * Where a variable's value is kept (ADR-240). SSM Parameter Store is the one
+ * store, and this says which part of it holds the value, or why none does.
+ *  - `environment`: one parameter per environment at `<prefix>/<KEY>`, with the
+ *    prefix from `PARAMETER_PREFIXES`. The nodes read it at container start,
+ *    the CI build reads it, and `pnpm env:pull` writes the development copy
+ *    into `.env.local`.
+ *  - `operator`: one parameter at `/oxagen/operator/<KEY>` for maintainer
+ *    tooling that no service reads. `pnpm env:pull --operator` adds these to
+ *    the root `.env.local`.
+ *  - `ci`: a GitHub Actions secret or variable of the same name. `CI_REGISTRY`
+ *    says how to refresh it. Phase 3 of ADR-240 moves these to `/oxagen/ci`.
+ *  - `registry`: the static value in this file. No parameter holds it, and a
+ *    parameter that does is drift, which `build-env.ts` reports.
+ *  - `shell`: set by hand for one run, set by a script or the CI harness, or
+ *    minted per machine. No store holds it.
+ */
+export type ValueStore = "environment" | "operator" | "ci" | "registry" | "shell";
+
+export const VALUE_STORES: readonly ValueStore[] = [
+  "environment",
+  "operator",
+  "ci",
+  "registry",
+  "shell",
+];
+
+/**
+ * How to get a new value for a variable: where it is issued, the command that
+ * mints or prints it, and what has to happen around the change. The
+ * Architecture Atlas renders it as the refresh column of its inventory.
+ */
+export interface Refresh {
+  /** Where the value comes from and what to do around the change. Plain sentences. */
+  how: string;
+  /** A shell command that mints or prints the new value, when one exists. */
+  command?: string;
+}
+
 export interface EnvVarMeta {
-  /** Section heading, used to group `.env.example` and the env-manager UI. */
+  /** Section heading, used to group `.env.example` and the Atlas inventory. */
   group: string;
   /** One-line human description. Becomes the comment above the var in `.env.example`. */
   description: string;
-  /** Stored on Vercel as `encrypted` (true) vs `plain`/readable (false). */
+  /**
+   * A credential. Parameter Store keeps it as a SecureString (a String when
+   * false), CI masks it, and the build never writes it into an artifact.
+   */
   secret: boolean;
   /** Inlined into a client bundle (the `NEXT_PUBLIC_` convention). */
   clientExposed: boolean;
-  /** Which Vercel projects need this var to function. Empty = operator/tooling-only. */
+  /** Which deployable services read this var. Empty = operator/tooling-only. */
   services: ServiceName[];
   /** Environments where a value MUST be present (drives the gap detector). */
   requiredIn: EnvName[];
-  /** Where the value comes from when deployed. */
+  /** Where the value comes from. */
   valueOrigin: ValueOrigin;
   /**
    * Per-env static values (only for `valueOrigin: "static"`). Use the `"*"` key
@@ -69,6 +120,17 @@ export interface EnvVarMeta {
   staticValue?: Partial<Record<EnvName | "*", string>>;
   /** Optional example/placeholder shown in `.env.example` for non-static vars. */
   placeholder?: string;
+  /**
+   * Where the value is kept. Leave it out to take the default `storeOf()`
+   * derives: `registry` for a static value, `environment` for a value a
+   * service reads, `shell` for anything else.
+   */
+  store?: ValueStore;
+  /**
+   * How to mint or fetch a new value. Required for every `environment` and
+   * `operator` variable (`registry.test.ts`).
+   */
+  refresh?: Refresh;
 }
 
 const ALL: EnvName[] = ["development", "preview", "production"];
@@ -78,6 +140,17 @@ const APP_PROD_URL = "https://app.oxagen.sh";
 const API_PROD_URL = "https://api.oxagen.sh";
 const MCP_PROD_URL = "https://mcp.oxagen.sh";
 const MARKETING_PROD_URL = "https://oxagen.sh";
+
+// Refresh steps shared by plain settings, which no vendor issues.
+const SETTING: Refresh = {
+  how: "A setting. Change it in the environment that needs it. Services read it when they start.",
+};
+const SWITCH: Refresh = {
+  how: "A switch. Set it to 1 to turn the feature on, or delete the parameter to turn it off.",
+};
+const CLIENT_SETTING: Refresh = {
+  how: "A setting compiled into the app bundle, so a change needs a rebuild.",
+};
 
 /**
  * The registry. Ordered for `.env.example` layout. `services`/`requiredIn`
@@ -112,6 +185,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: ALL,
     valueOrigin: "manual",
     placeholder: "postgres://oxagen:oxagen@localhost:5433/oxagen",
+    refresh: {
+      how: "Production and staging connect to Aurora as the app role. Change that role's password on the database first, from the app node (Aurora admits connections from it alone), then save the new URL. The local value matches docker-compose.dev.yml and changes only with that file.",
+      command: "openssl rand -hex 32",
+    },
   },
 
   // ── ClickHouse (append-only telemetry store) ────────────────────────────────
@@ -124,6 +201,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: ALL,
     valueOrigin: "manual",
     placeholder: "http://localhost:8123",
+    refresh: {
+      how: "Changes only when ClickHouse moves. Production and staging run it on the app node (infra/modules/app-node). Locally it is the Docker container from docker-compose.dev.yml.",
+    },
   },
   CLICKHOUSE_USERNAME: {
     group: "ClickHouse",
@@ -134,6 +214,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: ALL,
     valueOrigin: "manual",
     placeholder: "default",
+    refresh: {
+      how: "Changes only with the ClickHouse user. The deployed nodes use the default user.",
+    },
   },
   CLICKHOUSE_PASSWORD: {
     group: "ClickHouse",
@@ -143,6 +226,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "Terraform generates it (`random_password.clickhouse` in infra/modules/app-node) and keeps it at `/oxagen-app/clickhouse/password`, or `/oxagen-staging-app/clickhouse/password` for staging. Copy that value here. A rotation replaces the Terraform resource, rewrites the node's ClickHouse env file, and restarts ClickHouse and the services in one window. Local Docker uses an empty password.",
+      command: "aws ssm get-parameter --name /oxagen-app/clickhouse/password --with-decryption --query Parameter.Value --output text",
+    },
   },
   CLICKHOUSE_DATABASE: {
     group: "ClickHouse",
@@ -165,6 +252,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: ALL,
     valueOrigin: "manual",
     placeholder: "bolt://localhost:7687",
+    refresh: {
+      how: "Changes only when Neo4j moves. Production and staging run it on the app node (infra/modules/app-node). Locally it is the Docker container.",
+    },
   },
   NEO4J_USERNAME: {
     group: "Neo4j",
@@ -175,6 +265,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: ALL,
     valueOrigin: "manual",
     placeholder: "neo4j",
+    refresh: {
+      how: "Changes only with the Neo4j user. The deployed nodes use neo4j.",
+    },
   },
   NEO4J_PASSWORD: {
     group: "Neo4j",
@@ -184,6 +277,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: ALL,
     valueOrigin: "manual",
+    refresh: {
+      how: "Terraform generates it (`random_password.neo4j` in infra/modules/app-node) and keeps it at `/oxagen-app/neo4j/password`, or `/oxagen-staging-app/neo4j/password` for staging. Copy that value here. A rotation replaces the Terraform resource, rewrites the node's Neo4j env file, and restarts Neo4j and the services in one window. Locally it is the password in docker-compose.dev.yml.",
+      command: "aws ssm get-parameter --name /oxagen-app/neo4j/password --with-decryption --query Parameter.Value --output text",
+    },
   },
   NEO4J_DATABASE: {
     group: "Neo4j",
@@ -220,6 +317,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "https://otel.example.com/v1/traces",
+    refresh: {
+      how: "Your collector's OTLP HTTP traces URL. Delete the parameter to turn tracing off.",
+    },
   },
   OTEL_EXPORTER_OTLP_HEADERS: {
     group: "OpenTelemetry",
@@ -232,6 +332,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "The collector vendor issues the ingest token these headers carry. Create a new token there, save the whole header list, restart, then revoke the old token.",
+    },
   },
   OTEL_SERVICE_NAME: {
     group: "OpenTelemetry",
@@ -244,6 +347,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "oxagen",
+    refresh: SETTING,
   },
   OXAGEN_REGION: {
     group: "OpenTelemetry",
@@ -273,6 +377,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "5",
+    refresh: SETTING,
   },
   CIRCUIT_BREAKER_RESET_TIMEOUT_MS: {
     group: "Circuit breaker",
@@ -285,6 +390,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "30000",
+    refresh: SETTING,
   },
   MCP_OAUTH_FETCH_TIMEOUT_MS: {
     group: "MCP",
@@ -299,6 +405,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "10000",
+    refresh: SETTING,
   },
   CIRCUIT_BREAKER_SUCCESS_THRESHOLD: {
     group: "Circuit breaker",
@@ -311,6 +418,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "1",
+    refresh: SETTING,
   },
 
   // ── Rate limiting (distributed, Postgres-backed) ────────────────────────────
@@ -325,6 +433,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "60",
+    refresh: SETTING,
   },
 
   TRUSTED_PROXY_CIDRS: {
@@ -353,6 +462,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "10.60.0.0/20,10.60.16.0/20",
+    refresh: {
+      how: "A setting. Name the subnets of the proxies in front of the services, from infra/modules/network. Read ADR-083 before you change it.",
+    },
   },
 
   TRUST_EDGE_CLIENT_IP_HEADER: {
@@ -372,6 +484,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "false",
+    refresh: {
+      how: "A switch. Set it to true only after the Caddy config that writes the header is live (ADR-083).",
+    },
   },
 
   // ── Error alerting (vendor-neutral outbound webhook) ────────────────────────
@@ -387,6 +502,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "Create an incoming webhook in the chat tool that receives alerts (in Slack, the app's Incoming Webhooks page). Save the URL, restart, then remove the old webhook there.",
+    },
   },
 
   // ── Better Auth ─────────────────────────────────────────────────────────────
@@ -400,6 +518,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app"],
     requiredIn: ALL,
     valueOrigin: "generate",
+    refresh: {
+      how: "Mint 32 random bytes. A new value signs out every session in that environment, so rotate in a quiet hour. api and app read the same parameter. AUDIT_EXPORT_SIGNING_SECRET falls back to this value when unset, so outstanding export links stop verifying too.",
+      command: "openssl rand -base64 32",
+    },
   },
   BETTER_AUTH_URL: {
     group: "Better Auth",
@@ -447,6 +569,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: DEPLOYED,
     valueOrigin: "manual",
+    refresh: {
+      how: "Mint a 32-byte key and follow docs/guides/sso.md, Rotate the key that seals SSO secrets: change it together with SSO_SECRET_KEY_ID and SSO_SECRET_PREVIOUS_KEYS. Stored OAuth account tokens have no old-key fallback (`TOKEN_KEY_ID` in packages/auth/src/auth.ts), so people reconnect the accounts those tokens belong to.",
+      command: "openssl rand -base64 32",
+    },
   },
   SSO_SECRET_KEY_ID: {
     group: "Better Auth",
@@ -461,6 +587,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "A label. Give it a new value, such as sso_v2, each time AUTH_TOKEN_ENCRYPTION_KEY changes (docs/guides/sso.md).",
+    },
   },
   SSO_SECRET_PREVIOUS_KEYS: {
     group: "Better Auth",
@@ -473,6 +602,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "When AUTH_TOKEN_ENCRYPTION_KEY changes, add `<old key id>=<old key>`. Remove the entry once an `auth/sso-reseal` run reports `failed: []` and `resealed: 0` (docs/guides/sso.md).",
+    },
   },
   OAUTH_PROXY_PRODUCTION_URL: {
     group: "Better Auth",
@@ -500,6 +632,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "Mint 32 random bytes. Save the same value in production and staging in one sitting. Preview social sign-in fails until the two match.",
+      command: "openssl rand -base64 32",
+    },
   },
 
   // ── OAuth providers ─────────────────────────────────────────────────────────
@@ -515,6 +651,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app"],
     requiredIn: DEPLOYED,
     valueOrigin: "manual",
+    refresh: {
+      how: "In the Google Cloud console, open APIs and Services, Credentials, and the login OAuth client. It changes only with a new client. Checklist: docs/specs/social-login-oauth-apps.md.",
+    },
   },
   GOOGLE_LOGIN_CLIENT_SECRET: {
     group: "OAuth providers",
@@ -525,6 +664,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app"],
     requiredIn: DEPLOYED,
     valueOrigin: "manual",
+    refresh: {
+      how: "In the Google Cloud console, open the login OAuth client and add a client secret. Save it, restart api and app, then disable and delete the old secret on the same page.",
+    },
   },
   GOOGLE_DATA_CLIENT_ID: {
     group: "OAuth providers",
@@ -535,6 +677,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "In the Google Cloud console, open APIs and Services, Credentials, and the data OAuth client. It changes only with a new client.",
+    },
   },
   GOOGLE_DATA_CLIENT_SECRET: {
     group: "OAuth providers",
@@ -544,6 +689,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "In the Google Cloud console, open the data OAuth client and add a client secret. Save it, restart, then disable and delete the old secret.",
+    },
   },
   // GitHub mirrors the Google split: a LOGIN client (social sign-in, in use)
   // and a DATA client (repo-ingestion scopes, reserved for the future
@@ -557,6 +705,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app"],
     requiredIn: DEPLOYED,
     valueOrigin: "manual",
+    refresh: {
+      how: "On the GitHub OAuth App's settings page (the organization's Developer settings, OAuth Apps). It changes only with a new app. Checklist: docs/specs/social-login-oauth-apps.md.",
+    },
   },
   GITHUB_LOGIN_CLIENT_SECRET: {
     group: "OAuth providers",
@@ -567,6 +718,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app"],
     requiredIn: DEPLOYED,
     valueOrigin: "manual",
+    refresh: {
+      how: "On the OAuth App's settings page, generate a new client secret. GitHub keeps both secrets valid until you delete one. Save the new one, restart api and app, then delete the old one.",
+    },
   },
   MCP_OAUTH_PREREGISTERED_CLIENTS: {
     group: "OAuth providers",
@@ -582,6 +736,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "JSON built from the client id and secret each MCP vendor issued for the callback `<app-origin>/api/v1/mcp/oauth/callback`. Roll a secret in that vendor's console, edit the JSON, and save the whole object.",
+    },
   },
 
   // ── GitHub App (connector OAuth + webhooks) ──────────────────────────────────
@@ -599,6 +756,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "On the GitHub App's settings page (Oxagen Connect, owned by the oxageninc organization). It changes only with the App.",
+    },
   },
   GITHUB_APP_CLIENT_SECRET: {
     group: "github",
@@ -613,6 +773,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "On the GitHub App's settings page, generate a new client secret. Save it, restart api, app, and mcp, then delete the old secret.",
+    },
   },
   GITHUB_APP_WEBHOOK_SECRET: {
     group: "github",
@@ -624,6 +787,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "Mint a value. Set it on the GitHub App's settings page under Webhook secret and save it here in the same sitting. GitHub holds one secret, so deliveries between the two writes fail their check. Redeliver them from the App's Advanced tab.",
+      command: "openssl rand -hex 32",
+    },
   },
   GITHUB_APP_INSTALL_STATE_SECRET: {
     group: "github",
@@ -637,6 +804,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "Mint a value. An install that started before the change fails its state check and starts again.",
+      command: "openssl rand -hex 32",
+    },
   },
   GITHUB_APP_SLUG: {
     group: "github",
@@ -649,6 +820,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "The App's name in its public URL. It changes only if the App is renamed.",
+    },
   },
 
   // Per-workspace write credential resolution
@@ -666,6 +840,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: SWITCH,
   },
   GITHUB_APP_ID: {
     group: "github",
@@ -681,6 +856,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "mcp", "app"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "The numeric id on the GitHub App's settings page. It changes only with the App.",
+    },
   },
 
   GITHUB_APP_PRIVATE_KEY: {
@@ -693,6 +871,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "mcp", "app"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "On the GitHub App's settings page, generate a private key. GitHub allows several keys at once. Save the whole .pem from the file, restart, confirm a connected repository still syncs, then delete the old key on the same page.",
+      command: "pnpm env:push GITHUB_APP_PRIVATE_KEY --env production < oxagen-connect.private-key.pem",
+    },
   },
 
   GITHUB_PERSONAL_ACCESS_TOKEN: {
@@ -704,6 +886,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "Local and demo only. Never set it in staging or production. Create a fine-grained token at github.com/settings/personal-access-tokens when you need it.",
+    },
   },
 
   // ── Ingestion OAuth DATA client credentials ──────────────────────────────────
@@ -721,6 +906,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "At api.slack.com/apps, open the data app, Basic Information. It changes only with the app.",
+    },
   },
   SLACK_DATA_CLIENT_SECRET: {
     group: "Ingestion",
@@ -731,6 +919,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "At api.slack.com/apps, open the data app, Basic Information, App Credentials, and regenerate the client secret. Slack retires the old one at once, so save and restart in the same sitting.",
+    },
   },
   ZOOM_DATA_CLIENT_ID: {
     group: "Ingestion",
@@ -741,6 +932,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "In the Zoom App Marketplace, open the OAuth app, App Credentials. It changes only with the app.",
+    },
   },
   ZOOM_DATA_CLIENT_SECRET: {
     group: "Ingestion",
@@ -751,6 +945,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "In the Zoom App Marketplace, open the OAuth app, App Credentials, and regenerate the client secret. Save it and restart api in the same sitting.",
+    },
   },
   SALESFORCE_DATA_CLIENT_ID: {
     group: "Ingestion",
@@ -761,6 +958,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "In Salesforce Setup, open App Manager, the connected app, Manage Consumer Details. It changes only with the app.",
+    },
   },
   SALESFORCE_DATA_CLIENT_SECRET: {
     group: "Ingestion",
@@ -771,6 +971,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "In Salesforce Setup, open the connected app, Manage Consumer Details, and generate a new consumer secret. Save it and restart api.",
+    },
   },
   MICROSOFT_DATA_CLIENT_ID: {
     group: "Ingestion",
@@ -781,6 +984,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "In the Azure portal, open App registrations and the app. It is the application (client) id and changes only with the app.",
+    },
   },
   MICROSOFT_DATA_CLIENT_SECRET: {
     group: "Ingestion",
@@ -791,6 +997,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "In the Azure portal, open the app registration, Certificates and secrets, and add a client secret. Save it, restart api, then delete the old secret. Azure secrets expire, so note the date.",
+    },
   },
 
   // ── Stripe ──────────────────────────────────────────────────────────────────
@@ -806,6 +1015,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: ALL,
     valueOrigin: "manual",
     placeholder: "sk_test_replace_me",
+    refresh: {
+      how: "In the Stripe dashboard, open Developers, API keys, and roll the secret key. Every environment uses the shared sandbox until the live cutover (docs/ops/stripe-sandbox-mode.md). Stripe keeps the old key alive for the period you pick, so save and restart inside it. Production's value is also the GitHub secret STRIPE_SECRET_KEY in the production environment.",
+    },
   },
   STRIPE_PUBLISHABLE_KEY: {
     group: "Stripe",
@@ -821,6 +1033,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "pk_test_replace_me",
+    store: "environment",
+    refresh: {
+      how: "In the Stripe dashboard, open Developers, API keys. It changes when the account does, at the live cutover, together with NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.",
+    },
   },
   STRIPE_WEBHOOK_SECRET: {
     group: "Stripe",
@@ -835,6 +1051,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: ALL,
     valueOrigin: "manual",
     placeholder: "whsec_replace_me",
+    refresh: {
+      how: "In the Stripe dashboard, open Developers, Webhooks, the endpoint for this environment's API URL, and roll the signing secret. Save the new whsec_ value and restart inside the overlap Stripe offers.",
+    },
   },
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: {
     group: "Stripe",
@@ -848,6 +1067,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "pk_test_replace_me",
+    refresh: {
+      how: "The same value as STRIPE_PUBLISHABLE_KEY. It is compiled into the app bundle, so a change needs a rebuild.",
+    },
   },
   STRIPE_TAX_ENABLED: {
     group: "Stripe",
@@ -859,6 +1081,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "false",
+    refresh: {
+      how: "A switch. Turn it on only after Stripe Tax is active in the dashboard.",
+    },
   },
 
   // ── Billing / usage meter ────────────────────────────────────────────────────
@@ -884,6 +1109,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "A setting. Leave it unset unless pricing pins the markup.",
+    },
   },
   OXAGEN_USAGE_DISCOUNT_PERCENT: {
     group: "Billing",
@@ -943,6 +1171,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "Negotiated rates from a provider contract, as JSON. Edit the object and save it whole when a contract changes.",
+    },
   },
   OXAGEN_PRICE_OVERRIDES_FILE: {
     group: "Billing",
@@ -955,6 +1186,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "A path inside the container. Set it only when a rates file is mounted there.",
+    },
   },
 
   // ── Inngest (set on app.inngest.com → Keys) ─────────────────────────────────
@@ -966,6 +1200,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app"],
     requiredIn: DEPLOYED,
     valueOrigin: "manual",
+    refresh: {
+      how: "In the Inngest dashboard, open the environment's Manage page, Event keys. Create a key, save it, restart api and app, then delete the old key.",
+    },
   },
   INNGEST_SIGNING_KEY: {
     group: "Inngest",
@@ -975,6 +1212,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app"],
     requiredIn: DEPLOYED,
     valueOrigin: "manual",
+    refresh: {
+      how: "In the Inngest dashboard, open the environment's Manage page, Signing key. Inngest's rotation issues a new key while the old one still works. Save the new key, restart api and app, then finish the rotation in the dashboard.",
+    },
   },
   STELLA_ENROLLMENT_SIGNING_SECRET: {
     group: "Inngest",
@@ -997,6 +1237,11 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "generate",
+    store: "environment",
+    refresh: {
+      how: "Mint a value. Each managed Stella install verifies enrollments with its own copy, so give the installs the new value with the change, or new enrollments fail to verify.",
+      command: "openssl rand -hex 32",
+    },
   },
   STELLA_TELEMETRY_INGEST_ENDPOINTS: {
     group: "Inngest",
@@ -1013,6 +1258,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "https://api.oxagen.sh/v1/telemetry/stella/operational",
+    store: "environment",
+    refresh: {
+      how: "A setting. List the HTTPS endpoints this deployment serves for Stella telemetry.",
+    },
   },
   TACHO_ENROLLMENT_SIGNING_SECRET: {
     group: "Inngest",
@@ -1027,6 +1276,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "",
+    refresh: {
+      how: "Mint a value. Each enrolled host verifies its enrollment document with its own copy, so the hosts need the new value and a fresh enrollment after the change.",
+      command: "openssl rand -hex 32",
+    },
   },
   TACHO_BUNDLE_SIGNING_PRIVATE_KEY: {
     group: "Inngest",
@@ -1045,6 +1298,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "",
+    refresh: {
+      how: "Rotate only on a leak. Hosts received the public key at enrollment and refuse bundles a new key signs, so every host enrolls again after the change. Run exports signed before the change verify only with the old public key. Save the PEM file as it is.",
+      command: "openssl genpkey -algorithm ed25519 -out tacho-bundle.pem",
+    },
   },
   TACHO_INGEST_ENDPOINTS: {
     group: "Inngest",
@@ -1059,6 +1316,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "https://api.oxagen.sh/v1/tacho",
+    refresh: {
+      how: "A setting. List the HTTPS base URLs of this deployment's Tacho endpoints.",
+    },
   },
   TACHO_LOCAL_TOKEN: {
     group: "Inngest",
@@ -1128,6 +1388,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "vercel_blob_rw_xxxxxxxxxxxxxxxx",
+    refresh: {
+      how: "In the Vercel dashboard, open Storage, the Blob store, and create a read-write token. Save it, restart app, then revoke the old token.",
+    },
   },
   STORAGE_DRIVER: {
     group: "File storage",
@@ -1139,6 +1402,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "vercel-blob",
+    refresh: SETTING,
   },
   STORAGE_FS_ROOT: {
     group: "File storage",
@@ -1150,6 +1414,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "",
+    refresh: SETTING,
   },
   AI_GATEWAY_API_KEY: {
     group: "AI providers",
@@ -1162,6 +1427,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: DEPLOYED,
     valueOrigin: "manual",
+    refresh: {
+      how: "In the Vercel dashboard, open AI Gateway, API keys. Create a key, save it in each environment that uses the gateway, restart, then delete the old key.",
+    },
   },
   OXAGEN_MODEL_PROVIDER: {
     group: "AI providers",
@@ -1191,6 +1459,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "Create a key at openrouter.ai/settings/keys, or mint one with the management key. Save it, restart, then delete the old key.",
+      command: "curl -s https://openrouter.ai/api/v1/keys -H \"Authorization: Bearer $OPENROUTER_MANAGEMENT_KEY\" -H 'Content-Type: application/json' -d '{\"name\":\"oxagen-production\"}'",
+    },
   },
   VOYAGE_API_KEY: {
     group: "AI providers",
@@ -1204,6 +1476,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: ["production"],
     valueOrigin: "manual",
+    refresh: {
+      how: "In the Voyage AI dashboard, open API keys. Create a key, save it, restart, then revoke the old key.",
+    },
   },
   OPENROUTER_MANAGEMENT_KEY: {
     group: "AI providers",
@@ -1224,6 +1499,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "In OpenRouter settings, open Provisioning keys. Create a key, save it, restart, then delete the old one. Keys it already minted keep working.",
+    },
   },
   OPENROUTER_ORG_KEY_DAILY_LIMIT_USD: {
     group: "AI providers",
@@ -1254,6 +1532,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     // API refuses to start. Every other optional numeric var here carries one
     // for the same reason.
     placeholder: "25",
+    refresh: SETTING,
   },
   STELLA_SERVE_URL: {
     group: "Agent engine",
@@ -1283,6 +1562,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app"],
     requiredIn: ["production"],
     valueOrigin: "manual",
+    refresh: {
+      how: "Mint a value and save it at both /oxagen/production/STELLA_SERVE_TOKEN and /oxagen/production/stella-serve/STELLA_SERVE_TOKEN. `pnpm env:push` writes the first. Write the second with `aws ssm put-parameter`. Then restart stella-serve, app, and api together (infra/tools/node/README.md, The engine service).",
+      command: "openssl rand -hex 32",
+    },
   },
   ANTHROPIC_API_KEY: {
     group: "AI providers",
@@ -1377,6 +1660,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "re_xxxxxxxxxxxxxxxx",
+    refresh: {
+      how: "A Resend API key with sending access. Create one in the Resend dashboard under API keys, save it, restart, then delete the old key.",
+    },
   },
   SMTP_FROM_EMAIL: {
     group: "Email",
@@ -1414,6 +1700,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "In Attio workspace settings, open Developers, Access tokens. Create a token with the scopes the description lists, save it, then delete the old token.",
+    },
   },
 
   // ── Linear (capability provenance) ───────────────────────────────────────────
@@ -1426,6 +1715,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["app", "api"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "In Linear, open Settings, API, and the OAuth application. It changes only with the application.",
+    },
   },
   LINEAR_WEBHOOK_SECRET: {
     group: "Linear",
@@ -1436,6 +1728,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "In Linear, open Settings, API, the OAuth application, and its webhook. Linear shows the signing secret there. Save it and restart api in the same sitting, because deliveries signed with the new secret fail until api has it.",
+    },
   },
   LINEAR_API_KEY: {
     group: "Linear",
@@ -1446,6 +1741,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
+    store: "operator",
+    refresh: {
+      how: "In Linear, open Settings, Security and access, Personal API keys. Create a key, save it here and as the GitHub secret LINEAR_API_KEY, then revoke the old key.",
+    },
   },
   LINEAR_PROJECT_ID: {
     group: "Linear",
@@ -1474,6 +1773,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["app"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "At api.slack.com/apps, open the Oxagen app, Basic Information. It changes only with the app.",
+    },
   },
   SLACK_APP_CLIENT_ID: {
     group: "Slack app",
@@ -1484,6 +1786,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["app"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "At api.slack.com/apps, open the Oxagen app, Basic Information. It changes only with the app.",
+    },
   },
   SLACK_APP_CLIENT_SECRET: {
     group: "Slack app",
@@ -1494,6 +1799,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["app"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "At api.slack.com/apps, open the Oxagen app, Basic Information, App Credentials, and regenerate the client secret. Slack retires the old one at once, so save and restart app in the same sitting.",
+    },
   },
   SLACK_APP_SIGNING_SECRET: {
     group: "Slack app",
@@ -1504,6 +1812,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
+    store: "environment",
+    refresh: {
+      how: "At api.slack.com/apps, open the Oxagen app, Basic Information, and regenerate the signing secret. Nothing reads it yet.",
+    },
   },
 
   // ── Public URLs ───────────────────────────────────────────────────────────────
@@ -1594,6 +1906,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "",
+    refresh: CLIENT_SETTING,
   },
   NEXT_PUBLIC_CHAT_UX_V2: {
     group: "Public URLs",
@@ -1609,6 +1922,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "",
+    refresh: CLIENT_SETTING,
   },
 
   // ── Security / RLS enforcement ───────────────────────────────────────────────
@@ -1627,6 +1941,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "true",
+    refresh: {
+      how: "A switch. Leave it unset in production, where it defaults on and false refuses to boot.",
+    },
   },
 
   // ── Observability / feature flags ───────────────────────────────────────────
@@ -1659,6 +1976,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["mcp"],
     requiredIn: [],
     valueOrigin: "manual",
+    store: "shell",
   },
   OPENAI_APPS_VERIFICATION_TOKEN: {
     group: "MCP",
@@ -1669,6 +1987,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["mcp"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "OpenAI shows the challenge when you verify the domain for an app. Paste the value it shows.",
+    },
   },
 
   // ── Release / build metadata ────────────────────────────────────────────────
@@ -1685,6 +2006,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
+    store: "shell",
   },
 
   // ── Testing / e2e (test lanes only; never pushed to deployed projects) ───────
@@ -1700,6 +2022,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["app"],
     requiredIn: [],
     valueOrigin: "manual",
+    store: "shell",
   },
   E2E_TEST: {
     group: "Testing / e2e",
@@ -1714,6 +2037,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["app"],
     requiredIn: [],
     valueOrigin: "manual",
+    store: "shell",
   },
   STRIPE_E2E: {
     group: "Testing / e2e",
@@ -1727,6 +2051,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["app"],
     requiredIn: [],
     valueOrigin: "manual",
+    store: "shell",
   },
   OXAGEN_LOCAL_DEV: {
     group: "Testing / e2e",
@@ -1752,6 +2077,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
+    store: "operator",
+    refresh: {
+      how: "Create a token at vercel.com/account/tokens. Only tools/env-manager reads it, and phase 4 of ADR-240 retires that tool.",
+    },
   },
   VERCEL_TEAM_ID: {
     group: "env-manager tooling",
@@ -1761,18 +2090,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
-  },
-  VERCEL_TEAM_SLUG: {
-    group: "env-manager tooling",
-    description:
-      'Vercel team slug for `pnpm env:pull` --scope (e.g. "oxagen"). Optional — when unset, ' +
-      "the CLI resolves the team from each project's linked .vercel/project.json.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-    placeholder: "oxagen",
   },
   ENV_MANAGER_PORT: {
     group: "env-manager tooling",
@@ -1810,6 +2127,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "generate",
     placeholder: "",
+    refresh: {
+      how: "Mint 32 random bytes. Outstanding export download links stop verifying.",
+      command: "openssl rand -base64 32",
+    },
   },
 
   SERVER_ACTIONS_ALLOWED_ORIGINS: {
@@ -1824,6 +2145,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "app.oxagen.sh",
+    refresh: SETTING,
   },
 
   // ── CLI / tooling ────────────────────────────────────────────────────────────
@@ -1990,6 +2312,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: ["preview", "production"],
     valueOrigin: "manual",
+    refresh: {
+      how: "Mint a 32-byte key. Production seals with KMS instead (INGESTION_CRYPTO_PROVIDER=kms). Credentials sealed under the old key cannot be opened with a new one, and no re-wrap exists, so a change where credentials are stored makes every connector reconnect.",
+      command: "openssl rand -base64 32",
+    },
   },
   AWS_KMS_INGESTION_KEY_ARN: {
     group: "Ingestion",
@@ -2001,6 +2327,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
+    refresh: {
+      how: "Terraform owns the key (`aws_kms_key.ingestion` in infra/stacks-new/oxagen/crypto.tf) and this parameter. KMS rotates the key material yearly under the same ARN. Never point it at another key while credentials sealed with this one exist (docs/ops/ingestion-key-cutover.md).",
+    },
   },
   PRIVACY_ERASURE_GRACE_DAYS: {
     group: "Privacy",
@@ -2075,6 +2404,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
+    store: "operator",
+    refresh: {
+      how: "On npmjs.com, open Access Tokens and generate a granular token with publish rights on the CLI package. Save it here and as the GitHub secret NPM_TOKEN, then delete the old token after the next release publishes.",
+    },
   },
 
   TAURI_SIGNING_PRIVATE_KEY: {
@@ -2088,6 +2421,11 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
+    store: "operator",
+    refresh: {
+      how: "Rotate only on a leak. Installed apps check updates against the public key in apps/desktop/src-tauri/tauri.conf.json, so a new key needs a release, signed with the old key, that ships the new public key first. Save the private key here and as the GitHub secret of the same name.",
+      command: "pnpm --filter @oxagen/desktop exec tauri signer generate -w ~/.tauri/oxagen-desktop.key",
+    },
   },
   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: {
     group: "Operator scripts",
@@ -2099,6 +2437,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
+    store: "operator",
+    refresh: {
+      how: "Changes only with TAURI_SIGNING_PRIVATE_KEY. The key has none, so the value is the empty string.",
+    },
   },
   APPLE_SIGNING_IDENTITY: {
     group: "Operator scripts",
@@ -2111,6 +2453,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "-",
+    store: "ci",
   },
 
   OXAGEN_INSTALL_BASE: {
@@ -2450,6 +2793,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "3",
+    store: "ci",
   },
   SCR_OWNER: {
     group: "Operator scripts",
@@ -2581,6 +2925,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
+    store: "ci",
   },
   FLEET_STAGING_ORIGIN: {
     group: "Operator scripts",
@@ -2590,6 +2935,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
+    store: "ci",
   },
   FLEET_OPERATOR_TOKEN: {
     group: "Operator scripts",
@@ -2599,6 +2945,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
+    store: "ci",
   },
   FLEET_BUNDLE_PUBLIC_KEY_PEM: {
     group: "Operator scripts",
@@ -2608,6 +2955,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
+    store: "ci",
   },
   FLEET_CLICKHOUSE_URL: {
     group: "Operator scripts",
@@ -2708,7 +3056,7 @@ export function clientKeys(): string[] {
     .map(([k]) => k);
 }
 
-/** All keys stored encrypted on Vercel. */
+/** All credential keys: SecureStrings in Parameter Store, masked in CI. */
 export function secretKeys(): string[] {
   return Object.entries(ENV_REGISTRY)
     .filter(([, m]) => m.secret)
@@ -2723,6 +3071,45 @@ export function staticValueFor(key: string, env: EnvName): string | undefined {
 }
 
 /**
+ * The Parameter Store prefix that holds each environment's `environment`
+ * values (ADR-240). The staging stack serves the registry's `preview`.
+ */
+export const PARAMETER_PREFIXES: Readonly<Record<EnvName, string>> = {
+  development: "/oxagen/development",
+  preview: "/oxagen/staging",
+  production: "/oxagen/production",
+};
+
+/** The Parameter Store prefix for `operator` values. */
+export const OPERATOR_PARAMETER_PREFIX = "/oxagen/operator";
+
+/** Where a key's value is kept: its declared `store`, or the default. */
+export function storeOf(key: string): ValueStore | undefined {
+  const meta = ENV_REGISTRY[key];
+  if (!meta) return undefined;
+  if (meta.store) return meta.store;
+  if (meta.valueOrigin === "static") return "registry";
+  return meta.services.length > 0 ? "environment" : "shell";
+}
+
+/** Every key kept in the given store, in registry order. */
+export function keysInStore(store: ValueStore): string[] {
+  return registryKeys().filter((k) => storeOf(k) === store);
+}
+
+/**
+ * The Parameter Store name that holds a key in an environment, or undefined
+ * when no parameter holds it (`registry`, `ci`, `shell`). An `operator` key
+ * has one name for every environment.
+ */
+export function parameterName(key: string, env: EnvName): string | undefined {
+  const store = storeOf(key);
+  if (store === "environment") return `${PARAMETER_PREFIXES[env]}/${key}`;
+  if (store === "operator") return `${OPERATOR_PARAMETER_PREFIX}/${key}`;
+  return undefined;
+}
+
+/**
  * Render the canonical `.env.example` from the registry. Deterministic (stable
  * group + insertion order) so CI can assert the committed file matches via diff.
  */
@@ -2730,8 +3117,9 @@ export function renderEnvExample(): string {
   const lines: string[] = [
     "# Oxagen environment contract — GENERATED from packages/config/src/registry.ts.",
     "# Do not edit by hand: run `pnpm env:check --write` to regenerate.",
-    "# Copy to .env.local (gitignored) and fill values. NOTE markers flag vars not",
-    "# yet validated by baseEnvSchema (tracked in Linear).",
+    "# Values live in SSM Parameter Store (ADR-240). Run `pnpm env:pull` to write",
+    "# .env.local from /oxagen/development. This file only lists the variables.",
+    "# NOTE markers flag vars not yet validated by baseEnvSchema (tracked in Linear).",
     "",
   ];
   let group: string | null = null;
