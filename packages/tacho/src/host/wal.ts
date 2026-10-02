@@ -138,6 +138,27 @@ export interface WalStats {
 }
 
 /**
+ * One session with events past its shipped cursor, and the bytes its two files
+ * hold on disk. The WAL ceiling reads these (`wal-ceiling.ts`, ADR-252).
+ */
+export interface WalHolding {
+  sessionUuid: string;
+  shippedThrough: number;
+  lastSeq: number;
+  /** The event file's size. Shipped events count too. */
+  eventBytes: number;
+  /** The body file's size, or 0 when the session has none. Shipped bodies count too. */
+  bodyBytes: number;
+  /** When the session's last event happened, in epoch ms, or -Infinity when unknown. */
+  lastActivityAt: number;
+}
+
+/** A file's size in bytes, or 0 when there is no file. */
+function sizeOf(path: string): number {
+  return statSync(path, { throwIfNoEntry: false })?.size ?? 0;
+}
+
+/**
  * A retried batch holds an event at a seq the file already holds with a
  * different hash. The batch was sealed on a chain that is not the one on
  * disk, so no retry of it can ever land: the caller has to set it aside
@@ -1503,6 +1524,64 @@ export class Wal {
       unshipped,
       ...(oldest !== undefined ? { oldestUnshippedAt: oldest } : {}),
     };
+  }
+
+  /**
+   * Every session with an event past its shipped cursor, and the bytes its
+   * files hold.
+   *
+   * The WAL ceiling asks for this once a minute (ADR-252). It costs two `stat`
+   * calls per session, plus the tail read `lastSeqOf` already keeps, so it
+   * reads no event or body. The byte counts are whole files, shipped lines
+   * included, because nothing this cheap says where a session's unshipped
+   * bodies start.
+   */
+  holdings(): WalHolding[] {
+    const out: WalHolding[] = [];
+    for (const session of this.sessions()) {
+      const last = this.lastSeqOf(session);
+      const through = this.shippedThrough(session);
+      if (last <= through) continue;
+      out.push({
+        sessionUuid: session,
+        shippedThrough: through,
+        lastSeq: last,
+        eventBytes: sizeOf(this.fileFor(session)),
+        bodyBytes: sizeOf(this.bodyFileFor(session)),
+        lastActivityAt:
+          this.lastActivity.get(session) ?? Number.NEGATIVE_INFINITY,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Remove one session's body file and its index, and answer how many bytes
+   * went. Only the WAL ceiling calls this (ADR-252).
+   *
+   * The file is removed, not rewritten. `rewriteBodies` reads every line on
+   * the daemon's only thread, and a session over the ceiling can hold
+   * gigabytes, which ADR-231 rules out. The event file stays, so the chain
+   * still verifies. Each event whose body went ships without it, and the
+   * control plane records a `body_missing` gap for it.
+   *
+   * What each reader sees afterwards:
+   *
+   * - `bodiesFor` finds no file, so a batch read after this ships its events
+   *   with no bodies. A batch already read keeps the bodies it holds.
+   * - An index build running for the session sees the generation move, and
+   *   keeps nothing.
+   * - `appendRecovered` finds no stored body, so a journaled terminal batch
+   *   writes its own few bodies again.
+   * - The session's next `append` starts a new body file.
+   *
+   * A removal that fails is reported, answers 0, and the next check tries
+   * again. On Windows that happens while another reader holds the file open.
+   */
+  dropSessionBodies(sessionUuid: string): number {
+    const bytes = sizeOf(this.bodyFileFor(sessionUuid));
+    if (bytes === 0) return 0;
+    return this.removeBodies(sessionUuid) ? bytes : 0;
   }
 
   /**
