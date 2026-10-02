@@ -71,7 +71,7 @@
       "merged_before_review": "Merged on {at} before anyone accepted it. It is done once a person accepts it.",
       "brief_out_of_date": "The item changed after its brief was approved. Approve the new brief before you accept.",
       "accepted_waiting_merge": "Accepted by {by} on {head}. Waiting for the merge.",
-      "done": "Accepted by {by} on {accepted}. Merged on {merged}.",
+      "done": "{by} accepted {head} on {accepted}. Merged on {merged}.",
       "closed": "{resolution, select, cancelled {Cancelled} declined {Declined} other {Closed as a duplicate}} by {by} on {at}. {reason}"
     },
     "priority": {
@@ -82,6 +82,292 @@
       "none": "none yet",
       "unknown": "unknown",
       "coverage": "{known} of {runs, plural, one {# run} other {# runs}} known"
+    },
+    "page": {
+      "description": "Triage suggests priorities with <record>{lineage} v{version}</record>.",
+      "descriptionNoRecord": "Triage cannot rank work until a priorities record is merged.",
+      "setup": "Setup",
+      "outcomes": "Outcomes",
+      "send": "Send to an agent",
+      "sendNothingReady": "Nothing in the inbox is ready to send. Approve a brief first.",
+      "sendNoRole": "Your role cannot send work in this workspace.",
+      "viewerNote": "Your role can read Work here. Entering and sending work takes the run.control permission.",
+      "truncated": "Work lists the first {count} items here. The workspace holds more."
+    },
+    "banner": {
+      "failing": "Collector {name} is failing",
+      "reads": "It reads {repos}.",
+      "lastGood": "Last good read on {at}.",
+      "neverGood": "It has no good read yet.",
+      "open": "Open collectors"
+    },
+    "tiles": {
+      "label": "Work totals",
+      "ready": "Ready to send",
+      "readyNote": "{count, plural, one {# item} other {# items}} still in triage or approval",
+      "running": "Running",
+      "runningNote": "{count, plural, one {# send} other {# sends}} waiting for a runtime",
+      "review": "Waiting for review",
+      "reviewNote": "{count, plural, one {# accepted item} other {# accepted items}} waiting for the merge"
+    },
+    "tabs": {
+      "label": "Work tabs",
+      "inbox": "Inbox",
+      "running": "Running",
+      "review": "Review",
+      "done": "Done"
+    },
+    "table": {
+      "columns": {
+        "item": "Work item",
+        "priority": "Priority",
+        "state": "State",
+        "send": "Send",
+        "target": "Target",
+        "status": "Status",
+        "cost": "Cost",
+        "pullRequest": "Pull request",
+        "checks": "Required checks",
+        "result": "Result",
+        "agent": "Agent",
+        "finished": "Finished"
+      },
+      "send": "Send",
+      "sendItem": "Send {number} to an agent",
+      "sentOn": "Sent on {at}",
+      "pullRequest": "#{number}",
+      "none": "none"
+    },
+    "empty": {
+      "inbox": {
+        "title": "No items in the inbox",
+        "body": "New GitHub issues arrive from the collector. Add an item yourself and triage suggests its priority."
+      },
+      "running": {
+        "title": "No running items",
+        "body": "Send a ready work item to an agent and it shows here until its run ends."
+      },
+      "review": {
+        "title": "No items waiting for review",
+        "body": "An item moves here when its agent opens a pull request."
+      },
+      "done": {
+        "title": "No finished items",
+        "body": "An item lands here once a person accepts it and its pull request merges. A closed item lands here too."
+      }
+    },
+    "newItem": {
+      "open": "New work item",
+      "noRole": "Your role cannot enter work in this workspace.",
+      "title": "New work item",
+      "body": "Write a title. Triage suggests the priority and labels and drafts the brief.",
+      "fields": {
+        "title": "Title",
+        "titlePlaceholder": "Show the renewal date on the billing page",
+        "description": "Description",
+        "descriptionHint": "Optional",
+        "repository": "Repository",
+        "repositoryHint": "Optional. Write it as owner/name."
+      },
+      "titleRequired": "Write a title first.",
+      "submit": "Add to the inbox",
+      "pending": "Adding"
+    },
+    "failure": {
+      "workForbidden": "Your role cannot make this change in this workspace. Nothing changed.",
+      "personRequired": "Sign in to oxagen as a person to make this change. Nothing changed.",
+      "collectorNotFound": "oxagen found no such collector or GitHub connection in this workspace. Nothing changed.",
+      "collectorPaused": "The collector is paused. Resume it before you read it again.",
+      "collectorConflict": "The collector or its GitHub connection cannot take this change now. Nothing changed.",
+      "refused": "oxagen refused the change with {code}. Nothing changed.",
+      "invalid": "oxagen could not accept these values. Check each field and try again.",
+      "pendingApproval": "The change waits for approval as request {accessRequestId}.",
+      "unavailable": "oxagen could not make the change now. It answered {code}. Try again."
+    },
+    "state": {
+      "deniedTitle": "No access to {page}",
+      "deniedBody": "Your role in this workspace does not include {permission}. A workspace owner can grant it.",
+      "pendingTitle": "Access request pending",
+      "pendingBody": "Your access request {request} waits for approval.",
+      "errorTitle": "{page} could not be loaded",
+      "errorBody": "oxagen could not read the work records. Try again in a moment.",
+      "errorCode": "{status} {code}",
+      "retry": "Try again"
+    },
+    "loading": {
+      "page": "Loading Work",
+      "item": "Loading the work item"
+    },
+    "setup": {
+      "tabs": {
+        "label": "Work setup tabs",
+        "collectors": "Collectors",
+        "priorities": "Priorities",
+        "runtimes": "Runtimes"
+      },
+      "collectors": {
+        "add": "Add collector",
+        "noRole": "Your role cannot change collectors in this workspace.",
+        "columns": {
+          "collector": "Collector",
+          "reads": "Reads",
+          "health": "Health",
+          "lastEvent": "Last event"
+        },
+        "github": "GitHub Issues",
+        "health": {
+          "healthy": "Healthy",
+          "lagging": "Lagging",
+          "failing": "Failing",
+          "paused": "Paused"
+        },
+        "lastGood": "Last good read on {at}.",
+        "neverGood": "No good read yet.",
+        "streak": "{count, plural, one {# failed read} other {# failed reads}} in a row.",
+        "error": "The last read failed with this answer: {error}",
+        "catchUp": "Once the collector reads again, oxagen reads every issue changed since the last good read.",
+        "reconnect": "Read {name} again",
+        "reconnectPending": "Reading",
+        "reconnectQueued": "oxagen queued a new read of {name}.",
+        "manual": "Manual entry",
+        "manualReads": "A person adds an item by title in oxagen",
+        "manualOn": "On",
+        "none": "none",
+        "writeBack": "oxagen reads issues from GitHub and writes nothing back.",
+        "empty": "No collector yet. People can still add work items by title."
+      },
+      "addCollector": {
+        "title": "Add collector",
+        "body": "A collector turns the issues in the repositories it reads into work items. Save an existing name to change what that collector reads.",
+        "name": "Name",
+        "nameHint": "Use lowercase words joined by single hyphens.",
+        "connection": "GitHub connection",
+        "connectionHint": "A new collector needs a connection.",
+        "connectionKeep": "Keep its connection",
+        "connectionChoose": "Choose a connection",
+        "connectionsFailed": "oxagen could not read the GitHub connections. You can still change the repositories of an existing collector.",
+        "noConnection": "This workspace has no connected GitHub account. Connect GitHub on the <link>Repositories</link> page first.",
+        "repos": "Repositories",
+        "reposHint": "Write one owner/name on each line. Issues from any other repository are skipped.",
+        "writeBack": "oxagen writes nothing back to GitHub.",
+        "submit": "Save collector",
+        "pending": "Saving",
+        "nameInvalid": "Use lowercase words joined by single hyphens.",
+        "reposRequired": "Name at least one repository as owner/name.",
+        "reposInvalid": "Write each repository as owner/name.",
+        "connectionRequired": "Choose a GitHub connection for a new collector."
+      },
+      "priorities": {
+        "record": "Priorities record",
+        "version": "v{version}",
+        "published": "Published on {at}",
+        "unpublished": "Not published yet",
+        "edit": "Edit priorities",
+        "rulesTitle": "Rules",
+        "rule": "#{number}",
+        "noRules": "The record holds no rules.",
+        "triageTitle": "Triage",
+        "triageCaption": "Last 30 days",
+        "suggestions": "Suggestions",
+        "failures": "Failures",
+        "corrections": "Corrections",
+        "noneTitle": "No priorities record"
+      },
+      "runtimes": {
+        "title": "Runtimes",
+        "caption": "{count, plural, one {# agent} other {# agents}} can take a send now",
+        "columns": {
+          "agent": "Agent",
+          "runtime": "Runtime",
+          "tier": "Tier",
+          "send": "Send",
+          "budget": "Budget"
+        },
+        "lastPoll": "Last poll on {at}",
+        "neverPolled": "No poll yet",
+        "none": "none",
+        "ready": "Ready",
+        "busy": "Busy",
+        "blocked": "Cannot take work",
+        "reason": {
+          "no_runtime": "This agent is on no runtime.",
+          "no_host": "No host is enrolled for this agent.",
+          "host_outdated": "The host's oxagen build cannot take work orders. Update the host.",
+          "not_operator": "You do not operate this agent.",
+          "busy": "Working on {number}."
+        },
+        "quiet": "The host last polled on {at}. A send waits until it polls.",
+        "quietNever": "The host has not polled yet. A send waits until it polls.",
+        "budgetGateway": "The gateway holds {agent}'s budget before each model call when its version sets a ceiling.",
+        "budgetRecorded": "oxagen records spend after the run. Nothing stops the run at a limit.",
+        "footNote": "oxagen starts no agent itself. The runtime starts the run once it claims the send.",
+        "emptyTitle": "No agents",
+        "emptyBody": "Connect an agent on Agents. It shows here with whether it can take work.",
+        "openAgents": "Open Agents"
+      }
+    },
+    "outcomes": {
+      "description": "Work that finished in the last {days} days.",
+      "tilesLabel": "Outcome figures",
+      "accepted": "Accepted and merged",
+      "acceptedNote": "Last {days} days",
+      "returned": "Returned",
+      "returnedNote": "Returns before acceptance",
+      "closed": "Closed",
+      "closedCancelled": "{count} cancelled",
+      "closedDeclined": "{count} declined",
+      "closedDuplicate": "{count, plural, one {# duplicate} other {# duplicates}}",
+      "leadTime": "Lead time",
+      "hours": "{hours} h",
+      "leadNote": "p90 {hours} h across {count, plural, one {# item} other {# items}}",
+      "leadSampleNote": "{count, plural, one {# item} other {# items}} in the sample",
+      "noSample": "No sample",
+      "noSampleNote": "No item finished in this window",
+      "touches": "Review touches",
+      "touchesNote": "Per accepted item",
+      "cost": "Recorded cost",
+      "costUnknown": "Unknown",
+      "costNote": "Known for {known} of {runs, plural, one {# run} other {# runs}}",
+      "costNoRunsNote": "No runs in this window",
+      "weeks": {
+        "title": "Weekly trend",
+        "caption": "{count, plural, one {# week} other {# weeks}}",
+        "columns": {
+          "week": "Week of",
+          "accepted": "Accepted and merged",
+          "returned": "Returned",
+          "lead": "Median lead time"
+        },
+        "empty": "No week in this window has a finished item.",
+        "noLead": "none"
+      },
+      "touchKinds": {
+        "title": "Touches by kind",
+        "briefApprovals": "Brief approvals",
+        "acceptances": "Acceptances",
+        "returns": "Returns",
+        "triageOverrides": "Triage overrides",
+        "triageCorrections": "Triage corrections"
+      },
+      "coverage": {
+        "title": "Cost coverage",
+        "recorded": "<money></money> recorded. Cost is known for {known} of {runs, plural, one {# run} other {# runs}}.",
+        "unknown": "Cost is unknown for all {runs, plural, one {# run} other {# runs}} in this window.",
+        "noRuns": "No run belongs to this window yet.",
+        "note": "An unknown cost stays unknown and adds nothing to the total. In-app triage spend shows on <billing>Billing</billing> and is outside these figures."
+      },
+      "reopens": {
+        "title": "Reopens",
+        "cohort": "Merged 30 or more days ago",
+        "reopened": "Reopened",
+        "waiting": "{count, plural, one {# newer item waits for its} other {# newer items wait for their}} 30 days before counting here.",
+        "reverts": "oxagen does not record reverts yet."
+      },
+      "empty": {
+        "title": "No finished work",
+        "body": "Once people accept work here and its pull requests merge, this page counts it.",
+        "action": "Open Work setup"
+      }
     }
   }
 }
