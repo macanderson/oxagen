@@ -77,12 +77,6 @@ const PG: SeqLane = {
   sub: "Aurora / local :5433",
   kind: "store",
 };
-const NEO: SeqLane = {
-  id: "neo4j",
-  label: "Neo4j",
-  sub: "knowledge graph",
-  kind: "store",
-};
 const CH: SeqLane = {
   id: "ch",
   label: "ClickHouse",
