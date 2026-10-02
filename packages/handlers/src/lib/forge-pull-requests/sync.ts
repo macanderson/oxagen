@@ -10,10 +10,10 @@
 //            revision was recorded with no diff store and one exists now.
 //   capture  The diff for the head, put in the store.
 //   record   The revision row that names it.
+import { withTenantDb } from "@oxagen/database";
 import { createGitHubClient, GitHubApiError } from "@oxagen/github";
 import { resolveGitHubToken } from "@oxagen/github/workspace-token";
 import { createGitLabClient, GitLabApiError } from "@oxagen/gitlab";
-import { withTenantDb } from "@oxagen/database";
 import type {
   ForgePullRequestCapture,
   ForgePullRequestFacts,

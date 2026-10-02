@@ -14,7 +14,7 @@ import type {
   ForgePullRequestFacts,
   ForgePullRequestRecord,
 } from "@oxagen/inngest-functions/forge-pull-request-sync-runner";
-import { and, eq, isNull, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, isNull, lte, ne, or, sql, type SQL } from "drizzle-orm";
 import type { ForgeProvider } from "./facts";
 
 const pulls = schema.forgePullRequests;
@@ -35,10 +35,7 @@ function dateOf(value: string | null): Date | null {
 function newerWins(sourceUpdatedAt: Date | null): SQL | undefined {
   return sourceUpdatedAt === null
     ? isNull(pulls.sourceUpdatedAt)
-    : or(
-        isNull(pulls.sourceUpdatedAt),
-        sql`${pulls.sourceUpdatedAt} <= ${sourceUpdatedAt}`,
-      );
+    : or(isNull(pulls.sourceUpdatedAt), lte(pulls.sourceUpdatedAt, sourceUpdatedAt));
 }
 
 /**
