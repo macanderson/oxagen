@@ -992,6 +992,17 @@ describe("readRepositoryChange", () => {
       path: ".oxagen/rules/ctx.scr.001-never-push-to-main.toml",
     },
     record: null,
+    raised: {
+      statement: "Never push to main.",
+      rationale: "Two runs pushed to main.",
+      source: "agent:release-bot",
+      sourceName: null,
+      force: "must",
+      constraintEffect: "forbid",
+      sharingScope: "workspace",
+      support: { runs: [], agents: [], recordIds: [], evidenceLinks: [] },
+      at: "2026-09-19T09:00:00.000Z",
+    },
     body: "Why this record",
     checks: [
       {
@@ -1015,9 +1026,12 @@ describe("readRepositoryChange", () => {
       commit: "fedcba9876543210",
       at: "2026-09-19T10:00:00.000Z",
       byUserId: null,
+      byName: null,
+      onHost: true,
       promotionEventId: "pev_1",
       recordId: "rec_1",
     },
+    closed: null,
   };
 
   it("maps get_context_pr onto what the detail draws, the merge included", async () => {
@@ -1043,10 +1057,29 @@ describe("readRepositoryChange", () => {
           baseRef: "main",
           branch: "oxagen/prp_1",
           headSha: "0123456789abcdef",
+          provider: "github",
+        },
+        raised: {
+          statement: "Never push to main.",
+          rationale: "Two runs pushed to main.",
+          source: "agent:release-bot",
+          sourceName: null,
+          force: "must",
+          constraintEffect: "forbid",
+          sharingScope: "workspace",
+          support: { runs: [], agents: [], recordIds: [], evidenceLinks: [] },
+          at: "2026-09-19T09:00:00.000Z",
         },
         body: "Why this record",
         checks: [
-          { name: "schema", status: "passed", summary: "The record parses." },
+          {
+            name: "schema",
+            status: "passed",
+            summary: "The record parses.",
+            detailsUrl: null,
+            startedAt: null,
+            completedAt: null,
+          },
         ],
         onMerge: {
           path: ".oxagen/rules/ctx.scr.001-never-push-to-main.toml",
@@ -1057,7 +1090,10 @@ describe("readRepositoryChange", () => {
           at: "2026-09-19T10:00:00.000Z",
           promotionEventId: "pev_1",
           recordId: "rec_1",
+          byName: null,
+          onHost: true,
         },
+        closed: null,
       },
     });
   });
