@@ -19,8 +19,10 @@ committed.
 - **Does not own:** lead storage, the ebook reader content, and the Attio
   sync ([`apps/api`](../api/README.md), `src/routes/v1/cms.ts`, with the
   reader HTML seeded from `packages/database/seed-assets/books/`); the house
-  component system ([`@oxagen/ui`](../../packages/ui/README.md)), whose
-  tokens `assets/oxagen.css` mirrors by hand; the documentation site
+  component system ([`@oxagen/ui`](../../packages/ui/README.md)); the
+  house tokens, which `assets/oxagen.css` and `assets/blog.css` read from
+  the kit's synced `assets/house-tokens.css`, and which the brand check keeps
+  them reading (`tools/scripts/lib/brand-literals.mjs`); the documentation site
   ([`apps/docs`](../docs/README.md)); the S3 bucket and CloudFront
   distribution (`infra/stacks-new/ci-deploy/`).
 - **Depends on:** No `@oxagen/*` dependencies. Its npm packages are build-time
