@@ -13,6 +13,7 @@ import type { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import type { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import type { spendGet } from "@oxagen/oxagen/contracts/spend.get";
 import type { spendOperatorRanking } from "@oxagen/oxagen/contracts/spend.operator_ranking";
+import type { spendPerMergedPr } from "@oxagen/oxagen/contracts/spend.per_merged_pr";
 import type { spendUnproductive } from "@oxagen/oxagen/contracts/spend.unproductive";
 import type { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import type { z } from "zod";
@@ -26,6 +27,7 @@ import type {
   SpendFinding,
   SpendFindingEvidence,
   SpendFindings,
+  SpendPerMergedPr,
   SpendReport,
   SpendWaste,
   UnpricedModels,
@@ -174,6 +176,37 @@ export function toOperatorRanking(
       unproductiveShare: row.unproductiveShare,
       runs: row.runs,
       topRuns: row.topRuns,
+    })),
+  };
+}
+
+/**
+ * Each agent's spend per merged pull request as the Month tab reads it: every
+ * figure and every absence copied whole.
+ */
+export function toSpendPerMergedPr(
+  out: ContractOutput<typeof spendPerMergedPr>,
+): z.input<typeof SpendPerMergedPr> {
+  return {
+    period: out.period,
+    agents: out.agents.map((agent) => ({
+      agentKey: agent.agentKey,
+      boundedRuns: agent.boundedRuns,
+      unpricedRuns: agent.unpricedRuns,
+      spend: agent.spend,
+      mergedPrs: agent.mergedPrs,
+      perMergedPr: agent.perMergedPr,
+      absence: agent.absence,
+      runs: agent.runs.map((run) => ({
+        runId: run.runId,
+        startedAt: run.startedAt,
+        cost: run.cost,
+        pullRequests: run.pullRequests.map((pr) => ({
+          prKey: pr.prKey,
+          url: pr.url,
+          state: pr.state,
+        })),
+      })),
     })),
   };
 }

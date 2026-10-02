@@ -1103,6 +1103,7 @@ export function studioSource(reads: StudioReads = {}) {
       findingEvidence: refuse,
       priceBook: refuse,
       operatorRanking: refuse,
+      perMergedPr: refuse,
       unpricedModels: refuse,
       unproductive: refuse,
     },

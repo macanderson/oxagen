@@ -48,6 +48,7 @@ export {
   type UnproductiveClaim,
 } from "./findings-store";
 export * from "./run-pr-outcomes";
+export * from "./spend-per-merged-pr";
 export {
   applyOutcomeDelivery,
   listOutcomeRuns,
