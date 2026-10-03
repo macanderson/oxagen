@@ -21,14 +21,12 @@ import type { RunCostTokenSources } from "@/data/contracts/run";
 import type { ContextComposition } from "@/data/contracts/run-context";
 
 /** Prompt composition's parts, in the panel's order. */
-export const PROMPT_PARTS = [
-  "conversation",
-  "context",
-  "definitions",
-  "steering",
-  "system",
-] as const;
-export type PromptPart = (typeof PROMPT_PARTS)[number];
+export type PromptPart =
+  | "conversation"
+  | "context"
+  | "definitions"
+  | "steering"
+  | "system";
 
 export type PromptSplit = {
   /** `windows`: summed over the request windows. `sources`: the rollup's measured sources. */
