@@ -1832,7 +1832,7 @@ describe("merge_steering_pr", () => {
     const publisher = vi.fn(
       (): SteeringPublisher => unlockedPublisher({
         repository: () => BUNDLE_IDENTITY.repository,
-        store: { versionAt, highestVersion },
+        store: { versionAt, highestVersion, current: async () => null },
         publish,
       }),
     );
@@ -2557,6 +2557,7 @@ describe("merge_steering_pr", () => {
           store: {
             versionAt: async () => null,
             highestVersion: async () => 0,
+            current: async () => null,
           },
           publish,
           withLock: held,
@@ -2594,6 +2595,7 @@ describe("merge_steering_pr", () => {
           store: {
             versionAt: async () => null,
             highestVersion: async () => 4,
+            current: async () => null,
           },
           publish,
         }),
@@ -2627,6 +2629,7 @@ describe("merge_steering_pr", () => {
           store: {
             versionAt: async () => null,
             highestVersion: async () => 0,
+            current: async () => null,
           },
           publish: async () => ({
             status: "stale",
@@ -2691,7 +2694,9 @@ describe("merge_steering_pr", () => {
     expect(h.events.map((e) => e.eventType)).toContain("steering.published");
   });
 
-  it("in a steering repo, a resumed merge keeps its published version after a later merge was published", async () => {
+  // #4576: before the fix this retry recorded a deployment of version 1,
+  // which marked version 2's deployment inactive on the host.
+  it("in a steering repo, a resumed merge of a superseded version keeps its version and records no deployment", async () => {
     const h = steeringHarness();
     const { id } = await steeringPrPassed(h);
     const s5 = s5Publisher();
@@ -2722,18 +2727,15 @@ describe("merge_steering_pr", () => {
     // version 1 for its own commit.
     const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
     expect(out.status).toBe("merged");
+    expect(out.publishedVersion).toBe(1);
     expect(s5.publish).not.toHaveBeenCalled();
     expect(h.store.ledger).toHaveLength(1);
     expect(s5.store.published.get(BUNDLE_IDENTITY.repository)).toMatchObject({
       version: 2,
       commit: LATER,
     });
-    expect(h.github.deployments).toEqual([
-      expect.objectContaining({
-        sha: "0000000000000000000000000000000000000519",
-        description: "Steering version 1 from #519",
-      }),
-    ]);
+    // Version 2 is the published pointer, so the retry leaves its deployment active.
+    expect(h.github.deployments).toEqual([]);
   });
 
   it("in a steering repo, refuses version_superseded when a resumed merge was never published and production moved on", async () => {
@@ -2804,6 +2806,7 @@ describe("merge_steering_pr", () => {
     const store = {
       versionAt: vi.fn(async (): Promise<StoredVersion | null> => null),
       highestVersion: vi.fn(async () => 0),
+      current: vi.fn(async () => null),
     };
     const publish = vi.fn(
       async (): Promise<PublishResult> => ({
@@ -2868,6 +2871,7 @@ describe("merge_steering_pr", () => {
           store: {
             versionAt: async () => null,
             highestVersion: async () => 0,
+            current: async () => null,
           },
           publish,
         }),

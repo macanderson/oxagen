@@ -52,8 +52,11 @@ export type HeldPublish = (commit: string) => Promise<PublishResult>;
 export interface SteeringPublisher {
   /** The key the store and publish() use for this repository. */
   repository: (repo: SteeringRepository) => string;
-  /** The version store publish() assigns versions from. */
-  store: Pick<VersionStore, "versionAt" | "highestVersion">;
+  /**
+   * The version store publish() assigns versions from. A resumed merge reads
+   * `current` to learn whether its version is still the published one.
+   */
+  store: Pick<VersionStore, "versionAt" | "highestVersion" | "current">;
   /**
    * S5's publish() at `commit`, bound to `store` and the repository. It takes
    * the store's lock itself, so it must never run inside `withLock`: the

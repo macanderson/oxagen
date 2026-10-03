@@ -38,8 +38,10 @@
 // on a production branch that has since moved past it, is refused
 // `version_superseded` before the registry changes: publish() would answer
 // stale, and the repository sync publishes the production branch instead.
-// The deployment is recorded only for a version publish() made live. In a
-// legacy repository the version is the ledger length plus one.
+// The deployment is recorded only for a version publish() made live. A
+// resumed merge records it only while the published pointer still names its
+// commit, so a later version's deployment stays active (#4576). In a legacy
+// repository the version is the ledger length plus one.
 // The head branch is deleted before the publication so the next proposal on
 // the lineage branches from the production branch.
 //
@@ -527,13 +529,20 @@ export function createMergeSteeringPrHandler(
           !held ||
           steering?.published === true ||
           (await publishSteering(held, repo, commitSha, version));
-        return { commitSha, attempts, version, result, live };
+        return {
+          commitSha,
+          attempts,
+          version,
+          result,
+          live,
+          deploy: deploysVersion(live, steering),
+        };
       });
-      const { commitSha, attempts, version, result, live } = outcome;
+      const { commitSha, attempts, version, result, live, deploy } = outcome;
       // The steering version this merge made live. A legacy repository has
       // no version store, so its merge publishes no steering version.
       const publishedVersion = publisher !== null && live ? version : null;
-      const deploymentUrl = live
+      const deploymentUrl = deploy
         ? await recordPublishDeployment(deps.github, repo, {
             sha: commitSha,
             version,
@@ -1168,11 +1177,18 @@ async function mergeSteeringPrProposal(
       !held ||
       steering?.published === true ||
       (await publishSteering(held, repo, commitSha, version));
-    return { commitSha, attempts, version, result, live };
+    return {
+      commitSha,
+      attempts,
+      version,
+      result,
+      live,
+      deploy: deploysVersion(live, steering),
+    };
   });
-  const { commitSha, attempts, version, result, live } = outcome;
+  const { commitSha, attempts, version, result, live, deploy } = outcome;
   const publishedVersion = publisher !== null && live ? version : null;
-  const deploymentUrl = live
+  const deploymentUrl = deploy
     ? await recordPublishDeployment(deps.github, repo, {
         sha: commitSha,
         version,
@@ -1251,6 +1267,12 @@ async function readBody(
  * trailer never goes live, and a later merge may already hold that number.
  * The refusal comes before the registry changes, and the repository sync
  * publishes the production branch, which holds this merge, instead.
+ *
+ * `current` says whether the store's published pointer still names this
+ * merge's commit at that version. `versionAt` answers `published` for any
+ * version that was ever live, so a resumed merge whose version a later one
+ * replaced still reads as published. Its deployment would then mark the
+ * later version's deployment inactive on the host (#4576).
  */
 async function steeringVersion(
   publisher: SteeringPublisher,
@@ -1259,12 +1281,18 @@ async function steeringVersion(
   repo: SteeringRepository,
   row: Pick<ProposalRow, "id" | "publicId" | "prUrl" | "mergeClaimedAt">,
   mergedAs: string | null,
-): Promise<{ version: number; published: boolean }> {
+): Promise<{ version: number; published: boolean; current: boolean }> {
   const repository = publisher.repository(repo);
   if (mergedAs) {
     const stored = await publisher.store.versionAt(repository, mergedAs);
     if (stored?.published) {
-      return { version: stored.version, published: true };
+      const pointer = await publisher.store.current(repository);
+      return {
+        version: stored.version,
+        published: true,
+        current:
+          pointer?.commit === mergedAs && pointer.version === stored.version,
+      };
     }
     const head = await deps.github.branchHead(repo, repo.defaultBranch);
     if (head !== mergedAs) {
@@ -1289,7 +1317,7 @@ async function steeringVersion(
     }
   }
   const highest = await publisher.store.highestVersion(repository);
-  return { version: highest + 1, published: false };
+  return { version: highest + 1, published: false, current: false };
 }
 
 /** The statuses a claimed proposal can hold before it merges. */
@@ -1401,6 +1429,21 @@ async function underPublishLock<T>(
     }
     throw err;
   }
+}
+
+/**
+ * Whether a merge records its deployment. Only a version that went live gets
+ * one. A resumed merge whose version S5 published on an earlier call gets one
+ * only while the published pointer still names it (#4576). Once a later
+ * version replaced it, its result still names its own version, and the host
+ * keeps the later version's deployment active.
+ */
+function deploysVersion(
+  live: boolean,
+  steering: { published: boolean; current: boolean } | null,
+): boolean {
+  if (!live) return false;
+  return steering?.published !== true || steering.current;
 }
 
 /**

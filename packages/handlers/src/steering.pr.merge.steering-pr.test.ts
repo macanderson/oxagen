@@ -136,7 +136,11 @@ function fakePublisher(published: string[]): SteeringPublisher {
   };
   return {
     repository: (repo) => repo.fullName,
-    store: { highestVersion: async () => 20, versionAt: async () => null },
+    store: {
+      highestVersion: async () => 20,
+      versionAt: async () => null,
+      current: async () => null,
+    },
     publish: async (_repo, commit) => held(commit),
     withLock: (_repo, fn) => fn(held),
   };
