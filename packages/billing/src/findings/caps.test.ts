@@ -1,8 +1,10 @@
 /**
- * The findings caps and the unproductive spend headline (#5050). A finding
- * the caps cut is not written, so its claims are not stored. These tests
- * check that every frame a written finding claims is counted once, and that
- * a frame no written finding claims is free for a later counting detector.
+ * The findings caps and the unproductive spend headline (#5050, #5262). The
+ * caps never cut a finding that counts toward the headline, so every frame a
+ * counting detector claims belongs to a stored finding, and the headline
+ * equals the sum of the findings behind it. The caps still bound the
+ * advisory findings, which count toward nothing. These tests check both, and
+ * that a replay keeps the claims of every counting group a pass keeps.
  */
 import type { FindingKind } from "@oxagen/database/schema";
 import { describe, expect, it } from "vitest";
@@ -15,7 +17,6 @@ import {
 } from "./detect-input-fixture";
 import {
   countClaims,
-  DETECTORS,
   detectFindings,
   FINDINGS_MAX,
   FINDINGS_PER_KIND,
@@ -50,14 +51,17 @@ const DETECTOR_1_KINDS: readonly FindingKind[] = [
   "duplicate_tool_calls",
   "repeated_shell_commands",
 ];
-/** Five kinds no counting detector writes. */
+/** Six kinds no counting detector writes: the advisory kinds. */
 const OTHER_KINDS: readonly FindingKind[] = [
   "cache_busts",
   "unpaged_results",
   "standing_context",
   "cache_writes_never_read",
   "idle_cache_rewrites",
+  "model_class_fit",
 ];
+/** Past both caps: two more than `FINDINGS_PER_KIND` of every counting kind. */
+const PAST_THE_CAP = FINDINGS_PER_KIND + 2;
 
 let seq = 0;
 
@@ -166,10 +170,10 @@ function reads({ jobs = {}, closed = [], others = [] }: PassRuns): DetectReads {
   });
 }
 
-/** `FINDINGS_PER_KIND` recurring jobs, one agent each. */
-function recurringJobs(): Record<string, RunTotalsRecord[]> {
+/** `n` recurring jobs, one agent each. */
+function recurringJobs(n: number): Record<string, RunTotalsRecord[]> {
   const jobs: Record<string, RunTotalsRecord[]> = {};
-  for (let i = 0; i < FINDINGS_PER_KIND; i += 1)
+  for (let i = 0; i < n; i += 1)
     jobs[`sha256:job-${i}`] = Array.from({ length: RECURRING_RUNS_MIN }, () =>
       run(`acme.job.${i}`),
     );
@@ -211,18 +215,23 @@ function detector1(
 }
 
 /**
- * A detector that claims no frame: `FINDINGS_PER_KIND` findings of each kind
- * it names, each saving at least `saving`. The finding at index i saves i
- * micros more, so the smallest is index 0.
+ * A detector that claims no frame: `perKind` findings of each kind it names.
+ * The finding at index i of the kind at index k saves `saving + 1000k + i`
+ * micros, so a later kind's findings all rank above an earlier kind's, and
+ * within a kind index 0 is the smallest.
  */
-function nonCounting(kinds: readonly FindingKind[], saving: bigint): Detector {
+function nonCounting(
+  kinds: readonly FindingKind[],
+  saving: bigint,
+  perKind: number = FINDINGS_PER_KIND,
+): Detector {
   const r = run("acme.other");
   return {
     kinds,
     counting: null,
     detect(input, ctx) {
-      for (const kind of kinds)
-        for (let i = 0; i < FINDINGS_PER_KIND; i += 1)
+      kinds.forEach((kind, k) => {
+        for (let i = 0; i < perKind; i += 1)
           ctx.groups.add(
             { kind, level: "agent", subject: `acme.${kind}.${i}` },
             input.window.start,
@@ -230,10 +239,14 @@ function nonCounting(kinds: readonly FindingKind[], saving: bigint): Detector {
             {
               measuredTokens: 1,
               counterfactualTokens: 0,
-              micros: { measured: saving + BigInt(i), counterfactual: 0n },
+              micros: {
+                measured: saving + BigInt(k) * 1_000n + BigInt(i),
+                counterfactual: 0n,
+              },
             },
             null,
           );
+      });
     },
     prose: () => ({ why: "Other.", fix: "Change the setting." }),
   };
@@ -256,129 +269,177 @@ function frameKeys(runs: readonly RunTotalsRecord[]): string[] {
   return runs.flatMap((r) => framesOf(r).map((f) => claimKey(r.runId, f.key)));
 }
 
-describe("the findings caps and the headline (#5050)", () => {
-  it(`fits every counting kind before detector 8 under ${FINDINGS_MAX}`, () => {
-    // Detector 1 writes four kinds and detector 7 one, so their findings fill
-    // `FINDINGS_MAX` at most. Only detector 8, which runs last, can be cut by
-    // it, and no later detector could claim its frames anyway.
-    const before8 = DETECTORS.filter(
-      (d) => d.counting !== null && d.counting !== 8,
-    ).flatMap((d) => d.kinds);
-    expect(before8).toHaveLength(5);
-    expect(before8.length * FINDINGS_PER_KIND).toBeLessThanOrEqual(
-      FINDINGS_MAX,
+/** `n` runs whose pull request closed unmerged, one agent each. */
+function noOutcomeRuns(n: number): RunTotalsRecord[] {
+  return Array.from({ length: n }, (_, i) => run(`acme.closed.${i}`));
+}
+
+/** How many findings of each kind. */
+function kindCounts(findings: readonly FindingDraft[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const f of findings) out.set(f.kind, (out.get(f.kind) ?? 0) + 1);
+  return out;
+}
+
+/**
+ * Every counting kind past both caps: `PAST_THE_CAP` runs of each detector 1
+ * kind, `PAST_THE_CAP` recurring jobs, and `PAST_THE_CAP` runs with no
+ * outcome, each under its own agent. That is 72 counting findings, more than
+ * `FINDINGS_MAX`.
+ */
+function pastBothCaps(advisory: Detector[] = []) {
+  const byKind = new Map(
+    DETECTOR_1_KINDS.map((kind) => [
+      kind,
+      Array.from({ length: PAST_THE_CAP }, (_, i) => run(`acme.${kind}.${i}`)),
+    ]),
+  );
+  const looped = [...byKind.values()].flat();
+  const jobs = recurringJobs(PAST_THE_CAP);
+  const closed = noOutcomeRuns(PAST_THE_CAP);
+  const input = reads({ jobs, closed, others: looped });
+  const detectors = [
+    detector1(byKind),
+    recurringRuns,
+    spendWithNoOutcome,
+    ...advisory,
+  ];
+  const runs = [...looped, ...Object.values(jobs).flat(), ...closed];
+  return { input, detectors, runs };
+}
+
+/** The counting findings: those of detectors 1, 7, and 8. */
+function counting(findings: readonly FindingDraft[]): FindingDraft[] {
+  return findings.filter((f) => f.claims !== undefined);
+}
+
+describe("the findings caps and the headline (#5050, #5262)", () => {
+  it("stores a finding for each of 12 agents' spend with no outcome, and the headline counts each claimed frame once", () => {
+    const agents = noOutcomeRuns(12);
+    expect(agents.length).toBeGreaterThan(FINDINGS_PER_KIND);
+    const input = reads({ closed: agents });
+    // The pass as it runs: every registered detector, in counting order.
+    const findings = detectFindings(input);
+
+    const noOutcome = findings.filter(
+      (f) => f.kind === "spend_with_no_outcome",
+    );
+    expect(noOutcome).toHaveLength(12);
+    expect(new Set(noOutcome.map((f) => f.subject))).toEqual(
+      new Set(agents.map((r) => r.agentKey)),
+    );
+    // Every frame of the 12 runs is claimed once, under detector 8, and the
+    // headline adds each one once.
+    const claims = stored(findings);
+    expect(claims).toHaveLength(frameKeys(agents).length);
+    expect(claims.every((c) => c.detector === 8)).toBe(true);
+    expect(new Set(claims.map((c) => claimKey(c.runId, c.frameKey)))).toEqual(
+      new Set(frameKeys(agents)),
+    );
+    const headline = countClaims(claims);
+    expect(headline.totalMicros).toBe(
+      BigInt(frameKeys(agents).length) * TURN_MICROS,
+    );
+    // The headline is the sum of the findings behind it.
+    expect(headline.totalMicros).toBe(
+      noOutcome.reduce((sum, f) => sum + f.savingMicros, 0n),
+    );
+    // A replay keys the same frames under the same findings.
+    expect(replayClaims(input, new Set())).toEqual(claimsOf(findings));
+  });
+
+  it(`writes every counting finding past ${FINDINGS_PER_KIND} of a kind and ${FINDINGS_MAX} in all, and counts each claimed frame once`, () => {
+    const { input, detectors, runs } = pastBothCaps();
+    const findings = detectFindings(input, detectors);
+
+    const expected = new Map<string, number>(
+      [...DETECTOR_1_KINDS, "recurring_runs", "spend_with_no_outcome"].map(
+        (kind) => [kind, PAST_THE_CAP],
+      ),
+    );
+    expect(kindCounts(findings)).toEqual(expected);
+    expect(findings.length).toBeGreaterThan(FINDINGS_MAX);
+
+    // Every frame of every run is claimed once, so the headline adds each
+    // frame once, and it equals the sum of the findings behind it.
+    const claims = stored(findings);
+    expect(claims).toHaveLength(frameKeys(runs).length);
+    expect(new Set(claims.map((c) => claimKey(c.runId, c.frameKey)))).toEqual(
+      new Set(frameKeys(runs)),
+    );
+    const headline = countClaims(claims).totalMicros;
+    expect(headline).toBe(BigInt(frameKeys(runs).length) * TURN_MICROS);
+    expect(headline).toBe(
+      findings.reduce((sum, f) => sum + f.savingMicros, 0n),
     );
   });
 
-  it(`keeps a recurring runs finding that ${FINDINGS_MAX} larger findings of other kinds would have cut`, () => {
+  it("replays the claims of every counting group the pass keeps, under the same detectors", () => {
+    const { input, detectors } = pastBothCaps();
+    const findings = detectFindings(input, detectors);
+    const replayed = replayClaims(input, new Set(), detectors);
+
+    expect(replayed.size).toBe(counting(findings).length);
+    expect(replayed).toEqual(claimsOf(findings));
+  });
+
+  it("still caps the advisory kinds, and the counting findings take none of their room", () => {
+    // Advisory findings past both caps, each larger than every counting
+    // finding: 12 of each of 6 kinds.
+    const advisory = nonCounting(OTHER_KINDS, 10_000_000n, PAST_THE_CAP);
+    const { input, detectors } = pastBothCaps([advisory]);
+    const findings = detectFindings(input, detectors);
+
+    // Every counting finding is written.
+    expect(counting(findings)).toHaveLength(6 * PAST_THE_CAP);
+    // The advisory findings keep at most `FINDINGS_PER_KIND` of each kind,
+    // and `FINDINGS_MAX` in all. The 6 kinds hold 60 after the first cap, so
+    // the second cuts the 10 smallest: every finding of the first kind.
+    const kept = findings.filter((f) => f.claims === undefined);
+    expect(kept).toHaveLength(FINDINGS_MAX);
+    const perKind = kindCounts(kept);
+    expect(perKind.has(OTHER_KINDS[0]!)).toBe(false);
+    for (const kind of OTHER_KINDS.slice(1))
+      expect(perKind.get(kind)).toBe(FINDINGS_PER_KIND);
+    // Within each kind, the two smallest findings are the ones cut.
+    const subjects = new Set(kept.map((f) => f.subject));
+    for (const kind of OTHER_KINDS.slice(1)) {
+      expect(subjects.has(`acme.${kind}.0`)).toBe(false);
+      expect(subjects.has(`acme.${kind}.1`)).toBe(false);
+      expect(subjects.has(`acme.${kind}.${PAST_THE_CAP - 1}`)).toBe(true);
+    }
+    // The advisory findings add nothing to the headline.
+    expect(stored(kept)).toEqual([]);
+  });
+
+  it("keeps a recurring runs finding beside advisory findings that fill every advisory place", () => {
     const nightly = Array.from({ length: RECURRING_RUNS_MIN }, () =>
       run("acme.job.nightly"),
     );
     const input = reads({ jobs: { "sha256:nightly": nightly } });
-    const others = nonCounting(OTHER_KINDS, 10_000_000n);
-    const findings = detectFindings(input, [
+    const detectors = [
       recurringRuns,
       spendWithNoOutcome,
-      others,
-    ]);
+      nonCounting(OTHER_KINDS.slice(0, 5), 10_000_000n),
+    ];
+    const findings = detectFindings(input, detectors);
 
-    expect(findings).toHaveLength(FINDINGS_MAX);
+    // 5 advisory kinds of 10 fill `FINDINGS_MAX`, and the recurring runs
+    // finding takes no place among them.
+    expect(findings).toHaveLength(FINDINGS_MAX + 1);
     const kept = findings.filter((f) => f.kind === "recurring_runs");
     expect(kept).toHaveLength(1);
     expect(kept[0]!.claims!.map((c) => c.detector)).toEqual(
       Array<number>(3 * RECURRING_RUNS_MIN).fill(7),
     );
-    // One of the smallest findings of the other kinds made room for it.
-    const shown = new Set(findings.map((f) => f.subject));
-    const left = OTHER_KINDS.flatMap((kind) =>
-      Array.from({ length: FINDINGS_PER_KIND }, (_, i) => `acme.${kind}.${i}`),
-    ).filter((subject) => !shown.has(subject));
-    expect(left).toHaveLength(1);
-    expect(left[0]).toMatch(/\.0$/);
-    // The headline counts each of the job's frames once.
     expect(
       new Set(stored(findings).map((c) => claimKey(c.runId, c.frameKey))),
     ).toEqual(new Set(frameKeys(nightly)));
     expect(countClaims(stored(findings)).totalMicros).toBe(
       BigInt(3 * RECURRING_RUNS_MIN) * TURN_MICROS,
     );
-    expect(
-      replayClaims(input, new Set(), [recurringRuns, spendWithNoOutcome]),
-    ).toEqual(claimsOf(findings));
-  });
-
-  it(`frees the frames of a spend with no outcome finding past ${FINDINGS_MAX}, and counts every frame it keeps once`, () => {
-    const byKind = new Map(
-      DETECTOR_1_KINDS.map((kind) => [
-        kind,
-        Array.from({ length: FINDINGS_PER_KIND }, (_, i) =>
-          run(`acme.${kind}.${i}`),
-        ),
-      ]),
-    );
-    const looped = [...byKind.values()].flat();
-    const jobs = recurringJobs();
-    const lone = run("acme.lone");
-    const input = reads({ jobs, closed: [lone], others: looped });
-    const detectors = [
-      detector1(byKind),
-      recurringRuns,
-      spendWithNoOutcome,
-      // Larger than every counting finding, and still left out: the counting
-      // findings filled every place.
-      nonCounting(["cache_busts"], 10_000_000n),
-    ];
-    const findings = detectFindings(input, detectors);
-
-    expect(findings).toHaveLength(FINDINGS_MAX);
-    const kinds = new Map<string, number>();
-    for (const f of findings) kinds.set(f.kind, (kinds.get(f.kind) ?? 0) + 1);
-    const expected = new Map<string, number>(
-      DETECTOR_1_KINDS.map((k) => [k, FINDINGS_PER_KIND]),
-    );
-    expected.set("recurring_runs", FINDINGS_PER_KIND);
-    expect(kinds).toEqual(expected);
-
-    // Every kept frame is claimed once. The lone run's frames belong to no
-    // written finding, so none of them is claimed.
-    const claims = stored(findings);
-    const kept = [...looped, ...Object.values(jobs).flat()];
-    expect(claims).toHaveLength(frameKeys(kept).length);
-    expect(new Set(claims.map((c) => claimKey(c.runId, c.frameKey)))).toEqual(
-      new Set(frameKeys(kept)),
-    );
-    expect(countClaims(claims).totalMicros).toBe(
-      BigInt(frameKeys(kept).length) * TURN_MICROS,
-    );
-    // The replay cuts the same finding and keys the same frames under the
-    // same detectors.
     expect(replayClaims(input, new Set(), detectors)).toEqual(
       claimsOf(findings),
-    );
-  });
-
-  it("gives a spend with no outcome finding its place when the counting findings leave room", () => {
-    const jobs = recurringJobs();
-    const lone = run("acme.lone");
-    const input = reads({ jobs, closed: [lone] });
-    const findings = detectFindings(input, [
-      recurringRuns,
-      spendWithNoOutcome,
-      nonCounting(OTHER_KINDS, 10_000_000n),
-    ]);
-
-    expect(findings).toHaveLength(FINDINGS_MAX);
-    const noOutcome = findings.filter(
-      (f) => f.kind === "spend_with_no_outcome",
-    );
-    expect(noOutcome.map((f) => f.subject)).toEqual(["acme.lone"]);
-    // 11 counting findings leave 39 places for the 50 others.
-    expect(findings.filter((f) => OTHER_KINDS.includes(f.kind))).toHaveLength(
-      FINDINGS_MAX - FINDINGS_PER_KIND - 1,
-    );
-    expect(countClaims(stored(findings)).totalMicros).toBe(
-      BigInt(frameKeys([...Object.values(jobs).flat(), lone]).length) *
-        TURN_MICROS,
     );
   });
 });

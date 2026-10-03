@@ -119,10 +119,11 @@ interface Ranked {
 }
 
 /**
- * The entries the caps keep, largest saving first: at most
- * `FINDINGS_PER_KIND` of each kind, then at most `room` in all.
+ * The advisory findings the caps keep, largest saving first: at most
+ * `FINDINGS_PER_KIND` of each kind, then at most `FINDINGS_MAX` in all. A
+ * counting finding never comes here (#5262).
  */
-function withinCaps(entries: readonly Ranked[], room: number): Ranked[] {
+function withinCaps(entries: readonly Ranked[]): Ranked[] {
   const order = (a: Ranked, b: Ranked) => bySaving(a.draft, b.draft);
   const byKind = new Map<FindingKind, Ranked[]>();
   for (const e of entries) {
@@ -133,7 +134,7 @@ function withinCaps(entries: readonly Ranked[], room: number): Ranked[] {
   return [...byKind.values()]
     .flatMap((list) => list.sort(order).slice(0, FINDINGS_PER_KIND))
     .sort(order)
-    .slice(0, Math.max(room, 0));
+    .slice(0, FINDINGS_MAX);
 }
 
 /** Free every frame a group claimed, so a later counting detector may claim it. */
@@ -148,58 +149,32 @@ function free(group: Group, ctx: DetectContext): void {
  * next detector reads `ctx.claimed`. Every group of the detector's kinds is
  * final by then, since no other detector writes those kinds.
  *
- * A group frees the frames it claimed when the pass will not write it:
- * - `toDraft` drops it, because its saving is under a cent or its coverage
- *   is under half (#4607).
- * - The caps cut it, because it ranks past `FINDINGS_PER_KIND` of its kind
- *   or past the `room` left under `FINDINGS_MAX` (#5050). The group goes in
- *   `cut`, so the pass does not write it either.
- *
- * A later counting detector may then claim the freed frames. So a claimed
- * frame always belongs to a finding the pass writes, and the headline counts
- * it once. A group whose fingerprint is in `exempt` is never cut.
- *
- * Returns how many findings the detector keeps. Each one takes a place under
- * `FINDINGS_MAX`.
+ * A group the pass will not write frees the frames it claimed, so a later
+ * counting detector may claim them. The pass drops a group only when
+ * `toDraft` does: its saving is under a cent, or its coverage is under half
+ * (#4607). The caps never cut a counting group (#5262), so every group
+ * `toDraft` keeps is written, and a claimed frame always belongs to a stored
+ * finding. The headline then equals the sum of the findings behind it.
  */
-function settle(
-  d: Detector,
-  ctx: DetectContext,
-  windowEnd: Date,
-  room: number,
-  cut: Set<Group>,
-  exempt: ReadonlySet<string> = new Set(),
-): number {
-  if (d.counting === null) return 0;
+function settle(d: Detector, ctx: DetectContext, windowEnd: Date): void {
+  if (d.counting === null) return;
   const kinds = new Set<FindingKind>(d.kinds);
-  const entries: Ranked[] = [];
-  for (const group of ctx.groups.values()) {
-    if (!kinds.has(group.kind)) continue;
-    const draft = toDraft(group, windowEnd, NO_PROSE);
-    if (draft === null) free(group, ctx);
-    else entries.push({ group, draft });
-  }
-  const kept = new Set(withinCaps(entries, room).map((e) => e.group));
-  let keeps = 0;
-  for (const { group, draft } of entries) {
-    if (kept.has(group) || exempt.has(draft.fingerprint)) keeps += 1;
-    else {
+  for (const group of ctx.groups.values())
+    if (kinds.has(group.kind) && toDraft(group, windowEnd, NO_PROSE) === null)
       free(group, ctx);
-      cut.add(group);
-    }
-  }
-  return keeps;
 }
 
 /**
  * Every finding the window's runs, tool calls, and model calls prove,
- * largest saving first: at most `FINDINGS_PER_KIND` per kind and
- * `FINDINGS_MAX` in all.
+ * largest saving first.
  *
- * A finding that counts toward the unproductive spend headline takes its
- * place under `FINDINGS_MAX` first, in counting order, as its detector
- * finishes. The other findings fill the room left, largest saving first. So
- * the cap never drops a finding whose frames the headline counts (#5050).
+ * Every finding that counts toward the unproductive spend headline is
+ * written, however many there are, so the headline counts every frame it
+ * claims (#5262). The caps apply to the advisory findings alone, which count
+ * toward nothing: at most `FINDINGS_PER_KIND` of each advisory kind and
+ * `FINDINGS_MAX` in all, largest saving first. The counting findings take
+ * none of that room, so a workspace with many agents still sees its
+ * advisory findings.
  *
  * `detectors` is `DETECTORS` in a pass. A test may pass its own.
  */
@@ -217,28 +192,24 @@ export function detectFindings(
   };
   const prose = new Map<FindingKind, Prose>();
   const counting = new Set<FindingKind>();
-  const cut = new Set<Group>();
-  let room = FINDINGS_MAX;
   for (const d of detectors) {
     for (const kind of d.kinds) {
       prose.set(kind, d.prose);
       if (d.counting !== null) counting.add(kind);
     }
     d.detect(input, ctx);
-    room -= settle(d, ctx, input.window.end, room, cut);
+    settle(d, ctx, input.window.end);
   }
 
   const kept: FindingDraft[] = [];
-  const others: Ranked[] = [];
+  const advisory: Ranked[] = [];
   for (const group of ctx.groups.values()) {
-    if (cut.has(group)) continue;
     const draft = toDraft(group, input.window.end, prose.get(group.kind)!);
     if (draft === null) continue;
-    // `settle` already capped the counting kinds.
     if (counting.has(draft.kind)) kept.push(draft);
-    else others.push({ group, draft });
+    else advisory.push({ group, draft });
   }
-  return [...kept, ...withinCaps(others, room).map((e) => e.draft)].sort(
+  return [...kept, ...withinCaps(advisory).map((e) => e.draft)].sort(
     bySaving,
   );
 }
@@ -250,10 +221,10 @@ export function detectFindings(
  * detectors run, in counting order, so a frame is claimed under the first
  * detector that claims it, as in a pass.
  *
- * Each detector's groups settle as they do in a pass: a group the pass would
- * not write, or would cut, frees its frames for the next detector (#5050).
- * A released group is never cut, so an applied finding keeps its claims
- * whatever the open findings rank.
+ * Each detector's groups settle as they do in a pass: a group `toDraft`
+ * drops frees its frames for the next detector. No cap cuts a counting group
+ * in a pass or here (#5262), so the replay keeps the claims of every
+ * counting group the pass keeps, under the same detectors.
  */
 export function replayClaims(
   input: DetectInput,
@@ -272,21 +243,14 @@ export function replayClaims(
     claimed: new Set(),
     taken: new Set(),
   };
-  const cut = new Set<Group>();
-  let room = FINDINGS_MAX;
   for (const d of detectors) {
     if (d.counting === null) continue;
     d.detect(replay, ctx);
-    // A released group past the caps still keeps its place, so the room
-    // can run out before every released group is counted.
-    room = Math.max(
-      0,
-      room - settle(d, ctx, input.window.end, room, cut, released),
-    );
+    settle(d, ctx, input.window.end);
   }
   const out = new Map<string, FindingClaim[]>();
   for (const group of ctx.groups.values())
-    if (!cut.has(group) && group.claims.length > 0)
+    if (group.claims.length > 0)
       out.set(
         findingFingerprint(group.kind, group.level, group.subject),
         group.claims,

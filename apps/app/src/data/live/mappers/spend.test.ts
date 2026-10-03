@@ -419,9 +419,11 @@ describe("toSpendFindings", () => {
       annualised: { ...saving, micros: "17649600000" },
       counts: { findings: 1, high: 1, medium: 0, operators: 3 },
       findings: [listedFinding],
+      truncated: false,
     });
     const view = SpendFindings.parse(toSpendFindings(out));
     expect(view.saving).toEqual(saving);
+    expect(view.truncated).toBe(false);
     expect(view.spend?.basis).toBe("mixed");
     expect(view.share).toBe(0.64);
     expect(view.counts).toEqual({
@@ -456,6 +458,7 @@ describe("toSpendFindings", () => {
       annualised: { ...saving, micros: "17649600000" },
       counts: { findings: 1, high: 1, medium: 0, operators: 3 },
       findings: [{ ...listedFinding, recommendation }],
+      truncated: false,
     });
     const view = SpendFindings.parse(toSpendFindings(out));
     expect(view.findings[0]?.recommendation).toEqual(recommendation);
@@ -471,6 +474,7 @@ describe("toSpendFindings", () => {
       annualised: null,
       counts: { findings: 0, high: 0, medium: 0, operators: 0 },
       findings: [],
+      truncated: false,
     });
     const view = SpendFindings.parse(toSpendFindings(out));
     expect(view).toEqual({
@@ -481,7 +485,26 @@ describe("toSpendFindings", () => {
       annualised: null,
       counts: { findings: 0, high: 0, medium: 0, operators: 0 },
       findings: [],
+      truncated: false,
     });
+  });
+
+  it("copies the count of every open finding and truncated when the list is cut (#5262)", () => {
+    const out = findingList.output.parse({
+      status: "open",
+      window: listedFinding.window,
+      saving,
+      spend: null,
+      share: null,
+      annualised: saving,
+      counts: { findings: 62, high: 62, medium: 0, operators: 3 },
+      findings: Array.from({ length: 50 }, () => listedFinding),
+      truncated: true,
+    });
+    const view = SpendFindings.parse(toSpendFindings(out));
+    expect(view.truncated).toBe(true);
+    expect(view.counts.findings).toBe(62);
+    expect(view.findings).toHaveLength(50);
   });
 
   it("copies one finding's arithmetic and the runs it cites", () => {
