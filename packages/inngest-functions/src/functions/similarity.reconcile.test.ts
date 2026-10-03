@@ -361,6 +361,20 @@ describe("runReconcile", () => {
     });
   });
 
+  it("counts a node another run reconciled after this one selected it", async () => {
+    workspace("org-1", "ws-1", [
+      { id: "n-gone", outcome: { status: "not_deferred" } },
+    ]);
+
+    const summary = await runReconcile(makeStep());
+
+    expect(summary).toMatchObject({
+      deferredBefore: 1,
+      notDeferred: 1,
+      stillDeferred: 0,
+    });
+  });
+
   it("reports an empty run when nothing is marked", async () => {
     workspace("org-1", "ws-1", []);
 

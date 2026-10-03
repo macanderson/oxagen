@@ -30,6 +30,10 @@ interface FakeGraph {
   counts: { deferred: number; withoutVector: number };
   /** Ids the list query returns. A non-string stands for a row with no id. */
   listed: unknown[];
+  /** When set, the node read returns this as the stored embedding. */
+  brokenEmbedding: unknown[] | null;
+  /** Return counts as numbers instead of driver Integers. */
+  plainCounts: boolean;
 }
 
 const mocks = vi.hoisted(
@@ -41,6 +45,8 @@ const mocks = vi.hoisted(
     searchError: null,
     counts: { deferred: 0, withoutVector: 0 },
     listed: [],
+    brokenEmbedding: null,
+    plainCounts: false,
   }),
 );
 
@@ -60,7 +66,7 @@ function answer(cypher: string) {
       records: node
         ? [
             record({
-              embedding: node.embedding,
+              embedding: mocks.brokenEmbedding ?? node.embedding,
               entityType: node.entityType,
               displayName: node.displayName,
               properties: node.properties,
@@ -80,10 +86,14 @@ function answer(cypher: string) {
   if (cypher.includes("count(n) AS deferred")) {
     return {
       records: [
-        record({
-          deferred: driverInt(mocks.counts.deferred),
-          withoutVector: driverInt(mocks.counts.withoutVector),
-        }),
+        record(
+          mocks.plainCounts
+            ? { ...mocks.counts }
+            : {
+                deferred: driverInt(mocks.counts.deferred),
+                withoutVector: driverInt(mocks.counts.withoutVector),
+              },
+        ),
       ],
     };
   }
@@ -157,6 +167,8 @@ beforeEach(() => {
   mocks.searchError = null;
   mocks.counts = { deferred: 0, withoutVector: 0 };
   mocks.listed = [];
+  mocks.brokenEmbedding = null;
+  mocks.plainCounts = false;
 });
 
 // ── reconcileDeferredNode ────────────────────────────────────────────────────
@@ -241,6 +253,16 @@ describe("reconcileDeferredNode", () => {
     expect(ran("db.index.vector.queryNodes")).toHaveLength(0);
     expect(ran("REMOVE n.similarityDeferredAt")).toHaveLength(0);
     expect(mocks.createAliasEdge).not.toHaveBeenCalled();
+  });
+
+  it("reads a stored vector with a non-number entry as no vector", async () => {
+    mocks.node = deferredNode();
+    mocks.brokenEmbedding = [0.1, "0.2"];
+
+    const outcome = await reconcileDeferredNode(NODE, ORG);
+
+    expect(outcome).toEqual({ status: "no_vector" });
+    expect(ran("db.index.vector.queryNodes")).toHaveLength(0);
   });
 
   it("leaves the mark when the vector index refuses the search", async () => {
@@ -365,6 +387,16 @@ describe("findDeferredNodes", () => {
       "{orgId: $orgId, workspaceId: $workspaceId}",
     );
     expect(list?.params).toEqual({ limit: BigInt(10) });
+  });
+
+  it("reads counts that arrive as plain numbers", async () => {
+    mocks.plainCounts = true;
+    mocks.counts = { deferred: 2, withoutVector: 1 };
+    mocks.listed = ["ent_a"];
+
+    const selection = await findDeferredNodes(10);
+
+    expect(selection).toEqual({ deferred: 2, withoutVector: 1, ids: ["ent_a"] });
   });
 
   it("counts without listing when the run has no room left", async () => {
