@@ -376,10 +376,76 @@ function classBucketServerToolRequests(rowAlias: string): string {
 const FRAME_SERVER_TOOL_REQUESTS = classBucketServerToolRequests("c");
 
 /**
- * The predicate that limits a wrapped run's read to its own chains, by the
- * table's sort key ({@link FrameRunRef}).
+ * Sessions one array parameter carries at most. The client sends every query
+ * parameter as one field of the request URL, and ClickHouse refuses a field
+ * longer than `http_max_field_value_size` (128 KiB by default) with "HTML Form
+ * Exception: Field value too long" before it reads the query. A UUID takes 45
+ * bytes of that field once the client quotes it and the URL encodes it
+ * (`%27`, 36 characters, `%27%2C`), so 1,000 of them take about 45 KB. A run
+ * whose family held a few thousand subagent sessions failed every rollup and
+ * every findings pass on this limit (#5311).
  */
-const RUN_SESSIONS = "session_uuid IN {sessionUuids:Array(UUID)}";
+export const RUN_SESSIONS_PER_PARAM = 1_000;
+
+/**
+ * Array parameters one read splits a run's sessions across at most. The whole
+ * URL must stay under `http_max_uri_size` (1 MiB by default), and ten full
+ * parameters take about 450 KB of it.
+ */
+export const RUN_SESSIONS_PARAMS_MAX = 10;
+
+/**
+ * The sessions that carry a run's root in its workspace, named by ClickHouse
+ * itself. Every caller binds the three parameters it reads.
+ */
+const RUN_FAMILY_SESSIONS = `session_uuid IN (
+            SELECT session_uuid FROM tacho_events
+            WHERE org_id = {orgId:UUID}
+              AND workspace_id = {workspaceId:UUID}
+              AND root_session_uuid = {rootSessionUuid:UUID})`;
+
+/**
+ * The predicate that limits a wrapped run's read to its own chains, by the
+ * table's sort key ({@link FrameRunRef}), and the parameters it binds.
+ *
+ * Up to {@link RUN_SESSIONS_PER_PARAM} sessions bind as one array parameter,
+ * `sessionUuids`, as they always have. A longer list is split across
+ * `sessionUuids`, `sessionUuids1`, `sessionUuids2` and on, so no URL field
+ * passes the server's limit and the read still names each chain by the sort
+ * key. A list longer than {@link RUN_SESSIONS_PARAMS_MAX} parameters hold is
+ * not sent: the read takes the chains that carry the run's root in the
+ * workspace, which are every chain the root predicate already admits. That
+ * form costs a scan of the workspace's root column, so it is kept for a
+ * family too large to name in the URL.
+ *
+ * Three other ways were weighed and left out. The root subquery for every
+ * run brings back, on every read, the workspace scan #4103 removed. Raising
+ * the server's field limit is a fleet setting that moves the wall and leaves
+ * it. Writing the list into the SQL as literals hits the query size limit
+ * instead, and puts values in the query text that a parameter keeps out.
+ */
+export function runSessionsFilter(sessions: readonly string[]): {
+  sql: string;
+  params: Record<string, string[]>;
+} {
+  if (sessions.length > RUN_SESSIONS_PER_PARAM * RUN_SESSIONS_PARAMS_MAX)
+    return { sql: RUN_FAMILY_SESSIONS, params: {} };
+  const count = Math.max(1, Math.ceil(sessions.length / RUN_SESSIONS_PER_PARAM));
+  const params: Record<string, string[]> = {};
+  const terms: string[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const name = i === 0 ? "sessionUuids" : `sessionUuids${i}`;
+    params[name] = sessions.slice(
+      i * RUN_SESSIONS_PER_PARAM,
+      (i + 1) * RUN_SESSIONS_PER_PARAM,
+    );
+    terms.push(`session_uuid IN {${name}:Array(UUID)}`);
+  }
+  return {
+    sql: terms.length === 1 ? terms[0]! : `(${terms.join(" OR ")})`,
+    params,
+  };
+}
 
 /**
  * The sighting of a model call the loopback proxy sealed. It is the one
@@ -422,11 +488,13 @@ const RECORD_BASIS_VALUE = "attrs['oxagen.record_basis']";
  * call id, for the join named `alias` on `c.<key>`. Keyed on each id apart
  * for the reason the transcript joins are (`TRANSCRIPT_THINKING`). The
  * aliases differ from the column names so a grouped column is never read
- * back as its own aggregate.
+ * back as its own aggregate. `sessionsSql` is the run's
+ * {@link runSessionsFilter} predicate.
  */
 function proxySightingJoin(
   key: "request_id" | "message_id",
   alias: string,
+  sessionsSql: string,
 ): string {
   return `LEFT JOIN (
         SELECT
@@ -441,7 +509,7 @@ function proxySightingJoin(
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
-          AND ${RUN_SESSIONS}
+          AND ${sessionsSql}
           AND kind = 'llm_call'
           AND ${PROXY_SIGHTING}
         GROUP BY call_key
@@ -629,6 +697,7 @@ export async function readModelCallFrames(args: {
     }), consume);
   }
 
+  const sessions = runSessionsFilter(runSessions(run));
   const result = await ch.query({
     query: `
       SELECT
@@ -667,7 +736,7 @@ export async function readModelCallFrames(args: {
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
-          AND ${RUN_SESSIONS}
+          AND ${sessions.sql}
           AND kind = 'llm_call'
           AND source IN {sources:Array(String)}
           AND ${NOT_A_DUPLICATE}
@@ -683,7 +752,7 @@ export async function readModelCallFrames(args: {
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
-          AND ${RUN_SESSIONS}
+          AND ${sessions.sql}
           AND kind = 'llm_call'
           AND ${TRANSCRIPT_SPLIT_ROW}
         GROUP BY call_key
@@ -699,21 +768,21 @@ export async function readModelCallFrames(args: {
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
-          AND ${RUN_SESSIONS}
+          AND ${sessions.sql}
           AND kind = 'llm_call'
           AND ${TRANSCRIPT_SPLIT_ROW}
         GROUP BY call_key
         HAVING call_key != ''
       ) AS m ON m.call_key = c.message_id
-      ${proxySightingJoin("request_id", "r")}
-      ${proxySightingJoin("message_id", "q")}
+      ${proxySightingJoin("request_id", "r", sessions.sql)}
+      ${proxySightingJoin("message_id", "q", sessions.sql)}
       ORDER BY c.ts, c.seq
     `,
     query_params: {
       orgId: args.orgId,
       workspaceId: args.workspaceId,
       rootSessionUuid: run.rootSessionUuid,
-      sessionUuids: runSessions(run),
+      ...sessions.params,
       sources: TACHO_TOKEN_SOURCES,
       duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
     },
@@ -804,6 +873,7 @@ export async function readTachoToolCallFrames(args: {
   sessionUuids: readonly string[];
 }, consume?: FrameConsumer<ToolCallFrameRow>): Promise<ToolCallFrameRow[]> {
   const ch = clickhouse();
+  const sessions = runSessionsFilter(runSessions(args));
   const result = await ch.query({
     query: `
       SELECT
@@ -830,7 +900,7 @@ export async function readTachoToolCallFrames(args: {
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
-          AND ${RUN_SESSIONS}
+          AND ${sessions.sql}
           AND kind = 'tool_call'
           AND source = 'hook'
       ) AS h
@@ -840,7 +910,7 @@ export async function readTachoToolCallFrames(args: {
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
-          AND ${RUN_SESSIONS}
+          AND ${sessions.sql}
           AND kind = 'tool_call'
           AND source = 'otel_span'
           AND tool_use_id != ''
@@ -854,7 +924,7 @@ export async function readTachoToolCallFrames(args: {
       orgId: args.orgId,
       workspaceId: args.workspaceId,
       rootSessionUuid: args.rootSessionUuid,
-      sessionUuids: runSessions(args),
+      ...sessions.params,
     },
     format: "JSONEachRow",
     clickhouse_settings: COST_FRAME_QUERY_SETTINGS,
@@ -916,6 +986,7 @@ export async function readTachoProgressFrames(args: {
   sessionUuids: readonly string[];
 }): Promise<ProgressFrameRow[]> {
   const ch = clickhouse();
+  const sessions = runSessionsFilter(runSessions(args));
   const result = await ch.query({
     query: `
       SELECT
@@ -928,7 +999,7 @@ export async function readTachoProgressFrames(args: {
       WHERE org_id = {orgId:UUID}
         AND workspace_id = {workspaceId:UUID}
         AND root_session_uuid = {rootSessionUuid:UUID}
-        AND ${RUN_SESSIONS}
+        AND ${sessions.sql}
         AND (
           (kind = 'tool_call' AND source = 'hook')
           OR kind = 'oxagen:file_changed'
@@ -939,7 +1010,7 @@ export async function readTachoProgressFrames(args: {
       orgId: args.orgId,
       workspaceId: args.workspaceId,
       rootSessionUuid: args.rootSessionUuid,
-      sessionUuids: runSessions(args),
+      ...sessions.params,
     },
     format: "JSONEachRow",
   });

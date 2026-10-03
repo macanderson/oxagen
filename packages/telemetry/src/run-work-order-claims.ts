@@ -11,7 +11,7 @@
  * it stores it on `cost.run_totals`. This read only finds the claims.
  */
 import { clickhouse } from "./clickhouse";
-import { COST_FRAME_QUERY_SETTINGS } from "./cost-frames";
+import { COST_FRAME_QUERY_SETTINGS, runSessionsFilter } from "./cost-frames";
 
 /** The OTLP attribute a work order's stage runs carry. */
 export const WORK_ORDER_ATTR = "oxagen.work_order.id";
@@ -35,9 +35,11 @@ export async function readRunWorkOrderClaims(args: {
   /** The run's sessions, root first. */
   sessionUuids: readonly string[];
 }): Promise<string[]> {
-  const sessionUuids = args.sessionUuids.includes(args.rootSessionUuid)
-    ? [...args.sessionUuids]
-    : [args.rootSessionUuid, ...args.sessionUuids];
+  const sessions = runSessionsFilter(
+    args.sessionUuids.includes(args.rootSessionUuid)
+      ? [...args.sessionUuids]
+      : [args.rootSessionUuid, ...args.sessionUuids],
+  );
   const ch = clickhouse();
   const result = await ch.query({
     query: `
@@ -50,7 +52,7 @@ export async function readRunWorkOrderClaims(args: {
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
-          AND session_uuid IN {sessionUuids:Array(UUID)}
+          AND ${sessions.sql}
           AND (attrs[{attr:String}] != '' OR attrs[{claimedAttr:String}] != '')
         GROUP BY claim
       )
@@ -61,7 +63,7 @@ export async function readRunWorkOrderClaims(args: {
       orgId: args.orgId,
       workspaceId: args.workspaceId,
       rootSessionUuid: args.rootSessionUuid,
-      sessionUuids,
+      ...sessions.params,
       attr: WORK_ORDER_ATTR,
       claimedAttr: CLAIMED_WORK_ORDER_ATTR,
       limit: RUN_WORK_ORDER_CLAIM_LIMIT,
