@@ -7,6 +7,10 @@
 // attached. It starts no run and changes nothing in Oxagen's record of the
 // work order. A person reads the note and decides what to do with the work.
 //
+// The note links to the Oxagen page that shows the work order, and shows
+// what the runs cost only on an item the module says is private
+// (writeback.ts). On a public repository it names each run and why it ended.
+//
 // A streak is the send and the newest run in it. The record says which
 // streaks have a note already, so a later pass that finds the same streak
 // posts nothing. A new run on the send starts a new streak. The record is a
@@ -51,6 +55,8 @@ export interface SendBackRecord {
 export interface SendBackTarget {
   collector: WriteBackCollector;
   target: WriteBackTarget;
+  /** The Oxagen page that shows the work order. Null when Oxagen cannot name it, and the note then carries no link. */
+  orderUrl: string | null;
 }
 
 export interface SendBackPorts {
@@ -75,13 +81,17 @@ export interface SendBackResult {
 }
 
 /** The note's text before its spend lines. Oxagen writes all of it. */
-export function sendBackNoteText(order: WorkOrderToSendBack): string {
+export function sendBackNoteText(order: WorkOrderToSendBack, orderUrl: string | null): string {
   const count = order.runs.length;
   const ran =
     order.agentKey === null
       ? `The work order ran ${count} times in a row`
       : `Agent ${order.agentKey} ran it ${count} times in a row`;
-  return `Oxagen sent work order ${order.orderPublicId} back to this work item. ${ran}, and each run ended with nothing kept. Read why each run ended before you send the work again.`;
+  const read =
+    orderUrl === null
+      ? "Read why each run ended before you send the work again."
+      : `Read why each run ended before you send the work again: ${orderUrl}`;
+  return `Oxagen sent work order ${order.orderPublicId} back to this work item. ${ran}, and each run ended with nothing kept. ${read}`;
 }
 
 /**
@@ -115,7 +125,7 @@ export async function sendBackWorkOrders(
       }
       const outcome = await runWriteBack(resolved.collector, resolved.target, {
         switch: "send_note",
-        text: sendBackNoteText(order),
+        text: sendBackNoteText(order, resolved.orderUrl),
         spend: { runs: order.runs },
       });
       if (outcome === "written") await ports.record.add(key);

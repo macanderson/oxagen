@@ -1,12 +1,15 @@
 // The send-back ports against a real Postgres (R3, #5108):
 //
 //   - resolve: a GitHub work item resolves through the work intake stores to
-//     its collector, its connection, and the issue at GitHub. A work item a
-//     person entered resolves to no collector.
-//   - today: the collector row reads every write-back switch off (ADR-250),
-//     so the note's outcome is off, and with send_note on it is unsupported,
-//     because the GitHub module has no write-back yet. Neither records a note
-//     or mints a token.
+//     its collector, its connection, the issue at GitHub, and the page that
+//     shows the work order. A work item a person entered resolves to no
+//     collector.
+//   - switches: a new collector row stores every write-back switch off, so
+//     the note's outcome is off, and no note is recorded and no token minted.
+//   - GitHub: once the row's send_note switch is on, the note goes through
+//     the GitHub module as an issue comment. On a public repository it names
+//     the runs and their outcome and links to the work order, with no dollar
+//     figure. On a private one it shows the figures (#4775).
 //   - record: with a module that writes notes, work.send_backs holds one row
 //     per streak, a later pass posts nothing, and a new streak gets its own
 //     row. Each workspace reads only its own rows, and a row never changes.
@@ -37,6 +40,9 @@ const { resolveGitHubToken } = await import("@oxagen/github/workspace-token");
 const { sendBackPorts } = await import("./send-back");
 const { setCollector } = await import("./collectors");
 
+const APP = "https://app.oxagen.test";
+const NODE = "I_kwR3sendback";
+
 const enabled = Boolean(process.env.DATABASE_URL);
 if (process.env.CI && !enabled) throw new Error("The send-back ports test needs DATABASE_URL on CI.");
 
@@ -45,7 +51,8 @@ describe.skipIf(!enabled)("send-back ports against Postgres", () => {
   const scope = { orgId: crypto.randomUUID(), workspaceId: crypto.randomUUID() };
   const other = { orgId: scope.orgId, workspaceId: crypto.randomUUID() };
   const AMARA = crypto.randomUUID();
-  const providerId = `issue:node:I_kwR3${tag}`;
+  const orgSlug = `r3-${tag}`;
+  const providerId = `issue:node:${NODE}${tag}`;
   const runId = (name: string) => `tse_r3${tag}${name}`;
   let connectionId = "";
   let collectorId = "";
@@ -71,7 +78,7 @@ describe.skipIf(!enabled)("send-back ports against Postgres", () => {
     };
   }
 
-  /** The GitHub module with a note writer, as #4775's Phase 2 would give it. */
+  /** The GitHub module with a write-back that keeps each note, on a private repository. */
   function writingModule() {
     registerCollectorModules();
     const github = getCollector("github");
@@ -89,6 +96,7 @@ describe.skipIf(!enabled)("send-back ports against Postgres", () => {
         status: refuse,
         close: refuse,
         labels: refuse,
+        visibility: async () => "private",
       },
     };
     return { definition, notes };
@@ -104,7 +112,56 @@ describe.skipIf(!enabled)("send-back ports against Postgres", () => {
     );
   }
 
+  /** The collector row's stored switches, set the way a person turning send_note on would. */
+  async function setStoredSwitches(writeBack: Record<string, boolean>) {
+    await withSystemDb((tx) =>
+      tx.update(schema.workCollectors).set({ writeBack }).where(eq(schema.workCollectors.id, collectorId)),
+    );
+  }
+
+  /**
+   * GitHub, through a stubbed fetch: LocateIssue answers the issue in
+   * acme/app with the given visibility, and each comment posted is kept.
+   */
+  function githubServing(visibility: "PUBLIC" | "PRIVATE") {
+    const comments: Array<{ path: string; body: unknown }> = [];
+    const fetchMock = vi.fn(async (input: unknown, init?: RequestInit) => {
+      const url = new URL(String(input));
+      const body: unknown = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+      if (url.pathname === "/graphql") {
+        return Response.json({
+          data: { node: { __typename: "Issue", number: 12, repository: { nameWithOwner: "acme/app", visibility } } },
+        });
+      }
+      if (init?.method === "POST" && url.pathname === "/repos/acme/app/issues/12/comments") {
+        comments.push({ path: url.pathname, body });
+        return Response.json({ id: comments.length }, { status: 201 });
+      }
+      return Response.json({ message: "Not Found" }, { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return { comments, fetchMock };
+  }
+
   beforeAll(async () => {
+    // The work order's link names the organization and workspace by slug.
+    await withSystemDb(async (tx) => {
+      await tx.insert(schema.organizations).values({
+        id: scope.orgId,
+        name: `R3 ${tag}`,
+        slug: orgSlug,
+        namespace: `r${tag.slice(0, 5)}`,
+        planType: "free",
+        status: "active",
+      });
+      await tx.insert(schema.workspaces).values({
+        id: scope.workspaceId,
+        orgId: scope.orgId,
+        name: "Core",
+        slug: "core",
+        namespace: "core",
+      });
+    });
     await inScope(() =>
       withTenantDb(async (tx) => {
         const [connection] = await tx
@@ -235,7 +292,10 @@ describe.skipIf(!enabled)("send-back ports against Postgres", () => {
       await tx.delete(s.repositoryBindingHeads).where(eq(s.repositoryBindingHeads.orgId, scope.orgId));
       await tx.delete(s.repositoryBindings).where(eq(s.repositoryBindings.orgId, scope.orgId));
       await tx.delete(s.sourceConnections).where(eq(s.sourceConnections.orgId, scope.orgId));
+      await tx.delete(s.workspaces).where(eq(s.workspaces.orgId, scope.orgId));
+      await tx.delete(s.organizations).where(eq(s.organizations.id, scope.orgId));
     });
+    vi.unstubAllGlobals();
     await closeDatabase();
   });
 
@@ -257,6 +317,9 @@ describe.skipIf(!enabled)("send-back ports against Postgres", () => {
     // No note can be written, so no token is minted.
     expect(resolved!.target.conn.auth).toEqual({ scheme: "public" });
     expect(resolveGitHubToken).not.toHaveBeenCalled();
+
+    const linked = await inScope(() => sendBackPorts(scope, { appUrl: `${APP}/` }).resolve(providerItemId));
+    expect(linked!.orderUrl).toBe(`${APP}/${orgSlug}/core/work/R3-${tag}-1`);
   });
 
   it("resolves a work item a person entered, one the workspace does not hold, or one with no module to no collector", async () => {
@@ -269,16 +332,22 @@ describe.skipIf(!enabled)("send-back ports against Postgres", () => {
     expect(results).toEqual([{ orderId, outcome: "no_collector" }]);
   });
 
-  it("posts nothing on a GitHub work item today: the switch reads off, and GitHub has no write-back", async () => {
+  it("posts nothing while the collector row stores send_note off, as every new row does", async () => {
+    const [row] = await withSystemDb((tx) =>
+      tx
+        .select({ writeBack: schema.workCollectors.writeBack })
+        .from(schema.workCollectors)
+        .where(eq(schema.workCollectors.id, collectorId)),
+    );
+    expect(row!.writeBack).toEqual({ certify_note: false, send_note: false, status: false, close: false, labels: false });
+
+    const github = githubServing("PUBLIC");
     const off = await inScope(() => sendBackWorkOrders([send(providerItemId, "c", "b", "a")], sendBackPorts(scope)));
     expect(off).toEqual([{ orderId, outcome: "off" }]);
-
-    const switchedOn = sendBackPorts(scope, { switches: () => ({ ...WRITE_BACK_DEFAULTS }) });
-    const unsupported = await inScope(() => sendBackWorkOrders([send(providerItemId, "c", "b", "a")], switchedOn));
-    expect(unsupported).toEqual([{ orderId, outcome: "unsupported" }]);
-
+    expect(github.fetchMock).not.toHaveBeenCalled();
     expect(await sendBackRows()).toEqual([]);
     expect(resolveGitHubToken).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   it("records one row per streak once a note is written, so a later pass posts nothing", async () => {
@@ -340,5 +409,43 @@ describe.skipIf(!enabled)("send-back ports against Postgres", () => {
     ).rejects.toThrow();
     await expect(inScope(() => sendBackPorts(scope).record.has(key))).resolves.toBe(true);
     await expect(inScope(() => sendBackPorts(scope).record.has({ orderId, lastRunId: runId("z") }))).resolves.toBe(false);
+  });
+
+  it("posts the note as a GitHub issue comment once the row's send_note is on, with figures only on a private repository", async () => {
+    await setStoredSwitches({ certify_note: false, send_note: true, status: false, close: false, labels: false });
+    try {
+      const ports = sendBackPorts(scope, { appUrl: APP });
+
+      const open = githubServing("PUBLIC");
+      const onPublic = await inScope(() => sendBackWorkOrders([send(providerItemId, "pc", "pb", "pa")], ports));
+      expect(onPublic).toEqual([{ orderId, outcome: "written" }]);
+      expect(open.comments).toHaveLength(1);
+      const publicNote = JSON.stringify(open.comments[0]!.body);
+      expect(publicNote).toContain(`Oxagen sent work order ${orderPublicId} back to this work item.`);
+      expect(publicNote).toContain(`${APP}/${orgSlug}/core/work/R3-${tag}-1`);
+      expect(publicNote).toContain(`- ${runId("pc")}: pull request closed unmerged`);
+      expect(publicNote).not.toContain("$");
+      vi.unstubAllGlobals();
+
+      const closed = githubServing("PRIVATE");
+      const onPrivate = await inScope(() => sendBackWorkOrders([send(providerItemId, "qc", "qb", "qa")], ports));
+      expect(onPrivate).toEqual([{ orderId, outcome: "written" }]);
+      const privateNote = JSON.stringify(closed.comments[0]!.body);
+      expect(privateNote).toContain("Unproductive spend: $3.75 across 3 runs.");
+      expect(privateNote).toContain(`- ${runId("qc")}: $1.25, pull request closed unmerged`);
+      expect(privateNote).toContain(`${APP}/${orgSlug}/core/work/R3-${tag}-1`);
+      vi.unstubAllGlobals();
+
+      expect(await sendBackRows()).toEqual(
+        expect.arrayContaining([
+          { orderId, lastRunId: runId("pc") },
+          { orderId, lastRunId: runId("qc") },
+        ]),
+      );
+      expect(resolveGitHubToken).toHaveBeenCalledWith({ ...scope, connectionId });
+    } finally {
+      await setStoredSwitches({ certify_note: false, send_note: false, status: false, close: false, labels: false });
+      vi.unstubAllGlobals();
+    }
   });
 });
