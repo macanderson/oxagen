@@ -720,7 +720,7 @@ export function healthNotificationTitle(state: HealthState, repository: string):
     case "disconnected":
       return `Oxagen lost access to the steering repo ${repository}`;
     case "diverged":
-      return `main on the steering repo ${repository} holds a commit Oxagen did not merge`;
+      return `main on the steering repo ${repository} holds a commit that no pull request merged`;
   }
 }
 

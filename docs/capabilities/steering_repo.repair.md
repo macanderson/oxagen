@@ -32,12 +32,10 @@ None. The org and workspace come from the capability context.
 ## What a repair does
 
 1. Writes every baseline setting the host shows differently.
-2. When `main` diverged from the published commit, merges the pull request that puts `main` back at that commit. The published version does not change, and the repair records no new deployment.
+2. When `main` diverged from the published commit, merges the pull request that puts `main` back at that commit. The published version does not change, and the repair records no new deployment. `main` diverges only when it holds a commit that no pull request merged, such as a direct push. A pull request merged on GitHub does not make it diverge, and the repository sync publishes it ([ADR-296](../adr/ADR-296-a-pull-request-merged-on-github-publishes-like-one-oxagen-merged.md)).
 3. Reads the health again. That read posts the checks and comments, so every open pull request sees the new state.
 
 A setting that still differs after the write leaves the answer `drifted`. The repair does not fail for it.
-
-When `main` diverged only because someone merged pull requests Oxagen opened on the host, [`adopt_steering_merges`](steering_repo.adopt.md) keeps those merges instead of reverting them.
 
 ## Refusals
 
