@@ -11,6 +11,10 @@
  * Signals are noted on spool replays too: a replay is a call the agent made
  * while the daemon was down. Only the ask itself skips a replay, because a
  * replayed Stop's answer reaches no harness.
+ *
+ * The ask names a tool from Oxagen's MCP server, which enrolling Claude Code
+ * adds to Claude Code's user config (`cli/claude-code-mcp.ts`, #5287). A
+ * session on a host without that server is never asked.
  */
 import { type JsonValue, jcs } from "../../digest";
 import { OXAGEN_MCP_SERVER_KEY } from "../../host/mcp-config-writer";
@@ -222,6 +226,15 @@ export interface ReflectionAskOptions {
   stopHookActive: boolean;
   /** The hook is a spool replay or a deferred hook. */
   replayed: boolean;
+  /**
+   * Whether the session can reach `REFLECTION_TOOL_NAME`: this enrollment
+   * wrote the `oxagen` server into Claude Code's user config before the
+   * session started, and has the key the gateway serves Oxagen's tools with
+   * (#5287). Without all of that, an ask would block a stop for a tool the
+   * agent cannot call. Called only once every cheaper check has passed,
+   * because it reads files.
+   */
+  toolRegistered: () => boolean;
 }
 
 function clipTool(name: string): string {
@@ -282,7 +295,10 @@ function askText(state: ReflectionState, withTools: boolean): string {
  * The text a Stop hands the agent to ask for a reflection, or undefined.
  * It asks only a Claude Code session, only at a Stop that does not follow a
  * block and is not a replay, only when the run showed a signal and the agent
- * has not already called `record_reflection`, and only once per session. The session is marked asked before the text returns.
+ * has not already called `record_reflection`, only when the session can
+ * reach that tool, and only once per session. The session is marked asked
+ * before the text returns. A Stop that finds the tool missing does not use
+ * up the ask.
  */
 export function reflectionAsk(
   record: SessionRecord,
@@ -302,6 +318,7 @@ export function reflectionAsk(
     state.signals.size === 0
   )
     return undefined;
+  if (!options.toolRegistered()) return undefined;
   state.asked = true;
   const full = askText(state, true);
   return full.length <= REFLECTION_ASK_MAX_CHARS

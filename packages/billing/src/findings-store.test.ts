@@ -14,6 +14,7 @@ vi.mock("@oxagen/telemetry", () => ({
   readTachoToolCallObservations: vi.fn(),
   readTachoFileChanges: vi.fn(),
   readModelCallFrames: vi.fn(),
+  readGroupModelCallFrames: vi.fn(),
   chSelect: vi.fn(() => {
     throw new Error("the pass must not reach ClickHouse in this test");
   }),
@@ -34,7 +35,11 @@ vi.mock("./findings", async (importOriginal) => {
 });
 
 import { createHash } from "node:crypto";
-import { readModelCallFrames, type FrameRunRef } from "@oxagen/telemetry";
+import {
+  readGroupModelCallFrames,
+  readModelCallFrames,
+  type FrameRunRef,
+} from "@oxagen/telemetry";
 import { ZERO_TOKENS, type RunTotalsRecord } from "./cost-rollup";
 import {
   detectFindings,
@@ -56,8 +61,10 @@ import {
   CLAIMING_KINDS,
   FILE_CHANGE_READ_MAX,
   fileChangeTimesOf,
-  FRAME_RUNS_READ_MAX,
-  FRAME_RUNS_RECURRING_RESERVE,
+  FRAME_GROUP_READ_SESSIONS,
+  FRAME_GROUP_READS_RESERVE,
+  FRAME_READ_MAX_FRAMES,
+  FRAME_READS_MAX,
   frameReads,
   frameSources,
   planFrameReads,
@@ -401,17 +408,20 @@ describe("planFrameReads", () => {
   });
 });
 
-describe("planFrameReads with recurring runs (#4594)", () => {
+describe("planFrameReads with recurring groups (#5168)", () => {
   /** `n` runs named `tse_<name><i>`, each at `cost`. */
   const many = (name: string, n: number, cost: bigint) =>
     Array.from({ length: n }, (_, i) =>
       planRun(`tse_${name}${String(i).padStart(3, "0")}`, cost),
     );
-  const firstPrompt = (digest: string): RunFirstPrompt => ({
+  const firstPrompt = (
+    digest: string,
+    source: string | null = null,
+  ): RunFirstPrompt => ({
     at: new Date("2026-09-10T09:59:00.000Z"),
     atMicros: Date.parse("2026-09-10T09:59:00.000Z") * 1_000,
     digest,
-    source: null,
+    source,
     origin: null,
     commandName: null,
   });
@@ -424,12 +434,28 @@ describe("planFrameReads with recurring runs (#4594)", () => {
         runs.map((r) => [r.runId, firstPrompt(digest)] as const),
       ),
     );
-  /** A frame source for every run. The plan reads only whether a run has one. */
-  const everyRef = (runs: readonly RunTotalsRecord[]) =>
-    new Map(runs.map((r) => [r.runId, tachoRef(SESSION)]));
+  /** A root session for every run, numbered from 1. */
+  const rootOf = (i: number) =>
+    `00000000-0000-4000-8000-${(i + 1).toString(16).padStart(12, "0")}`;
+  /** A frame source for every run: its own root, and `children` more sessions. */
+  const everyRef = (runs: readonly RunTotalsRecord[], children = 0) =>
+    new Map(
+      runs.map((r, i) => [
+        r.runId,
+        tachoRef(
+          rootOf(i),
+          ...Array.from({ length: children }, (_, c) =>
+            rootOf(100_000 + i * 10 + c),
+          ),
+        ),
+      ]),
+    );
   const ids = (runs: readonly { runId: string }[]) => runs.map((r) => r.runId);
+  /** Each read's group number, or null on a run read alone. */
+  const groupsOf = (reads: readonly FrameRead[]) =>
+    reads.map((r) => r.group ?? null);
 
-  it("reads a cheap recurring group behind 200 dearer runs that each repeat a call", () => {
+  it("reads a cheap recurring job in one group read ahead of 200 dearer runs that each repeat a call", () => {
     // $1.00 a run, and each run repeats a call.
     const dear = many("dear", 300, 1_000_000n);
     // A scheduled job: 10 runs of one prompt, at $0.32 a run.
@@ -442,7 +468,7 @@ describe("planFrameReads with recurring runs (#4594)", () => {
       runs,
       everyRef(runs),
       repeats,
-      FRAME_RUNS_READ_MAX,
+      FRAME_READS_MAX,
     );
     expect(ids(before.reads).filter((id) => id.startsWith("tse_job"))).toEqual(
       [],
@@ -452,19 +478,52 @@ describe("planFrameReads with recurring runs (#4594)", () => {
       runs,
       everyRef(runs),
       repeats,
-      FRAME_RUNS_READ_MAX,
+      FRAME_READS_MAX,
       promptsOf([["sha256:job", job]]),
     );
-    // The job's runs are read first, so the frame cap cannot drop them.
+    // The job's runs are read first, in one read, so the frame cap cannot
+    // drop them.
     expect(ids(reads.slice(0, job.length))).toEqual(ids(job));
-    // The reserved places the job did not need go back to the ranking.
+    expect(groupsOf(reads.slice(0, job.length))).toEqual(
+      Array<number>(job.length).fill(0),
+    );
+    // The group took one place, and the ranking keeps the other 199.
     expect(ids(reads.slice(job.length))).toEqual(
-      ids(dear.slice(0, FRAME_RUNS_READ_MAX - job.length)),
+      ids(dear.slice(0, FRAME_READS_MAX - 1)),
+    );
+    expect(groupsOf(reads.slice(job.length))).toEqual(
+      Array<null>(FRAME_READS_MAX - 1).fill(null),
     );
     expect(coverage).toEqual({
       runs: 310,
-      read: FRAME_RUNS_READ_MAX,
-      capped: 110,
+      read: job.length + FRAME_READS_MAX - 1,
+      capped: 300 - (FRAME_READS_MAX - 1),
+      unmatched: 0,
+    });
+  });
+
+  it("reads a 400-run job whole in one group read, where the run reserve read 50 of its runs", () => {
+    const dear = many("dear", 300, 1_000_000n);
+    const job = many("job", 400, 320_000n);
+    const runs = [...dear, ...job];
+    const { reads, coverage } = planFrameReads(
+      runs,
+      everyRef(runs),
+      new Map(),
+      FRAME_READS_MAX,
+      promptsOf([["sha256:job", job]]),
+    );
+    expect(ids(reads.slice(0, job.length))).toEqual(ids(job));
+    expect(new Set(groupsOf(reads.slice(0, job.length)))).toEqual(
+      new Set([0]),
+    );
+    expect(ids(reads.slice(job.length))).toEqual(
+      ids(dear.slice(0, FRAME_READS_MAX - 1)),
+    );
+    expect(coverage).toEqual({
+      runs: 700,
+      read: 400 + FRAME_READS_MAX - 1,
+      capped: 300 - (FRAME_READS_MAX - 1),
       unmatched: 0,
     });
   });
@@ -477,14 +536,15 @@ describe("planFrameReads with recurring runs (#4594)", () => {
       runs,
       everyRef(runs),
       new Map(),
-      FRAME_RUNS_READ_MAX,
+      FRAME_READS_MAX,
       promptsOf([["sha256:few", few]]),
     );
-    expect(ids(reads)).toEqual(ids(dear.slice(0, FRAME_RUNS_READ_MAX)));
+    expect(ids(reads)).toEqual(ids(dear.slice(0, FRAME_READS_MAX)));
+    expect(reads.every((r) => r.group === undefined)).toBe(true);
   });
 
-  it("keeps the reserve for the groups the ranking left out, smallest group first", () => {
-    // A dear job the ranking reads anyway, a large cheap job, and a small one.
+  it("gives each recurring group one read, dearest group first, and takes its runs out of the ranking", () => {
+    // $80, $6, and $0.40 in all.
     const dearJob = many("a", 40, 2_000_000n);
     const largeJob = many("b", 60, 100_000n);
     const smallJob = many("c", 8, 50_000n);
@@ -494,32 +554,156 @@ describe("planFrameReads with recurring runs (#4594)", () => {
       runs,
       everyRef(runs),
       new Map(),
-      FRAME_RUNS_READ_MAX,
+      FRAME_READS_MAX,
       promptsOf([
         ["sha256:a", dearJob],
         ["sha256:b", largeJob],
         ["sha256:c", smallJob],
       ]),
     );
-    const ranked = FRAME_RUNS_READ_MAX - FRAME_RUNS_RECURRING_RESERVE;
-    // The dear job takes none of the reserve, so the large job gets every
-    // place the small job leaves.
+    // The dear job is read in its group read, so the ranking does not read
+    // it again, and each of the three groups takes one place.
     expect(ids(reads)).toEqual([
-      ...ids(smallJob),
-      ...ids(
-        largeJob.slice(0, FRAME_RUNS_RECURRING_RESERVE - smallJob.length),
-      ),
       ...ids(dearJob),
-      ...ids(dear.slice(0, ranked - dearJob.length)),
+      ...ids(largeJob),
+      ...ids(smallJob),
+      ...ids(dear.slice(0, FRAME_READS_MAX - 3)),
     ]);
+    expect(groupsOf(reads)).toEqual([
+      ...Array<number>(dearJob.length).fill(0),
+      ...Array<number>(largeJob.length).fill(1),
+      ...Array<number>(smallJob.length).fill(2),
+      ...Array<null>(FRAME_READS_MAX - 3).fill(null),
+    ]);
+    expect(new Set(ids(reads)).size).toBe(reads.length);
   });
-});
 
-describe("planFrameReads with recurring groups of one size (#4594)", () => {
-  it("takes two groups of one size by digest, and each group's runs by rank", () => {
-    const dear = Array.from({ length: 300 }, (_, i) =>
-      planRun(`tse_dear${String(i).padStart(3, "0")}`, 1_000_000n),
+  it(`keeps ${FRAME_GROUP_READS_RESERVE} reads for groups and leaves the cheaper groups' runs to the ranking`, () => {
+    const extra = 5;
+    // Job i's runs cost less as i grows, so the order of the groups is known.
+    const jobs = Array.from({ length: FRAME_GROUP_READS_RESERVE + extra }, (_, i) =>
+      many(`job${String(i).padStart(2, "0")}_`, RECURRING_RUNS_MIN, BigInt(1_000 - i) * 1_000n),
     );
+    const runs = jobs.flat();
+    const { reads, coverage } = planFrameReads(
+      runs,
+      everyRef(runs),
+      new Map(),
+      FRAME_READS_MAX,
+      promptsOf(jobs.map((job, i) => [`sha256:job${i}`, job] as const)),
+    );
+    const grouped = reads.filter((r) => r.group !== undefined);
+    expect(new Set(groupsOf(grouped)).size).toBe(FRAME_GROUP_READS_RESERVE);
+    expect(ids(grouped)).toEqual(
+      ids(jobs.slice(0, FRAME_GROUP_READS_RESERVE).flat()),
+    );
+    // The other groups' runs are read one by one, in the places left.
+    expect(ids(reads.filter((r) => r.group === undefined))).toEqual(
+      ids(jobs.slice(FRAME_GROUP_READS_RESERVE).flat()),
+    );
+    expect(coverage).toMatchObject({ read: runs.length, capped: 0 });
+  });
+
+  it("splits a group whose sessions pass the bound into reads that each fit, one place each", () => {
+    const job = many("job", 10, 320_000n);
+    const dear = many("dear", 10, 1_000_000n);
+    const runs = [...job, ...dear];
+    // Each run names its root and one subagent chain: 2 sessions.
+    const refs = everyRef(runs, 1);
+    const prompts = promptsOf([["sha256:job", job]]);
+
+    const { reads } = planFrameReads(runs, refs, new Map(), 7, prompts, {
+      groupSessions: 5,
+    });
+    // 2 runs, 4 sessions, fit one read; a third would name 6.
+    expect(ids(reads.slice(0, job.length))).toEqual(ids(job));
+    expect(groupsOf(reads.slice(0, job.length))).toEqual([
+      0, 0, 1, 1, 2, 2, 3, 3, 4, 4,
+    ]);
+    // 5 group reads leave 2 of 7 places to the ranking.
+    expect(ids(reads.slice(job.length))).toEqual(ids(dear.slice(0, 2)));
+
+    // With 3 places for groups, the job's last 4 runs go back to the
+    // ranking, and the ranking reads them by cost after the dearer runs.
+    const capped = planFrameReads(runs, refs, new Map(), FRAME_READS_MAX, prompts, {
+      groupSessions: 5,
+      groupReads: 3,
+    });
+    expect(groupsOf(capped.reads.slice(0, 6))).toEqual([0, 0, 1, 1, 2, 2]);
+    expect(ids(capped.reads.slice(6))).toEqual([
+      ...ids(dear),
+      ...ids(job.slice(6)),
+    ]);
+    expect(capped.reads.slice(6).every((r) => r.group === undefined)).toBe(
+      true,
+    );
+  });
+
+  it("sizes the group reads by each run's model calls, and leaves the runs past the frame bound to the ranking", () => {
+    // 10 runs of 3 calls at $0.50, and 5 runs of 5 calls at $0.10.
+    const jobA = many("a", 10, 500_000n).map((r) => ({ ...r, modelCalls: 3 }));
+    const jobB = many("b", 5, 100_000n).map((r) => ({ ...r, modelCalls: 5 }));
+    const runs = [...jobA, ...jobB];
+    const { reads, coverage } = planFrameReads(
+      runs,
+      everyRef(runs),
+      new Map(),
+      FRAME_READS_MAX,
+      promptsOf([
+        ["sha256:a", jobA],
+        ["sha256:b", jobB],
+      ]),
+      { groupFrames: 10 },
+    );
+    // Job A's first 3 runs fit 10 frames, and a fourth would make 12. Job B's
+    // first run needs 5 of the 1 left, so job B gets no group read.
+    expect(ids(reads)).toEqual([...ids(jobA), ...ids(jobB)]);
+    expect(groupsOf(reads)).toEqual([
+      0,
+      0,
+      0,
+      ...Array<null>(7 + jobB.length).fill(null),
+    ]);
+    expect(coverage).toMatchObject({ read: 15, capped: 0 });
+  });
+
+  it("groups runs as recurring runs groups them: by prompt source too, and never a person's prompt", () => {
+    const sdk = many("sdk", RECURRING_RUNS_MIN, 320_000n);
+    const typed = many("typed", RECURRING_RUNS_MIN, 320_000n);
+    const hook = many("hook", RECURRING_RUNS_MIN - 1, 320_000n);
+    const runs = [...sdk, ...typed, ...hook];
+    // One digest, three sources. The digest alone would make one group of 14.
+    const prompts = new Map<string, RunFirstPrompt>([
+      ...sdk.map((r) => [r.runId, firstPrompt("sha256:d", "sdk")] as const),
+      ...typed.map((r) => [r.runId, firstPrompt("sha256:d", "typed")] as const),
+      ...hook.map((r) => [r.runId, firstPrompt("sha256:d", "hook")] as const),
+    ]);
+    const { reads } = planFrameReads(
+      runs,
+      everyRef(runs),
+      new Map(),
+      FRAME_READS_MAX,
+      prompts,
+    );
+    expect(ids(reads.filter((r) => r.group !== undefined))).toEqual(ids(sdk));
+  });
+
+  it("reads no group when it has no place for one", () => {
+    const job = many("job", 10, 320_000n);
+    const { reads } = planFrameReads(
+      job,
+      everyRef(job),
+      new Map(),
+      FRAME_READS_MAX,
+      promptsOf([["sha256:job", job]]),
+      { groupReads: 0 },
+    );
+    expect(ids(reads)).toEqual(ids(job));
+    expect(reads.every((r) => r.group === undefined)).toBe(true);
+  });
+
+  it("takes two groups of one cost and size by job key, and each group's runs by rank", () => {
+    const dear = many("dear", 300, 1_000_000n);
     // Within each group, the dearer run has the later id.
     const later = [
       planRun("tse_x0", 10_000n),
@@ -536,27 +720,17 @@ describe("planFrameReads with recurring groups of one size (#4594)", () => {
       planRun("tse_y4", 50_000n),
     ];
     const runs = [...dear, ...later, ...earlier];
-    const at = new Date("2026-09-10T09:59:00.000Z");
-    const prompt = (digest: string): RunFirstPrompt => ({
-      at,
-      atMicros: at.getTime() * 1_000,
-      digest,
-      source: null,
-      origin: null,
-      commandName: null,
-    });
-    const prompts = new Map<string, RunFirstPrompt>([
-      ...later.map((r) => [r.runId, prompt("sha256:b")] as const),
-      ...earlier.map((r) => [r.runId, prompt("sha256:a")] as const),
-    ]);
     const { reads } = planFrameReads(
       runs,
-      new Map(runs.map((r) => [r.runId, tachoRef(SESSION)])),
+      everyRef(runs),
       new Map(),
-      FRAME_RUNS_READ_MAX,
-      prompts,
+      FRAME_READS_MAX,
+      promptsOf([
+        ["sha256:b", later],
+        ["sha256:a", earlier],
+      ]),
     );
-    expect(reads.slice(0, 10).map((r) => r.runId)).toEqual([
+    expect(ids(reads.slice(0, 10))).toEqual([
       "tse_y4",
       "tse_y3",
       "tse_y2",
@@ -568,6 +742,22 @@ describe("planFrameReads with recurring groups of one size (#4594)", () => {
       "tse_x1",
       "tse_x0",
     ]);
+    expect(groupsOf(reads.slice(0, 10))).toEqual([0, 0, 0, 0, 0, 1, 1, 1, 1, 1]);
+  });
+
+  it("keeps a ledger run out of a group read, since the read names root sessions", () => {
+    const job = many("job", RECURRING_RUNS_MIN, 320_000n);
+    const refs = everyRef(job);
+    refs.set(job[0]!.runId, { kind: "ledger", runUuid: rootOf(999) });
+    const { reads } = planFrameReads(
+      job,
+      refs,
+      new Map(),
+      FRAME_READS_MAX,
+      promptsOf([["sha256:job", job]]),
+    );
+    expect(ids(reads)).toEqual([...ids(job.slice(1)), job[0]!.runId]);
+    expect(groupsOf(reads)).toEqual([0, 0, 0, 0, null]);
   });
 });
 
@@ -1417,6 +1607,64 @@ describe("readFrameRows", () => {
     expect([...rows.keys()]).toEqual(["a", "b", "c", "d", "e"]);
     expect(peak).toBe(14);
   });
+
+  // #5168: a group read returns all of its runs' rows in one query.
+  const grouped: FrameRead[] = runs.map((r) =>
+    r.runId === "d" || r.runId === "e" ? r : { ...r, group: 0 },
+  );
+  const readGroup = (group: readonly FrameRead[]) =>
+    Promise.resolve(
+      new Map(group.map((r) => [r.runId, Array.from({ length: sizes[r.runId]! }, (_, i) => i)])),
+    );
+
+  it("reads a group's runs in one query, and admits them one by one while they fit", async () => {
+    const reader = vi.fn(read);
+    const groupReader = vi.fn(readGroup);
+    const { rows, peak } = await readFrameRows(
+      grouped,
+      reader,
+      8,
+      2,
+      groupReader,
+    );
+    // a (3) and b (4) fit 8, and c (5) would pass it, so the read stops
+    // inside the group.
+    expect([...rows.keys()]).toEqual(["a", "b"]);
+    expect(peak).toBe(7);
+    expect(groupReader).toHaveBeenCalledTimes(1);
+    expect(groupReader.mock.calls[0]?.[0].map((r) => r.runId)).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+    // The run read in the same batch was read and dropped.
+    expect(reader.mock.calls.map(([r]) => r.runId)).toEqual(["d"]);
+  });
+
+  it("reads every run of a group and the runs after it while they fit", async () => {
+    const { rows, peak } = await readFrameRows(grouped, read, 14, 2, readGroup);
+    expect([...rows.keys()]).toEqual(["a", "b", "c", "d", "e"]);
+    expect(peak).toBe(14);
+  });
+
+  it("reads a group's runs one by one when the caller cannot read a group", async () => {
+    const reader = vi.fn(read);
+    const { rows } = await readFrameRows(grouped, reader, 14, 2);
+    expect([...rows.keys()]).toEqual(["a", "b", "c", "d", "e"]);
+    expect(reader).toHaveBeenCalledTimes(5);
+  });
+
+  it("admits a group's run the read returned no rows for as read, with no frames", async () => {
+    const { rows } = await readFrameRows(
+      grouped,
+      read,
+      14,
+      2,
+      async () => new Map(),
+    );
+    expect(rows.get("a")).toEqual([]);
+    expect([...rows.keys()]).toEqual(["a", "b", "c", "d", "e"]);
+  });
 });
 
 describe("a pass with more frames than it may hold", () => {
@@ -1688,34 +1936,33 @@ describe("claims for applied findings with none (#4506)", () => {
   });
 });
 
-describe("a pass's frame plan (#4594)", () => {
-  it("hands each run's first prompt to the plan, so a cheap recurring job is read past 200 dearer runs", async () => {
-    const runOf = (n: number, costMicros: bigint): RunTotalsRecord => ({
-      ...pricedRun(),
-      runId: `tse_${String(n).padStart(22, "0")}`,
-      costMicros,
-    });
-    const dear = Array.from({ length: FRAME_RUNS_READ_MAX + 10 }, (_, i) =>
+describe("a pass's frame plan (#4594, #5168)", () => {
+  /** Root session `i`, numbered from 1. */
+  const rootOf = (i: number) =>
+    `00000000-0000-4000-8000-${(i + 1).toString(16).padStart(12, "0")}`;
+  const runOf = (n: number, costMicros: bigint): RunTotalsRecord => ({
+    ...pricedRun(),
+    runId: `tse_${String(n).padStart(22, "0")}`,
+    costMicros,
+  });
+  const promptOf = (digest: string): RunFirstPrompt => ({
+    at: new Date("2026-09-10T09:59:00.000Z"),
+    atMicros: Date.parse("2026-09-10T09:59:00.000Z") * 1_000,
+    digest,
+    source: null,
+    origin: null,
+    commandName: null,
+  });
+
+  it("hands each run's first prompt to the plan, so a cheap recurring job is read in one group read ahead of 200 dearer runs", async () => {
+    const dear = Array.from({ length: FRAME_READS_MAX + 10 }, (_, i) =>
       runOf(i + 1, 1_000_000n),
     );
     const job = Array.from({ length: RECURRING_RUNS_MIN }, (_, i) =>
       runOf(1_000 + i, 1_000n),
     );
     const runs = [...dear, ...job];
-    const roots = new Map(
-      runs.map((r, i) => [
-        `00000000-0000-4000-8000-${(i + 1).toString(16).padStart(12, "0")}`,
-        r.runId,
-      ]),
-    );
-    const prompt: RunFirstPrompt = {
-      at: new Date("2026-09-10T09:59:00.000Z"),
-      atMicros: Date.parse("2026-09-10T09:59:00.000Z") * 1_000,
-      digest: "sha256:job",
-      source: null,
-      origin: null,
-      commandName: null,
-    };
+    const roots = new Map(runs.map((r, i) => [rootOf(i), r.runId]));
     const readFrames = vi.fn(
       async (_scope: unknown, _runs: readonly FrameRead[]) =>
         new Map<string, PricedRequestFrame[]>(),
@@ -1727,14 +1974,264 @@ describe("a pass's frame plan (#4594)", () => {
       readToolCalls: async () => [],
       readFrames,
       readDecisions: async () => new Map(),
-      readFirstPrompts: async () => new Map(job.map((r) => [r.runId, prompt])),
+      readFirstPrompts: async () =>
+        new Map(job.map((r) => [r.runId, promptOf("sha256:job")])),
       write: async () => 0,
     });
     const planned = readFrames.mock.calls[0]?.[1] ?? [];
-    expect(planned).toHaveLength(FRAME_RUNS_READ_MAX);
+    // The job takes one read, and the dearer runs the other 199.
+    expect(planned).toHaveLength(job.length + FRAME_READS_MAX - 1);
     expect(planned.slice(0, job.length).map((r) => r.runId)).toEqual(
       job.map((r) => r.runId),
     );
+    expect(planned.slice(0, job.length).map((r) => r.group)).toEqual(
+      Array<number>(job.length).fill(0),
+    );
+  });
+
+  /**
+   * A pass over `dear` and the recurring `jobs`, with every run's frames
+   * read through the store's own priced read. Each run has one model call:
+   * $1.00 for a dear run, and `jobCost` for a job's run. Each job's runs are
+   * sealed, made no tool call, and changed no file.
+   */
+  async function passOver(
+    dear: readonly RunTotalsRecord[],
+    jobs: readonly (readonly RunTotalsRecord[])[],
+  ) {
+    const runs = [...dear, ...jobs.flat()];
+    const roots = new Map(runs.map((r, i) => [rootOf(i), r.runId]));
+    const rootByRun = new Map([...roots].map(([root, id]) => [id, root]));
+    const costOf = new Map(runs.map((r) => [r.runId, r.costMicros]));
+    const runByRoot = roots;
+    const frameOf = (root: string) =>
+      frameRow({
+        at: "2026-09-10T10:00:00.500000Z",
+        sessionUuid: root,
+        seq: 1,
+        reportedCostMicros: String(costOf.get(runByRoot.get(root)!)),
+      });
+    vi.mocked(loadPriceBookSlice).mockClear();
+    vi.mocked(readModelCallFrames).mockReset();
+    vi.mocked(readModelCallFrames).mockImplementation(async ({ run }) =>
+      run.kind === "tacho" ? [frameOf(run.rootSessionUuid)] : [],
+    );
+    vi.mocked(readGroupModelCallFrames).mockReset();
+    vi.mocked(readGroupModelCallFrames).mockImplementation(async ({ runs }) =>
+      new Map(runs.map((r) => [r.rootSessionUuid, [frameOf(r.rootSessionUuid)]])),
+    );
+    vi.mocked(detectFindings).mockClear();
+    const write = vi.fn(
+      async (_s, _at, _decided, drafts: readonly FindingDraft[]) =>
+        drafts.length,
+    );
+    const jobRuns = jobs.flat();
+    await runFindingsPass(SCOPE, {
+      now: () => NOW,
+      readRuns: async () => runs,
+      readRootSessions: async () => roots,
+      readToolCalls: async () => [],
+      readFrames: (scope, reads) =>
+        readPricedFrames(scope, reads, FRAME_READ_MAX_FRAMES, true),
+      readDecisions: async () => new Map(),
+      readFirstPrompts: async () =>
+        new Map(
+          jobs.flatMap((job, i) =>
+            job.map((r) => [r.runId, promptOf(`sha256:job${i}`)] as const),
+          ),
+        ),
+      readFileChanges: async () =>
+        new Map(jobRuns.map((r) => [r.runId, false])),
+      write,
+    });
+    const seen: DetectInput | undefined =
+      vi.mocked(detectFindings).mock.calls.at(-1)?.[0];
+    return {
+      drafts: write.mock.calls[0]?.[3] ?? [],
+      seen,
+      rootByRun,
+    };
+  }
+
+  /** `n` sealed runs of one job, from `first` on, each at `costMicros`. */
+  const jobOf = (first: number, n: number, costMicros: bigint, agent: string) =>
+    Array.from({ length: n }, (_, i) => {
+      const r = runOf(first + i, costMicros);
+      return {
+        ...r,
+        agentKey: agent,
+        sealedAt: new Date(r.startedAt.getTime() + 10 * 60_000),
+        toolCalls: 0,
+        modelCalls: 1,
+      };
+    });
+
+  // #5168, the Definition of done: the run reserve read 50 of this job's 400
+  // runs, so 12.5% of its calls were priced and the pass wrote nothing.
+  it("writes a recurring runs finding for a 400-run job behind 300 dearer runs", async () => {
+    const dear = Array.from({ length: 300 }, (_, i) =>
+      runOf(i + 1, 1_000_000n),
+    );
+    const job = jobOf(10_000, 400, 320_000n, "acme.ops.nightly");
+    const { drafts, seen } = await passOver(dear, [job]);
+
+    // One query read the whole job.
+    expect(readGroupModelCallFrames).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(readGroupModelCallFrames).mock.calls[0]?.[0].runs).toHaveLength(
+      400,
+    );
+    expect(seen?.frameCoverage).toEqual({
+      runs: 700,
+      read: 400 + FRAME_READS_MAX - 1,
+      capped: 300 - (FRAME_READS_MAX - 1),
+      unmatched: 0,
+    });
+    const recurring = drafts.filter((d) => d.kind === "recurring_runs");
+    expect(recurring).toHaveLength(1);
+    expect(recurring[0]).toMatchObject({
+      level: "agent",
+      subject: "acme.ops.nightly",
+      savingMicros: 400n * 320_000n,
+    });
+    // Each of the job's frames is claimed once, under detector 7.
+    const claims = recurring[0]!.claims ?? [];
+    expect(claims).toHaveLength(400);
+    expect(claims.every((c) => c.detector === 7)).toBe(true);
+    expect(new Set(claims.map((c) => c.runId))).toEqual(
+      new Set(job.map((r) => r.runId)),
+    );
+  });
+
+  // #5168, the Definition of done: the bound decision 12 sets.
+  it(`keeps a pass within ${FRAME_READS_MAX} queries, ${FRAME_GROUP_READS_RESERVE} of them group reads, and ${FRAME_READ_MAX_FRAMES} frames`, async () => {
+    const dear = Array.from({ length: 300 }, (_, i) =>
+      runOf(i + 1, 1_000_000n),
+    );
+    // The spec's sample job, about 2,500 runs a month, and 59 small jobs.
+    const big = jobOf(10_000, 2_500, 320_000n, "acme.ops.nightly");
+    const small = Array.from({ length: 59 }, (_, j) =>
+      jobOf(20_000 + j * 10, RECURRING_RUNS_MIN, 10_000n - BigInt(j), `acme.ops.small${j}`),
+    );
+    const { seen, rootByRun } = await passOver(dear, [big, ...small]);
+
+    const groupCalls = vi.mocked(readGroupModelCallFrames).mock.calls;
+    const runCalls = vi.mocked(readModelCallFrames).mock.calls;
+    expect(groupCalls).toHaveLength(FRAME_GROUP_READS_RESERVE);
+    expect(groupCalls.length + runCalls.length).toBe(FRAME_READS_MAX);
+    // The 2,500-run job is one query.
+    expect(groupCalls[0]?.[0].runs.map((r) => r.rootSessionUuid)).toEqual(
+      big.map((r) => rootByRun.get(r.runId)),
+    );
+    for (const [args] of groupCalls) {
+      const sessions = new Set(args.runs.flatMap((r) => r.sessionUuids));
+      expect(sessions.size).toBeLessThanOrEqual(FRAME_GROUP_READ_SESSIONS);
+    }
+    // The pass holds no more frames than the cap.
+    let held = 0;
+    for (const list of seen?.frames?.values() ?? []) held += list.length;
+    expect(held).toBeLessThanOrEqual(FRAME_READ_MAX_FRAMES);
+    // The big job and 49 small jobs take the group reads. The other 10 small
+    // jobs' runs go to the ranking, where the 150 places left go to dearer
+    // runs.
+    expect(seen?.frameCoverage).toEqual({
+      runs: 300 + 2_500 + 59 * RECURRING_RUNS_MIN,
+      read: 2_500 + 49 * RECURRING_RUNS_MIN + (FRAME_READS_MAX - FRAME_GROUP_READS_RESERVE),
+      capped:
+        10 * RECURRING_RUNS_MIN + 300 - (FRAME_READS_MAX - FRAME_GROUP_READS_RESERVE),
+      unmatched: 0,
+    });
+    // Every detector runs over 3,095 runs, so this test gets more time.
+  }, 30_000);
+});
+
+describe("group reads in the priced read (#5168)", () => {
+  const A = "tse_a";
+  const B = "tse_b";
+  const ROOT_A = "00000000-0000-4000-8000-00000000000a";
+  const ROOT_B = "00000000-0000-4000-8000-00000000000b";
+  const CHILD_A = "00000000-0000-4000-8000-0000000000ac";
+  const rowsA = [
+    // Two chains' calls at one instant, which only the chain and seq order.
+    frameRow({ at: "2026-09-10T10:00:00.500000Z", sessionUuid: CHILD_A, seq: 3 }),
+    frameRow({ at: "2026-09-10T10:00:00.500000Z", sessionUuid: ROOT_A, seq: 7 }),
+    frameRow({ at: "2026-09-10T10:00:01.500000Z", sessionUuid: ROOT_A, seq: 8 }),
+  ];
+  const rowsB = [
+    frameRow({ at: "2026-09-10T10:00:00.500000Z", sessionUuid: ROOT_B, seq: 1 }),
+  ];
+  const refA = tachoRef(ROOT_A, CHILD_A);
+  const refB = tachoRef(ROOT_B);
+
+  function mockStore() {
+    vi.mocked(readModelCallFrames).mockReset();
+    vi.mocked(readModelCallFrames).mockImplementation(async ({ run }) =>
+      run.kind === "tacho" && run.rootSessionUuid === ROOT_A ? rowsA : rowsB,
+    );
+    vi.mocked(readGroupModelCallFrames).mockReset();
+    vi.mocked(readGroupModelCallFrames).mockImplementation(
+      async () =>
+        new Map([
+          [ROOT_A, rowsA],
+          [ROOT_B, rowsB],
+        ]),
+    );
+  }
+
+  it("gives each frame the key a read of its run alone gives it", async () => {
+    mockStore();
+    const alone = await readPricedFrames(SCOPE, [
+      { runId: A, ref: refA },
+      { runId: B, ref: refB },
+    ]);
+    const grouped = await readPricedFrames(SCOPE, [
+      { runId: A, ref: refA, group: 0 },
+      { runId: B, ref: refB, group: 0 },
+    ]);
+    expect(readGroupModelCallFrames).toHaveBeenCalledTimes(1);
+    expect(readGroupModelCallFrames).toHaveBeenCalledWith({
+      ...SCOPE,
+      runs: [refA, refB],
+    });
+    expect(grouped).toEqual(alone);
+    expect(grouped.get(A)?.map((f) => f.key)).toEqual([
+      `2026-09-10T10:00:00.500000Z#${ROOT_A}:7`,
+      `2026-09-10T10:00:00.500000Z#${CHILD_A}:3`,
+      `2026-09-10T10:00:01.500000Z#${ROOT_A}:8`,
+    ]);
+    // The subagent's frame names its chain, and the root's own frames none.
+    expect(grouped.get(A)?.map((f) => f.sessionUuid)).toEqual([
+      null,
+      CHILD_A,
+      null,
+    ]);
+  });
+
+  it("asks the group read for calls that named no model only for the pass", async () => {
+    mockStore();
+    const reads: FrameRead[] = [
+      { runId: A, ref: refA, group: 0 },
+      { runId: B, ref: refB, group: 0 },
+    ];
+    await readPricedFrames(SCOPE, reads, 10, true);
+    expect(readGroupModelCallFrames).toHaveBeenLastCalledWith({
+      ...SCOPE,
+      runs: [refA, refB],
+      keepModelless: true,
+    });
+    expect(readModelCallFrames).not.toHaveBeenCalled();
+  });
+
+  it("reads two group numbers as two queries, and a run with no group alone", async () => {
+    mockStore();
+    const C = "tse_c";
+    const out = await readPricedFrames(SCOPE, [
+      { runId: A, ref: refA, group: 0 },
+      { runId: B, ref: refB, group: 1 },
+      { runId: C, ref: refB },
+    ]);
+    expect(readGroupModelCallFrames).toHaveBeenCalledTimes(2);
+    expect(readModelCallFrames).toHaveBeenCalledTimes(1);
+    expect([...out.keys()]).toEqual([A, B, C]);
   });
 });
 

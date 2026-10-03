@@ -116,6 +116,31 @@ function jobOf(prompt: RunFirstPrompt): string | null {
   return JSON.stringify([prompt.digest, prompt.source, prompt.origin]);
 }
 
+/**
+ * The window's runs by the job their first prompt names (`jobOf`), each job's
+ * runs in the order given. A run with no first prompt, or one a person
+ * started, is in no job. The detector finds recurring prompts among these
+ * jobs. The findings pass reads the frames of each job of
+ * `RECURRING_RUNS_MIN` or more runs in one query, so it groups runs the same
+ * way (#5168).
+ */
+export function runsByJob(
+  runs: readonly RunTotalsRecord[],
+  firstPrompts: ReadonlyMap<string, RunFirstPrompt>,
+): Map<string, RunTotalsRecord[]> {
+  const byJob = new Map<string, RunTotalsRecord[]>();
+  for (const run of runs) {
+    const prompt = firstPrompts.get(run.runId);
+    if (prompt === undefined) continue;
+    const job = jobOf(prompt);
+    if (job === null) continue;
+    const list = byJob.get(job) ?? [];
+    list.push(run);
+    byJob.set(job, list);
+  }
+  return byJob;
+}
+
 /** What the pass can tell about a run's changes. */
 export type RunChange = "changed" | "unchanged" | "unknown";
 
@@ -312,16 +337,7 @@ function halfPriceBatch(providers: ReadonlySet<string | null>): boolean {
 function detect(input: DetectInput, ctx: DetectContext): void {
   const { firstPrompts, fileChanges } = input;
   if (firstPrompts === undefined || fileChanges === undefined) return;
-  const byJob = new Map<string, RunTotalsRecord[]>();
-  for (const run of input.runs) {
-    const prompt = firstPrompts.get(run.runId);
-    if (prompt === undefined) continue;
-    const job = jobOf(prompt);
-    if (job === null) continue;
-    const list = byJob.get(job) ?? [];
-    list.push(run);
-    byJob.set(job, list);
-  }
+  const byJob = runsByJob(input.runs, firstPrompts);
   const callsByRun = new Map<string, ToolCallObservation[]>();
   for (const call of input.toolCalls) {
     const list = callsByRun.get(call.runId) ?? [];

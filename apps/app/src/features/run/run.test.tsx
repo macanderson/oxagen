@@ -583,10 +583,17 @@ describe("header", () => {
     );
     expect(chips.getByText("fork replay")).toBeTruthy();
     const rig = within(screen.getByTestId("run-rig"));
-    expect(rig.getByText("claude-sonnet-5")).toHaveAttribute(
-      "title",
-      "anthropic sonnet",
+    // The model chip draws the maker's mark and names the maker in text, so
+    // the provider reads without a hover (#5297). The tier stays on hover.
+    const model = rig.getByTestId("run-model");
+    expect(model).toHaveTextContent("claude-sonnet-5");
+    expect(model).toHaveAttribute("title", "sonnet");
+    expect(within(model).getByTestId("run-model-provider")).toHaveTextContent(
+      "Anthropic",
     );
+    expect(
+      model.querySelector('svg[data-provider-mark="anthropic"]'),
+    ).not.toBeNull();
     // The session recorded its harness, so the rig names it and its version.
     expect(rig.getByText("Claude Code")).toBeTruthy();
     expect(rig.getByText("2.1.0")).toBeTruthy();

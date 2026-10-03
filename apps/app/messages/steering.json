@@ -971,6 +971,8 @@
         "pendingApproval": "The import waits for approval on access request {accessRequestId}.",
         "exhausted": "The organization has no credit left for the model calls an import makes ({code}). Add credit, then try again.",
         "unavailable": "The import could not run ({code}). Try again.",
+        "noAnswer": "Oxagen did not answer, perhaps because it restarted for an update. It imported nothing. Reload the page, then choose the files again.",
+        "commitNoAnswer": "Oxagen did not answer, perhaps because it restarted for an update. It may still have opened the steering PR and stored the memories. Reload the page. Before you import again, check the steering repo for an open import PR and the Memories tab for the memories.",
         "billing": "Open Billing"
       }
     },

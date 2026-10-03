@@ -1,6 +1,6 @@
 # ADR-206: Memories wait in Oxagen and reach a repository by a memory PR
 
-- **Status:** Accepted. Superseded in part by ADR-238 (2026-09-30): decision
+- **Status:** Accepted. Amended 2026-10-02 (#5287): decision 4's ask needs the `oxagen` server. Superseded in part by ADR-238 (2026-09-30): decision
   10's recall of unreviewed memories, and the last sentence of decision 11.
   Superseded in part by ADR-248 (2026-10-01): decision 7's purge, and the age
   drop in decision 6 step 3.
@@ -58,6 +58,20 @@ record leaves them as they are.
    Claude Code run that did not answer the ask, `run.reflect` writes the
    reflection from the run's digest on the fast tier, with `source: digest`,
    when the run shows the same signals.
+
+   *Amended 2026-10-02 (#5287).* The ask names `mcp__oxagen__record_reflection`,
+   and before this amendment no enrollment gave Claude Code that server, so the
+   hook blocked a stop for a tool the agent could not call. Enrolling Claude
+   Code now writes the local gateway into Claude Code's user config as the
+   `oxagen` server, and the Stop hook asks only when that entry is there for
+   this enrollment, the enrollment holds the gateway key, and the session
+   started after the entry was written. Claude Code loads MCP servers when a
+   session starts, so a session already running has no such tool. Otherwise
+   the hook does not block, and the digest reflection covers the run. The gateway is the
+   endpoint because both capture handlers answer only a call the local gateway
+   serves (decision 2): a session pointed at the hosted MCP server directly is
+   refused with `no_watched_run`. Through the gateway the call seals on the
+   session's chain (ADR-189), where `run.reflect` reads it.
 5. **Tool grades never steer.** A reflection's tool grades and tool feedback
    stay on its row for the tool server's owner. The curator and recall never
    read them.

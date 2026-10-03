@@ -764,17 +764,13 @@ describe("an import in several parse calls", () => {
     );
   });
 
-  it("names a failed match in the dialog and opens no grid (negative)", async () => {
+  it("asks for a reload when the match gets no answer, and opens no grid (negative)", async () => {
     answerEachCall();
-    matchMarkdownImport.mockResolvedValue({
-      ok: false,
-      reason: "unavailable",
-      code: "action_failed",
-    });
+    matchMarkdownImport.mockRejectedValue(new TypeError("Failed to fetch"));
     const dialog = await pickFiles(many());
     fireEvent.click(within(dialog).getByTestId("import-review"));
     expect(await within(dialog).findByTestId("import-failure")).toHaveTextContent(
-      "The import could not run (action_failed).",
+      "Oxagen did not answer, perhaps because it restarted for an update. It imported nothing. Reload the page, then choose the files again.",
     );
     expect(within(dialog).queryByTestId("import-row")).toBeNull();
   });
@@ -809,6 +805,52 @@ describe("refusals", () => {
     expect(
       within(failure).getByRole("link", { name: "Open Billing" }),
     ).toHaveAttribute("href", "/acme/billing");
+  });
+
+  it("asks for a reload when the review gets no answer, and stays on the files (negative)", async () => {
+    // A deploy that restarts the app mid-call drops the request, and the
+    // page's server action ids no longer exist on the new build (#5319).
+    parseMarkdownImport.mockRejectedValue(new TypeError("Failed to fetch"));
+    const dialog = await pickFiles();
+    fireEvent.click(within(dialog).getByTestId("import-review"));
+    const failure = await within(dialog).findByTestId("import-failure");
+    expect(failure).toHaveAttribute("data-reason", "unavailable");
+    expect(failure).toHaveTextContent(
+      "Oxagen did not answer, perhaps because it restarted for an update. It imported nothing. Reload the page, then choose the files again.",
+    );
+    expect(failure).not.toHaveTextContent("Try again");
+    expect(within(dialog).getByTestId("import-review")).toBeEnabled();
+    expect(within(dialog).queryByTestId("import-row")).toBeNull();
+  });
+
+  it("still names the code of an unavailable answer from the server (negative)", async () => {
+    parseMarkdownImport.mockResolvedValue({
+      ok: false,
+      reason: "unavailable",
+      code: "kernel_failure",
+    });
+    const dialog = await pickFiles();
+    fireEvent.click(within(dialog).getByTestId("import-review"));
+    expect(await within(dialog).findByTestId("import-failure")).toHaveTextContent(
+      "The import could not run (kernel_failure). Try again.",
+    );
+  });
+
+  it("asks for a reload and a check when the commit gets no answer, and keeps the rows (negative)", async () => {
+    parseMarkdownImport.mockResolvedValue({ ok: true, value: parsed() });
+    commitMarkdownImport.mockRejectedValue(new TypeError("Failed to fetch"));
+    const dialog = await pickFiles();
+    await reviewStatements(dialog);
+    fireEvent.click(within(dialog).getByTestId("import-commit"));
+    const failure = await within(dialog).findByTestId("import-failure");
+    expect(failure).toHaveTextContent(
+      "It may still have opened the steering PR and stored the memories.",
+    );
+    expect(failure).toHaveTextContent(
+      "Before you import again, check the steering repo for an open import PR and the Memories tab for the memories.",
+    );
+    expect(within(dialog).getAllByTestId("import-row")).toHaveLength(2);
+    expect(commitMarkdownImport).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the rows and names the reason when the steering PR does not open (negative)", async () => {
