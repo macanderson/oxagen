@@ -138,6 +138,15 @@ export async function writeProductionBranch(
   };
 }
 
+/**
+ * What the check needs from the repository's token: its metadata, and the
+ * branch it names (#4753).
+ */
+export const PRODUCTION_BRANCH_PERMISSIONS = {
+  metadata: "read",
+  contents: "read",
+};
+
 export interface ProductionBranchDeps {
   github: WorkspaceGithub;
   readBound: typeof readBoundRepository;
@@ -179,7 +188,8 @@ export function createProductionBranchSetHandler(
     const gh = await requireWorkspaceGithub(
       deps.github,
       scope,
-      bound.connectionId,
+      bound,
+      PRODUCTION_BRANCH_PERMISSIONS,
     );
     // A repository deleted and re-created under the same name has a new id.
     // Writing its branch onto this binding would pin the old repository's

@@ -53,10 +53,14 @@ export const githubInstallationRepositoriesDeps: InstallationRepositoriesDeps = 
         "GitHub App is not configured: GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY unset",
       );
     }
+    // The picker lists every repository the installation covers, so this
+    // token keeps the whole installation. It holds only the metadata read
+    // `GET /installation/repositories` needs (#4753).
     const { token } = await getInstallationToken({
       appId,
       privateKey,
       installationId,
+      permissions: { metadata: "read" },
     });
     return createGitHubClient({ token }).listInstallationRepositories(options);
   },

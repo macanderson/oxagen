@@ -1,7 +1,8 @@
 // readBoundRepository refuses a GitLab binding by name (#3762): the three
 // capabilities built on it read and write through a GitHub App installation.
 // workspaceGithub reads a provisioned steering repository through the Oxagen
-// Steering app, and every other repository through the workspace's own app.
+// Steering app, and every other repository through the workspace's own app,
+// with a token for that one repository and the call's permissions (#4753).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -46,7 +47,16 @@ vi.mock("./lib/steering-app", async (importOriginal) => {
   };
 });
 
-import { readBoundRepository, workspaceGithub } from "./repository.bound";
+import {
+  readBoundRepository,
+  requireWorkspaceGithub,
+  workspaceGithub,
+  type RepositoryAccess,
+} from "./repository.bound";
+import {
+  githubTokenFetch,
+  TEST_APP_PRIVATE_KEY,
+} from "./test-utils/github-token-mint";
 
 const SCOPE = {
   orgId: "0192d4a8-7c1e-7a00-8000-00000000ac3e",
@@ -81,6 +91,14 @@ const ROW = {
   name: "widgets",
   fullName: "acme/widgets",
   productionBranch: "main",
+};
+
+/** The repository a call names, and what it asks the token to hold. */
+const ACCESS: RepositoryAccess = {
+  providerRepositoryId: "9001",
+  name: "widgets",
+  fullName: "acme/widgets",
+  permissions: { metadata: "read", contents: "read" },
 };
 
 beforeEach(() => vi.resetAllMocks());
@@ -162,11 +180,15 @@ describe("workspaceGithub.client", () => {
   });
 
   it("reads through the workspace's installation when no connection is named", async () => {
-    await expect(workspaceGithub.client(SCOPE)).resolves.toBe(WORKSPACE_CLIENT);
+    await expect(
+      workspaceGithub.client(SCOPE, undefined, ACCESS),
+    ).resolves.toBe(WORKSPACE_CLIENT);
     expect(mocks.getInstallationToken).toHaveBeenCalledWith({
       appId: "101",
       privateKey: "workspace-key",
       installationId: "555",
+      repositoryIds: [9001],
+      permissions: { metadata: "read", contents: "read" },
     });
     expect(mocks.withTenantDb).not.toHaveBeenCalled();
     expect(mocks.mintSteeringInstallationToken).not.toHaveBeenCalled();
@@ -177,24 +199,24 @@ describe("workspaceGithub.client", () => {
       connectorId: "github",
       deliveryConfig: { installationId: "555" },
     });
-    await expect(workspaceGithub.client(SCOPE, "conn-uuid")).resolves.toBe(
-      WORKSPACE_CLIENT,
-    );
+    await expect(
+      workspaceGithub.client(SCOPE, "conn-uuid", ACCESS),
+    ).resolves.toBe(WORKSPACE_CLIENT);
     expect(mocks.getInstallationToken).toHaveBeenCalled();
     expect(mocks.mintSteeringInstallationToken).not.toHaveBeenCalled();
   });
 
   it("falls back to the workspace's installation when the named connection is retired or gone", async () => {
     connection(null);
-    await expect(workspaceGithub.client(SCOPE, "conn-uuid")).resolves.toBe(
-      WORKSPACE_CLIENT,
-    );
+    await expect(
+      workspaceGithub.client(SCOPE, "conn-uuid", ACCESS),
+    ).resolves.toBe(WORKSPACE_CLIENT);
     expect(mocks.mintSteeringInstallationToken).not.toHaveBeenCalled();
   });
 
   it("reads only a live connection in this workspace", async () => {
     const where = connection(null);
-    await workspaceGithub.client(SCOPE, "conn-uuid");
+    await workspaceGithub.client(SCOPE, "conn-uuid", ACCESS);
     const query = new PgDialect().sqlToQuery(where[0] as SQL);
     expect(query.params).toEqual(
       expect.arrayContaining([
@@ -221,9 +243,9 @@ describe("workspaceGithub.client", () => {
         connectorId: "github_steering",
         deliveryConfig: { installationId, owner: "acme" },
       });
-      await expect(workspaceGithub.client(SCOPE, "conn-uuid")).resolves.toBe(
-        STEERING_CLIENT,
-      );
+      await expect(
+        workspaceGithub.client(SCOPE, "conn-uuid", ACCESS),
+      ).resolves.toBe(STEERING_CLIENT);
       expect(mocks.mintSteeringInstallationToken).toHaveBeenCalledWith(4242);
       expect(mocks.createGitHubClient).toHaveBeenCalledWith({
         token: "steering-tok",
@@ -243,7 +265,7 @@ describe("workspaceGithub.client", () => {
     async (_label, deliveryConfig) => {
       connection({ connectorId: "github_steering", deliveryConfig });
       await expect(
-        workspaceGithub.client(SCOPE, "conn-uuid"),
+        workspaceGithub.client(SCOPE, "conn-uuid", ACCESS),
       ).rejects.toMatchObject({
         code: "conflict",
         reason: "steering_installation_missing",
@@ -253,4 +275,124 @@ describe("workspaceGithub.client", () => {
       expect(mocks.getInstallationToken).not.toHaveBeenCalled();
     },
   );
+});
+
+// The narrowing as GitHub receives it: the real mint, in front of a fake
+// api.github.com that records each access-token request body (#4753).
+describe("the workspace token's narrowing", () => {
+  const CLIENT = { kind: "workspace" };
+
+  beforeEach(async () => {
+    const real =
+      await vi.importActual<typeof import("@oxagen/github")>("@oxagen/github");
+    mocks.getInstallationToken.mockImplementation(real.getInstallationToken);
+    mocks.createGitHubClient.mockReturnValue(CLIENT);
+    vi.stubEnv("GITHUB_APP_ID", "101");
+    vi.stubEnv("GITHUB_APP_PRIVATE_KEY", TEST_APP_PRIVATE_KEY);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** The workspace's installation. The mint caches per id, so each test names its own. */
+  function installation(installationId: string) {
+    mocks.resolveWorkspaceGithubInstallation.mockResolvedValue({
+      id: "workspace-conn",
+      publicId: "con_1",
+      status: "active",
+      installationId,
+    });
+  }
+
+  it("asks for the one bound repository by id, with only the call's permissions", async () => {
+    installation("47531");
+    const github = githubTokenFetch();
+    vi.stubGlobal("fetch", github.fetch);
+    await expect(
+      workspaceGithub.client(SCOPE, undefined, ACCESS),
+    ).resolves.toBe(CLIENT);
+    expect(github.mints).toEqual([
+      {
+        installationId: "47531",
+        body: {
+          repository_ids: [9001],
+          permissions: { contents: "read", metadata: "read" },
+        },
+      },
+    ]);
+    expect(mocks.createGitHubClient).toHaveBeenCalledWith({
+      token: "ghs_test",
+    });
+  });
+
+  it("asks for the repository by name when the stored id does not read as one", async () => {
+    installation("47532");
+    const github = githubTokenFetch();
+    vi.stubGlobal("fetch", github.fetch);
+    await workspaceGithub.client(SCOPE, undefined, {
+      ...ACCESS,
+      providerRepositoryId: "R_kgDO",
+    });
+    expect(github.mints[0]?.body).toEqual({
+      repositories: ["widgets"],
+      permissions: { contents: "read", metadata: "read" },
+    });
+  });
+
+  it("sends the bound head's repository and the caller's permissions through requireWorkspaceGithub", async () => {
+    installation("47533");
+    // The head hangs from the workspace's own GitHub connection.
+    connection({
+      connectorId: "github",
+      deliveryConfig: { installationId: "47533" },
+    });
+    const github = githubTokenFetch();
+    vi.stubGlobal("fetch", github.fetch);
+    await requireWorkspaceGithub(
+      workspaceGithub,
+      SCOPE,
+      {
+        connectionId: "conn-uuid",
+        providerRepositoryId: "9002",
+        name: "gadgets",
+        fullName: "acme/gadgets",
+      },
+      { metadata: "read", contents: "read", pull_requests: "read" },
+    );
+    expect(github.mints[0]?.body).toEqual({
+      repository_ids: [9002],
+      permissions: {
+        contents: "read",
+        metadata: "read",
+        pull_requests: "read",
+      },
+    });
+  });
+
+  it("refuses with repository_not_installed when GitHub will not mint for the repository", async () => {
+    installation("47534");
+    const github = githubTokenFetch({
+      mintStatus: 422,
+      mintMessage:
+        "There is at least one repository that does not exist or is not accessible to the parent installation.",
+    });
+    vi.stubGlobal("fetch", github.fetch);
+    await expect(
+      workspaceGithub.client(SCOPE, undefined, ACCESS),
+    ).rejects.toMatchObject({
+      code: "not_found",
+      reason: "repository_not_installed",
+    });
+    expect(mocks.createGitHubClient).not.toHaveBeenCalled();
+  });
+
+  it("lets any other mint failure through unchanged", async () => {
+    installation("47535");
+    vi.stubGlobal(
+      "fetch",
+      githubTokenFetch({ mintStatus: 401, mintMessage: "Bad credentials" })
+        .fetch,
+    );
+    await expect(
+      workspaceGithub.client(SCOPE, undefined, ACCESS),
+    ).rejects.toThrow("GitHub App token mint failed (401): Bad credentials");
+  });
 });

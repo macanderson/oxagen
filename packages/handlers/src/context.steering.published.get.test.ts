@@ -171,10 +171,16 @@ describe("get_published_steering", () => {
     expect(client).toHaveBeenCalledWith(
       { orgId: "org_1", workspaceId: "ws_1" },
       "conn-steering",
+      {
+        providerRepositoryId: "42",
+        name: "widgets",
+        fullName: "acme/widgets",
+        permissions: { metadata: "read", contents: "read" },
+      },
     );
   });
 
-  it("asks for the named binding's connection when a bindingId is given", async () => {
+  it("asks for the named binding's connection and repository when a bindingId is given", async () => {
     const named: BoundRepository = { ...LINKED, connectionId: "conn-linked" };
     const client = vi.fn(async () => fakeGithub());
     await createPublishedSteeringGetHandler({
@@ -186,6 +192,12 @@ describe("get_published_steering", () => {
     expect(client).toHaveBeenCalledWith(
       { orgId: "org_1", workspaceId: "ws_1" },
       "conn-linked",
+      {
+        providerRepositoryId: "43",
+        name: "docs",
+        fullName: "acme/docs",
+        permissions: { metadata: "read", contents: "read" },
+      },
     );
   });
 

@@ -199,7 +199,7 @@ describe("set_production_branch", () => {
     expect(write).not.toHaveBeenCalled();
   });
 
-  it("names the bound head's connection, so a steering repository reads through its own app", async () => {
+  it("names the bound head's connection and repository, and asks for metadata and contents read only", async () => {
     const client = vi.fn(async () => fakeGithub());
     const handler = createProductionBranchSetHandler({
       github: { client },
@@ -216,6 +216,12 @@ describe("set_production_branch", () => {
     expect(client).toHaveBeenCalledWith(
       { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
       "steering-conn",
+      {
+        providerRepositoryId: "42",
+        name: "widgets",
+        fullName: "acme/widgets",
+        permissions: { metadata: "read", contents: "read" },
+      },
     );
   });
 
