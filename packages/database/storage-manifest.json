@@ -1146,6 +1146,17 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "get_change_set",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "repo",
       "name": "get_ci_status",
       "reads": [],
@@ -1607,6 +1618,17 @@
         "agent",
         "api",
         "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "get_revision_diff",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
         "mcp"
       ],
       "writes": []

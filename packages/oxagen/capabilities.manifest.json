@@ -2743,6 +2743,42 @@
       }
     },
     {
+      "name": "get_change_set",
+      "file": "forge.changes.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_revision_diff",
+      "file": "forge.revision.diff.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "get_node",
       "file": "graph.node.get.ts",
       "domain": "graph",

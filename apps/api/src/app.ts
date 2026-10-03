@@ -262,6 +262,8 @@ import { steeringPrOpenRoute } from "./routes/v1/steering.pr.open";
 import { steeringPrGetRoute } from "./routes/v1/steering.pr.get";
 import { steeringPrRefreshRoute } from "./routes/v1/steering.pr.refresh";
 import { steeringPrDiffGetRoute } from "./routes/v1/steering.pr.diff.get";
+import { changeSetGetRoute } from "./routes/v1/forge.changes.get";
+import { revisionDiffGetRoute } from "./routes/v1/forge.revision.diff.get";
 import { steeringPrMergeRoute } from "./routes/v1/steering.pr.merge";
 import { steeringPrMergeWithoutReviewRoute } from "./routes/v1/steering.pr.merge_without_review";
 import { steeringPrRevertRoute } from "./routes/v1/steering.pr.revert";
@@ -1409,6 +1411,10 @@ orgScoped.route("/steering/prs/open", steeringPrOpenRoute);
 orgScoped.route("/steering/prs/get", steeringPrGetRoute);
 orgScoped.route("/steering/prs/refresh", steeringPrRefreshRoute);
 orgScoped.route("/steering/prs/diff", steeringPrDiffGetRoute);
+// A scope's pull requests and their change, and one revision's stored diff,
+// both read from the forge store (ADR-292).
+orgScoped.route("/pull-requests/changes", changeSetGetRoute);
+orgScoped.route("/pull-requests/revisions/diff", revisionDiffGetRoute);
 orgScoped.route("/steering/prs/merge", steeringPrMergeRoute);
 orgScoped.route(
   "/steering/prs/merge-without-review",

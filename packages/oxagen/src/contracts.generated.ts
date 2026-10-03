@@ -161,6 +161,8 @@ import "./contracts/finding.evidence.get";
 import "./contracts/finding.fix.record";
 import "./contracts/finding.list";
 import "./contracts/finding.shared";
+import "./contracts/forge.changes.get";
+import "./contracts/forge.revision.diff.get";
 import "./contracts/graph.node.get";
 import "./contracts/graph.node.list";
 import "./contracts/graph.node.search";
