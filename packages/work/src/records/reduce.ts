@@ -15,7 +15,11 @@
 //     that moves away and comes back to the accepted commit voids it too: a
 //     new head invalidates every acceptance made before it.
 //   - Done means accepted and merged, in either order. A pull request closed
-//     without merging is not done.
+//     without merging is not done. A merge by the Oxagen GitHub App is an
+//     agent merging its own work with the push token Oxagen issued it, so it
+//     is not done: the send stays in review and says the app merged it. A
+//     merge by any other account counts, a merge queue or a team's merge bot
+//     included, and so does a merge with no merger on record.
 //   - A material source or brief change after approval leaves the item
 //     changed. A running order keeps the brief it was sent with.
 //   - Reopening keeps every earlier fact and starts a fresh delivery on a new
@@ -25,6 +29,7 @@ import {
   type CheckConclusion,
   type CloseResolution,
   type FactOf,
+  type MergedBy,
   type RuntimeTier,
   type TriageOutcome,
   type WorkFact,
@@ -68,6 +73,7 @@ export const TERMINAL_DELIVERY_STATES: readonly DeliveryState[] = ["stopped", "r
 /** Why a person cannot accept a send's result yet. */
 export const REVIEW_BLOCKS = [
   "order_closed",
+  "merged_by_app",
   "already_accepted",
   "run_active",
   "pr_closed",
@@ -160,7 +166,12 @@ export interface OrderProjection {
    * stays visible.
    */
   staleAcceptance: AcceptanceRef | null;
-  merge: { headSha: string; mergeCommit: string; at: string } | null;
+  /**
+   * The merge, with the account the provider says merged it. `mergedBy` is
+   * null when no merger is on record: a merge recorded before Oxagen read
+   * one, or one the provider named no account for.
+   */
+  merge: { headSha: string; mergeCommit: string; at: string; mergedBy: MergedBy | null } | null;
   /** The pull request closed without merging. */
   prClosed: boolean;
   returned: { reason: string; actor: string; at: string } | null;
@@ -233,6 +244,24 @@ function deliveryOf(facts: readonly WorkFact[]): DeliveryState {
   return "waiting_for_claim";
 }
 
+/**
+ * The Oxagen GitHub App's account when it merged a send's pull request, or
+ * null when another account merged it, no merger is on record, or it has not
+ * merged. A merge queue's bot or a team's merge bot returns null: only the
+ * app whose installation token Oxagen issues an agent keeps a send out of
+ * done. Pure.
+ */
+export function appMergerOf(order: Pick<OrderProjection, "merge">): MergedBy | null {
+  const merger = order.merge?.mergedBy ?? null;
+  return merger !== null && merger.oxagen_app ? merger : null;
+}
+
+function mergedByOf(fact: FactOf<"merged">): MergedBy | null {
+  const merger = fact.data.merged_by;
+  if (merger === undefined || merger === null) return null;
+  return { login: merger.login, type: merger.type, oxagen_app: merger.oxagen_app === true };
+}
+
 function acceptanceOf(fact: FactOf<"accepted">): AcceptanceRef {
   return {
     headSha: fact.headSha as string,
@@ -268,7 +297,12 @@ function reduceOrder(
   // a done send stays done whatever arrives after it.
   const mergeFact = ofKind(facts, "merged").filter(onPullRequest)[0];
   const merge = mergeFact
-    ? { headSha: mergeFact.headSha as string, mergeCommit: mergeFact.data.merge_commit, at: mergeFact.occurredAt }
+    ? {
+        headSha: mergeFact.headSha as string,
+        mergeCommit: mergeFact.data.merge_commit,
+        at: mergeFact.occurredAt,
+        mergedBy: mergedByOf(mergeFact),
+      }
     : null;
   const headFacts = ofKind(facts, "head_observed").filter(onPullRequest);
   const headFact = last(headFacts);
@@ -318,7 +352,13 @@ function reduceOrder(
   const prClosed = merge === null && facts.some((fact) => fact.kind === "pr_closed" && onPullRequest(fact));
   const returnFact = last(ofKind(facts, "returned"));
   const returned = returnFact ? { reason: returnFact.data.reason, actor: returnFact.actor, at: returnFact.occurredAt } : null;
-  const done = acceptance !== null && merge !== null;
+  // Done needs a person on both sides: an acceptance of the merged head, and
+  // a merge the agent did not make itself. The push token Oxagen issues an
+  // agent is the Oxagen GitHub App's, so a merge by that app leaves the send
+  // in review, whatever was accepted (agent-work-phase-1.html: human send and
+  // human merge). A merge queue merges after a person queued the pull
+  // request, so its merge counts.
+  const done = acceptance !== null && merge !== null && appMergerOf({ merge }) === null;
   // A close recorded on the order's revision or a later one ends the order.
   // A reopen moves the revision, so a send after the reopen is not ended by
   // the close before it.
@@ -381,6 +421,11 @@ function briefRef(fact: FactOf<"brief_saved"> | FactOf<"brief_approved">): Brief
  */
 export function reviewGate(item: Pick<WorkItemProjection, "approvedBrief">, order: OrderProjection): ReviewGate {
   if (order.closed) return { open: false, block: "order_closed", detail: null };
+  // The Oxagen GitHub App merged the pull request, so no acceptance can finish
+  // the send: a person returns the work or closes the item. The detail is the
+  // app's login.
+  const app = appMergerOf(order);
+  if (app !== null) return { open: false, block: "merged_by_app", detail: app.login };
   if (order.acceptance !== null) return { open: false, block: "already_accepted", detail: order.acceptance.headSha };
   if (order.merge === null && order.delivery !== "run_ended") return { open: false, block: "run_active", detail: order.delivery };
   if (order.prClosed) return { open: false, block: "pr_closed", detail: null };

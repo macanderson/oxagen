@@ -1,11 +1,18 @@
 // test-fixtures.ts: fact builders the record tests share. Test support only:
 // no production module imports it, and coverage leaves it out.
 import type { Sha256Digest } from "@oxagen/run-evidence";
-import { type CheckConclusion, type WorkFact, newFact } from "./facts";
+import { type CheckConclusion, type MergedBy, type WorkFact, newFact } from "./facts";
 
 export const SHA1 = "1".repeat(40);
 export const SHA2 = "2".repeat(40);
 export const MERGE = "9".repeat(40);
+
+/** A person who merges on GitHub. */
+export const PERSON_MERGER: MergedBy = { login: "amara", type: "User", oxagen_app: false };
+/** The Oxagen GitHub App, merging with the installation token Oxagen issues an agent. */
+export const APP_MERGER: MergedBy = { login: "oxagen-connect[bot]", type: "Bot", oxagen_app: true };
+/** GitHub's merge queue, merging a pull request a person queued. */
+export const QUEUE_MERGER: MergedBy = { login: "github-merge-queue[bot]", type: "Bot", oxagen_app: false };
 
 export function digest(n: number): Sha256Digest {
   return `sha256:${String(n).padStart(64, "0")}`;
@@ -136,8 +143,19 @@ export const f = {
     }),
   returned: (order: string, minute: number) =>
     newFact({ kind: "returned", source: "person", itemRevision: 1, actor: "marcus", occurredAt: at(minute), dedupeKey: `returned:${order}`, orderId: order, data: { reason: "The test is missing." } }),
-  merged: (order: string, sha: string, minute: number) =>
-    newFact({ kind: "merged", source: "provider", itemRevision: 1, actor: "github", occurredAt: at(minute), dedupeKey: `merged:${order}`, orderId: order, headSha: sha, data: { merge_commit: MERGE } }),
+  /** With no merger, the merge reads as one recorded before Oxagen read who merged. */
+  merged: (order: string, sha: string, minute: number, mergedBy?: MergedBy | null) =>
+    newFact({
+      kind: "merged",
+      source: "provider",
+      itemRevision: 1,
+      actor: "github",
+      occurredAt: at(minute),
+      dedupeKey: `merged:${order}`,
+      orderId: order,
+      headSha: sha,
+      data: mergedBy === undefined ? { merge_commit: MERGE } : { merge_commit: MERGE, merged_by: mergedBy },
+    }),
   prClosed: (order: string, minute: number) =>
     newFact({ kind: "pr_closed", source: "provider", itemRevision: 1, actor: "github", occurredAt: at(minute), dedupeKey: `pr-closed:${order}`, orderId: order, data: {} }),
   closed: (itemRevision: number, minute: number) =>

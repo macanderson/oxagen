@@ -239,7 +239,7 @@ describe.skipIf(!enabled)("the work record store against Postgres", () => {
       provider("run_ended", orderId, 9, { runId: `tse_${tag}a`, data: { outcome: "stopped" } }),
       provider("checks_required", orderId, 10, { headSha: SHA1, data: { names: ["test"] } }),
       provider("check_observed", orderId, 11, { headSha: SHA1, data: { name: "test", conclusion: "success" } }),
-      provider("merged", orderId, 12, { headSha: SHA1, data: { merge_commit: MERGE } }),
+      provider("merged", orderId, 12, { headSha: SHA1, data: { merge_commit: MERGE, merged_by: null } }),
     ];
   }
 

@@ -12,6 +12,7 @@ import type {
   GitHubInstallationRepo,
   GitHubInstallationRepositories,
   GitHubIssueStates,
+  GitHubMergedBy,
   GitHubPathCommit,
   GitHubPrComment,
   GitHubPrComments,
@@ -209,6 +210,8 @@ interface GHPullDetail {
   };
   merge_commit_sha?: string | null;
   merged_at?: string | null;
+  /** The account that merged it. GitHub sends null before the merge. */
+  merged_by?: { login?: string; type?: string } | null;
   closed_at?: string | null;
   additions?: number;
   deletions?: number;
@@ -221,6 +224,20 @@ interface GHPullDetail {
 
 interface GHLabel {
   name: string;
+}
+
+/**
+ * The account that merged a pull request, or null when GitHub names none or
+ * leaves out its login or its type. Pure.
+ */
+function mergedByOf(
+  value: GHPullDetail["merged_by"],
+): GitHubMergedBy | null {
+  const login = value?.login;
+  const type = value?.type;
+  if (typeof login !== "string" || login === "") return null;
+  if (typeof type !== "string" || type === "") return null;
+  return { login, type };
 }
 
 interface GHIssueComment {
@@ -1095,6 +1112,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
         : { headRepository: data.head.repo?.full_name ?? null }),
       mergeCommitSha: data.merge_commit_sha ?? null,
       mergedAt: data.merged_at ?? null,
+      mergedBy: mergedByOf(data.merged_by),
       closedAt: data.closed_at ?? null,
       baseSha: data.base.sha ?? null,
       ...(data.base.repo

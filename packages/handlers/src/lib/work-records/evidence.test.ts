@@ -3,7 +3,7 @@
 // a re-read records nothing new while a real change does.
 import { describe, expect, it } from "vitest";
 import type { GitHubCiChecks } from "@oxagen/github";
-import { evidenceFacts, observedChecksOf, type PullRequestRead } from "./evidence";
+import { evidenceFacts, mergerOf, observedChecksOf, oxagenAppBotLogin, type PullRequestRead } from "./evidence";
 
 const SHA1 = "1".repeat(40);
 const SHA2 = "2".repeat(40);
@@ -57,6 +57,34 @@ describe("observedChecksOf", () => {
       { name: "ci", conclusion: "failure", at: "2026-10-02T09:11:00.000Z" },
       { name: "lint", conclusion: "success", at: null },
     ]);
+  });
+});
+
+describe("oxagenAppBotLogin and mergerOf", () => {
+  it("names the Oxagen GitHub App's bot login from GITHUB_APP_SLUG, and none when it is unset", () => {
+    expect(oxagenAppBotLogin({ GITHUB_APP_SLUG: "oxagen-connect" })).toBe("oxagen-connect[bot]");
+    expect(oxagenAppBotLogin({ GITHUB_APP_SLUG: " oxagen-connect " })).toBe("oxagen-connect[bot]");
+    expect(oxagenAppBotLogin({})).toBeNull();
+    expect(oxagenAppBotLogin({ GITHUB_APP_SLUG: "" })).toBeNull();
+    expect(oxagenAppBotLogin({ GITHUB_APP_SLUG: "  " })).toBeNull();
+  });
+
+  it("marks only the Oxagen GitHub App's account as the app, ignoring case", () => {
+    const app = "oxagen-connect[bot]";
+    expect(mergerOf({ login: "oxagen-connect[bot]", type: "Bot" }, app)).toEqual({ login: "oxagen-connect[bot]", type: "Bot", oxagen_app: true });
+    expect(mergerOf({ login: "Oxagen-Connect[bot]", type: "Bot" }, app)?.oxagen_app).toBe(true);
+    // GitHub's merge queue and a team's merge bot merge for a person, so they are not the app.
+    expect(mergerOf({ login: "github-merge-queue[bot]", type: "Bot" }, app)).toEqual({ login: "github-merge-queue[bot]", type: "Bot", oxagen_app: false });
+    expect(mergerOf({ login: "acme-merge-bot[bot]", type: "Bot" }, app)?.oxagen_app).toBe(false);
+    // The slug without the bot suffix is another account.
+    expect(mergerOf({ login: "oxagen-connect", type: "User" }, app)?.oxagen_app).toBe(false);
+    expect(mergerOf({ login: "amara", type: "User" }, app)).toEqual({ login: "amara", type: "User", oxagen_app: false });
+  });
+
+  it("marks no merger as the app when the deployment names no app, and records no merger GitHub did not name", () => {
+    expect(mergerOf({ login: "oxagen-connect[bot]", type: "Bot" }, null)?.oxagen_app).toBe(false);
+    expect(mergerOf(null, "oxagen-connect[bot]")).toBeNull();
+    expect(mergerOf(undefined, "oxagen-connect[bot]")).toBeNull();
   });
 });
 
@@ -119,7 +147,7 @@ describe("evidenceFacts", () => {
   });
 
   it("records no head after the merge, which fixes the head", () => {
-    const merged = { ...ORDER, head: SHA2, merge: { headSha: SHA2, mergeCommit: MERGE, at: "2026-10-02T09:45:00Z" } };
+    const merged = { ...ORDER, head: SHA2, merge: { headSha: SHA2, mergeCommit: MERGE, at: "2026-10-02T09:45:00Z", mergedBy: null } };
     // A late delivery for the older head, at its first update time and at another.
     for (const updatedAt of ["2026-10-02T09:30:00Z", "2026-10-02T09:50:00Z"]) {
       const { facts, summary } = evidenceFacts(merged, { pull: pull({ updatedAt }), required: null, checks: null }, NOW);
@@ -136,11 +164,29 @@ describe("evidenceFacts", () => {
     expect(success[0]?.dedupeKey).toBe(repeat[0]?.dedupeKey);
   });
 
-  it("records a human merge with its merge commit, and a close without merging", () => {
-    const merged = evidenceFacts(ORDER, { pull: pull({ state: "closed", merged: true, mergeCommitSha: MERGE, mergedAt: "2026-10-02T09:45:00.000Z" }), required: null, checks: null }, NOW).facts;
-    expect(merged.find((fact) => fact.kind === "merged")).toMatchObject({ headSha: SHA1, data: { merge_commit: MERGE }, occurredAt: "2026-10-02T09:45:00.000Z" });
+  it("records a human merge with its merge commit and its merger, and a close without merging", () => {
+    const amara = { login: "amara", type: "User", oxagen_app: false };
+    const merged = evidenceFacts(ORDER, { pull: pull({ state: "closed", merged: true, mergeCommitSha: MERGE, mergedAt: "2026-10-02T09:45:00.000Z", mergedBy: amara }), required: null, checks: null }, NOW).facts;
+    expect(merged.find((fact) => fact.kind === "merged")).toMatchObject({ headSha: SHA1, data: { merge_commit: MERGE, merged_by: amara }, occurredAt: "2026-10-02T09:45:00.000Z" });
     const closed = evidenceFacts(ORDER, { pull: pull({ state: "closed" }), required: null, checks: null }, NOW).facts;
     expect(closed.map((fact) => fact.kind)).toEqual(["pr_closed"]);
+  });
+
+  it("records the Oxagen GitHub App's merge under the same key as a person's, and no merger when GitHub named none", () => {
+    const mergedBy = (over: Partial<PullRequestRead>) =>
+      evidenceFacts(ORDER, { pull: pull({ state: "closed", merged: true, mergeCommitSha: MERGE, mergedAt: "2026-10-02T09:45:00.000Z", ...over }), required: null, checks: null }, NOW).facts.find(
+        (fact) => fact.kind === "merged",
+      );
+    const oxagen = { login: "oxagen-connect[bot]", type: "Bot", oxagen_app: true };
+    const app = mergedBy({ mergedBy: oxagen });
+    expect(app?.data).toEqual({ merge_commit: MERGE, merged_by: oxagen });
+    const queue = { login: "github-merge-queue[bot]", type: "Bot", oxagen_app: false };
+    expect(mergedBy({ mergedBy: queue })?.data).toEqual({ merge_commit: MERGE, merged_by: queue });
+    // A pull request merges once, so the first merge recorded stands whoever a later read names.
+    expect(app?.dedupeKey).toBe(mergedBy({ mergedBy: { login: "amara", type: "User", oxagen_app: false } })?.dedupeKey);
+    expect(mergedBy({ mergedBy: null })?.data).toEqual({ merge_commit: MERGE, merged_by: null });
+    // A reader that leaves the field out records the field as null, so the fact always names it.
+    expect(mergedBy({})?.data).toEqual({ merge_commit: MERGE, merged_by: null });
   });
 
   it("files every fact as the provider's, on the send", () => {

@@ -403,7 +403,7 @@ describe.skipIf(!enabled)("the Work reads against Postgres", { timeout: 60_000 }
       case "check_observed":
         return { ...base, kind, headSha: SHA1, dedupeKey: `check:${sent.orderId}`, data: { name: "test", conclusion: "success" as const } };
       case "merged":
-        return { ...base, kind, headSha: SHA1, dedupeKey: `merged:${sent.orderId}`, data: { merge_commit: MERGE } };
+        return { ...base, kind, headSha: SHA1, dedupeKey: `merged:${sent.orderId}`, data: { merge_commit: MERGE, merged_by: null } };
     }
   };
 

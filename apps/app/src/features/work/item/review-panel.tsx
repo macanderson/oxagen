@@ -7,6 +7,8 @@
 //
 // Every acceptance names the commit it was given on. Accepting merges
 // nothing: the item is done once the pull request merges too, in either order.
+// A merge by the oxagen GitHub App is the agent merging its own work with the
+// push token oxagen gave it, so it finishes nothing and the panel says so.
 import { useTranslations } from "next-intl";
 import type { CheckConclusion, WorkItemDetail, WorkSend } from "@/data/contracts/work";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
@@ -131,6 +133,7 @@ export function ReviewPanel({
   const optional = optionalChecks(send);
   const reviewing = detail.item.status === "in_review";
   const merged = pr?.merged ?? null;
+  const appMerged = merged?.mergedBy?.oxagenApp === true;
   const closedUnmerged = pr !== null && merged === null && pr.closedAt !== null;
   const acceptedHere = send.acceptance !== null && send.acceptance.head === head;
   // Earlier results show only when there are some: a head that moved with no
@@ -194,7 +197,13 @@ export function ReviewPanel({
               <dt className={kvTerm}>{t("merge")}</dt>
               <dd className={kvValue} data-testid="work-review-merge">
                 {merged !== null
-                  ? t("merged", { at: when(merged.at), commit: shortSha(merged.mergeCommit) })
+                  ? merged.mergedBy === null
+                    ? t("merged", { at: when(merged.at), commit: shortSha(merged.mergeCommit) })
+                    : t("mergedBy", {
+                        at: when(merged.at),
+                        commit: shortSha(merged.mergeCommit),
+                        login: merged.mergedBy.login,
+                      })
                   : pr.closedAt !== null
                     ? t("closedUnmerged", { at: when(pr.closedAt) })
                     : t("open")}
@@ -279,7 +288,15 @@ export function ReviewPanel({
             )}
           </div>
         )}
-        {merged !== null && send.acceptance === null && reviewing ? (
+        {appMerged && reviewing ? (
+          <p
+            data-testid="work-merged-by-app"
+            className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5 text-foreground"
+          >
+            <span className="font-semibold">{t("appMergedTitle")}</span> {t("appMergedBody")}
+          </p>
+        ) : null}
+        {merged !== null && send.acceptance === null && reviewing && !appMerged ? (
           <p
             data-testid="work-merged-before-review"
             className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5 text-foreground"
@@ -305,7 +322,7 @@ export function ReviewPanel({
             })}
           </p>
         )}
-        {reviewing && pr !== null && head !== null && !closedUnmerged && !acceptedHere ? (
+        {reviewing && pr !== null && head !== null && !closedUnmerged && !appMerged && !acceptedHere ? (
           <p data-testid="work-review-consequence" className="text-xs text-muted-foreground">
             {t("consequence", { head: shortSha(head) })}
           </p>

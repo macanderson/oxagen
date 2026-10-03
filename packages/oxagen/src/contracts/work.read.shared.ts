@@ -36,7 +36,8 @@ export const workTabSchema = z.enum(WORK_TABS);
  * the facts around it: a `new` item is triaging until triage fails, a `held`
  * item is a possible duplicate or out of scope, a `sent` item reads no answer
  * once its host took the command and has not claimed it, and a `review` item
- * reads accepted once a person accepted its head commit.
+ * reads accepted once a person accepted its head commit, unless the Oxagen
+ * GitHub App merged it.
  */
 export const WORK_ITEM_STATUSES = [
   "triaging",
@@ -96,6 +97,7 @@ export const workChecksWordSchema = z.enum(WORK_CHECKS_WORDS);
 /** Why Accept is closed on a send (REVIEW_BLOCKS in @oxagen/work/records). */
 export const workReviewBlockSchema = z.enum([
   "order_closed",
+  "merged_by_app",
   "already_accepted",
   "run_active",
   "pr_closed",
@@ -248,6 +250,13 @@ export const workWaitSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("no_head") }).strict(),
   z.object({ kind: z.literal("pr_closed"), at: z.string().nullable() }).strict(),
   z.object({ kind: z.literal("merged_before_review"), at: z.string() }).strict(),
+  /**
+   * The Oxagen GitHub App merged the pull request: the agent merged its own
+   * work with the push token Oxagen issued it. No acceptance finishes the
+   * send, so a person returns the work or closes the item. `login` is the
+   * app's GitHub login and `at` the merge time.
+   */
+  z.object({ kind: z.literal("merged_by_app"), login: z.string(), at: z.string() }).strict(),
   z.object({ kind: z.literal("brief_out_of_date") }).strict(),
   z
     .object({ kind: z.literal("accepted_waiting_merge"), by: z.string().nullable(), head: workHeadShaSchema })

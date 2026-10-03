@@ -130,6 +130,8 @@ function toWait(wait: WaitOut): z.input<typeof WorkWait> {
       return { kind: wait.kind, at: wait.at };
     case "merged_before_review":
       return { kind: wait.kind, at: wait.at };
+    case "merged_by_app":
+      return { kind: wait.kind, login: wait.login, at: wait.at };
     case "accepted_waiting_merge":
       return { kind: wait.kind, by: wait.by, head: wait.head };
     case "done":

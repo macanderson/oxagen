@@ -105,6 +105,25 @@ describe("toWorkItemList", () => {
     expect(view.viewer).toEqual({ canControl: true, canApprove: false });
   });
 
+  it("keeps the login and merge time of a pull request the Oxagen GitHub App merged", () => {
+    const merged = WorkItemList.parse(
+      toWorkItemList(
+        workItemsList.output.parse({
+          items: [
+            row({
+              wait: { kind: "merged_by_app", login: "oxagen-connect[bot]", at: AT },
+              send: { ...row().send, gate: { open: false, block: "merged_by_app", detail: "oxagen-connect[bot]" }, accepted: true },
+            }),
+          ],
+          truncated: false,
+          viewer: { can_control: true, can_approve: true },
+        }),
+      ),
+    );
+    expect(merged.items[0]?.wait).toEqual({ kind: "merged_by_app", login: "oxagen-connect[bot]", at: AT });
+    expect(merged.items[0]?.send?.gate).toEqual({ open: false, block: "merged_by_app", detail: "oxagen-connect[bot]" });
+  });
+
   it("keeps an unknown cost null and invents no zero", () => {
     const second = view.items[1];
     expect(second?.cost).toEqual({ runs: 0, knownRuns: 0, total: null });
@@ -256,6 +275,37 @@ describe("toWorkItemDetail", () => {
       { id: "tse_01k6c", cost: { micros: "10", currency: "USD", basis: null }, tier: "harness" },
     ]);
     expect(send?.cost).toEqual({ runs: 3, knownRuns: 2, total: { micros: "1250010", currency: "USD" } });
+  });
+
+  it("keeps who merged the pull request and whether the Oxagen GitHub App did", () => {
+    const [send] = out.sends;
+    if (send === undefined || send.pull_request === null) throw new Error("The sample has a send with a pull request.");
+    const pullRequest = send.pull_request;
+    const mergedAs = (mergedBy: { login: string; type: string; oxagen_app: boolean } | null) => {
+      const parsed = workItemGet.output.parse({
+        ...out,
+        sends: [{ ...send, pull_request: { ...pullRequest, merged: { at: AT, merge_commit: HEAD, merged_by: mergedBy } } }],
+      });
+      return WorkItemDetail.parse(toWorkItemDetail(parsed)).sends[0]?.pullRequest?.merged;
+    };
+    expect(mergedAs({ login: "amara", type: "User", oxagen_app: false })).toEqual({
+      at: AT,
+      mergeCommit: HEAD,
+      mergedBy: { login: "amara", type: "User", oxagenApp: false },
+    });
+    expect(mergedAs({ login: "oxagen-connect[bot]", type: "Bot", oxagen_app: true })?.mergedBy).toEqual({
+      login: "oxagen-connect[bot]",
+      type: "Bot",
+      oxagenApp: true,
+    });
+    expect(mergedAs(null)).toEqual({ at: AT, mergeCommit: HEAD, mergedBy: null });
+    // A merge that leaves out whether the Oxagen GitHub App made it is not what the handler returns.
+    expect(
+      workItemGet.output.safeParse({
+        ...out,
+        sends: [{ ...send, pull_request: { ...pullRequest, merged: { at: AT, merge_commit: HEAD, merged_by: { login: "amara", type: "User" } } } }],
+      }).success,
+    ).toBe(false);
   });
 
   it("keeps the stale acceptance and the earlier head's results beside the current head", () => {

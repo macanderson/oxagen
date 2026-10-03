@@ -26,6 +26,7 @@ import {
   draftBriefItem,
   inReviewItem,
   mergedBeforeReviewItem,
+  mergedByAppItem,
   needsInfoItem,
   noAnswerItem,
   noRequiredChecksItem,
@@ -214,6 +215,7 @@ describe("WorkItemPage › states", () => {
     ["stale evidence", staleEvidenceItem, "in_review", ["open-pr", "return", "accept"]],
     ["merged before review", mergedBeforeReviewItem, "in_review", ["open-pr", "return", "accept"]],
     ["closed without merging", closedWithoutMergingItem, "in_review", ["open-pr", "close", "return"]],
+    ["merged by the oxagen GitHub App", mergedByAppItem, "in_review", ["open-pr", "close", "return"]],
     ["cost unknown", costUnknownItem, "in_review", ["open-pr", "return", "accept"]],
     ["accepted", acceptedItem, "accepted", ["open-pr"]],
     ["done", doneItem, "done", ["reopen"]],
@@ -419,6 +421,24 @@ describe("WorkItemPage › states", () => {
     expect(screen.getByTestId("work-action-accept")).toBeEnabled();
   });
 
+  it("merged by the oxagen GitHub App: names the app, says no person merged it, and offers no Accept", async () => {
+    await renderDetail(mergedByAppItem());
+    expect(screen.getByTestId("work-review-merge")).toHaveTextContent("7c1e0b4 by oxagen-connect[bot]");
+    expect(screen.getByTestId("work-merged-by-app")).toHaveTextContent(
+      "Merged by the oxagen GitHub App. An agent's push token merges as this account, so no person merged the pull request. Return the work or close the item.",
+    );
+    expect(screen.getByTestId("work-item-wait")).toHaveTextContent(
+      "The oxagen GitHub App (oxagen-connect[bot]) merged the pull request on",
+    );
+    expect(screen.getByTestId("work-item-wait")).toHaveTextContent("No person merged it. Return the work or close the item.");
+    // The merge is not waiting on a person's acceptance, and Accept cannot finish the item.
+    expect(screen.queryByTestId("work-merged-before-review")).toBeNull();
+    expect(screen.queryByTestId("work-review-consequence")).toBeNull();
+    expect(screen.queryByTestId("work-action-accept")).toBeNull();
+    expect(screen.getByTestId("work-action-return")).toBeEnabled();
+    expect(screen.getByTestId("work-action-close")).toBeEnabled();
+  });
+
   it("closed without merging: offers no Accept", async () => {
     await renderDetail(closedWithoutMergingItem());
     expect(screen.getByTestId("work-closed-unmerged")).toHaveTextContent("Closed without merging.");
@@ -456,6 +476,9 @@ describe("WorkItemPage › states", () => {
   it("done: names the accepted commit and offers Reopen the item", async () => {
     await renderDetail(doneItem());
     expect(screen.getByTestId("work-acceptance")).toHaveTextContent("3f9a2c1");
+    // The person who merged it on GitHub.
+    expect(screen.getByTestId("work-review-merge")).toHaveTextContent("7c1e0b4 by amara-okafor");
+    expect(screen.queryByTestId("work-merged-by-app")).toBeNull();
     expect(screen.getByTestId("work-action-reopen")).toHaveTextContent("Reopen the item");
   });
 
@@ -604,6 +627,7 @@ describe("work-item.builders", () => {
       noRequiredChecksItem,
       staleEvidenceItem,
       mergedBeforeReviewItem,
+      mergedByAppItem,
       closedWithoutMergingItem,
       costUnknownItem,
       acceptedItem,

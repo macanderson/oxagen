@@ -41,6 +41,16 @@ export interface GitHubClosingIssues {
   complete: boolean;
 }
 
+/**
+ * The account that merged a pull request. `type` is GitHub's account type as
+ * it spells it: "User" for a person, "Bot" for an app such as a GitHub App
+ * acting with its installation token, and "Organization".
+ */
+export interface GitHubMergedBy {
+  login: string;
+  type: string;
+}
+
 /** A pull request's core fields, normalised from the GitHub REST payload. */
 export interface GitHubPullRequest {
   number: number;
@@ -68,6 +78,11 @@ export interface GitHubPullRequest {
   mergeCommitSha: string | null;
   /** When GitHub merged it (ISO 8601), once `merged` is true; null before. */
   mergedAt: string | null;
+  /**
+   * The account that merged it, once `merged` is true. Null before, and when
+   * GitHub names no account. Absent when the response did not say.
+   */
+  mergedBy?: GitHubMergedBy | null;
   /** When GitHub closed it (ISO 8601); null while open. Absent when the response did not say. */
   closedAt?: string | null;
   /** The base branch's tip when GitHub answered. Absent when the response did not say. */

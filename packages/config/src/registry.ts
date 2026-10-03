@@ -813,7 +813,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     description:
       "GitHub App public slug (the path segment in https://github.com/apps/<slug>). Used to deep-link users to GitHub's install/configure page so they can add or remove orgs and repos. Optional — when unset the connection dialog derives the slug from an existing installation. " +
       "Also minted by envGithubUrls (see GITHUB_APP_CLIENT_ID) in-process from app and mcp. " +
-      "The steering connect in api sends an install to this slug, and the steering repo health read compares a check's app against it (ADR-228).",
+      "The steering connect in api sends an install to this slug, and the steering repo health read compares a check's app against it (ADR-228)." +
+      " Work orders treat a pull request merged by <slug>[bot] as the Oxagen GitHub App's own merge, so that send stays in review (merged_by_app).",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],

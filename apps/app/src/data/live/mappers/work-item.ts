@@ -15,6 +15,7 @@ type SendOut = ItemOut["sends"][number];
 type RunOut = SendOut["runs"][number];
 type AcceptanceOut = NonNullable<SendOut["acceptance"]>;
 type CheckOut = SendOut["checks"][number];
+type MergedOut = NonNullable<SendOut["pull_request"]>["merged"];
 
 const BASES = ["gateway_observed", "client_attested", "mixed", "estimated"] as const;
 type Basis = (typeof BASES)[number];
@@ -44,6 +45,17 @@ function toAcceptance(acceptance: AcceptanceOut) {
 
 function toCheck(check: CheckOut) {
   return { name: check.name, conclusion: check.conclusion, required: check.required };
+}
+
+/** The merge, with who GitHub says merged it and whether that was the Oxagen GitHub App. */
+function toMerged(merged: MergedOut) {
+  if (merged === null) return null;
+  const by = merged.merged_by;
+  return {
+    at: merged.at,
+    mergeCommit: merged.merge_commit,
+    mergedBy: by === null ? null : { login: by.login, type: by.type, oxagenApp: by.oxagen_app },
+  };
 }
 
 function reasoned(value: { reason: string; by: string | null; at: string } | null) {
@@ -87,10 +99,7 @@ function toSend(send: SendOut): z.input<typeof WorkSend> {
             url: send.pull_request.url,
             head: send.pull_request.head,
             headAt: send.pull_request.head_at,
-            merged:
-              send.pull_request.merged === null
-                ? null
-                : { at: send.pull_request.merged.at, mergeCommit: send.pull_request.merged.merge_commit },
+            merged: toMerged(send.pull_request.merged),
             closedAt: send.pull_request.closed_at,
           },
     requiredChecks: send.required_checks === null ? null : [...send.required_checks],

@@ -109,6 +109,7 @@ export type ChecksWord = z.infer<typeof ChecksWord>;
 
 export const ReviewBlock = z.enum([
   "order_closed",
+  "merged_by_app",
   "already_accepted",
   "run_active",
   "pr_closed",
@@ -234,6 +235,8 @@ export const WorkWait = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("no_head") }),
   z.object({ kind: z.literal("pr_closed"), at: Instant.nullable() }),
   z.object({ kind: z.literal("merged_before_review"), at: Instant }),
+  /** The Oxagen GitHub App merged the pull request: the agent merged its own work. */
+  z.object({ kind: z.literal("merged_by_app"), login: z.string(), at: Instant }),
   z.object({ kind: z.literal("brief_out_of_date") }),
   z.object({
     kind: z.literal("accepted_waiting_merge"),
@@ -479,7 +482,21 @@ export const WorkSend = z.object({
   cost: CostCoverage,
   pullRequest: PullRequestRef.extend({
     headAt: Instant.nullable(),
-    merged: z.object({ at: Instant, mergeCommit: Sha }).nullable(),
+    merged: z
+      .object({
+        at: Instant,
+        mergeCommit: Sha,
+        /** The account GitHub says merged it. Null when no merger is on record. */
+        mergedBy: z
+          .object({
+            login: z.string(),
+            type: z.string(),
+            /** The Oxagen GitHub App merged it: the agent merged its own work. */
+            oxagenApp: z.boolean(),
+          })
+          .nullable(),
+      })
+      .nullable(),
     closedAt: Instant.nullable(),
   }).nullable(),
   requiredChecks: z.array(z.string()).nullable(),

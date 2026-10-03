@@ -23,8 +23,8 @@
 //   8. A required check that has not reported on the new head blocks Accept.
 //      Once it passes, Accept records the acceptance on the new head.
 //   9. The human merge, delivered through the route's entry, marks the item
-//      done. The same merge again, a late head, a late run end, and a late
-//      claim change nothing.
+//      done and records who merged. The same merge again, a late head, a late
+//      run end, and a late claim change nothing.
 //  10. Another workspace and another organization find the item nowhere and
 //      can act on none of it, and their reads count none of it.
 //  11. Outcomes counts the item, its send, its week's intake, and the full flow.
@@ -37,9 +37,12 @@
 //   - a runtime that never comes back, so the 12-hour idle close seals its run
 //   - a source change while the work runs
 //   - a merge of a new head while the only acceptance names the old head
+//   - a merge of the accepted head by the Oxagen GitHub App, whose
+//     installation token is the push token Oxagen issues an agent
 // Every case, in both groups, ends on expectGateInvariants: at most one open
 // send per item, one stored row and one command per send, one linked run per
-// send, and no done state without an acceptance of the merged head.
+// send, and no done state without an acceptance of the merged head and a
+// merge the Oxagen GitHub App did not make.
 //
 // Every provider time comes from one clock that only moves forward and stays
 // in the past. The reducer orders a work item's facts by time, and Outcomes
@@ -65,6 +68,7 @@ import type { TriageModelClient } from "@oxagen/work";
 import {
   type BriefDraft,
   type FactKind,
+  type MergedBy,
   type OrderProjection,
   isWorkRecordError,
   reviewGate,
@@ -109,6 +113,12 @@ const REPOSITORY = recorded.RECORDED_REPO;
 const SHA1 = "1".repeat(40);
 const SHA2 = "2".repeat(40);
 const MERGE = "9".repeat(40);
+/** The Oxagen GitHub App's login on this test deployment. webhook() passes it to workPullRequestDeliveryOf. */
+const OXAGEN_APP = "oxagen-connect[bot]";
+/** A person who merges on GitHub. */
+const PERSON_MERGER: MergedBy = { login: "amara-okafor", type: "User", oxagen_app: false };
+/** The Oxagen GitHub App, merging with the installation token Oxagen issues an agent. */
+const APP_MERGER: MergedBy = { login: OXAGEN_APP, type: "Bot", oxagen_app: true };
 
 /** GitHub writes its times to the second. */
 function githubTime(ms: number): string {
@@ -158,8 +168,18 @@ function prUrl(prNumber: number): string {
   return `https://github.com/${REPOSITORY}/pull/${prNumber}`;
 }
 
-/** A `pull_request` webhook body for one pull request, as GitHub sends it. */
-function pullRequestBody(prNumber: number, head: string, updatedAt: string, merge: { commit: string; at: string } | null = null): Record<string, unknown> {
+/**
+ * A `pull_request` webhook body for one pull request, as GitHub sends it. A
+ * merge with no `by` names no merger. GitHub sends the merger's login and
+ * type, and the delivery mapper decides whether it is the Oxagen GitHub App.
+ */
+function pullRequestBody(
+  prNumber: number,
+  head: string,
+  updatedAt: string,
+  merge: { commit: string; at: string; by?: MergedBy } | null = null,
+): Record<string, unknown> {
+  const by = merge?.by;
   return {
     action: merge === null ? "synchronize" : "closed",
     repository: { full_name: REPOSITORY },
@@ -171,14 +191,15 @@ function pullRequestBody(prNumber: number, head: string, updatedAt: string, merg
       merged: merge !== null,
       merge_commit_sha: merge?.commit ?? null,
       merged_at: merge?.at ?? null,
+      merged_by: by === undefined ? null : { login: by.login, type: by.type },
       updated_at: updatedAt,
     },
   };
 }
 
-/** The same webhook body, read by workPullRequestDeliveryOf. */
-function webhook(prNumber: number, head: string, updatedAt: string, merge: { commit: string; at: string } | null = null) {
-  const delivery = workPullRequestDeliveryOf(pullRequestBody(prNumber, head, updatedAt, merge));
+/** The same webhook body, read by workPullRequestDeliveryOf with OXAGEN_APP as the app's login. */
+function webhook(prNumber: number, head: string, updatedAt: string, merge: { commit: string; at: string; by?: MergedBy } | null = null) {
+  const delivery = workPullRequestDeliveryOf(pullRequestBody(prNumber, head, updatedAt, merge), OXAGEN_APP);
   if (delivery === null) throw new Error("The webhook body did not parse.");
   return delivery;
 }
@@ -728,7 +749,7 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
    * The invariants every case ends on. At most one send of the item is open.
    * Each send has one stored row, one `work_order` command for its key, and
    * at most one linked run. The item is done only when a send's acceptance
-   * names the head a person merged.
+   * names the merged head and the Oxagen GitHub App did not make the merge.
    */
   async function expectGateInvariants(scope: WorkScope, itemId: string): Promise<void> {
     const record = await read(scope, itemId);
@@ -744,6 +765,7 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       if (order.done) {
         expect(order.merge, `merge of done send ${order.send}`).not.toBeNull();
         expect(order.acceptance?.headSha, `accepted head of done send ${order.send}`).toBe(order.merge?.headSha);
+        expect(order.merge?.mergedBy?.oxagen_app ?? false, `Oxagen GitHub App merged done send ${order.send}`).toBe(false);
       }
     }
     if (state === "done") {
@@ -1056,16 +1078,20 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
 
     it("9. marks the item done when a person merges, and changes nothing on the same merge again or a late head, run end, or claim", async () => {
       const mergedAt = tick();
-      const merge = pullRequestBody(PR_NUMBER, SHA2, mergedAt, { commit: MERGE, at: mergedAt });
+      const merge = pullRequestBody(PR_NUMBER, SHA2, mergedAt, { commit: MERGE, at: mergedAt, by: PERSON_MERGER });
       expect(await deliverPullRequest(merge)).toBe(1);
       const done = await readItem();
       expect(done.projection.state).toBe("done");
       expect(orderOf(done)).toMatchObject({
-        merge: { headSha: SHA2, mergeCommit: MERGE },
+        merge: { headSha: SHA2, mergeCommit: MERGE, mergedBy: PERSON_MERGER },
         acceptance: { headSha: SHA2 },
         done: true,
         closed: true,
       });
+      // The merge records the person GitHub says merged it.
+      expect(factsOf(done, "merged")).toEqual([
+        expect.objectContaining({ source: "provider", actor: "github", headSha: SHA2, data: { merge_commit: MERGE, merged_by: PERSON_MERGER } }),
+      ]);
 
       expect(await deliverPullRequest(merge)).toBe(0);
       // A late webhook carries the first head, with the time GitHub first reported it.
@@ -1471,6 +1497,60 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       const reread = await read(recovery, item.itemId);
       expect(await acceptWork(review.deps, recovery, marcus, acceptance(reread, sent.orderPublicId, SHA2))).toMatchObject({ item: { state: "done" } });
       expect(orderIn(await read(recovery, item.itemId), sent.orderId)).toMatchObject({ acceptance: { headSha: SHA2 }, done: true });
+      await expectGateInvariants(recovery, item.itemId);
+    });
+
+    it("keeps an item out of done when the Oxagen GitHub App merges the accepted head", async () => {
+      const PR_NUMBER = 705;
+      const r = await rig(recovery);
+      const item = await readyItem(recovery);
+      const sent = await send(recovery, item, r);
+      await claim(recovery, r.hostA, sent.orderPublicId);
+      const run = await openRun(recovery, r);
+      await link(recovery, r.hostA, sent.orderPublicId, run.runId);
+      await endRun(recovery, run.runId);
+      const review = fakeGitHub(recovery);
+      await recordRunPullRequest(recovery, run.sessionUuid, prUrl(PR_NUMBER), review.deps);
+      const before = await read(recovery, item.itemId);
+      expect(await acceptWork(review.deps, recovery, marcus, acceptance(before, sent.orderPublicId, SHA1))).toMatchObject({ item: { state: "review" } });
+
+      // The agent merges its own pull request with the push token Oxagen
+      // issued it, which is the Oxagen GitHub App's installation token.
+      const mergedAt = tick();
+      expect(
+        await recordWorkPullRequestDelivery(recovery, webhook(PR_NUMBER, SHA1, mergedAt, { commit: MERGE, at: mergedAt, by: APP_MERGER }), new Date()),
+      ).toBe(1);
+      const merged = await read(recovery, item.itemId);
+      expect(merged.projection.state).toBe("review");
+      expect(orderIn(merged, sent.orderId)).toMatchObject({
+        acceptance: { headSha: SHA1 },
+        merge: { headSha: SHA1, mergeCommit: MERGE, mergedBy: APP_MERGER },
+        done: false,
+        closed: false,
+      });
+      expect(factsOf(merged, "merged")).toEqual([expect.objectContaining({ source: "provider", data: { merge_commit: MERGE, merged_by: APP_MERGER } })]);
+      expect(reviewGate(merged.projection, orderIn(merged, sent.orderId))).toEqual({ open: false, block: "merged_by_app", detail: APP_MERGER.login });
+
+      // GitHub delivers the merge again naming a person. A pull request merges once, so the app's merge stands.
+      expect(
+        await recordWorkPullRequestDelivery(recovery, webhook(PR_NUMBER, SHA1, mergedAt, { commit: MERGE, at: mergedAt, by: PERSON_MERGER }), new Date()),
+      ).toBe(0);
+      expect(orderIn(await read(recovery, item.itemId), sent.orderId).merge?.mergedBy).toEqual(APP_MERGER);
+
+      // A person returns the work. The send ends unfinished, and the item can go out again.
+      const returned = await db(recovery)((tx) =>
+        returnWork(
+          tx,
+          recovery,
+          marcus,
+          { item_id: item.publicId, version: merged.version, work_order_id: sent.orderPublicId, reason: "The agent merged its own pull request.", resend: false },
+          null,
+        ),
+      );
+      expect(returned).toMatchObject({ repeat: false, item: { state: "ready" }, order: { delivery: "returned" } });
+      const after = await read(recovery, item.itemId);
+      expect(after.projection.state).toBe("ready");
+      expect(orderIn(after, sent.orderId)).toMatchObject({ done: false, closed: true, merge: { mergedBy: APP_MERGER } });
       await expectGateInvariants(recovery, item.itemId);
     });
   });

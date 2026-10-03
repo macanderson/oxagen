@@ -13,7 +13,8 @@
 //     facts around it: a new item is triaging until triage fails, a held item
 //     is a possible duplicate or out of scope, a sent item reads no answer once
 //     its host took the command and has not claimed it, and an item in review
-//     reads accepted once a person accepted its head commit.
+//     reads accepted once a person accepted its head commit, unless the Oxagen
+//     GitHub App merged it.
 //   - wait: what the item waits for, as one code and the facts to say it.
 //   - send: the latest send since the last reopen, with the required checks on
 //     its pull request's head as one word and whether Accept is open.
@@ -31,6 +32,7 @@ import {
   type WorkFact,
   type WorkItemProjection,
   type WorkItemState,
+  appMergerOf,
   reviewGate,
   sortFacts,
 } from "@oxagen/work/records";
@@ -216,8 +218,10 @@ export function statusOf(projection: WorkItemProjection, noAnswer: boolean): Wor
       return active?.delivery === "stopping" ? "stopping" : "running";
     case "review":
       // An accepted send whose pull request then closed unmerged is back in
-      // review: the acceptance stands on its head, but nothing will merge.
-      return active?.acceptance && !active.prClosed ? "accepted" : "in_review";
+      // review: the acceptance stands on its head, but nothing will merge. So
+      // is one the Oxagen GitHub App merged: the merge stands, and it is not
+      // a person's, so a person returns the work or closes the item.
+      return active?.acceptance && !active.prClosed && appMergerOf(active) === null ? "accepted" : "in_review";
   }
 }
 
@@ -390,9 +394,10 @@ function requiredCheckWaitOf(order: OrderProjection, head: string): WorkWaitOutp
 /**
  * What a send in review waits for. A pull request closed without merging is
  * read first, because nothing after it can make the item done, even an
- * acceptance already on its head. Then an acceptance on the head and a merge,
- * the pull request and its head, an acceptance a newer head voided, and last
- * the review gate on the required checks.
+ * acceptance already on its head. A merge by the Oxagen GitHub App comes
+ * next, for the same reason. Then an acceptance on the head and a merge, the
+ * pull request and its head, an acceptance a newer head voided, and last the
+ * review gate on the required checks.
  */
 function reviewWaitOf(
   projection: WorkItemProjection,
@@ -401,6 +406,8 @@ function reviewWaitOf(
   lookups: Pick<Lookups, "names">,
 ): WorkWaitOutput {
   if (order.prClosed) return { kind: "pr_closed", at: lastAt(orderFacts, "pr_closed") };
+  const app = appMergerOf(order);
+  if (app !== null && order.merge !== null) return { kind: "merged_by_app", login: app.login, at: order.merge.at };
   if (order.acceptance !== null && order.merge === null) {
     return { kind: "accepted_waiting_merge", by: nameOf(lookups, order.acceptance.actor), head: order.acceptance.headSha };
   }
@@ -435,7 +442,8 @@ function reviewWaitOf(
     default:
       // order_closed and run_active cannot hold for a send in review: review
       // means the send is open and its run ended or its pull request merged.
-      // The head is known, so the checks are what is left to read.
+      // merged_by_app is read above. The head is known, so the checks are
+      // what is left to read.
       return { kind: "checks_unread", head };
   }
 }

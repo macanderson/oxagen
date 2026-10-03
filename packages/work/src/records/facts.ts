@@ -154,6 +154,24 @@ export const RUN_ID_PATTERN = /^(arun|tse)_[0-9a-z]+$/;
 /** The longest dedupe key, actor, reason, or claim text a fact carries. */
 export const MAX_FACT_TEXT = 2000;
 
+/**
+ * The account the provider says merged a pull request. `type` is GitHub's
+ * account type as it spells it: "User" for a person, "Bot" for an app, and
+ * "Organization".
+ *
+ * `oxagen_app` is true when the account is the Oxagen GitHub App itself. The
+ * push token Oxagen issues an agent is that app's installation token, so a
+ * merge by the app is an agent merging its own work. Any other bot, such as
+ * GitHub's merge queue or a team's merge bot, merges on a person's behalf,
+ * and its merge counts. The store decides the flag when it reads the merge,
+ * from the app's login on the deployment, so this record stays pure.
+ */
+export interface MergedBy {
+  login: string;
+  type: string;
+  oxagen_app: boolean;
+}
+
 /** A source item's material fields as one revision read them. */
 export interface SourceSnapshot {
   digest: Sha256Digest;
@@ -213,7 +231,12 @@ export interface FactDataByKind {
    * before 2026-10-03 has none.
    */
   accepted: { criteria: string[]; required_checks: string[]; run_ids?: string[] };
-  merged: { merge_commit: string };
+  /**
+   * `merged_by` is the account the provider says merged the pull request, or
+   * null when it named none. The store always writes it. A merge recorded
+   * before 2026-10-03 has none.
+   */
+  merged: { merge_commit: string; merged_by?: MergedBy | null };
   pr_closed: Record<string, never>;
 }
 
@@ -301,6 +324,19 @@ function runIds(value: unknown, decision: string): void {
   }
 }
 
+/**
+ * A merge names who merged it and whether that was the Oxagen GitHub App, or
+ * null when the provider named no one.
+ */
+function mergedBy(value: unknown): void {
+  if (value === null) return;
+  if (typeof value !== "object") throw invalid("A merge names the account that merged it, or null.");
+  const { login, type, oxagen_app: oxagenApp } = value as Record<string, unknown>;
+  text(login, "The merging account's login");
+  text(type, "The merging account's type");
+  if (typeof oxagenApp !== "boolean") throw invalid("A merge says whether the Oxagen GitHub App made it, as oxagen_app true or false.");
+}
+
 function checkData(fact: WorkFact): void {
   switch (fact.kind) {
     case "collected":
@@ -367,6 +403,7 @@ function checkData(fact: WorkFact): void {
       return;
     case "merged":
       if (!HEAD_SHA_PATTERN.test(fact.data.merge_commit)) throw invalid("A merge names its merge commit as 40 hex characters.");
+      mergedBy(fact.data.merged_by);
       return;
     default:
       return;

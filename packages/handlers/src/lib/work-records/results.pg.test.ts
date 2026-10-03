@@ -719,7 +719,7 @@ describe.skipIf(!enabled)("work order results against Postgres", { timeout: 30_0
     expect(swept.factsRecorded).toBeGreaterThan(0);
     const record = await read(space, item.itemId);
     expect(orderIn(record, sent.orderId)).toMatchObject({ merge: { headSha: SHA1, mergeCommit: MERGE } });
-    expect(factsOf(record, "merged")).toEqual([expect.objectContaining({ orderId: sent.orderId, data: { merge_commit: MERGE } })]);
+    expect(factsOf(record, "merged")).toEqual([expect.objectContaining({ orderId: sent.orderId, data: { merge_commit: MERGE, merged_by: null } })]);
     expect(reads.get(PR_NUMBER)).toBe(1);
 
     // The merge is on record, so the next pass reads nothing.

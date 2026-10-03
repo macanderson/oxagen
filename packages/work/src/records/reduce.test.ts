@@ -7,8 +7,8 @@
 // seed, never Math.random or the clock, so a failure always reproduces.
 import { describe, expect, it } from "vitest";
 import { type WorkFact, newFact } from "./facts";
-import { type WorkItemProjection, reduceWorkItem, reviewGate } from "./reduce";
-import { IN_REVIEW, MERGE, READY, SHA1, SHA2, at, digest, f } from "./test-fixtures";
+import { type WorkItemProjection, appMergerOf, reduceWorkItem, reviewGate } from "./reduce";
+import { APP_MERGER, IN_REVIEW, MERGE, PERSON_MERGER, QUEUE_MERGER, READY, SHA1, SHA2, at, digest, f } from "./test-fixtures";
 
 function state(facts: WorkFact[]): WorkItemProjection["state"] {
   return reduceWorkItem(facts).state;
@@ -246,6 +246,73 @@ describe("reduceWorkItem: review and finish", () => {
     const resent = reduceWorkItem([...IN_REVIEW, f.returned("o1", 12), f.send("o2", 2, 1, 1, 13)]);
     expect(resent).toMatchObject({ state: "sent", nextSend: 3 });
     expect(resent.activeOrder?.send).toBe(2);
+  });
+});
+
+describe("reduceWorkItem: who merged", () => {
+  const accepted = [...IN_REVIEW, f.accepted("o1", SHA1, 1, 12)];
+
+  it("is done when a person merges the accepted head, and keeps who merged", () => {
+    const done = reduceWorkItem([...accepted, f.merged("o1", SHA1, 13, PERSON_MERGER)]);
+    expect(done.state).toBe("done");
+    expect(done.orders[0]).toMatchObject({ done: true, closed: true, merge: { headSha: SHA1, mergeCommit: MERGE, mergedBy: PERSON_MERGER } });
+    expect(appMergerOf(done.orders[0]!)).toBeNull();
+  });
+
+  it("is done when GitHub's merge queue merges the accepted head, which a person queued", () => {
+    const done = reduceWorkItem([...accepted, f.merged("o1", SHA1, 13, QUEUE_MERGER)]);
+    expect(done.state).toBe("done");
+    expect(done.orders[0]).toMatchObject({ done: true, closed: true, merge: { mergedBy: QUEUE_MERGER } });
+    expect(appMergerOf(done.orders[0]!)).toBeNull();
+    // A merge queue's merge before review counts once a person accepts the head.
+    expect(state([...IN_REVIEW, f.merged("o1", SHA1, 12, QUEUE_MERGER), f.accepted("o1", SHA1, 1, 13)])).toBe("done");
+  });
+
+  it("counts a merge by any bot other than the Oxagen GitHub App", () => {
+    const teamBot = { login: "acme-merge-bot[bot]", type: "Bot", oxagen_app: false };
+    expect(state([...accepted, f.merged("o1", SHA1, 13, teamBot)])).toBe("done");
+  });
+
+  it("keeps an accepted send in review when the Oxagen GitHub App merges it, and names the app", () => {
+    const item = reduceWorkItem([...accepted, f.merged("o1", SHA1, 13, APP_MERGER)]);
+    expect(item.state).toBe("review");
+    const order = item.activeOrder!;
+    expect(order).toMatchObject({
+      acceptance: { headSha: SHA1 },
+      merge: { headSha: SHA1, mergedBy: APP_MERGER },
+      done: false,
+      closed: false,
+      released: true,
+    });
+    expect(appMergerOf(order)).toEqual(APP_MERGER);
+    expect(reviewGate(item, order)).toEqual({ open: false, block: "merged_by_app", detail: "oxagen-connect[bot]" });
+  });
+
+  it("keeps a send the Oxagen GitHub App merged before review out of done after a person accepts it", () => {
+    const merged = reduceWorkItem([...IN_REVIEW, f.merged("o1", SHA1, 12, APP_MERGER)]);
+    expect(reviewGate(merged, merged.activeOrder!)).toEqual({ open: false, block: "merged_by_app", detail: "oxagen-connect[bot]" });
+    expect(state([...IN_REVIEW, f.merged("o1", SHA1, 12, APP_MERGER), f.accepted("o1", SHA1, 1, 13)])).toBe("review");
+  });
+
+  it("counts a merge with no merger on record as before, so older records do not move", () => {
+    const legacy = reduceWorkItem([...accepted, f.merged("o1", SHA1, 13)]);
+    expect(legacy.state).toBe("done");
+    expect(legacy.orders[0]?.merge?.mergedBy).toBeNull();
+    expect(state([...accepted, f.merged("o1", SHA1, 13, null)])).toBe("done");
+  });
+
+  it("keeps a person's merge of a head the acceptance does not name out of done", () => {
+    const moved = reduceWorkItem([...accepted, f.head("o1", SHA2, 13), f.merged("o1", SHA2, 14, PERSON_MERGER)]);
+    expect(moved.state).toBe("review");
+    expect(moved.activeOrder).toMatchObject({ head: SHA2, acceptance: null, staleAcceptance: { headSha: SHA1 }, done: false });
+  });
+
+  it("reduces every arrival order of the Oxagen GitHub App's merge and an acceptance to the same review", () => {
+    const facts = [f.head("o1", SHA1, 8), f.accepted("o1", SHA1, 1, 12), f.merged("o1", SHA1, 13, APP_MERGER), f.runtime("run_ended", "o1", 9)];
+    const prefix = IN_REVIEW.filter((fact) => fact.kind !== "head_observed" && fact.kind !== "run_ended");
+    const expected = reduceWorkItem([...prefix, ...facts]);
+    expect(expected).toMatchObject({ state: "review", activeOrder: { done: false, merge: { mergedBy: APP_MERGER } } });
+    for (const order of permutations(facts)) expect(reduceWorkItem([...prefix, ...order])).toEqual(expected);
   });
 });
 

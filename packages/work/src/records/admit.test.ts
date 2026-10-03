@@ -6,7 +6,7 @@ import { type WorkItemDecision, admitDecision } from "./admit";
 import { type WorkRecordErrorCode, isWorkRecordError } from "./errors";
 import type { WorkFact } from "./facts";
 import { reduceWorkItem } from "./reduce";
-import { IN_REVIEW, READY, SHA1, SHA2, digest, f } from "./test-fixtures";
+import { APP_MERGER, IN_REVIEW, QUEUE_MERGER, READY, SHA1, SHA2, digest, f } from "./test-fixtures";
 
 const ITEM = "wi_x";
 
@@ -169,6 +169,11 @@ describe("withdraw, stop, and return", () => {
     expect(refused(accepted, { kind: "return", orderId: "o1" }, "not_allowed")).toContain(`accepted on ${SHA1.slice(0, 7)}`);
     expect(admit([...accepted, f.head("o1", SHA2, 13)], { kind: "return", orderId: "o1" })).toEqual({ repeat: false });
   });
+
+  it("admits Return on an accepted send the Oxagen GitHub App merged, which no new head can void", () => {
+    const appMerged = [...IN_REVIEW, f.accepted("o1", SHA1, 1, 12), f.merged("o1", SHA1, 13, APP_MERGER)];
+    expect(admit(appMerged, { kind: "return", orderId: "o1" })).toEqual({ repeat: false });
+  });
 });
 
 describe("accept", () => {
@@ -219,6 +224,18 @@ describe("accept", () => {
     refused([...READY, f.send("o1", 1, 1, 1, 4), f.runtime("run_ended", "o1", 5)], accept(), "not_allowed");
     refused([...IN_REVIEW, f.returned("o1", 12)], accept(), "not_allowed");
     refused(IN_REVIEW, accept({ orderId: "o9" }), "not_found");
+  });
+
+  it("refuses Accept on a send the Oxagen GitHub App merged, and names the app", () => {
+    const message = refused([...IN_REVIEW, f.merged("o1", SHA1, 12, APP_MERGER)], accept(), "not_allowed");
+    expect(message).toContain("The Oxagen GitHub App merged this pull request, so no person merged it.");
+    expect(message).toContain("oxagen-connect[bot]");
+  });
+
+  it("admits Accept on a send the merge queue merged, and then refuses it as done", () => {
+    const queued = [...IN_REVIEW, f.merged("o1", SHA1, 12, QUEUE_MERGER)];
+    expect(admit(queued, accept())).toEqual({ repeat: false });
+    refused([...queued, f.accepted("o1", SHA1, 1, 13)], accept(), "not_allowed");
   });
 
   it("calls a second acceptance of the same head a repeat, and refuses it on a done item", () => {
@@ -408,6 +425,12 @@ describe("close, reopen, and triage", () => {
     expect(admit(READY, { kind: "close" })).toEqual({ repeat: false });
     expect(admit(CLOSED, { kind: "close" })).toEqual({ repeat: true });
     expect(admit([...IN_REVIEW, f.prClosed("o1", 12)], { kind: "close" })).toEqual({ repeat: false });
+  });
+
+  it("closes an item whose accepted send the Oxagen GitHub App merged, and refuses to reopen it while it is open", () => {
+    const appMerged = [...IN_REVIEW, f.accepted("o1", SHA1, 1, 12), f.merged("o1", SHA1, 13, APP_MERGER)];
+    expect(admit(appMerged, { kind: "close" })).toEqual({ repeat: false });
+    refused(appMerged, { kind: "reopen" }, "not_allowed");
   });
 
   it("refuses to close a done item or one with a send still out", () => {

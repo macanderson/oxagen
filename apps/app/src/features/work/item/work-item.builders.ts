@@ -43,6 +43,11 @@ const FIRST_RUN_AT = "2026-10-01T10:07:00Z";
 const RUN_ENDED_AT = "2026-10-01T11:00:00Z";
 const HEAD_AT = "2026-10-01T10:58:00Z";
 const MERGED_AT = "2026-10-01T12:30:00Z";
+/** The oxagen GitHub App's login: the account an agent's push token merges as. */
+const OXAGEN_APP_LOGIN = "oxagen-connect[bot]";
+/** The person who merges the pull request on GitHub. */
+const PERSON_MERGER = { login: "amara-okafor", type: "User", oxagenApp: false };
+const APP_MERGER = { login: OXAGEN_APP_LOGIN, type: "Bot", oxagenApp: true };
 
 type Item = WorkItemDetail["item"];
 type WorkTriage = WorkItemDetail["triage"];
@@ -675,10 +680,11 @@ export function staleEvidenceItem(): WorkItemDetail {
   );
 }
 
+/** A merge recorded before oxagen read who merged, so it names no merger. */
 export function mergedBeforeReviewItem(): WorkItemDetail {
   return inReview(
     reviewedSend({
-      pullRequest: { ...PULL_REQUEST, merged: { at: MERGED_AT, mergeCommit: MERGE_COMMIT } },
+      pullRequest: { ...PULL_REQUEST, merged: { at: MERGED_AT, mergeCommit: MERGE_COMMIT, mergedBy: null } },
     }),
     { kind: "merged_before_review", at: MERGED_AT },
   );
@@ -743,6 +749,18 @@ export function acceptedItem(): WorkItemDetail {
   });
 }
 
+/** A person accepted the head, then the agent merged it with the oxagen GitHub App's token. */
+export function mergedByAppItem(): WorkItemDetail {
+  return inReview(
+    reviewedSend({
+      pullRequest: { ...PULL_REQUEST, merged: { at: MERGED_AT, mergeCommit: MERGE_COMMIT, mergedBy: APP_MERGER } },
+      acceptance: ACCEPTANCE,
+      gate: { open: false, block: "merged_by_app", detail: OXAGEN_APP_LOGIN },
+    }),
+    { kind: "merged_by_app", login: OXAGEN_APP_LOGIN, at: MERGED_AT },
+  );
+}
+
 export function doneItem(): WorkItemDetail {
   return workItemDetail({
     item: workItem({
@@ -759,7 +777,7 @@ export function doneItem(): WorkItemDetail {
     nextSend: null,
     sends: [
       reviewedSend({
-        pullRequest: { ...PULL_REQUEST, merged: { at: MERGED_AT, mergeCommit: MERGE_COMMIT } },
+        pullRequest: { ...PULL_REQUEST, merged: { at: MERGED_AT, mergeCommit: MERGE_COMMIT, mergedBy: PERSON_MERGER } },
         acceptance: ACCEPTANCE,
         gate: { open: false, block: "already_accepted", detail: HEAD },
       }),

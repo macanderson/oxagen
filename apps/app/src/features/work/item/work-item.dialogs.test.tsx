@@ -32,6 +32,7 @@ import {
   draftBriefItem,
   HEAD,
   inReviewItem,
+  mergedByAppItem,
   NEXT_KEY,
   needsInfoItem,
   possibleDuplicateItem,
@@ -286,6 +287,28 @@ describe("Accept dialog", () => {
     );
     expect(screen.queryByTestId("work-dialog-accept-submit")).toBeNull();
     expect(screen.queryByTestId("work-accept-c1")).toBeNull();
+  });
+
+  it("reads Accept is blocked when the oxagen GitHub App merged the pull request", async () => {
+    const detail = mergedByAppItem();
+    render(
+      <IntlProvider>
+        <AcceptDialog
+          org="acme"
+          ws="core-platform"
+          detail={itemData(detail)}
+          send={firstSend(detail)}
+          open
+          onOpenChange={vi.fn()}
+          onDone={vi.fn()}
+        />
+      </IntlProvider>,
+    );
+    const blocked = await screen.findByTestId("work-accept-blocked");
+    expect(blocked).toHaveTextContent(
+      "Accept is blocked. The oxagen GitHub App merged the pull request, so no person merged it. Return the work or close the item.",
+    );
+    expect(screen.queryByTestId("work-dialog-accept-submit")).toBeNull();
   });
 });
 

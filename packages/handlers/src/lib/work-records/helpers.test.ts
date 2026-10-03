@@ -3,7 +3,7 @@
 // a `pull_request` delivery, the work order a run names, the source text and
 // the return reason a claim's prompt reads, the criteria an acceptance is
 // checked against, and the contract's copies of the work record value lists.
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {
@@ -88,14 +88,21 @@ describe("workPullRequestDeliveryOf", () => {
       merged: true,
       merge_commit_sha: "9".repeat(40),
       merged_at: "2026-10-02T10:00:00Z",
+      merged_by: { login: "amara", id: 7, type: "User" },
       updated_at: "2026-10-02T10:00:01Z",
       head: { sha: "1".repeat(40) },
       base: { ref: "main" },
     },
   };
 
+  const APP = "oxagen-connect[bot]";
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("reads the pull request a delivery describes", () => {
-    expect(workPullRequestDeliveryOf(body)).toEqual({
+    expect(workPullRequestDeliveryOf(body, APP)).toEqual({
       repository: "aintel/platform",
       number: 612,
       pull: {
@@ -105,9 +112,31 @@ describe("workPullRequestDeliveryOf", () => {
         merged: true,
         mergeCommitSha: "9".repeat(40),
         mergedAt: "2026-10-02T10:00:00Z",
+        mergedBy: { login: "amara", type: "User", oxagen_app: false },
         updatedAt: "2026-10-02T10:00:01Z",
       },
     });
+  });
+
+  it("marks the Oxagen GitHub App's merge, and no merger when the delivery names none or half of one", () => {
+    const merger = (mergedBy: unknown) => workPullRequestDeliveryOf({ ...body, pull_request: { ...body.pull_request, merged_by: mergedBy } }, APP)?.pull.mergedBy;
+    expect(merger({ login: "oxagen-connect[bot]", type: "Bot" })).toEqual({ login: "oxagen-connect[bot]", type: "Bot", oxagen_app: true });
+    // GitHub's merge queue merges a pull request a person queued, so it is not the app.
+    expect(merger({ login: "github-merge-queue[bot]", type: "Bot" })).toEqual({ login: "github-merge-queue[bot]", type: "Bot", oxagen_app: false });
+    expect(merger(null)).toBeNull();
+    expect(merger(undefined)).toBeNull();
+    expect(merger({ login: "amara" })).toBeNull();
+    expect(merger({ login: "", type: "User" })).toBeNull();
+    expect(merger("amara")).toBeNull();
+  });
+
+  it("reads the Oxagen GitHub App's login from GITHUB_APP_SLUG when the caller passes none", () => {
+    const appMerge = { ...body, pull_request: { ...body.pull_request, merged_by: { login: "oxagen-connect[bot]", type: "Bot" } } };
+    vi.stubEnv("GITHUB_APP_SLUG", "oxagen-connect");
+    expect(workPullRequestDeliveryOf(appMerge)?.pull.mergedBy?.oxagen_app).toBe(true);
+    // A deployment with no slug names no app, so no merge reads as the app's.
+    vi.stubEnv("GITHUB_APP_SLUG", "");
+    expect(workPullRequestDeliveryOf(appMerge)?.pull.mergedBy?.oxagen_app).toBe(false);
   });
 
   it("drops a head that is not a commit id, and a delivery with no pull request", () => {
