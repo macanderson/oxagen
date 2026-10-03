@@ -18,7 +18,8 @@ import { mayActInWorkspace } from "@/shared/workspace-authority";
 import type { AgentPauseOutcome } from "./actions";
 import { pauseAgent } from "./actions";
 import { UNANSWERED, useActionFailure } from "./action-failure";
-import { buttonSecondary, textareaBase } from "@/ui/control-styles";
+import { textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -129,14 +130,14 @@ export function AgentKillSwitch({
   if (!mayActInWorkspace(orgRole, wsRole, ["owner", "admin"])) {
     return (
       <span className="flex flex-col gap-1">
-        <button
+        <Button
           type="button"
           disabled
           data-testid="agent-kill-switch-open"
-          className={buttonSecondary}
+          variant="outline"
         >
           {t("open")}
-        </button>
+        </Button>
         <span
           data-testid="agent-kill-switch-no-role"
           className="max-w-prose text-sm text-muted-foreground"
@@ -149,16 +150,16 @@ export function AgentKillSwitch({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid="agent-kill-switch-open"
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={openChange}
@@ -219,17 +220,17 @@ export function AgentKillSwitch({
             {/* The switch and the pause changed the record; the page still
                 shows the read from before. The same offer the Run page's
                 record dialogs make: re-read in place, and the tab stays put. */}
-            <button
+            <Button
               type="button"
               data-testid="agent-kill-switch-reread"
-              className={`${buttonSecondary} self-start`}
+              variant="outline" className="self-start"
               onClick={() => {
                 openChange(false);
                 navigate.refresh();
               }}
             >
               {t("reread")}
-            </button>
+            </Button>
           </div>
         )}
       </SheetDialog>

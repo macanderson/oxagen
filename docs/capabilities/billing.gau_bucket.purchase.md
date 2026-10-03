@@ -44,11 +44,15 @@ as `paid`, keyed on the session id, adds the quantity to the month's
 `purchased_gau`, clears any open auto top-up episode, and makes the
 collected card the default payment method when the customer had none.
 
-There is no tier gate and no saved-card check. A Free organisation that has
-exhausted its monthly allowance and holds no card is offered this purchase:
-it is the rev1 card-saving path of the Free-tier rule (spec §4.2, ADR-055
-§6). The refusal for want of a card applies only to the recorder's auto
-top-up.
+There is no tier gate and no saved-card check, but the purchase must be
+one the gate will count. An organisation with no subscription, past its
+signup grant or with none, while the Free row requires a subscription, is
+refused with `conflict / subscription_required` before any Stripe call
+(#4886). The gate refuses that organisation without reading its bucket
+(`requiresSubscription` in `gau-bucket.ts`, ADR-241), so units bought then
+would be paid for and never spent. A subscriber, an organisation inside its
+signup grant, and one whose subscription rule an operator has cleared can
+buy.
 
 Buying more is never a charge in itself (INV-27): the contract declares
 `noBillingGate: true`, so an organisation whose bucket is empty can still
@@ -81,7 +85,7 @@ No money field: the page prints the total from `get_contract_rate`.
 
 ## Side effects
 
-- Postgres: reads `billing.org_billing_settings` (mode), `billing.contract_terms` / `billing.subscriptions` / `billing.plans` (terms), `org.organizations`, and `iam.principals` / `iam.principal_role_assignments` / `iam.roles` for the role gate. Writes `billing.org_billing_settings.stripe_customer_id` on an organisation's first purchase (`ensureStripeCustomer`).
+- Postgres: reads `billing.org_billing_settings` (mode), `billing.contract_terms` / `billing.subscriptions` / `billing.plans` / `billing.gau_signup_grants` (terms and the subscription check), `org.organizations`, and `iam.principals` / `iam.principal_role_assignments` / `iam.roles` for the role gate. Writes `billing.org_billing_settings.stripe_customer_id` on an organisation's first purchase (`ensureStripeCustomer`).
 - Stripe: may create a Customer; creates a Checkout Session.
 - Security event: `billing.checkout_initiated` with `capability: purchase_gau_bucket`.
 - ClickHouse: none.
@@ -93,7 +97,7 @@ No money field: the page prints the total from `get_contract_rate`.
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tenant_missing` | No active tenant on the request context.                                                                                                                     |
 | `forbidden`      | `HandlerError` (403): no signed-in user and no API key with a live creator (`no_principal`), or the acting user (the signed-in user, or the key's creator) holds neither Owner nor Billing in the org (`org_role_required`).                       |
-| `conflict`       | `HandlerError` (409), reason `invoice_billed`: the organisation is approved for invoice billing, where consumption is never capped and units are not bought. |
+| `conflict`       | `HandlerError` (409), reason `invoice_billed`: the organisation is approved for invoice billing, where consumption is never capped and units are not bought. Reason `subscription_required`: the organisation has no subscription and is past its signup grant, so the gate would not count the units; nothing is charged, and the message says to choose a plan. |
 | `invalid_input`  | `quantityGau` is not a whole number of blocks at the contracted block size, or a return path is not app-relative.                                            |
 
 ## SPEC references

@@ -61,12 +61,8 @@ import {
   UNANSWERED,
   useActionFailure,
 } from "@/ui/command-failure";
-import {
-  buttonDanger,
-  buttonSecondary,
-  mono,
-  textareaBase,
-} from "@/ui/control-styles";
+import { mono, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -116,14 +112,14 @@ function slotsFor(state: HaltState): readonly Slot[] {
 function PendingSlot({ slot }: { slot: "pausing" | "resuming" }) {
   const t = useTranslations("run.commands");
   return (
-    <button
+    <Button
       type="button"
       disabled
       data-testid={`run-${slot}`}
-      className={buttonSecondary}
+      variant="outline"
     >
       {t(`${slot}.open`)}
-    </button>
+    </Button>
   );
 }
 
@@ -322,18 +318,18 @@ function CommandDialog({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={testId}
         // `.btn.danger`: Cancel ends the run, so it carries the failed hue
         // as ink; every other control is a plain `.btn`.
-        className={command === "cancel" ? buttonDanger : buttonSecondary}
+        variant={command === "cancel" ? "destructive-outline" : "outline"}
         onClick={() => {
           setOpen(true);
         }}
       >
         {t(`${command}.open`)}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={openChange}
@@ -407,16 +403,16 @@ function CommandDialog({
                 ))}
               </ul>
             )}
-            <button
+            <Button
               type="button"
-              className={buttonSecondary}
+              variant="outline"
               onClick={() => {
                 openChange(false);
                 navigate.refresh();
               }}
             >
               {t("reread")}
-            </button>
+            </Button>
           </div>
         )}
       </SheetDialog>
@@ -439,15 +435,15 @@ function DisabledControls({
     <div className="flex flex-col items-start gap-2 lg:items-end">
       <div className="flex flex-wrap gap-2">
         {slotsFor(state).map((slot) => (
-          <button
+          <Button
             key={slot}
             type="button"
             disabled
             data-testid={`run-${slot}`}
-            className={slot === "cancel" ? buttonDanger : buttonSecondary}
+            variant={slot === "cancel" ? "destructive-outline" : "outline"}
           >
             {t(`${slot}.open`)}
-          </button>
+          </Button>
         ))}
       </div>
       <p
@@ -544,15 +540,15 @@ export function RunControls({
             slot === "pausing" || slot === "resuming" ? (
               <PendingSlot key={slot} slot={slot} />
             ) : slot === "steer" ? (
-              <button
+              <Button
                 key={slot}
                 type="button"
                 disabled
                 data-testid="run-steer"
-                className={buttonSecondary}
+                variant="outline"
               >
                 {t("steer.open")}
-              </button>
+              </Button>
             ) : (
               <CommandDialog
                 key={slot}
@@ -580,15 +576,15 @@ export function RunControls({
         slot === "pausing" || slot === "resuming" ? (
           <PendingSlot key={slot} slot={slot} />
         ) : slot === "steer" && steerBlock !== null ? (
-          <button
+          <Button
             key={slot}
             type="button"
             disabled
             data-testid="run-steer"
-            className={buttonSecondary}
+            variant="outline"
           >
             {t("steer.open")}
-          </button>
+          </Button>
         ) : slot === "steer" ? (
           <CommandDialog
             key={slot}

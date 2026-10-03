@@ -6,7 +6,7 @@
 // collectors is refused on the server, and the refusal is shown here.
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
-import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { syncCollector } from "../actions";
@@ -55,7 +55,7 @@ export function Reconnect({
 
   return (
     <div className="flex flex-col items-start gap-2">
-      <button
+      <Button
         type="button"
         data-testid={`work-reconnect-${name}`}
         data-touch-target=""
@@ -64,11 +64,11 @@ export function Reconnect({
         aria-disabled={pending || undefined}
         aria-label={pending ? undefined : t("reconnectLabel", { name })}
         title={canControl ? undefined : t("noRole")}
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => void readAgain()}
       >
         {pending ? t("reconnectPending") : t("reconnect")}
-      </button>
+      </Button>
       {canControl ? null : (
         <span id={reasonId} className="sr-only">
           {t("noRole")}

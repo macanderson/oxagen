@@ -39,6 +39,7 @@ import {
 } from "react";
 import { AgentAvatar } from "./agent-avatar";
 import { Badge, type BadgeTone } from "./badge";
+import { Button } from "./button";
 import { inputBase, menuItemActive, menuSurface, mono } from "./control-styles";
 import { ProviderIcon } from "./provider-icon";
 import { ProviderMark, providerIdOf } from "./provider-mark";
@@ -779,18 +780,20 @@ export function RecordMultiPicker({
               <span className={`truncate ${shown.raw ? mono : ""}`}>
                 {label}
               </span>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-xs"
                 disabled={disabled}
                 aria-label={t("remove", { label })}
                 onClick={(e) => {
                   e.stopPropagation();
                   remove(v);
                 }}
-                className="rounded-sm px-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                className="-my-1"
               >
                 ×
-              </button>
+              </Button>
             </span>
           );
         })}

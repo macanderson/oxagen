@@ -1,17 +1,18 @@
 "use client";
 import { useTranslations } from "next-intl";
 import { openClone } from "@/shared/create";
-import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 /**
  * `label` names the source when a list shows one Clone per row, so each
- * button's accessible name says which one it copies. `className` replaces the
- * default secondary style, for a row that sizes its buttons smaller.
+ * button's accessible name says which one it copies. The button is the kit's
+ * outline Button. `className` adds layout to it, such as the smaller size a
+ * row gives its buttons.
  */
 export function CloneButton({
   kind,
   sourceRef,
   label,
-  className = buttonSecondary,
+  className,
 }: {
   kind: "skill" | "record";
   sourceRef: string;
@@ -20,8 +21,9 @@ export function CloneButton({
 }) {
   const t = useTranslations("create.clone");
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
       className={className}
       aria-label={label}
       onClick={() => {
@@ -29,6 +31,6 @@ export function CloneButton({
       }}
     >
       {t("open")}
-    </button>
+    </Button>
   );
 }

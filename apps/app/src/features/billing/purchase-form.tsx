@@ -12,8 +12,11 @@
 // ADR-055 §6). Owners and billing members buy; anyone else who can read the
 // bucket sees who can. An organization billed by invoice does not buy blocks,
 // and the panel says so in place of the form (pages/billing.md, Buy governed
-// actions). Nothing renders when the bucket or the rate could not be read:
-// the page's error state says why.
+// actions). An organization past its signup grant with no subscription is
+// refused with `subscription_required`, because the gate would never count
+// the units (#4886), and the alert says to choose a plan. Nothing renders
+// when the bucket or the rate could not be read: the page's error state says
+// why.
 import { useLocale, useTranslations } from "next-intl";
 import { useActionState, useState } from "react";
 import type { ContractRate, GauBucket } from "@/data/contracts/billing";
@@ -38,7 +41,9 @@ function failureKey(state: PurchaseState) {
     case "denied":
       return "errors.denied";
     case "conflict":
-      return "errors.conflict";
+      return state.code === "subscription_required"
+        ? "errors.subscriptionRequired"
+        : "errors.conflict";
     default:
       return "errors.unavailable";
   }

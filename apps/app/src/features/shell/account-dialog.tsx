@@ -33,7 +33,8 @@ import { routes } from "@/shared/safe-path";
 import { useFormatter } from "@/ui/formatter";
 import { timeZoneChoices } from "@/shared/time-zone";
 import { Avatar } from "@/ui/avatar";
-import { buttonPrimary, inputBase, panel } from "@/ui/control-styles";
+import { inputBase, panel } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { formatCount, formatMoney } from "@/ui/money-format";
 import { DownloadLink, SafeLink, useNavigate } from "@/ui/navigation";
@@ -85,8 +86,12 @@ import type { Theme } from "./theme";
 // `updateTimeZone` nowhere — so the member would be a state nothing can reach.
 type Outcome = "saved" | "invalid" | "denied" | "failed";
 
+/**
+ * A tab over the kit's ghost: square, with only the underline that marks the
+ * selected tab. `sm` carries no phone height of its own, so `min-h-10` holds.
+ */
 const tabClass =
-  "inline-flex min-h-10 items-center whitespace-nowrap border-b-2 border-transparent px-3 text-base font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring aria-selected:border-brand aria-selected:text-foreground";
+  "min-h-10 rounded-none border-0 border-b-2 border-transparent focus-visible:-outline-offset-2 aria-selected:border-brand aria-selected:text-foreground";
 
 type ProfileDraft = { userId: string; value: string };
 type ProfileDraftProps = {
@@ -224,12 +229,14 @@ export function AccountDialog({ data }: { data: ShellData }) {
           className="-mb-px flex gap-0.5 overflow-x-auto border-b border-border"
         >
           {ACCOUNT_TABS.map((tab, index) => (
-            <button
+            <Button
               key={tab}
               ref={(node) => {
                 tabRef.current.set(tab, node);
               }}
               type="button"
+              variant="ghost"
+              size="sm"
               role="tab"
               disabled={codesNeedAttention}
               id={`account-tab-${tab}`}
@@ -248,7 +255,7 @@ export function AccountDialog({ data }: { data: ShellData }) {
               }}
             >
               {t(`tabs.${tab}`)}
-            </button>
+            </Button>
           ))}
         </div>
       }
@@ -459,16 +466,16 @@ function ProfileTab({
             {viewer.emailVerified ? t("verified") : t("unverified")}
           </p>
         </div>
-        <button
+        <Button
           type="button"
           data-testid="edit-avatar"
-          className={`${buttonSmall} ml-auto`}
+          variant="outline" size="sm" className="ml-auto"
           onClick={() => {
             setAvatarOpen(true);
           }}
         >
           {t("editAvatar")}
-        </button>
+        </Button>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -1158,19 +1165,19 @@ function SecurityTab({
                       }}
                     />
                   </div>
-                  <button
+                  <Button
                     type="submit"
                     data-testid="account-codes-confirm"
                     aria-disabled={rotation.pending || undefined}
-                    className={buttonSmall}
+                    variant="outline" size="sm"
                   >
                     {rotation.pending ? t("issuing") : t("issue")}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
                     data-testid="account-codes-cancel"
                     aria-disabled={rotation.pending || undefined}
-                    className={buttonSmall}
+                    variant="outline" size="sm"
                     onClick={() => {
                       // Cancel is honest or it is not offered. The rotation
                       // cannot be called back once it has left, and closing the
@@ -1180,7 +1187,7 @@ function SecurityTab({
                     }}
                   >
                     {t("cancel")}
-                  </button>
+                  </Button>
                   {codes.refused ? (
                     <div className="basis-full">
                       <FormAlert testId="account-codes-refused">
@@ -1207,10 +1214,10 @@ function SecurityTab({
                   >
                     {t("codesHeld")}
                   </p>
-                  <button
+                  <Button
                     type="button"
                     data-testid="account-codes-saved"
-                    className={`${buttonSmall} mt-2`}
+                    variant="outline" size="sm" className="mt-2"
                     onClick={() => {
                       // The only signal that the single showing landed.
                       setHeldCodes(null);
@@ -1218,7 +1225,7 @@ function SecurityTab({
                     }}
                   >
                     {t("codesSaved")}
-                  </button>
+                  </Button>
                 </div>
               ) : null}
               {codes.kind === "blockedByOther" ? (
@@ -1236,16 +1243,16 @@ function SecurityTab({
               codes.kind === "closed" ||
               codes.kind === "blockedByOther" ||
               codes.kind === "blockedElsewhere" ? (
-                <button
+                <Button
                   type="button"
                   data-testid="account-codes-open"
-                  className={buttonSmall}
+                  variant="outline" size="sm"
                   onClick={() => {
                     setCodes({ kind: "asking", password: "", refused: false });
                   }}
                 >
                   {t("regenerate")}
-                </button>
+                </Button>
               ) : null
             ) : (
               <SafeLink
@@ -1304,15 +1311,15 @@ function SecurityTab({
                       })}
                 </time>
                 {s.current ? null : (
-                  <button
+                  <Button
                     type="button"
                     data-testid="account-session-revoke"
                     aria-disabled={revoking !== null || undefined}
-                    className={buttonSmall}
+                    variant="outline" size="sm"
                     onClick={() => void revoke(s.token)}
                   >
                     {revoking === s.token ? t("revoking") : t("revoke")}
-                  </button>
+                  </Button>
                 )}
               </div>
             ))}
@@ -1430,32 +1437,32 @@ function PrivacyTab({ data }: { data: ShellData }) {
           })}
         </p>
         <div className="mt-2.5 flex flex-wrap gap-2">
-          <button
+          <Button
             type="button"
             data-testid="account-export-user"
             aria-disabled={
               state.kind === "pending" || state.kind === "queued" || undefined
             }
-            className={buttonPrimary}
+            variant="primary"
             onClick={() => void ask("user")}
           >
             {state.kind === "pending" && state.scope === "user"
               ? t("exporting")
               : t("exportMine")}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             data-testid="account-export-org"
             aria-disabled={
               state.kind === "pending" || state.kind === "queued" || undefined
             }
-            className={buttonSmall}
+            variant="outline" size="sm"
             onClick={() => void ask("org")}
           >
             {state.kind === "pending" && state.scope === "org"
               ? t("exporting")
               : t("exportOrg")}
-          </button>
+          </Button>
         </div>
         <p role="status" data-testid="account-export-status" className={hint}>
           {state.kind === "queued" ? (

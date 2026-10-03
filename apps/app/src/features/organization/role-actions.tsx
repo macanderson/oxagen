@@ -30,12 +30,8 @@ import { type SyntheticEvent, useId, useState } from "react";
 import type { Permission, Role } from "@/data/contracts/org";
 import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  inputBase,
-  mono,
-} from "@/ui/control-styles";
+import { inputBase, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -182,15 +178,15 @@ export function RoleEditor({
   const formId = `${id}-form`;
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={primary ? buttonPrimary : buttonSecondary}
+        variant={primary ? "primary" : "outline"}
         onClick={() => {
           reset(true);
         }}
       >
         {openLabel}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={reset}
@@ -202,9 +198,9 @@ export function RoleEditor({
         closeLabel={readOnly ? t("close") : t("cancel")}
         footer={
           readOnly ? (
-            <button
+            <Button
               type="button"
-              className={buttonPrimary}
+              variant="primary"
               data-touch-target=""
               onClick={() => {
                 setMode("duplicate");
@@ -212,7 +208,7 @@ export function RoleEditor({
               }}
             >
               {t("duplicateAsCustom")}
-            </button>
+            </Button>
           ) : (
             <SubmitButton
               form={formId}
@@ -463,9 +459,9 @@ export function DeleteRole({ org, role }: { org: string; role: Role }) {
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={`${buttonSecondary} text-error-ink`}
+        variant="outline" className="text-error-ink"
         disabled={reason !== null}
         title={reason ?? undefined}
         aria-label={reason === null ? undefined : `${t("delete")}: ${reason}`}
@@ -475,7 +471,7 @@ export function DeleteRole({ org, role }: { org: string; role: Role }) {
         }}
       >
         {t("delete")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}
@@ -485,15 +481,15 @@ export function DeleteRole({ org, role }: { org: string; role: Role }) {
         headerClose
         closeLabel={tDel("cancel")}
         footer={
-          <button
+          <Button
             type="button"
             data-touch-target=""
-            className={`${buttonSecondary} text-error-ink`}
+            variant="outline" className="text-error-ink"
             disabled={role.heldBy > 0 || pending}
             onClick={() => void confirm()}
           >
             {pending ? tDel("pending") : tDel("confirm")}
-          </button>
+          </Button>
         }
       >
         <div className="flex flex-col gap-3 text-base">

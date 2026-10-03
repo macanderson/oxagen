@@ -221,6 +221,7 @@
         "aboveMax": "You can buy at most {max} governed actions at once.",
         "denied": "Your role cannot buy governed actions. An owner or a billing member can.",
         "conflict": "This organization is billed by invoice, so it does not buy governed actions in blocks.",
+        "subscriptionRequired": "Your organization needs a plan to keep governing. Blocks bought without a plan are not counted, so nothing was charged. Choose a plan under Change plan.",
         "unavailable": "Checkout could not be opened. Nothing was charged."
       }
     },

@@ -197,6 +197,7 @@ import { usePageRecord } from "./page-record";
 import { useShellState } from "./shell-state";
 import { useEngineHealth } from "./use-engine-health";
 import { routes } from "@/shared/safe-path";
+import { Button } from "@/ui/button";
 import { linkText } from "@/ui/control-styles";
 import {
   MessageScroller,
@@ -359,9 +360,12 @@ const RETRYABLE: ReadonlySet<Refusal> = new Set([
  */
 const COVERS_THE_APP = "(max-width: 47.99rem)";
 
-/** The header's icon buttons: the thread list, a new thread, and close. */
+/**
+ * The header's icon buttons (the thread list, a new thread, and close) over
+ * the kit's ghost: 28px, and the open list's toggle shows it is pressed.
+ */
 const HEADER_BUTTON =
-  "grid size-7 flex-none place-items-center rounded-md text-app-link-fg transition-colors hover:bg-app-link-hover-bg hover:text-app-link-hover-fg focus-visible:outline-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 aria-pressed:bg-app-link-active-bg aria-pressed:text-app-link-active-fg";
+  "size-7 flex-none aria-pressed:bg-app-link-active-bg aria-pressed:text-app-link-active-fg";
 
 /**
  * The thread and the session list share the space under the header, one over
@@ -1192,9 +1196,11 @@ export function AssistantFlyout({
         */}
         {inWorkspace ? (
           <>
-            <button
+            <Button
               ref={listToggleRef}
               type="button"
+              variant="ghost"
+              size="icon-sm"
               data-testid="assistant-sessions-toggle"
               aria-label={t("sessions.title")}
               title={t("sessions.title")}
@@ -1206,9 +1212,11 @@ export function AssistantFlyout({
               className={HEADER_BUTTON}
             >
               <ListIcon aria-hidden="true" className="size-4" />
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-sm"
               data-testid="assistant-new-thread"
               aria-label={t("thread.new")}
               title={t("thread.new")}
@@ -1225,12 +1233,14 @@ export function AssistantFlyout({
               className={HEADER_BUTTON}
             >
               <NotePencilIcon aria-hidden="true" className="size-4" />
-            </button>
+            </Button>
           </>
         ) : null}
-        <button
+        <Button
           ref={closeRef}
           type="button"
+          variant="ghost"
+          size="icon-sm"
           aria-label={t("close")}
           title={t("close")}
           onClick={() => {
@@ -1239,7 +1249,7 @@ export function AssistantFlyout({
           className={HEADER_BUTTON}
         >
           <span aria-hidden="true">✕</span>
-        </button>
+        </Button>
       </div>
 
       {/*
@@ -1473,17 +1483,19 @@ export function AssistantFlyout({
                             </p>
                           )}
                           {RETRYABLE.has(entry.code) && inWorkspace ? (
-                            <button
+                            <Button
                               type="button"
+                              variant="link"
+                              size="xs"
                               data-testid="assistant-retry"
                               disabled={pending || engineDown}
                               onClick={() => {
                                 void send(entry.question, { fromDraft: false });
                               }}
-                              className={`mt-1.5 ml-6 text-sm ${linkText} disabled:opacity-60`}
+                              className="mt-1.5 ml-6 h-auto px-0 disabled:opacity-60"
                             >
                               {t("retry")}
-                            </button>
+                            </Button>
                           ) : null}
                         </div>
                       )}

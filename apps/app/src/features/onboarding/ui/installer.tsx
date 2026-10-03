@@ -19,12 +19,8 @@ import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  mono,
-  panel,
-} from "@/ui/control-styles";
+import { buttonPrimary, buttonSecondary, mono, panel } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { useFormatter } from "@/ui/formatter";
 import { SafeLink } from "@/ui/navigation";
 
@@ -154,9 +150,9 @@ export function InstallerScreens({
           <dd className="text-muted-foreground">{t("tokenOnWrap")}</dd>
         </dl>
         <div className="mt-1 flex flex-wrap gap-2.5 max-md:flex-col">
-          <button
+          <Button
             type="button"
-            className={buttonPrimary}
+            variant="primary"
             onClick={() => {
               setScreen("installing");
               setDone(0);
@@ -164,7 +160,7 @@ export function InstallerScreens({
             }}
           >
             {t("install")}
-          </button>
+          </Button>
           <SafeLink to={wrap} className={buttonSecondary}>
             {t("cancel")}
           </SafeLink>
@@ -292,17 +288,17 @@ export function InstallerScreens({
             {t("screenLabel")}
           </span>
           {SCREENS.map((s) => (
-            <button
+            <Button
               key={s}
               type="button"
               aria-pressed={screen === s}
               onClick={() => {
                 show(s);
               }}
-              className={`${buttonSecondary} text-sm ${screen === s ? "font-semibold" : "border-transparent bg-transparent"}`}
+              variant="outline" className={`text-sm ${screen === s ? "font-semibold" : "border-transparent bg-transparent"}`}
             >
               {t(`screens.${s}`)}
-            </button>
+            </Button>
           ))}
         </div>
       )}

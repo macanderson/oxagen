@@ -3,13 +3,8 @@ import { useEffect, useState, type SyntheticEvent } from "react";
 import { useTranslations } from "next-intl";
 import type { ConfigurationCloneDraft } from "./clone-actions";
 import { SheetDialog } from "@/ui/sheet-dialog";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  inputBase,
-  mono,
-  textareaBase,
-} from "@/ui/control-styles";
+import { inputBase, mono, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { STEERING_RECORD_LABEL_MAX } from "@oxagen/oxagen/steering-record-label";
 import { FormAlert } from "@/ui/form-feedback";
 import { SafeLink, PullRequestLink } from "@/ui/navigation";
@@ -170,9 +165,9 @@ export function CloneEditor({
             <p>{t("companions", { count: draft.files.length })}</p>
           ) : null}
           {failure ? <FormAlert>{failure}</FormAlert> : null}
-          <button
+          <Button
             type="submit"
-            className={buttonPrimary}
+            variant="primary"
             disabled={
               pending ||
               !draft.slug.trim() ||
@@ -181,13 +176,13 @@ export function CloneEditor({
             }
           >
             {pending ? t("pending") : t("submit")}
-          </button>
+          </Button>
         </form>
       ) : (
         <div>
           {failure ? <FormAlert>{failure}</FormAlert> : null}
-          <button
-            className={buttonSecondary}
+          <Button
+            variant="outline"
             type="button"
             onClick={() => {
               setLoading(true);
@@ -196,7 +191,7 @@ export function CloneEditor({
             }}
           >
             {t("retry")}
-          </button>
+          </Button>
         </div>
       )}
     </SheetDialog>

@@ -15,7 +15,8 @@ import type {
   RepositoryTree,
 } from "@/data/contracts/repository";
 import { Badge, type BadgeTone } from "@/ui/badge";
-import { buttonSecondary, mono } from "@/ui/control-styles";
+import { mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { cell, headCell } from "@/ui/table";
 import { GOVERNANCE_MODES, GOVERNANCE_TOML, WORKSPACE_TOML } from "./draft";
@@ -105,16 +106,16 @@ export function Configuration({
         title={t("driftTitle")}
         subtitle={t("driftSubtitle")}
         action={
-          <button
+          <Button
             type="button"
             disabled
             data-testid="configuration-drift-pr"
             data-gap={REPOSITORY_GAPS.lifecycle}
             aria-describedby="configuration-drift-none"
-            className={`${buttonSecondary} min-h-7 px-2.5 py-1 text-sm`}
+            variant="outline" className="min-h-7 px-2.5 py-1 text-sm"
           >
             {t("driftPr")}
-          </button>
+          </Button>
         }
       >
         <div className="min-w-0 overflow-x-auto">

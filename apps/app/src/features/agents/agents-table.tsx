@@ -52,15 +52,8 @@ import { AgentCard } from "@/ui/agent-card";
 import { Avatar } from "@/ui/avatar";
 import { Badge } from "@/ui/badge";
 import { HarnessIcon } from "@/ui/harness-icon";
-import {
-  buttonSecondary,
-  inputBase,
-  linkText,
-  mono,
-  panel,
-  panelHeader,
-  panelTitle,
-} from "@/ui/control-styles";
+import { buttonSecondary, inputBase, linkText, mono, panel, panelHeader, panelTitle } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { Money } from "@/ui/money";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
@@ -701,18 +694,18 @@ export function AgentsTable({
             className="flex flex-nowrap gap-1.5"
           >
             {(["composition", "operations"] as const).map((name) => (
-              <button
+              <Button
                 key={name}
                 type="button"
                 aria-pressed={set === name}
                 data-touch-target=""
-                className={`${buttonSecondary} aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground`}
+                variant="outline" className="aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground"
                 onClick={() => {
                   setSet(name);
                 }}
               >
                 {t(`list.views.${name}`)}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -789,12 +782,14 @@ export function AgentsTable({
                       undefined ? (
                       column.label
                     ) : (
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="xs"
                         aria-label={t("list.controls.sortBy", {
                           column: column.label,
                         })}
-                        className="inline-flex items-center gap-1 uppercase tracking-[inherit] hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                        className="h-auto p-0 text-xs font-semibold uppercase tracking-[inherit] text-inherit hover:bg-transparent"
                         onClick={() => {
                           setSort(
                             sorted === "ascending"
@@ -814,7 +809,7 @@ export function AgentsTable({
                             className="size-3 opacity-50"
                           />
                         )}
-                      </button>
+                      </Button>
                     )}
                   </th>
                 );

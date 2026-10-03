@@ -10,6 +10,7 @@
 // toggle for the same row, since the open row lists the runs behind it.
 import { CaretRightIcon } from "@phosphor-icons/react";
 import { type ReactNode, useState } from "react";
+import { Button } from "@/ui/button";
 import { cell, headCell, numericCell } from "@/ui/table";
 
 export type MonthTableRow = {
@@ -51,16 +52,18 @@ function ExtraCell({
   if (extra === undefined) return null;
   if (extra.toggleLabel === null || !opens) return extra.content;
   return (
-    <button
+    <Button
       type="button"
+      variant="link"
+      size="xs"
       aria-expanded={isOpen}
       aria-controls={listId}
       onClick={onToggle}
-      className="ml-auto flex flex-col items-end rounded-sm text-right hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className="ml-auto flex h-auto flex-col items-end gap-0 p-0 text-right"
     >
       {extra.content}
       <span className="sr-only">{extra.toggleLabel}</span>
-    </button>
+    </Button>
   );
 }
 
@@ -132,19 +135,21 @@ export function MonthTable({
                     </span>
                   ) : (
                     <span className="flex min-w-0 items-center gap-2">
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="icon-xs"
                         aria-label={row.toggleLabel}
                         aria-expanded={isOpen}
                         aria-controls={listId}
                         onClick={toggle}
-                        className="flex size-6 flex-none items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        className="flex-none"
                       >
                         <CaretRightIcon
                           aria-hidden="true"
                           className={`size-4 transition-transform ${isOpen ? "rotate-90" : ""}`}
                         />
-                      </button>
+                      </Button>
                       {row.label}
                     </span>
                   )}

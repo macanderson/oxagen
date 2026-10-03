@@ -31,19 +31,8 @@ import {
 } from "@/data/contracts/audit";
 import { routes } from "@/shared/safe-path";
 import { Badge, type BadgeTone } from "@/ui/badge";
-import {
-  buttonSecondary,
-  inputBase,
-  mono,
-  panel,
-  panelHeader,
-  panelTitle,
-  statNote,
-  statStrip,
-  statTerm,
-  statTile,
-  statValue,
-} from "@/ui/control-styles";
+import { inputBase, mono, panel, panelHeader, panelTitle, statNote, statStrip, statTerm, statTile, statValue } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { useFormatter } from "@/ui/formatter";
 import { LinkPager } from "@/ui/link-pager";
 import { formatCount } from "@/ui/money-format";
@@ -236,9 +225,9 @@ function Filters({ org, query }: { org: string; query: AuditQuery }) {
           className={select}
         />
         <noscript>
-          <button type="submit" className={buttonSecondary}>
+          <Button type="submit" variant="outline">
             {t("apply")}
-          </button>
+          </Button>
         </noscript>
       </span>
       {/* The actor and range the header's selects set, and the size the
@@ -330,9 +319,9 @@ function HeaderFilters({
         <input type="hidden" name="rows" value={query.rows} />
       )}
       <noscript>
-        <button type="submit" className={buttonSecondary}>
+        <Button type="submit" variant="outline">
           {t("apply")}
-        </button>
+        </Button>
       </noscript>
     </SafeForm>
   );

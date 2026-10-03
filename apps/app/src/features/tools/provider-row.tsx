@@ -25,12 +25,12 @@ import { useState } from "react";
 import type { McpServer } from "@/data/contracts/tools";
 import { pathOf } from "@/shared/safe-path";
 import { buttonSecondary, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { ProviderIcon } from "@/ui/provider-icon";
 import { cell, numericCell } from "@/ui/table";
-import { buttonGhost } from "./buttons";
 import { NotBackedValue } from "./not-backed";
 import {
   HealthDot,
@@ -110,23 +110,27 @@ export function ProviderRow({
   return (
     <tr data-provider={server.id}>
       <td className={cell}>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="xs"
           data-provider-open={server.id}
           aria-label={t("openNamed", { name: server.name })}
-          className={`${buttonGhost} -ml-2 max-w-full items-start gap-2.5`}
+          className="-ml-2 h-auto min-h-8 max-w-full items-start justify-start gap-2.5 rounded-xl px-2 py-1 text-left whitespace-normal max-md:min-h-11"
           onClick={show}
         >
           <ProviderIcon name={server.name} iconUrl={server.iconUrl} size={24} />
           <span className="flex min-w-0 flex-col gap-0.5">
-            <span className="font-semibold md:truncate">{server.name}</span>
+            <span className="font-semibold text-foreground md:truncate">
+              {server.name}
+            </span>
             <span
               className={`${mono} text-sm font-normal text-muted-foreground md:truncate`}
             >
               {server.id}
             </span>
           </span>
-        </button>
+        </Button>
         <ProviderDialog
           at={at}
           view={view}
@@ -188,14 +192,14 @@ export function ProviderRow({
       </td>
       <td className={cell}>
         <span data-actions="" className="flex gap-1.5 max-md:flex-wrap">
-          <button
+          <Button
             type="button"
             data-testid={`provider-open-${server.id}`}
-            className={buttonSecondary}
+            variant="outline"
             onClick={show}
           >
             {t("open")}
-          </button>
+          </Button>
           <SafeLink
             to={pathOf(at.org, at.ws, "tools", "servers", server.id)}
             data-testid={`provider-studio-${server.id}`}

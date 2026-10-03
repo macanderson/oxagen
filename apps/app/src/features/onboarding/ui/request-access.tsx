@@ -6,7 +6,7 @@
 // says what the product would do and who can grant the permission today.
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { buttonPrimary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { SheetDialog } from "@/ui/sheet-dialog";
 
 export function RequestAccess({ permission }: { permission: string }) {
@@ -14,16 +14,16 @@ export function RequestAccess({ permission }: { permission: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid="request-access"
         onClick={() => {
           setOpen(true);
         }}
-        className={`${buttonPrimary} max-md:w-full`}
+        variant="primary" className="max-md:w-full"
       >
         {t("request")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}

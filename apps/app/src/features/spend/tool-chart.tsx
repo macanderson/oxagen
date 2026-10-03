@@ -10,6 +10,7 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import type { Money as MoneyValue } from "@/data/contracts/money";
+import { Button } from "@/ui/button";
 import {
   panel,
   panelFooter,
@@ -60,18 +61,20 @@ export function ToolChart({ tools }: { tools: readonly ToolChartItem[] }) {
           className="flex flex-wrap gap-1"
         >
           {METRICS.map((choice) => (
-            <button
+            <Button
               key={choice}
               type="button"
+              variant="ghost"
+              size="xs"
               data-touch-target=""
               aria-pressed={choice === metric}
               onClick={() => {
                 setMetric(choice);
               }}
-              className="rounded-md border border-transparent px-2.5 py-1 text-sm text-muted-foreground hover:text-foreground aria-pressed:border-border aria-pressed:bg-card aria-pressed:text-foreground"
+              className="aria-pressed:border-border aria-pressed:bg-card aria-pressed:text-foreground"
             >
               {t(`metric.${choice}`)}
-            </button>
+            </Button>
           ))}
         </div>
       </div>

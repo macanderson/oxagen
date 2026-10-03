@@ -17,14 +17,8 @@ import { useRef, useState } from "react";
 import type { CommandReport, DeliveryMode } from "@/data/contracts/runs";
 import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
-import {
-  buttonSecondary,
-  kvList,
-  kvTerm,
-  kvValue,
-  linkText,
-  mono,
-} from "@/ui/control-styles";
+import { kvList, kvTerm, kvValue, linkText, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
 import { SafeLink } from "@/ui/navigation";
@@ -298,17 +292,17 @@ export function DeliveryReport({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={`${testId}-open`}
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
           void read();
         }}
       >
         {t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={openChange}

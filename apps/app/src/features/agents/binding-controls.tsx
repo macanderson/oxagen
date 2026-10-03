@@ -21,7 +21,8 @@ import type { ToolbeltList } from "@/data/contracts/toolbelts";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { ChoiceGroup } from "@/ui/choice-group";
-import { buttonPrimary, linkText, mono } from "@/ui/control-styles";
+import { linkText, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
@@ -125,7 +126,7 @@ export function ToolbeltChoice({
                 {t("done", { version: done })}
               </p>
             )}
-            <button
+            <Button
               type="button"
               data-testid="agent-belt-save"
               aria-disabled={
@@ -133,11 +134,11 @@ export function ToolbeltChoice({
                   ? true
                   : undefined
               }
-              className={`${buttonPrimary} self-start`}
+              variant="primary" className="self-start"
               onClick={() => void save()}
             >
               {pending ? t("pending") : t("save")}
-            </button>
+            </Button>
           </>
         )}
       </div>
@@ -262,15 +263,15 @@ export function RuntimeMove({
                 })}
               </p>
             )}
-            <button
+            <Button
               type="button"
               data-testid="agent-runtime-save"
               aria-disabled={pending || chosen === null ? true : undefined}
-              className={`${buttonPrimary} self-start`}
+              variant="primary" className="self-start"
               onClick={() => void move()}
             >
               {pending ? t("pending") : t("move")}
-            </button>
+            </Button>
           </>
         )}
       </div>

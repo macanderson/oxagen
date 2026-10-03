@@ -5,9 +5,11 @@ import { billingGauBucketPurchase } from "@oxagen/oxagen/contracts/billing.gau_b
 import {
   billingProvider,
   blockPriceCents,
+  bucketBasis,
   ensureStripeCustomer,
   readOrgBillingSettings,
-  resolveContractTerms,
+  requiresSubscription,
+  resolveGauEntitlement,
 } from "@oxagen/billing";
 import { requireEnv } from "@oxagen/config/env";
 import { emitSecurityEvent } from "@oxagen/database/security";
@@ -27,19 +29,25 @@ import { logger } from "./logger";
  *   2. Mode — an org approved for invoice billing is never capped and buys
  *      nothing: `HandlerError { conflict, invoice_billed }`. The page does not
  *      render the form in that mode; the refusal is for API and MCP callers.
- *   3. Terms — `resolveContractTerms` at submit time, so a terms change
+ *   3. Subscription — an org with no subscription, past its signup grant
+ *      or with none, while the Free row requires a subscription:
+ *      `HandlerError { conflict, subscription_required }`. The gate refuses
+ *      that org without reading its bucket (`requiresSubscription`,
+ *      ADR-241), so units bought then would be paid for and never counted
+ *      (#4886). The check runs before any Stripe call, so a refused
+ *      purchase creates no customer and no session.
+ *   4. Terms — the entitlement's terms at submit time, so a terms change
  *      between render and submit prices the blocks the customer will see on
  *      Checkout. A quantity that is not a whole number of blocks is
  *      `invalid_input`.
- *   4. Customer — `ensureStripeCustomer`, which writes
+ *   5. Customer — `ensureStripeCustomer`, which writes
  *      `org_billing_settings.stripe_customer_id` on first use.
- *   5. Session — `createGauCheckout` with the return paths prefixed by
+ *   6. Session — `createGauCheckout` with the return paths prefixed by
  *      `NEXT_PUBLIC_APP_URL`; the contract admits app-relative paths only.
  *
  * There is no tier gate and no saved-card check: the Checkout saves the card
  * it collects (`setup_future_usage: "off_session"`) and the webhook grant
- * makes it the default, so this is the rev1 card-saving path for a Free org
- * (spec §4.2, ADR-055 §6). Nothing pending is inserted; the paid session's
+ * makes it the default. Nothing pending is inserted; the paid session's
  * metadata is the whole record of the sale and the webhook grant reads it.
  */
 export const billingGauBucketPurchaseHandler: CapabilityHandler<
@@ -61,7 +69,18 @@ export const billingGauBucketPurchaseHandler: CapabilityHandler<
     });
   }
 
-  const terms = await resolveContractTerms(ctx.orgId);
+  const now = new Date();
+  const entitlement = await resolveGauEntitlement(ctx.orgId, now);
+  if (requiresSubscription(bucketBasis(entitlement, now), entitlement)) {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "subscription_required",
+      message:
+        "This organisation needs a subscription to keep governing. Units bought without one are never counted, so nothing was charged. Choose a plan on the Billing page.",
+    });
+  }
+
+  const terms = entitlement.terms;
   if (input.quantityGau % terms.blockSizeGau !== 0) {
     throw new CapabilityError(
       billingGauBucketPurchase.name,

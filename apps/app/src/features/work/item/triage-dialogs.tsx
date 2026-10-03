@@ -7,7 +7,8 @@
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import type { WorkPriorityLabel } from "@/data/contracts/work";
-import { buttonSmall, fieldHint, fieldLabel, inputBase } from "@/ui/control-styles";
+import { fieldHint, fieldLabel, inputBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { useNavigate } from "@/ui/navigation";
 import { reviseTriage } from "../actions";
 import { useActionFailure } from "./action-failure";
@@ -182,10 +183,10 @@ export function CorrectTriageControl({ org, ws, detail }: Place) {
   const reason = detail.viewer.canControl ? null : blockText({ kind: "control" });
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid="work-action-correct-triage"
-        className={buttonSmall}
+        variant="outline" size="sm"
         disabled={reason !== null}
         title={reason ?? undefined}
         aria-describedby={reason === null ? undefined : reasonId}
@@ -194,7 +195,7 @@ export function CorrectTriageControl({ org, ws, detail }: Place) {
         }}
       >
         {t("correctTriage")}
-      </button>
+      </Button>
       {reason === null ? null : (
         <span id={reasonId} hidden>
           {reason}

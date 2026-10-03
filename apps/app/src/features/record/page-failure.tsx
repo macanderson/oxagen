@@ -16,6 +16,7 @@ import type { ReactNode } from "react";
 import type { Read } from "@/data/read";
 import { routes, type SafePath } from "@/shared/safe-path";
 import { buttonPrimary, buttonSecondary, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { SafeLink } from "@/ui/navigation";
 import { RECORD_GAPS } from "./gaps";
 
@@ -119,15 +120,15 @@ export function PageFailure({
           title={t("denied.title")}
           actions={
             <>
-              <button
+              <Button
                 type="button"
                 disabled
                 aria-describedby="record-denied-request"
                 data-gap={RECORD_GAPS.requestAccess}
-                className={buttonPrimary}
+                variant="primary"
               >
                 {t("denied.request")}
-              </button>
+              </Button>
               <SafeLink to={routes.fleet(org, ws)} className={buttonSecondary}>
                 {t("denied.back")}
               </SafeLink>
@@ -191,15 +192,15 @@ export function PageFailure({
               <SafeLink to={retry} className={buttonPrimary}>
                 {t("error.retry")}
               </SafeLink>
-              <button
+              <Button
                 type="button"
                 disabled
                 aria-describedby="record-error-incident"
                 data-gap={RECORD_GAPS.incident}
-                className={buttonSecondary}
+                variant="outline"
               >
                 {t("error.incident")}
-              </button>
+              </Button>
             </>
           }
           after={

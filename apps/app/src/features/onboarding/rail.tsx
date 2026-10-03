@@ -6,6 +6,7 @@
 import type { ReactNode } from "react";
 import type { StepState } from "./steps";
 import type { SafePath } from "@/shared/safe-path";
+import { Button } from "@/ui/button";
 import { SafeLink } from "@/ui/navigation";
 
 export type RailStep = {
@@ -161,13 +162,14 @@ export function StepRail({
                   {body}
                 </span>
               ) : (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   disabled
-                  className={`${segment} disabled:cursor-not-allowed`}
+                  className={`${segment} h-auto justify-start whitespace-normal rounded-none font-normal disabled:opacity-100`}
                 >
                   {body}
-                </button>
+                </Button>
               )}
             </li>
           );
