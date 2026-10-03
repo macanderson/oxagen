@@ -21,11 +21,11 @@ import type {
   UnpricedModels,
 } from "@/data/contracts/spend";
 import type { Read } from "@/data/read";
-import { mono } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { RowsPager } from "@/ui/pagination";
+import { ModelLabel, ProviderName } from "@/ui/provider-mark";
 import { Instant } from "./figures";
 import { PriceDialog } from "./price-dialog";
 import { RemoveRateDialog } from "./remove-rate-dialog";
@@ -204,7 +204,7 @@ function UnpricedSection({
               data-fully-unpriced={String(model.fullyUnpriced)}
             >
               <th scope="row" className={`${cell} font-normal`}>
-                <span className={mono}>{model.model}</span>
+                <ModelLabel model={model.model} provider={model.provider} />
               </th>
               <td className={cell}>
                 {model.provider === null ? (
@@ -212,7 +212,7 @@ function UnpricedSection({
                     {t("unpriced.noProvider")}
                   </span>
                 ) : (
-                  model.provider
+                  <ProviderName provider={model.provider} />
                 )}
               </td>
               <td className={cell}>
@@ -384,9 +384,11 @@ function PriceTable({
                 data-negotiated={String(entry.negotiated)}
               >
                 <th scope="row" className={`${cell} font-normal`}>
-                  <span className={mono}>{entry.model}</span>
+                  <ModelLabel model={entry.model} provider={entry.provider} />
                 </th>
-                <td className={cell}>{entry.provider}</td>
+                <td className={cell}>
+                  <ProviderName provider={entry.provider} />
+                </td>
                 <td className={cell}>{t(`class.${entry.tokenClass}`)}</td>
                 <td className={cell}>
                   <span className="inline-flex items-baseline gap-x-2 max-md:flex-wrap">

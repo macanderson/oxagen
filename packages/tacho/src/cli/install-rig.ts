@@ -442,6 +442,7 @@ export type KillPoint =
   | "readCursorHooks"
   | "readStellaHooks"
   | "writeClaudeDesktopConfig"
+  | "editClaudeUserConfig"
   | "daemonGet";
 
 export interface RigOptions {
@@ -759,6 +760,14 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
       "writeClaudeDesktopConfig",
       real.writeClaudeDesktopConfig,
     ),
+    ...(real.editClaudeUserConfig !== undefined
+      ? {
+          editClaudeUserConfig: guarded(
+            "editClaudeUserConfig",
+            real.editClaudeUserConfig,
+          ),
+        }
+      : {}),
     daemonGet: guarded("daemonGet", real.daemonGet),
     codexAppServer: guarded("codexAppServer", codexServer.server),
   };

@@ -732,6 +732,32 @@ describe("Pricing › Price book", () => {
     );
   });
 
+  it("draws each model's maker mark beside its name and its provider (#5297)", async () => {
+    priceBook.mockResolvedValue(
+      book([
+        entry({ provider: "openai", model: "gpt-5", tokenClass: "output" }),
+        entry({ tokenClass: "input_uncached" }),
+      ]),
+    );
+    unpricedModels.mockResolvedValue(unpriced([model()]));
+    await renderPricing();
+    const marks = (row: Element) =>
+      [...row.querySelectorAll("svg[data-provider-mark]")].map((svg) =>
+        svg.getAttribute("data-provider-mark"),
+      );
+    const [claude, gpt] = panelOf("spend-price-book").querySelectorAll(
+      "tbody tr",
+    );
+    if (claude === undefined || gpt === undefined)
+      throw new Error("expected two book rows");
+    expect(marks(claude)).toEqual(["anthropic", "anthropic"]);
+    expect(marks(gpt)).toEqual(["openai", "openai"]);
+    // A provider the registry does not know keeps its text and draws no mark.
+    const acme = rowOf(panelOf("spend-unpriced"), "acme-internal-7b");
+    expect(acme).toHaveTextContent("acme");
+    expect(marks(acme)).toEqual([]);
+  });
+
   it("says when a row stopped applying, and that an open row still does", async () => {
     priceBook.mockResolvedValue(
       book([

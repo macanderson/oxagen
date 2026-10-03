@@ -28,6 +28,7 @@
 // in the transcript for anyone who reads it.
 import { useTranslations } from "next-intl";
 import { Money } from "@/ui/money";
+import { ProviderMark } from "@/ui/provider-mark";
 import { type ReplyCostView, useReplyCost } from "./use-reply-cost";
 
 function CostReading({ view }: { view: ReplyCostView }) {
@@ -52,7 +53,17 @@ function CostReading({ view }: { view: ReplyCostView }) {
           )}
           {view.estimate ? <> · {t("estimate")}</> : null}
           {view.incomplete ? <> · {t("incomplete")}</> : null}
-          {view.models.length === 0 ? null : <> · {view.models.join(", ")}</>}
+          {view.models.map((model, index) => (
+            <span key={model}>
+              {index === 0 ? " · " : ", "}
+              <ProviderMark
+                model={model}
+                size={14}
+                className="mr-1 align-middle"
+              />
+              {model}
+            </span>
+          ))}
         </>
       );
     }

@@ -22,10 +22,12 @@ import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { ModelCredential, ModelProvider } from "@/data/contracts/org";
 import type { ActionResult } from "@/server/kernel";
-import { buttonSecondary, inputBase } from "@/ui/control-styles";
+import { ChoiceGroup } from "@/ui/choice-group";
+import { buttonSecondary } from "@/ui/control-styles";
 import { Field, PasswordField } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
+import { ProviderMark } from "@/ui/provider-mark";
 import {
   type ModelKeyInput,
   type ModelKeyVerdict,
@@ -261,32 +263,37 @@ export function ModelFundingForm({
           {t("form.vendor")}
         </summary>
         <div className="mt-3 flex flex-col gap-4">
+          {/* Option cards, not a native select, so each vendor carries its
+              mark (#5297). A vendor with no mark keeps its name alone. */}
           <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="funding-provider"
-              className="text-base font-medium text-foreground"
-            >
+            <span className="text-base font-medium text-foreground">
               {t("form.provider")}
-            </label>
-            <select
-              id="funding-provider"
-              name="provider"
-              className={inputBase}
+            </span>
+            <ChoiceGroup
+              label={t("form.provider")}
+              testId="funding-provider"
+              describedBy="funding-provider-hint"
               value={provider}
-              onChange={(e) => {
-                if (!isModelProvider(e.target.value)) return;
-                setProvider(e.target.value);
+              options={MODEL_PROVIDERS.map((p) => ({
+                value: p,
+                label: (
+                  <span className="inline-flex items-center gap-2">
+                    <ProviderMark provider={p} size={18} />
+                    {t(`providers.${p}.name`)}
+                  </span>
+                ),
+              }))}
+              onChange={(next) => {
+                if (!isModelProvider(next)) return;
+                setProvider(next);
                 setVerdict(null);
                 setFailure(null);
               }}
+            />
+            <p
+              id="funding-provider-hint"
+              className="text-sm text-muted-foreground"
             >
-              {MODEL_PROVIDERS.map((p) => (
-                <option key={p} value={p}>
-                  {t(`providers.${p}.name`)}
-                </option>
-              ))}
-            </select>
-            <p className="text-sm text-muted-foreground">
               {t(`providers.${provider}.hint`)}
             </p>
           </div>

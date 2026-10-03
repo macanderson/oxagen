@@ -19,6 +19,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { agentHolding } from "../host/agents";
+import { withClaudeConfigLock } from "../host/claude-config-lock";
 import type { FetchLike } from "../host/control-client";
 import { readJsonFileIfExists, writeSensitiveFileAtomic } from "../host/fs";
 import { mcpEndpointFor, readHostFile, writeHostFile } from "../host/host-file";
@@ -4946,5 +4947,170 @@ describe("moving a machine off the tacho names (#4879)", () => {
     expect(readHostFile(legacy.paths.hostFile)?.hook_command).toBe(
       "node /opt/tacho/tacho-hook.mjs",
     );
+  });
+});
+
+describe("Oxagen's MCP server in Claude Code (#5287)", () => {
+  const GITHUB = { type: "http", url: "https://api.githubcopilot.com/mcp/" };
+
+  /**
+   * The fixture's machine, whose control plane answers with the gateway key
+   * every enrollment now carries, and whose Claude Code user config is
+   * edited under the lock the real port takes. `seed` is that config before
+   * enroll, when Claude Code has run.
+   */
+  function gatewayDeps(seed?: unknown) {
+    const d = deps();
+    const inner = d.fetch;
+    const fetch: FetchLike = async (url, init) => {
+      const response = await inner(url, init);
+      if (!url.endsWith("/tacho/enrollments") || !response.ok) return response;
+      const body = JSON.parse(await response.text()) as Record<string, unknown>;
+      return {
+        ok: true,
+        status: response.status,
+        text: async () =>
+          JSON.stringify({
+            ...body,
+            gatewayApiKey: "oxa_gateway_secret",
+            gatewayApiKeyPublicId: "akp_gateway",
+          }),
+      };
+    };
+    const file = d.paths.claudeUserConfig;
+    if (seed !== undefined)
+      writeSensitiveFileAtomic(file, JSON.stringify(seed, null, 2));
+    const editClaudeUserConfig: NonNullable<
+      CliDeps["editClaudeUserConfig"]
+    > = (edit) =>
+      withClaudeConfigLock(file, () => {
+        const next = edit(readJsonFileIfExists(file));
+        if (next !== undefined)
+          writeSensitiveFileAtomic(file, JSON.stringify(next, null, 2));
+      });
+    return { ...d, fetch, editClaudeUserConfig, file };
+  }
+
+  const ENROLL = {
+    token: "tok",
+    org: "acme",
+    workspace: "core",
+    apiUrl: "https://api.test",
+  };
+
+  function userConfig(file: string) {
+    return readJsonFileIfExists(file) as Record<string, unknown> & {
+      mcpServers?: Record<string, unknown>;
+    };
+  }
+
+  it("is written by enroll, kept by a re-enroll, and keeps every other server and key", async () => {
+    const before = {
+      numStartups: 41,
+      projects: { "/home/dev/app": { allowedTools: [] } },
+      mcpServers: { github: GITHUB },
+    };
+    const d = gatewayDeps(before);
+    const result = await enroll(ENROLL, d);
+    expect(result.ok).toBe(true);
+    expect(result.warnings).toEqual([]);
+    const written = userConfig(d.file);
+    expect(written.mcpServers?.["oxagen"]).toEqual({
+      command: "node",
+      args: [
+        "/opt/tacho/tacho.mjs",
+        "mcp-stdio",
+        "--enrollment",
+        TEST_ENROLLMENT,
+        "--port",
+        "47123",
+      ],
+      env: {
+        TACHO_LOCAL_TOKEN: "local-token-0123456789abcdef",
+        TACHO_HOME: d.paths.tachoDir,
+      },
+    });
+    expect(written.mcpServers?.["github"]).toEqual(GITHUB);
+    expect(written["numStartups"]).toBe(41);
+    expect(written["projects"]).toEqual(before.projects);
+    expect(d.lines.join("\n")).toContain(
+      "`oxagen` server written; a new Claude Code session lists Oxagen's tools",
+    );
+    const host = readHostFile(d.paths.hostFile);
+    expect(host?.mcp_registered_at?.["claude-code"]).toBe(
+      "2026-09-10T12:00:00.000Z",
+    );
+    expect(host?.harness_files?.claude_user_config).toBe(d.file);
+
+    // A re-enroll of the live host changes nothing in the file.
+    const bytes = readFileSync(d.file, "utf8");
+    const again = await enroll({}, d);
+    expect(again.ok).toBe(true);
+    expect(readFileSync(d.file, "utf8")).toBe(bytes);
+  });
+
+  it("is added to an existing enrollment by a re-enroll", async () => {
+    const d = gatewayDeps({ mcpServers: { github: GITHUB } });
+    // Enrolled by a build that wrote hooks only.
+    const { editClaudeUserConfig: _unused, ...older } = d;
+    expect((await enroll(ENROLL, older)).ok).toBe(true);
+    expect(userConfig(d.file).mcpServers?.["oxagen"]).toBeUndefined();
+    expect(readHostFile(d.paths.hostFile)?.mcp_registered_at).toBeUndefined();
+
+    const reapplied = await enroll({}, d);
+    expect(reapplied.ok).toBe(true);
+    expect(d.lines.join("\n")).toContain("re-applying settings and service");
+    expect(userConfig(d.file).mcpServers?.["oxagen"]).toMatchObject({
+      args: expect.arrayContaining(["--enrollment", TEST_ENROLLMENT]),
+    });
+    expect(
+      readHostFile(d.paths.hostFile)?.mcp_registered_at?.["claude-code"],
+    ).toBe("2026-09-10T12:00:00.000Z");
+  });
+
+  it("is removed by unenroll, which puts back the server it displaced", async () => {
+    const theirs = { type: "http", url: "https://mcp.oxagen.sh/mcp" };
+    const before = { numStartups: 7, mcpServers: { github: GITHUB, oxagen: theirs } };
+    const d = gatewayDeps(before);
+    const result = await enroll(ENROLL, d);
+    expect(result.ok).toBe(true);
+    expect(result.warnings).toContain(
+      "an MCP server already used the name `oxagen` in Claude Code; it was moved aside and unenroll restores it",
+    );
+    expect(
+      readHostFile(d.paths.hostFile)?.displaced_mcp_servers["claude-code"],
+    ).toEqual({ oxagen: theirs });
+
+    const removed = await unenroll({ token: "tok" }, d);
+    expect(removed.ok).toBe(true);
+    expect(d.lines.join("\n")).toContain(
+      `Oxagen's MCP server removed from ${d.file}`,
+    );
+    expect(userConfig(d.file)).toEqual(before);
+  });
+
+  it("is not written for an enrollment the control plane gave no gateway key", async () => {
+    const d = { ...gatewayDeps(), fetch: deps().fetch };
+    const result = await enroll(ENROLL, d);
+    expect(result.ok).toBe(true);
+    expect(result.warnings).toEqual([
+      "Claude Code was not given Oxagen's tools: this enrollment has no gateway key, so the collector cannot serve Oxagen's tools. Run `oxagen agent enroll --force` to enroll this machine again with one. Until it has them, the Stop hook asks Claude Code for no reflection.",
+    ]);
+    expect(existsSync(d.file)).toBe(false);
+  });
+
+  it("does not stop the hooks when Claude Code's config cannot be read", async () => {
+    const d = gatewayDeps();
+    writeSensitiveFileAtomic(d.file, "{ not json");
+    const result = await enroll(ENROLL, d);
+    // Claude Code is hooked; only the tools are missing, and enroll says so.
+    expect(result.ok).toBe(true);
+    expect(
+      readJsonFileIfExists(d.paths.claudeSettings) as { hooks?: unknown },
+    ).toHaveProperty("hooks");
+    expect(result.warnings.join("\n")).toContain(
+      "Claude Code was not given Oxagen's tools",
+    );
+    expect(readFileSync(d.file, "utf8")).toBe("{ not json");
   });
 });

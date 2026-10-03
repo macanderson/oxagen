@@ -34,6 +34,13 @@ export interface TachoHome {
   daemonLauncher: string;
   /** Claude Code's user settings file. */
   claudeSettings: string;
+  /**
+   * Claude Code's user config file, which holds its user-scope MCP servers
+   * (`mcpServers`): `~/.claude.json`, or `.claude.json` inside
+   * `CLAUDE_CONFIG_DIR` when that is set. Enrolling Claude Code adds the
+   * Oxagen server here (`claude-code-mcp-writer.ts`).
+   */
+  claudeUserConfig: string;
   /** Claude Code's transcript root. */
   claudeProjects: string;
   /** Codex CLI's user hooks file (`~/.codex/hooks.json`). */
@@ -189,6 +196,21 @@ export function claudeConfigDirFor(
   return env["CLAUDE_CONFIG_DIR"] ?? join(home, ".claude");
 }
 
+/**
+ * Claude Code's user config file: `.claude.json` in `$CLAUDE_CONFIG_DIR`,
+ * else `~/.claude.json`. Not inside `~/.claude` when the variable is unset.
+ * Read from Claude Code 2.1.288, which joins `CLAUDE_CONFIG_DIR || homedir()`
+ * with `.claude.json` for its production login. Claude Code still prefers a
+ * legacy `.config.json` inside its config directory when one exists; Oxagen
+ * does not write that file.
+ */
+export function claudeUserConfigFor(
+  env: Record<string, string | undefined>,
+  home: string,
+): string {
+  return join(env["CLAUDE_CONFIG_DIR"] ?? home, ".claude.json");
+}
+
 /** Codex's home directory: `$CODEX_HOME`, else `~/.codex`. */
 export function codexHomeFor(
   env: Record<string, string | undefined>,
@@ -234,6 +256,7 @@ export function tachoHome(
     log: join(tachoDir, "tachod.log"),
     daemonLauncher: join(tachoDir, "tachod.cmd"),
     claudeSettings: join(claudeConfigDir, "settings.json"),
+    claudeUserConfig: claudeUserConfigFor(env, home),
     claudeProjects: join(claudeConfigDir, "projects"),
     codexHooks: join(codexHome, "hooks.json"),
     cursorHooks: cursorHooksPaths(home, platform, env),
@@ -252,6 +275,7 @@ export function homeOf(paths: TachoHome): TachoHome {
     log: paths.log,
     daemonLauncher: paths.daemonLauncher,
     claudeSettings: paths.claudeSettings,
+    claudeUserConfig: paths.claudeUserConfig,
     claudeProjects: paths.claudeProjects,
     codexHooks: paths.codexHooks,
     cursorHooks: paths.cursorHooks,

@@ -1,4 +1,5 @@
 export * from "./backfill";
+export * from "./claude-code-mcp";
 export * from "./credential";
 export * from "./deps";
 export * from "./detect";

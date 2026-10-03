@@ -26,6 +26,7 @@ import type { SafePath } from "@/shared/safe-path";
 import { eyebrowQuiet, linkText, mono } from "@/ui/control-styles";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
+import { ModelLabel, ProviderMark } from "@/ui/provider-mark";
 import { ReadFailure } from "@/ui/read-failure";
 import { Fact, Facts, NoValue } from "./parts";
 
@@ -223,9 +224,25 @@ export function RequestWindow({
   return (
     <div data-testid="window-panel" className="flex min-w-0 flex-col gap-3.5">
       <Facts>
-        <Fact label={t("provider")}>{recorded.provider ?? <NoValue />}</Fact>
+        <Fact label={t("provider")}>
+          {recorded.provider === null ? (
+            <NoValue />
+          ) : (
+            <span className="inline-flex items-center gap-1.5">
+              <ProviderMark
+                provider={recorded.provider}
+                model={recorded.model}
+              />
+              {recorded.provider}
+            </span>
+          )}
+        </Fact>
         <Fact label={t("model")} code>
-          {recorded.model ?? <NoValue />}
+          {recorded.model === null ? (
+            <NoValue />
+          ) : (
+            <ModelLabel model={recorded.model} provider={recorded.provider} />
+          )}
         </Fact>
         <Fact label={t("tools")}>
           <BlockFact recorded={recorded} kind="tools" />

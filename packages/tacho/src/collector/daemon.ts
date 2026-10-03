@@ -65,7 +65,9 @@ import {
   mcpEndpointFor,
   modelProxyPortFor,
   sessionScopeOf,
+  withRecordedHarnessFiles,
 } from "../host/host-file";
+import { claudeCodeSessionHasOxagenTools } from "../host/claude-code-mcp-writer";
 import { readModelBaseUrlState } from "../host/model-base-url";
 import {
   applyModelCredentials,
@@ -765,6 +767,35 @@ async function initializeDaemon(
           ))
             memoryUses.note({ ...file, ...run });
         };
+  // Whether a Claude Code session here can call Oxagen's `record_reflection`
+  // (#5287): the enrollment holds the key the gateway serves Oxagen's tools
+  // with, wrote its `oxagen` server before the session started, and Claude
+  // Code's user config still carries it. host.json is read again here,
+  // because enroll and `oxagen agent status` write the entry while this
+  // daemon runs. The config is read at the path enroll recorded, because the
+  // service's environment need not carry the CLAUDE_CONFIG_DIR the enrolling
+  // shell had. All of this runs only at a Stop that would otherwise ask, and
+  // any failure answers no, so the Stop hook never asks for a tool the
+  // session cannot reach.
+  const reflectionToolRegistered = (session: {
+    startedAt: string;
+  }): boolean => {
+    try {
+      const current = readHostFile(paths.hostFile) ?? host;
+      return claudeCodeSessionHasOxagenTools({
+        enrollmentId: current.host_enrollment_id,
+        hasGatewayKey: current.gateway_api_key !== undefined,
+        registeredAt: current.mcp_registered_at?.["claude-code"],
+        sessionStartedAt: session.startedAt,
+        readUserConfig: () =>
+          readJsonFileIfExists(
+            withRecordedHarnessFiles(paths, current).claudeUserConfig,
+          ),
+      });
+    } catch {
+      return false;
+    }
+  };
   // Runs the tools a lock pins on this machine. It starts at the end of
   // start-up, and `syncLocalServers` starts or stops it after each change to
   // the host's status.
@@ -2827,6 +2858,7 @@ async function initializeDaemon(
           skills,
           ...(recallMemories !== undefined ? { recallMemories } : {}),
           ...(noteMemoryReads !== undefined ? { noteMemoryReads } : {}),
+          reflectionToolRegistered,
         },
         envelope.replay,
         envelope.harness,

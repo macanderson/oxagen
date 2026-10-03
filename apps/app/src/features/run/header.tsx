@@ -36,6 +36,7 @@ import { useHarnessName } from "@/ui/harness-name";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { GitHubLink, PullRequestLink, SafeLink } from "@/ui/navigation";
+import { ProviderMark, providerNameOf } from "@/ui/provider-mark";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { BackfillBadge, BackfillNote, isBackfilled } from "./backfill";
@@ -146,6 +147,8 @@ function Rig({
   const t = useTranslations("run.header");
   const harness = useHarness(run, agent);
   const model = run.model;
+  const providerName =
+    model === null ? null : providerNameOf(model.provider, model.slug);
   const effort = runEffort(run);
   return (
     <div
@@ -173,17 +176,29 @@ function Rig({
           </>
         )}
       </Chip>
+      {/* The model with its maker's mark, then the maker's name in text, so
+          the provider reads without a hover (#5297). */}
       <Chip
         code
-        title={
-          model === null
-            ? undefined
-            : [model.provider, model.tier]
-                .filter((part): part is string => part !== null)
-                .join(" ")
-        }
+        testId="run-model"
+        title={model?.tier ?? undefined}
       >
-        {model === null ? t("modelNotRecorded") : model.slug}
+        {model === null ? (
+          t("modelNotRecorded")
+        ) : (
+          <>
+            <ProviderMark provider={model.provider} model={model.slug} />
+            {model.slug}
+            {providerName === null ? null : (
+              <span
+                data-testid="run-model-provider"
+                className="font-sans font-semibold"
+              >
+                {providerName}
+              </span>
+            )}
+          </>
+        )}
       </Chip>
       {/* The value only where the record holds it, titled with where it was
           read; otherwise not captured, titled with why (#3891). */}
