@@ -4,14 +4,22 @@
 // their reads to this lane's actions, so a send's change set and a file's diff
 // are read only when a person opens one.
 import type { ChangeSet as ChangeSetView } from "@/data/contracts/changes";
-import { ChangeSet, ChangeSetDisclosure } from "@/ui/change-set";
+import {
+  type Answer,
+  ChangeSet,
+  ChangeSetDisclosure,
+  type LoadDiff,
+} from "@/ui/change-set";
 import { readChangeSet, readRevisionDiff } from "../actions";
 
 type At = { org: string; ws: string };
 
-function diffReader({ org, ws }: At) {
-  return (revisionId: string, paths: string[]) =>
-    readRevisionDiff(org, ws, revisionId, paths);
+/**
+ * The ui's diff loader, bound to this lane's action. The action answers an
+ * `ActionResult`, which the ui reads as an `Answer`.
+ */
+function diffReader({ org, ws }: At): LoadDiff {
+  return (revisionId, paths) => readRevisionDiff(org, ws, revisionId, paths);
 }
 
 /** The work item's change set, as the page read it, one heading level under the panel's. */
@@ -42,7 +50,9 @@ export function SendChangeSet({
   return (
     <ChangeSetDisclosure
       label={label}
-      load={() => readChangeSet(at.org, at.ws, "work_order", orderId)}
+      load={(): Promise<Answer<ChangeSetView>> =>
+        readChangeSet(at.org, at.ws, "work_order", orderId)
+      }
       loadDiff={diffReader(at)}
       testId="work-send-change-set"
     />

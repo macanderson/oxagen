@@ -249,6 +249,101 @@ describe("ChangeSet", () => {
     expect(loadDiff).toHaveBeenCalledTimes(2);
   });
 
+  it("notes a cut list, an incomplete stored diff, a pull request it cannot link, and no counted files", () => {
+    const stored = changePull().revision;
+    if (stored === null) throw new Error("a stored revision");
+    show(
+      changeSet({
+        pullRequests: [
+          changePull({
+            url: "https://example.com/acme/platform/pull/482",
+            revision: { ...stored, complete: false },
+          }),
+          secondPull({ state: "closed", mergedAt: null }),
+        ],
+        morePullRequests: true,
+        repositories: [],
+      }),
+    );
+    const [first] = screen.getAllByTestId("change-pull");
+    if (first === undefined) throw new Error("a pull request");
+    expect(within(first).queryByRole("link")).toBeNull();
+    expect(within(first).getByText("acme/platform#482")).toBeTruthy();
+    expect(
+      within(first).getByText("The stored diff is incomplete."),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("More pull requests are linked than this list shows."),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("No open or merged pull request changed a file."),
+    ).toBeTruthy();
+  });
+
+  it("says a repository lists more files than it shows, a pull request past the list, and a path the revision lacks", async () => {
+    const user = userEvent.setup();
+    show(
+      changeSet({
+        pullRequests: [changePull()],
+        morePullRequests: true,
+        repositories: [
+          changeRepo({
+            moreFiles: true,
+            files: [
+              {
+                path: "src/app.ts",
+                pullRequestIds: ["fpr_482", "fpr_999"],
+                additions: 14,
+                deletions: 4,
+              },
+            ],
+          }),
+        ],
+      }),
+      () =>
+        Promise.resolve<Answer<RevisionDiff>>(
+          ok(revisionDiff("prv_482a", "src/other.ts", "@@ -1 +1 @@\n+x")),
+        ),
+    );
+    expect(
+      screen.getByText(
+        "This repository has more changed files than this list shows.",
+      ),
+    ).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /src\/app\.ts/ }));
+    expect(
+      await screen.findByText("This revision holds no change to this file."),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("This pull request is past the end of the list above."),
+    ).toBeTruthy();
+  });
+
+  it.each([
+    [
+      { ok: false, reason: "pending_approval", accessRequestId: "acr_7" },
+      "This read waits on access request acr_7.",
+    ],
+    [
+      { ok: false, reason: "unavailable", code: "diff_digest_mismatch" },
+      "Oxagen could not read these changes. The read answered diff_digest_mismatch.",
+    ],
+  ] as const)(
+    "names a read that waits or fails in its own words (negative)",
+    async (failure, sentence) => {
+      const user = userEvent.setup();
+      show(changeSet({ pullRequests: [changePull()] }), () =>
+        Promise.resolve<Answer<RevisionDiff>>(failure),
+      );
+      await user.click(
+        screen.getByRole("button", { name: /CHANGELOG\.md/ }),
+      );
+      expect(await screen.findByTestId("change-failure")).toHaveTextContent(
+        sentence,
+      );
+    },
+  );
+
   it("names a refused diff read and a read that never answered (negative)", async () => {
     const user = userEvent.setup();
     const loadDiff: LoadDiff = (revisionId) =>
