@@ -44,11 +44,12 @@ describe("AgentCard", () => {
     expect(screen.getByText("harness not recorded")).toBeTruthy();
   });
 
+  // Each layout names 28, 30 and 56; every avatar draws a tenth larger.
   it.each<["list" | "compact" | "detail", number, string, boolean]>([
-    ["list", 28, "truncate", false],
-    ["compact", 30, "truncate", true],
+    ["list", 31, "truncate", false],
+    ["compact", 33, "truncate", true],
     // The agent page's header wraps a long key rather than cutting it.
-    ["detail", 56, "break-words", false],
+    ["detail", 62, "break-words", false],
   ])(
     "sizes the %s layout's avatar to %s and its key to its place, as a pill only when compact",
     (layout, avatarSize, keyClass, pill) => {

@@ -26,6 +26,7 @@ import {
 import { basename, dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { codexHookPresence } from "../host/codex-writer";
+import type { FetchLike } from "../host/control-client";
 import { claudeDesktopPresence } from "../host/claude-desktop-writer";
 import { modelBaseUrlBackupPath } from "../host/model-base-url";
 import { readHostFile } from "../host/host-file";
@@ -1514,3 +1515,70 @@ describe.skipIf(process.platform === "win32")(
     });
   },
 );
+
+describe("install rig: Oxagen's MCP server in Claude Code (#5287)", () => {
+  /** The rig's control plane, answering with the gateway key every enrollment now carries. */
+  function withGatewayKey(inner: FetchLike): FetchLike {
+    return async (url, init) => {
+      const response = await inner(url, init);
+      if (!url.endsWith("/tacho/enrollments") || !response.ok) return response;
+      const body = JSON.parse(await response.text()) as Record<string, unknown>;
+      return {
+        ok: true,
+        status: response.status,
+        text: async () =>
+          JSON.stringify({
+            ...body,
+            gatewayApiKey: "oxa_rig_gateway_secret",
+            gatewayApiKeyPublicId: "akp_rig_gateway",
+          }),
+      };
+    };
+  }
+
+  it("is written beside Claude Code's own state, and uninstall gives the file back byte for byte", async () => {
+    const seed = seedHome();
+    // Claude Code's user config as Claude Code writes it: all of its state,
+    // with servers of the user's own.
+    const userConfig = join(seed.home, ".claude.json");
+    const original = `${JSON.stringify(
+      {
+        numStartups: 12,
+        hasCompletedOnboarding: true,
+        oauthAccount: { emailAddress: "dev@example.com" },
+        projects: { [join(seed.home, "code", "app")]: { allowedTools: [] } },
+        mcpServers: {
+          github: { type: "http", url: "https://api.githubcopilot.com/mcp/" },
+        },
+      },
+      null,
+      2,
+    )}\n`;
+    writeFileSync(userConfig, original, { mode: 0o600 });
+    const before = snapshotTree(seed.home);
+    const rig = buildRig(seed);
+    const d = { ...rig.deps, fetch: withGatewayKey(rig.deps.fetch) };
+
+    const enrolled = await enroll({ harnesses: ["claude-code"] }, d);
+    expect(enrolled.ok).toBe(true);
+    const written = JSON.parse(readFileSync(userConfig, "utf8")) as {
+      numStartups: number;
+      mcpServers: Record<string, { args?: string[] }>;
+    };
+    expect(written.numStartups).toBe(12);
+    expect(Object.keys(written.mcpServers).sort()).toEqual(["github", "oxagen"]);
+    expect(written.mcpServers["oxagen"]?.args).toEqual(
+      expect.arrayContaining(["mcp-stdio", "--enrollment", TEST_ENROLLMENT]),
+    );
+    expect(lstatSync(userConfig).mode & 0o777).toBe(0o600);
+    // Claude Code's lock was let go.
+    expect(existsSync(`${userConfig}.lock`)).toBe(false);
+
+    const removed = await unenroll({ purge: true }, d);
+    expect(removed.ok).toBe(true);
+    expect(readFileSync(userConfig, "utf8")).toBe(original);
+    expect(diffTrees(before, snapshotTree(seed.home), PURGE_ALLOWLIST)).toEqual(
+      EMPTY_DIFF,
+    );
+  });
+});

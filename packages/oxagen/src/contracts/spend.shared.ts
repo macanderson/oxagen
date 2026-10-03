@@ -122,6 +122,21 @@ export const tokenCountsSchema = z
 export type TokenCounts = z.output<typeof tokenCountsSchema>;
 
 /**
+ * The standing context model calls carried, by source, summed over every
+ * call the recorder measured (spec §12.6, #4493): the tool definitions, the
+ * context frames and the steering each call re-sent. A source no call
+ * measured is null, never a zero.
+ */
+export const standingTokensSchema = z
+  .object({
+    toolDefinitionTokens: z.number().int().nonnegative().nullable(),
+    contextFrameTokens: z.number().int().nonnegative().nullable(),
+    steeringTokens: z.number().int().nonnegative().nullable(),
+  })
+  .strict();
+export type StandingTokens = z.output<typeof standingTokensSchema>;
+
+/**
  * The levels spend is attributed to (spec §12.7), plus the cost center the
  * run is charged back to (ADR-142). A `cost_center` row's key is the label,
  * or {@link UNASSIGNED_COST_CENTER_KEY} for the spend no center claims.

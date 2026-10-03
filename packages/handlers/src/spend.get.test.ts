@@ -10,6 +10,8 @@ import {
   groupRows,
   mcpServerOf,
   mcpServerShares,
+  observedSpend,
+  promptComposition,
   reportedSpend,
 } from "./spend.get";
 import type { SpendRunRecord } from "./spend.shared";
@@ -605,6 +607,139 @@ describe("get_spend day series and top runs", () => {
   });
 });
 
+describe("get_spend prompt sources (#5295)", () => {
+  /** A priced run with the token sources the rollup stores beside its record. */
+  const measuredRun = (
+    sources: {
+      toolDefinitionTokens: number | null;
+      contextFrameTokens: number | null;
+      steeringTokens: number | null;
+    },
+    resultTokens: (number | null)[] = [],
+    over: Parameters<typeof pricedRun>[1] = {},
+  ): SpendRunRecord => {
+    const base = pricedRun(500n, over);
+    return Object.assign(
+      {
+        ...base,
+        breakdown: {
+          ...base.breakdown,
+          tools: resultTokens.map((tokens, i) => ({
+            name: `Tool${String(i)}`,
+            calls: 1,
+            resultTokens: tokens,
+            costMicros: null,
+          })),
+        },
+      },
+      sources,
+    );
+  };
+
+  it("sums an agent's runs' tool definitions, context frames, steering and tool results, and keeps a source no run measured null", async () => {
+    const h = harness({
+      daily: [daily({ groupKind: "agent", groupKey: "acme.core.cc" })],
+      runs: [
+        measuredRun(
+          {
+            toolDefinitionTokens: 12_000,
+            contextFrameTokens: null,
+            steeringTokens: 400,
+          },
+          [800, null],
+        ),
+        measuredRun(
+          {
+            toolDefinitionTokens: 6_000,
+            contextFrameTokens: null,
+            steeringTokens: null,
+          },
+          [1_200],
+        ),
+      ],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
+    expect(out.rows[0]?.tokenSources).toEqual({
+      toolDefinitionTokens: 18_000,
+      // No run measured context frames, so the sum is null, not zero.
+      contextFrameTokens: null,
+      steeringTokens: 400,
+      toolResultTokens: 2_000,
+    });
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers every source null for a row whose runs measured none (negative)", async () => {
+    const h = harness({
+      daily: [daily({ groupKind: "agent", groupKey: "acme.core.cc" })],
+      runs: [pricedRun(500n)],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
+    expect(out.rows[0]?.tokenSources).toEqual({
+      toolDefinitionTokens: null,
+      contextFrameTokens: null,
+      steeringTokens: null,
+      toolResultTokens: null,
+    });
+  });
+
+  it("carries no sources on a model row, which holds part of a run (negative)", async () => {
+    const h = harness({
+      daily: [
+        daily({
+          groupKind: "model",
+          groupKey: "claude-sonnet-5",
+          costMicros: 500n,
+          costBasis: "client_attested",
+        }),
+      ],
+      runs: [
+        measuredRun({
+          toolDefinitionTokens: 12_000,
+          contextFrameTokens: null,
+          steeringTokens: 400,
+        }),
+      ],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "model" }, ctx());
+    expect(out.rows[0]).not.toHaveProperty("tokenSources");
+  });
+
+  it("gives the assistant row its own runs' sources, and leaves them out of the operator's row", async () => {
+    const assistant: SpendRunRecord = {
+      ...measuredRun({
+        toolDefinitionTokens: 9_000,
+        contextFrameTokens: null,
+        steeringTokens: null,
+      }),
+      inApp: true,
+    };
+    const external = measuredRun({
+      toolDefinitionTokens: 1_000,
+      contextFrameTokens: null,
+      steeringTokens: null,
+    });
+    const h = harness({
+      daily: [
+        daily({
+          groupKind: "operator",
+          groupKey: OPERATOR,
+          runs: 2,
+          costMicros: 1000n,
+          costBasis: "client_attested",
+        }),
+      ],
+      runs: [assistant, external],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "operator" }, ctx());
+    expect(out.rows.map((r) => [r.key, r.tokenSources?.toolDefinitionTokens]))
+      .toEqual([
+        [OPERATOR, 1_000],
+        [ASSISTANT_SPEND_KEY, 9_000],
+      ]);
+  });
+});
+
 describe("get_spend reported spend", () => {
   it("sums the models the harness reported and leaves gateway and mixed models out", () => {
     const reported = pricedRun(300n);
@@ -621,5 +756,77 @@ describe("get_spend reported spend", () => {
       reportedSpend([pricedRun(10n, { costBasis: "gateway_observed" })]),
     ).toBeNull();
     expect(reportedSpend([run()])).toBeNull();
+  });
+});
+
+describe("get_spend observed spend", () => {
+  it("sums the models the gateway metered and leaves reported, mixed and estimated models out", () => {
+    const reported = pricedRun(300n);
+    const metered = pricedRun(900n, { costBasis: "gateway_observed" });
+    const mixed = pricedRun(50n, { costBasis: "mixed" });
+    const estimated = pricedRun(70n, { costBasis: "estimated" });
+    expect(observedSpend([reported, metered, mixed, estimated])).toEqual({
+      micros: "900",
+      currency: "USD",
+    });
+  });
+
+  it("answers null when no gateway-observed model carries a cost (negative)", () => {
+    expect(observedSpend([pricedRun(10n)])).toBeNull();
+    expect(observedSpend([run()])).toBeNull();
+  });
+
+  it("answers the observed part beside the reported part on the period", async () => {
+    const h = harness({
+      runs: [
+        pricedRun(300n),
+        pricedRun(900n, { costBasis: "gateway_observed" }),
+      ],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "model" }, ctx());
+    expect(out.reported).toEqual({ micros: "300", currency: "USD" });
+    expect(out.observed).toEqual({ micros: "900", currency: "USD" });
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+});
+
+describe("get_spend prompt composition", () => {
+  it("sums each standing source and the tool results over the period's runs", async () => {
+    const measured: SpendRunRecord = {
+      ...pricedRun(300n),
+      toolDefinitionTokens: 4_000,
+      contextFrameTokens: 0,
+      steeringTokens: null,
+    };
+    measured.breakdown = {
+      ...measured.breakdown,
+      tools: [
+        { name: "Read", calls: 2, resultTokens: 1_200, costMicros: 12n },
+        { name: "Bash", calls: 1, resultTokens: null, costMicros: null },
+      ],
+    };
+    const other: SpendRunRecord = {
+      ...pricedRun(100n),
+      toolDefinitionTokens: 1_000,
+    };
+    const h = harness({ runs: [measured, other] });
+    const out = await h.handler({ period: PERIOD, groupBy: "model" }, ctx());
+    // A source measured at 0 is a reading of 0; a source no run measured is null.
+    expect(out.composition).toEqual({
+      toolDefinitionTokens: 5_000,
+      contextFrameTokens: 0,
+      steeringTokens: null,
+      toolResultTokens: 1_200,
+    });
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers every part null when no run measured one (negative)", () => {
+    expect(promptComposition([run(), pricedRun(10n)])).toEqual({
+      toolDefinitionTokens: null,
+      contextFrameTokens: null,
+      steeringTokens: null,
+      toolResultTokens: null,
+    });
   });
 });

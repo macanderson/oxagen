@@ -31,6 +31,10 @@ The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-0
 | `period` | object | the range as asked |
 | `groupBy` | enum | the level as asked |
 | `total` | figure | the period over every run in the workspace (below) |
+| `days` | object[] | one `{ day, cost, calls, runs }` per day of the period, oldest first, days with no run included with `cost: null` |
+| `reported` | money or null | the part of `total.cost` the harness reported: every model whose frames were all `client_attested`; null when no such model carries a cost |
+| `observed` | money or null, optional | the part of `total.cost` the gateway metered: every model whose frames were all `gateway_observed`. A `mixed` or `estimated` model counts as not observed, so the figure is a floor; null when no such model carries a cost |
+| `composition` | object, optional | `{ toolDefinitionTokens, contextFrameTokens, steeringTokens, toolResultTokens }`: the standing context the period's model calls carried, summed over every call the recorder measured, and the tool-result tokens, each result counted once when it was recorded. A part no run recorded is null, never `0` |
 | `estimatedRuns` | integer, optional | the period's priced runs that were still open when their row was last rebuilt; their cost is in the figures as a running estimate |
 | `unmeteredRuns` | object, optional | `{ total, byHarness: [{ harness, runs }] }`: the period's wrapped runs whose rollup found no model call, by the harness that ran them, most runs first. `total.runs` counts them and `total.cost` cannot, so the Spend page prints this beside the total. See [Runs with no usage](#runs-with-no-usage) |
 | `rows` | row[] | one per group; largest spend first, groups with no cost after those with one, then by key |
@@ -47,6 +51,8 @@ A figure:
 | `productiveRatio` | number or null | 0..1, run-weighted; null until the grading lane writes it |
 
 A row adds `key` (an operator's principal public id `prn_…`, the `operatorId` a run of `list_runs` carries and the key `get_spend_drill` takes; an agent key `org_ns.ws_ns.slug`; a model id; a tool name; a task reference; or a cost-center label, with `~none` for spend no cost center claims), `provider` (set on `model` rows) and `tokens` by class (`input_uncached`, `cache_read`, `cache_write_5m`, `cache_write_1h`, `output`, `reasoning`, `server_tool_request`). `server_tool_request` counts web search requests, which the book prices per request, so it is not a token count. A row rolled up before the class existed reads 0 for it.
+
+A row that holds whole runs, on the `operator`, `agent`, `task` and `cost_center` levels and the assistant row of those levels, also carries `tokenSources`: `{ toolDefinitionTokens, contextFrameTokens, steeringTokens, toolResultTokens }`, the tokens the row's runs spent on each prompt source, summed (#5295). The first three are each run's `cost.run_totals` sums, the recorder's estimates over every counted call. `toolResultTokens` is each run's tools' result tokens. A source no run of the row measured is null, never zero. The `tokens` classes already count all four. A `model`, `tool` or `mcp_server` row holds part of a run, and the sources are not split by model or tool, so it carries no `tokenSources`.
 
 ## Basis
 

@@ -148,6 +148,31 @@ describe("Activity › token accounting", () => {
     );
   });
 
+  it("counts the tool definitions the agent's runs measured (#5295)", () => {
+    const row = spendRow({
+      tokenSources: {
+        toolDefinitionTokens: 1_500,
+        contextFrameTokens: null,
+        steeringTokens: null,
+        toolResultTokens: null,
+      },
+    });
+    renderActivity({ row, spend: spendReport([row]) });
+    const definitions = region("Token accounting").querySelector(
+      'tr[data-class="toolDefinitions"]',
+    );
+    expect(definitions?.children[1]).toHaveTextContent(/^1,500$/);
+  });
+
+  it("leaves tool definitions not recorded when no run measured them, never zero (negative)", () => {
+    renderActivity();
+    const definitions = region("Token accounting").querySelector(
+      'tr[data-class="toolDefinitions"]',
+    );
+    expect(definitions?.children[1]).toHaveTextContent("not recorded");
+    expect(definitions?.children[1]?.textContent).not.toMatch(/\d/);
+  });
+
   it("says there is no cache hit rate when no input was counted (negative)", () => {
     renderActivity({
       row: spendRow({

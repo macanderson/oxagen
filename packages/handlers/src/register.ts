@@ -1457,6 +1457,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .refreshSteeringPrHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_change_set",
+    async () =>
+      (await import("./forge.changes.get"))
+        .getChangeSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_revision_diff",
+    async () =>
+      (await import("./forge.revision.diff.get"))
+        .getRevisionDiffHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_steering_pr_diff",
     async () =>
       (await import("./steering.pr.diff.get"))

@@ -476,7 +476,8 @@
           "retried": "{count} retried"
         },
         "allAdvanced": "Every step the rollup graded advanced the task.",
-        "retries": "The rollup recorded <n></n> {count, plural, one {retry} other {retries}}."
+        "retries": "The rollup recorded <n></n> {count, plural, one {retry} other {retries}}.",
+        "resultTokens": "<count></count> tokens of tool results"
       },
       "families": {
         "shell": "Shell",
@@ -497,12 +498,12 @@
         "title": "Spend by area",
         "estimate": "estimate",
         "areas": {
-          "initial": "Initial prompt",
+          "initial": "Prompt",
           "followUp": "Follow-up prompts",
-          "context": "Context retrievals",
+          "context": "Context",
           "definitions": "Tool definitions",
-          "results": "Tool calls",
-          "system": "System prompt",
+          "results": "Tool results",
+          "system": "System",
           "output": "Model output"
         },
         "outputTitle": "{reasoning} of it reasoning",
@@ -513,17 +514,21 @@
         "byCost": "Each tool's cost is an estimate from its result tokens at the run's input rate. The run's cost already includes it.",
         "resultsTitle": "Estimate from the tools' result tokens at the run's input rate",
         "standingTitle": "Estimate of context re-sent on every call after the first: {split}",
+        "windowsTitle": "Estimate from each block's share of the measured requests' bytes",
+        "windowsSplitTitle": "Estimate from each block's share of the measured requests' bytes: {split}",
         "sources": {
           "toolDefinitions": "{count, plural, one {# token} other {# tokens}} of tool definitions",
           "steering": "{count, plural, one {# token} other {# tokens}} of steering",
-          "contextFrames": "{count, plural, one {# token} other {# tokens}} of context frames"
+          "contextFrames": "{count, plural, one {# token} other {# tokens}} of context frames",
+          "contextBlock": "{count, plural, one {# token} other {# tokens}} of context"
         },
         "noTools": "This run called no tool.",
         "toolsNotRead": "The transcript was not read, so the tools are not listed.",
         "unnamedTool": "A tool the record did not name",
         "note": "Model output is the run's recorded cost for its output and reasoning tokens. The six input areas share the run's {input} input tokens, which cost <cost></cost>, and how a request splits between them is not recorded yet. A follow-up prompt re-sends the window, which is why it costs more than its own words.",
-        "noteWithResults": "Model output is the run's recorded cost for its output and reasoning tokens. The six input areas share the run's {input} input tokens, which cost <cost></cost>. Tool calls is the tools' result tokens at the run's input rate, an estimate. How the rest of a request splits between the other five is not recorded yet. A follow-up prompt re-sends the window, which is why it costs more than its own words.",
-        "noteWithStanding": "Model output is the run's recorded cost for its output and reasoning tokens. The six input areas share the run's {input} input tokens, which cost <cost></cost>. Every call after the first re-sent the run's standing context: {split}. Those tokens are priced at the run's cache read rate, or its input rate when it read nothing from the cache, and they are an estimate. {results, select, yes {Tool calls is the tools' result tokens at the run's input rate, an estimate. } other {}}How the rest of a request splits between the other areas is not recorded yet. A follow-up prompt re-sends the window, which is why it costs more than its own words.",
+        "noteWithResults": "Model output is the run's recorded cost for its output and reasoning tokens. The six input areas share the run's {input} input tokens, which cost <cost></cost>. Tool results is the tools' result tokens at the run's input rate, an estimate. How the rest of a request splits between the other five is not recorded yet. A follow-up prompt re-sends the window, which is why it costs more than its own words.",
+        "noteWithStanding": "Model output is the run's recorded cost for its output and reasoning tokens. The six input areas share the run's {input} input tokens, which cost <cost></cost>. Every call after the first re-sent the run's standing context: {split}. Those tokens are priced at the run's cache read rate, or its input rate when it read nothing from the cache, and they are an estimate. {results, select, yes {Tool results is the tools' result tokens at the run's input rate, an estimate. } other {}}How the rest of a request splits between the other areas is not recorded yet. A follow-up prompt re-sends the window, which is why it costs more than its own words.",
+        "noteWithWindows": "Model output is the run's recorded cost for its output and reasoning tokens. The run's {input} input tokens cost <cost></cost>. The other input areas come from {requests, plural, one {# measured request} other {# measured requests}}. Each is its blocks' share of each request's bytes, priced at the run's average input rate. {standing, select, yes {Every call after the first re-sent the run's standing context: {split}. Tool definitions and Context show it where it was reported. } other {}}{results, select, yes {Tool results is the tools' result tokens at the run's input rate. } other {}}Each input area is an estimate. A follow-up prompt re-sends the window, which is why it costs more than its own words.",
         "noteNotRolledUp": "The rollup has not counted this run's tokens yet, so no area is priced."
       },
       "calls": {
@@ -584,12 +589,16 @@
         "tally": "{count} tok per call",
         "parts": {
           "conversation": "Conversation",
-          "context": "Context frames",
+          "context": "Context",
           "definitions": "Tool definitions",
           "steering": "Steering",
           "system": "System"
         },
-        "partsNote": "Per-part token counts are not recorded yet.",
+        "tok": "{count} tok",
+        "tokShare": "{count} tok · {share}",
+        "partsNote": "No request of this run recorded how its prompt splits into parts.",
+        "windowsNote": "Each part sums {requests, plural, one {# request} other {# requests}} of this run.{others, plural, =0 {} one { # more request recorded no split.} other { # more requests recorded no split.}}{complete, select, no { The read stopped at its limit before the run's last request.} other {}} A part is its share of each request's bytes, so it is an estimate.",
+        "sourcesNote": "No request of this run recorded how its prompt splits into parts. Tool definitions, Context and Steering are the recorder's own estimates over every call, each a share of the run's input tokens.",
         "effectivePrice": "Effective input price",
         "effectiveValue": "<rate></rate> per million across all input classes",
         "cacheWriteShare": "Cache write cost share",
@@ -1349,6 +1358,10 @@
       },
       "statusFilter": "Filter by status",
       "noMatch": "No issue has this status.",
+      "changes": {
+        "title": "Changes by issue",
+        "toggle": "Changes for {ref}"
+      },
       "linked": {
         "title": "Linked work",
         "edge": {

@@ -129,6 +129,44 @@ describe("Overview › 30-day token use", () => {
     expect(tile("Spend")).toHaveTextContent("basis not recorded");
   });
 
+  it("fills each prompt source the agent's runs measured, and leaves conversation, system and an unmeasured source not recorded (#5295)", () => {
+    const row = spendRow({
+      tokenSources: {
+        toolDefinitionTokens: 1_500,
+        contextFrameTokens: null,
+        steeringTokens: 300,
+        toolResultTokens: 600,
+      },
+    });
+    renderOverview({ spend: spendReport([row]), spendRow: row });
+    const classes = within(screen.getByTestId("token-classes")).getAllByRole(
+      "listitem",
+    );
+    const byClass = (key: string) =>
+      classes.find((li) => li.getAttribute("data-class") === key);
+    // Each is a share of the row's 6,000 tokens.
+    expect(byClass("toolResults")).toHaveTextContent("Tool results600 · 10%");
+    expect(byClass("toolDefinitions")).toHaveTextContent(
+      "Tool definitions1,500 · 25%",
+    );
+    expect(byClass("steering")).toHaveTextContent("Steering300 · 5%");
+    for (const key of ["conversation", "contextFrames", "system"]) {
+      expect(byClass(key)).toHaveTextContent("not recorded");
+      expect(byClass(key)?.textContent).not.toMatch(/\d/);
+    }
+  });
+
+  it("leaves every prompt source not recorded on a row that carries none (negative)", () => {
+    renderOverview();
+    const classes = within(screen.getByTestId("token-classes")).getAllByRole(
+      "listitem",
+    );
+    for (const li of classes.slice(0, 6)) {
+      expect(li).toHaveTextContent("not recorded");
+      expect(li.textContent).not.toMatch(/\d/);
+    }
+  });
+
   it("prints the per-run cost from the row's own cost over its runs", () => {
     renderOverview();
     // $12.50 over 4 runs is $3.125; the Money formatter prints it as $3.12.

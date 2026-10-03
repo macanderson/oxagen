@@ -7,8 +7,9 @@
 // and spend from this agent's row of `get_spend`, the findings from
 // `list_findings` narrowed to this agent's key, and the incidents from
 // `list_incidents` narrowed to the agent, one cursor page at the size Rows
-// picks (#4693). A run's own token count, a class's rate and cost, and the
-// tool-definition share of input are not recorded yet (G3), so they say so.
+// picks (#4693). A run's own token count and a class's rate and cost are not
+// recorded yet (G3), so they say so. Tool definitions is the runs' measured
+// sum from the same row (#5295), and not recorded when no run measured it.
 import { TAMPER_INCIDENT_KINDS } from "@oxagen/oxagen/contracts/tacho.incident.list";
 import { useLocale, useTranslations } from "next-intl";
 import type { IncidentPage } from "@/data/contracts/agents";
@@ -194,8 +195,14 @@ function Accounting({
             ))}
             <tr data-class="toolDefinitions">
               <td className={cell}>{t("classes.toolDefinitions")}</td>
+              {/* The runs' measured sum (#5295); none measured reads not
+                  recorded, never zero. */}
               <td className={numericCell}>
-                <NotRecordedValue />
+                {r.toolDefinitions === null ? (
+                  <NotRecordedValue />
+                ) : (
+                  formatCount(r.toolDefinitions, locale)
+                )}
               </td>
               <td className={`${numericCell} text-dim`}>
                 {t("countedAsInput")}

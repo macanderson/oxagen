@@ -31,6 +31,7 @@ import {
   moneySchema,
   spendDaySchema,
   spendFigureSchema,
+  standingTokensSchema,
   tokenCountsSchema,
   unmeteredRunsSchema,
 } from "./spend.shared";
@@ -92,6 +93,22 @@ export const spendTopRunSchema = z
   })
   .strict();
 
+/**
+ * What a row's runs spent on each prompt source the recorder measures,
+ * summed over the period's runs (#5295): tool definitions, context frames and
+ * steering from `cost.run_totals`, and tool results from each run's
+ * breakdown. A source no run of the row measured is null, never a zero. Each
+ * is an estimate the row's `tokens` already count.
+ */
+export const spendTokenSourcesSchema = z
+  .object({
+    toolDefinitionTokens: z.number().int().nonnegative().nullable(),
+    contextFrameTokens: z.number().int().nonnegative().nullable(),
+    steeringTokens: z.number().int().nonnegative().nullable(),
+    toolResultTokens: z.number().int().nonnegative().nullable(),
+  })
+  .strict();
+
 export const spendRowSchema = spendFigureSchema
   .extend({
     /**
@@ -112,6 +129,14 @@ export const spendRowSchema = spendFigureSchema
      * {@link ASSISTANT_SPEND_KEY} row. `runs` says how many there are.
      */
     topRuns: z.array(spendTopRunSchema).max(SPEND_TOP_RUNS_MAX),
+    /**
+     * The row's prompt sources over its runs (#5295). Present on a row that
+     * holds whole runs: operator, agent, task, cost center, and the
+     * {@link ASSISTANT_SPEND_KEY} row of those groupings. Absent on a model,
+     * tool, or MCP server row, which holds part of a run, and on the
+     * {@link OTHER_SPEND_KEY} row.
+     */
+    tokenSources: spendTokenSourcesSchema.optional(),
   })
   .strict();
 
@@ -119,7 +144,7 @@ export const spendGet = registerCapability({
   name: "get_spend",
   domain: "spend",
   description:
-    "Read this workspace's spend over a day range, rolled up by operator, agent, model, tool, task, cost center or MCP server, with every figure in micros and the basis that says who observed it, the period total with proven and accepted spend kept apart, the spend by day, and each row's costliest runs.",
+    "Read this workspace's spend over a day range, rolled up by operator, agent, model, tool, task, cost center or MCP server, with every figure in micros and the basis that says who observed it, the period total with proven and accepted spend kept apart, the spend by day, each row's costliest runs, and on a row of whole runs the tokens those runs spent on tool definitions, context frames, steering and tool results.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -155,6 +180,27 @@ export const spendGet = registerCapability({
        */
       reported: moneySchema.nullable(),
       /**
+       * The part of the total the gateway metered: every model whose frames
+       * were all `gateway_observed`. A model with `mixed` or `estimated`
+       * frames counts as not observed, so this is a floor. Null when no
+       * gateway-observed model carries a cost. Absent from an answer built
+       * before it was read.
+       */
+      observed: moneySchema.nullable().optional(),
+      /**
+       * What the period's model calls carried besides the conversation, in
+       * tokens, from the run rows: the standing context by source, and the
+       * tool results. Each tool result counts once, when it was recorded,
+       * and not again for each later call that re-sent it. A part no run
+       * recorded is null. Absent from an answer built before it was read.
+       */
+      composition: standingTokensSchema
+        .extend({
+          toolResultTokens: z.number().int().nonnegative().nullable(),
+        })
+        .strict()
+        .optional(),
+      /**
        * Priced runs in the period that were still open when their rollup was
        * last built (#3980). Their cost is in every figure here as a running
        * estimate over the calls recorded so far, and grows until they seal.
@@ -173,3 +219,4 @@ export type SpendGetOutput = z.output<typeof spendGet.output>;
 export type SpendGroupBy = z.output<typeof spendGroupBySchema>;
 export type SpendRow = z.output<typeof spendRowSchema>;
 export type SpendTopRun = z.output<typeof spendTopRunSchema>;
+export type SpendTokenSources = z.output<typeof spendTokenSourcesSchema>;

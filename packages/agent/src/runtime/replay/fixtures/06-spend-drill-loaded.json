@@ -42,13 +42,43 @@
         }
       },
       "share": 0.62,
+      "tokens": {
+        "input_uncached": 42000,
+        "cache_read": 168000,
+        "cache_write_5m": 0,
+        "cache_write_1h": 0,
+        "output": 9000,
+        "reasoning": 0,
+        "server_tool_request": 0
+      },
+      "cacheHitRate": 0.8,
+      "modelCalls": 58,
+      "observed": {
+        "micros": "1140000",
+        "currency": "USD"
+      },
+      "standing": {
+        "toolDefinitionTokens": 61000,
+        "contextFrameTokens": null,
+        "steeringTokens": null
+      },
+      "resultTokens": 4200,
       "byTool": [
         {
           "name": "create_pull_request",
           "calls": 6,
-          "runs": 4
+          "runs": 4,
+          "resultTokens": 4200,
+          "cost": {
+            "micros": "12600",
+            "currency": "USD",
+            "basis": "estimated"
+          }
         }
-      ]
+      ],
+      "byAgent": [],
+      "byOperator": [],
+      "byModel": []
     }
   },
   "frames": [

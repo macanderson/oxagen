@@ -21,6 +21,7 @@ import { Money } from "@/ui/money";
 import { inputBase } from "@/ui/control-styles";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
+import { ModelLabel } from "@/ui/provider-mark";
 import { type OptionLoad, RecordMultiPicker } from "@/ui/record-picker";
 import { setGatewayPolicyAction } from "./actions";
 import {
@@ -45,6 +46,20 @@ function valuesOf(policy: GatewayPolicy): GatewayPolicyFormValues {
 }
 
 /** One pattern per line, as the form holds a list, split into the picker's chips. */
+/** A saved list of models or patterns, each with its maker's mark (#5297). */
+function ModelNames({ models }: { models: readonly string[] }) {
+  return (
+    <>
+      {models.map((model, index) => (
+        <span key={model}>
+          {index === 0 ? null : ", "}
+          <ModelLabel model={model} className="align-bottom" />
+        </span>
+      ))}
+    </>
+  );
+}
+
 function patternsOf(value: string): string[] {
   return value
     .split("\n")
@@ -116,6 +131,9 @@ export function GatewayPolicySection({
     valuesOf(policy),
   );
   const [saved, setSaved] = useState<GatewayPolicy>(policy);
+  // Held apart so the allowlist's narrowing survives into the rich-text
+  // callback below.
+  const allow = saved.modelAllow;
   const [reach, setReach] = useState<GatewayReach | null>(null);
   const [errors, setErrors] = useState<GatewayFieldErrors>({});
   const [alert, setAlert] = useState<"denied" | "failed" | null>(null);
@@ -313,14 +331,20 @@ export function GatewayPolicySection({
             )}
           </p>
           <p>
-            {saved.modelAllow === null
+            {allow === null
               ? t("noAllowlist")
-              : saved.modelAllow.length === 0
+              : allow.length === 0
                 ? t("permitNoModels")
-                : t("allowlist", { models: saved.modelAllow.join(", ") })}
+                : t.rich("allowlist", {
+                    models: () => <ModelNames models={allow} />,
+                  })}
           </p>
           {saved.modelDeny.length > 0 ? (
-            <p>{t("denylist", { models: saved.modelDeny.join(", ") })}</p>
+            <p>
+              {t.rich("denylist", {
+                models: () => <ModelNames models={saved.modelDeny} />,
+              })}
+            </p>
           ) : null}
         </div>
       )}

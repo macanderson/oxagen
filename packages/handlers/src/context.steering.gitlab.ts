@@ -1007,6 +1007,23 @@ export function createSteeringGitLab(
       });
     },
 
+    mergeBase(repo, head, base) {
+      if (head === base) return Promise.resolve(head);
+      return callRest(repo, async (rest, path) => {
+        try {
+          const out = await rest.request<{ id: string }>(
+            "GET",
+            `${path}/repository/merge_base?refs[]=${encodeURIComponent(head)}&refs[]=${encodeURIComponent(base)}`,
+          );
+          return out.data.id;
+        } catch (err) {
+          // GitLab answers 400 when the two commits share no history.
+          if (isStatus(err, 400)) return null;
+          throw err;
+        }
+      });
+    },
+
     commitParents(repo, sha) {
       return callRest(repo, async (rest, path) => {
         const out = await rest.request<{ parent_ids?: string[] }>(

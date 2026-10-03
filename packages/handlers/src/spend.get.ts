@@ -23,6 +23,7 @@ import {
   type SpendGetOutput,
   type SpendGroupBy,
   type SpendRow,
+  type SpendTokenSources,
   type SpendTopRun,
 } from "@oxagen/oxagen/contracts/spend.get";
 import {
@@ -49,14 +50,16 @@ import {
   addTokens,
   cost,
   daysBetween,
-  money,
   readDailyTotals,
   readRunTotals,
   readUnmeteredRuns,
+  resultTokensOf,
   runFigure,
   type SpendRunRecord,
   type SpendScope,
+  spendOnBasis,
   sumFigures,
+  sumStanding,
   ZERO_TOKENS,
 } from "./spend.shared";
 
@@ -253,6 +256,40 @@ export function runShares(
 }
 
 type Attributed = { run: SpendRunRecord; share: RunShare };
+
+/**
+ * The groupings whose rows hold whole runs, so each run's prompt sources
+ * belong to its row. A model, tool, or MCP server row holds part of a run,
+ * and the sources are not split by model or tool, so those rows carry none.
+ */
+const WHOLE_RUN_GROUPINGS: ReadonlySet<SpendGroupBy> = new Set([
+  "operator",
+  "agent",
+  "task",
+  "cost_center",
+]);
+
+/**
+ * A row's prompt sources (#5295): each run's tool definition, context frame
+ * and steering tokens, which the rollup stores beside its record, and its
+ * tools' result tokens, summed over the row's runs. A source no run measured
+ * stays null, never a zero, so a row of runs the proxy never carried says
+ * its tool definitions were not recorded.
+ */
+export function tokenSourcesOf(
+  runs: readonly SpendRunRecord[],
+): SpendTokenSources {
+  // The drill sums the same sources with the same helpers, so a row and the
+  // drill it opens agree.
+  return { ...sumStanding(runs), toolResultTokens: resultTokensOf(runs) };
+}
+
+/** Each run of `list` once, in the order first seen. */
+function runsOf(list: readonly Attributed[]): SpendRunRecord[] {
+  const seen = new Map<string, SpendRunRecord>();
+  for (const { run } of list) if (!seen.has(run.runId)) seen.set(run.runId, run);
+  return [...seen.values()];
+}
 
 /** Costliest first, then most calls, then newest; nothing priced sorts last. */
 function compareShares(a: Attributed, b: Attributed): number {
@@ -461,19 +498,28 @@ function spendByDay(
 export function reportedSpend(
   runs: readonly RunTotalsRecord[],
 ): SpendGetOutput["reported"] {
-  let micros: bigint | null = null;
-  let currency = "USD";
-  for (const run of runs) {
-    currency = run.currency;
-    const parts =
-      run.breakdown.models.length === 0
-        ? [{ costMicros: run.costMicros, basis: run.costBasis }]
-        : run.breakdown.models;
-    for (const part of parts)
-      if (part.costMicros !== null && part.basis === "client_attested")
-        micros = (micros ?? 0n) + part.costMicros;
-  }
-  return micros === null ? null : money(micros, currency);
+  return spendOnBasis(runs, "client_attested");
+}
+
+/**
+ * The part of the period's spend the gateway metered: every model whose
+ * frames were all `gateway_observed`, the other side of {@link reportedSpend}.
+ */
+export function observedSpend(
+  runs: readonly RunTotalsRecord[],
+): SpendGetOutput["reported"] {
+  return spendOnBasis(runs, "gateway_observed");
+}
+
+/**
+ * What the period's model calls carried besides the conversation: the
+ * standing context by source and the tool results, from the run rows (#4493,
+ * ADR-199). A part no run recorded is null.
+ */
+export function promptComposition(
+  runs: readonly SpendRunRecord[],
+): NonNullable<SpendGetOutput["composition"]> {
+  return { ...sumStanding(runs), toolResultTokens: resultTokensOf(runs) };
 }
 
 export function createSpendGetHandler(
@@ -510,6 +556,8 @@ export function createSpendGetHandler(
             return left === null ? [] : [left];
           });
     const assistant = assistantRow(inAppByKey);
+    // A row of whole runs carries its runs' prompt sources (#5295).
+    const wholeRuns = WHOLE_RUN_GROUPINGS.has(groupBy);
     const top = new Map<string, Attributed[]>(
       grouped
         .filter((row) => row.key !== OTHER_SPEND_KEY)
@@ -562,6 +610,8 @@ export function createSpendGetHandler(
       total: sumFigures(runs.map(runFigure)),
       days: spendByDay(runs, from, to),
       reported: reportedSpend(runs),
+      observed: observedSpend(runs),
+      composition: promptComposition(runs),
       // An open run's row is its running estimate; the page says how many
       // of the period's runs that is. An open run nothing priced adds no
       // figure, so it is no estimate of one.
@@ -577,11 +627,25 @@ export function createSpendGetHandler(
           ...row,
           operator: facts.get(row.key) ?? null,
           topRuns: topRuns(row.key),
+          ...(wholeRuns
+            ? { tokenSources: tokenSourcesOf(runsOf(byKey.get(row.key) ?? [])) }
+            : {}),
         })),
         // Last, after the workspace's own ranked rows and the rest, so the
         // assistant never ranks among the people and agents the workspace
         // manages, and the page finds it in one place.
-        ...(assistant === null ? [] : [assistant]),
+        ...(assistant === null
+          ? []
+          : [
+              wholeRuns
+                ? {
+                    ...assistant,
+                    tokenSources: tokenSourcesOf(
+                      runsOf([...inAppByKey.values()].flat()),
+                    ),
+                  }
+                : assistant,
+            ]),
       ],
     };
   };

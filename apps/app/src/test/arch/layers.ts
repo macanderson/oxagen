@@ -91,6 +91,14 @@ const onlyNames = (edge: ImportEdge, names: readonly string[]): boolean =>
  * route render can make that read. The `runs.transcript` port maps the first
  * page, and a second copy of that mapper in the action dropped the assembled
  * reply from every later page. Reading the port gives every page one mapper.
+ * The same module reads an issue's change set and a file's diff through the
+ * `changes` port when a person opens one on the Run page (ADR-292).
+ *
+ * `features/work/actions` reads a send's change set and a file's diff when a
+ * person opens one in the work item page's Changes panel (ADR-292). A work
+ * item may hold many sends, each with its pull requests and their files, so
+ * no route render reads them all. The `changes` port maps the panel's own
+ * change set, and a second mapper in the action would let the two disagree.
  */
 const PORT_READING_ACTIONS: readonly string[] = [
   "features/shell/choice-actions",
@@ -98,6 +106,7 @@ const PORT_READING_ACTIONS: readonly string[] = [
   "features/shell/assistant-approval-actions",
   "features/shell/assistant-thread-actions",
   "features/run/actions",
+  "features/work/actions",
 ];
 
 const isVocabulary = (target: string): boolean =>

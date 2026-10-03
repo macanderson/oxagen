@@ -183,6 +183,10 @@ describe("the cost under a reply", () => {
     expect(line.textContent).toBe(
       "cost $0.004213 · anthropic/claude-sonnet-4.5",
     );
+    // The model carries its maker's mark (#5297).
+    expect(
+      line.querySelector('svg[data-provider-mark="anthropic"]'),
+    ).not.toBeNull();
     expect(screen.getByTestId("assistant-answer")).toContainElement(line);
     expect(line).toHaveAttribute("aria-live", "off");
     expect(readReplyCost).toHaveBeenCalledWith(

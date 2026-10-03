@@ -104,6 +104,23 @@ describe("AgentsTable › missing values", () => {
     }
   });
 
+  it("draws the harness logo beside its name in the Harness column", () => {
+    renderTable([
+      row("claude", { harness: "claude-code" }),
+      row("codex", { harness: "codex" }),
+    ]);
+    operations();
+    expect(
+      rows().map((agent) => {
+        // The marks outside the avatar's badge are the Harness column's.
+        const marks = Array.from(
+          agent.querySelectorAll("[data-harness-mark]"),
+        ).filter((mark) => mark.closest("[data-harness-badge]") === null);
+        return marks.map((mark) => mark.getAttribute("data-harness-mark"));
+      }),
+    ).toEqual([["claude-code"], ["codex"]]);
+  });
+
   it("says the owner is not recorded when none is (negative)", () => {
     renderTable([row("orphan", { operatorId: null, operatorName: null })]);
     const [only] = rows();

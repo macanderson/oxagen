@@ -1,7 +1,7 @@
 {
   "name": "get_spend",
   "domain": "spend",
-  "description": "Read this workspace's spend over a day range, rolled up by operator, agent, model, tool, task, cost center or MCP server, with every figure in micros and the basis that says who observed it, the period total with proven and accepted spend kept apart, the spend by day, and each row's costliest runs.",
+  "description": "Read this workspace's spend over a day range, rolled up by operator, agent, model, tool, task, cost center or MCP server, with every figure in micros and the basis that says who observed it, the period total with proven and accepted spend kept apart, the spend by day, each row's costliest runs, and on a row of whole runs the tokens those runs spent on tool definitions, context frames, steering and tool results.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -293,6 +293,85 @@
             "type": "null"
           }
         ]
+      },
+      "observed": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "micros": {
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "micros",
+              "currency"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "composition": {
+        "type": "object",
+        "properties": {
+          "toolDefinitionTokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contextFrameTokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "steeringTokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "toolResultTokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "toolDefinitionTokens",
+          "contextFrameTokens",
+          "steeringTokens",
+          "toolResultTokens"
+        ],
+        "additionalProperties": false
       },
       "estimatedRuns": {
         "type": "integer",
@@ -662,6 +741,62 @@
                 "additionalProperties": false
               },
               "maxItems": 8
+            },
+            "tokenSources": {
+              "type": "object",
+              "properties": {
+                "toolDefinitionTokens": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "contextFrameTokens": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "steeringTokens": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "toolResultTokens": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "toolDefinitionTokens",
+                "contextFrameTokens",
+                "steeringTokens",
+                "toolResultTokens"
+              ],
+              "additionalProperties": false
             }
           },
           "required": [

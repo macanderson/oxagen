@@ -14,7 +14,8 @@
 // run's ratio and the 30-day one. A baseline the agent's history is too thin
 // for reads not recorded, never a guessed figure. Productive ratio's foot
 // names why the steps that did not advance the task made no progress, from
-// the causes the rollup recorded.
+// the causes the rollup recorded. Tool calls carries the tokens the tools'
+// results added to the prompt when the rollup summed any (#5295).
 import { useLocale, useTranslations } from "next-intl";
 import { Fragment, type ReactNode } from "react";
 import {
@@ -33,6 +34,7 @@ import {
   formatRatio,
   ratioWidth,
 } from "@/ui/money-format";
+import { ProviderMark } from "@/ui/provider-mark";
 import {
   cacheRebuildShare,
   type ClassPrices,
@@ -270,14 +272,21 @@ function ProvisionalModels({ provisional }: { provisional: ProvisionalSpend }) {
   const locale = useLocale();
   const shown = provisional.byModel.slice(0, PROVISIONAL_MODELS);
   const more = provisional.byModel.length - shown.length;
-  const part = ({ model, cost, calls }: ProvisionalModel) =>
+  // Each model's name carries its maker's mark (#5297).
+  const named = (model: string, provider: string | null) => (
+    <b className="inline-flex items-center gap-1 align-bottom">
+      <ProviderMark provider={provider} model={model} />
+      {model}
+    </b>
+  );
+  const part = ({ model, provider, cost, calls }: ProvisionalModel) =>
     cost === null
       ? t.rich("provisionalModelUnpriced", {
-          model: () => <b>{model}</b>,
+          model: () => named(model, provider),
           calls,
         })
       : t.rich("provisionalModel", {
-          model: () => <b>{model}</b>,
+          model: () => named(model, provider),
           cost: () => (
             <b>{formatMoney(cost, { locale, precision: "cents" })}</b>
           ),
@@ -849,7 +858,14 @@ function FamilyRows({ families: rows }: { families: readonly Family[] }) {
   );
 }
 
-function CallsTile({ metrics }: { metrics: RunMetrics }) {
+function CallsTile({
+  metrics,
+  resultTokens,
+}: {
+  metrics: RunMetrics;
+  /** The tools' result tokens the rollup summed (#3892); null when no call recorded them. */
+  resultTokens: number | null;
+}) {
   const t = useTranslations("run.cost.inst");
   const locale = useLocale();
   const count = (value: number) => formatCount(value, locale);
@@ -880,6 +896,17 @@ function CallsTile({ metrics }: { metrics: RunMetrics }) {
             </small>
           )}
         </>
+      }
+      // What the tools' results added to the prompt (#5295). A run whose
+      // spans recorded no result tokens draws no line rather than a zero.
+      line={
+        resultTokens === null ? undefined : (
+          <span data-testid="inst-calls-results">
+            {t.rich("resultTokens", {
+              count: () => <b>{count(resultTokens)}</b>,
+            })}
+          </span>
+        )
       }
       chart={fams.length === 0 ? undefined : <FamilyRows families={fams} />}
       foot={
@@ -1052,6 +1079,7 @@ export function Instruments({
   retries,
   steps,
   baseline,
+  resultTokens = null,
 }: {
   run: RunRow;
   metrics: RunMetrics;
@@ -1064,6 +1092,8 @@ export function Instruments({
   steps: GradedSteps | null;
   /** The agent's 30 days before the run; null when its history is too thin. */
   baseline: Baseline | null;
+  /** The tools' result tokens summed (#5295); null when no call recorded them. */
+  resultTokens?: number | null;
 }) {
   const t = useTranslations("run.cost.inst");
   // Live is the run's status, as everywhere else on the page. A halted run
@@ -1086,7 +1116,7 @@ export function Instruments({
       <WallTile metrics={metrics} />
       <TokensTile metrics={metrics} prices={prices} />
       <ShapeTile run={run} metrics={metrics} ledger={ledger} live={live} />
-      <CallsTile metrics={metrics} />
+      <CallsTile metrics={metrics} resultTokens={resultTokens} />
       <RatioTile
         metrics={metrics}
         retries={retries}

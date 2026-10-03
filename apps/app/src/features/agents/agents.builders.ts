@@ -685,6 +685,7 @@ export function agentsSource(reads: AgentReads) {
       tree: refuse,
     },
     steeringRepo: { get: refuse },
+    changes: { changeSet: refuse, revisionDiff: refuse },
     tools: {
       versions: refuse,
       grants: refuse,

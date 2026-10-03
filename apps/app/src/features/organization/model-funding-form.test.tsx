@@ -69,8 +69,17 @@ function renderForm(credential: ModelCredential = NONE) {
 
 const KEY_LABEL = "Your OpenRouter or vendor key";
 
+/** The vendor's option card in the Vendor group (#5297). */
+function vendor(provider: string): HTMLElement {
+  const option = screen
+    .getByTestId("funding-provider")
+    .querySelector<HTMLElement>(`[data-value="${provider}"]`);
+  if (option === null) throw new Error(`no vendor option ${provider}`);
+  return option;
+}
+
 async function choose(provider: string) {
-  await userEvent.selectOptions(screen.getByLabelText("Vendor"), provider);
+  await userEvent.click(vendor(provider));
 }
 
 const ACCEPTED = {
@@ -99,7 +108,7 @@ describe("ModelFundingForm: the design's customer-key state", () => {
     expect(
       screen.getByRole("button", { name: "Test and save" }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Vendor")).toHaveValue("openrouter");
+    expect(vendor("openrouter")).toHaveAttribute("aria-checked", "true");
     expect(screen.getByTestId("funding-vendor")).not.toHaveAttribute("open");
     expect(screen.queryByLabelText("Endpoint URL")).toBeNull();
     expect(screen.queryByTestId("funding-models")).toBeNull();
@@ -109,6 +118,24 @@ describe("ModelFundingForm: the design's customer-key state", () => {
     renderForm();
     const save = screen.getByRole("button", { name: "Test and save" });
     expect(save.className).not.toContain("bg-button-primary-bg");
+  });
+});
+
+describe("ModelFundingForm: each vendor carries its mark", () => {
+  it("draws the mark of every vendor the registry knows, and none for a generic server", () => {
+    renderForm();
+    const markOf = (provider: string) =>
+      vendor(provider)
+        .querySelector("svg[data-provider-mark]")
+        ?.getAttribute("data-provider-mark") ?? null;
+    expect(markOf("openrouter")).toBe("openrouter");
+    expect(markOf("gateway")).toBe("vercel");
+    expect(markOf("openai")).toBe("openai");
+    expect(markOf("anthropic")).toBe("anthropic");
+    expect(markOf("openai_compatible")).toBeNull();
+    expect(vendor("openai_compatible")).toHaveTextContent(
+      "Other OpenAI-compatible server",
+    );
   });
 });
 
@@ -131,7 +158,10 @@ describe("ModelFundingForm: another vendor's fields follow the vendor", () => {
   it("opens Another vendor on a stored key from one", () => {
     renderForm(STORED);
     expect(screen.getByTestId("funding-vendor")).toHaveAttribute("open");
-    expect(screen.getByLabelText("Vendor")).toHaveValue("openai_compatible");
+    expect(vendor("openai_compatible")).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
   });
 
   it("warns that Anthropic's endpoint has no prompt caching, and only for Anthropic", async () => {

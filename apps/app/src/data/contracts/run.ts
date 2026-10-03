@@ -205,6 +205,18 @@ const RunCostStandingContext = z.object({
 });
 export type RunCostStandingContext = z.infer<typeof RunCostStandingContext>;
 
+/**
+ * What the run's model calls spent on tool definitions, context frames and
+ * steering, each summed over every counted call (#5295). The recorder
+ * estimates each, and a source no call measured is null, never a zero.
+ */
+const RunCostTokenSources = z.object({
+  toolDefinitionTokens: Count.nullable(),
+  contextFrameTokens: Count.nullable(),
+  steeringTokens: Count.nullable(),
+});
+export type RunCostTokenSources = z.infer<typeof RunCostTokenSources>;
+
 const RunCostRollup = z.object({
   cost: Cost.nullable(),
   tokens: RunTokenCounts,
@@ -232,6 +244,8 @@ const RunCostRollup = z.object({
   byTool: z.array(RunCostByTool),
   /** The context every call after the first re-sent, by source (#4537); null when no source was reported. */
   standingContext: RunCostStandingContext.nullable().optional(),
+  /** The three prompt sources' tokens over every counted call (#5295); null when no call measured any. */
+  tokenSources: RunCostTokenSources.nullable().optional(),
   /** The price entries the frames were priced with (spec §12.2). */
   priceEntryIds: z.array(z.string()),
   /** When the row was last rebuilt from the frames. */

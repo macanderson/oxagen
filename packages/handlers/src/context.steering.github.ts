@@ -320,6 +320,17 @@ export interface SteeringHost {
     ancestor: string,
   ): Promise<boolean>;
   /**
+   * The newest commit that both `head` and `base` hold, or null when they
+   * share none. When `head` holds `base`, it is `base`. The steering checks
+   * compare a PR's head with this commit when the branch fell behind the
+   * production branch (checkBase in steering-repo/merge-queue.ts).
+   */
+  mergeBase(
+    repo: SteeringRepository,
+    head: string,
+    base: string,
+  ): Promise<string | null>;
+  /**
    * The parents of the commit `sha`, in git's order. A squash merge has one:
    * the production branch head it landed on. A merge commit's first parent
    * is the branch it merged into. A root commit has none. A revert reads the
@@ -1640,6 +1651,23 @@ export function createSteeringGitHub(
         );
         return out.data.status === "ahead" || out.data.status === "identical";
       } catch (err) {
+        throw githubRefused(err);
+      }
+    },
+    async mergeBase(repo, head, base) {
+      if (head === base) return head;
+      const { rest, path } = restFor(repo);
+      try {
+        const out = await rest.request<{
+          merge_base_commit?: { sha: string } | null;
+        }>(
+          "GET",
+          `${path}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}?per_page=1`,
+        );
+        return out.data.merge_base_commit?.sha ?? null;
+      } catch (err) {
+        // GitHub answers 404 when the two commits share no history.
+        if (err instanceof GitHubApiError && err.status === 404) return null;
         throw githubRefused(err);
       }
     },

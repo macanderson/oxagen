@@ -721,7 +721,14 @@ describe("chooseModels", () => {
       ok: true,
       value: {
         partial: true,
-        options: [{ value: "kimi-k2", label: "kimi-k2", detail: "moonshot" }],
+        options: [
+          {
+            value: "kimi-k2",
+            label: "kimi-k2",
+            icon: { model: "kimi-k2", provider: "moonshot" },
+            detail: "moonshot",
+          },
+        ],
       },
     });
   });

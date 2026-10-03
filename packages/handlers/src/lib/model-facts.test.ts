@@ -18,6 +18,10 @@ describe("modelProviderOf", () => {
     expect(modelProviderOf("anthropic/claude-sonnet-5")).toBe("anthropic");
   });
 
+  it("reads Z.ai out of OpenRouter's z-ai slug, which runs in-app agents", () => {
+    expect(modelProviderOf("z-ai/glm-latest")).toBe("zai");
+  });
+
   it("answers undefined for an id it does not recognise", () => {
     expect(modelProviderOf("some-internal-model-v3")).toBeUndefined();
   });

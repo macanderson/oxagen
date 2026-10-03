@@ -44,7 +44,9 @@ const {
   exportRun,
   forkRun,
   haltRun,
+  readChangeSet,
   readDeliveryReport,
+  readRevisionDiff,
   readRunExport,
   readTranscriptPage,
   sealRun,
@@ -1099,6 +1101,151 @@ describe("readDeliveryReport", () => {
     invoke.mockRejectedValue(denied("list_commands"));
     expect(
       await readDeliveryReport("acme", "core-platform", { runId: RUN }),
+    ).toMatchObject({ ok: false, reason: "denied" });
+  });
+});
+
+// ADR-292: a change set and a file's diff, read when a person opens one.
+describe("readChangeSet", () => {
+  const url = "https://github.com/acme/platform/issues/12";
+  const answer = {
+    scope: "issue",
+    id: url,
+    pullRequests: [
+      {
+        id: "fpr_482",
+        provider: "github",
+        repository: "acme/platform",
+        number: 482,
+        url: "https://github.com/acme/platform/pull/482",
+        title: null,
+        state: "merged",
+        headSha: "9f8e7d6c5b4a",
+        baseRef: "main",
+        headRef: "fix/12",
+        mergedAt: "2026-10-03T10:00:00.000Z",
+        closedAt: "2026-10-03T10:00:00.000Z",
+        stateSeenAt: "2026-10-03T10:00:00.000Z",
+        revision: null,
+        files: [],
+        moreFiles: false,
+      },
+    ],
+    morePullRequests: false,
+    repositories: [],
+  };
+
+  it("reads an issue's change set by its page and answers the view", async () => {
+    invoke.mockResolvedValue(answer);
+    const result = await readChangeSet("acme", "core-platform", "issue", url);
+    expect(invoke).toHaveBeenCalledWith(
+      "get_change_set",
+      { scope: "issue", id: url },
+      expect.objectContaining(TENANT),
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      value: { scope: "issue", pullRequests: [{ id: "fpr_482" }] },
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+  });
+
+  it("refuses a scope outside the four and an empty id, before any read (negative)", async () => {
+    expect(
+      // A server action is an endpoint: the page's types do not bind a caller.
+      await Reflect.apply(readChangeSet, undefined, [
+        "acme",
+        "core-platform",
+        "repository",
+        url,
+      ]),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "change_set_scope",
+      field: "scope",
+    });
+    expect(await readChangeSet("acme", "core-platform", "issue", "")).toEqual(
+      { ok: false, reason: "invalid", code: "change_set_id", field: "id" },
+    );
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("answers a denied read as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("get_change_set"));
+    expect(
+      await readChangeSet("acme", "core-platform", "issue", url),
+    ).toMatchObject({ ok: false, reason: "denied" });
+  });
+});
+
+describe("readRevisionDiff", () => {
+  const answer = {
+    revisionId: "prv_482a",
+    pullRequestId: "fpr_482",
+    headSha: "9f8e7d6c5b4a",
+    mergeBaseSha: "1a2b3c4d",
+    diffStatus: "stored",
+    complete: true,
+    limitations: [],
+    diffSha256: "ab".repeat(32),
+    files: [
+      {
+        path: "src/app.ts",
+        status: "modified",
+        additions: 1,
+        deletions: 1,
+        patch: "@@ -1,1 +1,1 @@\n-old\n+new",
+        binary: false,
+        truncated: false,
+      },
+    ],
+    truncated: false,
+  };
+
+  it("reads one revision's opened path and answers its hunks", async () => {
+    invoke.mockResolvedValue(answer);
+    const result = await readRevisionDiff("acme", "core-platform", "prv_482a", [
+      "src/app.ts",
+    ]);
+    expect(invoke).toHaveBeenCalledWith(
+      "get_revision_diff",
+      { revisionId: "prv_482a", paths: ["src/app.ts"] },
+      expect.objectContaining(TENANT),
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        revisionId: "prv_482a",
+        files: [{ path: "src/app.ts", previousPath: null }],
+      },
+    });
+  });
+
+  it("refuses no path, too many paths, and an empty path, before any read (negative)", async () => {
+    for (const paths of [
+      [],
+      Array.from({ length: 101 }, (_, i) => `src/${String(i)}.ts`),
+      [""],
+    ]) {
+      expect(
+        await readRevisionDiff("acme", "core-platform", "prv_482a", paths),
+      ).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "revision_diff_paths",
+        field: "paths",
+      });
+    }
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("answers a denied read as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("get_revision_diff"));
+    expect(
+      await readRevisionDiff("acme", "core-platform", "prv_482a", [
+        "src/app.ts",
+      ]),
     ).toMatchObject({ ok: false, reason: "denied" });
   });
 });
