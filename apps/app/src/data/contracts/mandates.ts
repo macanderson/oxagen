@@ -360,6 +360,47 @@ export function isUpcoming(mandate: MandateRow, at: Date): boolean {
 }
 
 /**
+ * Whether this mandate is granted and its window has closed, while the record
+ * still says `active` (#3152). The status is a cached answer: the expiry job
+ * runs hourly and selects `validTo < now`, so a row keeps `active` for up to an
+ * hour after enforcement stopped honouring it, and longer when the job runs
+ * late. The page keeps the stored word and says the window closed beside it,
+ * because relabelling the row would make the page and `list_mandates` disagree
+ * about what the record holds.
+ *
+ * Like `isUpcoming`, deliberately not the negation of `isEffective`: a draft, a
+ * revoked row and an expired one are all false here whatever their dates say.
+ * A draft past its dates is a request nobody granted, and an `expired` row
+ * already says what this would add.
+ *
+ * The comparison is the exact negation of enforcement's upper bound,
+ * `gt(m.validTo, args.at)` (`packages/rules/src/mandates.ts:471-472`), so a
+ * mandate is effective up to but not including `validTo` and elapsed from that
+ * instant on. With `isUpcoming` the three split an active mandate's timeline
+ * with no gap and no overlap, and both handovers are pinned at the instant.
+ */
+export function isElapsed(mandate: MandateRow, at: Date): boolean {
+  return (
+    mandate.status === "active" && at.getTime() >= Date.parse(mandate.validTo)
+  );
+}
+
+/**
+ * What an active mandate's validity window says at `at`, beside the status the
+ * record stores: not started, closed, or null when the window is open or the
+ * status is not `active`. The one place a surface asks, so the Agents table,
+ * the Tools ledger and the next table to show a mandate cannot each work it
+ * out differently (`@/ui/mandate-status`).
+ */
+export type MandateWindow = "upcoming" | "elapsed";
+
+export function windowOf(mandate: MandateRow, at: Date): MandateWindow | null {
+  if (isUpcoming(mandate, at)) return "upcoming";
+  if (isElapsed(mandate, at)) return "elapsed";
+  return null;
+}
+
+/**
  * Why this answer is not the whole set, or null when it is. Note the question:
  * not "is it empty" but "is it everything". Incompleteness is a property of the
  * answer and not of its length — a reader-narrowed list of fifty rows is just
@@ -411,12 +452,13 @@ export function blindSpotOf(
 // `validTo` while the gate was already denying. Each is listed with what it
 // mirrors, whether it provably matches, and which way it errs when it cannot.
 //
-// - `isEffective` / `isUpcoming` — mirror `findCoveringMandate`'s status and
-//   window clauses (`packages/rules/src/mandates.ts:467-472`). Provably match:
-//   the window is half-open at both ends and every boundary instant is pinned,
-//   including the handover between the two predicates at `validFrom`. They do
-//   not mirror the gate's consequence-coverage and tool-pattern clauses, on
-//   purpose — those are questions about a call, and no call is named here.
+// - `isEffective` / `isUpcoming` / `isElapsed` — mirror `findCoveringMandate`'s
+//   status and window clauses (`packages/rules/src/mandates.ts:467-472`).
+//   Provably match: the window is half-open at both ends and every boundary
+//   instant is pinned, including the handovers at `validFrom` and `validTo`.
+//   They do not mirror the gate's consequence-coverage and tool-pattern
+//   clauses, on purpose — those are questions about a call, and no call is
+//   named here.
 // - `EVERY_TOOL` (`@/ui/mandate-scope`) — decides that a mandate covers every
 //   tool. Provably sound: `toolMatches` reaches `matchGlob`, which returns
 //   true for the literal pattern `*` before any conversion

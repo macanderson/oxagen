@@ -479,9 +479,39 @@ describe("Agents › Mandates", () => {
     const state = within(section).getByText(/has not reached the date/);
     expect(state).toHaveAttribute("data-state", "empty");
     const row = within(section).getByTestId("agent-mandate");
-    expect(row).toHaveAttribute("data-effect", "upcoming");
+    expect(row.querySelector("[data-mandate-status]")).toHaveAttribute(
+      "data-effect",
+      "upcoming",
+    );
     expect(within(row).getByText(/^starts /).textContent).toContain(
       "Oct 1, 2026",
+    );
+    // The stored word stays: the record says active, and so does the row.
+    expect(within(row).getByText("active")).toBeInTheDocument();
+  });
+
+  // #3152: the hourly expiry job leaves a closed window `active` for up to an
+  // hour, and the gate refuses it from `validTo` on. The row keeps the word the
+  // record holds and says the window closed under it, where it said only
+  // "active" before.
+  it("says when an active mandate's window closed, and keeps the stored word", async () => {
+    await renderMandates(
+      mandateList([mandateRow({ validTo: "2026-09-10T00:00:00.000Z" })]),
+    );
+    const section = held();
+    const row = within(section).getByTestId("agent-mandate");
+    expect(row).toHaveAttribute("data-status", "active");
+    const status = row.querySelector("[data-mandate-status]");
+    expect(status).toHaveAttribute("data-mandate-status", "active");
+    expect(status).toHaveAttribute("data-effect", "elapsed");
+    expect(within(row).getByText("active")).toBeInTheDocument();
+    expect(within(row).getByText(/^ended /).textContent).toContain(
+      "Sep 10, 2026",
+    );
+    expect(within(row).queryByText(/^starts /)).toBeNull();
+    // Nothing is in effect, so the section says so.
+    expect(within(section).getByRole("heading")).toHaveTextContent(
+      "No mandate",
     );
   });
 
@@ -500,7 +530,9 @@ describe("Agents › Mandates", () => {
     ).toHaveAttribute("data-state", "empty");
     expect(within(section).queryByText(/has not reached the date/)).toBeNull();
     for (const row of within(section).getAllByTestId("agent-mandate"))
-      expect(row).not.toHaveAttribute("data-effect");
+      expect(row.querySelector("[data-mandate-status]")).not.toHaveAttribute(
+        "data-effect",
+      );
   });
 
   // A measure is a figure the gate enforces, and the gate enforces micros. At

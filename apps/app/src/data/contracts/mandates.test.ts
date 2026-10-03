@@ -12,6 +12,7 @@ import {
   IMPACT,
   isChangeable,
   isEffective,
+  isElapsed,
   isUpcoming,
   MANDATE_APPROVER,
   MEASURE_NAME,
@@ -164,6 +165,95 @@ describe("isUpcoming", () => {
       ),
     ).toBe(false);
   });
+});
+
+describe("isElapsed", () => {
+  const at = new Date("2026-09-16T12:00:00.000Z");
+  const closed = "2026-09-15T00:00:00.000Z";
+
+  // The status is a cached answer the hourly expiry job keeps, so an active
+  // row whose window closed still says `active` while the gate refuses it.
+  it("is a granted mandate whose window has closed", () => {
+    expect(isElapsed(mandateRow({ validTo: closed }), at)).toBe(true);
+  });
+
+  it("is false while the window is open, and before it opens", () => {
+    expect(isElapsed(mandateRow({}), at)).toBe(false);
+    expect(
+      isElapsed(mandateRow({ validFrom: "2026-09-17T00:00:00.000Z" }), at),
+    ).toBe(false);
+  });
+
+  // Enforcement stops honouring the mandate at `validTo` itself
+  // (`gt(m.validTo, args.at)`), so the window is closed from that instant.
+  // A pair a second either side would pass under `>` and `>=` alike.
+  it("is true at validTo itself, and false the millisecond before", () => {
+    const to = "2026-09-16T23:59:59.999Z";
+    const instant = Date.parse(to);
+    expect(isElapsed(mandateRow({ validTo: to }), new Date(instant))).toBe(
+      true,
+    );
+    expect(isElapsed(mandateRow({ validTo: to }), new Date(instant - 1))).toBe(
+      false,
+    );
+  });
+
+  // A draft past its dates is a request nobody granted, and an expired or
+  // revoked row already says what this would add.
+  it.each([["draft"], ["revoked"], ["expired"]] as const)(
+    "%s is never elapsed, however its window is dated (negative)",
+    (status) => {
+      expect(isElapsed(mandateRow({ status, validTo: closed }), at)).toBe(
+        false,
+      );
+    },
+  );
+});
+
+// The three predicates split an active mandate's timeline into parts with no
+// gap, an instant the page can say nothing about, and no overlap, an instant it
+// says two things about. Each instant below is a boundary or one millisecond
+// from one, because a gap or an overlap lives only at a boundary.
+describe("the window of an active mandate", () => {
+  const validFrom = "2026-09-17T00:00:00.000Z";
+  const validTo = "2026-09-30T00:00:00.000Z";
+  const row = mandateRow({ validFrom, validTo });
+  const from = Date.parse(validFrom);
+  const to = Date.parse(validTo);
+  const answers = (instant: number) => {
+    const at = new Date(instant);
+    return [isUpcoming(row, at), isEffective(row, at), isElapsed(row, at)];
+  };
+
+  it.each([
+    ["long before validFrom", from - 86_400_000, [true, false, false]],
+    ["the millisecond before validFrom", from - 1, [true, false, false]],
+    ["validFrom itself", from, [false, true, false]],
+    ["the millisecond after validFrom", from + 1, [false, true, false]],
+    ["the millisecond before validTo", to - 1, [false, true, false]],
+    ["validTo itself", to, [false, false, true]],
+    ["the millisecond after validTo", to + 1, [false, false, true]],
+    ["long after validTo", to + 86_400_000, [false, false, true]],
+  ] as const)("names exactly one state at %s", (_, instant, expected) => {
+    const states = answers(instant);
+    expect(states).toEqual(expected);
+    expect(states.filter(Boolean)).toHaveLength(1);
+  });
+
+  it.each([["draft"], ["revoked"], ["expired"]] as const)(
+    "names none for a %s mandate at any of those instants (negative)",
+    (status) => {
+      const other = mandateRow({ status, validFrom, validTo });
+      for (const instant of [from - 1, from, to - 1, to]) {
+        const at = new Date(instant);
+        expect([
+          isUpcoming(other, at),
+          isEffective(other, at),
+          isElapsed(other, at),
+        ]).toEqual([false, false, false]);
+      }
+    },
+  );
 });
 
 describe("blindSpotOf", () => {
