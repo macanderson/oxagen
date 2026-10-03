@@ -16,38 +16,22 @@
 // engine.css rule and a recipe now differs from it, the recipe names the maia
 // value it took.
 
-/**
- * `.btn { border:1px solid var(--border); background:var(--panel);
- * font-weight:500 }`, in the maia button's shape: a pill 36px tall, 12px
- * across, 14px text, a 16px glyph. A phone keeps the 44px touch target the
- * mockup's sheet buttons have.
- */
-const buttonBase =
-  "inline-flex min-h-9 max-md:min-h-11 items-center justify-center gap-1.5 rounded-4xl px-3 py-1.5 text-base font-medium whitespace-nowrap transition-colors [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring " +
-  "disabled:cursor-not-allowed disabled:opacity-45 aria-disabled:cursor-not-allowed";
+import { buttonVariants } from "./button-variants";
+import { cn } from "./cn";
 
 /**
- * `.btn.primary { background:var(--gold); border-color:var(--gold);
- * color:var(--on-gold); font-weight:600 }` — the one gold action a screen
- * carries (creation-spec §6: gold is identity, never state). The tokens
- * resolve to the gold in both themes (globals.css). Ink on gold is 9.5:1.
+ * A link that looks like a button reads the kit Button's classes
+ * (button-variants.ts), so a link and a button never drift apart. `<Button>`
+ * is the button itself (INV-37). `buttonPrimary` is the one gold action a
+ * screen carries, `buttonSecondary` the neutral outline, and `buttonDanger`
+ * an action that ends something, in the error ink. Each runs through `cn()`
+ * as `<Button>` does, so a link and a button carry the same class string.
  */
-export const buttonPrimary = `${buttonBase} border border-button-primary-border bg-button-primary-bg font-semibold text-button-primary-fg hover:bg-button-primary-hover-bg hover:border-button-primary-hover-bg active:bg-button-primary-active-bg`;
-
-/**
- * `.btn` at rest: panel fill, hairline border, the wash on hover. The tokens
- * are the kit's default-button set, which globals.css points at the panel and
- * the wash so the recipe and the kit's own buttons agree.
- */
-export const buttonSecondary = `${buttonBase} border border-button-default-border bg-button-default-bg text-button-default-fg hover:border-rule hover:bg-button-default-hover-bg active:bg-button-default-active-bg`;
-
-/**
- * `.btn.danger { color:var(--st-failed); border-color:<st-failed 40%> }` and
- * `.btn.danger:hover { background:<st-failed 12%> }`: an action that ends
- * something, such as Deregister. It carries the failed hue as ink, never a fill.
- */
-export const buttonDanger = `${buttonBase} border border-error/40 bg-button-default-bg text-error-ink hover:bg-error/10 active:bg-error/15`;
+export const buttonPrimary = cn(buttonVariants({ variant: "primary" }));
+export const buttonSecondary = cn(buttonVariants({ variant: "outline" }));
+export const buttonDanger = cn(
+  buttonVariants({ variant: "destructive-outline" }),
+);
 
 /** `a { color:var(--accent-text) }` — gold as ink, underlined on hover. */
 export const linkText =
@@ -61,8 +45,9 @@ export const linkText =
  */
 export const fieldLabel = "mb-2 block text-base font-medium text-foreground";
 export const fieldHint = "mt-2 text-base leading-normal text-muted-foreground";
-export const buttonSmall =
-  "inline-flex min-h-8 flex-none items-center justify-center gap-1 rounded-4xl border border-button-default-border bg-button-default-bg px-3 text-base font-medium whitespace-nowrap text-button-default-fg hover:bg-button-default-hover-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:bg-button-disabled-bg disabled:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
+export const buttonSmall = cn(
+  buttonVariants({ variant: "outline", size: "sm" }),
+);
 
 /** The one skin every field wears; `inputBase` and `textareaBase` add the shape. */
 const fieldSkin =

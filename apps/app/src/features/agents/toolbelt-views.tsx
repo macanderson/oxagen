@@ -17,12 +17,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { type SubmitEvent, useMemo, useState } from "react";
 import type { Toolbelt } from "@/data/contracts/agents";
 import { Badge } from "@/ui/badge";
-import {
-  buttonSecondary,
-  inputBase,
-  linkText,
-  mono,
-} from "@/ui/control-styles";
+import { inputBase, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { formatCount } from "@/ui/money-format";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { cell, headCell } from "@/ui/table";
@@ -51,17 +47,17 @@ function Segmented<V extends string>({
   return (
     <div role="group" aria-label={label} className="inline-flex gap-1">
       {options.map((option) => (
-        <button
+        <Button
           key={option.value}
           type="button"
           aria-pressed={option.value === value}
-          className={`${buttonSecondary} ${pressed}`}
+          variant="outline" className={`${pressed}`}
           onClick={() => {
             onChange(option.value);
           }}
         >
           {option.label}
-        </button>
+        </Button>
       ))}
     </div>
   );
@@ -198,23 +194,23 @@ export function BeltSearch({ belt }: { belt: Toolbelt }) {
         <span className={`${mono} text-dim`} aria-hidden="true">
           )
         </span>
-        <button type="submit" className={buttonSecondary}>
+        <Button type="submit" variant="outline">
           {t("run")}
-        </button>
+        </Button>
       </form>
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-sm text-muted-foreground">{t("try")}</span>
         {SEARCH_EXAMPLES.map((example) => (
-          <button
+          <Button
             key={example}
             type="button"
-            className={buttonSecondary}
+            variant="outline"
             onClick={() => {
               run(example);
             }}
           >
             {example}
-          </button>
+          </Button>
         ))}
       </div>
       {ran === null || words.length === 0 ? null : hits.length > 0 ? (
@@ -376,15 +372,17 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
     return (
       <tr key={tool.name} data-testid="belt-tool" data-risk={tool.riskLevel}>
         <td className={cell}>
-          <button
+          <Button
             type="button"
-            className={`${linkText} ${mono} max-w-full text-left md:truncate`}
+            variant="link"
+            size="xs"
+            className={`${mono} block h-auto max-w-full whitespace-normal rounded-sm p-0 text-left md:truncate`}
             onClick={() => {
               setOpen(tool);
             }}
           >
             {tool.name}
-          </button>
+          </Button>
           {tool.server === null ? null : (
             <span
               className={`${mono} block text-sm text-muted-foreground md:truncate`}
@@ -497,29 +495,29 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
             aria-label={t("chips")}
             className="flex flex-wrap gap-1.5"
           >
-            <button
+            <Button
               type="button"
               aria-pressed={category === null}
-              className={`${buttonSecondary} ${pressed}`}
+              variant="outline" className={`${pressed}`}
               onClick={() => {
                 setCategory(null);
               }}
             >
               {t("all", { count: belt.tools.length })}
-            </button>
+            </Button>
             {counts.map(([key, count]) => (
-              <button
+              <Button
                 key={key}
                 type="button"
                 aria-pressed={category === key}
-                className={`${buttonSecondary} ${pressed}`}
+                variant="outline" className={`${pressed}`}
                 onClick={() => {
                   setCategory(key);
                 }}
               >
                 {key === NO_CATEGORY ? t("categories.none") : key}{" "}
                 <span className="text-dim">{formatCount(count, locale)}</span>
-              </button>
+              </Button>
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -527,15 +525,15 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
             <span data-testid="belt-approval">
               {t("approvalCount", { count: approval })}
             </span>
-            <button
+            <Button
               type="button"
-              className={`${buttonSecondary} ml-auto`}
+              variant="outline" className="ml-auto"
               onClick={() => {
                 setLegend(true);
               }}
             >
               {t("categories.open")}
-            </button>
+            </Button>
           </div>
           <div className="min-w-0 overflow-x-auto">
             <table

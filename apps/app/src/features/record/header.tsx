@@ -21,12 +21,8 @@ import type { ReactNode } from "react";
 import type { RecordDetail } from "@/data/contracts/steering";
 import { Badge } from "@/ui/badge";
 import { CloneButton } from "@/ui/clone-button";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  eyebrow,
-  mono,
-} from "@/ui/control-styles";
+import { eyebrow, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { KindBadge, KindTile } from "./kind";
 
 /** `.btn.danger`: the red outline a destructive action takes. */
@@ -185,37 +181,37 @@ export function Header({
       </div>
       <div className="flex shrink-0 gap-2 max-md:w-full max-md:[&>*]:flex-1">
         <CloneButton kind="record" sourceRef={record.lineage} />
-        <button
+        <Button
           type="button"
           data-testid="record-discard"
           disabled={!dirty}
           onClick={onDiscard}
-          className={buttonSecondary}
+          variant="outline"
         >
           {t("discard")}
-        </button>
+        </Button>
         {archived ? null : (
-          <button
+          <Button
             type="button"
             data-testid="record-archive-open"
             aria-haspopup="dialog"
             onClick={onArchive}
-            className={buttonDanger}
+            variant="destructive-outline"
           >
             {t("archive")}
-          </button>
+          </Button>
         )}
         {/* The page's one gold action. Gold is identity, so it marks the act
             this page exists for and never a state. */}
-        <button
+        <Button
           type="button"
           data-testid="record-propose-open"
           aria-haspopup="dialog"
           onClick={onPropose}
-          className={`${buttonPrimary} max-md:flex-2`}
+          variant="primary" className="max-md:flex-2"
         >
           {t("propose")}
-        </button>
+        </Button>
       </div>
     </header>
   );

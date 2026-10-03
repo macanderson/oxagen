@@ -16,14 +16,8 @@ import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { PAGE_FAILURES } from "@/data/read";
 import { routes } from "@/shared/safe-path";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  mono,
-  panel,
-  panelBody,
-  panelHeader,
-} from "@/ui/control-styles";
+import { buttonSecondary, mono, panel, panelBody, panelHeader } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { SafeLink } from "@/ui/navigation";
 import type { RepositoriesFailure } from "./failure";
 import { REPOSITORY_GAPS } from "./gaps";
@@ -145,23 +139,23 @@ export function ErrorBody({
       title={t("title")}
       actions={
         <>
-          <button
+          <Button
             type="button"
             data-testid="repositories-retry"
             onClick={onRetry}
-            className={buttonPrimary}
+            variant="primary"
           >
             {t("retry")}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             disabled
             aria-describedby="repositories-error-incident"
             data-gap={REPOSITORY_GAPS.incident}
-            className={buttonSecondary}
+            variant="outline"
           >
             {t("incident")}
-          </button>
+          </Button>
         </>
       }
       after={
@@ -214,15 +208,15 @@ export function DeniedBody({
       title={t("title")}
       actions={
         <>
-          <button
+          <Button
             type="button"
             disabled
             aria-describedby="repositories-denied-request"
             data-gap={REPOSITORY_GAPS.requestAccess}
-            className={buttonPrimary}
+            variant="primary"
           >
             {t("request")}
-          </button>
+          </Button>
           <SafeLink
             to={routes.fleet(org, ws)}
             data-testid="repositories-back-to-fleet"
@@ -273,15 +267,15 @@ export function EmptyBody({ onAddOxagen }: { onAddOxagen: () => void }) {
       icon={<BrowserIcon className="size-5" />}
       title={t("empty.title")}
       actions={
-        <button
+        <Button
           type="button"
           data-testid="repositories-empty-add"
           aria-haspopup="dialog"
           onClick={onAddOxagen}
-          className={buttonPrimary}
+          variant="primary"
         >
           {t("addOxagen")}
-        </button>
+        </Button>
       }
     >
       {t("empty.body")}

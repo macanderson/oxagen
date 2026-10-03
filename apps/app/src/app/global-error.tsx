@@ -8,7 +8,7 @@
 // The body is the design's error state, drawn by the shared `StateWrap`,
 // which needs no provider.
 import messages from "../../messages/en.json";
-import { buttonPrimary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { StateWrap } from "@/ui/state-wrap";
 import "./globals.css";
 
@@ -36,15 +36,15 @@ export default function GlobalError({
             tone="failed"
             title={t.title}
             actions={
-              <button
+              <Button
                 type="button"
-                className={buttonPrimary}
+                variant="primary"
                 onClick={() => {
                   (retry ?? reset)();
                 }}
               >
                 {t.retry}
-              </button>
+              </Button>
             }
           >
             {t.body}

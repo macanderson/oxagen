@@ -82,18 +82,18 @@ export function UnlinkDialog({
       testId="unlink-dialog"
       footer={
         proposed === null ? (
-          <button
+          <Button
             type="button"
             data-testid="unlink-submit"
             data-touch-target=""
             disabled={pending}
-            className={buttonDanger}
+            variant="destructive-outline"
             onClick={() => {
               void submit();
             }}
           >
             {pending ? t("pending") : t("submit")}
-          </button>
+          </Button>
         ) : null
       }
     >

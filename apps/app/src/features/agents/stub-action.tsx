@@ -5,7 +5,7 @@
 // that silently does nothing (spec pages/agent.md, "Stub controls say what the
 // product would do"). It never pretends to have acted.
 import { useState } from "react";
-import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { buttonDanger } from "./parts";
 
@@ -31,17 +31,17 @@ export function StubAction({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={testId}
         data-stub={gap}
-        className={danger ? buttonDanger : buttonSecondary}
+        variant={danger ? "destructive-outline" : "outline"}
         onClick={() => {
           setOpen(true);
         }}
       >
         {label}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}

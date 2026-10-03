@@ -14,7 +14,8 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { Toolbelt } from "@/data/contracts/agents";
-import { buttonSecondary, mono } from "@/ui/control-styles";
+import { mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 
 type BeltTool = Toolbelt["tools"][number];
 
@@ -33,11 +34,11 @@ function CopyButton({ label, value }: { label: string; value: string }) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   return (
     <span className="inline-flex items-center gap-2">
-      <button
+      <Button
         type="button"
         data-testid="belt-schema-copy"
         data-state={state}
-        className={`${buttonSecondary} text-sm`}
+        variant="outline" className="text-sm"
         onClick={() => {
           void writeClipboard(value).then((ok) => {
             setState(ok ? "copied" : "failed");
@@ -45,7 +46,7 @@ function CopyButton({ label, value }: { label: string; value: string }) {
         }}
       >
         {state === "copied" ? t("copied") : label}
-      </button>
+      </Button>
       <span role="status" className="text-sm text-muted-foreground">
         {state === "failed" ? t("copyFailed") : null}
       </span>

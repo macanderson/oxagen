@@ -6,15 +6,8 @@ import type {
   SkillConfiguration,
   SkillSearchPreview,
 } from "@/data/contracts/skills";
-import {
-  buttonPrimary,
-  inputBase,
-  mono,
-  panel,
-  panelBody,
-  panelHeader,
-  panelTitle,
-} from "@/ui/control-styles";
+import { inputBase, mono, panel, panelBody, panelHeader, panelTitle } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { previewSkillSearch } from "./actions";
 import { UNANSWERED, useSkillFailure } from "./action-failure";
@@ -108,13 +101,13 @@ export function SkillSearch({
               setResult(null);
             }}
           />
-          <button
-            className={`${buttonPrimary} self-start`}
+          <Button
+            variant="primary" className="self-start"
             type="submit"
             disabled={pending || !version || !query.trim()}
           >
             {pending ? t("searchPending") : t("search")}
-          </button>
+          </Button>
         </form>
         {failure ? <FormAlert>{failure}</FormAlert> : null}
         {result ? (

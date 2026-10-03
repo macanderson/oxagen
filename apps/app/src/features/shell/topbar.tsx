@@ -18,13 +18,15 @@ import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
 import { type OrgWaiting, useShellCounts } from "./use-activity";
 import { UserMenu } from "./user-menu";
+import { Button } from "@/ui/button";
 import { SafeLink } from "@/ui/navigation";
 
-const iconBase =
-  "relative grid size-8 place-items-center rounded-lg border bg-card transition-colors focus-visible:outline-2 focus-visible:outline-ring";
-const iconButton = `${iconBase} border-border text-muted-foreground hover:border-rule hover:text-foreground`;
-/** `.apd-btn[aria-pressed="true"]`: the open drawer's button takes the approval ink. */
-const iconButtonPressed = `${iconBase} border-info text-info`;
+/**
+ * `.apd-btn[aria-pressed="true"]`: the open drawer's button takes the approval
+ * ink. `relative` holds the count badge against the button's corner.
+ */
+const approvalsButton =
+  "relative aria-pressed:border-info aria-pressed:text-info";
 
 function Breadcrumbs({ data }: { data: ShellData }) {
   const t = useTranslations("shell");
@@ -116,9 +118,11 @@ export function Topbar({ data }: { data: ShellData }) {
       >
         {tShell("skipToContent")}
       </a>
-      <button
+      <Button
         type="button"
-        className={`${iconButton} md:hidden`}
+        variant="outline"
+        size="icon-sm"
+        className="md:hidden"
         data-touch-target=""
         aria-label={t("menu")}
         onClick={() => {
@@ -126,17 +130,19 @@ export function Topbar({ data }: { data: ShellData }) {
         }}
       >
         <ListIcon aria-hidden="true" className="size-4" />
-      </button>
+      </Button>
       <Breadcrumbs data={data} />
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="sm"
         onClick={() => {
           setCommandOpen(true);
         }}
         aria-keyshortcuts="Meta+K Control+K"
         aria-label={t("search")}
         data-touch-target=""
-        className="flex items-center gap-2 rounded-xl border border-border bg-card px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:border-rule hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring lg:min-w-47.5"
+        className="justify-start gap-2 px-2.5 text-sm lg:min-w-47.5"
       >
         <MagnifyingGlassIcon aria-hidden="true" className="size-3.5" />
         <span className="hidden lg:inline">{t("search")}</span>
@@ -146,9 +152,11 @@ export function Topbar({ data }: { data: ShellData }) {
         >
           {t("searchShortcut")}
         </kbd>
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
+        variant="outline"
+        size="icon-sm"
         data-testid="notifications-button"
         data-touch-target=""
         aria-haspopup="dialog"
@@ -160,7 +168,7 @@ export function Topbar({ data }: { data: ShellData }) {
         onClick={() => {
           setNotificationsOpen(true);
         }}
-        className={iconButton}
+        className="relative"
       >
         <BellIcon aria-hidden="true" className="size-4" />
         {unread !== null && unread > 0 ? (
@@ -170,9 +178,11 @@ export function Topbar({ data }: { data: ShellData }) {
             className="absolute right-1.5 top-1.5 size-1.75 rounded-full border border-app-topbar-bg bg-info"
           />
         ) : null}
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
+        variant="outline"
+        size="icon-sm"
         id="apdrawer-button"
         data-testid="approvals-button"
         data-touch-target=""
@@ -186,7 +196,7 @@ export function Topbar({ data }: { data: ShellData }) {
         onClick={() => {
           setApprovalsOpen(!approvalsOpen);
         }}
-        className={approvalsOpen ? iconButtonPressed : iconButton}
+        className={approvalsButton}
       >
         <ShieldCheckIcon aria-hidden="true" className="size-4" />
         {waiting !== null && waiting.count > 0 ? (
@@ -198,7 +208,7 @@ export function Topbar({ data }: { data: ShellData }) {
             {waitingText(waiting)}
           </span>
         ) : null}
-      </button>
+      </Button>
       <UserMenu data={data} />
     </header>
   );

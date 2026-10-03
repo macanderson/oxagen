@@ -9,7 +9,7 @@
 // so the control never silently does nothing (the design's stub rule). The
 // component that renders a stub names the issue that builds its write.
 import { type ReactNode, useState } from "react";
-import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { SheetDialog } from "@/ui/sheet-dialog";
 
 export function DetailsDialog({
@@ -33,16 +33,16 @@ export function DetailsDialog({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
+      <Button
         type="button"
         data-stub={stub ? "" : undefined}
-        className={primary ? buttonPrimary : buttonSecondary}
+        variant={primary ? "primary" : "outline"}
         onClick={() => {
           setOpen(true);
         }}
       >
         {openLabel}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}

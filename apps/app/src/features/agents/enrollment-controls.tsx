@@ -15,7 +15,8 @@
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
-import { buttonSecondary, mono } from "@/ui/control-styles";
+import { mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { DesktopDownloads } from "@/ui/desktop-downloads";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
@@ -63,13 +64,13 @@ function CopyValue({
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-3">
         <p className="text-base font-medium text-foreground">{label}</p>
-        <button
+        <Button
           type="button"
-          className={`${buttonSecondary} h-8 px-2 text-sm`}
+          variant="outline" className="h-8 px-2 text-sm"
           onClick={() => void copy()}
         >
           {state === "copied" ? t("copied") : t("copy")}
-        </button>
+        </Button>
       </div>
       <code
         data-testid={testId}
@@ -170,16 +171,16 @@ export function EnrollHost({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid="enroll-host"
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={openChange}
@@ -260,17 +261,17 @@ export function RevokeHost({
   const fieldId = `revoke-reason-${hostEnrollmentId}`;
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid="revoke-host"
         aria-label={t("label", { hostname })}
-        className={buttonDanger}
+        variant="destructive-outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={openChange}

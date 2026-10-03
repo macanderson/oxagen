@@ -21,7 +21,7 @@ import {
 } from "react";
 import { openApprovals } from "@/features/shell/client";
 import type { SafePath } from "@/shared/safe-path";
-import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { useNavigate } from "@/ui/navigation";
 import { playButton, speedButton, speedSeg } from "./player-styles";
 
@@ -227,8 +227,10 @@ export function PlayButton() {
       ? ["▶", t("replay")]
       : ["▶", t("play")];
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
+      size="xs"
       disabled={playback.disabled}
       aria-keyshortcuts="Space"
       data-testid="player-play"
@@ -237,7 +239,7 @@ export function PlayButton() {
     >
       <span aria-hidden="true">{glyph}</span>
       {word}
-    </button>
+    </Button>
   );
 }
 
@@ -254,9 +256,11 @@ export function PlaySpeed() {
       className={speedSeg}
     >
       {SPEEDS.map((speed) => (
-        <button
+        <Button
           key={speed}
           type="button"
+          variant="ghost"
+          size="xs"
           aria-pressed={playback.speed === speed}
           onClick={() => {
             playback.setSpeed(speed);
@@ -264,7 +268,7 @@ export function PlaySpeed() {
           className={speedButton}
         >
           {t("speed", { speed })}
-        </button>
+        </Button>
       ))}
     </span>
   );
@@ -376,13 +380,13 @@ export function FrameListBox({
 /** Opens the shell's approvals drawer, where every call parked in the workspace is decided. */
 export function OpenApprovalsButton({ children }: { children: ReactNode }) {
   return (
-    <button
+    <Button
       type="button"
       data-testid="open-approvals"
       onClick={openApprovals}
-      className={buttonSecondary}
+      variant="outline"
     >
       {children}
-    </button>
+    </Button>
   );
 }

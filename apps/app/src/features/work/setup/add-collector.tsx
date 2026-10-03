@@ -27,14 +27,8 @@ import {
   useState,
 } from "react";
 import { routes } from "@/shared/safe-path";
-import {
-  buttonPrimary,
-  fieldHint,
-  fieldLabel,
-  inputBase,
-  linkText,
-  mono,
-} from "@/ui/control-styles";
+import { fieldHint, fieldLabel, inputBase, linkText, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -186,13 +180,13 @@ export function AddCollector({
 
   return (
     <div className="flex flex-col items-end gap-2">
-      <button
+      <Button
         type="button"
         data-testid="work-add-collector"
         disabled={!canChange}
         aria-describedby={canChange ? undefined : reasonId}
         title={canChange ? undefined : c("noRole")}
-        className={buttonPrimary}
+        variant="primary"
         onClick={() => {
           setName(suggested);
           setSelected(new Set());
@@ -203,7 +197,7 @@ export function AddCollector({
       >
         <PlusIcon aria-hidden="true" />
         {c("add")}
-      </button>
+      </Button>
       {canChange ? null : (
         <span id={reasonId} className="sr-only">
           {c("noRole")}

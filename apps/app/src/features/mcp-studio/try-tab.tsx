@@ -18,17 +18,8 @@ import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import { Badge } from "@/ui/badge";
 import { CodeBlock } from "@/ui/code-panel";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  fieldHint,
-  fieldLabel,
-  inputBase,
-  panel,
-  panelBody,
-  panelHeader,
-  panelTitle,
-} from "@/ui/control-styles";
+import { fieldHint, fieldLabel, inputBase, panel, panelBody, panelHeader, panelTitle } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { StateWrap } from "@/ui/state-wrap";
 import { scrubTest } from "./draft";
@@ -281,17 +272,17 @@ export function TryTab({
             <FormAlert testId="studio-try-error">{t("error")}</FormAlert>
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            <Button
               type="submit"
               data-testid="studio-try-run"
               disabled={blocked !== null}
               aria-disabled={phase.kind === "running" || undefined}
               aria-describedby={blocked === null ? undefined : `${id}-pending`}
               data-capability={call.name}
-              className={buttonPrimary}
+              variant="primary"
             >
               {phase.kind === "running" ? t("running") : t("run")}
-            </button>
+            </Button>
           </div>
           {blocked === null ? null : (
             <PendingNote
@@ -330,10 +321,10 @@ export function TryTab({
           </div>
           {canEdit && phase.kind === "done" ? (
             <div className="flex flex-wrap items-center gap-2">
-              <button
+              <Button
                 type="button"
                 data-testid="studio-try-save"
-                className={buttonSecondary}
+                variant="outline"
                 aria-disabled={saved.kind === "saved" || undefined}
                 onClick={() => {
                   if (saved.kind === "saved") return;
@@ -361,7 +352,7 @@ export function TryTab({
                 }}
               >
                 {t("save")}
-              </button>
+              </Button>
               {saved.kind === "saved" ? (
                 <span
                   role="status"

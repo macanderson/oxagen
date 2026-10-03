@@ -25,17 +25,8 @@ import {
   useState,
 } from "react";
 import { routes, type SafePath } from "@/shared/safe-path";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  kvTerm,
-  kvValue,
-  mono,
-  panel,
-  panelBody,
-  panelHeader,
-  statStrip,
-} from "./control-styles";
+import { buttonPrimary, buttonSecondary, kvTerm, kvValue, mono, panel, panelBody, panelHeader, statStrip } from "./control-styles";
+import { Button } from "./button";
 import { SafeLink, useNavigate } from "./navigation";
 import { StateWrap, stateCode, stateFacts, stateTrace } from "./state-wrap";
 
@@ -133,25 +124,25 @@ export function PageError({
       title={title}
       actions={
         <>
-          <button
+          <Button
             type="button"
-            className={buttonPrimary}
+            variant="primary"
             onClick={() => {
               if (onRetry) onRetry();
               else navigate.refresh();
             }}
           >
             {t("retry")}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             aria-disabled="true"
             aria-describedby={noteId}
             data-gap={OPEN_INCIDENT_GAP}
-            className={buttonSecondary}
+            variant="outline"
           >
             {t("incident")}
-          </button>
+          </Button>
         </>
       }
       after={
@@ -292,15 +283,15 @@ export function PageDenied({
       title={title}
       actions={
         <>
-          <button
+          <Button
             type="button"
             aria-disabled="true"
             aria-describedby={noteId}
             data-gap={REQUEST_ACCESS_GAP}
-            className={buttonPrimary}
+            variant="primary"
           >
             {t("request")}
-          </button>
+          </Button>
           <SafeLink to={back} className={buttonSecondary}>
             {t("back")}
           </SafeLink>

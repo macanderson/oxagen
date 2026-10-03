@@ -18,12 +18,8 @@ import type { FirstFrame } from "@/data/contracts/onboarding";
 import type { EnforcementTier, ReplayGrade } from "@/data/contracts/runs";
 import type { SafePath } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  mono,
-  panel,
-} from "@/ui/control-styles";
+import { buttonPrimary, buttonSecondary, mono, panel } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { useFormatter } from "@/ui/formatter";
 import { HarnessIcon } from "@/ui/harness-icon";
 import { SafeLink, useNavigate } from "@/ui/navigation";
@@ -335,16 +331,16 @@ export function RunStep({
           <p className="font-mono text-xs text-muted-foreground">
             {t("errorRequest", { id: host.hostEnrollmentId })}
           </p>
-          <button
+          <Button
             type="button"
-            className={`${buttonSecondary} self-start`}
+            variant="outline" className="self-start"
             onClick={() => {
               setStatus(t("checkedAgain"));
               navigate.refresh();
             }}
           >
             {t("checkAgain")}
-          </button>
+          </Button>
           <p role="status" className="text-base empty:hidden">
             {status}
           </p>

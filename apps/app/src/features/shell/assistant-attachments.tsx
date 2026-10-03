@@ -35,6 +35,7 @@ import {
   AttachmentMedia,
   AttachmentTitle,
 } from "@/ui/attachment";
+import { Button } from "@/ui/button";
 import { formatByteSize } from "@/ui/money-format";
 import { FileTabLink } from "@/ui/navigation";
 import {
@@ -192,8 +193,10 @@ export function AssistantAttachmentPicker({
           onFiles(picked);
         }}
       />
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="icon-sm"
         data-testid="assistant-attach"
         aria-label={t("add")}
         title={t("add")}
@@ -201,10 +204,9 @@ export function AssistantAttachmentPicker({
         onClick={() => {
           inputRef.current?.click();
         }}
-        className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-app-link-fg outline-none hover:bg-app-link-hover-bg hover:text-app-link-hover-fg focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
       >
         <PaperclipIcon aria-hidden="true" className="size-4" />
-      </button>
+      </Button>
     </>
   );
 }

@@ -23,21 +23,8 @@ import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { routes } from "@/shared/safe-path";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  buttonSmall,
-  fieldHint,
-  fieldLabel,
-  inputBase,
-  linkText,
-  mono,
-  panel,
-  panelBody,
-  panelHeader,
-  panelTitle,
-  textareaBase,
-} from "@/ui/control-styles";
+import { buttonPrimary, fieldHint, fieldLabel, inputBase, linkText, mono, panel, panelBody, panelHeader, panelTitle, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { PullRequestLink, SafeLink } from "@/ui/navigation";
 import { openPrioritiesPr, proposePriorities } from "../actions";
@@ -242,56 +229,56 @@ export function PrioritiesEditor({
                     className={`${textareaBase} min-w-0 flex-1`}
                   />
                   <div className="flex flex-none flex-col gap-1">
-                    <button
+                    <Button
                       type="button"
                       aria-label={t("moveUp", { number })}
                       disabled={index === 0}
                       onClick={() => {
                         move(index, -1);
                       }}
-                      className={buttonSmall}
+                      variant="outline" size="sm"
                     >
                       <ArrowUpIcon aria-hidden="true" />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
                       aria-label={t("moveDown", { number })}
                       disabled={index === rules.length - 1}
                       onClick={() => {
                         move(index, 1);
                       }}
-                      className={buttonSmall}
+                      variant="outline" size="sm"
                     >
                       <ArrowDownIcon aria-hidden="true" />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
                       aria-label={t("remove", { number })}
                       onClick={() => {
                         setRules((current) => current.filter((item) => item.key !== rule.key));
                       }}
-                      className={buttonSmall}
+                      variant="outline" size="sm"
                     >
                       <TrashIcon aria-hidden="true" />
-                    </button>
+                    </Button>
                   </div>
                 </li>
               );
             })}
           </ol>
           <div>
-            <button
+            <Button
               type="button"
               data-testid="work-priorities-add-rule"
               onClick={() => {
                 setRules((current) => [...current, { key: nextKey, text: "" }]);
                 setNextKey((key) => key + 1);
               }}
-              className={buttonSecondary}
+              variant="outline"
             >
               <PlusIcon aria-hidden="true" />
               {t("addRule")}
-            </button>
+            </Button>
           </div>
         </fieldset>
         <details className="text-base">

@@ -19,6 +19,7 @@ import { useTranslations } from "next-intl";
 import type { RunRow } from "@/data/contracts/runs";
 import { Badge } from "@/ui/badge";
 import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import {
   effortVerdict,
   fitOf,
@@ -51,15 +52,15 @@ function MoveStub({
   const whyId = `run-fit-${kind}-why`;
   return (
     <div className="mt-2.5 flex flex-wrap items-center gap-2.25">
-      <button
+      <Button
         type="button"
         disabled
         aria-describedby={whyId}
         data-testid={`fit-move-${kind}`}
-        className={buttonSmall}
+        variant="outline" size="sm"
       >
         {label}
-      </button>
+      </Button>
       <span
         id={whyId}
         className="min-w-0 text-xs text-muted-foreground"

@@ -30,7 +30,8 @@ import {
   type CreatePrefill,
   createRequestOf,
 } from "@/shared/create";
-import { buttonPrimary, buttonSecondary, mono } from "@/ui/control-styles";
+import { mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { readMainRepository } from "./actions";
 import { useDraft } from "./draft";
@@ -88,13 +89,14 @@ function Chooser({
             const Icon = KIND_ICONS[kind];
             return (
               <li key={kind}>
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   data-kind={kind}
                   onClick={() => {
                     onChoose(kind);
                   }}
-                  className="flex w-full items-start gap-3 rounded-xl border border-border bg-card p-3.5 text-left transition-colors hover:border-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className="flex h-auto w-full items-start justify-start gap-3 whitespace-normal rounded-xl p-3.5 text-left font-normal"
                 >
                   <span
                     aria-hidden="true"
@@ -115,7 +117,7 @@ function Chooser({
                       {t(`kinds.${kind}.file`)}
                     </span>
                   </span>
-                </button>
+                </Button>
               </li>
             );
           })}
@@ -178,22 +180,22 @@ function Wizard({
       footer={
         <>
           {step > 1 && primary !== undefined ? (
-            <button
+            <Button
               type="button"
-              className={buttonSecondary}
+              variant="outline"
               disabled={pending}
               onClick={() => {
                 setRequested(step - 1);
               }}
             >
               {t("back")}
-            </button>
+            </Button>
           ) : null}
           {primary === undefined ? null : (
-            <button
+            <Button
               type="button"
               data-testid="wizard-primary"
-              className={buttonPrimary}
+              variant="primary"
               disabled={!primary.enabled || pending}
               aria-busy={pending}
               onClick={() => {
@@ -203,7 +205,7 @@ function Wizard({
               {pending
                 ? (primary.pendingLabel ?? primary.label)
                 : primary.label}
-            </button>
+            </Button>
           )}
         </>
       }
@@ -291,18 +293,18 @@ function WizardLoadFailed({
         {t("loadFailed.body")}
       </p>
       <div className="mt-4 flex gap-2">
-        <button type="button" className={buttonPrimary} onClick={onRetry}>
+        <Button type="button" variant="primary" onClick={onRetry}>
           {t("loadFailed.retry")}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className={buttonSecondary}
+          variant="outline"
           onClick={() => {
             onOpenChange(false);
           }}
         >
           {t("cancel")}
-        </button>
+        </Button>
       </div>
     </SheetDialog>
   );

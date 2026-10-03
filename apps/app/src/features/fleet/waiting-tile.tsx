@@ -12,6 +12,7 @@ import type { ApprovalQueue } from "@/data/contracts/approvals";
 import type { InterjectionQueue } from "@/data/contracts/interjections";
 import type { Read } from "@/data/read";
 import { openApprovals } from "@/features/shell/client";
+import { Button } from "@/ui/button";
 import { Clock } from "@/ui/clock";
 import { statNote, statTerm, statTile, statValue } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
@@ -107,13 +108,14 @@ export function WaitingTile({
     // The name is the action; the description is the figure. Without the
     // description a screen reader heard "Open approvals, button" and never
     // the count, the oldest wait, or which reads were missing.
-    <button
+    <Button
       type="button"
+      variant="outline"
       data-testid="tile"
       aria-label={t("open")}
       aria-describedby={`${figureId}-term ${figureId}-value ${figureId}-note`}
       onClick={openApprovals}
-      className={`${statTile} cursor-pointer text-left transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`}
+      className={`${statTile} h-auto cursor-pointer items-stretch justify-start gap-0 whitespace-normal text-left font-normal`}
     >
       <span id={`${figureId}-term`} className={statTerm}>
         {t("title")}
@@ -129,6 +131,6 @@ export function WaitingTile({
           </span>
         ))}
       </span>
-    </button>
+    </Button>
   );
 }

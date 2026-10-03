@@ -346,7 +346,7 @@ function RecordShelfCard({
               kind="record"
               sourceRef={record.lineage}
               label={t("cloneLabel", { lineage: record.lineage })}
-              className={`${buttonSecondary} min-h-7 px-2.5 py-1 text-sm`}
+              className="h-7 px-2.5 py-1 text-sm"
             />
           </span>
         </div>
