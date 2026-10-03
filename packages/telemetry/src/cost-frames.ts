@@ -919,6 +919,35 @@ const GROUP_FAMILY_SESSIONS = `session_uuid IN (
               AND workspace_id = {workspaceId:UUID}
               AND ${GROUP_ROOTS})`;
 
+/**
+ * The PREWHERE of each of a group read's five table reads (#5462): the
+ * workspace and the batch's sessions. Each one is a column of the table's
+ * sort key, `(org_id, workspace_id, session_uuid, seq)`.
+ *
+ * A group read names up to 5,000 sessions with random ids. A granule holds
+ * 8,192 rows of many sessions, so a list that long can touch most of the
+ * workspace's granules, and the sort key index keeps every granule it
+ * touches. In production on 2026-10-03 a group read scanned 6 to 14 million
+ * rows, two to four times the rows the table holds.
+ * Every read uses FINAL, and ClickHouse moves a WHERE condition to PREWHERE
+ * under FINAL only when `optimize_move_to_prewhere_if_final` is on, which
+ * older releases leave off. So each table read decoded every column it names,
+ * `attrs` and `system_context_parts` among them, for every row of those
+ * granules before it dropped another session's rows. With PREWHERE it reads
+ * the sort key columns first, and the other columns only for the batch's own
+ * sessions.
+ *
+ * FINAL allows a condition on the sort key before its merge: every version of
+ * a row carries the same key, so the condition keeps all of a row's versions
+ * or none of them, and FINAL keeps the same version it kept before. The root,
+ * kind, source, and duplicate conditions stay in WHERE, after the merge.
+ */
+function groupSortKeyPrewhere(sessionsSql: string): string {
+  return `PREWHERE org_id = {orgId:UUID}
+          AND workspace_id = {workspaceId:UUID}
+          AND ${sessionsSql}`;
+}
+
 /** One query of a group read: the roots it names and their sessions. */
 interface GroupFrameBatch {
   roots: string[];
@@ -985,10 +1014,8 @@ function groupTranscriptJoin(
           toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h,
           toInt64(max(coalesce(web_search_requests, 0))) AS searches
         FROM tacho_events FINAL
-        WHERE org_id = {orgId:UUID}
-          AND workspace_id = {workspaceId:UUID}
-          AND ${GROUP_ROOTS}
-          AND ${sessionsSql}
+        ${groupSortKeyPrewhere(sessionsSql)}
+        WHERE ${GROUP_ROOTS}
           AND kind = 'llm_call'
           AND ${TRANSCRIPT_SPLIT_ROW}
         GROUP BY call_key, root_session_uuid
@@ -1016,10 +1043,8 @@ function groupProxySightingJoin(
           max(system_context_digest) AS context_digest,
           argMax(system_context_parts, (system_context_digest, length(system_context_parts))) AS context_parts
         FROM tacho_events FINAL
-        WHERE org_id = {orgId:UUID}
-          AND workspace_id = {workspaceId:UUID}
-          AND ${GROUP_ROOTS}
-          AND ${sessionsSql}
+        ${groupSortKeyPrewhere(sessionsSql)}
+        WHERE ${GROUP_ROOTS}
           AND kind = 'llm_call'
           AND ${PROXY_SIGHTING}
         GROUP BY call_key, root_session_uuid
@@ -1148,10 +1173,8 @@ async function readGroupFrameBatch(
           ${CACHE_KEEP_ALIVE_VALUE} AS keep_alive,
           ${RECORD_BASIS_VALUE} AS record_basis
         FROM tacho_events FINAL
-        WHERE org_id = {orgId:UUID}
-          AND workspace_id = {workspaceId:UUID}
-          AND ${GROUP_ROOTS}
-          AND ${sessions.sql}
+        ${groupSortKeyPrewhere(sessions.sql)}
+        WHERE ${GROUP_ROOTS}
           AND kind = 'llm_call'
           AND source IN {sources:Array(String)}
           AND ${NOT_A_DUPLICATE}
