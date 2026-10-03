@@ -51,7 +51,7 @@ The reconcile job works one workspace at a time, inside that workspace's tenant 
 | Has a vector, and a candidate scores 0.70 or more | Links the node to that candidate with `ALIAS_OF`, as ingestion does | Cleared |
 | Has a vector, and no candidate scores 0.70 | Leaves the node as a principal | Cleared |
 | Already has an `ALIAS_OF` edge | Adds no edge | Cleared |
-| Has no vector yet | Nothing, and the backfill embeds it first | Kept |
+| Has no vector yet | Nothing. The backfill embeds it first, unless its connection opted out of embedding | Kept |
 | The vector index refuses the search | Nothing, and the next run tries again | Kept |
 
 The search is ingestion's own Pass B (`findSimilarityMatch`), with two changes:
@@ -66,4 +66,4 @@ Each run selects at most 500 marked nodes, and only nodes that have a vector, so
 - `[ingestion] dedup: embedding failed, deferring similarity match` names the embedder's error for one record.
 - `ingestion-pipeline: embedding backend unavailable` says the record was written without Pass B and marked.
 - `embeddings.backfill: run complete` gives `missingBefore` and `stillMissing`.
-- `similarity.reconcile: run complete` gives `deferredBefore`, `withoutVector`, each outcome's count, and `stillDeferred`. `deferredBefore` falling to 0 means every deferred node has been through Pass B.
+- `similarity.reconcile: run complete` gives `deferredBefore`, `withoutVector`, each outcome's count, and `stillDeferred`. `withoutVector` counts marked nodes still waiting for a vector. It includes nodes the backfill never embeds: a record type whose connection turned semantic inference off, and a node whose connection row is gone. Those keep the mark. `deferredBefore` minus `withoutVector` is the set Pass B has yet to reach.

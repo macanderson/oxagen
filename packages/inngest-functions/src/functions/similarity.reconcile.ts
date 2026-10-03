@@ -14,9 +14,9 @@
 // to RECONCILE_BATCH_SIZE from one workspace, each batch in its own step. A
 // retried step is safe: a reconciled node no longer carries the mark, and a
 // node that already has an `ALIAS_OF` edge gets no second one. A node with no
-// vector keeps its mark and waits for the backfill. Each run writes one
-// summary line, and its `deferredBefore` field shows the set shrinking from
-// run to run.
+// vector keeps its mark and waits for the backfill. A node whose connection
+// opted out of embedding never gets one, so it stays in `withoutVector`. Each
+// run writes one summary line.
 
 import type { StepContext } from "@oxagen/functions";
 import {
