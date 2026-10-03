@@ -137,6 +137,43 @@ describe("agent.mcp.list handler", () => {
     expect(() => agentMcpList.output.parse(result)).not.toThrow();
   });
 
+  it("returns the listing's description and null for a server with none (#4132)", async () => {
+    const base = {
+      transportType: "streamable-http",
+      endpointUrl: "https://mcp.example.com",
+      healthStatus: "healthy",
+      lastHealthcheckAt: null,
+      discoveredTools: [],
+    };
+    mocks.selectResult.mockReturnValueOnce([
+      // Added from the registry with OAuth: the listing holds the text.
+      {
+        ...base,
+        publicId: "mcs_1",
+        name: "Linear",
+        listingAuthKind: "oauth",
+        description: "  Linear issues and projects  ",
+      },
+      // Added with register_mcp_server: no listing, so the join reads null.
+      { ...base, publicId: "mcs_2", name: "Internal", description: null },
+      // A listing saved with blank text says nothing.
+      {
+        ...base,
+        publicId: "mcs_3",
+        name: "Blank",
+        listingAuthKind: "oauth",
+        description: "   ",
+      },
+    ]);
+    const result = await agentMcpListHandler({}, CTX);
+    expect(result.servers.map((s) => [s.publicId, s.description])).toEqual([
+      ["mcs_1", "Linear issues and projects"],
+      ["mcs_2", null],
+      ["mcs_3", null],
+    ]);
+    expect(() => agentMcpList.output.parse(result)).not.toThrow();
+  });
+
   it("redacts userinfo from a stored endpoint address (#3720)", async () => {
     // A row written before the register guard can carry a username and
     // password in endpoint_url. The list must not return either in the clear.

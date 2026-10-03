@@ -209,6 +209,7 @@ function selectServerRows(ctx: CapabilityContext) {
         authStrategy: schema.mcpServers.authStrategy,
         listingAuthKind: schema.pluginInstalledPlugins.authKind,
         iconUrl: schema.pluginInstalledPlugins.iconUrl,
+        description: schema.pluginInstalledPlugins.description,
         // Only whether a token is held and its lifetime; no secret column is
         // selected, so the list needs no KMS key and returns no material.
         credentialStatus: schema.mcpCredentials.status,
@@ -281,8 +282,18 @@ function serverView(
       : null,
     toolCount: r.discoveredTools.length,
     ...authorizationOf(r),
+    description: descriptionOf(r.description),
     steeringName: steeringNameOf(r),
   };
+}
+
+/**
+ * The listing's description, or null when the server has no listing or the
+ * listing has no text.
+ */
+function descriptionOf(value: string | null): string | null {
+  const text = value?.trim() ?? "";
+  return text === "" ? null : text;
 }
 
 /**

@@ -96,6 +96,17 @@
               ],
               "default": null
             },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
             "authorization": {
               "anyOf": [
                 {
