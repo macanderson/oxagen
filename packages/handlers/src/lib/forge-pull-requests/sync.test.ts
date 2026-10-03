@@ -159,6 +159,47 @@ describe("upsertObserved", () => {
     expect(out).toMatchObject({ outcome: "recorded", links: 0 });
   });
 
+  it("links the work order a backfill event names, with no run", async () => {
+    const d = deps();
+    const out = await upsertObserved(d, {
+      ...REQUEST,
+      facts: FACTS,
+      workOrderId: "0192d4a8-7c1e-7a00-8000-0000000000f1",
+    });
+    expect(d.runPublicId).not.toHaveBeenCalled();
+    expect(d.linkWorkOrders).toHaveBeenCalledTimes(1);
+    expect(d.linkWorkOrders).toHaveBeenCalledWith(
+      SCOPE,
+      "pr-1",
+      ["0192d4a8-7c1e-7a00-8000-0000000000f1"],
+      null,
+    );
+    expect(out.links).toBe(1);
+  });
+
+  it("links the named work order beside the run's, naming the run", async () => {
+    const d = deps();
+    const out = await upsertObserved(d, {
+      ...REQUEST,
+      link: { rootSessionUuid: "0192d4a8-7c1e-7a00-8000-0000000000a1", opened: false },
+      workOrderId: "0192d4a8-7c1e-7a00-8000-0000000000f1",
+    });
+    expect(d.linkWorkOrders).toHaveBeenLastCalledWith(
+      SCOPE,
+      "pr-1",
+      ["0192d4a8-7c1e-7a00-8000-0000000000f1"],
+      "tse_4q8r1t6v3x5z0b2d7h2k9m",
+    );
+    expect(out.links).toBe(4);
+  });
+
+  it("links no work order when the event names none (negative)", async () => {
+    const d = deps();
+    const out = await upsertObserved(d, { ...REQUEST, facts: FACTS });
+    expect(d.linkWorkOrders).not.toHaveBeenCalled();
+    expect(out.links).toBe(0);
+  });
+
   it.each(["no_connection", "unreadable"] as const)(
     "writes nothing when the forge read answers %s (negative)",
     async (answer) => {

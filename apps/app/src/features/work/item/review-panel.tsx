@@ -1,6 +1,8 @@
 // Review (roadmap mockups/src/work.js `reviewPanel()`, `reviewGate()`): the
 // newest send's pull request, its head commit, and the required checks on
-// that exact commit. A required check that failed, was cancelled or skipped,
+// that exact commit. Every pull request the send has shows with its state as
+// the forge store last recorded it (ADR-292). The head, the checks, the merge,
+// and the acceptance come from the send's facts, which Accept is judged on. A required check that failed, was cancelled or skipped,
 // or has not reported holds Accept back. An optional check never does, and
 // the panel says so. Results from an older head are stale evidence: a warning
 // with the earlier results, never the gate.
@@ -8,7 +10,7 @@
 // Every acceptance names the commit it was given on. Accepting merges
 // nothing: the item is done once the pull request merges too, in either order.
 import { useTranslations } from "next-intl";
-import type { CheckConclusion, WorkItemDetail, WorkSend } from "@/data/contracts/work";
+import type { CheckConclusion, ForgePullRequest, WorkItemDetail, WorkSend } from "@/data/contracts/work";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import {
@@ -23,7 +25,7 @@ import {
   panelTitle,
 } from "@/ui/control-styles";
 import { PullRequestLink } from "@/ui/navigation";
-import { ChecksBadge, shortSha } from "../words";
+import { ChecksBadge, PullStateBadge, shortSha } from "../words";
 import { RefreshChecks } from "./inline-actions";
 import { useWhen } from "./phrases";
 import { optionalChecks, type RequiredCheck, requiredChecks } from "./view";
@@ -114,6 +116,41 @@ function Why({ send }: { send: WorkSend }) {
   );
 }
 
+/** One pull request the forge store holds for the send: its link, its state now, and its title. */
+function ForgePullRow({ pull }: { pull: ForgePullRequest }) {
+  const t = useTranslations("workItem.review");
+  const url = parsePullRequestUrl(pull.url);
+  const name = t("pullRequestRef", { repository: pull.repository, number: String(pull.number) });
+  return (
+    <li data-testid="work-review-pull" data-pull-request={pull.number} className="flex min-w-0 flex-col gap-0.5">
+      <span className="flex min-w-0 flex-wrap items-center gap-2">
+        <span className="font-mono">
+          {url === null ? (
+            name
+          ) : (
+            <PullRequestLink to={url} className={linkText}>
+              {name}
+            </PullRequestLink>
+          )}
+        </span>
+        <PullStateBadge pull={pull} />
+      </span>
+      {pull.title === null ? null : <span className="min-w-0 truncate text-sm text-muted-foreground">{pull.title}</span>}
+    </li>
+  );
+}
+
+/** Every pull request the forge store holds for the send, newest first. */
+function ForgePulls({ pulls }: { pulls: readonly ForgePullRequest[] }) {
+  return (
+    <ul data-testid="work-review-pulls" className="flex flex-col gap-1.5">
+      {pulls.map((pull) => (
+        <ForgePullRow key={pull.id} pull={pull} />
+      ))}
+    </ul>
+  );
+}
+
 export function ReviewPanel({
   detail,
   send,
@@ -126,6 +163,7 @@ export function ReviewPanel({
   const t = useTranslations("workItem.review");
   const when = useWhen();
   const pr = send.pullRequest;
+  const pulls = send.pullRequests;
   const head = pr?.head ?? null;
   const required = requiredChecks(send);
   const optional = optionalChecks(send);
@@ -142,6 +180,9 @@ export function ReviewPanel({
   const staleFrom = send.staleAcceptance?.head ?? earlier?.head ?? null;
   const person = (name: string | null) => name ?? t("aPerson");
   const prUrl = pr === null ? null : parsePullRequestUrl(pr.url);
+  const factListed =
+    pr !== null &&
+    pulls.some((pull) => pull.provider === "github" && pull.number === pr.number && pull.repository === pr.repository.toLowerCase());
 
   return (
     <section
@@ -160,19 +201,39 @@ export function ReviewPanel({
       </div>
       <div className={`${panelBody} flex flex-col gap-3.5 text-sm`}>
         {pr === null ? (
-          <p className="text-muted-foreground">{t("noPullRequest")}</p>
+          pulls.length === 0 ? (
+            <p className="text-muted-foreground">{t("noPullRequest")}</p>
+          ) : (
+            // The forge store holds pull requests for the send, and the send's
+            // facts name none of them, so nothing here can be accepted yet.
+            <>
+              <dl className={kvList}>
+                <dt className={kvTerm}>{pulls.length > 1 ? t("pullRequests") : t("pullRequest")}</dt>
+                <dd className={kvValue}>
+                  <ForgePulls pulls={pulls} />
+                </dd>
+              </dl>
+              <p className="text-muted-foreground">{t("noRecordedPullRequest")}</p>
+            </>
+          )
         ) : (
           <>
             <dl className={kvList}>
-              <dt className={kvTerm}>{t("pullRequest")}</dt>
-              <dd className={`${kvValue} font-mono`}>
-                {prUrl === null ? (
-                  t("pullRequestRef", { repository: pr.repository, number: String(pr.number) })
-                ) : (
-                  <PullRequestLink to={prUrl} className={linkText}>
-                    {t("pullRequestRef", { repository: pr.repository, number: String(pr.number) })}
-                  </PullRequestLink>
+              <dt className={kvTerm}>{pulls.length + (factListed ? 0 : 1) > 1 ? t("pullRequests") : t("pullRequest")}</dt>
+              <dd className={`${kvValue} flex flex-col gap-1.5`}>
+                {/* The facts' pull request shows on its own only when the forge store does not list it. */}
+                {factListed ? null : (
+                  <span data-testid="work-review-fact-pull" className="font-mono">
+                    {prUrl === null ? (
+                      t("pullRequestRef", { repository: pr.repository, number: String(pr.number) })
+                    ) : (
+                      <PullRequestLink to={prUrl} className={linkText}>
+                        {t("pullRequestRef", { repository: pr.repository, number: String(pr.number) })}
+                      </PullRequestLink>
+                    )}
+                  </span>
                 )}
+                {pulls.length > 0 ? <ForgePulls pulls={pulls} /> : null}
               </dd>
               <dt className={kvTerm}>{t("head")}</dt>
               <dd className={kvValue}>

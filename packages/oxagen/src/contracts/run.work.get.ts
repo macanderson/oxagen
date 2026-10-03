@@ -42,20 +42,27 @@ export const runCapturedDiffSchema = z
     observedAt: z.string(),
   })
   .strict();
+/**
+ * One file of a pull request's stored revision (ADR-292). `additions` and
+ * `deletions` are null when the forge listed the file without line counts,
+ * as a GitLab compare can. `patch` is null when the stored bytes are not
+ * kept, the file is binary, or the read's cap was spent before it.
+ */
 export const runPrDiffFileSchema = z
   .object({
     path: z.string(),
     previousPath: z.string().nullable(),
     status: z.string(),
-    additions: z.number(),
-    deletions: z.number(),
+    additions: z.number().nullable(),
+    deletions: z.number().nullable(),
     patch: z.string().nullable(),
   })
   .strict();
 /**
- * The issues a pull request closes on merge, as GitHub records them (closing
- * keywords and sidebar links). Null when they could not be read, so an unread
- * list never reads as "closes nothing".
+ * The issues a pull request closes on merge, from the forge store's issue
+ * links, which the sync reads from GitHub's closing references at each new
+ * head (ADR-292). Null when they were never read, so an unread list never
+ * reads as "closes nothing".
  */
 const runPrClosingIssuesSchema = z
   .object({
@@ -161,7 +168,7 @@ export const runWorkGet = registerCapability({
   name: "get_run_work",
   domain: "run",
   description:
-    "Read recorded checkout locations and retained diff references, plus connected pull requests and their current CI checks.",
+    "Read recorded checkout locations and retained diff references, plus the run's pull requests from Oxagen's own store and their current CI checks.",
   mode: "sync",
   surfaces: ["api", "agent"],
   layers: ["schema", "api", "app", "unit", "docs"],
