@@ -25,6 +25,7 @@ import {
   type CostBasis,
   type SpendGroupKind,
 } from "@oxagen/database/schema";
+import type { WindowComposition } from "@oxagen/run-ledger";
 import {
   classesToResolve,
   FRAME_TOKEN_CLASSES,
@@ -262,6 +263,17 @@ export interface RunBreakdown {
    * source no call reported. Absent on a row rolled up before it was kept.
    */
   standing?: RunStandingResent;
+  /**
+   * The run's prompt composition: each window block's tokens summed over
+   * every request window the run recorded (`windowComposition` in
+   * `@oxagen/run-ledger`, #5341). It is the only record of a run's
+   * conversation and system tokens. The store reads it from the frames
+   * beside the model calls. Null when no window reported a prompt total, or
+   * when the read stopped at its cap, so a prefix is never stored as the
+   * whole. Absent on a row rolled up before it was kept. A reader takes null
+   * and absent alike as not measured, never as zero.
+   */
+  windows?: WindowComposition | null;
 }
 
 /** One standing context source's tokens on the calls after a run's first. */

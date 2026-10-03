@@ -369,6 +369,63 @@ describe("the token sources a rollup writes (#4493)", () => {
     });
   });
 
+  it("stores the run's window composition in the breakdown (#5341)", async () => {
+    const composition = {
+      requests: 2,
+      requestsWithoutTokens: 1,
+      promptTokens: 9_000,
+      blocks: {
+        system: 1_000,
+        steering: null,
+        tools: 3_000,
+        context: null,
+        conversation: 5_000,
+      },
+      initialConversationTokens: 1_500,
+    };
+    const { d, written } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+    });
+    const readWindowComposition = vi.fn(async () => composition);
+    d.readWindowComposition = readWindowComposition;
+    const record = await rebuildRunTotals(WORKER, d);
+    expect(readWindowComposition).toHaveBeenCalledWith(
+      expect.objectContaining({ meta: meta(WORKER, "prn_worker_operator") }),
+    );
+    expect(record?.breakdown.windows).toEqual(composition);
+    expect(written[0]?.breakdown.windows).toEqual(composition);
+  });
+
+  it("stores null for a run that recorded no window, never a zero (negative)", async () => {
+    const { d, written } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+    });
+    d.readWindowComposition = async () => null;
+    await rebuildRunTotals(WORKER, d);
+    expect(written[0]?.breakdown.windows).toBeNull();
+  });
+
+  it("stores no composition when the rollup reads no windows (negative)", async () => {
+    const { d, written } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+    });
+    await rebuildRunTotals(WORKER, d);
+    expect(written[0]?.breakdown).not.toHaveProperty("windows");
+  });
+
+  it("writes nothing when the windows cannot be read, so the job retries", async () => {
+    const { d, written } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+    });
+    d.readWindowComposition = async () => {
+      throw new Error("clickhouse down");
+    };
+    await expect(rebuildRunTotals(WORKER, d)).rejects.toThrow(
+      "clickhouse down",
+    );
+    expect(written).toHaveLength(0);
+  });
+
   it("writes nothing when the calls cannot be read, so the job retries", async () => {
     const { d, written, sourcesWritten } = deps({
       runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
@@ -726,6 +783,37 @@ describe("the breakdown jsonb (#4069)", () => {
     const stored = throughJsonb(serializeBreakdown(kept));
     expect(stored.standing).toEqual(kept.standing);
     expect(reviveBreakdown(stored)).toEqual(kept);
+  });
+
+  it("writes the run's window composition and reads it back, null included (#5341)", () => {
+    const windows = {
+      requests: 3,
+      requestsWithoutTokens: 0,
+      promptTokens: 12_000,
+      blocks: {
+        system: 2_000,
+        steering: 500,
+        tools: 4_000,
+        context: null,
+        conversation: 5_500,
+      },
+      initialConversationTokens: 900,
+    };
+    const kept = { ...breakdown, windows };
+    const stored = throughJsonb(serializeBreakdown(kept));
+    expect(stored.windows).toEqual(windows);
+    expect(reviveBreakdown(stored)).toEqual(kept);
+    const none = throughJsonb(serializeBreakdown({ ...breakdown, windows: null }));
+    expect(none.windows).toBeNull();
+    expect(reviveBreakdown(none).windows).toBeNull();
+  });
+
+  it("reads a row rolled up before #5341 with no window composition, never a zero", () => {
+    const stored = throughJsonb(serializeBreakdown(breakdown));
+    expect("windows" in stored).toBe(false);
+    const revived = reviveBreakdown(stored);
+    expect(revived).not.toHaveProperty("windows");
+    expect(revived.windows).toBeUndefined();
   });
 
   it("reads a row rolled up before #4572 with no priced tokens and no split", () => {
