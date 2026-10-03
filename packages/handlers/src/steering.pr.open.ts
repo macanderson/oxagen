@@ -92,6 +92,7 @@ import {
   managedBlockFinding,
 } from "./steering-repo/managed-block";
 import {
+  mergedByOxagen,
   readSteeringLayout,
   type SteeringLayout,
 } from "./steering-repo/merge-queue";
@@ -119,6 +120,18 @@ const pendingChecks = (): CheckResult[] =>
     startedAt: null,
     completedAt: null,
   }));
+
+/**
+ * A merge from Oxagen landed the PR and stopped before it published. Checks
+ * cannot change a merged PR, and merge_steering_pr finishes the publication.
+ */
+function mergeUnfinished(row: Pick<ProposalRow, "publicId" | "prUrl">): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: "merge_in_progress",
+    message: `Oxagen merged ${row.prUrl ?? row.publicId} and has not published it yet, so its checks cannot run again. Merge proposal ${row.publicId} from Oxagen to finish publishing it.`,
+  });
+}
 
 /** The set id Stella writes at the top of the file: the repository, dotted. */
 function setIdFor(repo: SteeringRepository): string {
@@ -331,13 +344,28 @@ export function createOpenSteeringPrHandler(
         throw mergeInProgress(row.publicId, row.mergeClaimedAt);
       const pr = await deps.github.getPullRequest(repo, row.prNumber!);
       assertProductionBase(repo, pr.baseRef, row.prUrl);
-      // A PR merged on the host at the commit the checks passed on is still
-      // Oxagen's to publish, and merge_steering_pr resumes it. Merged anywhere
-      // else, the checks would only report on a head that can never change.
-      const passedHere =
-        row.status === "checks_passed" && pr.headSha === row.headSha;
-      if (pr.merged && !passedHere) {
-        await refuseMergedOnHost(deps, scope, row, pr.headSha);
+      // In a legacy repo, a PR merged on the host at the commit the checks
+      // passed on is still Oxagen's to publish, and merge_steering_pr resumes
+      // it. In a steering repo only Oxagen's own stamp merge is, because every
+      // merge from Oxagen lands one (#4504), and the checks would fail the
+      // stamp's ledger line. Merged anywhere else, the checks would only
+      // report on a head that can never change.
+      if (pr.merged) {
+        const passedHere =
+          row.status === "checks_passed" && pr.headSha === row.headSha;
+        const ours =
+          passedHere &&
+          (!steering ||
+            (await mergedByOxagen({
+              host: deps.github,
+              repo,
+              branch,
+              number: row.prNumber!,
+              head: pr.headSha,
+              mergeCommit: pr.mergeCommitSha,
+            })));
+        if (!ours) await refuseMergedOnHost(deps, scope, row, pr.headSha);
+        if (steering) throw mergeUnfinished(row);
       }
       row = await deps.store.updateProposal(
         row.id,

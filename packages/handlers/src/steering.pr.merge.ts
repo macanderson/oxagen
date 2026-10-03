@@ -151,6 +151,7 @@ import {
   inMergeQueue,
   landSteeringPr,
   mergeApproval,
+  mergedByOxagen,
   readSteeringLayout,
   recordPublishDeployment,
   type MergeApproval,
@@ -362,6 +363,7 @@ export function createMergeSteeringPrHandler(
           host: deps.github,
           repo,
           branch,
+          number: prNumber,
           checkedHead: recorded.headSha,
           head: pr.headSha,
         }))
@@ -423,6 +425,17 @@ export function createMergeSteeringPrHandler(
       if (isSteeringPrKind(recorded.kind)) {
         return mergeSteeringPrProposal(call, nextVersion);
       }
+      // In a steering repo every merge from Oxagen lands its stamp commit,
+      // and the row moves to the stamp only once the host merged it. A PR
+      // merged at the head the checks passed on was merged on the host by
+      // someone else, with no ledger line, trailers, or approval check, so it
+      // is not published as this caller's merge (#4504).
+      if (
+        pr.merged &&
+        layout.layout === "steering" &&
+        !(await landedByOxagen(call))
+      )
+        await refuseMergedOnHost(deps, scope, row, pr.headSha);
       // The published body is the file at the merged commit.
       let body = await readBody(deps, repo, path, recorded.headSha);
       // Only a steering repo publishes. Its trailer carries the version
@@ -648,6 +661,22 @@ interface ProposalMerge {
   approve: (heads: readonly string[]) => Promise<MergeApproval>;
 }
 
+/**
+ * True when the PR the host reports merged carries Oxagen's stamp for it, so
+ * an earlier merge from Oxagen landed it (mergedByOxagen, #4504). Every
+ * proposal kind lands through the stamp in a steering repo.
+ */
+function landedByOxagen(input: ProposalMerge): Promise<boolean> {
+  return mergedByOxagen({
+    host: input.deps.github,
+    repo: input.repo,
+    branch: input.row.branch,
+    number: input.row.prNumber,
+    head: input.pr.headSha,
+    mergeCommit: input.pr.mergeCommitSha,
+  });
+}
+
 function governanceRefusal(reason: string, message: string): HandlerError {
   return new HandlerError({ code: "conflict", reason, message });
 }
@@ -752,10 +781,11 @@ async function mergeGovernanceProposal(
   if (pr.merged) {
     // Only a merge Oxagen started resumes here: an earlier call claimed the
     // row before it landed the PR, and failed before its record did. A PR
-    // someone merged on the host carries no claim. Finishing it here would
+    // someone merged on the host carries no claim, or no stamp of Oxagen's
+    // when a crashed call left a claim behind (#4504). Finishing it here would
     // record this caller as its merger and an approval nobody gave, so the
     // repository sync accepts it only when that host's provenance rules allow it.
-    if (recorded.mergeClaimedAt === null) {
+    if (recorded.mergeClaimedAt === null || !(await landedByOxagen(input))) {
       await requestSync(deps, scope, recorded);
       throw governanceRefusal(
         "merged_outside_oxagen",
@@ -1041,8 +1071,10 @@ async function mergeSteeringPrProposal(
   let passed: string[] = [];
   if (pr.merged) {
     // Only a merge Oxagen started resumes here. A lapsed claim still counts:
-    // the earlier call landed the PR and failed before its record did.
-    if (recorded.mergeClaimedAt === null) {
+    // the earlier call landed the PR and failed before its record did. The
+    // merged head must be that call's stamp too, because a call that crashed
+    // before its stamp leaves a claim on a PR someone else merged (#4504).
+    if (recorded.mergeClaimedAt === null || !(await landedByOxagen(input))) {
       await requestSync(deps, scope, recorded);
       throw new HandlerError({
         code: "conflict",

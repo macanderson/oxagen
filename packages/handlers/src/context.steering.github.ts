@@ -350,7 +350,9 @@ export interface SteeringHost {
    * GitHub merges `base`, the production branch head Oxagen read, so the
    * parents are `expectedHead` and then `base`. GitLab rebases onto the
    * production branch as it is when the rebase runs. A rebase makes no merge
-   * commit, so `parents` is null there.
+   * commit, so `parents` is null there. GitLab's rebase takes no expected
+   * head, so GitLab also refuses `head_moved` when the rebased head holds any
+   * commit the checked head did not.
    */
   updateBranch(
     repo: SteeringRepository,

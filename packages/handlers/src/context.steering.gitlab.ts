@@ -416,6 +416,71 @@ async function diffVersions(
     .sort((a, b) => b.at - a.at);
 }
 
+/** One commit as GitLab lists it: the parts a rebase keeps, and its parents. */
+interface ListedCommit {
+  id: string;
+  parent_ids?: string[] | null;
+  message?: string | null;
+  author_email?: string | null;
+  authored_date?: string | null;
+}
+
+/** Commits per page of a commit listing, GitLab's largest page. */
+const COMMIT_PAGE_SIZE = 100;
+/** Pages of a commit listing read before the branch counts as too long. */
+const COMMIT_PAGE_LIMIT = 10;
+
+/**
+ * Every commit `to` holds that `from` does not, as GitLab lists the range
+ * `from..to`. Refuses with `update_conflict` past
+ * {@link COMMIT_PAGE_LIMIT} pages, where the comparison would be partial.
+ */
+async function rangeCommits(
+  rest: GitLabRest,
+  projectPath: string,
+  from: string,
+  to: string,
+): Promise<ListedCommit[]> {
+  const range = encodeURIComponent(`${from}..${to}`);
+  const commits: ListedCommit[] = [];
+  for (let page = 1; page <= COMMIT_PAGE_LIMIT; page++) {
+    const out = await rest.request<ListedCommit[]>(
+      "GET",
+      `${projectPath}/repository/commits?ref_name=${range}&per_page=${COMMIT_PAGE_SIZE}&page=${page}`,
+    );
+    const listed = Array.isArray(out.data) ? out.data : [];
+    commits.push(...listed);
+    if (listed.length < COMMIT_PAGE_SIZE) return commits;
+  }
+  throw new HandlerError({
+    code: "conflict",
+    reason: "update_conflict",
+    message: `The branch holds more than ${COMMIT_PAGE_SIZE * COMMIT_PAGE_LIMIT} commits past ${from}, more than Oxagen compares after a rebase.`,
+  });
+}
+
+/**
+ * True when two lists hold the same commits as a rebase keeps them: the same
+ * message, author email and author date, as many times each, in any order.
+ */
+function sameCommits(
+  a: readonly ListedCommit[],
+  b: readonly ListedCommit[],
+): boolean {
+  const key = (commit: ListedCommit) =>
+    JSON.stringify([
+      commit.message ?? null,
+      commit.author_email ?? null,
+      commit.authored_date ?? null,
+    ]);
+  const left = a.map(key).sort();
+  const right = b.map(key).sort();
+  return (
+    left.length === right.length &&
+    left.every((entry, index) => entry === right[index])
+  );
+}
+
 /**
  * Refuse a merge when the project keeps approvals across a push. The merge
  * places each approval on the diff version it followed (`listApprovals`), and
@@ -1058,6 +1123,15 @@ export function createSteeringGitLab(
             reason: "head_moved",
             message: `The steering PR's branch ${args.branch} moved while Oxagen was merging it. Merge again to check the new head.`,
           });
+        // The rebase takes no expected head either, so a push between the
+        // read above and the rebase is rebased too, and one after the rebase
+        // sits on top of it (#4504). A rebase keeps each commit's message,
+        // author and author date and drops merge commits. So the commits the
+        // new head holds past the production branch must be the commits the
+        // checked head held past `args.base`, one for one.
+        const checked = (
+          await rangeCommits(rest, path, args.base, args.expectedHead)
+        ).filter((commit) => (commit.parent_ids?.length ?? 0) < 2);
         // GitLab brings a merge request up to date by rebasing it onto the
         // target branch as it is now, so it cannot pin `args.base`. The
         // rebase runs in the background, so poll it.
@@ -1081,8 +1155,21 @@ export function createSteeringGitLab(
                 reason: "update_conflict",
                 message: `${repo.defaultBranch} does not rebase cleanly under ${args.branch}: ${mr.data.merge_error}. Resolve the conflict on the steering PR, then merge again.`,
               });
+            const headSha = mr.data.sha ?? args.expectedHead;
+            const rebased = await rangeCommits(
+              rest,
+              path,
+              repo.defaultBranch,
+              headSha,
+            );
+            if (!sameCommits(checked, rebased))
+              throw new HandlerError({
+                code: "conflict",
+                reason: "head_moved",
+                message: `Someone pushed to ${args.branch} while GitLab rebased it onto ${repo.defaultBranch}, so its head ${headSha} holds commits the checks never ran on. Oxagen left the branch as it is, so the push stays. Run the checks again, then merge.`,
+              });
             // A rebase makes no merge commit, so it has no parents to answer.
-            return { headSha: mr.data.sha ?? args.expectedHead, parents: null };
+            return { headSha, parents: null };
           }
           await deps.sleep(1000);
         }
