@@ -74,7 +74,7 @@ export function SidebarNav({
                     onClick={onNavigate}
                     className={`mb-px flex items-center gap-2.5 rounded-lg px-2.25 py-1.75 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring ${
                       current
-                        ? "bg-sidebar-nav-link-active-bg text-sidebar-nav-link-active-fg shadow-[inset_2px_0_0_var(--gold)]"
+                        ? "bg-sidebar-nav-link-active-bg text-sidebar-nav-link-active-fg shadow-rail"
                         : "text-sidebar-nav-link-fg hover:bg-sidebar-nav-link-hover-bg hover:text-sidebar-nav-link-hover-fg"
                     }`}
                   >
