@@ -4901,3 +4901,382 @@ describe("get_run_transcript thinking and seal chips (#3942)", () => {
     expect(out.counts?.kinds.tools).toBe(1);
   });
 });
+
+describe("get_run_transcript follows a live run from inside its turn (#4340)", () => {
+  const bare = { toolName: "", toolStatus: "" };
+  const live = { outcome: "running", sealedAt: null };
+  const A = "0192d4a8-7c1e-7a00-8000-00000000a0a0";
+  /** When frame `seq` was recorded: one second after the one before it. */
+  const BASE = Date.parse("2026-09-26T09:00:00.000Z");
+  const ts = (seq: number) => receipt(BASE + seq * 1_000);
+  /** Received two settle margins before the first read: settled for every read. */
+  const settled = receipt(NOW - 2 * RECEIPT_SETTLE_MS);
+
+  type Harness = ReturnType<typeof harness>;
+
+  /** A model call that kept a body, and the two tool calls it asked for, from `seq` on. */
+  const cycle = (seq: number, receivedAt: string): TachoFrameRow[] =>
+    [
+      tachoRow(seq, {
+        kind: "llm_call",
+        ...bare,
+        model: "haiku",
+        provider: "anthropic",
+        costUsdMicros: 5,
+        turnSeq: 2,
+        ...stored(`Step ${seq}: reading the next file.`),
+      }),
+      tachoRow(seq + 1, { turnSeq: 2 }),
+      tachoRow(seq + 2, { turnSeq: 2 }),
+    ].map((row) => ({ ...row, ts: ts(row.seq), receivedAt }));
+
+  /**
+   * A live run in its second turn: turn 1 is a prompt and its answer, and
+   * turn 2 is `cycles` cycles of a model call and its tool calls, the shape
+   * of a coding agent's one long turn. Turn 2 opens at seq 3.
+   */
+  function longTurn(cycles: number): TachoFrameRow[] {
+    const rows: TachoFrameRow[] = [
+      tachoRow(0, { kind: "turn_start", ...bare, turnSeq: 1 }),
+      tachoRow(1, {
+        kind: "llm_call",
+        ...bare,
+        model: "haiku",
+        provider: "anthropic",
+        costUsdMicros: 10,
+        turnSeq: 1,
+      }),
+      tachoRow(2, { kind: "turn_end", ...bare, turnSeq: 1 }),
+      tachoRow(3, { kind: "turn_start", ...bare, turnSeq: 2 }),
+    ].map((row) => ({ ...row, ts: ts(row.seq), receivedAt: settled }));
+    for (let k = 0; k < cycles; k += 1)
+      rows.push(...cycle(rows.length, settled));
+    return rows;
+  }
+
+  /** The read a live Run page makes: `steps`, whole bodies, a full page. */
+  const follow = (h: Harness, after?: string | null) =>
+    h.transcript(
+      input({
+        zoom: "steps",
+        text: "full",
+        limit: 500,
+        ...(after === undefined || after === null ? {} : { after }),
+      }),
+      ctx(),
+    );
+
+  /** Where each read of the run's own chain since the last clear began. */
+  const afterSeqs = (h: Harness) =>
+    h.tachoFrames.mock.calls.map(([args]) => args.afterSeq);
+
+  /** How many frames of the run's own chain those reads answered. */
+  async function rowsRead(h: Harness): Promise<number> {
+    const answered = await Promise.all(
+      h.tachoFrames.mock.results.map(
+        (result) => result.value as Promise<TachoFrameRow[]>,
+      ),
+    );
+    return answered.reduce((sum, rows) => sum + rows.length, 0);
+  }
+
+  it("reads only the frames past the reader's place, and sends what a reader of the whole run is sent", async () => {
+    let clock = NOW;
+    const rows = longTurn(10);
+    // Postgres lists the subagent chains, so this reader can read windows.
+    const tailing = harness(rows, live, [], { chains: [], now: () => clock });
+    // Without that list every read reads the whole run.
+    const whole = harness(rows, live, [], { now: () => clock });
+    let a = await follow(tailing);
+    let b = await follow(whole);
+    expect(a.entries).toEqual(b.entries);
+    expect(decodeTranscriptCursor(a.cursor as string)?.from?.seq).toBe("3");
+    const starts: number[] = [];
+    const counted: number[] = [];
+    for (let poll = 0; poll < 8; poll += 1) {
+      clock += 90_000;
+      // A cycle the server received a second before this read.
+      rows.push(...cycle(rows.length, receipt(clock - 1_000)));
+      tailing.tachoFrames.mockClear();
+      a = await follow(tailing, a.cursor);
+      b = await follow(whole, b.cursor);
+      expect(a.entries).toEqual(b.entries);
+      expect(a.cursor).toBe(b.cursor);
+      starts.push(afterSeqs(tailing)[0] ?? -2);
+      counted.push(await rowsRead(tailing));
+    }
+    // Each read starts at the latest model step whose frames had settled
+    // when the read before it ran, never at the turn's first frame (seq 3),
+    // and it moves one cycle a read as the cycles settle.
+    expect(starts).toEqual([30, 30, 33, 36, 39, 42, 45, 48]);
+    // So a read holds the same few frames however long the turn has run.
+    expect(counted).toEqual([6, 9, 9, 9, 9, 9, 9, 9]);
+    // Turns and cost carry on from the run's count.
+    expect(a.entries.at(-1)?.turn).toBe(2);
+    expect(a.entries.at(-1)?.cumulativeCost?.micros).toBe(String(10 + 5 * 18));
+  }, 30_000);
+
+  it("follows a run that is one turn from its first frame, whose cursor names no window", async () => {
+    let clock = NOW;
+    const rows: TachoFrameRow[] = [
+      {
+        ...tachoRow(0, { kind: "turn_start", ...bare, turnSeq: 2 }),
+        ts: ts(0),
+        receivedAt: settled,
+      },
+    ];
+    for (let k = 0; k < 10; k += 1) rows.push(...cycle(rows.length, settled));
+    const tailing = harness(rows, live, [], { chains: [], now: () => clock });
+    const whole = harness(rows, live, [], { now: () => clock });
+    let a = await follow(tailing);
+    let b = await follow(whole);
+    // No turn opens after the first frame, so the cursor names no window
+    // and, without a tail start, every read would read the whole run.
+    expect(decodeTranscriptCursor(a.cursor as string)?.from).toBeUndefined();
+    const starts: number[] = [];
+    for (let poll = 0; poll < 4; poll += 1) {
+      clock += 90_000;
+      rows.push(...cycle(rows.length, receipt(clock - 1_000)));
+      tailing.tachoFrames.mockClear();
+      a = await follow(tailing, a.cursor);
+      b = await follow(whole, b.cursor);
+      expect(a.entries).toEqual(b.entries);
+      expect(a.cursor).toBe(b.cursor);
+      starts.push(afterSeqs(tailing)[0] ?? -2);
+    }
+    expect(starts).toEqual([27, 27, 30, 33]);
+    expect(a.entries.at(-1)?.turn).toBe(1);
+  }, 30_000);
+
+  it("reads as many frames on each update of a turn of 1,200 frames as of one of 30", async () => {
+    const readsAt = async (cycles: number) => {
+      let clock = NOW;
+      const rows = longTurn(cycles);
+      const tailing = harness(rows, live, [], { chains: [], now: () => clock });
+      // The page reads 500 entries at a time until it holds the run.
+      let page = await follow(tailing);
+      while (page.entries.length >= 500) page = await follow(tailing, page.cursor);
+      const counted: number[] = [];
+      for (let poll = 0; poll < 4; poll += 1) {
+        clock += 90_000;
+        rows.push(...cycle(rows.length, receipt(clock - 1_000)));
+        tailing.tachoFrames.mockClear();
+        page = await follow(tailing, page.cursor);
+        counted.push(await rowsRead(tailing));
+      }
+      return counted;
+    };
+    const short = await readsAt(10);
+    const long = await readsAt(400);
+    expect(long).toEqual(short);
+    expect(long.at(-1)).toBe(9);
+  }, 60_000);
+
+  it("reads the turn's window when a frame past the tail start names a call from before it", async () => {
+    let clock = NOW;
+    const rows = longTurn(10);
+    const tailing = harness(rows, live, [], { chains: [], now: () => clock });
+    const whole = harness(rows, live, [], { now: () => clock });
+    let a = await follow(tailing);
+    let b = await follow(whole);
+    for (let poll = 0; poll < 3; poll += 1) {
+      clock += 90_000;
+      rows.push(...cycle(rows.length, receipt(clock - 1_000)));
+      a = await follow(tailing, a.cursor);
+      b = await follow(whole, b.cursor);
+    }
+    // A second source's copy of tool call tu_5, from the turn's first cycle,
+    // lands now. The fold joins it to that call, so the call grows.
+    clock += 90_000;
+    rows.push({
+      ...tachoRow(rows.length, { turnSeq: 2, toolUseId: "tu_5" }),
+      ts: ts(rows.length),
+      receivedAt: receipt(clock - 1_000),
+    });
+    tailing.tachoFrames.mockClear();
+    a = await follow(tailing, a.cursor);
+    b = await follow(whole, b.cursor);
+    expect(a.entries).toEqual(b.entries);
+    expect(a.entries.map((e) => e.seq)).toContain("5");
+    // The read tried the tail start, found the key, and read the turn's
+    // window from its first frame instead.
+    expect(afterSeqs(tailing)).toEqual([36, 2]);
+    // Negative control: the same read with no copy answers from the tail.
+    rows.pop();
+    const again = harness(rows, live, [], { chains: [], now: () => clock });
+    let c = await follow(again);
+    for (let poll = 0; poll < 3; poll += 1) {
+      c = await follow(again, c.cursor);
+    }
+    again.tachoFrames.mockClear();
+    await follow(again, c.cursor);
+    expect(afterSeqs(again)[0]).toBe(39);
+  }, 30_000);
+
+  it("resumes from the cursor after a gap, and reads the turn's window where no start was kept", async () => {
+    let clock = NOW;
+    const rows = longTurn(10);
+    const tailing = harness(rows, live, [], { chains: [], now: () => clock });
+    const whole = harness(rows, live, [], { now: () => clock });
+    let a = await follow(tailing);
+    let b = await follow(whole);
+    for (let poll = 0; poll < 2; poll += 1) {
+      clock += 90_000;
+      rows.push(...cycle(rows.length, receipt(clock - 1_000)));
+      a = await follow(tailing, a.cursor);
+      b = await follow(whole, b.cursor);
+    }
+    // The stream drops, and the run records five cycles before the reader
+    // is back. It reads once, from the cursor it held.
+    for (let gap = 0; gap < 5; gap += 1) {
+      clock += 90_000;
+      rows.push(...cycle(rows.length, receipt(clock - 1_000)));
+    }
+    // Another process, which kept no tail start for the cursor, answers it
+    // from the turn's window, with the same entries.
+    const other = harness(rows, live, [], { chains: [], now: () => clock });
+    const fresh = await follow(other, a.cursor);
+    expect(afterSeqs(other)[0]).toBe(2);
+    tailing.tachoFrames.mockClear();
+    a = await follow(tailing, a.cursor);
+    b = await follow(whole, b.cursor);
+    expect(a.entries).toEqual(b.entries);
+    expect(fresh.entries).toEqual(b.entries);
+    // This process kept the start for that cursor: the read begins at the
+    // last model step that had settled when the reader last read (seq 34),
+    // not at the turn's first frame.
+    expect(afterSeqs(tailing)).toEqual([33]);
+    // Every cycle recorded in the gap reached the reader.
+    expect(a.entries.at(-1)?.seq).toBe(String(rows.length - 1));
+  }, 30_000);
+
+  it("keeps a call that gains its result and a subagent chain that grows after the root inside the read", async () => {
+    let clock = NOW;
+    const rows = longTurn(10);
+    const children: TachoFrameRow[] = [];
+    const chains: SubagentChainFixture[] = [];
+    const tailing = harness(rows, live, children, {
+      chains,
+      now: () => clock,
+    });
+    const whole = harness(rows, live, children, { now: () => clock });
+    let a = await follow(tailing);
+    let b = await follow(whole);
+    const onA = (seq: number, over: Partial<TachoFrameRow>): TachoFrameRow =>
+      tachoRow(seq, {
+        sessionUuid: A,
+        rootSessionUuid: SESSION_UUID,
+        parentSessionUuid: SESSION_UUID,
+        subagentId: "agent-1",
+        subagentType: "Explore",
+        spawnToolUseId: "toolu_A",
+        ts: receipt(BASE + 36_500 + seq * 100),
+        receivedAt: receipt(clock - 1_000),
+        ...over,
+      });
+    const chain = subagentChain({
+      sessionUuid: A,
+      rootSessionUuid: SESSION_UUID,
+      subagentId: "agent-1",
+      spawnToolUseId: "toolu_A",
+      seqCount: 0,
+      // Half a second after the spawn at seq 36.
+      startedAt: new Date(BASE + 36_500),
+      lastEventAt: new Date(clock),
+    });
+    /** Subagent A records `recorded` now. */
+    const record = (...recorded: TachoFrameRow[]) => {
+      children.push(...recorded);
+      chain.seqCount = children.length;
+      chain.lastEventAt = new Date(clock - 1_000);
+    };
+    const step = async () => {
+      a = await follow(tailing, a.cursor);
+      b = await follow(whole, b.cursor);
+      expect(a.entries).toEqual(b.entries);
+      expect(a.cursor).toBe(b.cursor);
+      return afterSeqs(tailing)[0] ?? -2;
+    };
+    const starts: number[] = [];
+
+    // The model asks for a subagent: a Task call that waits on it.
+    clock += 90_000;
+    const spawn = rows.length;
+    rows.push(
+      ...[
+        tachoRow(spawn, {
+          kind: "llm_call",
+          ...bare,
+          model: "haiku",
+          provider: "anthropic",
+          costUsdMicros: 5,
+          turnSeq: 2,
+        }),
+        tachoRow(spawn + 1, {
+          kind: "tool_requested",
+          toolName: "Task",
+          toolUseId: "toolu_A",
+          turnSeq: 2,
+        }),
+        tachoRow(spawn + 2, {
+          kind: "subagent_start",
+          ...bare,
+          toolUseId: "toolu_A",
+          turnSeq: 2,
+        }),
+      ].map((row) => ({
+        ...row,
+        ts: ts(row.seq),
+        receivedAt: receipt(clock - 1_000),
+      })),
+    );
+    chains.push(chain);
+    record(
+      onA(0, { kind: "turn_start", ...bare }),
+      onA(1, {
+        kind: "llm_call",
+        ...bare,
+        costUsdMicros: 300,
+        receivedAt: receipt(clock - 1_000),
+      }),
+    );
+    tailing.tachoFrames.mockClear();
+    starts.push(await step());
+
+    // The subagent works on while the call waits.
+    for (const seq of [2, 3]) {
+      clock += 90_000;
+      record(onA(seq, { receivedAt: receipt(clock - 1_000) }));
+      tailing.tachoFrames.mockClear();
+      starts.push(await step());
+    }
+
+    // The subagent ends, and the Task call gains its result: it grows past
+    // the cursor and is sent again with what it gained.
+    clock += 90_000;
+    rows.push({
+      ...tachoRow(spawn + 3, { toolName: "Task", toolUseId: "toolu_A", turnSeq: 2 }),
+      ts: ts(spawn + 3),
+      receivedAt: receipt(clock - 1_000),
+    });
+    rows.push(...cycle(rows.length, receipt(clock - 1_000)));
+    tailing.tachoFrames.mockClear();
+    starts.push(await step());
+    expect(a.entries.map((e) => e.seq)).toContain(String(spawn + 1));
+
+    // The run moves on past the call.
+    for (let poll = 0; poll < 3; poll += 1) {
+      clock += 90_000;
+      rows.push(...cycle(rows.length, receipt(clock - 1_000)));
+      tailing.tachoFrames.mockClear();
+      starts.push(await step());
+    }
+    // While the call waited, no read started after it, so the subagent's
+    // chain was always inside the read. Once it ended, the start moved past
+    // it, and the finished chain is left out of the read.
+    expect(starts.slice(0, 4).every((at) => at > 2 && at < spawn + 1)).toBe(
+      true,
+    );
+    expect(starts.at(-1)).toBeGreaterThan(spawn + 3);
+  }, 30_000);
+});
