@@ -385,6 +385,7 @@ import { steeringPrApprove } from "./steering.pr.approve";
 import { contextSteeringDeliveries } from "./context.steering.deliveries";
 import { steeringRepoGet } from "./steering_repo.get";
 import { steeringRepoRepair } from "./steering_repo.repair";
+import { steeringRepoAdopt } from "./steering_repo.adopt";
 import { steeringRepoImport } from "./steering_repo.import";
 import { steeringRepoProvisionRetry } from "./steering_repo.provision.retry";
 import { steeringRepoDestinationsList } from "./steering_repo.destinations.list";
@@ -1210,6 +1211,7 @@ export {
   contextSteeringDeliveries,
   steeringRepoGet,
   steeringRepoRepair,
+  steeringRepoAdopt,
   steeringRepoImport,
   steeringRepoProvisionRetry,
   steeringRepoDestinationsList,
@@ -1705,6 +1707,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextSteeringDeliveries,
   steeringRepoGet,
   steeringRepoRepair,
+  steeringRepoAdopt,
   steeringRepoImport,
   steeringRepoProvisionRetry,
   steeringRepoDestinationsList,

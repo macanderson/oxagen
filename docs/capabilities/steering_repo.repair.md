@@ -37,6 +37,8 @@ None. The org and workspace come from the capability context.
 
 A setting that still differs after the write leaves the answer `drifted`. The repair does not fail for it.
 
+When `main` diverged only because someone merged pull requests Oxagen opened on the host, [`adopt_steering_merges`](steering_repo.adopt.md) keeps those merges instead of reverting them.
+
 ## Refusals
 
 | Code | Reason | When |

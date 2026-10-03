@@ -6832,6 +6832,24 @@
       }
     },
     {
+      "name": "adopt_steering_merges",
+      "file": "steering_repo.adopt.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "list_steering_repo_destinations",
       "file": "steering_repo.destinations.list.ts",
       "domain": "repository",

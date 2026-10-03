@@ -1259,6 +1259,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .repairSteeringRepoHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "adopt_steering_merges",
+    async () =>
+      (await import("./steering_repo.adopt"))
+        .adoptSteeringMergesHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "retry_steering_repo_provision",
     async () =>
       (await import("./steering_repo.provision.retry"))

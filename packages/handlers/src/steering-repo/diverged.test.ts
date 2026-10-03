@@ -14,8 +14,12 @@ import {
   assertGithubSteeringCommit,
   githubCloseRevert,
   githubDiverged,
+  githubHostMerge,
   githubOpenRevert,
   githubPublished,
+  githubRecordAdoption,
+  githubSameChanges,
+  githubUnproven,
   gitlabCloseRevert,
   gitlabDiverged,
   gitlabOpenRevert,
@@ -393,8 +397,21 @@ const GH = "/repos/acme/steering";
 /** The test clock: 2026-10-02T21:02:45Z, when the live test's merge landed. */
 const NOW = Date.parse("2026-10-02T21:02:45Z");
 
+/** The read of the steering app's adoption check runs on `sha` (#5195). */
+function adoptionRuns(sha: string): string {
+  return `GET ${GH}/commits/${sha}/check-runs?check_name=Oxagen%20steering%20adoption&app_id=1234`;
+}
+
 function github(routes: Record<string, Reply | Reply[]>) {
-  const s = server("https://api.github.com", routes);
+  // A commit a person merged through a pull request costs one more read: the
+  // app's adoption check runs. Unless a test says otherwise, it finds none.
+  const unadopted: Record<string, Reply> = Object.fromEntries(
+    [P, S1, X, S2, R, HEAD, OLD].map((sha) => [
+      adoptionRuns(sha),
+      ok({ total_count: 0, check_runs: [] }),
+    ]),
+  );
+  const s = server("https://api.github.com", { ...unadopted, ...routes });
   const waits: number[] = [];
   const target: GithubHistoryTarget = {
     rest: createGithubRest({ token: "ghs_test", fetch: s.fetch }),
@@ -881,6 +898,183 @@ describe("GitHub commit provenance", () => {
       );
     });
   }
+});
+
+describe("host merge adoption (#5195)", () => {
+  /** The adoption check run the steering app posts, by `appId`. */
+  function adoptionRun(over: Record<string, unknown> = {}) {
+    return {
+      id: 9,
+      name: "Oxagen steering adoption",
+      status: "completed",
+      conclusion: "success",
+      external_id: "oxagen-steering-adoption",
+      app: { id: 1234 },
+      ...over,
+    };
+  }
+
+  /** Pull request `number`, merged on the host by a person as `sha`. */
+  function personPull(sha: string, number: number, head: string = HEAD) {
+    return {
+      ...authenticatedPull(sha, number),
+      head: { sha: head },
+      merged_by: { type: "User", login: "maintainer" },
+    };
+  }
+
+  const IMPORT = "Import steering from .oxagen/ (#2)";
+
+  it("counts a host merge the steering app's adoption check run vouches for", async () => {
+    const gh = github({
+      [COMPARE]: ok(singleGithubCommit(IMPORT)),
+      [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([{ number: 2 }]),
+      [`GET ${GH}/pulls/2`]: ok(personPull(S1, 2)),
+      [adoptionRuns(S1)]: ok({ total_count: 1, check_runs: [adoptionRun()] }),
+    });
+    await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toBeNull();
+  });
+
+  for (const [name, runs] of [
+    ["no adoption run", []],
+    ["a run another app posted", [adoptionRun({ app: { id: 999 } })]],
+    ["a run with another external id", [adoptionRun({ external_id: "oxagen-steering-revert" })]],
+    ["a failed run", [adoptionRun({ conclusion: "failure" })]],
+  ] as const) {
+    it(`still flags a host merge with ${name} (negative)`, async () => {
+      const gh = github({
+        [COMPARE]: ok(singleGithubCommit(IMPORT)),
+        [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([{ number: 2 }]),
+        [`GET ${GH}/pulls/2`]: ok(personPull(S1, 2)),
+        [adoptionRuns(S1)]: ok({ total_count: runs.length, check_runs: runs }),
+      });
+      await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toEqual({
+        reason: "main holds 1 commit Oxagen did not merge: b2b2b2b",
+        main_sha: S1,
+      });
+    });
+  }
+
+  it("never counts an adoption run on a commit no pull request merged (negative)", async () => {
+    const gh = github({
+      [COMPARE]: ok(singleGithubCommit("Edit the release notes rule by hand")),
+      [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([]),
+      [adoptionRuns(S1)]: ok({ total_count: 1, check_runs: [adoptionRun()] }),
+    });
+    await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toMatchObject({
+      main_sha: S1,
+    });
+    expect(gh.sent(adoptionRuns(S1))).toHaveLength(0);
+  });
+
+  it("lists the commits no app merge proves, oldest first, and skips the app's merges", async () => {
+    const gh = github({
+      [COMPARE]: ok(fixture("github-compare-ahead")),
+      ...authenticatedRoutes(S1),
+      [`GET ${GH}/commits/${S2}/pulls?per_page=100`]: ok([{ number: 43 }]),
+      [`GET ${GH}/pulls/43`]: ok(personPull(S2, 43)),
+    });
+    await expect(githubUnproven(gh.target, PUBLISHED)).resolves.toEqual({
+      main_sha: S2,
+      commits: [
+        {
+          sha: S2,
+          message: expect.stringMatching(/^Tighten the review checklist \(#43\)/),
+        },
+      ],
+    });
+  });
+
+  it("refuses to list a main that no longer holds the published commit, or holds more than one read", async () => {
+    const rewritten = fixture<GithubCompareFixture>("github-compare-ahead");
+    rewritten.status = "diverged";
+    const cut = fixture<GithubCompareFixture>("github-compare-ahead");
+    cut.total_commits = 250;
+    for (const [reply, reason] of [
+      [fail(404, "Not Found"), /no longer contains the published commit/],
+      [ok(rewritten), /no longer contains the published commit/],
+      [ok(cut), /more commits since the published commit a1a1a1a than Oxagen can read/],
+    ] as const) {
+      const gh = github({ [COMPARE]: reply });
+      const listed = await githubUnproven(gh.target, PUBLISHED);
+      expect("refused" in listed && reason.test(listed.refused)).toBe(true);
+    }
+  });
+
+  it("names the pull request a person merged as the commit, and the head it merged", async () => {
+    const gh = github({
+      [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([{ number: 2 }]),
+      [`GET ${GH}/pulls/2`]: ok(personPull(S1, 2, R)),
+    });
+    await expect(
+      githubHostMerge(gh.target, { sha: S1, message: IMPORT }),
+    ).resolves.toEqual({ number: 2, headSha: R });
+  });
+
+  it("names no host merge for an app merge or a pull request that merged as another commit (negative)", async () => {
+    for (const pull of [authenticatedPull(S1, 2), personPull(X, 2)]) {
+      const gh = github({
+        [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([{ number: 2 }]),
+        [`GET ${GH}/pulls/2`]: ok(pull),
+      });
+      await expect(
+        githubHostMerge(gh.target, { sha: S1, message: IMPORT }),
+      ).resolves.toBeNull();
+    }
+  });
+
+  describe("githubSameChanges", () => {
+    const FILES = [
+      { filename: "steering/records/rule-a.md", status: "added", sha: "aa".repeat(20) },
+      { filename: "workspace.toml", status: "modified", sha: "bb".repeat(20) },
+    ];
+    const COMMIT = `GET ${GH}/commits/${S1}`;
+    const PULL_FILES = `GET ${GH}/pulls/2/files?per_page=100`;
+
+    it("matches a merge commit that changes exactly the pull request's files, in any order", async () => {
+      const gh = github({
+        [COMMIT]: ok({ sha: S1, files: FILES }),
+        [PULL_FILES]: ok([...FILES].reverse()),
+      });
+      await expect(githubSameChanges(gh.target, S1, 2)).resolves.toBe(true);
+    });
+
+    it("refuses a merge commit with another blob, another file, or a cut file list (negative)", async () => {
+      const other = [FILES[0], { ...FILES[1], sha: "cc".repeat(20) }];
+      const more = [...FILES, { filename: "steering/records/extra.md", status: "added", sha: "dd".repeat(20) }];
+      const cut = Array.from({ length: 300 }, (_, i) => ({ filename: `f${i}`, status: "added", sha: "ee".repeat(20) }));
+      for (const files of [other, more, cut]) {
+        const gh = github({
+          [COMMIT]: ok({ sha: S1, files }),
+          [PULL_FILES]: ok(FILES),
+        });
+        await expect(githubSameChanges(gh.target, S1, 2)).resolves.toBe(false);
+      }
+    });
+
+    it("reads every page of the pull request's files", async () => {
+      const many = Array.from({ length: 120 }, (_, i) => ({ filename: `f${i}`, status: "added", sha: "ab".repeat(20) }));
+      const gh = github({
+        [COMMIT]: ok({ sha: S1, files: many }),
+        [PULL_FILES]: ok(many.slice(0, 100)),
+        [`${PULL_FILES}&page=2`]: ok(many.slice(100)),
+      });
+      await expect(githubSameChanges(gh.target, S1, 2)).resolves.toBe(true);
+    });
+  });
+
+  it("posts the adoption check run that later reads count", async () => {
+    const gh = github({ [`POST ${GH}/check-runs`]: ok({ id: 9 }, 201) });
+    await githubRecordAdoption(gh.target, S1, "Adopted in Oxagen by user u-1.");
+    expect(gh.sent(`POST ${GH}/check-runs`)[0]!.body).toEqual({
+      name: "Oxagen steering adoption",
+      head_sha: S1,
+      status: "completed",
+      conclusion: "success",
+      external_id: "oxagen-steering-adoption",
+      output: { title: "Adopted in Oxagen", summary: "Adopted in Oxagen by user u-1." },
+    });
+  });
 });
 
 describe("assertGithubSteeringCommit", () => {

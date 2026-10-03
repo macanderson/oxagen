@@ -233,6 +233,7 @@ import { publishedSteeringGetRoute } from "./routes/v1/context.steering.publishe
 import { steeringIndexGetRoute } from "./routes/v1/context.steering.index.get";
 import { steeringRepoGetRoute } from "./routes/v1/steering_repo.get";
 import { steeringRepoRepairRoute } from "./routes/v1/steering_repo.repair";
+import { steeringRepoAdoptRoute } from "./routes/v1/steering_repo.adopt";
 import { steeringRepoProvisionRetryRoute } from "./routes/v1/steering_repo.provision.retry";
 import { steeringRepoDestinationsListRoute } from "./routes/v1/steering_repo.destinations.list";
 import { steeringMemoriesListRoute } from "./routes/v1/steering.memories.list";
@@ -1357,6 +1358,8 @@ orgScoped.route("/context/steering/index", steeringIndexGetRoute);
 // The workspace's steering repo and its settings repair (lane S2, #4560).
 orgScoped.route("/context/steering/repo", steeringRepoGetRoute);
 orgScoped.route("/context/steering/repo/repair", steeringRepoRepairRoute);
+// Adopt host merges of pull requests Oxagen opened (#5195).
+orgScoped.route("/context/steering/repo/adopt", steeringRepoAdoptRoute);
 // Re-send a failed or blocked steering repo setup (#4750).
 orgScoped.route("/context/steering/repo/retry", steeringRepoProvisionRetryRoute);
 // Workspace memories (#4912): the Memories tab's list and drawer, promotion

@@ -166,6 +166,10 @@ const ACTIONS = new Set([
   // baseline Oxagen applied. Not "reconcile" or "sync": those move records,
   // and this writes one repository's settings.
   "repair",
+  // adopt_steering_merges: take host merges of pull requests Oxagen opened as
+  // Oxagen's own (#5195). Not "accept": accept_work_result takes a delivered
+  // result, and this takes commits already on the production branch.
+  "adopt",
   // revert_steering_pr: open a steering PR that undoes a merged one (#4449).
   // Not "undo" or "rollback": git and the host both call this a revert.
   "revert",
