@@ -144,10 +144,12 @@ decision, and its window starts at the decision.
 | Cache writes never read | `cache_writes_never_read` | operator, or agent when the run names no operator | `cost.run_totals.tokens`: `cache_write_5m + cache_write_1h > 0` and `cache_read = 0`; the money from `breakdown.models[].costByClass.cache_write_*` | the written tokens at the run's input price |
 | Repeated shell commands (mockup) | `repeated_shell_commands` | tool `Bash` | `tacho_events` hook `tool_call`: the same `tool_name`, `tool_input_digest` and `tool_output_digest` as an earlier call of the run | nothing: the result was already in the window |
 | Duplicate tool calls | `duplicate_tool_calls` | agent (`agent_key`) | the same match on a tool with `tool_is_mutating = false` | nothing |
-| Unpaged results (mockup) | `unpaged_results` | tool | `tool_result_tokens` above 20,000, from the OTel tool span joined on `tool_use_id` | the same result at 4,000 tokens |
+| Unpaged results (mockup) | `unpaged_results` | tool | `tool_result_tokens` above 20,000, from the OTel tool span joined on `tool_use_id`, else the hook row's estimate (amendment of 2026-10-03) | the same result at 4,000 tokens |
 
-The tool-call kinds price a call's `tool_result_tokens`; a hook call with no
-span carrying that figure is cited and not covered.
+The tool-call kinds price a call's `tool_result_tokens`. A hook call with no
+span carrying that figure was cited and not covered until the amendment of
+2026-10-03, which prices the hook's estimate and labels the figure
+`estimated`.
 
 ### Waiting on a recorder
 
@@ -305,8 +307,12 @@ each call counts the steering. A side call carries neither.
   there.
 - **The basis is `estimated`.** The count is `budgetTokens` over the text,
   like every other count on this path. It is not the `apportioned` byte share
-  `get_run_context` uses. A share needs the request's total bytes, and a
-  session the proxy did not carry never has them.
+  `get_run_context` uses. A share splits the vendor's prompt total across
+  the blocks by their bytes, so it needs the request's total bytes, and a session the
+  proxy did not carry never has them. With only the injected text's bytes,
+  any share would be the same bytes-over-four estimate under another name.
+  The envelope's token source basis is `reported` or `estimated` for the same
+  reason.
 - **A call reads the total as of when it was made.** OTel exports in batches,
   and the transcript is read behind the session. A call's record can arrive
   after a later answer left. Each answer is kept with the time it left, and a
@@ -326,20 +332,55 @@ each call counts the steering. A side call carries neither.
   has no count. Cursor's model calls carry no usage record, so no row carries
   one.
 
-Two sources stay absent on a session the proxy did not carry:
+**Tool definitions stay absent on a session the proxy did not carry.** No
+hook payload, OTel record, or transcript record lists the tools a session
+declared, so nothing can count them. Only a request carries the tool list,
+and only the proxy sees the request.
 
-- **Tool definitions.** No hook payload, OTel record, or transcript record
-  lists the tools a session declared, so nothing can count them.
-- **Tool result tokens.** The hook's `PostToolUse` row keeps the result's size
-  as `tool_output_bytes` under every retention, `digest_only` included. The
-  rollup prices a result only from the tokens Claude Code reports on its OTel
-  tool span, which needs enhanced telemetry. Turning the byte size into
-  tokens would put an estimate into `tool_result_tokens`, which has no basis
-  column, and the `unpaged_results` finding would price that estimate as if
-  Claude Code had reported it. That needs a basis column for result tokens
-  first.
+**Tool result tokens are estimated where Claude Code reports none.** Claude
+Code counts a result's tokens only on its OTel tool span, which a session
+without enhanced telemetry never sends. The hook's `PostToolUse` row keeps
+the result's size as `tool_output_bytes` under every retention, `digest_only`
+included, so it needs no body. The recorder now writes `tool_result_tokens`
+on that row as the size over four, rounded up, with a new
+`tool_result_tokens_basis` of `estimated`. The span's count is `reported`.
+
+- **The span wins.** The rollup and the findings job read the span's count
+  when one exists and the hook's estimate when none does
+  (`packages/telemetry/src/cost-frames.ts`, `RESULT_TOKENS`).
+- **An estimate is never priced as reported.** A tool's sum in
+  `breakdown.tools` carries `resultTokensBasis: "estimated"` when any of its
+  counts was an estimate, the way one estimated part makes a cost basis
+  `estimated`. The tool's cost was already labeled `estimated`. The
+  `unpaged_results` finding prices an estimated result the same way and
+  labels its figure `estimated`, as findings label every other estimate. It
+  does not skip the result: the size is the best record of a large result on
+  a session the span does not cover.
+- **An old row reads as reported.** Migration
+  `0038_tacho_events_tool_result_tokens_basis.sql` adds the column with an
+  empty default, like the three token source bases. An empty basis beside a
+  count is a row from before the column, when only the span wrote a count. A
+  `DEFAULT 'reported'` would say the same of old rows, and would also stamp
+  `reported` on a new row whose producer forgot its basis.
+- **The estimate is of the result the hook saw.** Claude Code hands the hook
+  its own result object, and the model reads that result in Claude Code's
+  own wording. The two are close in size, and the basis says the count is
+  not Claude Code's.
+
+**A growing source is re-sent only as far as an earlier call carried it.**
+The rollup's re-sent split (#4572) counted every call after a run's first as
+re-sending its whole count. Context frames grow during a run, so each hook
+answer's first send was counted as re-sent, and the `standing_context`
+finding priced it. A call now re-sends a source only up to what the last call
+that carried it sent, the smaller of the two counts. A call that carried none
+of a source is skipped, so a side call's zero tool definitions reset nothing.
+A source that holds still gives the same split as before. A compaction that
+empties the context frames is not seen by the split, so the first call after
+it counts up to its own count as re-sent (`createStandingSplit` in
+`packages/billing/src/cost-rollup-store.ts`).
 
 The code is `SystemContextTracker.noteInjectedContext` and `injectedAt` in
 `system-context.ts`, `noteHandedContext` in
-`packages/tacho/src/collector/hook-handler.ts`, and the compaction reset in
-`SessionRecorder.sealHookDraft`.
+`packages/tacho/src/collector/hook-handler.ts`, the compaction reset in
+`SessionRecorder.sealHookDraft`, the estimate in `claude-code/hooks.ts`, and
+`withResultBasis` in `packages/billing/src/findings/unpaged-results.ts`.
