@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  compile,
+  formatJson,
+  importGrpc,
+  lock as lockServer,
   NotBuiltError,
   parseLock,
+  parseServerToml,
   parseToolsToml,
+  type ImportedFile,
+  type ImportResult,
   type ManifestServer,
   type McpToolsLock,
 } from "@oxagen/mcp-studio";
@@ -10,8 +17,10 @@ import { fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
 import {
   buildTools,
   compileServerFolder,
+  grpcDescriptorSet,
   lockedSecuritySchemes,
   lockedUpstreamTools,
+  ProtoFilesError,
   ServerFileError,
   serverNames,
   type ServerFolder,
@@ -35,6 +44,7 @@ function folder(name: string): ServerFolder {
     server: file(`tools/servers/${name}/server.toml`),
     tools: file(`tools/servers/${name}/tools.toml`),
     lock: file(`tools/servers/${name}/tools.lock.json`),
+    proto: [],
   };
 }
 
@@ -56,9 +66,9 @@ function without(...paths: string[]): Map<string, string> {
   return copy;
 }
 
-function serverFileError(run: () => unknown): ServerFileError {
+async function serverFileError(run: () => Promise<unknown>): Promise<ServerFileError> {
   try {
-    run();
+    await run();
   } catch (error) {
     expect(error).toBeInstanceOf(ServerFileError);
     return error as ServerFileError;
@@ -149,24 +159,26 @@ function billingToolsWithNewDescription(): string {
 const STALE_LOCK = "The lock's definition_hash for get_charge is not the compiled one. Run lock again.";
 
 describe("compileServerFolder", () => {
-  it.each(["billing", "stripe"])("compiles the %s folder and pins each tool to its lock", (name) => {
-    const compiled = compileServerFolder(folder(name));
+  it.each(["billing", "stripe"])("compiles the %s folder and pins each tool to its lock", async (name) => {
+    const compiled = await compileServerFolder(folder(name));
     const locked = lock(name);
 
     expect(compiled.name).toBe(name);
     expect(compiled.pinned).toEqual(locked.source);
     expect(Object.keys(compiled.tools).sort()).toEqual(toolKeys(name));
     expect(pinsOf(compiled.tools)).toEqual(pinsOf(locked.tools));
+    // Only a gRPC server carries a descriptor set.
+    expect(compiled.descriptor_set).toBeUndefined();
   });
 
-  it("refuses a lock that no longer pins what compiles", () => {
-    expect(() =>
+  it("refuses a lock that no longer pins what compiles", async () => {
+    await expect(
       compileServerFolder({ ...folder("billing"), tools: billingToolsWithNewDescription() }),
-    ).toThrow(STALE_LOCK);
+    ).rejects.toThrow(STALE_LOCK);
   });
 
-  it("names server.toml when it does not parse", () => {
-    const error = serverFileError(() =>
+  it("names server.toml when it does not parse", async () => {
+    const error = await serverFileError(() =>
       compileServerFolder({ ...folder("billing"), server: 'schema = "mcp-server/v1"\nname = 7\n' }),
     );
     expect(error.path).toBe("tools/servers/billing/server.toml");
@@ -177,15 +189,15 @@ describe("compileServerFolder", () => {
     );
   });
 
-  it("names tools.toml when it does not parse", () => {
-    const error = serverFileError(() =>
+  it("names tools.toml when it does not parse", async () => {
+    const error = await serverFileError(() =>
       compileServerFolder({ ...folder("billing"), tools: "this is not toml [" }),
     );
     expect(error.path).toBe("tools/servers/billing/tools.toml");
   });
 
-  it("names tools.lock.json when the folder has none", () => {
-    const error = serverFileError(() => compileServerFolder({ ...folder("billing"), lock: undefined }));
+  it("names tools.lock.json when the folder has none", async () => {
+    const error = await serverFileError(() => compileServerFolder({ ...folder("billing"), lock: undefined }));
     expect(error.path).toBe("tools/servers/billing/tools.lock.json");
     expect(error.issues).toEqual([
       { line: null, field: null, message: "the folder has no tools.lock.json" },
@@ -195,9 +207,169 @@ describe("compileServerFolder", () => {
     );
   });
 
-  it("names tools.lock.json when it does not parse", () => {
-    const error = serverFileError(() => compileServerFolder({ ...folder("billing"), lock: "{}\n" }));
+  it("names tools.lock.json when it does not parse", async () => {
+    const error = await serverFileError(() => compileServerFolder({ ...folder("billing"), lock: "{}\n" }));
     expect(error.path).toBe("tools/servers/billing/tools.lock.json");
+  });
+});
+
+// ── A gRPC folder ────────────────────────────────────────────────────────────
+
+/**
+ * A gRPC server folder written the way Studio's import writes one: the
+ * .proto files under proto/, a tools.toml that imports each method by its
+ * path, and the lock from compiling them with the descriptor set the import
+ * returned. The environment routes through a relay, as the MCP Studio live
+ * test's ledger does (#5139).
+ */
+const LEDGER = "ledger";
+const LEDGER_PROTO: ImportedFile = {
+  path: "proto/ledger.proto",
+  text: [
+    'syntax = "proto3";',
+    "",
+    "package ledger.v1;",
+    "",
+    "service Ledger {",
+    "  // Read one ledger entry by its id.",
+    "  rpc GetEntry(GetEntryRequest) returns (Entry);",
+    "}",
+    "",
+    "message GetEntryRequest {",
+    "  string id = 1;",
+    "}",
+    "",
+    "message Entry {",
+    "  string id = 1;",
+    "  string account_id = 2;",
+    "}",
+    "",
+  ].join("\n"),
+};
+
+const LEDGER_SERVER_TOML = [
+  "#:schema https://oxagen.sh/schemas/mcp-server/v1.json",
+  'schema = "mcp-server/v1"',
+  `name = "${LEDGER}"`,
+  'label = "Ledger"',
+  'description = "The sample gRPC ledger, reached through a relay."',
+  "",
+  "[source]",
+  'type = "grpc"',
+  'from = "upload"',
+  "",
+  "[auth]",
+  'mode = "none"',
+  "",
+  "[environments.sandbox]",
+  'url = "http://127.0.0.1:50051"',
+  'network = "relay:office"',
+  "",
+  "[exposure]",
+  'mode = "direct"',
+  "",
+  "[sync]",
+  'schedule = "manual"',
+  "",
+].join("\n");
+
+interface GrpcFolder {
+  folder: ServerFolder;
+  imported: ImportResult;
+  /** The tool key tools.toml imports the one method under. */
+  key: string;
+}
+
+async function ledgerFolder(): Promise<GrpcFolder> {
+  const imported = await importGrpc({ files: [LEDGER_PROTO] });
+  const [method] = imported.tools;
+  if (method === undefined || method.request.kind !== "grpc") {
+    throw new Error("The ledger proto imported no gRPC method.");
+  }
+  const key = method.name;
+  const toolsToml = [
+    "#:schema https://oxagen.sh/schemas/mcp-tools/v1.json",
+    'schema = "mcp-tools/v1"',
+    "",
+    `[tools.${key}]`,
+    `method = ${JSON.stringify(method.request.method)}`,
+    'description = "Read one ledger entry by its id."',
+    'risk = "low"',
+    'side_effect = "read"',
+    'egress = "org_tenant"',
+    "",
+  ].join("\n");
+  const server = parseServerToml(LEDGER_SERVER_TOML);
+  const tools = parseToolsToml(toolsToml);
+  if (!server.ok || !tools.ok) throw new Error("The ledger folder's server.toml or tools.toml does not parse.");
+  const compiled = compile({
+    server: server.value,
+    tools: tools.value,
+    upstream: imported.tools,
+    security_schemes: {},
+    descriptor_set: imported.descriptor_set,
+  });
+  const locked = lockServer({
+    compiled,
+    source: { type: "grpc", from: "upload", document_hash: imported.document_hash },
+    previous: undefined,
+  });
+  return {
+    folder: { name: LEDGER, server: LEDGER_SERVER_TOML, tools: toolsToml, lock: formatJson(locked), proto: [LEDGER_PROTO] },
+    imported,
+    key,
+  };
+}
+
+/** The fixture repo with the ledger folder added. Leave out proto/ with `withProto: false`. */
+function treeWithLedger({ folder: ledger }: GrpcFolder, withProto = true): Map<string, string> {
+  const tree = new Map(files);
+  const base = `tools/servers/${LEDGER}`;
+  tree.set(`${base}/server.toml`, ledger.server);
+  tree.set(`${base}/tools.toml`, ledger.tools);
+  tree.set(`${base}/tools.lock.json`, ledger.lock ?? "");
+  if (withProto) for (const proto of ledger.proto) tree.set(`${base}/${proto.path}`, proto.text);
+  return tree;
+}
+
+function base64(bytes: Uint8Array | undefined): string {
+  if (bytes === undefined) throw new Error("The import returned no descriptor set.");
+  return Buffer.from(bytes).toString("base64");
+}
+
+const NO_PROTO =
+  "tools/servers/ledger/proto holds no .proto files, and a gRPC server needs them to serve its tools. Import the server in Studio to write them.";
+
+describe("compileServerFolder for a gRPC server", () => {
+  it("carries the descriptor set the folder's proto/ files give", async () => {
+    const ledger = await ledgerFolder();
+    const compiled = await compileServerFolder(ledger.folder);
+
+    expect(compiled.name).toBe(LEDGER);
+    expect(Object.keys(compiled.tools)).toEqual([ledger.key]);
+    expect(compiled.descriptor_set).toBe(base64(ledger.imported.descriptor_set));
+    expect(compiled.environments["sandbox"]?.network).toBe("relay:office");
+  });
+
+  it("refuses a gRPC folder with no proto/ files", async () => {
+    const ledger = await ledgerFolder();
+    const refused = compileServerFolder({ ...ledger.folder, proto: [] });
+    await expect(refused).rejects.toBeInstanceOf(ProtoFilesError);
+    await expect(refused).rejects.toThrow(NO_PROTO);
+  });
+});
+
+describe("grpcDescriptorSet", () => {
+  it("names proto/ when its files do not import", async () => {
+    const ledger = await ledgerFolder();
+    const broken = { ...ledger.folder, proto: [{ path: "proto/ledger.proto", text: "this is not a proto file {" }] };
+    const error = await grpcDescriptorSet(broken).then(
+      () => null,
+      (reason: unknown) => reason,
+    );
+    expect(error).toBeInstanceOf(ProtoFilesError);
+    expect((error as ProtoFilesError).path).toBe("tools/servers/ledger/proto");
+    expect((error as ProtoFilesError).message).toMatch(/^tools\/servers\/ledger\/proto does not import: /);
   });
 });
 
@@ -361,5 +533,41 @@ describe("buildTools", () => {
     expect(result.warnings[6]).toBe(
       "tools/servers/Billing is left out: MCP Studio's compile is not built yet.",
     );
+  });
+
+  // #5344: publish passed no descriptor set, so compile() refused every gRPC
+  // server, and the gateway listed none of its tools to any agent.
+  it("serves a gRPC server, with the descriptor set its proto/ files give", async () => {
+    const ledger = await ledgerFolder();
+    const result = await buildTools(await reader(treeWithLedger(ledger)), compileServerFolder);
+
+    expect(result.warnings).toEqual([]);
+    expect(result.servers.map((server) => server.name)).toEqual(["billing", LEDGER, "stripe"]);
+    expect(result.imported).toContain(`${LEDGER}__${ledger.key}`);
+    const served = result.servers.find((server) => server.name === LEDGER);
+    expect(served?.descriptor_set).toBe(base64(ledger.imported.descriptor_set));
+  });
+
+  it("gives the compiler a gRPC folder's proto/ files by path in the folder", async () => {
+    const ledger = await ledgerFolder();
+    const seen: ServerFolder[] = [];
+    const compiler: ToolCompiler = (entry) => {
+      seen.push(entry);
+      return { name: entry.name } as unknown as ManifestServer;
+    };
+    await buildTools(await reader(treeWithLedger(ledger)), compiler);
+    expect(seen.map((entry) => [entry.name, entry.proto])).toEqual([
+      ["billing", []],
+      [LEDGER, [LEDGER_PROTO]],
+      ["stripe", []],
+    ]);
+  });
+
+  it("leaves out a gRPC server whose folder has no proto/ files, and says why", async () => {
+    const ledger = await ledgerFolder();
+    const result = await buildTools(await reader(treeWithLedger(ledger, false)), compileServerFolder);
+
+    expect(result.servers.map((server) => server.name)).toEqual(["billing", "stripe"]);
+    expect(result.warnings).toEqual([`tools/servers/${LEDGER} is left out: ${NO_PROTO}`]);
   });
 });
