@@ -23,7 +23,11 @@ const BATCH_SIZE = 50;
 
 interface PollBatch {
   recordType: string;
-  records: Array<{ sourceRecordType: string; payload: unknown }>;
+  records: Array<{
+    sourceRecordType: string;
+    payload: unknown;
+    backfill: boolean;
+  }>;
   newCursor: string | null;
 }
 
@@ -203,6 +207,7 @@ export const [ingestionConnectionPoll] = createFunction(
               records: collected.map((r) => ({
                 sourceRecordType: r.sourceRecordType,
                 payload: r.raw,
+                backfill: r.backfill === true,
               })),
               newCursor,
             });
@@ -239,6 +244,9 @@ export const [ingestionConnectionPoll] = createFunction(
               connectorType: connectorId,
               sourceRecordType: rec.sourceRecordType,
               payload: rec.payload,
+              // A record the connector read with no saved cursor. The
+              // pipeline writes it and fires no trigger for it (#5263).
+              ...(rec.backfill ? { backfill: true } : {}),
             },
           })),
         );

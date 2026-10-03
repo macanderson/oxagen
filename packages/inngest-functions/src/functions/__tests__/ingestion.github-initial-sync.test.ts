@@ -355,10 +355,20 @@ describe("ingestion.github-initial-sync Inngest function", () => {
     expect(entitiesOfType(sendEvent, "release")).toHaveLength(1);
     const commits = entitiesOfType(sendEvent, "commit");
     expect(commits).toHaveLength(1);
-    // git_branch is injected so trigger conditions can match on it.
+    // git_branch is the default branch, as the poll and a push also set it.
     expect(
       (commits[0]!.data["payload"] as Record<string, unknown>)["git_branch"],
     ).toBe("trunk");
+  });
+
+  it("marks every record it reads as backfill, so none fires a trigger (#5263)", async () => {
+    const step = makeStep();
+    const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
+    await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+    const events = allEventsFrom(sendEvent);
+    expect(events.length).toBeGreaterThan(0);
+    expect(events.every((e) => e.data["backfill"] === true)).toBe(true);
   });
 
   it("emits only provider entities and never detailed-code work", async () => {

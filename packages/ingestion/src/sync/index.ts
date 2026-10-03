@@ -4,3 +4,4 @@
  */
 export * from "./backoff";
 export * from "./cursor";
+export * from "./change-event";

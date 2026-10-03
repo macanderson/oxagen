@@ -679,6 +679,92 @@ describe("ingestion.pipeline Inngest function", () => {
     });
   });
 
+  // ── Trigger guard (#5263) ────────────────────────────────────────────────
+  // The change events are the feed trigger conditions read. A backfill record
+  // and an update that changes nothing write the node and send no event.
+  describe("change event guard (#5263)", () => {
+    beforeEach(() => {
+      mocks.getConnector.mockReturnValue({ normalizeRecord: () => NORMALIZED });
+      mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+        fn({
+          execute: vi
+            .fn()
+            .mockResolvedValue([
+              { oxagen_entity_type: "task", property_mappings: {} },
+            ]),
+        }),
+      );
+    });
+
+    const existingNode = () =>
+      vi.fn(async (name: string, fn: () => unknown) =>
+        name === "dedup-pass-a"
+          ? { found: true, nodeId: "neo4j-existing-node" }
+          : fn(),
+      );
+
+    it("writes a backfill record and sends no change event", async () => {
+      const sendEvent = vi.fn().mockResolvedValue(undefined);
+      const result = await capturedHandler!({
+        event: { data: { ...BASE_EVENT, backfill: true } },
+        step: makeStep({ sendEvent }),
+      });
+      expect(mocks.upsertEntityNode).toHaveBeenCalledTimes(1);
+      expect(sendEvent).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        naturalKey: "github:conn-abc:42",
+        action: "created_principal",
+      });
+    });
+
+    it("sends no change event when a re-read stores the values the node held", async () => {
+      // The webhook delivered this record first. The poll reads it again with
+      // the same values, so the node does not change and no trigger fires.
+      mocks.upsertEntityNode.mockResolvedValueOnce({
+        nodeId: "neo4j-existing-node",
+        isNew: false,
+        previousProperties: { ...NORMALIZED.properties },
+      });
+      const sendEvent = vi.fn().mockResolvedValue(undefined);
+      const result = await capturedHandler!({
+        event: { data: BASE_EVENT },
+        step: makeStep({ run: existingNode(), sendEvent }),
+      });
+      expect(mocks.upsertEntityNode).toHaveBeenCalledTimes(1);
+      expect(sendEvent).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ action: "updated_principal" });
+    });
+
+    it("sends entity.updated when a re-read changes a value", async () => {
+      mocks.upsertEntityNode.mockResolvedValueOnce({
+        nodeId: "neo4j-existing-node",
+        isNew: false,
+        previousProperties: { ...NORMALIZED.properties, state: "draft" },
+      });
+      const sendEvent = vi.fn().mockResolvedValue(undefined);
+      await capturedHandler!({
+        event: { data: BASE_EVENT },
+        step: makeStep({ run: existingNode(), sendEvent }),
+      });
+      expect(sendEvent).toHaveBeenCalledWith(
+        "schedule-change-event",
+        expect.objectContaining({ name: "ingestion/entity.updated" }),
+      );
+    });
+
+    it("treats a backfill flag that is not true as a live delivery", async () => {
+      const sendEvent = vi.fn().mockResolvedValue(undefined);
+      await capturedHandler!({
+        event: { data: { ...BASE_EVENT, backfill: "yes" } },
+        step: makeStep({ sendEvent }),
+      });
+      expect(sendEvent).toHaveBeenCalledWith(
+        "schedule-change-event",
+        expect.objectContaining({ name: "ingestion/entity.created" }),
+      );
+    });
+  });
+
   // ── DeliveryConfig enforcement (filters + legacy embedding opt-out) ──
   describe("DeliveryConfig enforcement", () => {
     // Mocks the step-1 JOIN read (entity_type_mappings ⨝ source_connections):

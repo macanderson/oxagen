@@ -67,13 +67,17 @@ function ghHeaders(token: string): Record<string, string> {
   };
 }
 
-/** Yield pages on demand, stopping sorted issue/PR lists at their saved cursor. */
+/**
+ * Yield pages on demand, stopping sorted issue/PR lists at their saved cursor
+ * and after `maxPages` pages.
+ */
 async function* ghListRecords(
   url: string,
   token: string,
   updatedCursor?: string | null,
+  maxPages = Number.POSITIVE_INFINITY,
 ): AsyncIterable<unknown> {
-  for (let page = 1; ; page++) {
+  for (let page = 1; page <= maxPages; page++) {
     const pageUrl = page === 1 ? url : `${url}&page=${page}`;
     const resp = await fetch(pageUrl, {
       headers: ghHeaders(token),
@@ -94,10 +98,51 @@ async function* ghListRecords(
   }
 }
 
-async function ghListPage(url: string, token: string): Promise<unknown[]> {
+async function ghListPage(
+  url: string,
+  token: string,
+  maxPages = Number.POSITIVE_INFINITY,
+): Promise<unknown[]> {
   const rows: unknown[] = [];
-  for await (const row of ghListRecords(url, token)) rows.push(row);
+  for await (const row of ghListRecords(url, token, null, maxPages))
+    rows.push(row);
   return rows;
+}
+
+/**
+ * The repository's default branch, read from GitHub, or null when the
+ * repository is gone or the token cannot see it. A repository with no
+ * default branch throws, so the poll fails and retries rather than guessing
+ * a branch name.
+ */
+async function defaultBranchOf(
+  base: string,
+  token: string,
+): Promise<string | null> {
+  const resp = await fetch(base, {
+    headers: ghHeaders(token),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (resp.status === 404) return null;
+  if (!resp.ok)
+    throw new Error(`github.poll: GitHub API ${resp.status} for ${base}`);
+  const branch = asString(asRecord(await resp.json()).default_branch);
+  if (!branch)
+    throw new Error(`github.poll: ${base} reports no default branch`);
+  return branch;
+}
+
+/**
+ * A commit date as GitHub's REST API writes it: UTC, to the second. A push
+ * delivery writes the same instant with a time zone offset, such as
+ * `2026-06-14T09:00:00-04:00`. Both paths store the UTC form, so one commit
+ * gets one value. A value that is not a date passes through unchanged.
+ */
+function utcSeconds(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const at = new Date(value);
+  if (Number.isNaN(at.getTime())) return value;
+  return at.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
 // Utility functions to safely extract values
@@ -289,10 +334,12 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
       case "commit": {
         const commitObj = asRecord(r["commit"]);
         const authorObj = asRecord(commitObj["author"]);
-        // git_branch may be injected into the raw payload by the caller (e.g. a push
-        // webhook dispatcher or the polling sync that knows the branch it listed commits
-        // from). When present, it is forwarded to the EntityNode as a property so that
-        // trigger conditions can match on `git_branch = 'main'`.
+        // Every path that reads a commit sets git_branch on the raw record: the
+        // push delivery from its ref, and the initial sync and the poll from the
+        // default branch they listed. A commit gets the same properties whichever
+        // path read it, so a poll that reads a commit the webhook already
+        // delivered changes nothing on its node (#5263). A record with no
+        // git_branch gets no git_branch property.
         const gitBranch = asString(r["git_branch"]);
         return {
           externalId:
@@ -307,7 +354,7 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
             message: asString(commitObj["message"]),
             author: asString(authorObj["name"]),
             authorEmail: asString(authorObj["email"]),
-            committedAt: asString(authorObj["date"]),
+            committedAt: utcSeconds(asString(authorObj["date"])),
             url: asString(r["html_url"]),
             ...(gitBranch !== undefined ? { git_branch: gitBranch } : {}),
           },
@@ -478,30 +525,54 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
   // updated records of the requested type and yield those changed since the
   // cursor (the max updated_at from the previous poll). Commits use GitHub's
   // native `since` filter; the rest sort by `updated` desc and stop at cursor.
+  //
+  // A poll with no cursor is the first read after a connection. It reads one
+  // page (the newest 100 records of each list) and marks each record
+  // `backfill`, since those records mostly predate the connection. For a
+  // connection made in the wizard, the initial sync has already read them.
+  // The pipeline sends no trigger change event for a backfill record
+  // (#5263). Reading every page instead would
+  // reach the connection poll's 200-record limit on any busy repository and
+  // fail every poll after it, because the cursor never advances.
   async *poll(auth, config, recordType, cursor): AsyncIterable<RawRecord> {
     const token = githubToken(auth);
     if (!token) return;
     const targets = await pollTargets(config, token);
     const now = new Date().toISOString();
+    const backfill = cursor === null;
+    const maxPages = backfill ? 1 : Number.POSITIVE_INFINITY;
+    const record = (
+      sourceRecordType: string,
+      externalId: string,
+      raw: unknown,
+    ): RawRecord => ({
+      sourceRecordType,
+      externalId,
+      raw,
+      receivedAt: now,
+      ...(backfill ? { backfill: true } : {}),
+    });
 
     for (const { owner, repo } of targets) {
       const base = `https://api.github.com/repos/${owner}/${repo}`;
 
       if (recordType === "commit") {
+        // Read the default branch on every poll: an owner can rename it, and
+        // the poll never assumes `main`. The list names the branch it read,
+        // and each commit carries that branch as `git_branch`, the field a
+        // push delivery sets from its ref (#5263).
+        const branch = await defaultBranchOf(base, token);
+        if (branch === null) continue;
         const sinceQuery = cursor ? `&since=${encodeURIComponent(cursor)}` : "";
         const rows = await ghListPage(
-          `${base}/commits?per_page=100${sinceQuery}`,
+          `${base}/commits?sha=${encodeURIComponent(branch)}&per_page=100${sinceQuery}`,
           token,
+          maxPages,
         );
         for (const raw of rows) {
           const id = (raw as { sha?: string }).sha ?? "";
           if (!id) continue;
-          yield {
-            sourceRecordType: "commit",
-            externalId: id,
-            raw,
-            receivedAt: now,
-          };
+          yield record("commit", id, { ...asRecord(raw), git_branch: branch });
         }
         continue;
       }
@@ -512,6 +583,7 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
           `${base}/${path}?state=all&sort=updated&direction=desc&per_page=100`,
           token,
           cursor,
+          maxPages,
         );
         for await (const raw of rows) {
           const r = raw as {
@@ -521,19 +593,21 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
           };
           // The issues endpoint also returns PRs — drop them here.
           if (recordType === "issue" && r.pull_request !== undefined) continue;
-          yield {
-            sourceRecordType: recordType,
-            externalId: githubRecordIdentity(recordType, asRecord(raw))
-              .externalId,
+          yield record(
+            recordType,
+            githubRecordIdentity(recordType, asRecord(raw)).externalId,
             raw,
-            receivedAt: now,
-          };
+          );
         }
         continue;
       }
 
       if (recordType === "release") {
-        const rows = await ghListPage(`${base}/releases?per_page=100`, token);
+        const rows = await ghListPage(
+          `${base}/releases?per_page=100`,
+          token,
+          maxPages,
+        );
         for (const raw of rows) {
           const r = raw as {
             id?: number;
@@ -542,12 +616,7 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
           };
           const stamp = r.published_at ?? r.created_at;
           if (cursor && stamp && stamp <= cursor) continue;
-          yield {
-            sourceRecordType: "release",
-            externalId: r.id !== undefined ? String(r.id) : "",
-            raw,
-            receivedAt: now,
-          };
+          yield record("release", r.id !== undefined ? String(r.id) : "", raw);
         }
         continue;
       }
@@ -557,12 +626,11 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
         if (!resp.ok) continue;
         const raw = (await resp.json()) as { id?: number; updated_at?: string };
         if (cursor && raw.updated_at && raw.updated_at <= cursor) continue;
-        yield {
-          sourceRecordType: "repository",
-          externalId: raw.id !== undefined ? String(raw.id) : "",
+        yield record(
+          "repository",
+          raw.id !== undefined ? String(raw.id) : "",
           raw,
-          receivedAt: now,
-        };
+        );
         continue;
       }
       // code_review / comment are webhook-only — no poll.

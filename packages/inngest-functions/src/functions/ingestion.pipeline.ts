@@ -6,6 +6,7 @@ import { getConnector } from "@oxagen/ingestion/connectors";
 import { renderEntityText, embedEntity } from "@oxagen/ingestion/embed";
 import { upsertEntityNode } from "@oxagen/ingestion/mutations";
 import { resolveEntity, resolveNaturalKey } from "@oxagen/ingestion/dedup";
+import { changeEventKind } from "@oxagen/ingestion/sync";
 import type { EntityMutation, SourceRef } from "@oxagen/ingestion/types";
 import type { EntityTypeMapping } from "@oxagen/ingestion/pipeline";
 import {
@@ -37,7 +38,8 @@ import { logger } from "../logger";
  * Step 4: upsert-node         MERGE :EntityNode in Neo4j
  * Step 5: embed               embed text and store the vector on the node.
  * Step 6: schedule-change-event  fire ingestion/entity.created or entity.updated
- *                              for downstream trigger matching.
+ *                              for downstream trigger matching, unless the
+ *                              record is backfill or changed nothing.
  *
  * Neither embedding call can fail the run. Steps 3 and 5 both talk to the
  * embedding backend, and an unreachable one used to abort the pipeline before
@@ -70,6 +72,7 @@ export const [ingestionPipeline] = createFunction(
       connectorType,
       sourceRecordType,
       payload,
+      backfill,
     } = event.data as {
       connectionId: string;
       workspaceId: string;
@@ -77,6 +80,7 @@ export const [ingestionPipeline] = createFunction(
       connectorType: string;
       sourceRecordType: string;
       payload: unknown;
+      backfill?: unknown;
     };
 
     // ── Step 1: Normalize, load DeliveryConfig, enforce filters, map ─────────
@@ -433,15 +437,41 @@ export const [ingestionPipeline] = createFunction(
     // ── Step 6: Fire async downstream events ─────────────────────────────────
     // Events are sent in a single step.sendEvent call to keep the step count
     // stable and avoid an extra Inngest checkpoint round-trip.
-    //   - ingestion/entity.created  → consumed by playbook.trigger.match on a
-    //     first-time create (node.created triggers). Always fired for creates.
-    //   - ingestion/entity.updated  → consumed by playbook.trigger.match on an
-    //     update (node.updated triggers). Carries `previousProperties` so
-    //     previous-aware operators (`changed`, X→merged) can fire.
+    //   - ingestion/entity.created  → the feed for node.created triggers, on
+    //     a first-time create.
+    //   - ingestion/entity.updated  → the feed for node.updated triggers, on
+    //     an update. Carries `previousProperties` so previous-aware operators
+    //     (`changed`, X→merged) can fire.
+    // The trigger matcher that read these (`playbook.trigger.match`) left with
+    // the runtime excision (ADR-043). Nothing subscribes today, and these
+    // events stay the one place a trigger can learn of a change.
     // The create-vs-update decision is driven by `dedup.action`, the pipeline's
     // authoritative signal (Pass A hit → updated_principal; brand-new →
-    // created_principal). The entity is in the graph, so automations must see it.
+    // created_principal).
+    //
+    // `changeEventKind` sends nothing for a backfill record (the initial sync,
+    // or the first poll after a connection) and nothing for an update that
+    // changed no property, such as the poll reading a commit the webhook
+    // already delivered. A trigger therefore fires once per change (#5263).
     const isCreate = dedup.action === "created_principal";
+    const kind = changeEventKind({
+      created: isCreate,
+      backfill: backfill === true,
+      properties: mutation.properties,
+      previousProperties,
+    });
+    if (kind === null) {
+      logger.info(
+        {
+          naturalKey: mutation.naturalKey,
+          action: dedup.action,
+          orgId,
+          backfill: backfill === true,
+        },
+        "ingestion-pipeline: done; no change event, since the record is backfill or changed nothing",
+      );
+      return { naturalKey: mutation.naturalKey, action: dedup.action };
+    }
     const changeEvent = isCreate
       ? {
           name: "ingestion/entity.created",

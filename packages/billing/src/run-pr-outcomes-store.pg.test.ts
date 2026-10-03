@@ -13,6 +13,7 @@ import {
   blankOutcome,
   type CommitDelivery,
   type OutcomeRow,
+  outcomeDeliveryOf,
   prKeyOf,
   type PullRequestDelivery,
   withStateRead,
@@ -387,6 +388,35 @@ describe.skipIf(!enabled)("run_pr_outcomes writes against Postgres", () => {
       expect(await applyOutcomeDelivery(scope, commit)).toEqual({ rows: 0, reverted: 0 });
       expect((await stored(runId))?.reverted).toBe(false);
       expect((await kept()).some((e) => e.mergeCommitSha === sha)).toBe(false);
+    });
+
+    it("marks a pull request merged into the default branch by a revert commit the poll read (#5263)", async () => {
+      const runId = `tse_${tag}i9`;
+      const sha = "5".repeat(40);
+      const revertSha = "6".repeat(40);
+      await saveOutcomeRows(scope, [merged(runId, 56, "trunk", sha)]);
+      // The commit as the poll hands it on: GitHub's list-commits row plus
+      // the default branch the poll listed.
+      const commit = outcomeDeliveryOf(
+        "commit",
+        {
+          sha: revertSha,
+          html_url: `https://github.com/acme/app${tag}/commit/${revertSha}`,
+          commit: {
+            message: `Revert "Add w"\n\nThis reverts commit ${sha}.`,
+            author: { name: "a", email: "a@example.com", date: "2026-09-27T11:30:00Z" },
+            committer: { name: "a", email: "a@example.com", date: "2026-09-27T11:30:00Z" },
+          },
+          git_branch: "trunk",
+        },
+        at("2026-09-27T11:31:00Z"),
+      );
+      if (commit === null) throw new Error("fixture did not parse");
+      expect(await applyOutcomeDelivery(scope, commit)).toEqual({ rows: 0, reverted: 1 });
+      expect(await stored(runId)).toMatchObject({
+        reverted: true,
+        revertedBy: `github:acme/app${tag}@${revertSha}`,
+      });
     });
   });
 

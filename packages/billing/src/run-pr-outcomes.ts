@@ -418,12 +418,15 @@ export interface PullRequestDelivery extends PrStateRead {
   body: string | null;
 }
 
-/** One pushed commit, reduced to what a revert needs. */
+/** One commit, pushed or polled, reduced to what a revert needs. */
 export interface CommitDelivery {
   kind: "commit";
   repository: string;
   sha: string;
-  /** The branch the push landed on, when the connector recorded it. */
+  /**
+   * The branch the commit landed on: the push's branch, or the default branch
+   * the initial sync or the poll listed. Null when the record carries none.
+   */
   branch: string | null;
   message: string;
   at: Date | null;
@@ -578,9 +581,10 @@ export function mergedPullRequestRevertPlan(
  * The reverts a delivery records, or null. A pull request reverts only once
  * it merges: an open revert that is closed unmerged reverted nothing. A
  * pushed commit reverts only on the branch it was pushed to, so a commit with
- * no branch records nothing. The push delivery always carries the branch. The
- * incremental GitHub poll records none, so a revert commit Oxagen sees only
- * through the poll, after a missed push delivery, marks no row.
+ * no branch records nothing. Every GitHub path sets the branch: the push
+ * delivery from its ref, and the initial sync and the incremental poll from
+ * the default branch they list. A revert commit Oxagen sees only through the
+ * poll, after a missed push delivery, marks its row as a push would (#5263).
  */
 export function revertPlanOf(delivery: OutcomeDelivery): RevertPlan | null {
   if (delivery.kind === "pull_request") {
