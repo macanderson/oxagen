@@ -4,6 +4,7 @@ import { app } from "./app";
 import { bootstrap } from "./bootstrap";
 import { apiAdmission } from "./middleware/admission";
 import { logger } from "./middleware/logger";
+import { drainOnSignal } from "./shutdown";
 
 // Local / self-hosted entrypoint: a long-running Node server (tsx in dev).
 // On Vercel the same Hono `app` is served as a serverless function — see
@@ -34,7 +35,7 @@ async function main(): Promise<void> {
   // only control — but the control that fails open is the one worth having.
   const hostname = process.env.HOST ?? process.env.HOSTNAME ?? "127.0.0.1";
 
-  serve(
+  const server = serve(
     {
       fetch: app.fetch,
       port,
@@ -45,6 +46,9 @@ async function main(): Promise<void> {
       logger.info({ port: info.port, hostname }, "api listening");
     },
   );
+  // A deploy sends SIGTERM and starts the next release on this port, so the
+  // port closes at once and the requests in progress finish (#5318).
+  drainOnSignal(server, logger);
   const metrics = setInterval(() => {
     logger.info({ event: "resource_budget", ...apiAdmission.snapshot() }, "api resource budget");
   }, 30_000);
