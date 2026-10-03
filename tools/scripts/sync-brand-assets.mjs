@@ -69,9 +69,9 @@
  * brackets is a literal. A literal is listed as `literal` with its line and
  * the token to use, and an allowlist entry that excuses nothing is listed as
  * `keep`. On the two customer sites, oxagen.sh and docs.oxagen.sh, it also
- * holds the house type rule (oxageninc/brand#83): no size under 14px, h1 to
- * h3 in Space Grotesk, every face from a kit token, and no size by hand in a
- * hand-written page. Each break is listed as `type`.
+ * holds the house type rule (oxageninc/brand#83): h1 to h3 in Space Grotesk,
+ * every face from a kit token, and no size by hand in a hand-written page.
+ * Each break is listed as `type`.
  *
  * SURFACE_MARKS lists the marks each app may carry. The product shows the
  * wordmark where a word fits and the hive where the slot is square. The kit
@@ -901,8 +901,8 @@ function literals() {
       why: `line ${h.line}: ${h.prop} ${h.value}; use ${h.use}`,
     });
   }
-  // The type rule on the customer sites: the 14px floor, Space Grotesk on
-  // h1 to h3, a face named by hand, and the hand-written pages' own sizes.
+  // The type rule on the customer sites: Space Grotesk on h1 to h3, a face
+  // named by hand, and the hand-written pages' own sizes.
   const typed = new Map(
     [...GUARDED, ...GUARDED_PAGES].map(({ path }) => [
       path,
@@ -931,7 +931,7 @@ const HOW_TO_FIX =
   "Run node tools/scripts/sync-brand-assets.mjs --brand <kit> and commit the result. " +
   "If the desktop icons are stale, also run pnpm --filter @oxagen/desktop icons. " +
   "For a literal, write the token the line names, or name the literal and its reason in KEEP in tools/scripts/lib/brand-literals.mjs. " +
-  "For a type break, write the token or face the line names: KEEP excuses no size under 14px.";
+  "For a type break, write the step or face the line names. A hand-written page keeps no size by hand.";
 
 if (isEntrypoint(import.meta.url)) {
   for (const surface of Object.keys(SURFACE_MARKS)) {

@@ -138,10 +138,10 @@
   --font: var(--ox-font);
   --mono: var(--ox-font-mono);
   /* The type ramp of oxagen.sh (assets/oxagen.css), which this page does not
-     link. No step is under 14px. Body copy is the kit's marketing body. */
+     link. Every step follows the kit's marketing base (--ox-m-body). */
   --fs-micro: var(--ox-m-micro);
-  --fs-ui: calc(var(--ox-m-micro) * 15 / 14);
-  --fs-small: calc(var(--ox-m-micro) * 8 / 7);
+  --fs-ui: calc(var(--ox-m-body) * 15 / 16);
+  --fs-small: var(--ox-m-body);
   --fs-lead: calc(var(--ox-m-body) * 9 / 8);
   --fs-card: var(--ox-m-h4);
   --radius: var(--ox-radius); --wrap: var(--ox-wrap);
@@ -222,11 +222,12 @@ section.hero { border-top: 0; padding-block: 64px 40px; }
 .hive-svg .cell:hover path { stroke: var(--muted); }
 /* A chart's text scales with its drawing, so each chart carries --u, its
    drawing units per screen pixel, which the script below keeps current. Its
-   labels multiply the type step by it, and so read 14px at any width. */
+   labels multiply the type step by it, and so read at the step's own size at
+   any width. */
 .hive-svg text { fill: var(--muted); font-family: var(--font); font-size: calc(var(--fs-micro) * var(--u, 1)); }
 .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 14px; }
 .controls input[type=range] { flex: 1 1 220px; accent-color: var(--fg); }
-button { font-family: var(--font); font-size: var(--fs-micro); border-radius: 8px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--rule); background: transparent; color: var(--fg); }
+button { font-family: var(--font); font-size: var(--fs-ui); border-radius: 8px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--rule); background: transparent; color: var(--fg); }
 button:hover { background: var(--hl); }
 button.gold { background: var(--gold); color: var(--on-gold); border-color: var(--gold); font-weight: 600; min-width: 132px; }
 button.gold:hover { background: var(--gold-hover); }
@@ -244,7 +245,7 @@ button.gold:hover { background: var(--gold-hover); }
 .areakey em { display: block; font-style: normal; color: var(--muted); font-size: var(--fs-micro); line-height: 1.5; }
 .areakey .n { font-family: var(--mono); font-size: var(--fs-micro); color: var(--muted); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-.chip { font-size: var(--fs-micro); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--rule); background: transparent; color: var(--body); }
+.chip { font-size: var(--fs-ui); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--rule); background: transparent; color: var(--body); }
 .chip[aria-pressed="true"] { background: var(--fg); color: var(--ink); border-color: var(--fg); }
 
 .reader { border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); padding: 20px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 32px; min-height: 330px; align-content: start; }
@@ -271,7 +272,7 @@ button.gold:hover { background: var(--gold-hover); }
 .chapter:first-child { border-top: 0; }
 @media (max-width: 700px) { .chapter { grid-template-columns: 1fr; gap: 8px; } }
 .chapter .when { font-family: var(--mono); font-size: var(--fs-micro); color: var(--muted); padding-top: 6px; }
-.chapter .when button { margin-top: 10px; font-size: var(--fs-micro); padding: 5px 10px; }
+.chapter .when button { margin-top: 10px; font-size: var(--fs-ui); padding: 5px 10px; }
 .chapter p { color: var(--body); margin-top: 8px; }
 .chapter blockquote { margin: 12px 0 0; font-family: var(--mono); font-size: var(--fs-micro); color: var(--fg); border-left: 2px solid var(--rule); padding-left: 12px; max-width: 70ch; }
 
@@ -335,7 +336,7 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
 .bio .who { font-family: var(--font); font-size: var(--fs-lead); font-weight: 600; color: var(--fg); margin: 0 0 6px; }
 .bio p { margin: 0 0 10px; color: var(--muted); font-size: var(--fs-ui); max-width: 62ch; }
 .bio .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.bio .links a { display: inline-flex; align-items: center; gap: 7px; font-size: var(--fs-micro); color: var(--body); text-decoration: none; border: 1px solid var(--border); border-radius: 8px; padding: 6px 11px; transition: border-color .15s, color .15s; }
+.bio .links a { display: inline-flex; align-items: center; gap: 7px; font-size: var(--fs-ui); color: var(--body); text-decoration: none; border: 1px solid var(--border); border-radius: 8px; padding: 6px 11px; transition: border-color .15s, color .15s; }
 .bio .links a:hover { border-color: var(--rule); color: var(--fg); }
 .bio .links svg { width: 14px; height: 14px; fill: currentColor; opacity: .75; }
 @media (max-width: 720px) {
@@ -900,8 +901,8 @@ $('#beliefList').innerHTML = BELIEFS.map(b => `<div class="belief"><h4>${b.name}
 // Chart labels: an SVG scales its text with its drawing, so a label drawn
 // at 14 units reads 7px when a phone shrinks the chart to half size. Each
 // chart sets --u, its drawing units per screen pixel, and the stylesheet
-// multiplies the type step by it, so every label reads 14px, the house floor
-// (Mac, 2026-10-02, oxageninc/brand#83).
+// multiplies the type step by it, so every label reads at the step's own
+// size (Mac, 2026-10-02, oxageninc/brand#83).
 {
   const charts = ['#hiveSvg', '#moodSvg', '#clockSvg', '#engineSvg'].map(q => $(q));
   const fit = c => { const px = c.getBoundingClientRect().width; if (px > 0 && c.viewBox.baseVal.width) c.style.setProperty('--u', String(c.viewBox.baseVal.width / px)); };

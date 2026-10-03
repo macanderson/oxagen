@@ -214,7 +214,7 @@
 }
 .doc code {
   font-family: var(--font-mono);
-  font-size: max(var(--fs-micro), 0.88em);
+  font-size: 0.88em;
   padding: 1px 5px;
   border: 1px solid var(--line);
   border-radius: var(--ox-radius-sm);

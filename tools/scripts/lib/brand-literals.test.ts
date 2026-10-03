@@ -3,7 +3,6 @@
 // sync-brand-assets.tree.test.ts runs the guard over the live stylesheets.
 import { describe, expect, it } from "vitest";
 import {
-  FLOOR_PX,
   GUARDED,
   GUARDED_MARKUP,
   GUARDED_PAGES,
@@ -17,7 +16,6 @@ import {
   layers,
   literalDrift,
   markupDrift,
-  minPx,
   pageCss,
   rules,
   shorthandFamily,
@@ -382,7 +380,7 @@ describe("the docs markup", () => {
     const src =
       `const a = "text-[13.5px] rounded-[8px] rounded-tl-[0.5rem] shadow-[0_1px_2px_red] text-[0.9em] rounded-[999px] shadow-[0_0_0_1px_red]";`;
     expect(drift(src).map((h) => [h.value, h.use])).toEqual([
-      ["text-[13.5px]", "var(--ox-a-body) (14px) or larger: no text is under 14px"],
+      ["text-[13.5px]", "var(--ox-a-body) (14px)"],
       ["rounded-[8px]", "var(--ox-radius-lg) (7.2px)"],
       ["rounded-tl-[0.5rem]", "var(--ox-radius-lg) (7.2px)"],
       ["shadow-[0_1px_2px_red]", expect.stringContaining("var(--ox-shadow-pop)")],
@@ -413,9 +411,9 @@ describe("the docs markup", () => {
     }
   });
 
-  // oxageninc/brand#83: the landing pages keep Tailwind's steps, which are
-  // 14px and up, and are held to the bracket rule and the floor.
-  it("holds a brackets entry to the bracket rule and the 14px floor only", () => {
+  // oxageninc/brand#83: the landing pages keep Tailwind's steps, which the
+  // kit maps to its own, and are held to the bracket rule only.
+  it("holds a brackets entry to the bracket rule only", () => {
     const hits = markupDrift(
       new Map([
         [
@@ -425,8 +423,7 @@ describe("the docs markup", () => {
       ]),
       { tokens: TYPE_TOKENS, guarded: [{ path: "landing.tsx", scale: "a", brackets: true }] },
     );
-    expect(hits.map((h) => h.value)).toEqual(["text-[11px]", "text-[0.8em]"]);
-    for (const h of hits) expect(h.use).toContain(`no text is under ${FLOOR_PX}px`);
+    expect(hits.map((h) => [h.value, h.use])).toEqual([["text-[11px]", "var(--ox-a-body) (14px)"]]);
   });
 });
 
@@ -499,46 +496,6 @@ describe("the type rule: reading a page", () => {
   });
 });
 
-describe("the type rule: computing a size", () => {
-  const vars = customProperties([
-    TYPE_TOKENS,
-    ":root { --docs-step: calc(8 / 7); --fs-micro: var(--ox-m-micro); --two: 15px; }",
-    ".x { --two: 13px; }",
-  ]);
-
-  it.each([
-    ["var(--ox-m-micro)", 14],
-    ["calc(var(--ox-a-body) * var(--docs-step))", 16],
-    ["clamp(var(--ox-m-h3), 4vw, var(--ox-m-h2))", 28],
-    ["max(var(--fs-micro), 0.8em)", 14],
-    ["0.8em", 12.8],
-    ["87.5%", 14],
-    ["var(--missing, 13px)", 13],
-    ["var(--two)", 13],
-    ["calc((14px + 2px) * 1)", 16],
-    ["calc(20px + -4px)", 16],
-    ["calc(20px - 4px)", 16],
-  ])("computes %s as %spx", (value, px) => {
-    expect(minPx(value, vars)).toBeCloseTo(px);
-  });
-
-  it.each([
-    "min(14px, 2vw)",
-    "12vw",
-    "max(var(--missing), 0.8em)",
-    "inherit",
-    "calc(14px / 2px)",
-    "calc(14px + 2)",
-    "calc(14px / 0)",
-  ])("cannot tell %s, and so passes it", (value) => {
-    expect(minPx(value, vars)).toBeNull();
-  });
-
-  it("stops at a property that reads itself", () => {
-    expect(minPx("var(--loop)", new Map([["--loop", ["var(--loop)"]]]))).toBeNull();
-  });
-});
-
 describe("the type rule: the heading face", () => {
   it.each([
     ["var(--ox-font-display)", true],
@@ -566,16 +523,14 @@ describe("the type rule on the customer sites", () => {
   const pages = [
     { path: "page.html", scale: "m" as const, site: "web" as const, with: ["site.css"] },
   ];
-  const floor = "var(--ox-m-micro) (14px) or a larger step: no text on a customer site is under 14px";
-
-  it("lists every size under the floor, a face named by hand, a size by hand in a page, and a heading in the wrong face", () => {
+  it("lists a face named by hand, a size by hand in a page, and a heading in the wrong face", () => {
     const files = new Map([
       [
         "site.css",
         [
-          ":root { --fs-micro: var(--ox-m-micro); --fs-bad: calc(var(--ox-m-micro) * 0.8); }",
+          ":root { --fs-micro: var(--ox-m-micro); --fs-tiny: calc(var(--ox-m-micro) * 0.8); }",
           "h1, h2, h3 { font-family: var(--ox-font-display); }",
-          ".tag { font-size: var(--fs-bad); }",
+          ".tag { font-size: var(--fs-tiny); }",
           ".code { font-family: ui-monospace, monospace; }",
           '@font-face { font-family: "Aeonik"; src: url(x); }',
         ].join("\n"),
@@ -595,8 +550,6 @@ describe("the type rule on the customer sites", () => {
       ],
     ]);
     expect(typeDrift(files, { tokens: TYPE_TOKENS, guarded, pages })).toEqual([
-      { path: "site.css", line: 1, prop: "--fs-bad", value: "calc(var(--ox-m-micro) * 0.8)", use: floor },
-      { path: "site.css", line: 3, prop: "font-size", value: "var(--fs-bad)", use: floor },
       {
         path: "site.css",
         line: 4,
@@ -605,8 +558,8 @@ describe("the type rule on the customer sites", () => {
         use: expect.stringContaining("var(--ox-font-mono) for code"),
       },
       { path: "page.html", line: 3, prop: "font-size", value: "15px", use: "var(--ox-m-body) (16px)" },
-      { path: "page.html", line: 6, prop: "font-size", value: "12px", use: floor },
-      { path: "page.html", line: 7, prop: "font-size", value: "11px", use: floor },
+      { path: "page.html", line: 6, prop: "font-size", value: "12px", use: "var(--ox-m-micro) (14px)" },
+      { path: "page.html", line: 7, prop: "font-size", value: "11px", use: "var(--ox-m-micro) (14px)" },
       {
         path: "page.html",
         line: 4,
@@ -650,7 +603,6 @@ describe("the type rule on the customer sites", () => {
   });
 
   it("guards the two customer sites, every page with the stylesheets it links", () => {
-    expect(FLOOR_PX).toBe(14);
     const sheets = new Set(GUARDED.map((g) => g.path));
     for (const g of GUARDED.filter((x) => x.site)) {
       expect(/^apps\/(web|docs)\//.test(g.path), g.path).toBe(true);
@@ -665,6 +617,13 @@ describe("the type rule on the customer sites", () => {
       // A page either links the site stylesheet or sets its own heading face.
       expect(Boolean(p.faces) !== Boolean(p.with?.length), p.path).toBe(true);
       for (const w of p.with ?? []) expect(sheets.has(w), w).toBe(true);
+    }
+  });
+
+  it("keeps no font size by hand on a customer site", () => {
+    for (const g of GUARDED.filter((x) => x.site)) {
+      const sizes = (KEEP[g.path] ?? []).filter((entry) => entry.prop === "font-size");
+      expect(sizes, g.path).toEqual([]);
     }
   });
 });

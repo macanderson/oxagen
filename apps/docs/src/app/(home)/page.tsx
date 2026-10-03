@@ -112,7 +112,7 @@ export default function HomePage(): ReactNode {
               skills. Inspect its recorded work in Oxagen. These docs cover the
               CLI, REST API, and MCP surfaces whose capability calls pass
               through the{" "}
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.9em]">
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 invoke()
               </code>{" "}
               boundary.

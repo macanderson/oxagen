@@ -398,8 +398,8 @@ describe("a sync and a check against a kit", () => {
     expect(fixed.status, fixed.stderr).toBe(0);
   });
 
-  // oxageninc/brand#83: a customer page sets no size by hand, none under
-  // 14px, and h1 to h3 in Space Grotesk.
+  // oxageninc/brand#83: a customer page sets no size by hand, and sets h1 to
+  // h3 in Space Grotesk.
   it("fails a check on a type break in a customer page, naming the line, until it reads a token", () => {
     sync();
     stampDesktop();
@@ -409,9 +409,9 @@ describe("a sync and a check against a kit", () => {
     const broken = sync("--check");
     expect(broken.status).toBe(1);
     expect(broken.stderr).toMatch(
-      /type\s+apps\/web\/story\/index\.html \(line \d+: font-size: 12px; use .*no text on a customer site is under 14px/,
+      /type\s+apps\/web\/story\/index\.html \(line \d+: font-size: 12px; use an --ox-m-\* step\)/,
     );
-    expect(broken.stderr).toContain("KEEP excuses no size under 14px");
+    expect(broken.stderr).toContain("A hand-written page keeps no size by hand.");
     put(repo(), page, head.replace("</head>", "<style>\n.tag { font-size: var(--ox-m-micro); }\n</style>\n</head>"));
     const fixed = sync("--check");
     expect(fixed.status, fixed.stderr).toBe(0);

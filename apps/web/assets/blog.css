@@ -80,7 +80,7 @@
 }
 .pillar-card p {
   color: var(--ink-3);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-small);
   line-height: 1.45;
 }
 .pillar-count {
@@ -394,7 +394,7 @@
   margin: 0;
   padding-left: 18px;
   color: var(--ink-2);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-ui);
   line-height: 1.5;
 }
 .toc li + li {
@@ -470,7 +470,7 @@
 }
 .prose code {
   font-family: var(--font-mono);
-  font-size: max(var(--fs-micro), 0.86em);
+  font-size: 0.86em;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--r);

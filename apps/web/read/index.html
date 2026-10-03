@@ -141,10 +141,10 @@
   --font-heading:var(--ox-font-display);
   --font-wordmark:var(--ox-font-wordmark);
   /* The type ramp of oxagen.sh (assets/oxagen.css), which this page does not
-     link. No step is under 14px. Body copy is the kit's marketing body. */
+     link. Every step follows the kit's marketing base (--ox-m-body). */
   --fs-micro:var(--ox-m-micro);
-  --fs-ui:calc(var(--ox-m-micro) * 15 / 14);
-  --fs-small:calc(var(--ox-m-micro) * 8 / 7);
+  --fs-ui:calc(var(--ox-m-body) * 15 / 16);
+  --fs-small:var(--ox-m-body);
   --fs-lead:calc(var(--ox-m-body) * 9 / 8);
   --fs-card:var(--ox-m-h4);
   --on-gold:var(--ox-ink);
@@ -299,7 +299,7 @@ main{flex:1;position:relative}
 @media (max-width:520px){.f-row{grid-template-columns:1fr}}
 .field{display:grid;gap:6px}
 .field.full{grid-column:1/-1}
-.field label{font-size:var(--fs-micro);color:var(--ink-soft);font-weight:500}
+.field label{font-size:var(--fs-ui);color:var(--ink-soft);font-weight:500}
 .field label .opt{color:var(--muted);font-weight:400}
 .field input,.field select,.field textarea{
   background:var(--surface);border:1px solid var(--line-strong);border-radius:2px;
@@ -325,7 +325,7 @@ main{flex:1;position:relative}
 
 /* edition chooser */
 .edition-pick{border:0;padding:0;margin:0;display:grid;gap:10px}
-.edition-pick legend{font-size:var(--fs-micro);color:var(--ink-soft);font-weight:500;padding:0;margin-bottom:2px}
+.edition-pick legend{font-size:var(--fs-ui);color:var(--ink-soft);font-weight:500;padding:0;margin-bottom:2px}
 .edition-opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media (max-width:520px){.edition-opts{grid-template-columns:1fr}}
 .edition-opt{

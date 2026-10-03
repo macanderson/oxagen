@@ -111,20 +111,20 @@
   /* The header island floats 12px below the top and stands 56px tall; the
      page clears it with this. */
   --nav-h: 76px;
-  /* The site's type ramp, built on the kit's marketing scale so a theme edit
-     still reaches it. No step is under 14px, the house floor, and no rule on
-     this site writes a size of its own (Mac, 2026-10-02, oxageninc/brand#83).
-     Body copy is the scale's body (16px). A lead under a heading, a card
-     title, and a step's name are 18px. Secondary copy (cards, steps, lists,
-     tables) is 16px, as is the top-level navigation. Labels and controls are
-     15px. The scale's micro step (14px) sets captions, notes, tags, eyebrows,
-     table heads, and figure labels, which stand apart by case, tracking,
-     weight, or colour, never by a smaller size. A card heading is the scale's
+  /* The site's type ramp, built on the kit's marketing scale, so a change to
+     the scale's base in the kit reaches every size here. No rule on this site
+     writes a size of its own (Mac, 2026-10-02, oxageninc/brand#83). Body copy
+     is the scale's body, its base (16px by default). Secondary copy (cards,
+     steps, lists, tables) and the top-level navigation take the base too.
+     Labels and controls are one step under it (15px), and a lead under a
+     heading, a card title, and a step's name one step over it (18px). The
+     scale's micro step (14px by default) sets captions, notes, tags,
+     eyebrows, table heads, and figure labels. A card heading is the scale's
      h4 (20px), and a section heading tops out at 1.2 times its h2 (48px). */
   --fs-micro: var(--ox-m-micro);
-  --fs-ui: calc(var(--ox-m-micro) * 15 / 14);
-  --fs-small: calc(var(--ox-m-micro) * 8 / 7);
-  --fs-nav: calc(var(--ox-m-micro) * 8 / 7);
+  --fs-ui: calc(var(--ox-m-body) * 15 / 16);
+  --fs-small: var(--ox-m-body);
+  --fs-nav: var(--ox-m-body);
   --fs-lead: calc(var(--ox-m-body) * 9 / 8);
   --fs-card: var(--ox-m-h4);
   --fs-sec: clamp(var(--ox-m-h3), 4.2vw, calc(var(--ox-m-h2) * 1.2));
@@ -829,7 +829,7 @@ h2 .gold,
 }
 .ext::after {
   content: "↗";
-  font-size: max(var(--fs-micro), 0.8em);
+  font-size: 0.8em;
   color: var(--faint);
   margin-left: 3px;
 }
@@ -1204,7 +1204,7 @@ html:not(.js) .nav-item:is(:hover, :focus-within) > .menu {
   padding: 10px 6px 0 10px;
   border-top: 1px solid var(--line);
   color: var(--ink-3);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-ui);
 }
 .dd-row > a:hover {
   color: var(--ink);

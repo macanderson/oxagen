@@ -155,9 +155,9 @@ Never put `--` before the filename. Each build module has a co-located
   option. All of them are cached immutable for a year. Mac set the rule on
   2026-10-02 (oxageninc/brand#83): Space Grotesk sets every h1, h2, and h3,
   and the wordmark when it is text rather than an SVG. Aeonik sets h4 to h6
-  and all other text. Monaspace Neon sets code, data, and figures. No text
-  is under 14px, and every size reads the site's ramp in
-  `assets/oxagen.css`, which reads the kit's marketing scale. Aeonik Mono
+  and all other text. Monaspace Neon sets code, data, and figures. Every
+  size reads the site's ramp in `assets/oxagen.css`, whose steps follow the
+  kit's marketing base, so no page writes a size of its own. Aeonik Mono
   and Aeonik Fono load, and no rule names them yet. A page preloads only the
   faces its first screen draws.
 - `favicon.svg`: the hive, the kit's Oxagen icon: six hexagonal cells, four

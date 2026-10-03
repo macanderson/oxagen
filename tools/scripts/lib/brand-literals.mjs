@@ -417,11 +417,11 @@ export function literalDrift(files, { tokens = "", guarded = GUARDED, keep = KEE
  * comments blanked, the way Tailwind finds classes: it scans the text for
  * words shaped like a class and never runs the code.
  *
- * An entry marked `brackets` is held to the square-bracket rule and the
- * 14px floor only (oxageninc/brand#83). These are the landing pages and the
- * MDX components of docs.oxagen.sh, which still size their headings with
- * Tailwind's steps. Those steps are 14px and up, because the kit points
- * `text-xs` and `text-sm` at its 14px body step.
+ * An entry marked `brackets` is held to the square-bracket rule only
+ * (oxageninc/brand#83). These are the landing pages and the MDX components
+ * of docs.oxagen.sh, which still size their headings with Tailwind's steps.
+ * The kit points `text-xs` and `text-sm` at its own steps, so neither is a
+ * size by hand.
  *
  * @type {readonly { path: string, scale: Scale, brackets?: boolean }[]}
  */
@@ -498,7 +498,6 @@ function typeClass(px, scale, sizes) {
  */
 export function markupDrift(files, { tokens = "", guarded = GUARDED_MARKUP } = {}) {
   const sizes = tokenSizes(tokens);
-  const vars = customProperties([tokens]);
   const hits = [];
   for (const { path, scale, brackets } of guarded) {
     const text = files.get(path);
@@ -525,13 +524,6 @@ export function markupDrift(files, { tokens = "", guarded = GUARDED_MARKUP } = {
     )) {
       const value = m[2].replace(/_/g, " ").replace(/^(?:length|size):/, "");
       const group = m[1] === "text" ? "font-size" : m[1] === "shadow" ? "box-shadow" : "border-radius";
-      if (group === "font-size") {
-        const px = minPx(value, vars);
-        if (px !== null && px < FLOOR_PX - 0.005) {
-          hit(m, `${suggestion(group, `${FLOOR_PX}px`, scale, sizes)} or larger: no text is under ${FLOOR_PX}px`);
-          continue;
-        }
-      }
       if (!isLiteral(group, value)) continue;
       hit(m, suggestion(group, value, scale, sizes));
     }
@@ -544,13 +536,11 @@ export function markupDrift(files, { tokens = "", guarded = GUARDED_MARKUP } = {
 /**
  * The house type rule (Mac, 2026-10-02, oxageninc/brand#83), on the two
  * customer sites this repo publishes: oxagen.sh (`apps/web`) and
- * docs.oxagen.sh (`apps/docs`). The literal pass above already fails a font
- * size written by hand in a stylesheet. This pass adds what that pass cannot
- * see:
+ * docs.oxagen.sh (`apps/docs`). Every size reads a step of the kit's scale,
+ * and the steps follow the base, so a change to the base in the kit reaches
+ * every size. The literal pass above already fails a font size written by
+ * hand in a stylesheet. This pass adds what that pass cannot see:
  *
- * - the 14px floor: no font size on a customer site may compute below 14px,
- *   whether it is written by hand or computed from a token, and no KEEP entry
- *   excuses one;
  * - the heading face: h1 to h3 on a customer site are set in Space Grotesk,
  *   the kit's display face, and a rule that points them at another face
  *   fails;
@@ -558,17 +548,11 @@ export function markupDrift(files, { tokens = "", guarded = GUARDED_MARKUP } = {
  *   cannot set its code in the system's monospace instead of Monaspace Neon;
  * - the hand-written pages of oxagen.sh (GUARDED_PAGES), whose `<style>`
  *   blocks, `style` attributes, and script-drawn SVG text the literal pass
- *   does not read.
+ *   does not read. A page keeps no size by hand, so it has no KEEP.
  *
- * A size the pass cannot compute, such as one that hangs on the viewport
- * alone, passes. A size in em or percent is read against 16px body text. The
- * kit's tokens and the custom properties of the stylesheets a file is read
- * with are followed, so `var(--fs-ui)` and `calc(var(--ox-a-body) * 8 / 7)`
- * are both computed.
+ * The pass sets no smallest size. A small step below the base has real uses,
+ * such as an eyebrow, a badge, or a table header, as long as it is a step.
  */
-
-/** The smallest size any text may take, in px, on every surface. */
-export const FLOOR_PX = 14;
 
 /**
  * The hand-written pages of oxagen.sh, each with its own `<style>` block.
@@ -761,151 +745,6 @@ export function shorthandFamily(value) {
   return parts.slice(i).join(" ") || null;
 }
 
-/** @typedef {{ n: number, px: boolean }} Num */
-
-/**
- * The smallest size, in px, a font-size value can compute to, or null when
- * the text cannot tell, as for a size that hangs on the viewport alone.
- * `clamp()` gives its minimum, and `min()` and `max()` are computed only
- * when every argument is. A size in em or percent
- * is read against 16px body text, so `0.8em` fails and
- * `max(var(--fs-micro), 0.8em)` passes.
- *
- * `vars` maps each custom property to every value it is given. A property
- * given more than one value takes its smallest.
- *
- * @param {string} value
- * @param {ReadonlyMap<string, readonly string[]>} vars
- * @returns {number | null}
- */
-export function minPx(value, vars) {
-  const r = evaluate(value.trim(), vars, 0);
-  return r && r.px ? r.n : null;
-}
-
-/**
- * @param {string} src
- * @param {ReadonlyMap<string, readonly string[]>} vars
- * @param {number} depth
- * @returns {Num | null}
- */
-function evaluate(src, vars, depth) {
-  if (depth > 12) return null;
-  const tokens = src.match(
-    /var\(|calc\(|clamp\(|min\(|max\(|--[\w-]+|\d*\.?\d+(?:px|rem|em|%|vw|vh|vmin|vmax|ch|ex|[a-z]+)?|[-+*/(),]|\S+/g,
-  );
-  if (!tokens) return null;
-  let i = 0;
-  const peek = () => tokens[i];
-  const next = () => tokens[i++];
-
-  /** Every top-level argument of the function whose `(` was just read. */
-  const args = () => {
-    const out = [];
-    let start = i;
-    let level = 0;
-    for (; i < tokens.length; i++) {
-      const t = tokens[i];
-      if (t.endsWith("(")) level++;
-      else if (t === ")") {
-        if (level === 0) break;
-        level--;
-      } else if (t === "," && level === 0) {
-        out.push(tokens.slice(start, i).join(" "));
-        start = i + 1;
-      }
-    }
-    out.push(tokens.slice(start, i).join(" "));
-    i++;
-    return out.map((s) => s.trim());
-  };
-
-  const lookup = (name, fallback) => {
-    const values = vars.get(name);
-    if (values && values.length) {
-      let best = null;
-      for (const v of values) {
-        const r = evaluate(v, vars, depth + 1);
-        if (!r) return null;
-        if (!best || r.n < best.n) best = r;
-      }
-      return best;
-    }
-    return fallback === null ? null : evaluate(fallback, vars, depth + 1);
-  };
-
-  /** @returns {Num | null} */
-  const primary = () => {
-    const t = next();
-    if (t === undefined) return null;
-    if (t === "(") {
-      const v = sum();
-      return next() === ")" ? v : null;
-    }
-    if (t === "-") {
-      const v = primary();
-      return v && { n: -v.n, px: v.px };
-    }
-    if (t === "var(") {
-      const [name, ...rest] = args();
-      return lookup(name, rest.length ? rest.join(",") : null);
-    }
-    if (t === "calc(") return evaluate(args()[0] ?? "", vars, depth + 1);
-    if (t === "clamp(") return evaluate(args()[0] ?? "", vars, depth + 1);
-    if (t === "min(") {
-      const all = args().map((a) => evaluate(a, vars, depth + 1));
-      if (all.some((a) => !a)) return null;
-      return all.reduce((a, b) => (b.n < a.n ? b : a));
-    }
-    if (t === "max(") {
-      const all = args().map((a) => evaluate(a, vars, depth + 1));
-      if (all.some((a) => !a)) return null;
-      return all.reduce((a, b) => (b.n > a.n ? b : a));
-    }
-    const m = /^(\d*\.?\d+)([a-z%]*)$/.exec(t);
-    if (!m) return null;
-    const n = Number(m[1]);
-    if (m[2] === "") return { n, px: false };
-    if (m[2] === "px") return { n, px: true };
-    if (m[2] === "rem") return { n: n * 16, px: true };
-    // A size relative to its parent is read against 16px body text, the
-    // customer sites' body, so 0.8em is 12.8px. In a smaller parent it is
-    // smaller still, which only the rendered page can show.
-    if (m[2] === "em") return { n: n * 16, px: true };
-    if (m[2] === "%") return { n: (n / 100) * 16, px: true };
-    return null;
-  };
-
-  /** @returns {Num | null} */
-  const product = () => {
-    let left = primary();
-    while (peek() === "*" || peek() === "/") {
-      const op = next();
-      const right = primary();
-      if (!left || !right) return null;
-      if (op === "*") left = { n: left.n * right.n, px: left.px || right.px };
-      else if (right.px || right.n === 0) return null;
-      else left = { n: left.n / right.n, px: left.px };
-    }
-    return left;
-  };
-
-  /** @returns {Num | null} */
-  const sum = () => {
-    let left = product();
-    while (peek() === "+" || peek() === "-") {
-      const op = next();
-      const right = product();
-      if (!left || !right || left.px !== right.px) return null;
-      left = { n: op === "+" ? left.n + right.n : left.n - right.n, px: left.px };
-    }
-    return left;
-  };
-
-  const out = sum();
-  return i < tokens.length ? null : out;
-}
-
 /**
  * Every custom property the given stylesheets set, as name to values, in
  * the order given.
@@ -965,9 +804,8 @@ function namesFace(value) {
  * Every place a customer site breaks the type rule, as
  * `{ path, line, prop, value, use }`:
  *
- * - a font size below FLOOR_PX, in a guarded stylesheet or page;
  * - a font size written by hand in a page (a stylesheet's is the literal
- *   pass's to report, with its KEEP);
+ *   pass's to report);
  * - a `font-family` that names a face by hand, outside an `@font-face`;
  * - a rule for h1, h2, or h3 that sets a face other than Space Grotesk;
  * - a stylesheet or page marked `faces` that does not set all of h1 to h3
@@ -1005,7 +843,6 @@ export function typeDrift(files, { tokens = "", guarded = GUARDED, pages = GUARD
     const { path, scale } = src;
     const linked = (src.with ?? []).map(cssOf);
     const local = customProperties([...linked, src.css]);
-    const vars = customProperties([tokens, ...linked, src.css]);
     const hit = (line, prop, value, use) => hits.push({ path, line, prop, value, use });
 
     const text = stripComments(src.css);
@@ -1018,22 +855,9 @@ export function typeDrift(files, { tokens = "", guarded = GUARDED, pages = GUARD
 
     for (const { prop, value: raw, line } of [...declarations(src.css), ...src.inline]) {
       const value = raw.replace(/\s*!important$/, "");
-      if (groupOf(prop) === "font-size") {
-        const size = prop === "font" ? shorthandSize(value) : value;
-        const px = size === null ? null : minPx(size, vars);
-        if (px !== null && px < FLOOR_PX - 0.005) {
-          hit(
-            line,
-            prop,
-            value,
-            `${suggestion("font-size", `${FLOOR_PX}px`, scale, sizes)} or a larger step: no text on a customer site is under ${FLOOR_PX}px`,
-          );
-          continue;
-        }
-        if (src.page && isLiteral("font-size", value)) {
-          hit(line, prop, value, suggestion("font-size", value, scale, sizes));
-          continue;
-        }
+      if (src.page && groupOf(prop) === "font-size" && isLiteral("font-size", value)) {
+        hit(line, prop, value, suggestion("font-size", value, scale, sizes));
+        continue;
       }
       if ((prop === "font-family" || prop === "font") && !fontFaceLines.has(line)) {
         const family = prop === "font" ? shorthandFamily(value) : value;

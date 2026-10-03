@@ -45,8 +45,8 @@ function cachePromise<T>(
 }
 
 /**
- * The kit's smallest type step in px (--ox-a-micro, 14px), read from the page
- * so Mermaid lays its boxes out for the size the stylesheet draws its labels
+ * The kit's small type step in px (--ox-a-micro), read from the page so
+ * Mermaid lays its boxes out for the size the stylesheet draws its labels
  * at. Mermaid takes a number, not a token.
  */
 function microPx(): number {
@@ -93,10 +93,7 @@ function MermaidContent({ chart }: { chart: string }) {
     fontFamily: mono,
     themeVariables: { fontFamily: mono, fontSize: `${micro}px` },
     themeCSS: "margin: 1.5rem auto 0;",
-    // Every diagram draws at its own size and scrolls sideways in a narrow
-    // column instead of shrinking, so no label reads under 14px.
     flowchart: {
-      useMaxWidth: false,
       curve: "basis",
       padding: 10,
       nodeSpacing: 32,
@@ -106,7 +103,6 @@ function MermaidContent({ chart }: { chart: string }) {
       actorFontFamily: mono,
       messageFontFamily: mono,
       noteFontFamily: mono,
-      useMaxWidth: false,
       actorFontSize: micro,
       messageFontSize: micro,
       noteFontSize: micro,
@@ -116,9 +112,6 @@ function MermaidContent({ chart }: { chart: string }) {
       boxMargin: 8,
       messageMargin: 32,
     },
-    state: { useMaxWidth: false },
-    er: { useMaxWidth: false },
-    class: { useMaxWidth: false },
   });
 
   const { svg, bindFunctions } = use(
@@ -140,7 +133,7 @@ function MermaidContent({ chart }: { chart: string }) {
       // supplies. If a chart ever becomes user-supplied, this must move to
       // `securityLevel: "strict"` before that lands.
       dangerouslySetInnerHTML={{ __html: svg }}
-      className="ox-mermaid max-w-full overflow-auto [&_svg]:mx-auto [&_svg]:h-auto"
+      className="ox-mermaid max-w-full overflow-auto [&_svg]:mx-auto [&_svg]:h-auto [&_svg]:max-w-full"
     />
   );
 }

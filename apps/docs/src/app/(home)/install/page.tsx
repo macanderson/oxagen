@@ -86,12 +86,12 @@ export default function InstallPage(): ReactNode {
 
             <p className="mt-5 max-w-xl text-pretty text-base text-muted-foreground sm:text-lg">
               The{" "}
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.9em]">
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 oxagen
               </code>{" "}
               CLI puts the fleet in your terminal: the same knowledge graph, the
               same scoped retrieval, and the same audited{" "}
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.9em]">
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 invoke()
               </code>{" "}
               boundary as the app. One command installs it.
@@ -175,7 +175,7 @@ export default function InstallPage(): ReactNode {
               The install script
             </h2>
             <p className="mt-5 max-w-lg text-base text-muted-foreground">
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.9em]">
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 install.sh
               </code>{" "}
               downloads one file and checks it before it installs anything.
