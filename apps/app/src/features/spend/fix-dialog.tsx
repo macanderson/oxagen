@@ -128,18 +128,18 @@ export function FixDialog({
           }}
           className="flex flex-col gap-3"
         >
-          <p className="text-sm text-foreground">{fix}</p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-foreground">{fix}</p>
+          <p className="text-base text-muted-foreground">
             {t("findings.fix.body")}
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t("findings.fix.effort")}
           </p>
           <section className="rounded-lg border border-border p-3">
-            <h3 className="text-sm font-semibold">
+            <h3 className="text-base font-semibold">
               {t("findings.fix.contextTitle")}
             </h3>
-            <p className="my-2 text-sm text-muted-foreground">
+            <p className="my-2 text-base text-muted-foreground">
               {t("findings.fix.contextBody")}
             </p>
             <button
@@ -160,10 +160,10 @@ export function FixDialog({
             </button>
           </section>
           <section className="rounded-lg border border-border p-3">
-            <h3 className="text-sm font-semibold">
+            <h3 className="text-base font-semibold">
               {t("findings.fix.codeTitle")}
             </h3>
-            <p className="my-2 text-sm text-muted-foreground">
+            <p className="my-2 text-base text-muted-foreground">
               {t("findings.fix.codeBody")}
             </p>
             <button
@@ -204,7 +204,7 @@ export function FixDialog({
               ? t("findings.fix.dismissing")
               : t("findings.fix.dismiss")}
           </button>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t("findings.fix.dismissNote")}
           </p>
         </form>

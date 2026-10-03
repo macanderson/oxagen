@@ -549,15 +549,32 @@ export function buildProgram(): Command {
   findingsCmd
     .command("list")
     .description(
-      "List the findings by the money at stake; with --run, only those citing the run, with the frames each cites",
+      "List the findings by the money at stake, 50 a page; with --run, only those citing the run, with the frames each cites",
     )
     .option("--run <id>", "A run id (arun_… or tse_…)")
     .option("--status <status>", "open (default) | applied | dismissed")
+    .option("--level <level>", "tool | agent | operator | workspace")
+    .option(
+      "--subject <key>",
+      "An agent key, an operator id (prn_…), a tool name or the workspace id",
+    )
+    .option("--kind <kind>", "A finding kind, such as retry_loops")
+    .option("--cursor <cursor>", "The cursor the previous page printed")
     .option("--json", "Output JSON")
-    .action(async (opts: { run?: string; status?: string; json?: boolean }) => {
-      const { findingsList } = await import("./commands/findings.js");
-      await findingsList(opts);
-    });
+    .action(
+      async (opts: {
+        run?: string;
+        status?: string;
+        level?: string;
+        subject?: string;
+        kind?: string;
+        cursor?: string;
+        json?: boolean;
+      }) => {
+        const { findingsList } = await import("./commands/findings.js");
+        await findingsList(opts);
+      },
+    );
 
   // ── context: a steering proposal on a lineage (propose_record) ──────────────
 

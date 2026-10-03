@@ -52,6 +52,7 @@ import {
   REVIEWER,
   ctx,
   harness,
+  landStampOnHost,
   type Harness,
 } from "./context.steering.test-support";
 import { MARKDOWN_IMPORT_PULL_REQUEST } from "./markdown-import/opener";
@@ -136,7 +137,11 @@ function fakePublisher(published: string[]): SteeringPublisher {
   };
   return {
     repository: (repo) => repo.fullName,
-    store: { highestVersion: async () => 20, versionAt: async () => null },
+    store: {
+      highestVersion: async () => 20,
+      versionAt: async () => null,
+      current: async () => null,
+    },
     publish: async (_repo, commit) => held(commit),
     withLock: (_repo, fn) => fn(held),
   };
@@ -353,10 +358,10 @@ describe("merge_steering_pr on a steering PR proposal", () => {
       content: await toolsText(h),
     });
     const row = rowFor(h, opened.number);
-    // An earlier call claimed the row and the host merged the PR. That call
-    // failed before the row moved to merged.
-    row.mergeClaimedAt = new Date("2026-09-26T11:59:00.000Z");
-    const mergeSha = h.github.mergeOnHost(opened.number);
+    // An earlier call claimed the row and the host merged its stamp. That
+    // call failed before the row moved to merged, and its claim has lapsed.
+    row.mergeClaimedAt = new Date("2026-09-26T11:49:00.000Z");
+    const mergeSha = await landStampOnHost(h, row);
     const s = seams();
 
     const out = await createMergeSteeringPrHandler(h, s)(
@@ -590,6 +595,31 @@ describe("merge_steering_pr on a steering PR proposal", () => {
       ),
     ).rejects.toMatchObject({ code: "conflict", reason: "merged_outside_oxagen" });
     expect(h.requestSync).toHaveBeenCalled();
+    expect(rowFor(h, opened.number).status).toBe("checks_passed");
+  });
+
+  // #4504: a call that crashed before its stamp leaves a claim behind, so the
+  // claim alone does not prove Oxagen merged the PR.
+  it("refuses a claimed PR someone merged on the host with no stamp of Oxagen's", async () => {
+    const h = steeringHarness();
+    const opened = await openSteeringPr(h, TOOLS_PULL_REQUEST, {
+      branch: "tools/billing",
+      path: TOOLS_FILE,
+      content: await toolsText(h),
+    });
+    const row = rowFor(h, opened.number);
+    row.mergeClaimedAt = new Date("2026-09-26T11:49:00.000Z");
+    h.github.mergeOnHost(opened.number);
+    const s = seams();
+
+    await expect(
+      createMergeSteeringPrHandler(h, s)(
+        { proposalId: row.publicId },
+        ctx({ userId: REVIEWER }),
+      ),
+    ).rejects.toMatchObject({ code: "conflict", reason: "merged_outside_oxagen" });
+    expect(h.requestSync).toHaveBeenCalled();
+    expect(s.published).toEqual([]);
     expect(rowFor(h, opened.number).status).toBe("checks_passed");
   });
 

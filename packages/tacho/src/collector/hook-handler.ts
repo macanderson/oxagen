@@ -197,6 +197,15 @@ export interface HookHandlerDeps {
     },
     run: { sessionUuid: string; at: string },
   ) => void;
+  /**
+   * Whether this Claude Code session can reach Oxagen's `record_reflection`
+   * tool: the enrollment wrote the `oxagen` MCP server into Claude Code's
+   * user config before the session started, and holds the gateway key that
+   * serves it (#5287). The daemon reads the files only when a Stop would
+   * otherwise ask. Absent, no Stop asks for a reflection, so a hook never
+   * blocks a stop for a tool the session does not have.
+   */
+  reflectionToolRegistered?: (session: { startedAt: string }) => boolean;
 }
 
 export interface HookReplay {
@@ -671,6 +680,30 @@ function drainMidTurn(
   const continuation = drainContinuation(record, events);
   if (continuation !== undefined) texts.push(continuation);
   return texts;
+}
+
+/**
+ * Note the text a live answer hands the session's agent after its start, so
+ * every model call on the session's conversation from `at` on carries it as
+ * `context_frame_tokens` (#5339). That covers a later hook's
+ * `additionalContext` and a `Stop` block's reason. The start's text is not
+ * noted here: the steering manifest sealed beside it counts that text.
+ *
+ * A replay's answer reaches no harness, and a subagent's text stays in the
+ * subagent's own conversation, so neither notes anything. An interrupt's
+ * text is not noted either. It stands in for the refused tool's result, so
+ * it is a tool result and not context.
+ */
+function noteHandedContext(
+  record: SessionRecord,
+  input: HookInput,
+  replay: HookReplay | undefined,
+  text: string,
+  at: string,
+): void {
+  if (replay !== undefined || input.agent_id !== undefined) return;
+  if (text.length === 0) return;
+  record.recorder.noteInjectedContext(text, at);
 }
 
 /**
@@ -1307,16 +1340,33 @@ async function routeHook(
       if (block === undefined) record.control.resumeOwed = undefined;
       // Only a prompt the agent received can correct it.
       if (block === undefined) notePrompt(record, promptText(input));
+      // What this answer hands the agent: the notice, the operator's
+      // messages, then the memories. Each is drained or asked for only on a
+      // live prompt that is not blocked, so a replay or a block hands nothing.
+      const handed = [
+        ...delivered,
+        ...(recalled !== undefined ? [recalled.text] : []),
+      ];
+      const context = handed.join(CONTEXT_JOINER);
       events.push(
         ...record.recorder.ingestHook(payload, env, at, (draft) =>
           withReplay({
             ...draft,
-            ...(recalled !== undefined
+            ...(recalled !== undefined || handed.length > 0
               ? {
                   attrs: {
                     ...draft.attrs,
-                    "oxagen.recall_digest": digestText(recalled.text),
-                    "oxagen.recalled_memories": String(recalled.count),
+                    ...(recalled !== undefined
+                      ? {
+                          "oxagen.recall_digest": digestText(recalled.text),
+                          "oxagen.recalled_memories": String(recalled.count),
+                        }
+                      : {}),
+                    // How much text the answer hands the agent, as the start
+                    // records it (#5339).
+                    ...(handed.length > 0
+                      ? { "oxagen.delivered_chars": String(context.length) }
+                      : {}),
                   },
                 }
               : {}),
@@ -1338,18 +1388,15 @@ async function routeHook(
           record,
         };
       }
-      const context = [
-        ...delivered,
-        ...(recalled !== undefined ? [recalled.text] : []),
-      ];
+      noteHandedContext(record, input, replay, context, at);
       return {
         events,
         response:
-          context.length > 0
+          handed.length > 0
             ? {
                 hookSpecificOutput: {
                   hookEventName: "UserPromptSubmit",
-                  additionalContext: context.join(CONTEXT_JOINER),
+                  additionalContext: context,
                 },
               }
             : {},
@@ -1685,6 +1732,7 @@ async function routeHook(
       if (operatorBlock(view, record) !== undefined)
         return { events, response: {}, record };
       const texts = drainMidTurn(input, record, deps, events, replay);
+      noteHandedContext(record, input, replay, texts.join(CONTEXT_JOINER), at);
       return {
         events,
         response:
@@ -1718,7 +1766,9 @@ async function routeHook(
         return { events, response: {}, record };
       // A run that showed trouble is asked once to record a reflection
       // (`memory-capture/reflection-ask.ts`). A custom agent speaks Claude
-      // Code's hooks but may have no Oxagen MCP server, so it is not asked.
+      // Code's hooks but may have no Oxagen MCP server, so it is not asked,
+      // and neither is a session on a host whose enrollment did not give
+      // Claude Code that server (#5287).
       // A subagent's hook is not the session's turn end, as in
       // `drainMidTurn`, so it leaves the ask for the main agent's Stop.
       const ask =
@@ -1731,6 +1781,10 @@ async function routeHook(
                   : (record.harness ?? "claude-code"),
               stopHookActive: input["stop_hook_active"] === true,
               replayed: replay !== undefined,
+              toolRegistered: () =>
+                deps.reflectionToolRegistered?.({
+                  startedAt: record.startedAt,
+                }) ?? false,
             });
       // A queued steer, or a resume's continuation, keeps the turn going:
       // `decision: "block"` hands the reason to the model as what to do next.
@@ -1739,6 +1793,8 @@ async function routeHook(
         ...drainMidTurn(input, record, deps, events, replay, ask?.length ?? 0),
         ...(ask !== undefined ? [ask] : []),
       ];
+      // The reason goes on as the next thing the model reads.
+      noteHandedContext(record, input, replay, texts.join(CONTEXT_JOINER), at);
       return {
         events,
         response:

@@ -65,6 +65,7 @@ describe("openProposals", () => {
       store,
       create: createProposal,
       audit: vi.fn(),
+      capture: vi.fn(),
     });
     expect(result).toEqual({ opened: 2, taken: 0 });
     expect(store.insertProposal).toHaveBeenCalledTimes(2);
@@ -101,6 +102,7 @@ describe("openProposals", () => {
       store,
       create: createProposal,
       audit: vi.fn(),
+      capture: vi.fn(),
     });
     const [values] = store.insertProposal.mock.calls[0]!;
     expect(values).toMatchObject({
@@ -122,6 +124,7 @@ describe("openProposals", () => {
       store: storeWith(),
       create,
       audit: vi.fn(),
+      capture: vi.fn(),
     });
     const ids = create.mock.calls.map(
       (call) =>
@@ -140,6 +143,7 @@ describe("openProposals", () => {
       store,
       create: createProposal,
       audit: vi.fn(),
+      capture: vi.fn(),
     });
     expect(result).toEqual({ opened: 1, taken: 1 });
   });
@@ -155,9 +159,62 @@ describe("openProposals", () => {
         store,
         create: createProposal,
         audit: vi.fn(),
+        capture: vi.fn(),
       }),
     ).rejects.toThrow("database unavailable");
     expect(store.insertProposal).toHaveBeenCalledTimes(3);
+  });
+
+  // The findings pass logs the throw and carries on, and the throw carries
+  // only the first failure, so the capture is the one record of each (#3698).
+  it("captures every failed write to the error log as the runner", async () => {
+    const store = storeWith(
+      new Error("database unavailable"),
+      taken(),
+      null,
+      new Error("second failure"),
+    );
+    const audit = vi.fn();
+    const capture = vi.fn();
+    await expect(
+      openProposals(
+        SCOPE,
+        [proposal(1), proposal(2), proposal(3), proposal(4)],
+        { store, create: createProposal, audit, capture },
+      ),
+    ).rejects.toThrow("database unavailable");
+    expect(capture).toHaveBeenCalledTimes(2);
+    const captured = capture.mock.calls.map((call) => call[0]);
+    expect(captured.map((c) => (c.error as Error).message)).toEqual([
+      "database unavailable",
+      "second failure",
+    ]);
+    for (const c of captured) {
+      expect(c).toMatchObject({
+        source: "runner",
+        orgId: SCOPE.orgId,
+        workspaceId: SCOPE.workspaceId,
+        capability: "propose_record",
+      });
+    }
+    // The capture and the audit row of one failure share its request id.
+    const audited = audit.mock.calls
+      .map((call) => call[0])
+      .filter((event) => event.eventType === "capability.invoke_error")
+      .map((event) => event.requestId);
+    expect(audited).toHaveLength(2);
+    expect(captured.map((c) => c.requestId)).toEqual(audited);
+  });
+
+  it("captures nothing when every write opens or finds its lineage taken", async () => {
+    const capture = vi.fn();
+    await openProposals(SCOPE, [proposal(1), proposal(2)], {
+      store: storeWith(null, taken()),
+      create: createProposal,
+      audit: vi.fn(),
+      capture,
+    });
+    expect(capture).not.toHaveBeenCalled();
   });
 
   it("treats a conflict with another reason as a failure", async () => {
@@ -169,6 +226,7 @@ describe("openProposals", () => {
         store,
         create: createProposal,
         audit: vi.fn(),
+        capture: vi.fn(),
       }),
     ).rejects.toMatchObject({ reason: "stale_head" });
   });
@@ -180,6 +238,7 @@ describe("openProposals", () => {
         store,
         create: createProposal,
         audit: vi.fn(),
+        capture: vi.fn(),
       }),
     ).resolves.toEqual({ opened: 0, taken: 0 });
     expect(store.insertProposal).not.toHaveBeenCalled();
@@ -194,6 +253,7 @@ describe("openProposals", () => {
       store: { insertProposal },
       create: createProposal,
       audit,
+      capture: vi.fn(),
     });
     expect(audit).toHaveBeenCalledTimes(1);
     const event = audit.mock.calls[0]![0];
@@ -223,6 +283,7 @@ describe("openProposals", () => {
         store,
         create: createProposal,
         audit,
+        capture: vi.fn(),
       }),
     ).rejects.toThrow("database unavailable");
     expect(audit).toHaveBeenCalledTimes(1);
@@ -259,6 +320,7 @@ describe("openSpendProposalsFor", () => {
       store,
       create: createProposal,
       audit: vi.fn(),
+      capture: vi.fn(),
     });
   }
 
@@ -341,6 +403,7 @@ describe("openSpendProposalsFor with detectors 4, 5, and 7", () => {
       store,
       create: createProposal,
       audit: vi.fn(),
+      capture: vi.fn(),
     });
   }
 

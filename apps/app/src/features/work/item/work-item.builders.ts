@@ -7,14 +7,17 @@
 // src/test/arch/layers.ts).
 import type {
   BriefRevision,
+  ForgePullRequest,
   WorkHistoryEntry,
   WorkItemDetail,
   WorkSend,
   WorkTarget,
   WorkTargetList,
 } from "@/data/contracts/work";
+import type { ChangeSet } from "@/data/contracts/changes";
 import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
+import { emptyChangeSet } from "@/test/change-views";
 
 /** A full commit id that shortens to `prefix` (seven hex characters). */
 function sha(prefix: string): string {
@@ -191,6 +194,7 @@ export function workSend(overrides: Partial<WorkSend> = {}): WorkSend {
     runs: [],
     cost: { runs: 0, knownRuns: 0, total: null },
     pullRequest: null,
+    pullRequests: [],
     requiredChecks: null,
     checks: [],
     earlierChecks: null,
@@ -244,6 +248,7 @@ function summaryOf(send: WorkSend): NonNullable<Item["send"]> {
             url: send.pullRequest.url,
             head: send.pullRequest.head,
           },
+    pullRequests: send.pullRequests,
     checks: send.checksWord,
     gate: send.gate,
     accepted: send.acceptance !== null,
@@ -619,6 +624,64 @@ export function inReviewItem(): WorkItemDetail {
   return inReview(reviewedSend(), { kind: "ready_for_review", head: HEAD });
 }
 
+/** Pull request #641 as the forge store holds it: open, with its title. */
+export function forgePull(overrides: Partial<ForgePullRequest> = {}): ForgePullRequest {
+  return {
+    id: "fpr_641",
+    provider: "github",
+    repository: "acme/platform",
+    number: 641,
+    url: "https://github.com/acme/platform/pull/641",
+    title: "Retry the export on 429",
+    state: "open",
+    head: HEAD,
+    stateSeenAt: "2026-10-01T11:02:00Z",
+    ...overrides,
+  };
+}
+
+/**
+ * In review, and the forge store holds two pull requests for the send: #642,
+ * a newer draft, and #641, the one the facts name, now merged.
+ */
+export function twoPullsItem(): WorkItemDetail {
+  return inReview(
+    reviewedSend({
+      pullRequests: [
+        forgePull({ id: "fpr_642", number: 642, url: "https://github.com/acme/platform/pull/642", title: null, state: "draft", stateSeenAt: "2026-10-01T11:05:00Z" }),
+        forgePull({ state: "merged" }),
+      ],
+    }),
+    { kind: "ready_for_review", head: HEAD },
+  );
+}
+
+/** In review on #641, and the forge store holds only #700 for the send. */
+export function otherPullItem(): WorkItemDetail {
+  return inReview(
+    reviewedSend({
+      pullRequests: [forgePull({ id: "fpr_700", number: 700, url: "https://github.com/acme/platform/pull/700", state: "closed" })],
+    }),
+    { kind: "ready_for_review", head: HEAD },
+  );
+}
+
+/** The run ended, its facts name no pull request, and the forge store holds one for the send. */
+export function unrecordedPullItem(): WorkItemDetail {
+  return inReview(
+    reviewedSend({
+      pullRequest: null,
+      pullRequests: [forgePull()],
+      requiredChecks: null,
+      checks: [],
+      checksWord: "no_pull_request",
+      gate: { open: false, block: "no_pull_request", detail: null },
+      claims: [],
+    }),
+    { kind: "no_pull_request" },
+  );
+}
+
 export function checkFailedItem(): WorkItemDetail {
   return inReview(
     reviewedSend({
@@ -874,9 +937,16 @@ export function workTargets(): WorkTargetList {
 export function workItemSource(
   read: Read<WorkItemDetail>,
   targets: Read<WorkTargetList> = readOk(workTargets()),
+  /**
+   * `get_change_set` for the item, which its Changes panel reads once the
+   * item read answers (ADR-292). A test that says nothing about it gets an
+   * item with no pull request on record.
+   */
+  changes: Read<ChangeSet> = readOk(emptyChangeSet("work_item")),
 ) {
   const calls: unknown[][] = [];
   const targetCalls: unknown[][] = [];
+  const changeCalls: unknown[][] = [];
   const refuse = () => Promise.reject(new Error("not a Work item read"));
   const source: DataSource = {
     runtimes: { list: refuse, agents: refuse, named: refuse },
@@ -981,6 +1051,13 @@ export function workItemSource(
       tree: refuse,
     },
     steeringRepo: { get: refuse },
+    changes: {
+      changeSet: (...args: unknown[]) => {
+        changeCalls.push(args);
+        return Promise.resolve(changes);
+      },
+      revisionDiff: refuse,
+    },
     tools: {
       versions: refuse,
       grants: refuse,
@@ -993,5 +1070,5 @@ export function workItemSource(
     },
     mandates: { list: refuse, get: refuse },
   };
-  return { source, calls, targetCalls };
+  return { source, calls, targetCalls, changeCalls };
 }

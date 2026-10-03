@@ -20,6 +20,7 @@ import {
 } from "node:fs";
 import { dirname } from "node:path";
 import { acquireInstallLock } from "../host/install-lock";
+import { stripClaudeCodeMcpConfig } from "../host/claude-code-mcp-writer";
 import { stripClaudeDesktopConfig } from "../host/claude-desktop-writer";
 import { untrustCodexHooks } from "../host/codex-hook-trust";
 import { stripCodexHooks } from "../host/codex-writer";
@@ -324,6 +325,8 @@ export async function stripEnrollmentHooks(
   stellaChanged: string[];
   /** Claude Desktop's config, when our MCP server entry was removed from it. */
   claudeDesktopChanged?: string;
+  /** Claude Code's user config, when our MCP server entry was removed from it. */
+  claudeCodeMcpChanged?: string;
   /**
    * Files that could not be cleaned, each with why. One unreadable file (JSON
    * the user has since broken, a file locked read-only) used to throw out of
@@ -466,6 +469,37 @@ export async function stripEnrollmentHooks(
       }
     });
   }
+  // Oxagen's MCP server in Claude Code's user config (#5287). Only the entry
+  // this enrollment wrote comes out, and a server of the user's that it
+  // displaced goes back, under the lock Claude Code saves the file with.
+  // Every other key in that file is Claude Code's and stays as it is.
+  // An agent that never hooked Claude Code never wrote the entry, so its
+  // unenroll leaves the file, and Claude Code's lock on it, alone. A host
+  // whose harness list could not be read is checked anyway.
+  let claudeCodeMcpChanged: string | undefined;
+  const editUserConfig = deps.editClaudeUserConfig;
+  if (
+    editUserConfig !== undefined &&
+    (host?.harnesses === undefined || host.harnesses.includes("claude-code"))
+  ) {
+    const userConfig = deps.paths.claudeUserConfig;
+    attempt(userConfig, () => {
+      editUserConfig((current) => {
+        if (current === undefined) return undefined;
+        const stripped = stripClaudeCodeMcpConfig(
+          current,
+          host?.host_enrollment_id,
+          (host?.displaced_mcp_servers?.["claude-code"] ?? {}) as Record<
+            string,
+            McpServerEntry
+          >,
+        );
+        if (!stripped.changed) return undefined;
+        claudeCodeMcpChanged = userConfig;
+        return stripped.config;
+      });
+    });
+  }
   // The pure strips above leave a correct document; this gives the *file*
   // back: the user's own bytes, mode and symlink, and nothing where enroll
   // had to create something (`host/harness-file.ts`). Skipped while any file
@@ -487,6 +521,7 @@ export async function stripEnrollmentHooks(
     cursorChanged,
     stellaChanged,
     claudeDesktopChanged,
+    ...(claudeCodeMcpChanged !== undefined ? { claudeCodeMcpChanged } : {}),
     failed,
   };
 }
@@ -767,6 +802,11 @@ async function unenrollLocked(
     deps.out(`      removed from ${stripped.claudeDesktopChanged} too`);
     deps.out(
       "      Quit Claude Desktop and open it again for the change to take effect",
+    );
+  }
+  if (stripped.claudeCodeMcpChanged !== undefined) {
+    deps.out(
+      `      Oxagen's MCP server removed from ${stripped.claudeCodeMcpChanged}`,
     );
   }
   for (const failure of stripped.failed) {

@@ -43,12 +43,12 @@ export function WorkItemHead({
     >
       <div className="flex min-w-0 flex-col gap-1">
         <p className={`${eyebrow} mb-1`}>{t("eyebrow")}</p>
-        <h1 className="min-w-0 text-2xl font-bold leading-tight tracking-[-0.015em] text-foreground [overflow-wrap:anywhere]">
+        <h1 className="min-w-0 text-2xl font-bold leading-tight tracking-display text-foreground [overflow-wrap:anywhere]">
           {item.title}
         </h1>
         <div
           data-testid="work-item-facts"
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-xs text-muted-foreground"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-sm text-muted-foreground"
         >
           {source === null ? (
             <span data-testid="work-item-source">{origin}</span>
@@ -67,20 +67,20 @@ export function WorkItemHead({
             <WorkStatusBadge status={item.status} />
           </span>
         </div>
-        <p data-testid="work-item-wait" className="max-w-[72ch] pt-1">
+        <p data-testid="work-item-wait" className="max-w-measure pt-1">
           <WaitLine wait={item.wait} />
         </p>
         {readsOnly ? (
           <p
             role="note"
             data-testid="work-viewer-note"
-            className="mt-1.5 max-w-[72ch] border-l-2 border-dashed border-border pl-2 text-sm text-muted-foreground"
+            className="mt-1.5 max-w-measure border-l-2 border-dashed border-border pl-2 text-sm text-muted-foreground"
           >
             {t("viewerNote")}
           </p>
         ) : null}
       </div>
-      <div className="flex shrink-0 sm:max-w-[50%]">
+      <div className="flex shrink-0 sm:max-w-1/2">
         <ItemActions
           org={org}
           ws={ws}

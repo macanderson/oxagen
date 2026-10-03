@@ -166,7 +166,7 @@ export function PrioritiesEditor({
             {t("openedTitle")}
           </h2>
         </div>
-        <div className={`${panelBody} flex flex-col gap-3 text-sm`}>
+        <div className={`${panelBody} flex flex-col gap-3 text-base`}>
           <p>
             {opened.pr === null
               ? t("openedNoPr")
@@ -203,7 +203,7 @@ export function PrioritiesEditor({
         </h2>
       </div>
       <form noValidate onSubmit={(event) => void submit(event)} className={`${panelBody} flex flex-col gap-4`}>
-        <p className="text-sm text-muted-foreground">{t("body")}</p>
+        <p className="text-base text-muted-foreground">{t("body")}</p>
         <div className="flex min-w-0 flex-col">
           <label htmlFor="work-priorities-instruction" className={fieldLabel}>
             {t("instruction")}
@@ -294,7 +294,7 @@ export function PrioritiesEditor({
             </button>
           </div>
         </fieldset>
-        <details className="text-sm">
+        <details className="text-base">
           <summary className="cursor-pointer font-medium">{t("preview")}</summary>
           <pre
             data-testid="work-priorities-preview"

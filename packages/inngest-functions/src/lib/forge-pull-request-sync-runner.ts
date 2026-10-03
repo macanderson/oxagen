@@ -64,6 +64,12 @@ export type ForgePullRequestSyncRequest = {
     /** True when a `pr_open` call recorded the link, so the run opened it. */
     opened: boolean;
   };
+  /**
+   * A work order (`work.orders.id`) to link the pull request to. The backfill
+   * names the order a `pr_linked` fact recorded before the forge store
+   * existed (ADR-292).
+   */
+  workOrderId?: string;
 };
 
 /** What the first step did. */
@@ -95,6 +101,18 @@ export interface ForgeCapturedFile {
   deletions: number | null;
 }
 
+/** An issue a pull request's closing references name (ADR-292). */
+export interface ForgeClosingIssue {
+  /** The forge's node id: the id a work item names its source issue by. */
+  nodeId: string;
+  /** Lower-cased `owner/name` of the repository that holds the issue. */
+  repository: string;
+  number: number;
+  url: string;
+  title: string | null;
+  state: "open" | "closed";
+}
+
 /** What the capture step found for a head commit. */
 export interface ForgePullRequestCapture {
   diffStatus: "stored" | "too_large" | "unreadable" | "unconfigured";
@@ -109,6 +127,12 @@ export interface ForgePullRequestCapture {
   deletions: number | null;
   complete: boolean;
   limitations: string[];
+  /**
+   * The issues the pull request's closing references name at this head, or
+   * null when the forge could not be asked. Absent for a forge that has
+   * none to read.
+   */
+  closingIssues?: ForgeClosingIssue[] | null;
 }
 
 /** What the record step wrote. */

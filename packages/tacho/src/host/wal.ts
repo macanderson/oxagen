@@ -755,9 +755,9 @@ export class Wal {
    * one torn write (a crash mid-append, before `repairTail` runs at the next
    * startup) must not stop every reader of this session. The retention
    * sweep reads through here. `unshipped` and `stats` read through
-   * `eventsAfterShipped`, and `head`, `compact`, `lastSeqOf`, and
-   * `appendRecovered` read back from the tail through `eventsBackward`. Both
-   * skip a bad line the same way.
+   * `eventsAfterShipped`, and `head`, `eventsSince`, `compact`, `lastSeqOf`,
+   * and `appendRecovered` read back from the tail through `eventsBackward`.
+   * Both skip a bad line the same way.
    */
   read(sessionUuid: string): TachoEvent[] {
     const path = this.fileFor(sessionUuid);
@@ -1303,6 +1303,27 @@ export class Wal {
     return readdirSync(this.dir)
       .filter((name) => name.endsWith(suffix))
       .map((name) => name.slice(0, -suffix.length));
+  }
+
+  /**
+   * A session's latest events, in seq order: read back from the tail, and
+   * stopped at the first event whose `ts` is before `since` (epoch ms). That
+   * event is left out, and so is everything written before it. An event
+   * whose `ts` does not parse cannot be placed in time, so it is kept and the
+   * walk goes on past it.
+   *
+   * The read costs the lines it walks, not the file. It takes the file's seq
+   * order for time order, and a caller has to accept that: an event written
+   * late with an earlier `ts` ends the walk, so an event written before it
+   * is not returned, whatever its own `ts`.
+   */
+  eventsSince(sessionUuid: string, since: number): TachoEvent[] {
+    const out: TachoEvent[] = [];
+    for (const event of this.eventsBackward(sessionUuid)) {
+      if (Date.parse(event.ts) < since) break;
+      out.push(event);
+    }
+    return out.reverse();
   }
 
   /**

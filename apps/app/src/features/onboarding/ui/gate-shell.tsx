@@ -37,7 +37,7 @@ function Mark({ n, state }: { n: number; state: "done" | "current" | "todo" }) {
   return (
     <span
       aria-hidden="true"
-      className={`inline-flex size-[22px] flex-none items-center justify-center rounded-full border text-sm ${tone}`}
+      className={`inline-flex size-5.5 flex-none items-center justify-center rounded-full border text-xs ${tone}`}
     >
       {state === "done" ? "✓" : n}
     </span>
@@ -138,7 +138,7 @@ export function GateShell({
     <>
       <GateRail step={step} back={back} />
       {children}
-      <p className="mt-1 text-center text-xs leading-relaxed text-muted-foreground">
+      <p className="mt-1 text-center text-sm leading-relaxed text-muted-foreground">
         {t("caption")}
       </p>
     </>
@@ -146,14 +146,14 @@ export function GateShell({
   const bodyClass = "flex min-w-0 flex-col gap-5 pt-7";
   return (
     <div className="min-h-dvh bg-background px-4 pb-14 sm:px-5">
-      <div className="mx-auto flex w-full max-w-[772px] flex-col">
-        <header className="flex items-center gap-3 pt-[18px]">
+      <div className="mx-auto flex w-full max-w-193 flex-col">
+        <header className="flex items-center gap-3 pt-4.5">
           <OxagenWordmark className="h-6" />
           <div className="ml-auto flex min-w-0 items-center gap-3">
             {email === null ? null : (
               <span
                 data-testid="gate-email"
-                className="truncate font-mono text-sm text-muted-foreground max-sm:hidden"
+                className="truncate font-mono text-xs text-muted-foreground max-sm:hidden"
               >
                 {email}
               </span>
@@ -161,7 +161,7 @@ export function GateShell({
             <SafeLink
               to={cancel}
               data-testid="gate-cancel"
-              className={`${buttonSecondary} text-xs`}
+              className={`${buttonSecondary} text-sm`}
             >
               {t("cancel")}
             </SafeLink>
@@ -194,14 +194,14 @@ export function GateHeader({
   return (
     <div className="flex flex-col gap-2 pt-2">
       {eyebrow === undefined ? null : (
-        <p className="text-sm font-semibold uppercase tracking-[0.14em] text-accent-text">
+        <p className="text-sm font-semibold uppercase tracking-widest text-accent-text">
           {eyebrow}
         </p>
       )}
-      <h1 className="text-2xl font-bold tracking-tight text-foreground">
+      <h1 className="text-xl font-bold tracking-tight text-foreground">
         {title}
       </h1>
-      <p className="max-w-[560px] text-sm leading-relaxed text-muted-foreground">
+      <p className="max-w-140 text-base leading-relaxed text-muted-foreground">
         {lead}
       </p>
     </div>
@@ -230,7 +230,7 @@ export function GateFooter({
       {start}
       <div className="flex flex-wrap items-center gap-2.5 md:ml-auto max-md:flex-col max-md:items-stretch">
         {caption === undefined ? null : (
-          <span className="text-xs text-muted-foreground max-md:text-center">
+          <span className="text-sm text-muted-foreground max-md:text-center">
             {caption}
           </span>
         )}

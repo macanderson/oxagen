@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { findingList } from "./finding.list";
+import {
+  FINDINGS_CURSOR_MAX,
+  FINDINGS_LIST_MAX,
+  findingList,
+} from "./finding.list";
 
 const finding = {
   id: "fnd_0123456789abcdefghjkmn",
@@ -46,12 +50,48 @@ describe("list_findings contract", () => {
       },
       counts: { findings: 1, high: 1, medium: 0, operators: 2 },
       findings: [finding],
+      truncated: false,
+      nextCursor: null,
+      offset: 0,
     };
     expect(findingList.output.parse(out)).toEqual(out);
     expect(
       findingList.output.safeParse({
         ...out,
         findings: [{ ...finding, saving: { micros: "1", currency: "USD" } }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("says when the workspace holds more findings than the list (#5262)", () => {
+    const out = {
+      status: "open",
+      window: finding.window,
+      saving: finding.saving,
+      spend: null,
+      share: null,
+      annualised: finding.saving,
+      counts: {
+        findings: FINDINGS_LIST_MAX + 1,
+        high: FINDINGS_LIST_MAX + 1,
+        medium: 0,
+        operators: 0,
+      },
+      findings: Array.from({ length: FINDINGS_LIST_MAX }, () => finding),
+      truncated: true,
+      nextCursor: "eyJ9",
+      offset: 0,
+    };
+    expect(findingList.output.parse(out)).toEqual(out);
+    // An answer must say whether the list was cut, and lists at most 50.
+    const unsaid = Object.fromEntries(
+      Object.entries(out).filter(([key]) => key !== "truncated"),
+    );
+    expect(findingList.output.safeParse(unsaid).success).toBe(false);
+    expect(
+      findingList.output.safeParse({
+        ...out,
+        findings: [...out.findings, finding],
       }).success,
     ).toBe(false);
   });
@@ -86,6 +126,9 @@ describe("list_findings contract", () => {
       annualised: finding.saving,
       counts: { findings: 1, high: 1, medium: 0, operators: 0 },
       findings: [cited],
+      truncated: false,
+      nextCursor: null,
+      offset: 0,
     };
     expect(findingList.output.parse(out)).toEqual(out);
     // A run-level finding pins no frame, and an older row names none (null).
@@ -112,6 +155,58 @@ describe("list_findings contract", () => {
       ).toBe(false);
   });
 
+  it("takes a cursor, a level and a subject, and answers the next page's cursor and the page's offset (#5303)", () => {
+    expect(
+      findingList.input.parse({
+        level: "agent",
+        subject: "acme.core.release-bot",
+        kind: "retry_loops",
+        cursor: "WyJvcGVuIl0",
+      }),
+    ).toEqual({
+      status: "open",
+      level: "agent",
+      subject: "acme.core.release-bot",
+      kind: "retry_loops",
+      cursor: "WyJvcGVuIl0",
+    });
+    // A level or a kind the findings job never writes, an empty subject or
+    // cursor, and a cursor past the bound (negative).
+    for (const bad of [
+      { level: "run" },
+      { kind: "retry_storm" },
+      { subject: "" },
+      { cursor: "" },
+      { cursor: "x".repeat(FINDINGS_CURSOR_MAX + 1) },
+    ])
+      expect(findingList.input.safeParse(bad).success).toBe(false);
+
+    const out = {
+      status: "open",
+      window: finding.window,
+      saving: finding.saving,
+      spend: null,
+      share: null,
+      annualised: finding.saving,
+      counts: { findings: 62, high: 62, medium: 0, operators: 0 },
+      findings: Array.from({ length: 12 }, () => finding),
+      truncated: true,
+      nextCursor: null,
+      offset: FINDINGS_LIST_MAX,
+    };
+    expect(findingList.output.parse(out)).toEqual(out);
+    // Every answer says where its page starts and whether another follows.
+    for (const key of ["nextCursor", "offset"])
+      expect(
+        findingList.output.safeParse(
+          Object.fromEntries(Object.entries(out).filter(([k]) => k !== key)),
+        ).success,
+      ).toBe(false);
+    expect(findingList.output.safeParse({ ...out, offset: -1 }).success).toBe(
+      false,
+    );
+  });
+
   it("refuses a finding that cites no run", () => {
     expect(
       findingList.output.safeParse({
@@ -123,6 +218,9 @@ describe("list_findings contract", () => {
         annualised: null,
         counts: { findings: 1, high: 1, medium: 0, operators: 0 },
         findings: [{ ...finding, runs: 0 }],
+        truncated: false,
+        nextCursor: null,
+        offset: 0,
       }).success,
     ).toBe(false);
   });

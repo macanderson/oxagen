@@ -90,6 +90,11 @@ function readAll(
   return Promise.resolve({ states, warnings: [] as string[] });
 }
 
+/** No connection reads any owner unless a test says one does. */
+function noConnection(_scope: unknown, _owner: string): Promise<string | null> {
+  return Promise.resolve(null);
+}
+
 function setup(
   over: {
     session?: Partial<TachoSessionColumns>;
@@ -162,6 +167,7 @@ function setup(
       }),
     ),
     tracker: vi.fn(readAll),
+    githubConnection: vi.fn(noConnection),
   } satisfies RunIssuesDeps;
   return { deps, handler: createRunIssuesGetHandler(deps) };
 }
@@ -331,16 +337,16 @@ describe("get_run_issues (#3970)", () => {
     ]);
   });
 
-  it("marks the list incomplete when a closing list was not read (negative)", async () => {
-    const { handler, deps } = setup();
-    deps.closingIssues.mockResolvedValue({
-      closing: [],
-      warnings: ["closing_issues_read_failed"],
-    });
-    const result = await handler({ runId: TACHO_ID }, ctx());
-    expect(result.complete).toBe(false);
-    expect(result.warnings).toContain("closing_issues_read_failed");
-  });
+  it.each(["closing_issues_not_read", "pull_request_not_stored"])(
+    "marks the list incomplete when a closing list was not read (%s, negative)",
+    async (warning) => {
+      const { handler, deps } = setup();
+      deps.closingIssues.mockResolvedValue({ closing: [], warnings: [warning] });
+      const result = await handler({ runId: TACHO_ID }, ctx());
+      expect(result.complete).toBe(false);
+      expect(result.warnings).toContain(warning);
+    },
+  );
 
   it("keeps the list whole when only a state was not read, and says why for that row", async () => {
     const { handler, deps } = setup();
@@ -403,5 +409,107 @@ describe("get_run_issues (#3970)", () => {
     expect(result.issues).toHaveLength(2);
     expect(result.warnings).toContain("chain_break");
     expect(result.complete).toBe(false);
+  });
+});
+
+// #5296: a wrapped run's pull requests in a repository the workspace does not
+// link were dropped, so the Issues tab could not say what they close.
+describe("get_run_issues pull requests in a repository the workspace does not link", () => {
+  const product = (n: number) =>
+    `https://github.com/oxageninc/product/pull/${String(n)}`;
+  const productLink = (n: number, seq: number) => ({
+    url: product(n),
+    number: String(n),
+    repository: "oxageninc/product",
+    first_seq: seq,
+    first_ts: "2026-10-02 21:50:00.000",
+  });
+
+  it("reads what each pull request closes through the owner's connection", async () => {
+    const { handler, deps } = setup();
+    const connections: Record<string, string> = { oxageninc: "conn_owner" };
+    deps.githubConnection.mockImplementation(
+      async (_scope, owner) => connections[owner] ?? null,
+    );
+    deps.prLinks.mockResolvedValue([
+      {
+        url: "https://github.com/acme/app/pull/511",
+        number: "511",
+        repository: "acme/app",
+        first_seq: 30,
+        first_ts: "2026-09-26 10:00:30.000",
+      },
+      productLink(5260, 2955),
+      productLink(5266, 6013),
+    ]);
+    const result = await handler({ runId: TACHO_ID }, ctx());
+    expect(runIssuesGet.output.parse(result)).toEqual(result);
+    const pulls = deps.closingIssues.mock.calls[0]?.[1] ?? [];
+    expect(pulls.map((pull) => pull.number)).toEqual([511, 5260, 5266]);
+    expect(pulls[1]).toMatchObject({
+      url: product(5260),
+      seq: "2955",
+      repository: {
+        owner: "oxageninc",
+        name: "product",
+        connectionId: "conn_owner",
+        connected: false,
+      },
+    });
+    expect(result.issues[0]?.resolvedBy).toEqual([
+      { number: 511, url: "https://github.com/acme/app/pull/511" },
+      { number: 5260, url: product(5260) },
+      { number: 5266, url: product(5266) },
+    ]);
+    expect(result.warnings).not.toContain("recorded_repository_not_connected");
+    expect(result.complete).toBe(true);
+    // One lookup for the one unlinked owner. The linked repository needs none.
+    expect(deps.githubConnection).toHaveBeenCalledTimes(1);
+    expect(deps.githubConnection).toHaveBeenCalledWith(
+      expect.anything(),
+      "oxageninc",
+    );
+  });
+
+  it("reads no closing list for a pull request no connection reaches, and says so (negative)", async () => {
+    const { handler, deps } = setup();
+    deps.prLinks.mockResolvedValue([productLink(5260, 2955)]);
+    const result = await handler({ runId: TACHO_ID }, ctx());
+    expect(deps.closingIssues).toHaveBeenCalledWith(expect.anything(), []);
+    expect(result.warnings).toContain("recorded_repository_not_connected");
+    expect(result.complete).toBe(false);
+  });
+
+  it("never asks a GitHub connection about a link on another forge (negative)", async () => {
+    const { handler, deps } = setup();
+    deps.githubConnection.mockResolvedValue("conn_any");
+    deps.prLinks.mockResolvedValue([
+      {
+        url: "https://gitlab.com/oxageninc/product/-/merge_requests/3",
+        number: "3",
+        repository: "oxageninc/product",
+        first_seq: 9,
+        first_ts: "2026-10-02 21:50:00.000",
+      },
+    ]);
+    const result = await handler({ runId: TACHO_ID }, ctx());
+    expect(deps.githubConnection).not.toHaveBeenCalled();
+    expect(deps.closingIssues).toHaveBeenCalledWith(expect.anything(), []);
+    expect(result.warnings).toContain("recorded_repository_not_connected");
+  });
+
+  it("marks the list incomplete when the connection lookup fails (negative)", async () => {
+    const { handler, deps } = setup();
+    deps.githubConnection.mockRejectedValue(new Error("lookup failed"));
+    deps.prLinks.mockResolvedValue([
+      productLink(5260, 2955),
+      productLink(5266, 6013),
+    ]);
+    const result = await handler({ runId: TACHO_ID }, ctx());
+    expect(deps.closingIssues).toHaveBeenCalledWith(expect.anything(), []);
+    expect(result.warnings).toContain("closing_issues_read_failed");
+    expect(result.warnings).not.toContain("recorded_repository_not_connected");
+    expect(result.complete).toBe(false);
+    expect(deps.githubConnection).toHaveBeenCalledTimes(1);
   });
 });

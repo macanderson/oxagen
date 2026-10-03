@@ -30,7 +30,7 @@ const TONE: Record<BadgeTone, string> = {
 };
 
 const badgeBase =
-  "inline-flex items-center gap-[5px] whitespace-nowrap rounded-md border px-[7px] py-0.5 text-sm font-semibold leading-normal tracking-[0.02em]";
+  "inline-flex items-center gap-1.25 whitespace-nowrap rounded-md border px-1.75 py-0.5 text-xs font-semibold leading-normal tracking-wide";
 
 export function Badge({
   tone,
@@ -56,13 +56,13 @@ export function Badge({
     <span
       {...rest}
       title={title}
-      className={`${badgeBase} ${TONE[tone]} ${mono ? "font-mono text-sm font-medium lowercase" : ""}`}
+      className={`${badgeBase} ${TONE[tone]} ${mono ? "font-mono text-xs font-medium lowercase" : ""}`}
     >
       {dot ? (
         <span
           aria-hidden="true"
           data-pulse={dot === "pulse" ? "true" : undefined}
-          className={`size-[5px] flex-none rounded-full bg-current ${dot === "pulse" ? "animate-pulse" : ""}`}
+          className={`size-1.25 flex-none rounded-full bg-current ${dot === "pulse" ? "animate-pulse" : ""}`}
         />
       ) : null}
       {children}

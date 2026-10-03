@@ -13,6 +13,7 @@ import { useTranslations } from "next-intl";
 import type {
   ChecksWord,
   CostCoverage,
+  ForgePullRequest,
   WorkPriority,
   WorkStatus,
   WorkWait,
@@ -71,6 +72,30 @@ const CHECKS_TONE: Record<ChecksWord, BadgeTone> = {
   pr_closed: "failed",
 };
 
+const PULL_TONE: Record<ForgePullRequest["state"], BadgeTone> = {
+  open: "approval",
+  draft: "quiet",
+  merged: "allowed",
+  closed: "quiet",
+};
+
+/** A pull request's state as the forge store last recorded it, as one word. */
+export function PullStateBadge({ pull }: { pull: ForgePullRequest }) {
+  const t = useTranslations("work.pullState");
+  const format = useFormatter();
+  return (
+    <Badge
+      tone={PULL_TONE[pull.state]}
+      data-pull-state={pull.state}
+      title={t("seen", {
+        at: format.dateTime(new Date(pull.stateSeenAt), { dateStyle: "medium", timeStyle: "short" }),
+      })}
+    >
+      {t(pull.state)}
+    </Badge>
+  );
+}
+
 /** The required checks on the head commit, as one word beside its dot. */
 export function ChecksBadge({ word }: { word: ChecksWord }) {
   const t = useTranslations("work.checks");
@@ -103,7 +128,7 @@ export function PriorityCell({ priority }: { priority: WorkPriority }) {
       <Badge tone={PRIORITY_TONE[priority.label]} dot={false}>
         {priority.label}
       </Badge>
-      <span className="text-sm text-muted-foreground" data-wrap="">
+      <span className="text-xs text-muted-foreground" data-wrap="">
         {priority.by === "person" && priority.setBy !== null ? `${t("setBy", { name: priority.setBy })} ` : null}
         {priority.reason}
         {priority.cites.map((cite) => (
@@ -124,7 +149,7 @@ export function CostText({ cost }: { cost: CostCoverage }) {
     <span className="inline-flex flex-col items-end gap-0.5" data-cost-known={cost.knownRuns} data-cost-runs={cost.runs}>
       {cost.total === null ? <span className="text-muted-foreground">{t("unknown")}</span> : <Money value={cost.total} />}
       {cost.knownRuns < cost.runs ? (
-        <span className="text-sm text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {t("coverage", { known: cost.knownRuns, runs: cost.runs })}
         </span>
       ) : null}

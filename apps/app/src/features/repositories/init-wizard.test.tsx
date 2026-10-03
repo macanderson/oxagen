@@ -232,7 +232,7 @@ describe("the init wizard", () => {
     actions.linkWorkspaceRepository.mockResolvedValue({
       ok: false,
       reason: "conflict",
-      code: "repository_linked_elsewhere",
+      code: "repository_already_linked",
     });
     const user = userEvent.setup();
     const root = wizard([MAIN, AVAILABLE]);
@@ -240,7 +240,7 @@ describe("the init wizard", () => {
     await user.click(within(root).getByTestId("init-wizard-open"));
     expect(
       await within(root).findByTestId("init-wizard-failure"),
-    ).toHaveTextContent("Another workspace has linked");
+    ).toHaveTextContent("already linked to this workspace");
     expect(actions.setProductionBranch).not.toHaveBeenCalled();
     expect(actions.openInitPullRequest).not.toHaveBeenCalled();
     expect(onOpened).not.toHaveBeenCalled();

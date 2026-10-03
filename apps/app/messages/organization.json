@@ -548,6 +548,7 @@
         "baseUrlRequired": "Enter the server's URL.",
         "balancedRequired": "Enter the model the assistant should use.",
         "invalid": "Oxagen refused these settings. Check that the URL starts with https and is not a private address.",
+        "modelTooLong": "This model name is too long. Enter one of 200 characters or fewer.",
         "refused": "Refused ({code}).",
         "pendingApproval": "This change is waiting for approval.",
         "unavailable": "Oxagen could not reach the key service ({code}). Try again."

@@ -112,20 +112,20 @@ export function PostureBadgeGroup({
             breakdown is discoverable even when nothing needs action. */}
         <span
           aria-hidden="true"
-          className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-border text-[9px] leading-none text-muted-foreground"
+          className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-border text-xs leading-none text-muted-foreground"
         >
           i
         </span>
       </TooltipTrigger>
       <TooltipPopup align="start" className="max-w-[260px]">
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium">
+          <span className="text-sm font-medium">
             {vendorLabel} capability posture
           </span>
           {badges.map((b) => (
             <div key={b.axis} className="flex flex-col gap-0.5">
               <PostureChip badge={b} />
-              <span className="text-[11px] leading-snug text-muted-foreground">
+              <span className="text-xs leading-snug text-muted-foreground">
                 {b.detail}
               </span>
             </div>

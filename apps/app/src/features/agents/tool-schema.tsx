@@ -37,7 +37,7 @@ function CopyButton({ label, value }: { label: string; value: string }) {
         type="button"
         data-testid="belt-schema-copy"
         data-state={state}
-        className={`${buttonSecondary} text-xs`}
+        className={`${buttonSecondary} text-sm`}
         onClick={() => {
           void writeClipboard(value).then((ok) => {
             setState(ok ? "copied" : "failed");
@@ -46,7 +46,7 @@ function CopyButton({ label, value }: { label: string; value: string }) {
       >
         {state === "copied" ? t("copied") : label}
       </button>
-      <span role="status" className="text-xs text-muted-foreground">
+      <span role="status" className="text-sm text-muted-foreground">
         {state === "failed" ? t("copyFailed") : null}
       </span>
     </span>
@@ -61,7 +61,7 @@ export function ToolSchema({ tool }: { tool: BeltTool }) {
     return (
       <p
         data-testid="belt-schema-none"
-        className="text-xs text-muted-foreground"
+        className="text-sm text-muted-foreground"
       >
         {t("none")}
       </p>
@@ -69,17 +69,17 @@ export function ToolSchema({ tool }: { tool: BeltTool }) {
   }
   return (
     <details data-testid="belt-schema" className="min-w-0">
-      <summary className="cursor-pointer rounded-sm text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+      <summary className="cursor-pointer rounded-sm text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
         {t("title")}
         <span className={`${mono} ml-2 text-muted-foreground`}>
           {tool.schemaDigest.slice(0, 12)}
         </span>
       </summary>
       <div className="mt-2 flex flex-col gap-2">
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {t(`origin.${tool.schemaOrigin}`)}
         </p>
-        <dl className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
+        <dl className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
           <dt className="text-muted-foreground">{t("digest")}</dt>
           <dd className={`${mono} min-w-0 break-all`}>{tool.schemaDigest}</dd>
         </dl>
@@ -93,13 +93,13 @@ export function ToolSchema({ tool }: { tool: BeltTool }) {
           )}
         </div>
         {tool.inputSchema === null ? (
-          <p data-testid="belt-schema-truncated" className="text-xs">
+          <p data-testid="belt-schema-truncated" className="text-sm">
             {t(tool.schemaTruncated ? "truncated" : "none")}
           </p>
         ) : (
           <pre
             data-testid="belt-schema-json"
-            className={`${mono} max-h-80 overflow-auto rounded-md border border-border bg-muted p-3 text-xs`}
+            className={`${mono} max-h-80 overflow-auto rounded-md border border-border bg-muted p-3 text-sm`}
           >
             {JSON.stringify(tool.inputSchema, null, 2)}
           </pre>

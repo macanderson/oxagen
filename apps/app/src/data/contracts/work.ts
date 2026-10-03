@@ -264,12 +264,35 @@ const AgentRef = z.object({
   harness: z.string().nullable(),
 });
 
+/**
+ * A send's pull request from its facts: the one acceptance, the required
+ * checks, and Accept are judged on. `url` is the forge store's link when the
+ * store holds the same pull request.
+ */
 const PullRequestRef = z.object({
   repository: z.string(),
   number: z.number().int().positive(),
   url: z.string(),
   head: Sha.nullable(),
 });
+
+/**
+ * One pull request a send has, as the forge store last recorded it
+ * (ADR-292). It says what the pull request is and its state now. The title
+ * comes from the forge: the page renders it as text.
+ */
+const ForgePullRequest = z.object({
+  id: PublicId,
+  provider: z.enum(["github", "gitlab"]),
+  repository: z.string(),
+  number: z.number().int().positive(),
+  url: z.string(),
+  title: z.string().nullable(),
+  state: z.enum(["open", "draft", "closed", "merged"]),
+  head: z.string().regex(/^[0-9a-f]{40}([0-9a-f]{24})?$/),
+  stateSeenAt: Instant,
+});
+export type ForgePullRequest = z.infer<typeof ForgePullRequest>;
 
 /** The latest send of an item, as a list row shows it. */
 export const SendSummary = z.object({
@@ -282,6 +305,8 @@ export const SendSummary = z.object({
   runtime: z.object({ name: z.string().nullable(), tier: RuntimeTier }),
   requestedAt: Instant,
   pullRequest: PullRequestRef.nullable(),
+  /** Every pull request the send has in the forge store, newest first. */
+  pullRequests: z.array(ForgePullRequest),
   checks: ChecksWord,
   gate: ReviewGate,
   accepted: z.boolean(),
@@ -499,6 +524,8 @@ export const WorkSend = z.object({
       .nullable(),
     closedAt: Instant.nullable(),
   }).nullable(),
+  /** Every pull request the send has in the forge store, newest first. */
+  pullRequests: z.array(ForgePullRequest),
   requiredChecks: z.array(z.string()).nullable(),
   checks: z.array(Check),
   earlierChecks: z.object({ head: Sha, checks: z.array(Check) }).nullable(),
@@ -615,6 +642,8 @@ export const WorkOutcomes = z.object({
   }),
   cost: CostCoverage,
   reopens: z.object({ cohort: Count, reopened: Count, waiting: Count }),
+  /** Reverts over the same items as reopens. Only a revert GitHub links by `Reverts <owner>/<repo>#<n>` counts. */
+  reverts: z.object({ cohort: Count, reverted: Count, waiting: Count }),
   /** More items finished than one read counts. The figures cover the newest of them. */
   truncated: z.boolean(),
   weeks: z.array(

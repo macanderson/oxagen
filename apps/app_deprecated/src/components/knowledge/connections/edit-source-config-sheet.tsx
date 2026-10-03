@@ -176,10 +176,10 @@ export function EditSourceConfigSheet({
                 aria-hidden="true"
               />
               <div className="flex flex-col gap-0.5">
-                <p className="text-sm font-medium text-foreground">
+                <p className="text-base font-medium text-foreground">
                   Couldn&apos;t load configuration
                 </p>
-                <p className="text-xs text-muted-foreground">{loadError}</p>
+                <p className="text-sm text-muted-foreground">{loadError}</p>
               </div>
             </div>
           </SheetPanel>
@@ -353,14 +353,14 @@ function EditSourceConfigForm({
         )}
 
         {!loading && fetchError && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             This connector&apos;s configuration schema couldn&apos;t be loaded (
             {fetchError}). You can still rename the source.
           </p>
         )}
 
         {!loading && !fetchError && configFields.length === 0 && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             This source has no editable configuration beyond its name.
           </p>
         )}
@@ -381,7 +381,7 @@ function EditSourceConfigForm({
         )}
 
         {submitError && (
-          <p role="alert" className="text-xs text-destructive">
+          <p role="alert" className="text-sm text-destructive">
             {submitError}
           </p>
         )}

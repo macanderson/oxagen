@@ -57,7 +57,7 @@ Content-Type: application/json
 ```
 
 ## Notes
-- **Access:** Owner or Admin at org level; Owner or Member at workspace level.
+- **Access:** Owner or Admin at org level; Owner or Member at workspace level. The handler checks these roles on every plan, and a workspace's Owner or Admin also passes (#5228).
 - **Agent requires approval** before executing this action due to high risk level.
 - **Async:** Returns `202 Accepted`; the install job fetches the schema, provisions credentials, and runs the first sync.
 - Use `plugin.schema.get` to retrieve the schema before constructing the `config` payload.

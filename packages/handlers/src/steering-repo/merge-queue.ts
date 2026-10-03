@@ -41,7 +41,10 @@ import {
   GOVERNANCE_TOML_PATH,
   PROMOTIONS_DIR,
 } from "@oxagen/oxagen/steering-repo/paths";
-import type { PromotionChange } from "@oxagen/oxagen/steering-repo/promotion";
+import {
+  promotionSchema,
+  type PromotionChange,
+} from "@oxagen/oxagen/steering-repo/promotion";
 import { sql } from "drizzle-orm";
 import type {
   SteeringHost,
@@ -303,12 +306,12 @@ export interface ApprovalInput {
   mode: GovernanceMode;
   /**
    * The heads an approval counts at, oldest first. The first is the head the
-   * checks passed on. Each one after it is a merge commit the queue made to
-   * bring the branch up to date: its first parent is the head before it, and
-   * its second is the production branch head. The PR's own diff is the same
-   * at each, so an approval of one carries to the rest. An approval of any
-   * other commit counts for nothing, so a push by anyone else needs a fresh
-   * approval.
+   * author pushed. Each one after it is a merge commit that brought the branch
+   * up to date: its first parent is the head before it, its second is a
+   * production branch commit, and the PR's own diff is the same as at the head
+   * before it, so an approval of one carries to the rest (approvalHeads). An
+   * approval of any other commit counts for nothing, so a push by anyone else
+   * needs a fresh approval.
    */
   heads: readonly string[];
   authorUserId: string | null;
@@ -569,12 +572,40 @@ export async function stampHead(input: StampInput): Promise<StampResult> {
   };
 }
 
+// ── The commit a check compares against ──────────────────────────────────────
+
+/**
+ * The commit the steering checks compare a PR's `head` with: the production
+ * head `main` when the head holds it, and otherwise the newest commit the
+ * branch shares with the production branch.
+ *
+ * The checks compare two whole trees. A branch cut before another steering
+ * PR merged lacks that PR's files and the ledger line its stamp wrote. Read
+ * against the production head, the branch looks like it removes those files
+ * and rewrites the ledger, and the owned check fails it (#5139). Against the
+ * shared commit, the checks see only what the PR changes. landSteeringPr
+ * then brings the branch up to date, and the checks run again against the
+ * production head, which the new head holds.
+ *
+ * Falls back to `main` when the two commits share no history.
+ */
+export async function checkBase(
+  host: Pick<SteeringHost, "mergeBase">,
+  repo: SteeringRepository,
+  head: string,
+  main: string,
+): Promise<string> {
+  return (await host.mergeBase(repo, head, main)) ?? main;
+}
+
 // ── Landing a PR ─────────────────────────────────────────────────────────────
 
 /** What a re-check after an update found: whether it passed, and which checks ran. */
 export interface RecheckResult {
   ok: boolean;
   checks: readonly string[];
+  /** The first error the checks found, as a sentence for the refusal. */
+  failure?: string | null;
 }
 
 export interface LandInput {
@@ -589,11 +620,12 @@ export interface LandInput {
   layout: SteeringLayout;
   /**
    * The approvals the merge carries at any of `heads`, or a refusal. `heads`
-   * starts as the checked head. Each update that merges the production branch
-   * head into the last of them adds its merge commit. Any other update starts
-   * the list again at the new head. It runs before the first attempt and
-   * again after each update, so the stamp and the trailers name the approvals
-   * that stand on the head that merges.
+   * starts as the checked head and every head an earlier merge's updates
+   * walked it up from (approvalHeads). Each update that merges the production
+   * branch head into the last of them adds its merge commit. Any other update
+   * starts the list again at the new head. It runs before the first attempt
+   * and again after each update, so the stamp and the trailers name the
+   * approvals that stand on the head that merges.
    */
   approve: (heads: readonly string[]) => Promise<MergeApproval>;
   mergedBy: string;
@@ -641,6 +673,82 @@ function headsAfterUpdate(
   return merged ? [...heads, update.headSha] : [update.headSha];
 }
 
+/** How many updates a merge walks back through to find the head the author pushed. */
+const UPDATE_WALK_LIMIT = 10;
+
+/**
+ * The heads an approval counts at when a merge starts from `head`, oldest
+ * first, ending with `head`.
+ *
+ * A merge that gave up after it brought the branch up to date leaves the row
+ * at the update it made: `production_branch_moving`, a host refusal after the
+ * stamp, or a dropped stamp. The retry starts from that head. GitHub pins each
+ * review to the head the reviewer saw, which is the head the author pushed,
+ * so without this walk the retry asked for a fresh approval of a change that
+ * had not moved (#4504).
+ *
+ * So the walk goes back from `head` through each commit that is an update of
+ * the commit before it (updatedFrom), and stops at the first that is not. A
+ * rebase makes no merge commit, so a GitLab head stops the walk at once.
+ */
+async function approvalHeads(
+  host: SteeringHost,
+  repo: SteeringRepository,
+  head: string,
+  main: string,
+): Promise<string[]> {
+  const heads = [head];
+  let at = head;
+  for (let step = 0; step < UPDATE_WALK_LIMIT; step += 1) {
+    const before = await updatedFrom(host, repo, at, main);
+    if (before === null) break;
+    heads.unshift(before);
+    at = before;
+  }
+  return heads;
+}
+
+/**
+ * The head `commit` brought up to date, when `commit` only merged production
+ * history into it, or null.
+ *
+ * The test is what the commit holds, not who made it: two parents, the second
+ * one a commit the production branch `main` holds, and a diff against that
+ * second parent that is the first parent's own diff, path for path and byte
+ * for byte. An update Oxagen made passes. A merge with any edit of its own,
+ * such as one written in GitHub's conflict editor, does not, so the content
+ * that merges is always the content the reviewer approved.
+ */
+async function updatedFrom(
+  host: SteeringHost,
+  repo: SteeringRepository,
+  commit: string,
+  main: string,
+): Promise<string | null> {
+  const parents = await host.commitParents(repo, commit);
+  const [before, production] = parents;
+  if (parents.length !== 2 || !before || !production) return null;
+  if (!(await host.holdsCommit(repo, main, production))) return null;
+  const base = await host.mergeBase(repo, before, production);
+  if (base === null) return null;
+  const [was, now] = await Promise.all([
+    host.changedFiles(repo, base, before),
+    host.changedFiles(repo, production, commit),
+  ]);
+  if (was.length !== now.length) return null;
+  const statusWas = new Map(was.map((file) => [file.path, file.status]));
+  for (const file of now) {
+    if (statusWas.get(file.path) !== file.status) return null;
+    if (file.status === "removed") continue;
+    const [left, right] = await Promise.all([
+      host.readFile(repo, file.path, before),
+      host.readFile(repo, file.path, commit),
+    ]);
+    if (left === null || left !== right) return null;
+  }
+  return before;
+}
+
 /**
  * Merge one steering PR at the head of the queue.
  *
@@ -648,7 +756,8 @@ function headsAfterUpdate(
  *    the branch up to date, run the checks again on the new head, and read
  *    the approvals again. An approval carries onto the new head only when
  *    that head is a merge commit of the approved head and the production
- *    branch head, so the PR's own diff is unchanged.
+ *    branch head, so the PR's own diff is unchanged. A retry that starts
+ *    from such a merge commit counts approvals of the heads under it too.
  * 2. In the steering layout, push the stamp commit and post the required
  *    check on it, naming the commit the checks ran on.
  * 3. Read the production branch again. When it moved, point the branch back
@@ -667,7 +776,7 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
   const { host, repo } = input;
   const attempts = input.maxAttempts ?? LAND_ATTEMPTS;
   let head = input.checkedHead;
-  let heads: string[] = [head];
+  let heads: string[] | null = null;
   let checks = input.checks;
   let approval: MergeApproval | null = null;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -680,6 +789,7 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
       });
     }
     await assertSteeringCommit(host, repo, main);
+    heads ??= await approvalHeads(host, repo, head, main);
     approval ??= await input.approve(heads);
     if (!(await host.holdsCommit(repo, head, main))) {
       const update = await host.updateBranch(repo, {
@@ -695,7 +805,7 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
         throw new HandlerError({
           code: "conflict",
           reason: "checks_failed",
-          message: `${repo.defaultBranch} moved, and the checks failed on ${head} after Oxagen brought ${input.branch} up to date. Fix the branch and run the checks again.`,
+          message: `${repo.defaultBranch} moved, and the checks failed on ${head} after Oxagen brought ${input.branch} up to date.${again.failure ? ` ${again.failure}` : ""} Fix the branch and run the checks again.`,
         });
       }
       checks = again.checks;
@@ -810,6 +920,198 @@ async function dropStampQuietly(
       "steering merge queue: the stamp commit could not be dropped; the next merge refuses head_moved until the branch is reset",
     );
   }
+}
+
+export interface StampTestInput {
+  host: SteeringHost;
+  repo: SteeringRepository;
+  /** The PR's branch. Its ledger line names it, and its prefix says whether it is an import. */
+  branch: string;
+  /** The PR whose stamp `head` must be. */
+  number: number;
+  /** The commit to test. */
+  head: string;
+  /** When set, the only commit the stamp may sit on. */
+  on?: string;
+  /**
+   * A production branch commit the PR's branch shares history with. What the
+   * PR changes is read against the newest commit the two share.
+   */
+  production: () => Promise<string | null>;
+}
+
+/**
+ * The commit `head` stamps, when `head` is Oxagen's stamp commit for PR
+ * `number`, or null.
+ *
+ * The commit message proves nothing, so a stamp is known by what it changes.
+ * Its one parent is the head the checks passed on, and it changes nothing a
+ * stamp does not: one ledger file under {@link PROMOTIONS_DIR}, which it
+ * extends by one promotion/v1 line that names this PR and its branch; the
+ * `id` and `hash` lines of records the PR already changes, so each such file
+ * at `head` is exactly that file at the parent, stamped; and, on an import
+ * branch, the deletion of {@link IMPORT_REPLACES_PATH}. Anything else is a
+ * person's push.
+ */
+export async function stampParentOf(
+  input: StampTestInput,
+): Promise<string | null> {
+  const { host, repo, branch, head } = input;
+  const parents = await host.commitParents(repo, head);
+  const [parent] = parents;
+  if (parents.length !== 1 || !parent) return null;
+  if (input.on !== undefined && parent !== input.on) return null;
+  const stamped = await host.changedFiles(repo, parent, head);
+  if (stamped.length === 0) return null;
+  const main = await input.production();
+  const base = main === null ? null : await checkBase(host, repo, parent, main);
+  const own =
+    base === null
+      ? new Set<string>()
+      : new Set(
+          (await host.changedFiles(repo, base, parent))
+            .filter((file) => file.status !== "removed")
+            .map((file) => file.path),
+        );
+  let ledgers = 0;
+  for (const file of stamped) {
+    if (file.path.startsWith(`${PROMOTIONS_DIR}/`)) {
+      if (file.status === "removed" || ++ledgers > 1) return null;
+      const before =
+        file.status === "added"
+          ? ""
+          : await host.readFile(repo, file.path, parent);
+      const after = await host.readFile(repo, file.path, head);
+      if (before === null || after === null || !after.startsWith(before))
+        return null;
+      if (!ledgerLineNames(after.slice(before.length), repo, input.number, branch))
+        return null;
+      continue;
+    }
+    if (file.path === IMPORT_REPLACES_PATH) {
+      if (file.status !== "removed" || !isImportBranch(branch)) return null;
+      continue;
+    }
+    if (
+      file.status !== "modified" ||
+      !own.has(file.path) ||
+      !isStampedRecordPath(file.path)
+    )
+      return null;
+    const before = await host.readFile(repo, file.path, parent);
+    const after = await host.readFile(repo, file.path, head);
+    if (before === null || after === null) return null;
+    const expected = stampRecordText(before);
+    if (!expected.ok || expected.text !== after) return null;
+  }
+  return ledgers === 1 ? parent : null;
+}
+
+/** True when `added` is one promotion/v1 line that records PR `number` on `branch`. */
+function ledgerLineNames(
+  added: string,
+  repo: SteeringRepository,
+  number: number,
+  branch: string,
+): boolean {
+  const [line, ...more] = added.split("\n").filter((text) => text.trim() !== "");
+  if (line === undefined || more.length > 0) return false;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return false;
+  }
+  const read = promotionSchema.safeParse(parsed);
+  return (
+    read.success &&
+    read.data.pull_request.provider === repo.provider &&
+    read.data.pull_request.number === number &&
+    read.data.branch === branch
+  );
+}
+
+/**
+ * True when Oxagen merged a steering PR the host reports merged at `head`.
+ *
+ * In the steering layout every merge from Oxagen lands its stamp commit, and
+ * the proposal row moves to the stamp only after the host merged it. So a
+ * merged PR whose head is not Oxagen's stamp for that PR, the head the checks
+ * passed on included, was merged on the host by someone else: no ledger line,
+ * no Oxagen trailers, and no approval check stand behind it (#4504). What the
+ * PR changes is read against the production branch commit the merge landed
+ * on, the first parent of `mergeCommit`.
+ */
+export async function mergedByOxagen(input: {
+  host: SteeringHost;
+  repo: SteeringRepository;
+  branch: string;
+  number: number;
+  head: string | null;
+  mergeCommit: string | null;
+}): Promise<boolean> {
+  const { host, repo, head, mergeCommit } = input;
+  if (head === null) return false;
+  const parent = await stampParentOf({
+    host,
+    repo,
+    branch: input.branch,
+    number: input.number,
+    head,
+    production: async () =>
+      mergeCommit === null
+        ? host.branchHead(repo, repo.defaultBranch)
+        : ((await host.commitParents(repo, mergeCommit))[0] ?? null),
+  });
+  return parent !== null;
+}
+
+export interface StrandedStampInput {
+  host: SteeringHost;
+  repo: SteeringRepository;
+  branch: string;
+  /** The PR whose stamp the head may be. */
+  number: number;
+  /** The head the checks passed on, which the proposal row still names. */
+  checkedHead: string;
+  /** The PR's head now. */
+  head: string;
+}
+
+/**
+ * Drop a stamp commit that a merge left on the branch when it stopped
+ * between the stamp and the host merge, and answer true (#4498).
+ *
+ * The call that pushed a stamp drops it on any failure it sees. A call that
+ * dies, or times out, does not, and its claim lapses with the stamp still the
+ * PR's head. Without this, every later merge read that head as moved and
+ * refused `head_moved`, and nothing put the branch back.
+ *
+ * `head` counts as a stamp only when it is Oxagen's stamp for the PR on top
+ * of `checkedHead` ({@link stampParentOf}). Anything else is a person's push,
+ * and the caller still refuses `head_moved`. The reset runs only while the
+ * branch is still at `head`, so a push in between stays.
+ */
+export async function dropStrandedStamp(input: StrandedStampInput): Promise<boolean> {
+  const { host, repo, branch, checkedHead, head } = input;
+  if (head === checkedHead) return false;
+  const parent = await stampParentOf({
+    host,
+    repo,
+    branch,
+    number: input.number,
+    head,
+    on: checkedHead,
+    production: () => host.branchHead(repo, repo.defaultBranch),
+  });
+  if (parent === null) return false;
+  const reset = await host.resetBranch(repo, branch, { from: head, to: checkedHead });
+  if (reset)
+    logger.info(
+      { repository: repo.fullName, branch, stamp: head, head: checkedHead },
+      "steering merge queue: dropped a stamp commit a stopped merge left on the branch",
+    );
+  return reset;
 }
 
 /** A push reached the branch after the stamp, so the stamp stays under it. */

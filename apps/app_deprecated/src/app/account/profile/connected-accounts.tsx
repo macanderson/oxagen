@@ -80,8 +80,8 @@ export function ConnectedAccounts({ state }: ConnectedAccountsProps) {
   return (
     <section aria-label="Connected accounts" className="flex flex-col gap-3">
       <div>
-        <h3 className="text-sm font-medium">Connected accounts</h3>
-        <p className="text-xs text-muted-foreground mt-0.5">
+        <h3 className="text-base font-medium">Connected accounts</h3>
+        <p className="text-sm text-muted-foreground mt-0.5">
           Sign in with any of your connected accounts.
         </p>
       </div>
@@ -100,13 +100,13 @@ export function ConnectedAccounts({ state }: ConnectedAccountsProps) {
               <div className="flex items-center gap-3">
                 <span className="text-foreground">{icon}</span>
                 <div className="flex flex-col">
-                  <span className="text-sm font-medium">{label}</span>
+                  <span className="text-base font-medium">{label}</span>
                   {linked ? (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-sm text-muted-foreground">
                       Connected
                     </span>
                   ) : (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-sm text-muted-foreground">
                       Not connected
                     </span>
                   )}
@@ -142,7 +142,7 @@ export function ConnectedAccounts({ state }: ConnectedAccountsProps) {
 
                 {/* Last-method safety note */}
                 {isLastMethod && (
-                  <p className="text-xs text-muted-foreground max-w-[200px] text-right">
+                  <p className="text-sm text-muted-foreground max-w-[200px] text-right">
                     Set a password or connect another account before
                     disconnecting.
                   </p>
@@ -150,7 +150,7 @@ export function ConnectedAccounts({ state }: ConnectedAccountsProps) {
 
                 {/* Inline error */}
                 {errors[key] && (
-                  <p className="text-xs text-destructive" role="alert">
+                  <p className="text-sm text-destructive" role="alert">
                     {errors[key]}
                   </p>
                 )}

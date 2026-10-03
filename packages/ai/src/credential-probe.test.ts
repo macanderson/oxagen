@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CREDENTIAL_PROBE_TIMEOUT_MS,
   CREDENTIAL_PROBE_URL,
+  endpointUrl,
   probeModelCredential,
 } from "./credential-probe";
 
@@ -264,6 +265,46 @@ describe("probeModelCredential — direct vendors and custom endpoints", () => {
     expect((fetchMock.mock.calls[0] as [string])[0]).toBe(
       "https://api.together.xyz/v1/models",
     );
+  });
+
+  it("asks both questions on the endpoint's path and keeps its query after the path (#3317)", async () => {
+    // Azure OpenAI and some gateways need `api-version` on every request. A
+    // path joined onto the whole string would land inside the query and
+    // send both questions to `/v1`.
+    const fetchMock = stubFetch(async (url) =>
+      String(url).includes("/models")
+        ? jsonResponse(200, { data: [] })
+        : jsonResponse(200, {
+            choices: [
+              { message: { tool_calls: [{ function: { name: "ping" } }] } },
+            ],
+          }),
+    );
+    await probeModelCredential({
+      provider: "openai_compatible",
+      apiKey: KEY,
+      baseUrl: "https://host.example/v1/?api-version=2024-10-01",
+      toolProbeModel: "m",
+    });
+    const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(urls[0]).toBe(
+      "https://host.example/v1/models?api-version=2024-10-01",
+    );
+    expect(urls).toContain(
+      "https://host.example/v1/chat/completions?api-version=2024-10-01",
+    );
+  });
+
+  it("joins a path with one slash, and puts it before any query", () => {
+    expect(endpointUrl("https://host.example/v1", "models")).toBe(
+      "https://host.example/v1/models",
+    );
+    expect(
+      endpointUrl("https://host.example/v1//", "/chat/completions"),
+    ).toBe("https://host.example/v1/chat/completions");
+    expect(
+      endpointUrl("https://host.example/v1?api-version=1", "models"),
+    ).toBe("https://host.example/v1/models?api-version=1");
   });
 
   it("reports toolCalling: true when the endpoint returns a forced tool call", async () => {

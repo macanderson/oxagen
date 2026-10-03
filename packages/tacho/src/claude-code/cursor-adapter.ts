@@ -31,8 +31,11 @@
  * `conversation_id`; `preToolUse` carries `tool_name`, `tool_input`,
  * `tool_use_id`, `cwd` and `agent_message`. Cursor issues both the session id
  * and the tool-use id, so unlike Stella nothing has to be synthesized from a
- * pid or a digest of the call. `postToolUse` carries `tool_output`;
- * `subagentStart`/`subagentStop` carry `subagent_id` and `subagent_type`.
+ * pid or a digest of the call. `postToolUse` carries `tool_output`, and
+ * `postToolUseFailure` carries `error_message`. `subagentStart` carries
+ * `subagent_id`, `subagent_type` and the subagent's `task`. `subagentStop`
+ * carries `subagent_type`, `task`, `description` and the subagent's output
+ * `summary` (Cursor's hook reference as of 2026-10-03).
  * Cursor names its built-in tools `Shell`, `Read`, `Write`, `Grep`, `Delete`,
  * `Task` and an MCP tool `MCP:<tool>`; the adapter renames them to Claude
  * Code's names (`Bash` for `Shell`, the rest pass through or keep their
@@ -95,6 +98,7 @@
  * above 0 exactly when a stop hook's follow-up started the turn that just
  * ended, because any other submission resets the count to 0.
  */
+import { digestText } from "./context";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -189,6 +193,22 @@ export function cursorToolName(name: string, mcpServer?: unknown): string {
  *   - `session_id` / `conversation_id` as separate members, since one of
  *     them becomes `session_id` and repeating the other adds no fact
  *     (Cursor's own session id survives as `cursor_session_id`).
+ *
+ * Free text the recorder has no body member for leaves as a digest and a
+ * length, never as itself. A member passed through lands in a `hook.*`
+ * attribute. An attribute gets only the credential detectors, never the
+ * retention mandate every body goes through, so a workspace that keeps
+ * digests only would still store the text. Stella's subagent instruction is
+ * handled the same way (`digestSubagentInstruction` in `./stella-adapter.ts`).
+ *
+ *   - `task` (the parent's instruction to a subagent), `description` and
+ *     `summary` (the subagent's output) become `<name>_digest` and
+ *     `<name>_length`. A value that is not a string is dropped.
+ *   - `error_message` on `postToolUseFailure` becomes `error`, which
+ *     `normalizeHook` digests as the tool error, as it does for Claude
+ *     Code. On any other event nothing reads `error`, so there it leaves as
+ *     `error_message_digest` and `error_message_length`. `sessionEnd` sends
+ *     it, and its `reason` already says the session ended on an error.
  */
 export function translateCursorPayload(raw: unknown): unknown {
   if (!isRecord(raw)) return raw;
@@ -209,6 +229,10 @@ export function translateCursorPayload(raw: unknown): unknown {
     subagent_id: subagentId,
     subagent_type: subagentType,
     duration,
+    task,
+    description,
+    summary,
+    error_message: errorMessage,
     ...rest
   } = raw;
   // `session_id` is documented as the same value as `conversation_id` and is
@@ -255,6 +279,21 @@ export function translateCursorPayload(raw: unknown): unknown {
   if (typeof duration === "number") out["duration_ms"] = duration;
   if (typeof subagentId === "string") out["agent_id"] = subagentId;
   if (typeof subagentType === "string") out["agent_type"] = subagentType;
+  // Free text with no body member: a digest and a length, never the text
+  // (see the function comment).
+  const digestOnly: [string, unknown][] = [
+    ["task", task],
+    ["description", description],
+    ["summary", summary],
+  ];
+  if (event === "postToolUseFailure" && errorMessage !== undefined)
+    out["error"] = errorMessage;
+  else digestOnly.push(["error_message", errorMessage]);
+  for (const [name, value] of digestOnly) {
+    if (typeof value !== "string") continue;
+    out[`${name}_digest`] = digestText(value);
+    out[`${name}_length`] = value.length;
+  }
   return out;
 }
 

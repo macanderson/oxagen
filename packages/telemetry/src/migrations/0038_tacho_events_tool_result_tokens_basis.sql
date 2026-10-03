@@ -1,0 +1,27 @@
+-- 0038_tacho_events_tool_result_tokens_basis.sql
+--
+-- The basis of a tool call's result tokens (#5339).
+--
+-- tool_result_tokens_basis says how tool_result_tokens is known: `reported`
+-- for Claude Code's own count on its OTel tool span, `estimated` for the
+-- recorder's count from the size of the result the hook saw. The rollup and
+-- the findings job price an estimated count as an estimate, never as a count
+-- Claude Code reported.
+--
+-- The column is LowCardinality(String) with an empty default, like the three
+-- token source bases 0036 added. An empty basis beside a count means the row
+-- was written before this column existed. Only the OTel span wrote a count
+-- then, so a reader takes it as `reported`. A DEFAULT 'reported' would say
+-- the same for every old row, but it would also stamp `reported` on a new
+-- row whose producer forgot the basis, and that is the mistake this column
+-- exists to catch.
+--
+-- Why this file exists beside 0027. 0027 is GENERATED from the @oxagen/tacho
+-- envelope, so adding a body member rewrites it, and a cluster that already
+-- applied 0027 skips the rewritten file and never gets the column. This one
+-- carries the column forward to every cluster bootstrapped before it.
+-- Idempotent, so the order of the two on a fresh cluster does not matter.
+--
+-- Backfill: none. An old row reads an empty basis.
+ALTER TABLE tacho_events
+  ADD COLUMN IF NOT EXISTS tool_result_tokens_basis LowCardinality(String) AFTER tool_result_tokens;

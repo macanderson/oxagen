@@ -108,7 +108,7 @@ function GovernanceField({ idPrefix }: { idPrefix: string }) {
     <div className="flex min-w-0 flex-col gap-1.5">
       <label
         htmlFor={`${idPrefix}-governance`}
-        className="text-sm font-medium text-foreground"
+        className="text-base font-medium text-foreground"
       >
         {t("heading")}
       </label>
@@ -121,7 +121,7 @@ function GovernanceField({ idPrefix }: { idPrefix: string }) {
         onChange={(event) => {
           setMode(event.target.value);
         }}
-        className={`${inputBase} max-md:text-base`}
+        className={`${inputBase} max-md:text-input-touch`}
       >
         <option value="">{t("unchanged")}</option>
         {GOVERNANCE_MODES.map((choice) => (
@@ -132,13 +132,13 @@ function GovernanceField({ idPrefix }: { idPrefix: string }) {
       </select>
       <p
         id={`${idPrefix}-governance-about`}
-        className="text-xs text-muted-foreground"
+        className="text-sm text-muted-foreground"
       >
         {t("about")}
       </p>
       <label
         data-touch-target=""
-        className="flex min-h-11 items-start gap-2.5 text-sm has-[:disabled]:opacity-50"
+        className="flex min-h-11 items-start gap-2.5 text-base has-[:disabled]:opacity-50"
       >
         <input
           type="checkbox"
@@ -152,7 +152,7 @@ function GovernanceField({ idPrefix }: { idPrefix: string }) {
           <b className="block font-medium">{t("override")}</b>
           <span
             id={`${idPrefix}-governance-override-hint`}
-            className="block text-xs text-muted-foreground"
+            className="block text-sm text-muted-foreground"
           >
             {t("overrideHint")}
           </span>
@@ -182,7 +182,7 @@ function UnrecordedField({
   const t = useTranslations("organization");
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-foreground">
+      <label htmlFor={id} className="text-base font-medium text-foreground">
         {label}
       </label>
       <input
@@ -191,9 +191,9 @@ function UnrecordedField({
         disabled
         value={value ?? t("notRecorded")}
         aria-describedby={`${id}-hint`}
-        className={`${inputBase} max-md:text-base ${value === undefined ? "text-dim" : "font-mono"}`}
+        className={`${inputBase} max-md:text-input-touch ${value === undefined ? "text-dim" : "font-mono"}`}
       />
-      <p id={`${id}-hint`} className="text-xs text-muted-foreground">
+      <p id={`${id}-hint`} className="text-sm text-muted-foreground">
         {hint}
       </p>
     </div>
@@ -213,7 +213,7 @@ function BranchSelect({ id, branch }: { id: string; branch: string | null }) {
   const tf = useTranslations("organization.actions.fields");
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-foreground">
+      <label htmlFor={id} className="text-base font-medium text-foreground">
         {tf("productionBranch")}
       </label>
       <select
@@ -221,11 +221,11 @@ function BranchSelect({ id, branch }: { id: string; branch: string | null }) {
         disabled
         aria-describedby={`${id}-hint`}
         data-testid="edit-workspace-branch"
-        className={`${inputBase} max-md:text-base ${branch === null ? "text-dim" : "font-mono"}`}
+        className={`${inputBase} max-md:text-input-touch ${branch === null ? "text-dim" : "font-mono"}`}
       >
         <option>{branch ?? t("notRecorded")}</option>
       </select>
-      <p id={`${id}-hint`} className="text-xs text-muted-foreground">
+      <p id={`${id}-hint`} className="text-sm text-muted-foreground">
         {tf("productionBranchHint")}
       </p>
     </div>
@@ -242,7 +242,7 @@ function WorkspaceFactList({ agents }: { agents: number | null }) {
   const tOrg = useTranslations("organization");
   const term = "text-muted-foreground";
   return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+    <dl className="grid grid-cols-dl gap-x-4 gap-y-1.5 text-base">
       <dt className={term}>{t("toolbelt")}</dt>
       <dd className="text-dim">{tOrg("notRecorded")}</dd>
       <dt className={term}>{t("budget")}</dt>
@@ -317,14 +317,14 @@ function GovernanceResult({
   if (governance === null) return null;
   if (!governance.ok) {
     return (
-      <p className="text-sm text-error-ink">
+      <p className="text-base text-error-ink">
         {t("done.refused", { reason: governance.code ?? governance.reason })}
       </p>
     );
   }
   if (governance.outcome === "unchanged") return null;
   return (
-    <div className="flex flex-col gap-2 text-sm">
+    <div className="flex flex-col gap-2 text-base">
       <p>
         {governance.outcome === "applied"
           ? t("done.applied", {
@@ -368,8 +368,8 @@ function WorkspaceCreatedPanel({
   const t = useTranslations("organization.actions.createWorkspace.done");
   const term = "text-muted-foreground";
   return (
-    <div className="flex flex-col gap-3 text-sm">
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+    <div className="flex flex-col gap-3 text-base">
+      <dl className="grid grid-cols-dl gap-x-4 gap-y-1.5">
         <dt className={term}>{t("workspace")}</dt>
         <dd className="font-medium" data-testid="create-workspace-done-name">
           {created.name}
@@ -584,7 +584,7 @@ export function ArchiveWorkspace({
         navigate.replace(routes.organization(org, "workspaces"));
       }}
     >
-      <p className="text-sm">
+      <p className="text-base">
         {t.rich("archiveWorkspace.body", {
           name: workspace.name,
           b: (chunks) => <b>{chunks}</b>,

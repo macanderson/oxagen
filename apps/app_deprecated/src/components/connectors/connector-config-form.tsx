@@ -56,9 +56,9 @@ function SectionHeader({
 }) {
   return (
     <div className="flex flex-col gap-0.5 border-b border-border/40 pb-3 mb-4">
-      <p className="text-sm font-semibold text-foreground">{title}</p>
+      <p className="text-base font-semibold text-foreground">{title}</p>
       {description && (
-        <p className="text-xs text-muted-foreground">{description}</p>
+        <p className="text-sm text-muted-foreground">{description}</p>
       )}
     </div>
   );
@@ -267,7 +267,7 @@ export function ConnectorConfigForm({
 
   if (fetchError) {
     return (
-      <div className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+      <div className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-4 text-base text-destructive">
         <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
         Failed to load connector schema: {fetchError}
       </div>
@@ -346,7 +346,7 @@ export function ConnectorConfigForm({
       {formState.errors.length > 0 && (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
+          className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-base text-destructive"
         >
           <AlertTriangle
             className="mt-0.5 h-4 w-4 shrink-0"
@@ -369,7 +369,7 @@ export function ConnectorConfigForm({
       {submitError && (
         <div
           role="alert"
-          className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
+          className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-base text-destructive"
         >
           <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
           {submitError}

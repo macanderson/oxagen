@@ -392,6 +392,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 
 ## repository
 
+- adopt_steering_merges
 - attach_github_installation
 - attach_gitlab_project
 - get_main_repository
@@ -427,6 +428,8 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - create_run_token
 - export_run
 - fork_run
+- get_change_set
+- get_revision_diff
 - get_run
 - get_run_chain
 - get_run_context

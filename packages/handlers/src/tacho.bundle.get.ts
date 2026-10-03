@@ -67,7 +67,11 @@ export function createTachoBundleGetHandler(
         input.host_enrollment_id,
       ),
     );
-    // Both at once, so the production port answers them with one read.
+    // Both at once, so the production port answers them with one read. When
+    // the Cedar policies cannot be had and no earlier set is held, the reader
+    // throws `CedarPoliciesUnavailableError` and this request fails on
+    // purpose. The host keeps the bundle it holds, policies included. A
+    // bundle signed without them would let it allow what they forbid.
     const [skills, policy] = await Promise.all([
       skillsReader.read("get_tacho_bundle", ctx, caller),
       cedarReader.read("get_tacho_bundle", ctx, caller),

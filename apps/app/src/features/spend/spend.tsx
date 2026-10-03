@@ -8,7 +8,10 @@
 // answer, its state replaces the body; when it holds nothing, the empty state
 // does. The other summary reads (findings, waste, budgets) leave their count
 // off, and their tile not recorded, when they do not answer, and their own tab
-// says why. An agent's avatar carries the harness it registered (#4871): the
+// says why. The Findings tab reads the page of the list its cursor names, and
+// a drill reads the findings about its own key, so a finding that ranks past
+// the workspace's first page still shows (#5303). An agent's avatar carries
+// the harness it registered (#4871): the
 // rollup names the agent key alone, so the tabs that list agents read the
 // agents once beside the rollup, and a failed read leaves the avatars
 // unbadged.
@@ -18,6 +21,7 @@ import type { ReactNode } from "react";
 import type {
   SpendFinding,
   SpendFindings,
+  SpendFindingsQuery,
   SpendReport,
 } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
@@ -52,7 +56,12 @@ import { SummaryTiles } from "./summary";
 import { BudgetsTable, TaskTable, ToolSection } from "./tables";
 import { SPEND_PANEL, SpendTabs } from "./tabs";
 import { TokensSection } from "./tokens";
-import { monthToDate, type SpendAt, type SpendView } from "./view";
+import {
+  monthToDate,
+  SPEND_MONTH_DEFAULT_BY,
+  type SpendAt,
+  type SpendView,
+} from "./view";
 import { WasteSection } from "./waste";
 
 type SpendProps = {
@@ -79,6 +88,36 @@ function isEmpty(report: SpendReport): boolean {
 
 function listed(read: Read<SpendFindings>): SpendFinding[] | null {
   return read.ok ? read.value.findings : null;
+}
+
+/** The most pages a tab reads to total its findings: 1,000 findings. */
+const FINDING_PAGES_MAX = 20;
+
+/**
+ * Every open finding a query matches, page by page, for a tab that totals
+ * findings by key (#5303). The first page alone would leave out a finding
+ * that ranks past it. Null when a page does not answer, or when more
+ * findings match than FINDING_PAGES_MAX pages hold, so a total is never drawn
+ * from part of the findings.
+ */
+async function everyFinding(
+  ctx: WsCtx,
+  source: DataSource,
+  query: SpendFindingsQuery,
+): Promise<SpendFinding[] | null> {
+  const all: SpendFinding[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < FINDING_PAGES_MAX; page += 1) {
+    const read = await source.spend.findings(
+      ctx,
+      cursor === null ? query : { ...query, cursor },
+    );
+    if (!read.ok) return null;
+    all.push(...read.value.findings);
+    if (read.value.nextCursor === null) return all;
+    cursor = read.value.nextCursor;
+  }
+  return null;
 }
 
 function Header({
@@ -133,7 +172,7 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
       at.ws,
       view.drill !== null
         ? { tab: view.tab, drill: view.drill }
-        : view.tab === "month" && view.by !== "agent"
+        : view.tab === "month" && view.by !== SPEND_MONTH_DEFAULT_BY
           ? { tab: view.tab, by: view.by }
           : { tab: view.tab },
     ),
@@ -155,15 +194,18 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
   );
 
   if (view.drill !== null) {
+    // Every drill names agents: an agent's own header, and the By agent
+    // table on an operator's or a tool's drill, so each reads the harnesses.
     const [drill, findings, names, harnesses] = await Promise.all([
       source.spend.drill(ctx, view.tab, view.drill),
-      source.spend.findings(ctx),
+      // A drill's kind names the finding level it lists: operator, agent or
+      // tool. The findings job keeps at most one open finding per kind for
+      // each level and subject, so one page holds every finding about the key.
+      source.spend.findings(ctx, { level: view.tab, subject: view.drill }),
       view.tab === "operator"
         ? source.spend.byGroup(ctx, "operator", period)
         : Promise.resolve(null),
-      view.tab === "agent"
-        ? readAgentHarnessIndex(ctx, source)
-        : Promise.resolve(EMPTY_HARNESS_INDEX),
+      readAgentHarnessIndex(ctx, source),
     ]);
     if (!drill.ok) return <SpendReadFailure read={drill} {...failure} />;
     const operator =
@@ -184,6 +226,7 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
               ? harnessOfKey(harnesses, drill.value.key)
               : null
           }
+          harnesses={harnesses.byKey}
           at={at}
         />
       </>
@@ -192,7 +235,14 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
 
   const [month, findings, waste, budgets, harnesses] = await Promise.all([
     source.spend.byGroup(ctx, view.tab === "month" ? view.by : "model", period),
-    source.spend.findings(ctx),
+    // The tab badge counts every open finding on any page, so only the
+    // Findings tab names its page.
+    source.spend.findings(
+      ctx,
+      view.tab === "findings" && view.cursor !== null
+        ? { cursor: view.cursor }
+        : {},
+    ),
     source.spend.waste(ctx, period),
     source.spend.budgets(ctx),
     AGENT_TABS.has(view.tab)
@@ -310,12 +360,20 @@ async function body({
           <FindingsSection
             headline={headline}
             findings={findings.value}
+            cursor={view.cursor}
             operators={operators.ok ? operators.value.rows : []}
             harnesses={harnesses.byKey}
             at={at}
             evidence={
               evidence === null ? null : (
-                <FindingEvidence evidence={evidence} at={at} />
+                <FindingEvidence
+                  evidence={evidence}
+                  at={at}
+                  close={routes.spend(at.org, at.ws, {
+                    tab: "findings",
+                    cursor: view.cursor ?? undefined,
+                  })}
+                />
               )
             }
           />
@@ -342,19 +400,20 @@ async function body({
         />
       );
     }
-    case "tool":
-    case "task": {
-      const report = await source.spend.byGroup(ctx, view.tab, period);
+    case "tool": {
+      // Each tool's savings total its own findings, so the tab reads every
+      // tool finding, not the workspace's first page.
+      const [report, tools] = await Promise.all([
+        source.spend.byGroup(ctx, "tool", period),
+        everyFinding(ctx, source, { level: "tool" }),
+      ]);
       if (!report.ok) return <SpendReadFailure read={report} {...failure} />;
-      return view.tab === "tool" ? (
-        <ToolSection
-          report={report.value}
-          findings={listed(findings)}
-          at={at}
-        />
-      ) : (
-        <TaskTable report={report.value} />
-      );
+      return <ToolSection report={report.value} findings={tools} at={at} />;
+    }
+    case "task": {
+      const report = await source.spend.byGroup(ctx, "task", period);
+      if (!report.ok) return <SpendReadFailure read={report} {...failure} />;
+      return <TaskTable report={report.value} />;
     }
     case "cost_center": {
       const report = await source.spend.byGroup(ctx, "cost_center", period);
@@ -363,14 +422,7 @@ async function body({
     }
     case "waste":
       if (!waste.ok) return <SpendReadFailure read={waste} {...failure} />;
-      return (
-        <WasteSection
-          waste={waste.value}
-          findings={listed(findings)}
-          month={month}
-          at={at}
-        />
-      );
+      return <WasteSection waste={waste.value} month={month} at={at} />;
     case "budgets": {
       if (!budgets.ok) return <SpendReadFailure read={budgets} {...failure} />;
       const gateway = await source.spend.gatewayPolicy(ctx);

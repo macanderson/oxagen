@@ -34,7 +34,7 @@ const MODE_TONE: Record<DeclaredGovernanceMode, BadgeTone> = {
 const DRIFT_COLUMNS = ["declared", "file", "live", "right"] as const;
 
 const fileBlock =
-  "max-h-[360px] overflow-auto rounded-[10px] border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-[1.6] text-foreground whitespace-pre";
+  "max-h-90 overflow-auto rounded-xl border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-relaxed text-foreground whitespace-pre";
 
 export function Configuration({
   mainFullName,
@@ -111,7 +111,7 @@ export function Configuration({
             data-testid="configuration-drift-pr"
             data-gap={REPOSITORY_GAPS.lifecycle}
             aria-describedby="configuration-drift-none"
-            className={`${buttonSecondary} min-h-7 px-2.5 py-1 text-xs`}
+            className={`${buttonSecondary} min-h-7 px-2.5 py-1 text-sm`}
           >
             {t("driftPr")}
           </button>
@@ -177,7 +177,7 @@ export function Configuration({
           )}
           <dl
             data-testid="configuration-modes"
-            className="mt-3 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm leading-relaxed"
+            className="mt-3 grid grid-cols-dl-clip gap-x-4 gap-y-2 text-sm leading-relaxed"
           >
             {GOVERNANCE_MODES.map((mode) => (
               <div key={mode} className="contents" data-mode={mode}>
@@ -205,7 +205,7 @@ export function Configuration({
               {value.oxagen.files.join("\n")}
             </pre>
           )}
-          <p className="mt-2 text-xs text-dim">{t("treeJson")}</p>
+          <p className="mt-2 text-sm text-dim">{t("treeJson")}</p>
           <p className={`mt-3 ${note}`}>{t.rich("treeNote", { code })}</p>
         </PanelBody>
       </Panel>

@@ -139,7 +139,28 @@ describe("spend port", () => {
         series: [],
         averages: { perCall: null, perRun: null },
         share: null,
+        tokens: {
+          input_uncached: 0,
+          cache_read: 0,
+          cache_write_5m: 0,
+          cache_write_1h: 0,
+          output: 0,
+          reasoning: 0,
+          server_tool_request: 0,
+        },
+        cacheHitRate: null,
+        modelCalls: 0,
+        observed: null,
+        standing: {
+          toolDefinitionTokens: null,
+          contextFrameTokens: null,
+          steeringTokens: null,
+        },
+        resultTokens: null,
         byTool: [],
+        byAgent: [],
+        byOperator: [],
+        byModel: [],
       }),
     );
     const read = await spend.drill(ctx, "agent", "acme/core-platform/triage");
@@ -163,6 +184,7 @@ describe("spend port", () => {
                 runsWithWaste: 0,
                 largestCause: null,
                 causes: [],
+                findingsOutsidePeriod: 0,
               })
             : readOk({ budgets: [] }),
         ),
@@ -362,6 +384,7 @@ describe("spend port", () => {
         { detector: 5, saving: usd("300"), findings: 2 },
       ],
       estimate: { saving: usd("900"), findings: 1 },
+      findingsOutsidePeriod: 2,
     };
     kernelRead.mockResolvedValue(readOk(answer));
     const read = await spend.unproductive(ctx, period);
@@ -446,6 +469,9 @@ describe("the findings the Spend page leads with", () => {
         annualised: savingCost,
         counts: { findings: 1, high: 1, medium: 0, operators: 2 },
         findings: [listedFinding],
+        truncated: false,
+        nextCursor: null,
+        offset: 0,
       }),
     );
     const read = await spend.findings(ctx);
@@ -466,6 +492,41 @@ describe("the findings the Spend page leads with", () => {
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: findingList,
       input: { status: "open" },
+      page: "spend",
+    });
+  });
+
+  it("findings narrows the read to a subject or a later page, and carries the page's cursor and offset (#5303)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        status: "open",
+        window: listedFinding.window,
+        saving: savingCost,
+        spend: null,
+        share: null,
+        annualised: savingCost,
+        counts: { findings: 62, high: 62, medium: 0, operators: 2 },
+        findings: [listedFinding],
+        truncated: true,
+        nextCursor: "c3",
+        offset: 50,
+      }),
+    );
+    const read = await spend.findings(ctx, {
+      level: "agent",
+      subject: "acme.core.release-bot",
+      cursor: "c2",
+    });
+    expect(read.ok && read.value.nextCursor).toBe("c3");
+    expect(read.ok && read.value.offset).toBe(50);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: findingList,
+      input: {
+        status: "open",
+        level: "agent",
+        subject: "acme.core.release-bot",
+        cursor: "c2",
+      },
       page: "spend",
     });
   });
@@ -585,6 +646,9 @@ describe("the findings the Spend page leads with", () => {
         annualised: null,
         counts: { findings: 1, high: 1, medium: 0, operators: 1 },
         findings: [{ ...listedFinding, id: "01k5rtgh" }],
+        truncated: false,
+        nextCursor: null,
+        offset: 0,
       }),
     );
     expect(await spend.findings(ctx)).toEqual(

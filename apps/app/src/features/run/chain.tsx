@@ -101,7 +101,7 @@ function Gaps({ gaps }: { gaps: RunChain["gaps"] }) {
           {t("missingFrames", {
             count: formatCount(gaps.missingFrameCount, locale),
           })}{" "}
-          <span className={`${mono} text-sm`}>
+          <span className={`${mono} text-xs`}>
             {gaps.missingSequences
               .map((gap) =>
                 gap.from === gap.to ? gap.from : `${gap.from}-${gap.to}`,
@@ -160,10 +160,10 @@ function HashChain({ chain }: { chain: RunChain }) {
               })}
         </Fact>
         <Fact label={t("rule")}>
-          <span className={`${mono} block text-sm`}>
+          <span className={`${mono} block text-xs`}>
             {t(`rules.${rule}`)}
           </span>
-          <span className={`${mono} block text-sm text-dim`}>
+          <span className={`${mono} block text-xs text-dim`}>
             {chain.hashRule}
           </span>
         </Fact>
@@ -186,12 +186,12 @@ function HashChain({ chain }: { chain: RunChain }) {
           <Gaps gaps={chain.gaps} />
         </Fact>
       </Facts>
-      <div className="mt-[13px] flex flex-col gap-2">
+      <div className="mt-3.25 flex flex-col gap-2">
         <Note>{t(`note.${rule}`)}</Note>
         {chain.complete ? null : (
           <p
             data-testid="chain-prefix"
-            className="m-0 text-xs text-muted-foreground"
+            className="m-0 text-sm text-muted-foreground"
           >
             {t("prefix")}
           </p>
@@ -234,7 +234,7 @@ function Attestation({ seal }: { seal: Seal }) {
             keyRef: attestation.keyRef,
           })}
         </span>
-        <span className="block text-sm text-muted-foreground">
+        <span className="block text-xs text-muted-foreground">
           {attestation.sig}
         </span>
       </Fact>
@@ -433,17 +433,17 @@ function ReplayGrade({
                   <span className={`${mono} text-dim`}>{rung.grade}</span>
                 )}
               </td>
-              <td className={`${cell} text-xs`}>
+              <td className={`${cell} text-sm`}>
                 <span className="block md:truncate">
                   {rung.met ? t("met") : t("unmet")}
                 </span>
                 <span
-                  className={`${mono} block text-sm text-dim md:truncate`}
+                  className={`${mono} block text-xs text-dim md:truncate`}
                 >
                   {rung.reason}
                 </span>
               </td>
-              <td className={`${cell} text-xs`}>
+              <td className={`${cell} text-sm`}>
                 {t(`allowsText.${rung.grade}`)}
               </td>
             </tr>
@@ -492,7 +492,7 @@ function Checkpoints({ chain, place }: { chain: RunChain; place: Place }) {
       testId="chain-checkpoints"
       flush
       aside={
-        <span className="font-mono text-sm text-dim">
+        <span className="font-mono text-xs text-dim">
           {t("count", { count: formatCount(chain.checkpoints.length, locale) })}
         </span>
       }
@@ -546,7 +546,7 @@ function CheckpointRow({
         <FrameLink seq={checkpoint.seq} chainRef={undefined} place={place} />
       </td>
       <td
-        className={`${cell} ${mono} whitespace-nowrap text-sm`}
+        className={`${cell} ${mono} whitespace-nowrap text-xs`}
         data-truncate={checkpoint.chainHead}
       >
         {shortDigest(checkpoint.chainHead)}
@@ -554,7 +554,7 @@ function CheckpointRow({
       <td className={numericCell}>
         {formatCount(checkpoint.eventCount, locale)}
       </td>
-      <td className={`${cell} text-xs`}>
+      <td className={`${cell} text-sm`}>
         <span className="flex flex-col items-start gap-1">
           {checkpoint.countersignedAt === null ? (
             <span data-testid="chain-not-countersigned">
@@ -565,14 +565,14 @@ function CheckpointRow({
           ) : (
             <Badge tone="allowed">{t("countersigned")}</Badge>
           )}
-          <span className="max-w-full text-sm text-dim md:truncate">
+          <span className="max-w-full text-xs text-dim md:truncate">
             {t("signed")} <When at={checkpoint.signedAt} />
             <span className={`${mono} block md:truncate`}>
               {checkpoint.deviceKeyFingerprint}
             </span>
           </span>
           {checkpoint.countersignedAt === null ? null : (
-            <span className="max-w-full text-sm text-dim md:truncate">
+            <span className="max-w-full text-xs text-dim md:truncate">
               {t("countersignedAt")} <When at={checkpoint.countersignedAt} />
               {checkpoint.platformKey === null ? null : (
                 <span className={`${mono} block md:truncate`}>
@@ -583,7 +583,7 @@ function CheckpointRow({
           )}
           {checkpoint.anchorRoot === null ? null : (
             <span
-              className={`${mono} max-w-full text-sm text-dim md:truncate`}
+              className={`${mono} max-w-full text-xs text-dim md:truncate`}
             >
               {t("anchored", { root: checkpoint.anchorRoot })}
             </span>
@@ -625,7 +625,7 @@ export function ChainSection({
   const chain = read.value;
   const panels = (
     // `.grid.g2 { grid-template-columns:repeat(auto-fit,minmax(320px,1fr)) }`
-    <div className="grid items-start gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))]">
+    <div className="grid items-start gap-3.5 grid-cols-cards">
       <HashChain chain={chain} />
       <SealPanel
         chain={chain}

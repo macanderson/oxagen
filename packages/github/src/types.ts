@@ -6,6 +6,11 @@ export interface GitHubClosingIssue {
   title: string;
   url: string;
   state: "open" | "closed";
+  /**
+   * GitHub's node id for the issue, the id a work item names its source issue
+   * by (`issue:node:<id>`). Absent when the answer carried none.
+   */
+  nodeId?: string;
 }
 
 /**

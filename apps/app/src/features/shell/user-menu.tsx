@@ -95,10 +95,10 @@ export function UserMenu({ data }: { data: ShellData }) {
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Positioner sideOffset={8} align="end" className="z-50">
-          <Menu.Popup className={`${menuPopup} w-[250px]`}>
+          <Menu.Popup className={`${menuPopup} w-62.5`}>
             <div className="px-3 pb-2 pt-2">
-              <p className="truncate text-sm font-semibold">{displayName}</p>
-              <p className="truncate font-mono text-xs text-muted-foreground">
+              <p className="truncate text-base font-semibold">{displayName}</p>
+              <p className="truncate font-mono text-sm text-muted-foreground">
                 {viewer.email}
               </p>
             </div>
@@ -144,7 +144,7 @@ export function UserMenu({ data }: { data: ShellData }) {
                 {signOutFailed ? (
                   <span
                     data-testid="sign-out-failed"
-                    className="mt-0.5 block text-xs text-destructive"
+                    className="mt-0.5 block text-sm text-destructive"
                   >
                     {t("userMenu.signOutFailed")}
                   </span>

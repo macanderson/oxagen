@@ -1192,12 +1192,6 @@ type Messages = {
         validTo: string;
         status: string;
       };
-      status: {
-        draft: string;
-        active: string;
-        expired: string;
-        revoked: string;
-      };
       request: {
         open: string;
         title: string;
@@ -1238,7 +1232,6 @@ type Messages = {
       noneListedDetail: string;
       retired: string;
       noneEffectiveUpcoming: string;
-      startsOn: string;
       cannotMove: string;
       active: string;
       chain: {
@@ -2765,6 +2758,7 @@ type Messages = {
       columns: {
         run: string;
         agent: string;
+        harness: string;
         operator: string;
         status: string;
         pullRequests: string;
@@ -2778,6 +2772,7 @@ type Messages = {
       };
       parked: string;
       notRecorded: string;
+      harnessRegistered: string;
       noUsage: string;
       basisNotRecorded: string;
       estimate: string;
@@ -4828,6 +4823,7 @@ type Messages = {
         baseUrlRequired: string;
         balancedRequired: string;
         invalid: string;
+        modelTooLong: string;
         refused: string;
         pendingApproval: string;
         unavailable: string;
@@ -5758,9 +5754,7 @@ type Messages = {
       installationUnreachable: string;
       mainRepo: string;
       repositoryAlreadyLinked: string;
-      mainRepoClaimed: string;
       mainRepoUnbound: string;
-      repositoryLinkedElsewhere: string;
       mainRepoUnlinkRefused: string;
       repositoryNotLinked: string;
       workspaceTomlUnreadable: string;
@@ -6993,6 +6987,7 @@ type Messages = {
         };
         allAdvanced: string;
         retries: string;
+        resultTokens: string;
       };
       families: {
         shell: string;
@@ -7029,10 +7024,13 @@ type Messages = {
         byCost: string;
         resultsTitle: string;
         standingTitle: string;
+        windowsTitle: string;
+        windowsSplitTitle: string;
         sources: {
           toolDefinitions: string;
           steering: string;
           contextFrames: string;
+          contextBlock: string;
         };
         noTools: string;
         toolsNotRead: string;
@@ -7040,6 +7038,7 @@ type Messages = {
         note: string;
         noteWithResults: string;
         noteWithStanding: string;
+        noteWithWindows: string;
         noteNotRolledUp: string;
       };
       calls: {
@@ -7105,7 +7104,11 @@ type Messages = {
           steering: string;
           system: string;
         };
+        tok: string;
+        tokShare: string;
         partsNote: string;
+        windowsNote: string;
+        sourcesNote: string;
         effectivePrice: string;
         effectiveValue: string;
         cacheWriteShare: string;
@@ -7402,7 +7405,6 @@ type Messages = {
         answerShape: string;
         repositoryUnresolved: string;
         slugTaken: string;
-        mainRepoClaimed: string;
         githubNotConnected: string;
         githubNotAuthorized: string;
         installationUnreachable: string;
@@ -7865,6 +7867,10 @@ type Messages = {
       };
       statusFilter: string;
       noMatch: string;
+      changes: {
+        title: string;
+        toggle: string;
+      };
       linked: {
         title: string;
         edge: {
@@ -9270,9 +9276,12 @@ type Messages = {
       };
       costData: string;
       hero: string;
+      heroWindow: string;
       heroShareOf: string;
       heroPeriod: string;
       heroNoSpend: string;
+      heroSpendNote: string;
+      heroOutside: string;
       mixedCurrency: string;
       parts: {
         title: string;
@@ -9289,6 +9298,7 @@ type Messages = {
       attributionMissing: string;
       evidenceLine: string;
       list: string;
+      truncated: string;
       filters: {
         label: string;
         level: string;
@@ -9309,6 +9319,12 @@ type Messages = {
         range: string;
         previous: string;
         next: string;
+      };
+      pages: {
+        label: string;
+        first: string;
+        next: string;
+        empty: string;
       };
       card: {
         amount: string;
@@ -9399,9 +9415,19 @@ type Messages = {
       causeRuns: string;
       cause: {
         cache_write_never_read: string;
+        spin_loops: string;
+        retry_loops: string;
+        repeated_calls: string;
+        recurring_runs: string;
+        spend_with_no_outcome: string;
       };
       why: {
         cache_write_never_read: string;
+        spin_loops: string;
+        retry_loops: string;
+        repeated_calls: string;
+        recurring_runs: string;
+        spend_with_no_outcome: string;
       };
       designCause: {
         cacheMisses: string;
@@ -9411,11 +9437,10 @@ type Messages = {
         idleWhileParked: string;
         haltedEarly: string;
       };
+      causesNote: string;
       causesMissing: string;
-      retryLoopsWhy: string;
-      retryLoopsNone: string;
-      retryLoopsFindings: string;
-      retryLoopsOpen: string;
+      outside: string;
+      openFindings: string;
       runs: string;
       note: string;
       runAmountMissing: string;
@@ -9618,6 +9643,12 @@ type Messages = {
         repeatCalls: string;
         retries: string;
       };
+      toolSpendNote: string;
+      toolCacheNote: string;
+      observedNote: string;
+      toolDefinitionsNote: string;
+      resultBodyNote: string;
+      toolEstimate: string;
       byDay: string;
       peak: string;
       on: string;
@@ -9632,7 +9663,19 @@ type Messages = {
         operator: string;
         model: string;
       };
-      crossMissing: string;
+      cutEmpty: {
+        agent: string;
+        operator: string;
+        model: string;
+      };
+      columns: {
+        agent: string;
+        operator: string;
+        model: string;
+        tokens: string;
+        resultTokens: string;
+        resultCost: string;
+      };
       toolsEmpty: string;
       findings: string;
       noFindings: string;
@@ -9667,6 +9710,10 @@ type Messages = {
           hint: string;
         };
         cost_center: {
+          label: string;
+          hint: string;
+        };
+        runs: {
           label: string;
           hint: string;
         };
@@ -9756,9 +9803,10 @@ type Messages = {
         toolResults: string;
         reasoning: string;
         basis: string;
+        part: string;
       };
       composition: string;
-      compositionMissing: string;
+      compositionFooter: string;
       parts: {
         conversation: string;
         toolResults: string;
@@ -9905,6 +9953,14 @@ type Messages = {
         label: string;
         note: string;
       };
+      noWorkItem: {
+        label: string;
+        note: string;
+      };
+      notMetered: {
+        label: string;
+        reported: string;
+      };
       moreRuns: string;
       showRuns: string;
       reported: string;
@@ -9927,12 +9983,14 @@ type Messages = {
       by: {
         label: string;
         options: {
+          work_item: string;
           agent: string;
           operator: string;
           model: string;
           mcp_server: string;
         };
         titles: {
+          work_item: string;
           agent: string;
           operator: string;
           model: string;
@@ -10942,6 +11000,8 @@ type Messages = {
         pendingApproval: string;
         exhausted: string;
         unavailable: string;
+        noAnswer: string;
+        commitNoAnswer: string;
         billing: string;
       };
     };
@@ -11775,12 +11835,6 @@ type Messages = {
         status: string;
         tools: string;
       };
-      status: {
-        draft: string;
-        active: string;
-        expired: string;
-        revoked: string;
-      };
       truncated: string;
       partial: string;
       emptyListed: string;
@@ -12444,6 +12498,16 @@ type Messages = {
         monthly: string;
       };
     };
+    mandateStatus: {
+      status: {
+        draft: string;
+        active: string;
+        expired: string;
+        revoked: string;
+      };
+      startsOn: string;
+      endedOn: string;
+    };
     sourceFilename: {
       rename: string;
       name: string;
@@ -12613,6 +12677,50 @@ type Messages = {
       region: string;
       close: string;
     };
+    diffView: {
+      renamedFrom: string;
+      notKept: {
+        too_large: string;
+        unreadable: string;
+        unconfigured: string;
+      };
+      binary: string;
+      noRoom: string;
+      truncated: string;
+    };
+    changeSet: {
+      rule: string;
+      pullsHeading: string;
+      filesHeading: string;
+      empty: string;
+      noFiles: string;
+      state: {
+        open: string;
+        draft: string;
+        merged: string;
+        closed: string;
+      };
+      stateSeen: string;
+      noRevision: string;
+      revisionFiles: string;
+      incomplete: string;
+      countsUnknown: string;
+      leftOut: string;
+      morePullRequests: string;
+      repositorySummary: string;
+      moreFiles: string;
+      pullNotListed: string;
+      loadingDiff: string;
+      pathMissing: string;
+      loading: string;
+      failure: {
+        denied: string;
+        notFound: string;
+        pendingApproval: string;
+        other: string;
+        thrown: string;
+      };
+    };
   };
   work: {
     status: {
@@ -12643,6 +12751,13 @@ type Messages = {
       none_required: string;
       no_pull_request: string;
       pr_closed: string;
+    };
+    pullState: {
+      open: string;
+      draft: string;
+      closed: string;
+      merged: string;
+      seen: string;
     };
     wait: {
       aPerson: string;
@@ -13016,6 +13131,7 @@ type Messages = {
         title: string;
         cohort: string;
         reopened: string;
+        reverted: string;
         waiting: string;
         reverts: string;
       };
@@ -13267,7 +13383,9 @@ type Messages = {
       heading: string;
       aPerson: string;
       noPullRequest: string;
+      noRecordedPullRequest: string;
       pullRequest: string;
+      pullRequests: string;
       pullRequestRef: string;
       head: string;
       headUnread: string;
@@ -13320,6 +13438,11 @@ type Messages = {
       closedBody: string;
       acceptance: string;
       consequence: string;
+    };
+    changes: {
+      heading: string;
+      sendsHeading: string;
+      send: string;
     };
     refresh: {
       submit: string;
@@ -13379,6 +13502,7 @@ type Messages = {
         accepted: string;
         merged: string;
         pr_closed: string;
+        reverted: string;
         closed: string;
         reopened: string;
       };

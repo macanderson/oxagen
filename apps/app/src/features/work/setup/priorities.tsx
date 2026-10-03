@@ -56,7 +56,7 @@ function TriagePanel({ last30Days }: { last30Days: WorkPriorities["last30Days"] 
         <h2 id="work-triage-title" className={panelTitle}>
           {t("triageTitle")}
         </h2>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           {t("triageCaption")}
         </span>
       </div>
@@ -113,7 +113,7 @@ export function PrioritiesTab({
             problem === null ? undefined : (
               <p
                 data-testid="work-priorities-problem"
-                className="mx-auto max-w-[52ch] text-sm text-muted-foreground [overflow-wrap:anywhere]"
+                className="mx-auto max-w-measure-narrow text-base text-muted-foreground [overflow-wrap:anywhere]"
               >
                 {problem}
               </p>
@@ -130,7 +130,7 @@ export function PrioritiesTab({
     );
   const rules = [...record.rules].sort((a, b) => a.number - b.number);
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+    <div className="grid gap-4 lg:grid-cols-split">
       <section
         aria-labelledby="work-priorities-title"
         data-testid="work-priorities-record"
@@ -152,7 +152,7 @@ export function PrioritiesTab({
                 {t("priorities.version", { version: String(record.version) })}
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {record.publishedAt === null
                 ? t("priorities.unpublished")
                 : t("priorities.published", {
@@ -175,13 +175,13 @@ export function PrioritiesTab({
         <div className={`${panelBody} flex flex-col gap-2`}>
           <h3 className={eyebrowQuiet}>{t("priorities.rulesTitle")}</h3>
           {rules.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               {t("priorities.noRules")}
             </p>
           ) : (
             <ol
               data-testid="work-priorities-rules"
-              className="flex flex-col gap-2 text-sm"
+              className="flex flex-col gap-2 text-base"
             >
               {rules.map((rule) => (
                 <li

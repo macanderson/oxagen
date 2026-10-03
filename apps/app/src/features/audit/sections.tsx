@@ -167,7 +167,7 @@ export function ReceiptsTab() {
               disabled
               placeholder={t("searchPlaceholder")}
               aria-describedby={note}
-              className={`${inputBase} max-md:min-h-11 max-md:text-base`}
+              className={`${inputBase} max-md:min-h-11 max-md:text-input-touch`}
             />
           </label>
           <button
@@ -189,7 +189,7 @@ export function ReceiptsTab() {
                 type="button"
                 disabled
                 aria-describedby={note}
-                className={`${buttonSecondary} min-h-7 px-2 py-0.5 text-xs`}
+                className={`${buttonSecondary} min-h-7 px-2 py-0.5 text-sm`}
               >
                 {t(`chips.${chip}`)}
               </button>
@@ -200,7 +200,7 @@ export function ReceiptsTab() {
               type="button"
               disabled
               aria-describedby={note}
-              className="min-h-7 px-2 text-xs text-muted-foreground max-md:min-h-11"
+              className="min-h-7 px-2 text-sm text-muted-foreground max-md:min-h-11"
             >
               {t("clear")}
             </button>
@@ -315,7 +315,7 @@ function BundleCard({
         </span>
       </header>
       <div className={`${panelBody} flex flex-col gap-3`}>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+        <dl className="grid grid-cols-dl gap-x-4 gap-y-1 text-sm">
           <Fact term={t("exportId")}>
             <span className={mono}>{bundle.exportRef}</span>
           </Fact>
@@ -338,7 +338,7 @@ function BundleCard({
           id={verifyNote}
           data-testid="audit-not-recorded"
           data-issue={AUDIT_GAPS.exports.issue}
-          className="text-xs text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           {t("verifyNotRecorded")}
         </p>
@@ -409,7 +409,7 @@ function PolicyField({
 }) {
   const t = useTranslations("audit");
   return (
-    <div className="grid gap-x-4 gap-y-0.5 py-1.5 md:grid-cols-[14rem_1fr]">
+    <div className="grid gap-x-4 gap-y-0.5 py-1.5 md:grid-cols-rail-lg">
       <dt className="text-sm font-medium">{term}</dt>
       <dd className="text-sm text-muted-foreground">
         {children ?? <span data-recorded="false">{t("notRecorded")}</span>}
@@ -421,7 +421,7 @@ function PolicyField({
 /** A field whose read did not answer: "unread" and the code, marked as such. */
 function Unread({ children }: { children: string }) {
   return (
-    <span data-recorded="unread" className="font-mono text-xs">
+    <span data-recorded="unread" className="font-mono text-sm">
       {children}
     </span>
   );

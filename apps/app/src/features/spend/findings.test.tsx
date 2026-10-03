@@ -7,8 +7,9 @@
 // recorded" and never a guessed percentage, the list sorts by saving and by
 // kind, an operator the rollup cannot name is shown by id, and a filter that
 // hides every card says so. The pager under the cards holds Rows per page,
-// turns to the next ten and shows every card at 25. Evidence with no runs
-// says so, and closing it returns to the list.
+// turns to the next ten and shows every card at 25. When the workspace holds
+// more open findings than the list, a line says how many in all (#5262).
+// Evidence with no runs says so, and closing it returns to the list.
 import {
   cleanup,
   render,
@@ -106,6 +107,9 @@ const listing = (saving: SpendFindings["saving"]): SpendFindings => ({
   annualised: null,
   counts: { findings: 9, high: 9, medium: 0, operators: 1 },
   findings: NINE,
+  truncated: false,
+  nextCursor: null,
+  offset: 0,
 });
 
 /** The operator rollup names nobody: the row carries no name. */
@@ -151,6 +155,7 @@ const HEADLINE: UnproductiveSpend = {
     { detector: 5, saving: usd("6000000"), findings: 3 },
   ],
   estimate: { saving: usd("15000000"), findings: 4 },
+  findingsOutsidePeriod: 0,
 };
 
 beforeEach(() => {
@@ -198,8 +203,70 @@ describe("Findings hero", () => {
     expect(screen.getByTestId("spend-headline-share")).toHaveTextContent(
       /12(\.3)?%/,
     );
-    expect(hero).toHaveTextContent(/of \$100(\.00)? spent this month\./);
+    expect(hero).toHaveTextContent(
+      /of \$100(\.00)? spent on calls in this window\./,
+    );
     expect(hero).not.toHaveTextContent("Savings identified");
+  });
+
+  // #5294: the list is the open backlog, so the hero names the days its
+  // headline counts, and why its spend can differ from the Spend tile.
+  it("names the days the headline counts, in UTC, and how its spend differs from the Spend tile", () => {
+    section(null);
+    expect(screen.getByTestId("spend-headline-window")).toHaveTextContent(
+      "Counts the calls that ran from Sep 1, 2026 to Sep 15, 2026.",
+    );
+    expect(screen.getByTestId("spend-findings-hero")).toHaveTextContent(
+      "The Spend tile counts each run on the day it started.",
+    );
+  });
+
+  it("prints each day of the window as the UTC day, whatever the viewer's zone", () => {
+    render(
+      <IntlProvider timeZone="America/Los_Angeles">
+        <FindingsSection
+          headline={readOk(HEADLINE)}
+          findings={listing(null)}
+          operators={OPERATORS}
+          at={AT}
+          evidence={null}
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("spend-headline-window")).toHaveTextContent(
+      "from Sep 1, 2026 to Sep 15, 2026.",
+    );
+  });
+
+  it("says how many open findings claim calls outside the window when the headline is zero", () => {
+    section(
+      null,
+      readOk({
+        ...HEADLINE,
+        unproductive: usd("0"),
+        share: 0,
+        findingsOutsidePeriod: 4,
+      }),
+    );
+    expect(screen.getByTestId("spend-headline")).toHaveTextContent("$0.00");
+    expect(screen.getByTestId("spend-headline-outside")).toHaveTextContent(
+      "4 open findings claim calls outside this window.",
+    );
+    // The list still shows the open backlog.
+    expect(order()).toHaveLength(9);
+  });
+
+  it("names no findings outside the window beside a headline that counts calls inside it (negative)", () => {
+    section(null, readOk({ ...HEADLINE, findingsOutsidePeriod: 4 }));
+    expect(screen.queryByTestId("spend-headline-outside")).toBeNull();
+  });
+
+  it("names no findings outside the window when none falls outside it (negative)", () => {
+    section(
+      null,
+      readOk({ ...HEADLINE, unproductive: usd("0"), share: 0 }),
+    );
+    expect(screen.queryByTestId("spend-headline-outside")).toBeNull();
   });
 
   it("shows the parts and the estimate beside the headline and adds none of them to it", () => {
@@ -234,7 +301,11 @@ describe("Findings hero", () => {
         .querySelector('[data-recorded="false"]'),
     ).not.toBeNull();
     expect(screen.getByTestId("spend-findings-hero")).toHaveTextContent(
-      /No share: this month’s spend has no single priced figure\./,
+      /No share: the calls in this window have no single priced figure\./,
+    );
+    // No spend figure, so nothing to set beside the Spend tile's.
+    expect(screen.getByTestId("spend-findings-hero")).not.toHaveTextContent(
+      "The Spend tile counts",
     );
   });
 
@@ -322,6 +393,9 @@ describe("Findings pager", () => {
             annualised: null,
             counts: { findings: 12, high: 12, medium: 0, operators: 0 },
             findings: TWELVE,
+            truncated: false,
+            nextCursor: null,
+            offset: 0,
           }}
           operators={[]}
           at={AT}
@@ -362,6 +436,103 @@ describe("Findings pager", () => {
     expect(pager).toHaveTextContent("1 to 12 of 12");
     expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+  });
+});
+
+describe("Findings past one answer (#5262, #5303)", () => {
+  function cut(
+    total: number,
+    page: Partial<SpendFindings> = {},
+    cursor: string | null = null,
+  ) {
+    render(
+      <IntlProvider>
+        <FindingsSection
+          headline={readOk(HEADLINE)}
+          findings={{
+            ...listing(null),
+            counts: { findings: total, high: total, medium: 0, operators: 1 },
+            truncated: total > NINE.length,
+            ...page,
+          }}
+          cursor={cursor}
+          operators={OPERATORS}
+          at={AT}
+          evidence={null}
+        />
+      </IntlProvider>,
+    );
+  }
+  const ranks = () =>
+    Array.from(document.querySelectorAll("li[data-finding] > span:first-child")).map(
+      (span) => span.textContent,
+    );
+  const pages = () =>
+    screen.getByRole("navigation", { name: "Pages of open findings" });
+
+  it("says which findings the first page shows and opens the next page", () => {
+    cut(59, { nextCursor: "c2" });
+    expect(screen.getByTestId("spend-findings-truncated")).toHaveTextContent(
+      "The list shows open findings 1 to 9 of 59.",
+    );
+    // The hero counts every open finding, not only the nine listed.
+    expect(screen.getByTestId("spend-findings-hero")).toHaveTextContent(
+      "59 findings",
+    );
+    expect(order()).toHaveLength(9);
+    expect(ranks()[0]).toBe("1");
+    expect(
+      within(pages()).getByRole("link", { name: "Open the next page" }),
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/spend/findings?cursor=c2",
+    );
+    // The first page has no way back to itself.
+    expect(
+      within(pages()).queryByRole("link", { name: "Open the first page" }),
+    ).toBeNull();
+  });
+
+  it("opens the findings past the first 50, ranked from 51, with the way back to the first page", () => {
+    cut(59, { offset: 50, nextCursor: null }, "c2");
+    expect(screen.getByTestId("spend-findings-truncated")).toHaveTextContent(
+      "The list shows open findings 51 to 59 of 59.",
+    );
+    expect(ranks()).toEqual(
+      Array.from({ length: 9 }, (_, i) => String(51 + i)),
+    );
+    expect(
+      within(pages()).getByRole("link", { name: "Open the first page" }),
+    ).toHaveAttribute("href", "/acme/core-platform/spend/findings");
+    expect(
+      within(pages()).queryByRole("link", { name: "Open the next page" }),
+    ).toBeNull();
+    // A finding's evidence opens over this page, and closing it comes back here.
+    const [first] = screen.getAllByRole("link", { name: "Evidence" });
+    expect(first).toHaveAttribute(
+      "href",
+      "/acme/core-platform/spend/findings?finding=fnd_0a&cursor=c2",
+    );
+  });
+
+  it("says when a page holds no open findings and links the first page (negative)", () => {
+    cut(50, { findings: [], offset: 50, nextCursor: null }, "c3");
+    expect(
+      screen.getByText("This page holds no open findings."),
+    ).toBeVisible();
+    expect(
+      within(pages()).getByRole("link", { name: "Open the first page" }),
+    ).toHaveAttribute("href", "/acme/core-platform/spend/findings");
+    expect(order()).toHaveLength(0);
+  });
+
+  it("adds no line and no page links when the list holds every finding (negative)", () => {
+    cut(9);
+    expect(screen.queryByTestId("spend-findings-truncated")).toBeNull();
+    expect(screen.queryByTestId("spend-findings-pages")).toBeNull();
+    expect(screen.getByTestId("spend-findings-hero")).toHaveTextContent(
+      "9 findings",
+    );
   });
 });
 

@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-26. Amended on 2026-10-02 (#4506): items 5, 6, and 7.
+  Amended again on 2026-10-02 (#5262): item 11, and claims are exact.
 - **Owners:** billing, spend
 - **Related:** ADR-062 (the findings job and its detectors), ADR-199 (a run's
   steps are graded from recorded outcomes), ADR-205 (a run's reads cover every
@@ -101,11 +102,19 @@ request, as detector 3 does.
 10. **The job reads frames for at most 200 runs a pass.** It reads the runs
     with the most repeats first. A run past the cap, or one whose frames did
     not load, has its repeats cited with no price. They do not count toward a
-    finding's coverage, and they claim no frame.
-11. **A pass keeps at most 10 findings per kind and 50 in all.** Only a
-    written finding stores claims, so a frame claimed by a finding below the
-    cut does not reach the headline. `list_findings` answers at most 50, so
-    every open finding still fits one answer.
+    finding's coverage, and they claim no frame. ADR-210 now sets the cap: 200
+    reads a pass, where one read covers a run or a recurring group's runs
+    (#5168).
+11. **The caps never cut a counting finding.** A pass writes every finding of
+    detectors 1, 7, and 8, however many there are. The caps apply only to the
+    advisory findings, the ones that claim no frame: at most 10 per kind and
+    50 in all, largest saving first. A counting finding takes none of those
+    places. So every frame the headline counts belongs to a stored finding,
+    and the headline equals the sum of the findings behind it. `list_findings`
+    lists at most 50 findings, counts every one, and says when it lists fewer
+    (`truncated`). This replaces the first rule, which kept at most 10
+    findings per kind and 50 in all for every kind (see the amendment of
+    2026-10-02, #5262).
 
 ## Consequences
 
@@ -187,3 +196,46 @@ carries each wrapped frame's `seq`, and the items below use it.
   frames of applied findings whose claims the migration deleted. A replay
   finds frames only for runs inside the pass's 30-day window and frame read
   cap, so an older frame of such a finding is not claimed again.
+
+## Amendment 2026-10-02: caps never cut a counting finding (#5262)
+
+Mac decided both rules on 2026-10-02, by the test of what holds up with
+hundreds of customers (decisions 8 and 13 of the unproductive spend build
+plan).
+
+- **Item 11. The caps apply to advisory findings only.** The first rule kept
+  at most 10 findings per kind and 50 in all, so every open finding fit one
+  `list_findings` answer. That is a page size, and it decided what the
+  headline counted. #5148 freed the frames of a cut group for a later counting
+  detector, but spend with no outcome (detector 8) runs last, so nothing
+  claimed the frames of a detector 8 group the caps cut. Detector 8 groups by
+  agent or operator, so a workspace with more than 10 agents whose runs ended
+  with no outcome lost every group past the tenth from the headline. Now a
+  pass writes every counting finding. The caps still bound the advisory
+  findings, which count toward nothing, and the counting findings take none
+  of their room, so a workspace with many agents still sees its advice.
+  `replayClaims` settles groups the same way: a group `toDraft` drops frees
+  its frames, and no cap cuts a group, so a replay keeps the claims of every
+  counting group the pass keeps.
+- **A claim is always an exact frame, never a sample.** A counting finding
+  claims each model-call frame it prices, one by one, and the headline adds
+  the claimed frames. No detector prices a sample of a group's frames and
+  scales the result, so every dollar in the headline can be traced to a frame
+  a finding claims. A frame the pass did not read is cited with no price, as
+  item 10 says, and never estimated. A recurring job with more runs than the
+  frame read reaches gets a read of the whole group in one query (#5168), not
+  a sample.
+
+### Consequences of the amendment
+
+- A workspace can hold more open findings than one `list_findings` answer
+  lists. The answer's counts and totals cover every matching finding, it
+  lists the first 50 in its order, and `truncated` is true when it lists
+  fewer. The Spend page and the CLI say how many findings there are in all
+  when the list is cut. Paging through the rest is not built yet.
+- A page that reads the open findings and filters them, such as an agent's
+  page, sees only the 50 the answer lists.
+- The number of counting findings a pass writes grows with the agents and
+  operators whose runs it prices. Detector 1 writes at most one finding per
+  kind per agent or operator, and detectors 7 and 8 one per agent or
+  operator.

@@ -40,6 +40,7 @@ import {
   panel,
 } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
+import { HarnessIcon } from "@/ui/harness-icon";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { registerAgent } from "../actions";
@@ -60,9 +61,9 @@ import type { RegisterPlace } from "../register-actions";
 import { CancelRegistration } from "./cancel-registration";
 
 /** An input at 16px on a phone, so iOS does not zoom on focus. */
-const control = `${inputBase} min-h-10 max-md:min-h-11 max-md:text-base`;
+const control = `${inputBase} min-h-10 max-md:min-h-11 max-md:text-input-touch`;
 const label = "text-sm font-semibold text-foreground";
-const hint = "text-xs text-muted-foreground";
+const hint = "text-sm text-muted-foreground";
 const sectionTitle = "text-sm font-semibold text-foreground";
 
 export type ReservedAgent = {
@@ -84,7 +85,7 @@ function SectionHead({ title, done }: { title: string; done?: string }) {
       {done === undefined ? null : (
         <span
           data-testid="register-toolbelt-done"
-          className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-sm text-muted-foreground"
+          className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground"
         >
           <CheckIcon aria-hidden className="size-3" />
           {done}
@@ -100,7 +101,7 @@ function Reserved({ reserved }: { reserved: ReservedAgent }) {
   return (
     <dl
       data-testid="register-reserved"
-      className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 text-sm"
+      className="grid grid-cols-dl gap-x-5 gap-y-1.5 text-sm"
     >
       <dt className={kvTerm}>{t("name")}</dt>
       <dd className={`${kvValue} flex items-center gap-1.5`}>
@@ -115,7 +116,10 @@ function Reserved({ reserved }: { reserved: ReservedAgent }) {
       <dt className={kvTerm}>{t("slug")}</dt>
       <dd className={`${kvValue} ${mono}`}>{reserved.slug}</dd>
       <dt className={kvTerm}>{t("harness")}</dt>
-      <dd className={kvValue}>{harnessT(reserved.harness)}</dd>
+      <dd className={`${kvValue} flex items-center gap-2`}>
+        <HarnessIcon harness={reserved.harness} size={16} />
+        {harnessT(reserved.harness)}
+      </dd>
       <dt className={kvTerm}>{t("runtime")}</dt>
       <dd className={kvValue}>
         {reserved.runtime === null ? t("noRuntime") : reserved.runtime.name}
@@ -340,7 +344,7 @@ export function RegisterAgentForm({
   const fieldError = (field: AgentField, id: string) => {
     const text = errorText(field);
     return text === null ? null : (
-      <p id={id} className="text-sm text-error-ink">
+      <p id={id} className="text-base text-error-ink">
         {text}
       </p>
     );
@@ -353,7 +357,7 @@ export function RegisterAgentForm({
       onSubmit={(e) => void onSubmit(e)}
       className="flex min-w-0 flex-col gap-4"
     >
-      <div className={`${panel} flex flex-col gap-5 p-[18px]`}>
+      <div className={`${panel} flex flex-col gap-5 p-4.5`}>
         {failure === null ? null : (
           <FormAlert testId="register-failure">{failure}</FormAlert>
         )}
@@ -431,7 +435,12 @@ export function RegisterAgentForm({
                   }}
                   options={HARNESSES.map((option) => ({
                     value: option,
-                    label: harnessT(option),
+                    label: (
+                      <span className="inline-flex items-center gap-2">
+                        <HarnessIcon harness={option} size={16} />
+                        {harnessT(option)}
+                      </span>
+                    ),
                     disabledReason: takenReason(chosenRuntime, option),
                   }))}
                 />

@@ -211,7 +211,7 @@ export function FlipControls({
             name: label ?? kinds(kind),
           })}
           data-testid={`tools-flip-${existing?.id ?? `${kind}-${fixed?.ref ?? "self"}`}`}
-          className="group inline-flex min-h-8 items-center gap-2 rounded-md px-1 text-xs font-medium text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11"
+          className="group inline-flex min-h-8 items-center gap-2 rounded-md px-1 text-sm font-medium text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11"
           onClick={() => {
             setOpen(true);
           }}
@@ -228,7 +228,7 @@ export function FlipControls({
               className={`absolute size-3 rounded-full transition-transform motion-reduce:transition-none ${
                 turningOn
                   ? "translate-x-0.5 bg-muted-foreground"
-                  : "translate-x-[1.05rem] bg-destructive"
+                  : "translate-x-4 bg-destructive"
               }`}
             />
           </span>
@@ -255,7 +255,7 @@ export function FlipControls({
               <div className="flex min-w-0 flex-col gap-1.5">
                 <label
                   htmlFor="kind"
-                  className="text-sm font-medium text-foreground"
+                  className="text-base font-medium text-foreground"
                 >
                   {t("kind")}
                 </label>
@@ -285,7 +285,7 @@ export function FlipControls({
                 // something the page refuses to show, so it states it instead.
                 <p
                   data-testid="tools-flip-self-target"
-                  className="text-sm text-muted-foreground"
+                  className="text-base text-muted-foreground"
                 >
                   {t("target")} · {t(`targetHint.${kind}`)}
                 </p>
@@ -293,7 +293,7 @@ export function FlipControls({
                 <div className="flex min-w-0 flex-col gap-1.5">
                   <label
                     htmlFor="target"
-                    className="text-sm font-medium text-foreground"
+                    className="text-base font-medium text-foreground"
                   >
                     {t("target")}
                   </label>
@@ -339,13 +339,13 @@ export function FlipControls({
                     />
                   )}
                   {kind === "operator" && members.length === 0 ? (
-                    <p id="target-hint" className="text-xs text-destructive">
+                    <p id="target-hint" className="text-sm text-destructive">
                       {t("targetOperatorEmpty")}
                     </p>
                   ) : (
                     <p
                       id="target-hint"
-                      className="text-xs text-muted-foreground"
+                      className="text-sm text-muted-foreground"
                     >
                       {t(`targetHint.${kind}`)}
                     </p>
@@ -354,7 +354,7 @@ export function FlipControls({
               )}
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               {kinds(kind)} ·{" "}
               <span className={`${mono} break-all`}>
                 {label ?? existing?.target.ref ?? kinds(kind)}
@@ -364,7 +364,7 @@ export function FlipControls({
 
           <div
             data-testid="tools-flip-blast-radius"
-            className={`rounded-lg border px-3 py-2.5 text-sm ${
+            className={`rounded-lg border px-3 py-2.5 text-base ${
               turningOn
                 ? "border-destructive/45 bg-destructive/10"
                 : "border-border bg-muted"
@@ -379,10 +379,10 @@ export function FlipControls({
             </p>
           </div>
           {turningOn && kind === "class" ? (
-            <p className="text-xs text-muted-foreground">{t("classNote")}</p>
+            <p className="text-sm text-muted-foreground">{t("classNote")}</p>
           ) : null}
           {turningOn && kind === "connection" ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {t("connectionNote")}
             </p>
           ) : null}
@@ -390,7 +390,7 @@ export function FlipControls({
           <div className="flex min-w-0 flex-col gap-1.5">
             <label
               htmlFor="reason"
-              className="text-sm font-medium text-foreground"
+              className="text-base font-medium text-foreground"
             >
               {t("reason")}
             </label>
@@ -403,7 +403,7 @@ export function FlipControls({
               className={textareaBase}
             />
           </div>
-          <dl className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]">
+          <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-rail-sm">
             <dt className="text-muted-foreground">{t("takesEffect")}</dt>
             <dd className="text-foreground">
               {/* A card knows the state of the switch it flips, so the counter
@@ -429,7 +429,7 @@ export function FlipControls({
           {unchanged ? (
             <p
               data-testid="tools-flip-unchanged"
-              className="rounded-lg border border-border bg-muted px-3 py-2.5 text-sm text-foreground"
+              className="rounded-lg border border-border bg-muted px-3 py-2.5 text-base text-foreground"
             >
               {t("unchanged")}
             </p>

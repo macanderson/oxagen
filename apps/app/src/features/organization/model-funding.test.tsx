@@ -198,6 +198,21 @@ describe("Funding source", () => {
     await expectNoAxe(view.container);
   });
 
+  it("does not say the customer's vendor pays while the stored key is disabled (#3317)", async () => {
+    // A disabled key answers no turn: Oxagen's key does, and Oxagen bills
+    // for it. So the page names no customer_key and no vendor bill.
+    await renderTab(readOk({ ...STORED, status: "disabled" }));
+    const panel = funding();
+    expect(
+      panel.querySelector('[data-source="not-recorded"]'),
+    ).toHaveTextContent("source not recorded");
+    expect(panel.querySelector('[data-source="customer_key"]')).toBeNull();
+    expect(within(panel).getByLabelText("Source")).toHaveValue("");
+    expect(panel).not.toHaveTextContent(
+      "your vendor bills these tokens and Oxagen charges nothing for them",
+    );
+  });
+
   it("marks the shared account a preview when the person picks it", async () => {
     await renderTab(readOk(NONE));
     const panel = funding();

@@ -343,6 +343,31 @@ describe("BYOK beyond the routed vendors (@oxagen/ai)", () => {
     );
   });
 
+  it("keeps the endpoint's query off the base URL and on every request (#3317)", () => {
+    // The SDK appends the path to baseURL as a string, so a query left there
+    // would send `…?api-version=1/chat/completions`. The probe asks
+    // `/v1/chat/completions?api-version=…`, and the turn must ask the same.
+    selectModel({
+      tier: "balanced",
+      credential: compat({
+        digest: "d-query",
+        baseUrl: "https://host.example/v1?api-version=2024-10-01#docs",
+      }),
+    });
+    const call = mocks.createOpenAICompatible.mock.calls[0]?.[0] as {
+      baseURL?: string;
+      queryParams?: Record<string, string>;
+    };
+    expect(call.baseURL).toBe("https://host.example/v1");
+    expect(call.queryParams).toEqual({ "api-version": "2024-10-01" });
+  });
+
+  it("sends no query parameters for an endpoint without a query (negative)", () => {
+    selectModel({ tier: "balanced", credential: compat() });
+    const call = mocks.createOpenAICompatible.mock.calls[0]?.[0] as object;
+    expect(call).not.toHaveProperty("queryParams");
+  });
+
   it("sends the customer endpoint's requests through a fetch that refuses redirects", () => {
     // The URL was checked when the row was written; a redirect target was
     // not. The probe refuses redirects, and the runtime client must too, or

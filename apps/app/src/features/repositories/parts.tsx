@@ -26,15 +26,15 @@ export const note =
 
 /** `.btn.danger`: the red outline a destructive action takes. */
 export const buttonDanger =
-  "inline-flex min-h-8 max-md:min-h-11 items-center justify-center gap-1.5 rounded-[9px] border border-error/45 bg-card px-[13px] py-1.5 text-sm font-medium text-error-ink transition-colors hover:bg-error/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45";
+  "inline-flex min-h-8 max-md:min-h-11 items-center justify-center gap-1.5 rounded-xl border border-error/45 bg-card px-3.25 py-1.5 text-sm font-medium text-error-ink transition-colors hover:bg-error/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45";
 
 /** `.btn.sm`: the small secondary a table cell or a panel header carries. */
 export const buttonSmall =
-  "inline-flex min-h-7 max-md:min-h-11 items-center justify-center whitespace-nowrap rounded-[9px] border border-button-default-border bg-button-default-bg px-2.5 py-1 text-xs font-medium text-button-default-fg hover:bg-button-default-hover-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-45";
+  "inline-flex min-h-7 max-md:min-h-11 items-center justify-center whitespace-nowrap rounded-xl border border-button-default-border bg-button-default-bg px-2.5 py-1 text-sm font-medium text-button-default-fg hover:bg-button-default-hover-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-45";
 
 /** `.kv`: a two-column definition list. */
 export const kv =
-  "grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm [&>dd]:min-w-0 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:text-muted-foreground";
+  "grid grid-cols-dl-clip gap-x-4 gap-y-2 text-sm [&>dd]:min-w-0 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:text-muted-foreground";
 
 export const code = (chunks: ReactNode) => (
   <span className={mono}>{chunks}</span>
@@ -64,7 +64,7 @@ export function Panel({
             {title}
           </h2>
           {subtitle === undefined ? null : (
-            <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>
           )}
         </div>
         {action}
@@ -89,13 +89,13 @@ export function CheckRows({
   return (
     <ul
       data-testid={testId}
-      className="overflow-hidden rounded-[10px] border border-border text-sm"
+      className="overflow-hidden rounded-xl border border-border text-sm"
     >
       {rows.map((row) => (
         <li
           key={row.key}
           data-row={row.key}
-          className="grid gap-x-3 gap-y-0.5 border-b border-border px-3.5 py-2.5 last:border-b-0 sm:grid-cols-[140px_minmax(0,1fr)]"
+          className="grid gap-x-3 gap-y-0.5 border-b border-border px-3.5 py-2.5 last:border-b-0 sm:grid-cols-rail-sm"
         >
           <b className="font-semibold text-foreground">{row.name}</b>
           <span className="text-muted-foreground">{row.what}</span>

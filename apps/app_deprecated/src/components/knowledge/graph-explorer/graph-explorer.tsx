@@ -401,7 +401,7 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
           {data.truncated &&
             data.status === "ready" &&
             data.nodes.length > 0 && (
-              <div className="pointer-events-none absolute bottom-3 left-1/2 w-max max-w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-full border border-border bg-card/90 px-3 py-1 text-center text-[11px] text-muted-foreground shadow-sm">
+              <div className="pointer-events-none absolute bottom-3 left-1/2 w-max max-w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-full border border-border bg-card/90 px-3 py-1 text-center text-xs text-muted-foreground shadow-sm">
                 {isMobile
                   ? "Showing a sample — tap a node, then “Expand neighbours”."
                   : "Showing a sample of the graph — double-click a node to expand, or use search."}
@@ -447,7 +447,7 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
             className="flex h-[70vh] flex-col gap-0 overflow-hidden rounded-t-xl p-0"
           >
             <SheetHeader className="border-b border-border px-4 py-3 text-left">
-              <SheetTitle className="text-sm">Filters</SheetTitle>
+              <SheetTitle className="text-base">Filters</SheetTitle>
             </SheetHeader>
             <div className="min-h-0 flex-1 overflow-y-auto">{filterPanel}</div>
           </SheetPopup>
@@ -509,7 +509,7 @@ function CanvasSkeleton() {
     <div className="flex h-full w-full items-center justify-center">
       <div className="flex flex-col items-center gap-3 text-muted-foreground">
         <Loader2 className="size-6 animate-spin" aria-hidden="true" />
-        <p className="text-sm">Loading graph…</p>
+        <p className="text-base">Loading graph…</p>
       </div>
     </div>
   );
@@ -523,10 +523,10 @@ function EmptyState() {
           className="mx-auto mb-3 size-8 text-muted-foreground"
           aria-hidden="true"
         />
-        <h3 className="text-sm font-semibold text-foreground">
+        <h3 className="text-base font-semibold text-foreground">
           No graph data yet
         </h3>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-base text-muted-foreground">
           Connect a data source and run a sync to populate the knowledge graph.
           Entities and their relationships will appear here.
         </p>
@@ -559,11 +559,11 @@ function FilteredEmptyState({
           className="mx-auto mb-3 size-8 text-muted-foreground"
           aria-hidden="true"
         />
-        <h3 className="text-sm font-semibold text-foreground">
+        <h3 className="text-base font-semibold text-foreground">
           {count.toLocaleString()} {count === 1 ? "node" : "nodes"} hidden by
           filters
         </h3>
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        <p className="mt-1 text-base text-muted-foreground">{description}</p>
         <Button
           variant="outline"
           size="sm"
@@ -592,10 +592,10 @@ function ErrorState({
           className="mx-auto mb-3 size-8 text-destructive"
           aria-hidden="true"
         />
-        <h3 className="text-sm font-semibold text-foreground">
+        <h3 className="text-base font-semibold text-foreground">
           Couldn’t load the graph
         </h3>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-base text-muted-foreground">
           {message ?? "An unexpected error occurred."}
         </p>
         <Button

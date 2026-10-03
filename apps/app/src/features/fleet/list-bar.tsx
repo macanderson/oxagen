@@ -34,7 +34,7 @@ export const SEARCH_PAUSE_MS = 400;
 
 const PR_FILTERS: readonly PullRequestFilter[] = ["any", "with", "without"];
 
-const triggerSize = "text-xs max-md:min-h-11 max-md:text-base";
+const triggerSize = "text-sm max-md:min-h-11 max-md:text-input-touch";
 
 type Facet = "status" | "tier" | "replay";
 
@@ -148,7 +148,7 @@ function SearchBox({
         onChange={(event) => {
           setDraft(event.target.value);
         }}
-        className={`${inputBase} w-full py-1.5 max-md:min-h-11 max-md:text-base`}
+        className={`${inputBase} w-full py-1.5 max-md:min-h-11 max-md:text-input-touch`}
       />
     </form>
   );
@@ -172,7 +172,7 @@ export function RunsListBar({
   const status = useTranslations("ui.runStatus");
   const grade = useTranslations("ui.replayGrade");
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-[9px]">
+    <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.25">
       <SearchBox
         value={list.q}
         onSearch={(q) => {
@@ -231,7 +231,7 @@ export function RunsListBar({
         data-testid="columns-open"
         data-touch-target=""
         onClick={onColumns}
-        className={`${buttonSecondary} inline-flex items-center gap-1.5 px-2.5 py-1 text-xs`}
+        className={`${buttonSecondary} inline-flex items-center gap-1.5 px-2.5 py-1 text-sm`}
       >
         <ColumnsIcon aria-hidden className="size-3.5" />
         {t("columnsPicker.open")}
@@ -239,7 +239,7 @@ export function RunsListBar({
       {pullRequests === "any" ? null : (
         <p
           data-testid="pr-filter-note"
-          className="basis-full text-sm text-muted-foreground"
+          className="basis-full text-xs text-muted-foreground"
         >
           {t("prFilter.note")}
         </p>

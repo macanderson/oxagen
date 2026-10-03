@@ -9,7 +9,8 @@
 //   a night, ask for one check per collector that is not paused.
 // - work/intake-check: one collector's reconcile or nightly count. A reconcile
 //   reads page by page, one step per page, and the cursor moves only after a
-//   page is stored. One check runs at a time per collector.
+//   page is stored. One check runs at a time per collector. A collector whose
+//   repositories are all unlinked records a failed read that says so.
 // - work/intake-triage: draft one triage suggestion. At most 60 start per
 //   workspace per minute (TRIAGE_DECISIONS_PER_MINUTE in @oxagen/work), and
 //   the rest wait in the queue. When the retries run out, the on-failure
@@ -36,6 +37,17 @@ export const RECONCILE_MAX_PAGES = 20;
 
 /** The most triage runs that start per workspace per minute. Matches TRIAGE_DECISIONS_PER_MINUTE in @oxagen/work. */
 export const TRIAGE_RUNS_PER_MINUTE = 60;
+
+/**
+ * The result a check records when the workspace links none of the collector's
+ * repositories. The read is skipped as `scope_invalid`, which no person can
+ * see: the collector's last read would stop moving with no word why (#5254
+ * dropped unlinked repositories from the scope). Recording it as a failed
+ * read shows the reason under the collector, and three in a row turn it
+ * failing, so it waits for a person to link a repository.
+ */
+export const NO_LINKED_REPOSITORIES_ERROR =
+  "The workspace links none of the repositories this collector reads, so it read nothing. Link one on the Repositories page, or set the collector to read a linked repository.";
 
 function text(data: Record<string, unknown>, key: string, job: string): string {
   const value = data[key];
@@ -167,7 +179,11 @@ export const [workIntakeCheck] = createFunction(
         workIntakeRunner().reconcilePage(scope, collectorId, force),
       );
       if (page.kind === "skipped") {
-        if (index === 0) return { check: "reconcile", skipped: page.reason };
+        if (index === 0 && page.reason !== "scope_invalid") return { check: "reconcile", skipped: page.reason };
+        if (index === 0) {
+          summary.ok = false;
+          summary.error = NO_LINKED_REPOSITORIES_ERROR;
+        }
         break;
       }
       if (page.kind === "failed") {

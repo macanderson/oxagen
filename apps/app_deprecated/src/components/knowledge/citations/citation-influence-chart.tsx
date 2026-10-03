@@ -67,7 +67,7 @@ export function CitationInfluenceChart({
 
   if (total === 0) {
     return (
-      <div className="flex h-[160px] items-center justify-center text-sm text-muted-foreground">
+      <div className="flex h-[160px] items-center justify-center text-base text-muted-foreground">
         No citations recorded in this window yet.
       </div>
     );
@@ -81,7 +81,7 @@ export function CitationInfluenceChart({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-4 text-[11px] text-muted-foreground">
+      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
         {rows.map((r) => (
           <span key={r.key} className="flex items-center gap-1.5">
             <span

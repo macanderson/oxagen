@@ -954,7 +954,7 @@ export function ChatShellClient({
             <StreamingText
               text={seg.text}
               isStreaming={isStreaming}
-              className="text-sm"
+              className="text-base"
             />
           ),
           tone: "idle",
@@ -1242,7 +1242,7 @@ export function ChatShellClient({
                   <p className="text-xl font-semibold text-foreground">
                     {userFirstName ? `Welcome, ${userFirstName}!` : "Welcome!"}
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-base text-muted-foreground">
                     What would you like to do?
                   </p>
                 </div>
@@ -1324,7 +1324,7 @@ export function ChatShellClient({
                 onClick={() => setMobileRailOpen(true)}
                 className={cn(
                   "absolute bottom-3 right-3 z-20 flex h-11 items-center gap-1.5 rounded-full border border-border/60",
-                  "bg-background/95 px-4 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur",
+                  "bg-background/95 px-4 text-sm font-medium text-muted-foreground shadow-sm backdrop-blur",
                   railHiddenBelowClass,
                   "hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 )}
@@ -1368,7 +1368,7 @@ export function ChatShellClient({
             <div
               role="alert"
               data-testid="stream-error-banner"
-              className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+              className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-base text-destructive"
             >
               {streamError}
             </div>
@@ -1675,7 +1675,7 @@ function StepMarker({
 }) {
   return (
     <div
-      className="flex items-center gap-2 py-0.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70"
+      className="flex items-center gap-2 py-0.5 text-xs font-medium uppercase tracking-wider text-muted-foreground/70"
       data-component="step-marker"
       data-status={status}
     >

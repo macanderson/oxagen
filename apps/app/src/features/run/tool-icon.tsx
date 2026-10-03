@@ -67,7 +67,7 @@ export function ToolIcon({
   return (
     <Icon
       aria-hidden="true"
-      className={`${size === "sm" ? "size-[11px]" : "size-[13px]"} shrink-0`}
+      className={`${size === "sm" ? "size-2.75" : "size-3.25"} shrink-0`}
     />
   );
 }

@@ -97,7 +97,7 @@ export default function HomePage(): ReactNode {
         <div className="relative z-10 mx-auto grid w-full max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-[1.05fr_1fr] lg:py-28">
           <div className="flex flex-col items-start text-left">
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-              <span className="ox-eyebrow !text-[11px] !tracking-[0.14em]">
+              <span className="ox-eyebrow !tracking-[0.14em]">
                 The agent control plane
               </span>
             </span>
@@ -127,7 +127,7 @@ export default function HomePage(): ReactNode {
               </Link>
               <Link
                 href="/docs"
-                className="inline-flex h-11 items-center rounded-lg border border-border bg-card/60 px-6 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:border-[var(--_ember-b,#D4AF37)]/60"
+                className="inline-flex h-11 items-center rounded-lg border border-border bg-card/60 px-6 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:border-brand/60"
               >
                 Read the docs
               </Link>
@@ -176,7 +176,7 @@ export default function HomePage(): ReactNode {
                 ],
               ].map(([t, d]) => (
                 <li key={t} className="flex gap-3">
-                  <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[var(--_ember-b,#D4AF37)]" />
+                  <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand" />
                   <span>
                     <span className="font-medium text-foreground">{t}.</span>{" "}
                     <span className="text-muted-foreground">{d}</span>
@@ -256,7 +256,7 @@ export default function HomePage(): ReactNode {
         <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           {SURFACES.map((s) => (
             <Link key={s.href} href={s.href} className="group">
-              <div className="flex h-full flex-col rounded-xl border border-border p-6 transition-colors hover:border-[var(--_ember-b,#D4AF37)]/60 hover:bg-muted/40">
+              <div className="flex h-full flex-col rounded-xl border border-border p-6 transition-colors hover:border-brand/60 hover:bg-muted/40">
                 <h3 className="text-base font-semibold text-foreground group-hover:text-[var(--ember-ink)]">
                   {s.title}
                 </h3>
@@ -297,7 +297,7 @@ export default function HomePage(): ReactNode {
             </Link>
             <a
               href={APP_URL}
-              className="inline-flex h-11 items-center rounded-lg border border-border bg-card/60 px-6 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:border-[var(--_ember-b,#D4AF37)]/60"
+              className="inline-flex h-11 items-center rounded-lg border border-border bg-card/60 px-6 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:border-brand/60"
             >
               See your fleet
             </a>

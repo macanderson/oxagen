@@ -25,6 +25,7 @@ import {
   staticPwaHead,
   withPwaHead,
 } from "./sync-brand-assets.mjs";
+import { SEMANTIC_KEEP } from "./lib/brand-literals.mjs";
 
 const SCRIPT = fileURLToPath(new URL("./sync-brand-assets.mjs", import.meta.url));
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -43,6 +44,8 @@ function put(root: string, rel: string, content: string | Buffer) {
  * A copy of the repo with just what the script imports and edits in place:
  * the script, its entrypoint helper and literal guard, apps/web's palette
  * module, and the six hand-authored pages the sync writes a <head> block into.
+ * The story and read pages link no site stylesheet, so each sets its own
+ * heading face, as the type pass requires (oxageninc/brand#83).
  */
 function fixtureRepo(root: string) {
   const copyIn = (rel: string) => {
@@ -61,10 +64,22 @@ function fixtureRepo(root: string) {
     "terms/index.html",
     "privacy/index.html",
   ]) {
+    const faces = ["story/index.html", "read/index.html"].includes(page)
+      ? "<style>h1, h2, h3 { font-family: var(--ox-font-display); }</style>\n"
+      : "";
+    // The story's chart hues, which SEMANTIC_KEEP keeps by hand, so the
+    // allowlist excuses something here as it does in the tree.
+    const hues =
+      page === "story/index.html"
+        ? `<style>:root { ${(SEMANTIC_KEEP["apps/web/story/index.html"] ?? [])
+            .flatMap((e) => e.values)
+            .map((v, i) => `--hue-${i}: ${v};`)
+            .join(" ")} }</style>\n`
+        : "";
     put(
       root,
       `apps/web/${page}`,
-      '<head>\n<link rel="manifest" href="/oxagen.webmanifest">\n</head>\n',
+      `<head>\n<link rel="manifest" href="/oxagen.webmanifest">\n${faces}${hues}</head>\n`,
     );
   }
   return join(root, "tools/scripts/sync-brand-assets.mjs");
@@ -94,7 +109,9 @@ function fakeKit(kit: string) {
     "tokens/house-tokens.json",
     JSON.stringify({ version: "9.9.9", gold: { hex: TOKENS.gold }, tokens: TOKENS }),
   );
-  for (const f of ["house-tokens.css", "house-tailwind.css"]) put(kit, `tokens/${f}`, `/* ${f} */\n`);
+  for (const f of ["house-tokens.css", "house-tailwind.css", "house-text-scale.css"]) {
+    put(kit, `tokens/${f}`, `/* ${f} */\n`);
+  }
   put(kit, "tokens/house-fonts.css", "@font-face { src: url(../fonts/face.woff2); }\n");
   put(kit, "fonts/face.woff2", "face");
   put(kit, "fonts/LICENSE-OFL.txt", "licence");
@@ -393,13 +410,32 @@ describe("a sync and a check against a kit", () => {
     expect(fixed.status, fixed.stderr).toBe(0);
   });
 
+  // oxageninc/brand#83: a customer page sets no size by hand, and sets h1 to
+  // h3 in Space Grotesk.
+  it("fails a check on a type break in a customer page, naming the line, until it reads a token", () => {
+    sync();
+    stampDesktop();
+    const page = "apps/web/story/index.html";
+    const head = readFileSync(join(repo(), page), "utf8");
+    put(repo(), page, head.replace("</head>", "<style>\n.tag { font-size: 12px; }\n</style>\n</head>"));
+    const broken = sync("--check");
+    expect(broken.status).toBe(1);
+    expect(broken.stderr).toMatch(
+      /type\s+apps\/web\/story\/index\.html \(line \d+: font-size: 12px; use an --ox-m-\* step\)/,
+    );
+    expect(broken.stderr).toContain("A hand-written page keeps no size by hand.");
+    put(repo(), page, head.replace("</head>", "<style>\n.tag { font-size: var(--ox-m-micro); }\n</style>\n</head>"));
+    const fixed = sync("--check");
+    expect(fixed.status, fixed.stderr).toBe(0);
+  });
+
   it("names an allowlisted literal its stylesheet no longer writes", () => {
     sync();
     stampDesktop();
-    put(repo(), "apps/app/src/ui/phone.css", "input { font-size: var(--ox-a-body); }\n");
+    put(repo(), "apps/app/src/app/globals.css", ".frame { max-width: var(--ox-wrap); }\n");
     const check = sync("--check");
     expect(check.status).toBe(1);
-    expect(check.stderr).toMatch(/keep\s+apps\/app\/src\/ui\/phone\.css \(the allowlist .* keeps font-size 16px/);
+    expect(check.stderr).toMatch(/keep\s+apps\/app\/src\/app\/globals\.css \(the allowlist .* keeps width 1500px/);
   });
 
   it("fails a check when the kit changes, until the sync runs", () => {

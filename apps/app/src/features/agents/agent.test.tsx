@@ -723,10 +723,59 @@ describe("Permissions", () => {
   });
 });
 
+/**
+ * The agent page over a workspace whose first page of findings holds 50
+ * about other agents and says 62 are open (#5303). Only the read by this
+ * agent's key answers `own`. Answers the findings read, to assert its query.
+ */
+async function renderRankedPast50(
+  tab: string,
+  own: Parameters<typeof spendFindings>[0],
+) {
+  const { source } = agentsSource(allReads());
+  const others = spendFindings(
+    Array.from({ length: 50 }, (_, i) => ({
+      id: `fnd_other${String(i)}`,
+      subject: `acme.core.other-${String(i)}`,
+    })),
+  );
+  const workspace = others.ok
+    ? readOk({
+        ...others.value,
+        counts: { ...others.value.counts, findings: 62 },
+        truncated: true,
+        nextCursor: "c2",
+      })
+    : others;
+  const mine = spendFindings(own);
+  const findings = vi.fn(
+    (_ctx: unknown, query?: { level?: string; subject?: string }) =>
+      Promise.resolve(
+        query?.level === "agent" && query.subject === "acme.core.release-bot"
+          ? mine
+          : workspace,
+      ),
+  );
+  source.spend.findings = findings;
+  const element = await Agent({
+    ctx,
+    source,
+    agent: "release-bot",
+    tab,
+    cursor: null,
+  });
+  render(<IntlProvider>{element}</IntlProvider>);
+  return findings;
+}
+
 describe("Activity", () => {
   it("draws the runs, the token accounting, the last 30 days with a finding, and one panel per incident", async () => {
     const calls = await renderAgent({}, "activity");
-    expect(calls.findings).toHaveLength(1);
+    // The read names this agent, so its findings never depend on where they
+    // rank among the workspace's (#5303).
+    expect(calls.findings).toEqual([
+      [ctx, { level: "agent", subject: "acme.core.release-bot" }],
+    ]);
     const runs = region("Runs");
     expect(
       within(runs)
@@ -765,6 +814,29 @@ describe("Activity", () => {
     ).toHaveAttribute("href", "/acme/audit");
   });
 
+  it("shows its own finding that ranks past 50 in the workspace (#5303)", async () => {
+    const findings = await renderRankedPast50("activity", [
+      {
+        id: "fnd_rank62",
+        kind: "spin_loops",
+        why: "One call ran 24 times in a row on two runs.",
+      },
+    ]);
+    expect(findings).toHaveBeenCalledWith(ctx, {
+      level: "agent",
+      subject: "acme.core.release-bot",
+    });
+    const last30 = screen.getByTestId("agent-findings");
+    expect(last30).toHaveTextContent("Spin loops");
+    expect(last30).toHaveTextContent("One call ran 24 times in a row");
+    expect(
+      within(last30).getByRole("link", { name: "Evidence" }),
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/spend/findings?finding=fnd_rank62",
+    );
+  });
+
   it("names the empty runs and incidents with their way out (negative)", async () => {
     await renderAgent(
       {
@@ -789,6 +861,33 @@ describe("Activity", () => {
     expect(
       screen.getByText("No finding is open against this agent."),
     ).toBeVisible();
+  });
+});
+
+describe("Overview cache TTL by the agent's key", () => {
+  it("draws the TTL line from its own finding that ranks past 50 in the workspace (#5303)", async () => {
+    const findings = await renderRankedPast50("overview", [
+      {
+        id: "fnd_ttl62",
+        kind: "idle_cache_rewrites",
+        recommendation: { setting: "cache_ttl", value: "1h", current: "5m" },
+      },
+    ]);
+    expect(findings).toHaveBeenCalledWith(ctx, {
+      level: "agent",
+      subject: "acme.core.release-bot",
+    });
+    expect(screen.getByTestId("cache-ttl")).toHaveTextContent(
+      "Set the cache TTL to 1 hour.",
+    );
+    expect(
+      within(screen.getByTestId("cache-ttl")).getByRole("link", {
+        name: "Open the finding",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/spend/findings?finding=fnd_ttl62",
+    );
   });
 });
 
@@ -846,8 +945,10 @@ describe("Agent tab bodies", () => {
     const calls = await renderAgent({
       get: readOk(agentDetail({ identity: { agentKey: null } })),
     });
-    // The rollup is keyed by agent key, so it is not asked for at all.
+    // The rollup and the findings are keyed by agent key, so neither is asked
+    // for at all.
     expect(calls.spend).toEqual([]);
+    expect(calls.findings).toEqual([]);
     const badges = screen.getByTestId("agent-badges");
     expect(badges).toHaveTextContent("tier not recorded");
     expect(region("30-day token use")).toHaveTextContent(

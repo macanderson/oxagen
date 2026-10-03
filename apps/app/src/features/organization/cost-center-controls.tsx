@@ -15,7 +15,7 @@ import {
 import { textValue, WriteDialog } from "./dialog";
 
 const select =
-  "min-h-10 rounded-md border border-input-border bg-input-bg px-2 py-1.5 text-sm text-input-fg focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-input-ring";
+  "min-h-10 rounded-md border border-input-border bg-input-bg px-2 py-1.5 text-base text-input-fg focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-input-ring";
 
 export function AddCostCenter({ org }: { org: string }) {
   const t = useTranslations("organization.costCenters.add");
@@ -78,7 +78,7 @@ export function DeleteCostCenter({
         navigate.replace(routes.people(org));
       }}
     >
-      <p className="text-sm">{t("body")}</p>
+      <p className="text-base">{t("body")}</p>
     </WriteDialog>
   );
 }
@@ -111,9 +111,9 @@ export function ChargeWorkspace({
         navigate.replace(routes.people(org));
       }}
     >
-      <span className="flex flex-col gap-1 text-sm">
+      <span className="flex flex-col gap-1 text-base">
         <label
-          className="text-xs font-medium text-muted-foreground"
+          className="text-sm font-medium text-muted-foreground"
           htmlFor={`${id}-label`}
         >
           {t("label")}
@@ -132,7 +132,7 @@ export function ChargeWorkspace({
           ))}
         </select>
       </span>
-      <p className="text-xs text-muted-foreground">{t("hint")}</p>
+      <p className="text-sm text-muted-foreground">{t("hint")}</p>
     </WriteDialog>
   );
 }

@@ -3,6 +3,13 @@
  * @oxagen/ui (tokens, fonts, light/dark). House tokens only; no raw palette.
  */
 @import "@oxagen/ui/styles/globals.css";
+/* The kit's text scale: Tailwind's text-xs to text-3xl on the app steps, in
+   order. text-base is the app base (14px), text-sm (12px) and text-xs (10px)
+   are smaller, and text-lg and up are larger. Every step is the kit's
+   --ox-a-base times a ratio, so a new base in the kit resizes them all. The
+   app opts in here and not in @oxagen/ui's globals.css, because the docs site
+   loads that file too and keeps Tailwind's stock text-sm. */
+@import "@oxagen/ui/styles/house-text-scale.css";
 @import "../ui/phone.css";
 @import "../ui/transcript-skins.css";
 
@@ -61,18 +68,95 @@
   --color-code-string: var(--code-string);
   --color-code-number: var(--code-number);
   --color-code-punct: var(--code-punct);
+  /* Widths in characters (#5283). A line of prose and a truncated cell are
+     measured in ch, so each named width keeps its unit: max-w-measure for a
+     lede under a heading, max-w-measure-narrow for a state's message, and
+     max-w-cell-* for a truncated line in a table cell. */
+  --container-measure: 70ch;
+  --container-measure-narrow: 52ch;
+  --container-cell-narrow: 24ch;
+  --container-cell: 28ch;
+  --container-cell-wide: 36ch;
+  /* One character between a transcript's columns, and the device's safe
+     areas: gap-ch, pt-safe-top, pb-safe-bottom. */
+  --spacing-ch: 1ch;
+  --spacing-safe-top: env(safe-area-inset-top);
+  --spacing-safe-bottom: env(safe-area-inset-bottom);
+  /* Marks drawn as an inset shadow, so they take no layout space: the gold
+     rail on the current nav or list item, and the underline on a selected
+     tab (#5283). */
+  --shadow-rail: inset 2px 0 0 var(--gold);
+  --shadow-tab-underline: inset 0 -2px 0 var(--accent-text);
+  /* Grid templates (#5283): grid-cols-<name>. A description list sets a
+     term, then its value: dl lets a long term wrap, dl-max never wraps a
+     term, and dl-clip lets a long value wrap inside its column. A rail is a
+     label column beside its content. */
+  --grid-template-columns-dl: auto 1fr;
+  --grid-template-columns-dl-max: max-content 1fr;
+  --grid-template-columns-dl-clip: max-content minmax(0, 1fr);
+  --grid-template-columns-lead: auto minmax(0, 1fr);
+  --grid-template-columns-form: minmax(calc(var(--spacing) * 32), auto) 1fr;
+  --grid-template-columns-rail-xs: minmax(0, calc(var(--spacing) * 24))
+    minmax(0, 1fr);
+  --grid-template-columns-rail-sm: minmax(0, calc(var(--spacing) * 36))
+    minmax(0, 1fr);
+  --grid-template-columns-rail: minmax(0, calc(var(--spacing) * 48))
+    minmax(0, 1fr);
+  --grid-template-columns-rail-lg: minmax(0, calc(var(--spacing) * 56))
+    minmax(0, 1fr);
+  --grid-template-columns-rail-lg-pair: calc(var(--spacing) * 56)
+    calc(var(--spacing) * 24) 1fr;
+  --grid-template-columns-split: minmax(0, 3fr) minmax(0, 2fr);
+  --grid-template-columns-split-end: minmax(0, 2fr) minmax(0, 3fr);
+  --grid-template-columns-main: minmax(0, 2fr) minmax(0, 1fr);
+  --grid-template-columns-main-end: minmax(0, 1fr) minmax(0, 2fr);
+  --grid-template-columns-aside: minmax(0, 1fr) calc(var(--spacing) * 85);
+  --grid-template-columns-shell: var(--sidebar-width) minmax(0, 1fr);
+  --grid-template-rows-shell: auto 1fr;
+  --grid-template-columns-icon: calc(var(--spacing) * 8) minmax(0, 1fr);
+  --grid-template-columns-icon-end: calc(var(--spacing) * 8) minmax(0, 1fr)
+    auto;
+  --grid-template-columns-diff: calc(var(--spacing) * 8.5)
+    calc(var(--spacing) * 8.5) minmax(0, 1fr);
+  --grid-template-columns-diff-sign: calc(var(--spacing) * 10)
+    calc(var(--spacing) * 10) calc(var(--spacing) * 4) minmax(0, 1fr);
+  --grid-template-columns-meter: calc(var(--spacing) * 5) minmax(0, 1fr) 34%
+    auto;
+  --grid-template-columns-label-row: minmax(0, 22ch) 1fr auto;
+  --grid-template-columns-count-row: 8ch minmax(0, 1fr) auto;
+  --grid-template-columns-row-end: minmax(0, 1fr) max-content max-content;
+  --grid-template-columns-swatches: repeat(
+    auto-fill,
+    minmax(calc(var(--spacing) * 9), 1fr)
+  );
+  --grid-template-columns-tiles: repeat(
+    auto-fit,
+    minmax(calc(var(--spacing) * 44), 1fr)
+  );
+  --grid-template-columns-cards: repeat(
+    auto-fit,
+    minmax(min(100%, calc(var(--spacing) * 80)), 1fr)
+  );
+  --grid-template-columns-cards-sm: repeat(
+    auto-fit,
+    minmax(min(100%, calc(var(--spacing) * 60)), 1fr)
+  );
   /* The corner scale is @oxagen/ui's, which reads the kit's --ox-radius-<step>
      tokens: the theme's corner base (0.45rem, shadcn's base-maia preset) times
      each step's multiplier. `rounded-4xl` is the pill a maia button and input
      wear; `rounded-2xl` is a card, a popover and a menu. */
-  /* Text in the app is never smaller than 14px, the house body step. Mac set
-     this floor on 2026-10-02, along with the rule that a class never writes a
-     size of its own (src/test/arch/type-scale.test.ts). `text-sm` reads the
-     body token. `text-xs` keeps its name but renders at the floor too, with
-     the line height of `text-sm`. */
-  --text-xs: var(--ox-a-body);
-  --text-xs--line-height: var(--text-sm--line-height);
-  --text-sm: var(--ox-a-body);
+  /* The text steps above text-3xl. house-text-scale.css, imported above,
+     maps text-xs to text-3xl, and the kit names no step above h1 (30px). So
+     4xl to 6xl are the kit's base times a ratio here, at Tailwind's stock
+     36px, 48px and 60px, and they follow the base too (Mac, 2026-10-03,
+     #5256). No class or stylesheet sets a size of its own
+     (src/test/arch/type-scale.test.ts). */
+  --text-4xl: calc(var(--ox-a-base) * 18 / 7);
+  --text-4xl--line-height: var(--ox-a-h1-leading);
+  --text-5xl: calc(var(--ox-a-base) * 24 / 7);
+  --text-5xl--line-height: var(--ox-a-h1-leading);
+  --text-6xl: calc(var(--ox-a-base) * 30 / 7);
+  --text-6xl--line-height: var(--ox-a-h1-leading);
 }
 
 @layer base {
@@ -136,6 +220,34 @@
     --tx-surface: var(--ox-paper);
     --side-w: 236px;
     --sidebar-width: var(--side-w);
+    /* Overlay, drawer and frame geometry (#5283). Each reads the spacing
+       unit, the viewport or the safe area, so one edit here moves every
+       surface that uses it. */
+    --overlay-w: calc(100% - var(--spacing) * 6);
+    --overlay-max-h: 76dvh;
+    --command-top: 10vh;
+    --sheet-top: 12vh;
+    --sheet-h: min(76dvh, calc(var(--spacing) * 180));
+    --drawer-w: min(calc(var(--spacing) * 75), 86vw);
+    --drawer-pad-top: max(calc(var(--spacing) * 3), env(safe-area-inset-top));
+    --drawer-pad-bottom: max(
+      calc(var(--spacing) * 4),
+      env(safe-area-inset-bottom)
+    );
+    --approvals-w: min(calc(var(--spacing) * 170), 90vw);
+    --assistant-max-w: calc(100vw - var(--sidebar-width) - var(--spacing) * 14);
+    --topbar-pad-top: calc(var(--spacing) * 2.5 + env(safe-area-inset-top));
+    --frame-pad-bottom: calc(var(--spacing) * 24 + env(safe-area-inset-bottom));
+    --toast-bottom-mobile: calc(
+      var(--spacing) * 22 + env(safe-area-inset-bottom)
+    );
+    --popover-max-w: min(
+      calc(var(--spacing) * 136),
+      calc(100vw - var(--spacing) * 4)
+    );
+    --editor-max-h: calc(100vh - var(--spacing) * 75);
+    /* An agent avatar's corner, as a share of its size (#5283). */
+    --agent-corner: 27%;
     --sidebar-bg: var(--void);
     --mono: var(--ox-font-mono);
     --font: var(--ox-font);
@@ -281,11 +393,12 @@
   padding: 22px 24px 80px;
 }
 
-/* The mockup sets a 13px cell and a 10.5px header. Both take the 14px floor,
-   the house body step, so a table reads at the size of the page's text. */
+/* The mockup sets a 13px cell and a 10.5px header. Each takes the app
+   scale's step at or below it: the cell the micro step (12px at the 14px
+   base), the header the 2xs step (10px). */
 [data-shell-page] table {
   border-collapse: collapse;
-  font-size: var(--ox-a-body);
+  font-size: var(--ox-a-micro);
 }
 
 /* `th { letter-spacing:.09em; text-transform:uppercase; color:var(--dim);
@@ -295,7 +408,7 @@
   padding: 9px 12px;
   white-space: nowrap;
   background: var(--panel);
-  font-size: var(--ox-a-body);
+  font-size: var(--ox-a-2xs);
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -568,4 +681,12 @@
 /* The stat tiles and panels settle their border on hover, no lift. */
 [data-shell-page] .app-panel {
   transition: border-color var(--motion-base) var(--ease-hover);
+}
+
+/* An agent's avatar: a corner that is a share of the avatar's size, so the
+   shape holds at every size, where a radius step would not (#5283). The app
+   names no --radius-* step of its own (design-record.test.ts), so the class
+   is a utility over --agent-corner. */
+@utility rounded-agent {
+  border-radius: var(--agent-corner);
 }

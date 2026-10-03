@@ -141,7 +141,7 @@ export function KeyValueEditor({
         type="button"
         onClick={addRow}
         disabled={disabled}
-        className="flex items-center gap-1.5 self-start rounded-md border border-dashed border-border/60 px-3 py-1.5 text-xs text-muted-foreground hover:border-border hover:text-foreground transition-colors disabled:opacity-40 disabled:pointer-events-none"
+        className="flex items-center gap-1.5 self-start rounded-md border border-dashed border-border/60 px-3 py-1.5 text-sm text-muted-foreground hover:border-border hover:text-foreground transition-colors disabled:opacity-40 disabled:pointer-events-none"
       >
         <Plus className="h-3.5 w-3.5" aria-hidden="true" />
         Add row

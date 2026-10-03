@@ -98,14 +98,14 @@ export function CodeInput({
 
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <p id={labelId} className="text-sm font-medium text-foreground">
+      <p id={labelId} className="text-base font-medium text-foreground">
         {label}
       </p>
       <div
         role="group"
         aria-labelledby={labelId}
         aria-describedby={error ? errorId : undefined}
-        className="flex gap-[5px] sm:gap-2"
+        className="flex gap-1.25 sm:gap-2"
       >
         {POSITIONS.map((position, index) => (
           <input
@@ -133,13 +133,13 @@ export function CodeInput({
             onPaste={(e) => {
               onPaste(index, e);
             }}
-            className="h-12 w-[calc((100%-25px)/6)] min-w-0 rounded-md border border-input-border bg-input-bg p-0 text-center font-mono text-lg text-input-fg hover:border-input-border-hover focus-visible:border-input-border-focus focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-input-ring aria-invalid:border-input-invalid-border sm:h-[54px] sm:w-[46px] sm:text-2xl"
+            className="h-12 min-w-0 flex-1 sm:flex-none rounded-md border border-input-border bg-input-bg p-0 text-center font-mono text-lg text-input-fg hover:border-input-border-hover focus-visible:border-input-border-focus focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-input-ring aria-invalid:border-input-invalid-border sm:h-13.5 sm:w-11.5 sm:text-xl"
           />
         ))}
       </div>
       <input type="hidden" name={name} value={digits.join("")} />
       {error ? (
-        <p id={errorId} className="text-sm text-error-ink">
+        <p id={errorId} className="text-base text-error-ink">
           {error}
         </p>
       ) : null}

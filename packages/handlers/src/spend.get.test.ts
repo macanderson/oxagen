@@ -1,7 +1,9 @@
 import {
   ASSISTANT_SPEND_KEY,
+  NO_WORK_ITEM_KEY,
   spendGet,
 } from "@oxagen/oxagen/contracts/spend.get";
+import type { OperatorFacts } from "@oxagen/oxagen/contracts/operator.shared";
 import type { UnmeteredRuns } from "@oxagen/oxagen/contracts/spend.shared";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -10,8 +12,15 @@ import {
   groupRows,
   mcpServerOf,
   mcpServerShares,
+  observedSpend,
+  promptComposition,
   reportedSpend,
 } from "./spend.get";
+import {
+  type RunWorkItem,
+  type RunWorkOrderRef,
+  workOrderKey,
+} from "./lib/run-work-items";
 import type { SpendRunRecord } from "./spend.shared";
 import {
   daily,
@@ -34,6 +43,10 @@ function harness(
     harnesses?: Record<string, string>;
     /** The harness each agent registered, by agent key; absent leaves the dep out. */
     agentHarnesses?: Record<string, string>;
+    /** The people operator keys name; absent leaves the dep out. */
+    people?: OperatorFacts[];
+    /** The work item each work order served; absent leaves the dep out. */
+    workItems?: [RunWorkOrderRef, RunWorkItem][];
   } = {},
 ) {
   const readDailyTotals = vi.fn(async () => over.daily ?? []);
@@ -58,6 +71,29 @@ function harness(
   const readAgentHarnesses = vi.fn(
     async () => new Map(Object.entries(agentHarnesses ?? {})),
   );
+  const people = over.people;
+  const readOperatorFacts = vi.fn(
+    async (_scope: unknown, keys: readonly string[]) =>
+      new Map(
+        (people ?? [])
+          .filter((person) => keys.includes(person.id))
+          .map((person): [string, OperatorFacts] => [person.id, person]),
+      ),
+  );
+  const workItems = over.workItems;
+  const readRunWorkItems = vi.fn(
+    async (_scope: unknown, orders: readonly RunWorkOrderRef[]) => {
+      const wanted = new Set(orders.map((order) => workOrderKey(order)));
+      return new Map(
+        (workItems ?? [])
+          .map(([order, item]): [string, RunWorkItem] => [
+            workOrderKey(order),
+            item,
+          ])
+          .filter(([key]) => wanted.has(key)),
+      );
+    },
+  );
   const handler = createSpendGetHandler({
     readDailyTotals,
     readRunTotals,
@@ -65,6 +101,8 @@ function harness(
     readRunNames,
     readRunHarnesses,
     ...(agentHarnesses === undefined ? {} : { readAgentHarnesses }),
+    ...(people === undefined ? {} : { readOperatorFacts }),
+    ...(workItems === undefined ? {} : { readRunWorkItems }),
   });
   return {
     handler,
@@ -74,6 +112,8 @@ function harness(
     readRunNames,
     readRunHarnesses,
     readAgentHarnesses,
+    readOperatorFacts,
+    readRunWorkItems,
   };
 }
 
@@ -605,6 +645,260 @@ describe("get_spend day series and top runs", () => {
   });
 });
 
+describe("get_spend prompt sources (#5295)", () => {
+  /** A priced run with the token sources the rollup stores beside its record. */
+  const measuredRun = (
+    sources: {
+      toolDefinitionTokens: number | null;
+      contextFrameTokens: number | null;
+      steeringTokens: number | null;
+    },
+    resultTokens: (number | null)[] = [],
+    over: Parameters<typeof pricedRun>[1] = {},
+  ): SpendRunRecord => {
+    const base = pricedRun(500n, over);
+    return Object.assign(
+      {
+        ...base,
+        breakdown: {
+          ...base.breakdown,
+          tools: resultTokens.map((tokens, i) => ({
+            name: `Tool${String(i)}`,
+            calls: 1,
+            resultTokens: tokens,
+            costMicros: null,
+          })),
+        },
+      },
+      sources,
+    );
+  };
+
+  it("sums an agent's runs' tool definitions, context frames, steering and tool results, and keeps a source no run measured null", async () => {
+    const h = harness({
+      daily: [daily({ groupKind: "agent", groupKey: "acme.core.cc" })],
+      runs: [
+        measuredRun(
+          {
+            toolDefinitionTokens: 12_000,
+            contextFrameTokens: null,
+            steeringTokens: 400,
+          },
+          [800, null],
+        ),
+        measuredRun(
+          {
+            toolDefinitionTokens: 6_000,
+            contextFrameTokens: null,
+            steeringTokens: null,
+          },
+          [1_200],
+        ),
+      ],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
+    expect(out.rows[0]?.tokenSources).toEqual({
+      toolDefinitionTokens: 18_000,
+      // No run measured context frames, so the sum is null, not zero.
+      contextFrameTokens: null,
+      steeringTokens: 400,
+      toolResultTokens: 2_000,
+    });
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers every source null for a row whose runs measured none (negative)", async () => {
+    const h = harness({
+      daily: [daily({ groupKind: "agent", groupKey: "acme.core.cc" })],
+      runs: [pricedRun(500n)],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
+    expect(out.rows[0]?.tokenSources).toEqual({
+      toolDefinitionTokens: null,
+      contextFrameTokens: null,
+      steeringTokens: null,
+      toolResultTokens: null,
+    });
+  });
+
+  it("carries no sources on a model row, which holds part of a run (negative)", async () => {
+    const h = harness({
+      daily: [
+        daily({
+          groupKind: "model",
+          groupKey: "claude-sonnet-5",
+          costMicros: 500n,
+          costBasis: "client_attested",
+        }),
+      ],
+      runs: [
+        measuredRun({
+          toolDefinitionTokens: 12_000,
+          contextFrameTokens: null,
+          steeringTokens: 400,
+        }),
+      ],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "model" }, ctx());
+    expect(out.rows[0]).not.toHaveProperty("tokenSources");
+  });
+
+  it("gives the assistant row its own runs' sources, and leaves them out of the operator's row", async () => {
+    const assistant: SpendRunRecord = {
+      ...measuredRun({
+        toolDefinitionTokens: 9_000,
+        contextFrameTokens: null,
+        steeringTokens: null,
+      }),
+      inApp: true,
+    };
+    const external = measuredRun({
+      toolDefinitionTokens: 1_000,
+      contextFrameTokens: null,
+      steeringTokens: null,
+    });
+    const h = harness({
+      daily: [
+        daily({
+          groupKind: "operator",
+          groupKey: OPERATOR,
+          runs: 2,
+          costMicros: 1000n,
+          costBasis: "client_attested",
+        }),
+      ],
+      runs: [assistant, external],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "operator" }, ctx());
+    expect(out.rows.map((r) => [r.key, r.tokenSources?.toolDefinitionTokens]))
+      .toEqual([
+        [OPERATOR, 1_000],
+        [ASSISTANT_SPEND_KEY, 9_000],
+      ]);
+  });
+});
+
+describe("get_spend request windows (#5341)", () => {
+  /** A priced run whose rollup stored the window composition given; undefined stores none. */
+  const windowedRun = (
+    windows: NonNullable<SpendRunRecord["breakdown"]["windows"]> | null | undefined,
+    over: Parameters<typeof pricedRun>[1] = {},
+  ): SpendRunRecord => {
+    const base = pricedRun(500n, over);
+    return {
+      ...base,
+      breakdown: {
+        ...base.breakdown,
+        ...(windows === undefined ? {} : { windows }),
+      },
+    };
+  };
+
+  const composition = (
+    blocks: { system: number | null; conversation: number | null; tools?: number | null },
+    requests = 1,
+  ) => {
+    const tools = blocks.tools ?? null;
+    return {
+      requests,
+      requestsWithoutTokens: 0,
+      promptTokens:
+        (blocks.system ?? 0) + (blocks.conversation ?? 0) + (tools ?? 0),
+      blocks: {
+        system: blocks.system,
+        steering: null,
+        tools,
+        context: null,
+        conversation: blocks.conversation,
+      },
+      initialConversationTokens: null,
+    };
+  };
+
+  it("sums an agent's runs' windows block by block, past a run with none and a run rolled up before them", async () => {
+    const h = harness({
+      daily: [daily({ groupKind: "agent", groupKey: "acme.core.cc" })],
+      runs: [
+        windowedRun(composition({ system: 1_000, conversation: 4_000, tools: 3_000 }, 2)),
+        windowedRun(composition({ system: 500, conversation: 2_500 }, 3)),
+        // A run that recorded no window, and one rolled up before #5341.
+        windowedRun(null),
+        windowedRun(undefined),
+      ],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
+    expect(out.rows[0]?.windows).toEqual({
+      runs: 2,
+      requests: 5,
+      requestsWithoutTokens: 0,
+      promptTokens: 11_000,
+      blocks: {
+        system: 1_500,
+        // No run's windows carried steering or context, so both stay null.
+        steering: null,
+        tools: 3_000,
+        context: null,
+        conversation: 6_500,
+      },
+    });
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers null for a row none of whose runs stored windows, never a zero (negative)", async () => {
+    const h = harness({
+      daily: [daily({ groupKind: "agent", groupKey: "acme.core.cc" })],
+      runs: [windowedRun(null), windowedRun(undefined)],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
+    expect(out.rows[0]?.windows).toBeNull();
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+
+  it("carries no windows on a model row, which holds part of a run (negative)", async () => {
+    const h = harness({
+      daily: [
+        daily({
+          groupKind: "model",
+          groupKey: "claude-sonnet-5",
+          costMicros: 500n,
+          costBasis: "client_attested",
+        }),
+      ],
+      runs: [windowedRun(composition({ system: 100, conversation: 900 }))],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "model" }, ctx());
+    expect(out.rows[0]).not.toHaveProperty("windows");
+  });
+
+  it("gives the assistant row its own runs' windows, and leaves them out of the operator's row", async () => {
+    const h = harness({
+      daily: [
+        daily({
+          groupKind: "operator",
+          groupKey: OPERATOR,
+          runs: 2,
+          costMicros: 1000n,
+          costBasis: "client_attested",
+        }),
+      ],
+      runs: [
+        {
+          ...windowedRun(composition({ system: 200, conversation: 800 })),
+          inApp: true,
+        },
+        windowedRun(composition({ system: 50, conversation: 950 })),
+      ],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "operator" }, ctx());
+    expect(
+      out.rows.map((r) => [r.key, r.windows?.blocks.conversation ?? null]),
+    ).toEqual([
+      [OPERATOR, 950],
+      [ASSISTANT_SPEND_KEY, 800],
+    ]);
+  });
+});
+
 describe("get_spend reported spend", () => {
   it("sums the models the harness reported and leaves gateway and mixed models out", () => {
     const reported = pricedRun(300n);
@@ -621,5 +915,271 @@ describe("get_spend reported spend", () => {
       reportedSpend([pricedRun(10n, { costBasis: "gateway_observed" })]),
     ).toBeNull();
     expect(reportedSpend([run()])).toBeNull();
+  });
+});
+
+describe("get_spend observed spend", () => {
+  it("sums the models the gateway metered and leaves reported, mixed and estimated models out", () => {
+    const reported = pricedRun(300n);
+    const metered = pricedRun(900n, { costBasis: "gateway_observed" });
+    const mixed = pricedRun(50n, { costBasis: "mixed" });
+    const estimated = pricedRun(70n, { costBasis: "estimated" });
+    expect(observedSpend([reported, metered, mixed, estimated])).toEqual({
+      micros: "900",
+      currency: "USD",
+    });
+  });
+
+  it("answers null when no gateway-observed model carries a cost (negative)", () => {
+    expect(observedSpend([pricedRun(10n)])).toBeNull();
+    expect(observedSpend([run()])).toBeNull();
+  });
+
+  it("answers the observed part beside the reported part on the period", async () => {
+    const h = harness({
+      runs: [
+        pricedRun(300n),
+        pricedRun(900n, { costBasis: "gateway_observed" }),
+      ],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "model" }, ctx());
+    expect(out.reported).toEqual({ micros: "300", currency: "USD" });
+    expect(out.observed).toEqual({ micros: "900", currency: "USD" });
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+});
+
+describe("get_spend prompt composition", () => {
+  it("sums each standing source and the tool results over the period's runs", async () => {
+    const measured: SpendRunRecord = {
+      ...pricedRun(300n),
+      toolDefinitionTokens: 4_000,
+      contextFrameTokens: 0,
+      steeringTokens: null,
+    };
+    measured.breakdown = {
+      ...measured.breakdown,
+      tools: [
+        { name: "Read", calls: 2, resultTokens: 1_200, costMicros: 12n },
+        { name: "Bash", calls: 1, resultTokens: null, costMicros: null },
+      ],
+    };
+    const other: SpendRunRecord = {
+      ...pricedRun(100n),
+      toolDefinitionTokens: 1_000,
+    };
+    const h = harness({ runs: [measured, other] });
+    const out = await h.handler({ period: PERIOD, groupBy: "model" }, ctx());
+    // A source measured at 0 is a reading of 0; a source no run measured is null.
+    expect(out.composition).toEqual({
+      toolDefinitionTokens: 5_000,
+      contextFrameTokens: 0,
+      steeringTokens: null,
+      toolResultTokens: 1_200,
+    });
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers every part null when no run measured one (negative)", () => {
+    expect(promptComposition([run(), pricedRun(10n)])).toEqual({
+      toolDefinitionTokens: null,
+      contextFrameTokens: null,
+      steeringTokens: null,
+      toolResultTokens: null,
+    });
+  });
+});
+
+describe("get_spend run operators (#2962)", () => {
+  const PERSON: OperatorFacts = {
+    id: OPERATOR,
+    name: "Marcus Bell",
+    email: "marcus@example.com",
+    avatarUrl: null,
+    role: "Member",
+  };
+
+  it("names each listed run's operator, in one read with no key twice", async () => {
+    const first = pricedRun(900n);
+    const second = pricedRun(800n);
+    const nobody = pricedRun(700n, {
+      operatorKey: null,
+      operatorPrincipalId: null,
+    });
+    const h = harness({
+      daily: [daily({ groupKind: "agent", groupKey: "acme.core.cc" })],
+      runs: [first, second, nobody],
+      people: [PERSON],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
+    const top = out.rows[0]?.topRuns ?? [];
+    expect(top.map((r) => r.operator ?? null)).toEqual([PERSON, PERSON, null]);
+    // An agent row names no operator of its own.
+    expect(out.rows[0]?.operator).toBeNull();
+    expect(h.readOperatorFacts).toHaveBeenCalledTimes(1);
+    expect(h.readOperatorFacts).toHaveBeenCalledWith(SCOPE, [
+      OPERATOR,
+    ]);
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+
+  it("reads the operator rows and their runs' operators together", async () => {
+    const h = harness({
+      daily: [
+        daily({
+          groupKind: "operator",
+          groupKey: OPERATOR,
+          costMicros: 400n,
+          costBasis: "client_attested",
+        }),
+      ],
+      runs: [pricedRun(400n)],
+      people: [PERSON],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "operator" }, ctx());
+    expect(out.rows[0]?.operator).toEqual(PERSON);
+    expect(out.rows[0]?.topRuns[0]?.operator).toEqual(PERSON);
+    expect(h.readOperatorFacts).toHaveBeenCalledTimes(1);
+    expect(h.readOperatorFacts).toHaveBeenCalledWith(SCOPE, [
+      OPERATOR,
+    ]);
+  });
+
+  it("leaves an operator nobody can name null rather than print the key", async () => {
+    const h = harness({
+      daily: [daily({ groupKind: "agent", groupKey: "acme.core.cc" })],
+      runs: [pricedRun(400n)],
+      people: [],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
+    expect(out.rows[0]?.topRuns[0]).toMatchObject({
+      operatorKey: OPERATOR,
+      operator: null,
+    });
+  });
+});
+
+describe("get_spend by work item (#2962)", () => {
+  const SEND: RunWorkOrderRef = {
+    workOrderId: "0192d4a8-7c1e-7a00-8000-0000000000f1",
+    workOrderKind: "send",
+  };
+  const ATTACHED: RunWorkOrderRef = {
+    workOrderId: "0192d4a8-7c1e-7a00-8000-0000000000f2",
+    workOrderKind: "direct",
+  };
+  /** A direct work order nobody attached to a work item. */
+  const LOOSE: RunWorkOrderRef = {
+    workOrderId: "0192d4a8-7c1e-7a00-8000-0000000000f3",
+    workOrderKind: "direct",
+  };
+  const LOGIN: RunWorkItem = {
+    id: "wi_0000000000000000000001",
+    number: "OPS-88",
+    subject: "Fix the login page",
+  };
+  const BILLING: RunWorkItem = {
+    id: "wi_0000000000000000000002",
+    number: "OPS-90",
+    subject: "Retry the billing sync",
+  };
+  const ITEMS: [RunWorkOrderRef, RunWorkItem][] = [
+    [SEND, LOGIN],
+    [ATTACHED, BILLING],
+  ];
+
+  function month() {
+    const sent = pricedRun(900n, { ...SEND });
+    const sentAgain = pricedRun(300n, { ...SEND });
+    // Priced by nothing: its row's cost is null, never 0.
+    const attached = run({ ...ATTACHED });
+    const loose = pricedRun(200n, { ...LOOSE });
+    const terminal = pricedRun(100n);
+    const assistant: SpendRunRecord = { ...pricedRun(50n), inApp: true };
+    return {
+      sent,
+      sentAgain,
+      attached,
+      loose,
+      terminal,
+      assistant,
+      runs: [sent, sentAgain, attached, loose, terminal, assistant],
+    };
+  }
+
+  it("puts each run on the work item it served, the rest on No work item, and sums to the total", async () => {
+    const m = month();
+    const h = harness({ runs: m.runs, workItems: ITEMS });
+    const out = await h.handler({ period: PERIOD, groupBy: "work_item" }, ctx());
+    expect(out.groupBy).toBe("work_item");
+    expect(out.rows.map((r) => r.key)).toEqual([
+      LOGIN.id,
+      NO_WORK_ITEM_KEY,
+      BILLING.id,
+      ASSISTANT_SPEND_KEY,
+    ]);
+    expect(out.rows[0]).toMatchObject({
+      workItem: LOGIN,
+      runs: 2,
+      cost: { micros: "1200", basis: "client_attested" },
+    });
+    expect(out.rows[0]?.topRuns.map((r) => r.runId)).toEqual([
+      m.sent.runId,
+      m.sentAgain.runId,
+    ]);
+    // A direct work order nobody attached and a run with no work order serve
+    // no work item.
+    expect(out.rows[1]).toMatchObject({
+      workItem: null,
+      runs: 2,
+      cost: { micros: "300" },
+    });
+    expect(out.rows[2]).toMatchObject({
+      workItem: BILLING,
+      runs: 1,
+      cost: null,
+    });
+    // The assistant's row names no work item: Oxagen runs it (ADR-235).
+    expect(out.rows[3]).toMatchObject({ topRuns: [] });
+    expect(out.rows[3]).not.toHaveProperty("workItem");
+    const sum = out.rows.reduce(
+      (acc, r) => acc + BigInt(r.cost?.micros ?? "0"),
+      0n,
+    );
+    expect(out.total.cost?.micros).toBe("1550");
+    expect(sum).toBe(1550n);
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+
+  it("reads no daily rollup and no work item for an assistant run", async () => {
+    const m = month();
+    const h = harness({ runs: m.runs, workItems: ITEMS });
+    await h.handler({ period: PERIOD, groupBy: "work_item" }, ctx());
+    expect(h.readDailyTotals).not.toHaveBeenCalled();
+    expect(h.readRunWorkItems).toHaveBeenCalledTimes(1);
+    expect(h.readRunWorkItems).toHaveBeenCalledWith(SCOPE, [
+      SEND,
+      SEND,
+      ATTACHED,
+      LOOSE,
+    ]);
+  });
+
+  it("carries the prompt sources of a row of whole runs", async () => {
+    const m = month();
+    const h = harness({ runs: m.runs, workItems: ITEMS });
+    const out = await h.handler({ period: PERIOD, groupBy: "work_item" }, ctx());
+    expect(out.rows[0]?.tokenSources).toBeDefined();
+  });
+
+  it("leaves workItem off every other grouping", async () => {
+    const h = harness({
+      daily: [daily({ groupKind: "agent", groupKey: "acme.core.cc" })],
+      runs: [pricedRun(400n, { ...SEND })],
+      workItems: ITEMS,
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
+    expect(out.rows[0]).not.toHaveProperty("workItem");
+    expect(h.readRunWorkItems).not.toHaveBeenCalled();
   });
 });

@@ -48,9 +48,9 @@ export function UnknownComponentCard({
       className="rounded-xl border bg-card px-4 py-3"
       data-testid="unknown-component-card"
     >
-      <p className="text-sm text-muted-foreground">
+      <p className="text-base text-muted-foreground">
         This interactive component isn&apos;t available in this view.{" "}
-        <span className="font-mono text-xs">({componentId})</span>
+        <span className="font-mono text-sm">({componentId})</span>
       </p>
     </div>
   );

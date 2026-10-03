@@ -233,6 +233,7 @@ import { publishedSteeringGetRoute } from "./routes/v1/context.steering.publishe
 import { steeringIndexGetRoute } from "./routes/v1/context.steering.index.get";
 import { steeringRepoGetRoute } from "./routes/v1/steering_repo.get";
 import { steeringRepoRepairRoute } from "./routes/v1/steering_repo.repair";
+import { steeringRepoAdoptRoute } from "./routes/v1/steering_repo.adopt";
 import { steeringRepoProvisionRetryRoute } from "./routes/v1/steering_repo.provision.retry";
 import { steeringRepoDestinationsListRoute } from "./routes/v1/steering_repo.destinations.list";
 import { steeringMemoriesListRoute } from "./routes/v1/steering.memories.list";
@@ -262,6 +263,8 @@ import { steeringPrOpenRoute } from "./routes/v1/steering.pr.open";
 import { steeringPrGetRoute } from "./routes/v1/steering.pr.get";
 import { steeringPrRefreshRoute } from "./routes/v1/steering.pr.refresh";
 import { steeringPrDiffGetRoute } from "./routes/v1/steering.pr.diff.get";
+import { changeSetGetRoute } from "./routes/v1/forge.changes.get";
+import { revisionDiffGetRoute } from "./routes/v1/forge.revision.diff.get";
 import { steeringPrMergeRoute } from "./routes/v1/steering.pr.merge";
 import { steeringPrMergeWithoutReviewRoute } from "./routes/v1/steering.pr.merge_without_review";
 import { steeringPrRevertRoute } from "./routes/v1/steering.pr.revert";
@@ -1326,6 +1329,8 @@ orgScoped.route("/context/steering/index", steeringIndexGetRoute);
 // The workspace's steering repo and its settings repair (lane S2, #4560).
 orgScoped.route("/context/steering/repo", steeringRepoGetRoute);
 orgScoped.route("/context/steering/repo/repair", steeringRepoRepairRoute);
+// Adopt host merges of pull requests Oxagen opened (#5195).
+orgScoped.route("/context/steering/repo/adopt", steeringRepoAdoptRoute);
 // Re-send a failed or blocked steering repo setup (#4750).
 orgScoped.route("/context/steering/repo/retry", steeringRepoProvisionRetryRoute);
 // Workspace memories (#4912): the Memories tab's list and drawer, promotion
@@ -1383,6 +1388,10 @@ orgScoped.route("/steering/prs/open", steeringPrOpenRoute);
 orgScoped.route("/steering/prs/get", steeringPrGetRoute);
 orgScoped.route("/steering/prs/refresh", steeringPrRefreshRoute);
 orgScoped.route("/steering/prs/diff", steeringPrDiffGetRoute);
+// A scope's pull requests and their change, and one revision's stored diff,
+// both read from the forge store (ADR-292).
+orgScoped.route("/pull-requests/changes", changeSetGetRoute);
+orgScoped.route("/pull-requests/revisions/diff", revisionDiffGetRoute);
 orgScoped.route("/steering/prs/merge", steeringPrMergeRoute);
 orgScoped.route(
   "/steering/prs/merge-without-review",

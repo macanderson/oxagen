@@ -14,8 +14,12 @@ import {
   assertGithubSteeringCommit,
   githubCloseRevert,
   githubDiverged,
+  githubHostMerge,
   githubOpenRevert,
   githubPublished,
+  githubRecordAdoption,
+  githubSameChanges,
+  githubUnproven,
   gitlabCloseRevert,
   gitlabDiverged,
   gitlabOpenRevert,
@@ -393,8 +397,21 @@ const GH = "/repos/acme/steering";
 /** The test clock: 2026-10-02T21:02:45Z, when the live test's merge landed. */
 const NOW = Date.parse("2026-10-02T21:02:45Z");
 
+/** The read of the steering app's adoption check runs on `sha` (#5195). */
+function adoptionRuns(sha: string): string {
+  return `GET ${GH}/commits/${sha}/check-runs?check_name=Oxagen%20steering%20adoption&app_id=1234`;
+}
+
 function github(routes: Record<string, Reply | Reply[]>) {
-  const s = server("https://api.github.com", routes);
+  // A commit a person merged through a pull request costs one more read: the
+  // app's adoption check runs. Unless a test says otherwise, it finds none.
+  const unadopted: Record<string, Reply> = Object.fromEntries(
+    [P, S1, X, S2, R, HEAD, OLD].map((sha) => [
+      adoptionRuns(sha),
+      ok({ total_count: 0, check_runs: [] }),
+    ]),
+  );
+  const s = server("https://api.github.com", { ...unadopted, ...routes });
   const waits: number[] = [];
   const target: GithubHistoryTarget = {
     rest: createGithubRest({ token: "ghs_test", fetch: s.fetch }),
@@ -883,6 +900,183 @@ describe("GitHub commit provenance", () => {
   }
 });
 
+describe("host merge adoption (#5195)", () => {
+  /** The adoption check run the steering app posts, by `appId`. */
+  function adoptionRun(over: Record<string, unknown> = {}) {
+    return {
+      id: 9,
+      name: "Oxagen steering adoption",
+      status: "completed",
+      conclusion: "success",
+      external_id: "oxagen-steering-adoption",
+      app: { id: 1234 },
+      ...over,
+    };
+  }
+
+  /** Pull request `number`, merged on the host by a person as `sha`. */
+  function personPull(sha: string, number: number, head: string = HEAD) {
+    return {
+      ...authenticatedPull(sha, number),
+      head: { sha: head },
+      merged_by: { type: "User", login: "maintainer" },
+    };
+  }
+
+  const IMPORT = "Import steering from .oxagen/ (#2)";
+
+  it("counts a host merge the steering app's adoption check run vouches for", async () => {
+    const gh = github({
+      [COMPARE]: ok(singleGithubCommit(IMPORT)),
+      [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([{ number: 2 }]),
+      [`GET ${GH}/pulls/2`]: ok(personPull(S1, 2)),
+      [adoptionRuns(S1)]: ok({ total_count: 1, check_runs: [adoptionRun()] }),
+    });
+    await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toBeNull();
+  });
+
+  for (const [name, runs] of [
+    ["no adoption run", []],
+    ["a run another app posted", [adoptionRun({ app: { id: 999 } })]],
+    ["a run with another external id", [adoptionRun({ external_id: "oxagen-steering-revert" })]],
+    ["a failed run", [adoptionRun({ conclusion: "failure" })]],
+  ] as const) {
+    it(`still flags a host merge with ${name} (negative)`, async () => {
+      const gh = github({
+        [COMPARE]: ok(singleGithubCommit(IMPORT)),
+        [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([{ number: 2 }]),
+        [`GET ${GH}/pulls/2`]: ok(personPull(S1, 2)),
+        [adoptionRuns(S1)]: ok({ total_count: runs.length, check_runs: runs }),
+      });
+      await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toEqual({
+        reason: "main holds 1 commit Oxagen did not merge: b2b2b2b",
+        main_sha: S1,
+      });
+    });
+  }
+
+  it("never counts an adoption run on a commit no pull request merged (negative)", async () => {
+    const gh = github({
+      [COMPARE]: ok(singleGithubCommit("Edit the release notes rule by hand")),
+      [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([]),
+      [adoptionRuns(S1)]: ok({ total_count: 1, check_runs: [adoptionRun()] }),
+    });
+    await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toMatchObject({
+      main_sha: S1,
+    });
+    expect(gh.sent(adoptionRuns(S1))).toHaveLength(0);
+  });
+
+  it("lists the commits no app merge proves, oldest first, and skips the app's merges", async () => {
+    const gh = github({
+      [COMPARE]: ok(fixture("github-compare-ahead")),
+      ...authenticatedRoutes(S1),
+      [`GET ${GH}/commits/${S2}/pulls?per_page=100`]: ok([{ number: 43 }]),
+      [`GET ${GH}/pulls/43`]: ok(personPull(S2, 43)),
+    });
+    await expect(githubUnproven(gh.target, PUBLISHED)).resolves.toEqual({
+      main_sha: S2,
+      commits: [
+        {
+          sha: S2,
+          message: expect.stringMatching(/^Tighten the review checklist \(#43\)/),
+        },
+      ],
+    });
+  });
+
+  it("refuses to list a main that no longer holds the published commit, or holds more than one read", async () => {
+    const rewritten = fixture<GithubCompareFixture>("github-compare-ahead");
+    rewritten.status = "diverged";
+    const cut = fixture<GithubCompareFixture>("github-compare-ahead");
+    cut.total_commits = 250;
+    for (const [reply, reason] of [
+      [fail(404, "Not Found"), /no longer contains the published commit/],
+      [ok(rewritten), /no longer contains the published commit/],
+      [ok(cut), /more commits since the published commit a1a1a1a than Oxagen can read/],
+    ] as const) {
+      const gh = github({ [COMPARE]: reply });
+      const listed = await githubUnproven(gh.target, PUBLISHED);
+      expect("refused" in listed && reason.test(listed.refused)).toBe(true);
+    }
+  });
+
+  it("names the pull request a person merged as the commit, and the head it merged", async () => {
+    const gh = github({
+      [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([{ number: 2 }]),
+      [`GET ${GH}/pulls/2`]: ok(personPull(S1, 2, R)),
+    });
+    await expect(
+      githubHostMerge(gh.target, { sha: S1, message: IMPORT }),
+    ).resolves.toEqual({ number: 2, headSha: R });
+  });
+
+  it("names no host merge for an app merge or a pull request that merged as another commit (negative)", async () => {
+    for (const pull of [authenticatedPull(S1, 2), personPull(X, 2)]) {
+      const gh = github({
+        [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([{ number: 2 }]),
+        [`GET ${GH}/pulls/2`]: ok(pull),
+      });
+      await expect(
+        githubHostMerge(gh.target, { sha: S1, message: IMPORT }),
+      ).resolves.toBeNull();
+    }
+  });
+
+  describe("githubSameChanges", () => {
+    const FILES = [
+      { filename: "steering/records/rule-a.md", status: "added", sha: "aa".repeat(20) },
+      { filename: "workspace.toml", status: "modified", sha: "bb".repeat(20) },
+    ];
+    const COMMIT = `GET ${GH}/commits/${S1}`;
+    const PULL_FILES = `GET ${GH}/pulls/2/files?per_page=100`;
+
+    it("matches a merge commit that changes exactly the pull request's files, in any order", async () => {
+      const gh = github({
+        [COMMIT]: ok({ sha: S1, files: FILES }),
+        [PULL_FILES]: ok([...FILES].reverse()),
+      });
+      await expect(githubSameChanges(gh.target, S1, 2)).resolves.toBe(true);
+    });
+
+    it("refuses a merge commit with another blob, another file, or a cut file list (negative)", async () => {
+      const other = [FILES[0], { ...FILES[1], sha: "cc".repeat(20) }];
+      const more = [...FILES, { filename: "steering/records/extra.md", status: "added", sha: "dd".repeat(20) }];
+      const cut = Array.from({ length: 300 }, (_, i) => ({ filename: `f${i}`, status: "added", sha: "ee".repeat(20) }));
+      for (const files of [other, more, cut]) {
+        const gh = github({
+          [COMMIT]: ok({ sha: S1, files }),
+          [PULL_FILES]: ok(FILES),
+        });
+        await expect(githubSameChanges(gh.target, S1, 2)).resolves.toBe(false);
+      }
+    });
+
+    it("reads every page of the pull request's files", async () => {
+      const many = Array.from({ length: 120 }, (_, i) => ({ filename: `f${i}`, status: "added", sha: "ab".repeat(20) }));
+      const gh = github({
+        [COMMIT]: ok({ sha: S1, files: many }),
+        [PULL_FILES]: ok(many.slice(0, 100)),
+        [`${PULL_FILES}&page=2`]: ok(many.slice(100)),
+      });
+      await expect(githubSameChanges(gh.target, S1, 2)).resolves.toBe(true);
+    });
+  });
+
+  it("posts the adoption check run that later reads count", async () => {
+    const gh = github({ [`POST ${GH}/check-runs`]: ok({ id: 9 }, 201) });
+    await githubRecordAdoption(gh.target, S1, "Adopted in Oxagen by user u-1.");
+    expect(gh.sent(`POST ${GH}/check-runs`)[0]!.body).toEqual({
+      name: "Oxagen steering adoption",
+      head_sha: S1,
+      status: "completed",
+      conclusion: "success",
+      external_id: "oxagen-steering-adoption",
+      output: { title: "Adopted in Oxagen", summary: "Adopted in Oxagen by user u-1." },
+    });
+  });
+});
+
 describe("assertGithubSteeringCommit", () => {
   it("authenticates the deployment anchor and the exact candidate", async () => {
     const gh = github({
@@ -1004,7 +1198,7 @@ describe("assertGithubSteeringCommit", () => {
     });
   });
 
-  it("fails closed when the bounded deployment history contains no app anchor", async () => {
+  it("fails closed when the deployment history holds no app anchor", async () => {
     const gh = github({
       [DEPLOYMENTS]: ok(
         Array.from({ length: 30 }, () => ({
@@ -1012,10 +1206,45 @@ describe("assertGithubSteeringCommit", () => {
           performed_via_github_app: null,
         })),
       ),
+      [`${DEPLOYMENTS}&page=2`]: ok([]),
     });
     await expect(assertGithubSteeringCommit(gh.target, S1)).rejects.toMatchObject({
       reason: "steering_publication_missing",
     });
+  });
+});
+
+describe("published deployment paging (#4653)", () => {
+  const FOREIGN_PAGE = (count: number) =>
+    Array.from({ length: count }, () => ({
+      sha: X,
+      performed_via_github_app: { id: 77, slug: "deploy-bot" },
+    }));
+
+  it("finds the app's deployment on GitHub's second page", async () => {
+    const gh = github({
+      [DEPLOYMENTS]: ok(FOREIGN_PAGE(30)),
+      [`${DEPLOYMENTS}&page=2`]: ok(fixture("github-deployments")),
+    });
+    await expect(githubPublished(gh.target)).resolves.toEqual({ sha: P, version: 7 });
+    expect(gh.calls).toHaveLength(2);
+  });
+
+  it("stops at GitHub's first short page", async () => {
+    const gh = github({ [DEPLOYMENTS]: ok(FOREIGN_PAGE(29)) });
+    await expect(githubPublished(gh.target)).resolves.toBeNull();
+    expect(gh.calls).toHaveLength(1);
+  });
+
+  it("throws rather than answer none when GitHub holds more pages than Oxagen reads", async () => {
+    const routes: Record<string, Reply> = { [DEPLOYMENTS]: ok(FOREIGN_PAGE(30)) };
+    for (let page = 2; page <= 10; page++)
+      routes[`${DEPLOYMENTS}&page=${page}`] = ok(FOREIGN_PAGE(30));
+    const gh = github(routes);
+    await expect(githubPublished(gh.target)).rejects.toThrow(
+      /more than 300 deployments to the steering environment/,
+    );
+    expect(gh.calls).toHaveLength(10);
   });
 });
 
@@ -1077,7 +1306,7 @@ describe("githubOpenRevert", () => {
       [COMMIT_P]: ok(fixture("github-git-commit-published")),
       [REF]: ok({ ref: `refs/heads/${BRANCH}`, object: { sha: R, type: "commit" } }),
       [COMMIT_R]: REVERT_TIP,
-      [`GET ${GH}/pulls/12`]: ok(fixture("github-pull")),
+      [PULLS]: ok([fixture("github-pull")]),
       [CHECK_RUNS]: ok({
         total_count: 1,
         check_runs: [
@@ -1195,7 +1424,7 @@ describe("githubOpenRevert", () => {
       [REF]: fail(404, "Not Found"),
       [`POST ${GH}/git/commits`]: ok({ sha: R }, 201),
       [`POST ${GH}/git/refs`]: ok({ ref: `refs/heads/${BRANCH}` }, 201),
-      [`GET ${GH}/pulls/12`]: [ok(moved), ok({ ...moved, state: "closed" })],
+      [`GET ${GH}/pulls/12`]: ok({ ...moved, state: "closed" }),
       [PULLS]: ok([moved]),
       [`PATCH ${GH}/pulls/12`]: ok({ ...moved, state: "closed" }),
       [`POST ${GH}/pulls`]: ok(pull(13, BRANCH), 201),
@@ -1210,11 +1439,81 @@ describe("githubOpenRevert", () => {
       base: "main",
     });
     expect(gh.writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+      `PATCH ${GH}/pulls/12`,
       `POST ${GH}/git/commits`,
       `POST ${GH}/git/refs`,
-      `PATCH ${GH}/pulls/12`,
       `POST ${GH}/pulls`,
       `POST ${GH}/check-runs`,
+    ]);
+  });
+
+  // #4671: the branch write lands only after the retargeted pull request is
+  // closed and read back as closed. On the old order, the force-push came
+  // first, so auto-merge could land the app's commit on the other branch.
+  it("closes a retargeted pull request before it force-moves a tampered branch (#4671)", async () => {
+    const moved = { ...pull(12, BRANCH), base: { ref: "release" } };
+    const gh = github({
+      [PULLS]: ok([moved]),
+      [`PATCH ${GH}/pulls/12`]: ok({ ...moved, state: "closed" }),
+      [`GET ${GH}/pulls/12`]: ok({ ...moved, state: "closed" }),
+      [COMMIT_P]: ok(fixture("github-git-commit-published")),
+      // Someone pushed their own commit to the revert branch.
+      [REF]: ok({ ref: `refs/heads/${BRANCH}`, object: { sha: HEAD, type: "commit" } }),
+      [`GET ${GH}/git/commits/${HEAD}`]: ok({
+        sha: HEAD,
+        tree: { sha: TREE_OTHER },
+        parents: [{ sha: S2 }],
+      }),
+      [`POST ${GH}/git/commits`]: ok({ sha: R }, 201),
+      [`POST ${GH}/git/refs`]: fail(422, "Reference already exists"),
+      [`PATCH ${GH}/git/refs/heads/${BRANCH}`]: ok({ object: { sha: R } }),
+      [`POST ${GH}/pulls`]: ok(pull(13, BRANCH), 201),
+      [`POST ${GH}/check-runs`]: ok({ id: 83 }, 201),
+    });
+    await expect(
+      githubOpenRevert(gh.target, PUBLISHED, DIVERGENCE, 12),
+    ).resolves.toBe(13);
+    expect(gh.writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+      `PATCH ${GH}/pulls/12`,
+      `POST ${GH}/git/commits`,
+      `POST ${GH}/git/refs`,
+      `PATCH ${GH}/git/refs/heads/${BRANCH}`,
+      `POST ${GH}/pulls`,
+      `POST ${GH}/check-runs`,
+    ]);
+    // The read-back that proves the close happens before the first branch write.
+    const order = gh.calls.map((c) => `${c.method} ${c.path}`);
+    expect(order.indexOf(`GET ${GH}/pulls/12`)).toBeLessThan(
+      order.indexOf(`POST ${GH}/git/commits`),
+    );
+  });
+
+  it("writes nothing to the branch when GitHub refuses to close a retargeted pull request (#4671)", async () => {
+    const moved = { ...pull(12, BRANCH), base: { ref: "release" } };
+    const gh = github({
+      [PULLS]: ok([moved]),
+      [`PATCH ${GH}/pulls/12`]: fail(403, "Resource not accessible by integration"),
+    });
+    await expect(
+      githubOpenRevert(gh.target, PUBLISHED, DIVERGENCE, 12),
+    ).rejects.toThrow(/Resource not accessible by integration/);
+    expect(gh.writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+      `PATCH ${GH}/pulls/12`,
+    ]);
+  });
+
+  it("writes nothing to the branch when a closed pull request still reads as open (#4671)", async () => {
+    const moved = { ...pull(12, BRANCH), base: { ref: "release" } };
+    const gh = github({
+      [PULLS]: ok([moved]),
+      [`PATCH ${GH}/pulls/12`]: ok(moved),
+      [`GET ${GH}/pulls/12`]: ok(moved),
+    });
+    await expect(
+      githubOpenRevert(gh.target, PUBLISHED, DIVERGENCE, 12),
+    ).rejects.toThrow(/still shows pull request #12 .* as open, so Oxagen wrote nothing/);
+    expect(gh.writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+      `PATCH ${GH}/pulls/12`,
     ]);
   });
 
@@ -1342,6 +1641,16 @@ describe("gitlabPublished", () => {
     const deployments = fixture<GitlabDeploymentFixture[]>("gitlab-deployments");
     const gl = gitlab({ [GL_DEPLOYMENTS]: ok(deployments.slice(0, 1)) });
     await expect(gitlabPublished(gl.target)).resolves.toBeNull();
+  });
+
+  it("finds the bot's deployment on the second page (#4653)", async () => {
+    const others = Array.from({ length: 20 }, () => ({ sha: X, user: { id: 9 } }));
+    const gl = gitlab({
+      [GL_DEPLOYMENTS]: ok(others),
+      [`${GL_DEPLOYMENTS}&page=2`]: ok(fixture("gitlab-deployments")),
+      [`GET ${GL}/repository/commits/${P}`]: ok(fixture("gitlab-commit-published")),
+    });
+    await expect(gitlabPublished(gl.target)).resolves.toEqual({ sha: P, version: 7 });
   });
 });
 
@@ -1511,7 +1820,7 @@ describe("gitlabOpenRevert", () => {
     const gl = gitlab({
       [BRANCH_GET]: glBranch(BRANCH, R, [S2]),
       [`GET ${GL}/repository/compare?from=${R}&to=${P}&straight=true`]: sameFiles(),
-      [`GET ${GL}/merge_requests/5`]: ok(request(5, BRANCH)),
+      [REQUESTS]: ok([request(5, BRANCH)]),
       [STATUS]: fail(400, "Cannot transition status via :run from :success"),
     });
     await expect(
@@ -1555,7 +1864,7 @@ describe("gitlabOpenRevert", () => {
     const gl = gitlab({
       [BRANCH_GET]: glBranch(BRANCH, R, [S2]),
       [`GET ${GL}/repository/compare?from=${R}&to=${P}&straight=true`]: sameFiles(),
-      [`GET ${GL}/merge_requests/5`]: [ok(moved), ok(closed)],
+      [`GET ${GL}/merge_requests/5`]: ok(closed),
       [REQUESTS]: ok([moved]),
       [`PUT ${GL}/merge_requests/5`]: ok(closed),
       [`POST ${GL}/merge_requests`]: ok(request(6, BRANCH), 201),
@@ -1576,6 +1885,74 @@ describe("gitlabOpenRevert", () => {
     ]);
   });
 
+  // #4671: the revert commit force-moves the branch, so it lands only after
+  // the retargeted merge request is closed and read back as closed.
+  it("closes a retargeted merge request before it force-moves a tampered branch (#4671)", async () => {
+    const moved = request(5, BRANCH, "opened", "release");
+    const closed = request(5, BRANCH, "closed", "release");
+    const gl = gitlab({
+      [REQUESTS]: ok([moved]),
+      [`PUT ${GL}/merge_requests/5`]: ok(closed),
+      [`GET ${GL}/merge_requests/5`]: ok(closed),
+      // Someone pushed their own commit to the revert branch.
+      [BRANCH_GET]: glBranch(BRANCH, HEAD, [X]),
+      [REVERT_COMPARE]: ok(fixture("gitlab-compare-revert")),
+      [file("rules/release-notes.md")]: ok(fixture("gitlab-file")),
+      [file("rules/review-checklist.md")]: ok(fixture("gitlab-file")),
+      [file("rules/house-style.md")]: ok(fixture("gitlab-file")),
+      [`POST ${GL}/repository/commits`]: ok(glCommit(R, [S2], revertMessage(PUBLISHED)), 201),
+      [`POST ${GL}/merge_requests`]: ok(request(6, BRANCH), 201),
+      [STATUS]: ok({ id: 5 }, 201),
+    });
+    await expect(
+      gitlabOpenRevert(gl.target, PUBLISHED, DIVERGENCE, 5),
+    ).resolves.toBe(6);
+    expect(gl.sent(`POST ${GL}/repository/commits`)[0]!.body).toMatchObject({
+      branch: BRANCH,
+      start_sha: S2,
+      force: true,
+    });
+    expect(gl.writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+      `PUT ${GL}/merge_requests/5`,
+      `POST ${GL}/repository/commits`,
+      `POST ${GL}/merge_requests`,
+      STATUS,
+    ]);
+    const order = gl.calls.map((c) => `${c.method} ${c.path}`);
+    expect(order.indexOf(`GET ${GL}/merge_requests/5`)).toBeLessThan(
+      order.indexOf(`POST ${GL}/repository/commits`),
+    );
+  });
+
+  it("writes nothing to the branch when GitLab refuses to close a retargeted merge request (#4671)", async () => {
+    const moved = request(5, BRANCH, "opened", "release");
+    const gl = gitlab({
+      [REQUESTS]: ok([moved]),
+      [`PUT ${GL}/merge_requests/5`]: fail(403, "403 Forbidden"),
+    });
+    await expect(
+      gitlabOpenRevert(gl.target, PUBLISHED, DIVERGENCE, 5),
+    ).rejects.toThrow();
+    expect(gl.writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+      `PUT ${GL}/merge_requests/5`,
+    ]);
+  });
+
+  it("writes nothing to the branch when a closed merge request still reads as open (#4671)", async () => {
+    const moved = request(5, BRANCH, "opened", "release");
+    const gl = gitlab({
+      [REQUESTS]: ok([moved]),
+      [`PUT ${GL}/merge_requests/5`]: ok(moved),
+      [`GET ${GL}/merge_requests/5`]: ok(moved),
+    });
+    await expect(
+      gitlabOpenRevert(gl.target, PUBLISHED, DIVERGENCE, 5),
+    ).rejects.toThrow(/still shows merge request !5 .* as open, so Oxagen wrote nothing/);
+    expect(gl.writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+      `PUT ${GL}/merge_requests/5`,
+    ]);
+  });
+
   it("reuses a listed merge request into main without closing it", async () => {
     const gl = gitlab({
       [BRANCH_GET]: glBranch(BRANCH, R, [S2]),
@@ -1591,6 +1968,7 @@ describe("gitlabOpenRevert", () => {
 
   it("refuses to write an empty revert commit", async () => {
     const gl = gitlab({
+      [REQUESTS]: ok([]),
       [BRANCH_GET]: fail(404, "404 Branch Not Found"),
       [REVERT_COMPARE]: sameFiles(),
     });
@@ -1604,6 +1982,7 @@ describe("gitlabOpenRevert", () => {
     const compare = fixture<GitlabCompareFixture>("gitlab-compare-revert");
     compare.compare_timeout = true;
     const gl = gitlab({
+      [REQUESTS]: ok([]),
       [BRANCH_GET]: fail(404, "404 Branch Not Found"),
       [REVERT_COMPARE]: ok(compare),
     });

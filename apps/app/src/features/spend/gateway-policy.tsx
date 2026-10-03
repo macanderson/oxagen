@@ -21,6 +21,7 @@ import { Money } from "@/ui/money";
 import { inputBase } from "@/ui/control-styles";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
+import { ModelLabel } from "@/ui/provider-mark";
 import { type OptionLoad, RecordMultiPicker } from "@/ui/record-picker";
 import { setGatewayPolicyAction } from "./actions";
 import {
@@ -45,6 +46,20 @@ function valuesOf(policy: GatewayPolicy): GatewayPolicyFormValues {
 }
 
 /** One pattern per line, as the form holds a list, split into the picker's chips. */
+/** A saved list of models or patterns, each with its maker's mark (#5297). */
+function ModelNames({ models }: { models: readonly string[] }) {
+  return (
+    <>
+      {models.map((model, index) => (
+        <span key={model}>
+          {index === 0 ? null : ", "}
+          <ModelLabel model={model} className="align-bottom" />
+        </span>
+      ))}
+    </>
+  );
+}
+
 function patternsOf(value: string): string[] {
   return value
     .split("\n")
@@ -73,7 +88,7 @@ function ModelList({
   const errorId = error ? `${id}-error` : undefined;
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-foreground">
+      <label htmlFor={id} className="text-base font-medium text-foreground">
         {label}
       </label>
       <RecordMultiPicker
@@ -90,11 +105,11 @@ function ModelList({
         }}
       />
       {error ? (
-        <p id={errorId} className="text-xs text-destructive">
+        <p id={errorId} className="text-sm text-destructive">
           {error}
         </p>
       ) : null}
-      <p id={hintId} className="text-xs text-muted-foreground">
+      <p id={hintId} className="text-sm text-muted-foreground">
         {hint}
       </p>
     </div>
@@ -116,6 +131,9 @@ export function GatewayPolicySection({
     valuesOf(policy),
   );
   const [saved, setSaved] = useState<GatewayPolicy>(policy);
+  // Held apart so the allowlist's narrowing survives into the rich-text
+  // callback below.
+  const allow = saved.modelAllow;
   const [reach, setReach] = useState<GatewayReach | null>(null);
   const [errors, setErrors] = useState<GatewayFieldErrors>({});
   const [alert, setAlert] = useState<"denied" | "failed" | null>(null);
@@ -187,10 +205,10 @@ export function GatewayPolicySection({
       footer={
         reach === null ? (
           saved.mode === "enforced" ? (
-            <p className="text-xs">{t("reach.unknown")}</p>
+            <p className="text-sm">{t("reach.unknown")}</p>
           ) : null
         ) : (
-          <p data-testid="gateway-reach" className="text-xs">
+          <p data-testid="gateway-reach" className="text-sm">
             {reach.hosts === 0
               ? t("reach.none")
               : t("reach.stored", {
@@ -210,7 +228,7 @@ export function GatewayPolicySection({
           className="flex flex-col gap-3 px-4 py-3.5"
         >
           {alert ? <FormAlert>{t(`alert.${alert}`)}</FormAlert> : null}
-          <label htmlFor="gateway-mode" className="text-sm font-medium">
+          <label htmlFor="gateway-mode" className="text-base font-medium">
             {t("mode")}
           </label>
           <select
@@ -234,7 +252,7 @@ export function GatewayPolicySection({
             <p
               id="gateway-mode-error"
               role="alert"
-              className="text-xs text-destructive"
+              className="text-sm text-destructive"
             >
               {message("mode")}
             </p>
@@ -254,7 +272,7 @@ export function GatewayPolicySection({
               }));
             }}
           />
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex items-center gap-2 text-base">
             <input
               type="checkbox"
               checked={values.permitNoModels ?? false}
@@ -301,7 +319,7 @@ export function GatewayPolicySection({
           />
         </form>
       ) : (
-        <div className="flex flex-col gap-2 px-4 py-3.5 text-sm">
+        <div className="flex flex-col gap-2 px-4 py-3.5 text-base">
           <p className="text-muted-foreground">{t("readOnly")}</p>
           <p>
             {saved.sessionLimit === null ? (
@@ -313,14 +331,20 @@ export function GatewayPolicySection({
             )}
           </p>
           <p>
-            {saved.modelAllow === null
+            {allow === null
               ? t("noAllowlist")
-              : saved.modelAllow.length === 0
+              : allow.length === 0
                 ? t("permitNoModels")
-                : t("allowlist", { models: saved.modelAllow.join(", ") })}
+                : t.rich("allowlist", {
+                    models: () => <ModelNames models={allow} />,
+                  })}
           </p>
           {saved.modelDeny.length > 0 ? (
-            <p>{t("denylist", { models: saved.modelDeny.join(", ") })}</p>
+            <p>
+              {t.rich("denylist", {
+                models: () => <ModelNames models={saved.modelDeny} />,
+              })}
+            </p>
           ) : null}
         </div>
       )}

@@ -1,5 +1,6 @@
 import { listWorkspacesForFindings, runFindingsPass } from "@oxagen/billing";
 import { NonRetriableError } from "@oxagen/functions";
+import { captureError } from "@oxagen/telemetry";
 import { createFunction } from "../create-function";
 import { logger } from "../logger";
 
@@ -67,6 +68,13 @@ export const [costFindings] = createFunction(
  * event was lost is still visited.
  * One workspace's degraded read does not stop the sweep; the next night
  * retries it.
+ *
+ * A failed pass is captured as an error for its workspace (error_events, and
+ * the alert webhook where one is set), as well as logged. The sweep catches
+ * the failure, so Inngest never sees it and `observability.capture-failure`
+ * never fires. With only a warn line, five nights of failed passes went
+ * unseen and every open finding kept a window that ended on 2026-09-27
+ * (#5311).
  */
 export const [costFindingsNightly] = createFunction(
   { id: "cost.findings-nightly", retries: 3 },
@@ -86,6 +94,14 @@ export const [costFindingsNightly] = createFunction(
             { workspaceId: scope.workspaceId, err },
             "cost.findings-nightly: pass failed",
           );
+          captureError({
+            error: err,
+            source: "inngest",
+            severity: "error",
+            orgId: scope.orgId,
+            workspaceId: scope.workspaceId,
+            context: "cost.findings-nightly: findings pass failed",
+          });
           return false;
         }
       });

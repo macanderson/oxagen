@@ -29,7 +29,7 @@ export default async function LoginPage({
           <h1 className="text-2xl font-semibold tracking-tight">
             Welcome back
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             Sign in to your Oxagen workspace
           </p>
         </div>
@@ -40,14 +40,14 @@ export default async function LoginPage({
           <div className="absolute inset-0 flex items-center">
             <span className="w-full border-t" />
           </div>
-          <div className="relative flex justify-center text-xs uppercase">
+          <div className="relative flex justify-center text-sm uppercase">
             <span className="bg-card px-2 text-muted-foreground">Or</span>
           </div>
         </div>
 
         <LoginForm mode="signin" returnTo={returnTo} />
 
-        <p className="text-center text-sm text-muted-foreground">
+        <p className="text-center text-base text-muted-foreground">
           Don&rsquo;t have an account?{" "}
           <Link
             href={withReturnTo("/signup", returnTo)}
@@ -58,7 +58,7 @@ export default async function LoginPage({
         </p>
       </div>
 
-      <p className="text-center text-xs text-muted-foreground">
+      <p className="text-center text-sm text-muted-foreground">
         SOC 2 Type II · SSO/SCIM · RBAC-enforced retrieval
       </p>
     </div>

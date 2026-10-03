@@ -68,7 +68,10 @@
  * chrome's markup too, where a fixed Tailwind size or a length in square
  * brackets is a literal. A literal is listed as `literal` with its line and
  * the token to use, and an allowlist entry that excuses nothing is listed as
- * `keep`.
+ * `keep`. On the two customer sites, oxagen.sh and docs.oxagen.sh, it also
+ * holds the house type rule (oxageninc/brand#83): h1 to h3 in Space Grotesk,
+ * every face from a kit token, and no size by hand in a hand-written page.
+ * Each break is listed as `type`.
  *
  * SURFACE_MARKS lists the marks each app may carry. The product shows the
  * wordmark where a word fits and the hive where the slot is square. The kit
@@ -87,7 +90,16 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { INK_TOKENS } from "../../apps/web/scripts/lib/theme.mjs";
-import { GUARDED, GUARDED_MARKUP, literalDrift, markupDrift } from "./lib/brand-literals.mjs";
+import {
+  GUARDED,
+  GUARDED_MARKUP,
+  GUARDED_PAGES,
+  literalDrift,
+  markupDrift,
+  markupSemanticDrift,
+  semanticDrift,
+  typeDrift,
+} from "./lib/brand-literals.mjs";
 import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -639,15 +651,20 @@ function fonts() {
  *
  * `house-tailwind.css` is the layer that turns the palette into something an
  * app can write: the `--color-ox-*` theme entries, the shadcn and Base UI
- * semantic names, the tracking scale, and the twelve type utilities
+ * semantic names, the tracking scale, and the thirteen type utilities
  * (`text-m-*` for a page read once, `text-a-*` for a dashboard read all day).
  * It imports `house-tokens.css` from beside it, which is why `globals.css`
  * imports this file rather than both.
+ *
+ * `house-text-scale.css` maps Tailwind's `text-xs` to `text-3xl` on the app
+ * steps. A site opts into it with its own import: the app and the archived
+ * app do, and the docs site does not.
  */
 function tokens(kit) {
   copy("tokens/house-tokens.css", "packages/ui/src/styles/house-tokens.css");
   copy("tokens/house-tokens.json", "packages/ui/src/styles/house-tokens.json");
   copy("tokens/house-tailwind.css", "packages/ui/src/styles/house-tailwind.css");
+  copy("tokens/house-text-scale.css", "packages/ui/src/styles/house-text-scale.css");
   emit("packages/ui/src/lib/house-grounds.ts", houseGroundsModule(kit.tokens));
 }
 
@@ -856,8 +873,10 @@ function desktopIcons() {
 /**
  * The literal guard, in a check only: every corner, shadow, font size, or
  * page wrap a guarded stylesheet writes as a literal instead of a kit token,
- * and every fixed size, corner, or shadow class in the docs chrome's markup.
- * The kit's own house-tokens.css names the nearest token in each message.
+ * every fixed size, corner, or shadow class in the docs chrome's markup, and
+ * every break of the house type rule on oxagen.sh and docs.oxagen.sh. The
+ * kit's own house-tokens.css names the nearest token in each message, and
+ * gives the type pass the sizes it computes against.
  */
 function literals() {
   if (!CHECK) return;
@@ -889,6 +908,39 @@ function literals() {
       why: `line ${h.line}: ${h.prop} ${h.value}; use ${h.use}`,
     });
   }
+  // The type rule on the customer sites: Space Grotesk on h1 to h3, a face
+  // named by hand, and the hand-written pages' own sizes.
+  const typed = new Map(
+    [...GUARDED, ...GUARDED_PAGES].map(({ path }) => [
+      path,
+      committed(path)?.toString("utf8") ?? null,
+    ]),
+  );
+  for (const h of typeDrift(typed, { tokens })) {
+    drifted.push({
+      kind: "type",
+      path: h.path,
+      why: `line ${h.line}: ${h.prop}: ${h.value}; use ${h.use}`,
+    });
+  }
+  // The semantic rule on the customer sites: colours, raw tokens, spacing,
+  // corners and shadows in a page, and buttons, each from a semantic token.
+  const semantic = semanticDrift(typed);
+  const markupSemantic = markupSemanticDrift(markup);
+  for (const h of [...semantic.hits, ...markupSemantic.hits]) {
+    drifted.push({
+      kind: "token",
+      path: h.path,
+      why: `line ${h.line}: ${h.prop}${h.prop === "class" ? " " : ": "}${h.value}; use ${h.use}`,
+    });
+  }
+  for (const k of [...semantic.stale, ...markupSemantic.stale]) {
+    drifted.push({
+      kind: "keep",
+      path: k.path,
+      why: `an allowlist in tools/scripts/lib/brand-literals.mjs keeps ${k.value}, which the file no longer writes; remove the entry`,
+    });
+  }
   for (const k of stale) {
     drifted.push({
       kind: "keep",
@@ -903,7 +955,8 @@ function literals() {
 const HOW_TO_FIX =
   "Run node tools/scripts/sync-brand-assets.mjs --brand <kit> and commit the result. " +
   "If the desktop icons are stale, also run pnpm --filter @oxagen/desktop icons. " +
-  "For a literal, write the token the line names, or name the literal and its reason in KEEP in tools/scripts/lib/brand-literals.mjs.";
+  "For a literal, write the token the line names, or name the literal and its reason in KEEP in tools/scripts/lib/brand-literals.mjs. " +
+  "For a type break, write the step or face the line names. A hand-written page keeps no size by hand.";
 
 if (isEntrypoint(import.meta.url)) {
   for (const surface of Object.keys(SURFACE_MARKS)) {

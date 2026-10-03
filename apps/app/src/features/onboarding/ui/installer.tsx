@@ -111,7 +111,7 @@ export function InstallerScreens({
   if (rejected !== null) {
     body = (
       <div data-testid="installer-rejected" className="flex flex-col gap-2">
-        <h2 className="text-xl font-semibold">{t("rejectedTitle")}</h2>
+        <h2 className="text-lg font-semibold">{t("rejectedTitle")}</h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
           {t.rich("rejectedBody", {
             token: rejected.token,
@@ -137,11 +137,11 @@ export function InstallerScreens({
   } else if (screen === "download") {
     body = (
       <div data-testid="installer-download" className="flex flex-col gap-3">
-        <h2 className="text-xl font-semibold">{t("downloadTitle")}</h2>
+        <h2 className="text-lg font-semibold">{t("downloadTitle")}</h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
           {t.rich("downloadBody", { org, workspace, b: bold })}
         </p>
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm max-sm:grid-cols-1 max-sm:gap-y-0.5 max-sm:[&>dd]:mb-2">
+        <dl className="grid grid-cols-dl-max gap-x-4 gap-y-2 text-sm max-sm:grid-cols-1 max-sm:gap-y-0.5 max-sm:[&>dd]:mb-2">
           <dt className="text-muted-foreground">{t("facts.package")}</dt>
           <dd data-testid="installer-package">{notPublished}</dd>
           <dt className="text-muted-foreground">{t("facts.size")}</dt>
@@ -169,15 +169,15 @@ export function InstallerScreens({
             {t("cancel")}
           </SafeLink>
         </div>
-        <p className="text-xs text-muted-foreground">{t("userOnly")}</p>
+        <p className="text-sm text-muted-foreground">{t("userOnly")}</p>
       </div>
     );
   } else if (screen === "installing") {
     const n = Math.min(done + 1, STEPS.length);
     body = (
       <div data-testid="installer-installing" className="flex flex-col gap-3">
-        <h2 className="text-xl font-semibold">{t("installingTitle")}</h2>
-        <p className="text-xs text-muted-foreground">
+        <h2 className="text-lg font-semibold">{t("installingTitle")}</h2>
+        <p className="text-sm text-muted-foreground">
           {t("stepOf", { n, total: STEPS.length })}
         </p>
         <div
@@ -221,7 +221,7 @@ export function InstallerScreens({
       <div data-testid="installer-connected" className="flex flex-col gap-3">
         {connected === null ? (
           <>
-            <h2 className="text-xl font-semibold">
+            <h2 className="text-lg font-semibold">
               {t("notConnectedTitle")}
             </h2>
             <p className="text-sm leading-relaxed text-muted-foreground">
@@ -232,11 +232,11 @@ export function InstallerScreens({
           <>
             <div className="flex items-center gap-2">
               <Badge tone="allowed">{t("connected")}</Badge>
-              <span className="ml-auto font-mono text-sm text-muted-foreground">
+              <span className="ml-auto font-mono text-xs text-muted-foreground">
                 {time(connected.at)}
               </span>
             </div>
-            <h2 className="text-xl font-semibold">
+            <h2 className="text-lg font-semibold">
               {t("connectedTitle", { org })}
             </h2>
             <p className="text-sm leading-relaxed text-muted-foreground">
@@ -263,7 +263,7 @@ export function InstallerScreens({
           <SafeLink to={run} className={buttonPrimary}>
             {t("backToOxagen")}
           </SafeLink>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             {t("unlocking")}
           </span>
         </div>
@@ -275,12 +275,12 @@ export function InstallerScreens({
     <div className="flex w-full min-w-0 max-w-xl flex-col gap-3.5">
       <section className={panel}>
         <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-          <h3 className="text-sm font-semibold">{t("title")}</h3>
-          <span className="ml-auto truncate font-mono text-sm text-muted-foreground">
+          <h3 className="text-base font-semibold">{t("title")}</h3>
+          <span className="ml-auto truncate font-mono text-xs text-muted-foreground">
             {t("notPublished")}
           </span>
         </div>
-        <div className="px-[18px] py-4">{body}</div>
+        <div className="px-4.5 py-4">{body}</div>
       </section>
       {rejected !== null ? null : (
         <div
@@ -288,7 +288,7 @@ export function InstallerScreens({
           aria-label={t("screenLabel")}
           className="flex flex-wrap items-center justify-center gap-2"
         >
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             {t("screenLabel")}
           </span>
           {SCREENS.map((s) => (
@@ -299,7 +299,7 @@ export function InstallerScreens({
               onClick={() => {
                 show(s);
               }}
-              className={`${buttonSecondary} text-xs ${screen === s ? "font-semibold" : "border-transparent bg-transparent"}`}
+              className={`${buttonSecondary} text-sm ${screen === s ? "font-semibold" : "border-transparent bg-transparent"}`}
             >
               {t(`screens.${s}`)}
             </button>

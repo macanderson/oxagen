@@ -1,16 +1,23 @@
-// One operator's, agent's or tool's spend over its trailing window (#2962;
-// spec "Drill"): the crumb back to its table, the header with Open the agent (an
-// agent only) and Export this view, the potential savings its own findings
-// hold, the kind's stat tiles, spend by day as a chart with its peak and
-// average, the cross-cuts, and its findings. get_spend_drill answers the
-// totals, the averages, the series and the tools its runs called; every other
-// tile the design draws prints "not recorded" until the rollup carries it
-// (#2962), and the per-key report behind Export this view waits on a contract
-// that takes a key. An agent's drill draws its avatar with the harness it
-// registered beside its name (#4871).
+// One operator's, agent's or tool's spend over its trailing window (#2962,
+// #5293; spec "Drill"): the crumb back to its table, the header with Open the
+// agent (an agent only) and Export this view, the potential savings its own
+// findings hold, the kind's stat tiles, spend by day as a chart with its peak
+// and average, the cross-cuts, and its findings. get_spend_drill answers every
+// figure the tiles and the cross-cuts draw: the totals, the averages, the
+// series, the tokens and their cache hit rate, the model calls, the part the
+// gateway metered, the standing context, the tool results, the tools its runs
+// called, and its spend by agent, operator and model. A tile prints "not
+// recorded" only where the response carries null or no source records the
+// figure yet (wasted, budget, trend, and a tool's repeat calls and retries).
+// A tool's spend is what its results cost as input to later calls, an
+// estimate its runs already paid, and the page says so. The per-key report
+// behind Export this view waits on a contract that takes a key. An agent
+// carries its avatar with the harness it registered (#4871).
 import { useLocale, useTranslations } from "next-intl";
-import { divMicros, maxMoney } from "@/data/contracts/money";
+import type { ReactNode } from "react";
+import { divMicros, maxMoney, ratioOfMicros } from "@/data/contracts/money";
 import type {
+  DrillCutRow,
   SpendDrill,
   SpendDrillKind,
   SpendFinding,
@@ -28,7 +35,7 @@ import { Money } from "@/ui/money";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { cell, numericCell, Table } from "@/ui/table";
-import { AgentMark } from "./agent-mark";
+import { type AgentHarnesses, AgentMark, harnessIn } from "./agent-mark";
 import {
   BasisLabel,
   CostFigure,
@@ -39,8 +46,8 @@ import {
   TileStrip,
   UnmeteredNote,
 } from "./figures";
-import { GAP_ISSUE, NotBacked, NotBackedPanel } from "./not-backed";
-import { findingsOn, savingOf, sumCost } from "./rollup";
+import { GAP_ISSUE, NotBacked } from "./not-backed";
+import { classesOf, findingsOn, savingOf, sumCost, totalOf } from "./rollup";
 import { SpendByDayChart } from "./spend-by-day-chart";
 import { StubDialog } from "./stub-dialog";
 import { Empty, Panel } from "./tables";
@@ -109,41 +116,108 @@ const TILES: Record<SpendDrillKind, readonly TileKey[]> = {
   ],
 };
 
-/** The cross-cuts each kind allows, besides By tool, which the drill answers. */
-const CROSS_CUTS: Record<
-  SpendDrillKind,
-  readonly ("agent" | "operator" | "model")[]
-> = {
+type Cut = "agent" | "operator" | "model";
+
+/** The cross-cuts each kind draws, besides By tool on an operator or an agent. */
+const CROSS_CUTS: Record<SpendDrillKind, readonly Cut[]> = {
   operator: ["agent", "model"],
   agent: ["operator", "model"],
   tool: ["agent", "operator"],
 };
 
-function TileValue({ tile, drill }: { tile: TileKey; drill: SpendDrill }) {
+/** The response field each cross-cut reads. */
+const CUT_ROWS = {
+  agent: "byAgent",
+  operator: "byOperator",
+  model: "byModel",
+} as const satisfies Record<Cut, keyof SpendDrill>;
+
+/** A count the response carried, or "not recorded" where it carried null. */
+function CountValue({ count }: { count: number | null }) {
   const locale = useLocale();
+  return count === null ? (
+    <NotRecordedValue />
+  ) : (
+    <span className="tabular-nums">{formatCount(count, locale)}</span>
+  );
+}
+
+/**
+ * One tile: its figure, and a note where the figure needs one. A tool's
+ * spend and cache hit rate say what they cover, since the first is an
+ * estimate and the second is its runs' rate. A figure no source records yet
+ * prints "not recorded".
+ */
+function DrillTile({ tile, drill }: { tile: TileKey; drill: SpendDrill }) {
+  const t = useTranslations("spend.drill");
+  const isTool = drill.kind === "tool";
+  let value: ReactNode;
+  let note: string | undefined;
   switch (tile) {
     case "spend":
-      return <CostFigure cost={drill.total.cost} />;
+      value = <CostFigure cost={drill.total.cost} />;
+      if (isTool) note = t("toolSpendNote");
+      break;
+    case "tokens":
+      value = <CountValue count={totalOf(classesOf(drill.tokens))} />;
+      break;
+    case "cacheHit":
+      value = <RatioFigure ratio={drill.cacheHitRate} />;
+      if (isTool && drill.cacheHitRate !== null) note = t("toolCacheNote");
+      break;
+    case "observed": {
+      const share =
+        drill.observed === null || drill.total.cost === null
+          ? null
+          : ratioOfMicros(drill.observed, drill.total.cost);
+      value = <RatioFigure ratio={share} />;
+      if (share !== null) note = t("observedNote");
+      break;
+    }
     case "productive":
-      return <RatioFigure ratio={drill.total.productiveRatio} />;
+      value = <RatioFigure ratio={drill.total.productiveRatio} />;
+      break;
     case "runs":
-      return <>{formatCount(drill.total.runs, locale)}</>;
+      value = <CountValue count={drill.total.runs} />;
+      break;
     case "modelCalls":
+      value = <CountValue count={drill.modelCalls} />;
+      break;
     case "calls":
-      return <>{formatCount(drill.total.calls, locale)}</>;
+      value = <CountValue count={drill.total.calls} />;
+      break;
     case "perRun":
     case "avgPerRun":
-      return <MoneyFigure money={drill.perRun} precision="exact" />;
+      value = <MoneyFigure money={drill.perRun} precision="exact" />;
+      break;
     case "perCall":
-      return <MoneyFigure money={drill.perCall} precision="exact" />;
+      value = <MoneyFigure money={drill.perCall} precision="exact" />;
+      break;
+    case "toolDefinitions":
+      value = <CountValue count={drill.standing.toolDefinitionTokens} />;
+      if (drill.standing.toolDefinitionTokens !== null)
+        note = t("toolDefinitionsNote");
+      break;
+    case "resultBody":
+      value = <CountValue count={drill.resultTokens} />;
+      if (drill.resultTokens !== null) note = t("resultBodyNote");
+      break;
     default:
-      return <NotRecordedValue />;
+      // Wasted, budgets, trend, and a tool's repeat calls and retries: no
+      // source records them per key yet.
+      value = <NotRecordedValue />;
   }
+  return (
+    <Tile term={t(`tiles.${tile}`)} note={note}>
+      {value}
+    </Tile>
+  );
 }
 
 /**
  * Spend by day: an area over the window, with its peak and average. A window
- * with no priced day says so instead of drawing an empty chart.
+ * with no priced day says so instead of drawing an empty chart. A tool's days
+ * are its results' estimate, and the footer says what that is.
  */
 function SpendByDay({ drill }: { drill: SpendDrill }) {
   const t = useTranslations("spend.drill");
@@ -171,6 +245,11 @@ function SpendByDay({ drill }: { drill: SpendDrill }) {
             {t("average")} <MoneyFigure money={average} />
           </span>
           <BasisLabel basis={total?.basis ?? null} />
+          {drill.kind === "tool" ? (
+            <span className="basis-full" data-testid="spend-drill-estimate">
+              {t("toolEstimate")}
+            </span>
+          ) : null}
         </span>
       }
     >
@@ -190,12 +269,191 @@ function SpendByDay({ drill }: { drill: SpendDrill }) {
   );
 }
 
+/** A cross-cut row's name: the agent with its avatar, the person, or the model and its provider. */
+function CutName({
+  cut,
+  row,
+  at,
+  harnesses,
+}: {
+  cut: Cut;
+  row: DrillCutRow;
+  at: SpendAt;
+  harnesses: AgentHarnesses;
+}) {
+  switch (cut) {
+    case "agent":
+      return (
+        <span className="flex min-w-0 items-center gap-2">
+          <AgentMark
+            agentKey={row.key}
+            harness={harnessIn(harnesses, row.key)}
+          />
+          <SafeLink
+            to={routes.spend(at.org, at.ws, { tab: "agent", drill: row.key })}
+            className={`${linkText} ${mono} break-all`}
+          >
+            {row.key}
+          </SafeLink>
+        </span>
+      );
+    case "operator": {
+      // A principal nobody can name is shown by its key, never a made-up name.
+      const person = row.operator?.name ?? null;
+      return (
+        <SafeLink
+          to={routes.spend(at.org, at.ws, { tab: "operator", drill: row.key })}
+          className={person === null ? `${linkText} ${mono}` : linkText}
+        >
+          {person ?? row.key}
+        </SafeLink>
+      );
+    }
+    case "model":
+      return (
+        <span className="flex min-w-0 flex-col">
+          <span className={`${mono} break-all`}>{row.key}</span>
+          {row.provider === null ? null : (
+            <span className="text-base text-muted-foreground">
+              {row.provider}
+            </span>
+          )}
+        </span>
+      );
+  }
+}
+
+/**
+ * One cross-cut as a table. On an operator or agent drill a row is its runs'
+ * calls, tokens and spend; on a tool drill it is the tool's calls, result
+ * tokens and result cost in those runs.
+ */
+function CutPanel({
+  cut,
+  drill,
+  at,
+  harnesses,
+}: {
+  cut: Cut;
+  drill: SpendDrill;
+  at: SpendAt;
+  harnesses: AgentHarnesses;
+}) {
+  const t = useTranslations("spend");
+  const locale = useLocale();
+  const rows = drill[CUT_ROWS[cut]];
+  const isTool = drill.kind === "tool";
+  const title = t(`drill.cross.${cut}`);
+  return (
+    <Panel id={`spend-drill-${cut}`} title={title}>
+      {rows.length === 0 ? (
+        <Empty>{t(`drill.cutEmpty.${cut}`)}</Empty>
+      ) : (
+        <Table
+          label={title}
+          columns={[
+            { label: t(`drill.columns.${cut}`) },
+            { label: t("columns.runs"), numeric: true },
+            { label: t("columns.calls"), numeric: true },
+            {
+              label: isTool
+                ? t("drill.columns.resultTokens")
+                : t("drill.columns.tokens"),
+              numeric: true,
+            },
+            {
+              label: isTool ? t("drill.columns.resultCost") : t("columns.spend"),
+              numeric: true,
+            },
+          ]}
+        >
+          {rows.map((row) => (
+            <tr key={row.key} data-key={row.key}>
+              <th scope="row" className={`${cell} text-left font-normal`}>
+                <CutName cut={cut} row={row} at={at} harnesses={harnesses} />
+              </th>
+              <td className={numericCell}>{formatCount(row.runs, locale)}</td>
+              <td className={numericCell}>{formatCount(row.calls, locale)}</td>
+              <td className={numericCell}>
+                <CountValue
+                  count={
+                    isTool ? row.resultTokens : totalOf(classesOf(row.tokens))
+                  }
+                />
+              </td>
+              <td className={numericCell}>
+                <CostFigure cost={row.cost} />
+              </td>
+            </tr>
+          ))}
+        </Table>
+      )}
+    </Panel>
+  );
+}
+
+/** By tool on an operator's or an agent's drill: each tool's calls, runs, result tokens and their cost. */
+function ToolsPanel({ drill, at }: { drill: SpendDrill; at: SpendAt }) {
+  const t = useTranslations("spend");
+  const locale = useLocale();
+  return (
+    <Panel
+      id="spend-drill-tools"
+      title={t("drill.cross.tool")}
+      footer={drill.tools.length === 0 ? undefined : t("drill.toolEstimate")}
+    >
+      {drill.tools.length === 0 ? (
+        <Empty>{t("drill.toolsEmpty")}</Empty>
+      ) : (
+        <Table
+          label={t("drill.cross.tool")}
+          columns={[
+            { label: t("columns.tool") },
+            { label: t("columns.calls"), numeric: true },
+            { label: t("columns.runs"), numeric: true },
+            { label: t("drill.columns.resultTokens"), numeric: true },
+            { label: t("drill.columns.resultCost"), numeric: true },
+          ]}
+        >
+          {drill.tools.map((tool) => (
+            <tr key={tool.name} data-key={tool.name}>
+              <th
+                scope="row"
+                className={`${cell} text-left font-mono font-normal`}
+              >
+                <SafeLink
+                  to={routes.spend(at.org, at.ws, {
+                    tab: "tool",
+                    drill: tool.name,
+                  })}
+                  className={`${linkText} break-all`}
+                >
+                  {tool.name}
+                </SafeLink>
+              </th>
+              <td className={numericCell}>{formatCount(tool.calls, locale)}</td>
+              <td className={numericCell}>{formatCount(tool.runs, locale)}</td>
+              <td className={numericCell}>
+                <CountValue count={tool.resultTokens} />
+              </td>
+              <td className={numericCell}>
+                <CostFigure cost={tool.cost} />
+              </td>
+            </tr>
+          ))}
+        </Table>
+      )}
+    </Panel>
+  );
+}
+
 export function DrillSection({
   drill,
   findings,
   operator,
   at,
   harness = null,
+  harnesses = {},
 }: {
   drill: SpendDrill;
   findings: readonly SpendFinding[] | null;
@@ -203,12 +461,20 @@ export function DrillSection({
   at: SpendAt;
   /** An agent drill's registered harness; null for another kind or none. */
   harness?: string | null;
+  /** Each agent's registered harness, by key, for the By agent table's avatars. */
+  harnesses?: AgentHarnesses;
 }) {
   const t = useTranslations("spend");
   const locale = useLocale();
   const kindLabel = t(`drill.kind.${drill.kind}`);
+  // An operator drill names the person: the month's operator row when the
+  // page read it, else the drill's own By operator row for the key.
+  const ownFacts =
+    drill.byOperator.find((row) => row.key === drill.key)?.operator ?? null;
   const name =
-    drill.kind === "operator" ? (operator?.name ?? drill.key) : drill.key;
+    drill.kind === "operator"
+      ? (operator?.name ?? ownFacts?.name ?? drill.key)
+      : drill.key;
   const own =
     findings === null ? null : findingsOn(findings, drill.kind, drill.key);
   const saving = own === null ? null : savingOf(own);
@@ -227,7 +493,9 @@ export function DrillSection({
             label: t("tabs.findings"),
           }
         : {
-            to: routes.spend(at.org, at.ws, { tab: "month" }),
+            // The Month tab opens on Work item, so the crumb names the
+            // grouping it goes back to.
+            to: routes.spend(at.org, at.ws, { tab: "month", by: "agent" }),
             label: t("month.by.titles.agent"),
           };
   return (
@@ -332,55 +600,20 @@ export function DrillSection({
       </section>
       <TileStrip>
         {TILES[drill.kind].map((tile) => (
-          <Tile key={tile} term={t(`drill.tiles.${tile}`)}>
-            <TileValue tile={tile} drill={drill} />
-          </Tile>
+          <DrillTile key={tile} tile={tile} drill={drill} />
         ))}
       </TileStrip>
       <SpendByDay drill={drill} />
-      <div className="grid gap-3.5 lg:grid-cols-3">
+      <div className="grid gap-3.5 xl:grid-cols-2">
         {drill.kind === "tool" ? null : (
-          <Panel id="spend-drill-tools" title={t("drill.cross.tool")}>
-            {drill.tools.length === 0 ? (
-              <Empty>{t("drill.toolsEmpty")}</Empty>
-            ) : (
-              <Table
-                label={t("drill.cross.tool")}
-                columns={[
-                  { label: t("columns.tool") },
-                  { label: t("columns.calls"), numeric: true },
-                  { label: t("columns.runs"), numeric: true },
-                ]}
-              >
-                {drill.tools.map((tool) => (
-                  <tr key={tool.name} data-key={tool.name}>
-                    <th
-                      scope="row"
-                      className={`${cell} text-left font-mono font-normal`}
-                    >
-                      {tool.name}
-                    </th>
-                    <td className={numericCell}>
-                      {formatCount(tool.calls, locale)}
-                    </td>
-                    <td className={numericCell}>
-                      {formatCount(tool.runs, locale)}
-                    </td>
-                  </tr>
-                ))}
-              </Table>
-            )}
-          </Panel>
+          <div className="min-w-0 xl:col-span-2">
+            <ToolsPanel drill={drill} at={at} />
+          </div>
         )}
         {CROSS_CUTS[drill.kind].map((cut) => (
-          <NotBackedPanel
-            key={cut}
-            id={`spend-drill-${cut}`}
-            title={t(`drill.cross.${cut}`)}
-            gap="rollup"
-          >
-            {t("drill.crossMissing")}
-          </NotBackedPanel>
+          <div key={cut} className="min-w-0">
+            <CutPanel cut={cut} drill={drill} at={at} harnesses={harnesses} />
+          </div>
         ))}
       </div>
       <Panel id="spend-drill-findings" title={t("drill.findings")}>

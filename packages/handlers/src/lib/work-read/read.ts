@@ -9,6 +9,9 @@
 // (readRunTotalsByIds) after the transaction closes, because that read opens
 // its own.
 //
+// Each send's pull requests come from the forge store (ADR-292), read in the
+// same transaction through forge-pull-requests/orders.ts.
+//
 // Nothing here calls GitHub or writes anything. derive.ts, detail.ts, and
 // outcomes.ts shape what these reads return.
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
@@ -27,6 +30,7 @@ import {
 import { type FactDataByKind, type FactKind, type WorkFact, reduceWorkItem } from "@oxagen/work/records";
 import { and, asc, count, desc, eq, gte, inArray, isNull, lte, ne, or, type SQL, sql } from "drizzle-orm";
 import { readRunTotalsByIds } from "../../spend.shared";
+import { readOrderPullRequests } from "../forge-pull-requests/orders";
 import { composeAgentKey } from "../run-item";
 import { takesWorkOrders } from "../tacho-host";
 import { itemCorrections, latestDecision } from "../work-intake/triage-store";
@@ -418,6 +422,15 @@ async function lookupsFor(
     });
   }
 
+  // Every pull request each send has in the forge store (ADR-292): its links,
+  // and the pull requests its pr_linked facts name.
+  const named = allFacts.flatMap((fact) =>
+    fact.kind === "pr_linked" && fact.orderId !== null && fact.repository !== null && fact.prNumber !== null
+      ? [{ orderId: fact.orderId, repository: fact.repository, number: fact.prNumber }]
+      : [],
+  );
+  const pullRequests = await readOrderPullRequests(tx, scope, orderIds, named);
+
   const names = await userNames(tx, [
     ...allFacts.filter((fact) => fact.source === "person").map((fact) => fact.actor),
     ...allOrders.map((order) => order.operatorId),
@@ -437,6 +450,7 @@ async function lookupsFor(
       agents: new Map(agentRows.map((row) => [row.id, { publicId: String(row.publicId), name: row.name, harness: row.harness }])),
       runtimes: new Map(runtimeRows.map((row) => [row.id, { publicId: String(row.publicId), name: row.name }])),
       orders: orderRefs,
+      pullRequests,
     },
     actorNames,
   };
@@ -918,8 +932,8 @@ async function intakeByWeek(tx: Tx, scope: WorkScope, windowStart: Date, now: Da
  * since the start of the reopen cohort, or a return or close in the window,
  * newest first and at most OUTCOMES_ITEMS_MAX of them, with their facts and
  * their triage correction counts. The check facts are left out: the figures
- * read acceptances, merges, returns, closes, and reopens, never a check, and a
- * pull request's checks are most of its facts.
+ * read acceptances, merges, returns, closes, reopens, and reverts, never a
+ * check, and a pull request's checks are most of its facts.
  *
  * For the pilot measures it also reads the sends in the window, at most
  * OUTCOMES_SENDS_MAX of them, and each week's entered and sent counts, which

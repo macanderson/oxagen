@@ -156,7 +156,7 @@ export function NewOrgForm({
       {/* Attribution — only when the profile came from a social provider, so
           the user knows the fields were prefilled and are theirs to edit. */}
       {providerLabel && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Prefilled from your {providerLabel} account — edit anything below.
         </p>
       )}
@@ -171,7 +171,7 @@ export function NewOrgForm({
               type="button"
               onClick={() => selectOrgType(opt.value)}
               className={[
-                "flex-1 px-4 py-2 text-sm font-medium transition-colors",
+                "flex-1 px-4 py-2 text-base font-medium transition-colors",
                 "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                 orgType === opt.value
                   ? "bg-primary text-primary-foreground"
@@ -236,7 +236,7 @@ export function NewOrgForm({
               setSlug(next);
             }}
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Lowercase letters, digits, and hyphens. 2 to 40 chars.
           </p>
         </div>
@@ -341,7 +341,7 @@ export function NewOrgForm({
         )}
       </div>
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? <p className="text-base text-destructive">{error}</p> : null}
 
       <Button type="submit" size="lg" disabled={pending || navigating}>
         {pending || navigating ? "Creating…" : "Create organization"}

@@ -35,6 +35,7 @@ import {
   decision,
   digest,
   f,
+  forgePull,
   item,
   lookups,
 } from "./facts.test-support";
@@ -210,6 +211,24 @@ describe("sendDetailOf", () => {
     expect(mergedBy(APP_MERGER)).toEqual({ login: "oxagen-connect[bot]", type: "Bot", oxagen_app: true });
   });
 
+  it("lists the send's pull requests from the forge store and links the facts' one through it", () => {
+    const merged = forgePull({ url: "https://github.example.com/aintel/platform/pull/612", state: "merged" });
+    const second = forgePull({ id: "fpr_700", number: 700, url: "https://github.example.com/aintel/platform/pull/700", stateSeenAt: at(30) });
+    const send = sendDetailOf(item(IN_REVIEW), reduceWorkItem(IN_REVIEW).orders[0]!, lookups({ pullRequests: new Map([[O1, [second, merged]]]) }));
+    expect(send.pull_requests.map((pull) => [pull.id, pull.state])).toEqual([
+      ["fpr_700", "open"],
+      ["fpr_612", "merged"],
+    ]);
+    expect(send.pull_request).toMatchObject({ number: 612, url: "https://github.example.com/aintel/platform/pull/612", head: SHA1, merged: null });
+    expect(send.checks_word).toBe("passing");
+  });
+
+  it("lists no pull requests for a send the forge store holds none for", () => {
+    const send = sendDetailOf(item(IN_REVIEW), reduceWorkItem(IN_REVIEW).orders[0]!, lookups());
+    expect(send.pull_requests).toEqual([]);
+    expect(send.pull_request?.url).toBe(`https://github.com/${REPOSITORY}/pull/612`);
+  });
+
   it("reads no earlier checks before a second head", () => {
     expect(earlierChecksOf(reduceWorkItem(IN_REVIEW).orders[0]!, IN_REVIEW)).toBeNull();
     expect(earlierChecksOf(reduceWorkItem(SENT).orders[0]!, SENT)).toBeNull();
@@ -263,7 +282,7 @@ describe("historyOf", () => {
 describe("detailOf", () => {
   it("answers everything get_work_item promises, in the contract's shape", () => {
     const facts = [...IN_REVIEW, f.accepted(O1, SHA1, 12)];
-    const detail = detailOf(input(facts, { briefs: [brief(1, 1)] }), lookups());
+    const detail = detailOf(input(facts, { briefs: [brief(1, 1)] }), lookups({ pullRequests: new Map([[O1, [forgePull()]]]) }));
     const parsed = workItemGet.output.parse({ ...detail, viewer: { can_control: true, can_approve: true } });
     expect(parsed.item).toMatchObject({
       id: ITEM,
@@ -302,6 +321,8 @@ describe("detailOf", () => {
     expect(parsed.next_send).toBeNull();
     expect(parsed.sends.map((send) => send.id)).toEqual(["wo_one"]);
     expect(parsed.sends[0]?.acceptance?.head).toBe(SHA1);
+    expect(parsed.sends[0]?.pull_requests.map((pull) => pull.id)).toEqual(["fpr_612"]);
+    expect(parsed.item.send?.pull_requests.map((pull) => pull.id)).toEqual(["fpr_612"]);
     expect(parsed.triage.view.criteria.value).toEqual(decision().done_record?.criteria);
   });
 

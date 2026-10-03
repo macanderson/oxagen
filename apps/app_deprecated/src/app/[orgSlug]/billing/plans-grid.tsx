@@ -189,7 +189,7 @@ export function PlansGrid({
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-baseline gap-2">
             <h2 className="text-lg font-semibold">Plans</h2>
-            <span className="text-sm text-muted-foreground">
+            <span className="text-base text-muted-foreground">
               You&rsquo;re on the{" "}
               <span className="font-medium capitalize text-foreground">
                 {currentTier}
@@ -239,7 +239,7 @@ export function PlansGrid({
           </DialogHeader>
           <DialogPanel>
             {preview ? (
-              <div className="space-y-3 text-sm">
+              <div className="space-y-3 text-base">
                 {preview.isCharge ? (
                   <p>
                     Switching to this plan will charge{" "}

@@ -77,7 +77,7 @@ function QuantityPicker({
           {t(failure, { max: formatCount(maxGau, locale) })}
         </FormAlert>
       )}
-      <div className="flex flex-wrap items-center gap-3 text-sm">
+      <div className="flex flex-wrap items-center gap-3 text-base">
         <label htmlFor="purchase-quantity">{t("quantity")}</label>
         <input
           id="purchase-quantity"
@@ -115,7 +115,7 @@ function QuantityPicker({
         </Fact>
       </Facts>
       {savesCard ? (
-        <p data-saves-card="" className="text-sm">
+        <p data-saves-card="" className="text-base">
           {t("savesCard")}
         </p>
       ) : null}
@@ -151,7 +151,7 @@ export function PurchaseForm({
   if (bucket.value.mode === "invoice") {
     return (
       <Section id="billing-buy" title={t("title")} data-state="invoice">
-        <p className="text-sm text-muted-foreground">{t("invoiceBilled")}</p>
+        <p className="text-base text-muted-foreground">{t("invoiceBilled")}</p>
       </Section>
     );
   }
@@ -169,7 +169,7 @@ export function PurchaseForm({
           savesCard={bucket.value.autoTopup?.paymentMethod === null}
         />
       ) : (
-        <p className="text-sm text-muted-foreground">{t("denied")}</p>
+        <p className="text-base text-muted-foreground">{t("denied")}</p>
       )}
     </Section>
   );

@@ -10,17 +10,29 @@
 // never replaced: its key and digest are what a check that read it cites.
 import { schema, type Tx } from "@oxagen/database";
 import type {
+  ForgeClosingIssue,
   ForgePullRequestCapture,
   ForgePullRequestFacts,
   ForgePullRequestRecord,
 } from "@oxagen/inngest-functions/forge-pull-request-sync-runner";
-import { and, eq, isNull, lte, ne, or, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  eq,
+  isNull,
+  lte,
+  ne,
+  notInArray,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import type { ForgeProvider } from "./facts";
 
 const pulls = schema.forgePullRequests;
 const revisions = schema.forgePullRequestRevisions;
 const runLinks = schema.forgePullRequestRuns;
 const orderLinks = schema.forgePullRequestWorkOrders;
+const issueLinks = schema.forgePullRequestIssues;
 
 export type Scope = { orgId: string; workspaceId: string };
 
@@ -297,13 +309,16 @@ export async function workOrdersOf(
   return rows.map((row) => row.orderId);
 }
 
-/** Link work orders to a pull request. Answers how many links were new. */
+/**
+ * Link work orders to a pull request. `runId` names the run whose link
+ * brought them, or null when none did. Answers how many links were new.
+ */
 export async function linkWorkOrders(
   tx: Pick<Tx, "insert">,
   scope: Scope,
   pullRequestId: string,
   orderIds: readonly string[],
-  runId: string,
+  runId: string | null,
 ): Promise<number> {
   if (orderIds.length === 0) return 0;
   const written = await tx
@@ -321,5 +336,55 @@ export async function linkWorkOrders(
       target: [orderLinks.pullRequestId, orderLinks.workOrderId],
     })
     .returning({ id: orderLinks.id });
+  return written.length;
+}
+
+/**
+ * Make a pull request's issue links match the issues its closing references
+ * name now (ADR-292). A link the references no longer name is removed, and a
+ * named issue's title and state are refreshed. Answers the links held after.
+ */
+export async function replaceIssueLinks(
+  tx: Pick<Tx, "insert" | "delete">,
+  scope: Scope,
+  pullRequestId: string,
+  issues: readonly ForgeClosingIssue[],
+): Promise<number> {
+  const keep = [...new Set(issues.map((issue) => issue.nodeId))];
+  await tx
+    .delete(issueLinks)
+    .where(
+      and(
+        eq(issueLinks.orgId, scope.orgId),
+        eq(issueLinks.workspaceId, scope.workspaceId),
+        eq(issueLinks.pullRequestId, pullRequestId),
+        keep.length === 0 ? undefined : notInArray(issueLinks.issueNodeId, keep),
+      ),
+    );
+  if (issues.length === 0) return 0;
+  const written = await tx
+    .insert(issueLinks)
+    .values(
+      issues.map((issue) => ({
+        orgId: scope.orgId,
+        workspaceId: scope.workspaceId,
+        pullRequestId,
+        issueNodeId: issue.nodeId,
+        repository: issue.repository.toLowerCase(),
+        number: issue.number,
+        url: issue.url,
+        title: issue.title,
+        state: issue.state,
+      })),
+    )
+    .onConflictDoUpdate({
+      target: [issueLinks.pullRequestId, issueLinks.issueNodeId],
+      set: {
+        title: sql`excluded.title`,
+        state: sql`excluded.state`,
+        url: sql`excluded.url`,
+      },
+    })
+    .returning({ id: issueLinks.id });
   return written.length;
 }

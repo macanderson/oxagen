@@ -72,7 +72,7 @@ export function Toaster() {
         <Toast.Viewport
           aria-label={t("region")}
           data-testid="toasts"
-          className="pointer-events-none fixed inset-x-4 bottom-[70px] z-[60] mx-auto w-auto max-w-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:bottom-[calc(88px+env(safe-area-inset-bottom))]"
+          className="pointer-events-none fixed inset-x-4 bottom-17.5 z-60 mx-auto w-auto max-w-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:bottom-(--toast-bottom-mobile)"
         >
           <ToastList closeLabel={t("close")} />
         </Toast.Viewport>
@@ -122,7 +122,7 @@ function ToastList({ closeLabel }: { closeLabel: string }) {
               news, and it names the toast's dialog either way. */}
           <Toast.Title
             render={<p />}
-            className="min-w-0 flex-1 text-sm font-medium"
+            className="min-w-0 flex-1 text-base font-medium"
           >
             {item.title}
           </Toast.Title>

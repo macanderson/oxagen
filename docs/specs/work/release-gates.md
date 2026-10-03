@@ -70,7 +70,7 @@ The phase's pilot decision is a proposed discovery gate: two independent teams u
 | Touches by type | `touches` |
 | Execution cost coverage and unknowns | `cost.runs`, `cost.known_runs` |
 | Reopen rate in a mature 30-day cohort, with the immature count | `reopens.cohort`, `reopens.reopened`, `reopens.waiting` |
-| Revert rate | Not recorded yet (#5244) |
+| Revert rate in a mature 30-day cohort, with the immature count | `reverts.cohort`, `reverts.reverted`, `reverts.waiting`. Only a revert GitHub links with `Reverts <owner>/<repo>#<n>` counts (#5244) |
 | A week that used the full flow | `weeks[].full_flow`: at least one item was accepted and merged that week. Only a week with `weeks[].complete` true counts |
 | Work items completed | `accepted_merged` from one read whose window covers the pilot's weeks. It counts each work item once, however many of its sends finished |
 | Stop condition: teams only use intake | `weeks[].entered` beside `weeks[].sent` |

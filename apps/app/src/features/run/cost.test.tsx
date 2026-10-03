@@ -28,6 +28,7 @@ import type {
   RunTranscript,
   RunTurns,
 } from "@/data/contracts/run";
+import type { RunContext } from "@/data/contracts/run-context";
 import type { RunRow } from "@/data/contracts/runs";
 import type { SpendFindingEvidence } from "@/data/contracts/spend";
 import { type Read, readError, readOk } from "@/data/read";
@@ -43,7 +44,15 @@ import {
   releaseRunTurns,
 } from "./cost.builders";
 import { runMetrics } from "./metrics";
-import { NOW, runDetail, runOutputs, runRow, runSource } from "./run.builders";
+import {
+  contextComposition,
+  NOW,
+  runContext,
+  runDetail,
+  runOutputs,
+  runRow,
+  runSource,
+} from "./run.builders";
 import type { RunTabProps } from "./tab-props";
 
 vi.mock("next/link", () => ({
@@ -149,6 +158,7 @@ function props({
   findings,
   findingEvidence,
   finding = null,
+  context,
 }: {
   run?: RunRow;
   cost?: Read<RunCost>;
@@ -162,6 +172,8 @@ function props({
   findingEvidence?: Read<SpendFindingEvidence>;
   /** `?finding=`. */
   finding?: string | null;
+  /** The tab's own `get_run_context` read; a run that recorded no window when absent. */
+  context?: Read<RunContext>;
 } = {}): RunTabProps {
   const detail = runDetail({ run });
   const { source } = runSource({
@@ -169,6 +181,7 @@ function props({
     turns,
     ...(findings === undefined ? {} : { findings }),
     ...(findingEvidence === undefined ? {} : { findingEvidence }),
+    ...(context === undefined ? {} : { context }),
   });
   return {
     ctx,
@@ -1362,6 +1375,220 @@ describe("CostTab's standing context (#4537)", () => {
     const context = area("context");
     expect(context).toHaveTextContent("not recorded");
     expect(context?.textContent).not.toMatch(/\$|\d/);
+  });
+});
+
+describe("CostTab's prompt split (#5295)", () => {
+  const area = (name: string) =>
+    screen
+      .getAllByTestId("area-row")
+      .find((row) => row.dataset.area === name);
+  const part = (name: string) =>
+    screen
+      .getAllByTestId("composition-part")
+      .find((row) => row.dataset.part === name);
+
+  /**
+   * Ten measured requests of the release run, whose 732,270 input tokens
+   * split 10% system, 5% steering, 30% tools, 5% context and 50%
+   * conversation. The first request's conversation was 3,000 tokens.
+   */
+  const RELEASE_SPLIT = contextComposition({
+    requests: 10,
+    promptTokens: 732_270,
+    blocks: {
+      system: 73_227,
+      steering: 36_613,
+      tools: 219_681,
+      context: 36_614,
+      conversation: 366_135,
+    },
+    initialConversationTokens: 3_000,
+  });
+
+  it("fills every part of Prompt composition from the request windows, each with its tokens and share", async () => {
+    const { container } = await renderTab(
+      props({
+        context: readOk(
+          runContext({ unmeasured: 2, composition: RELEASE_SPLIT }),
+        ),
+      }),
+    );
+    expect(part("conversation")).toHaveTextContent("366,135 tok · 50%");
+    expect(part("context")).toHaveTextContent("36,614 tok · 5%");
+    expect(part("definitions")).toHaveTextContent("219,681 tok · 30%");
+    expect(part("steering")).toHaveTextContent("36,613 tok · 5%");
+    expect(part("system")).toHaveTextContent("73,227 tok · 10%");
+    for (const each of screen.getAllByTestId("composition-part"))
+      expect(each).not.toHaveTextContent("not recorded");
+    expect(screen.getByTestId("composition-note")).toHaveTextContent(
+      "Each part sums 10 requests of this run. 2 more requests recorded no split. A part is its share of each request's bytes, so it is an estimate.",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("fills Prompt, Follow-up prompts and System in Spend by area from the windows, each an estimate", async () => {
+    await renderTab(
+      props({ context: readOk(runContext({ composition: RELEASE_SPLIT })) }),
+    );
+    // Each area is its tokens' share of the 732,270 input tokens times the
+    // $1.852644 the input classes recorded.
+    expect(area("initial")).toHaveTextContent("$0.01");
+    expect(area("initial")).toHaveTextContent("3,000 tok · estimate");
+    // Every later request's conversation: 366,135 less the first 3,000.
+    expect(area("followUp")).toHaveTextContent("$0.92");
+    expect(area("followUp")).toHaveTextContent("363,135 tok · estimate");
+    expect(area("system")).toHaveTextContent("$0.19");
+    expect(area("system")).toHaveTextContent("73,227 tok · estimate");
+    // The run reported no standing context, so the windows fill these too.
+    expect(area("definitions")).toHaveTextContent("$0.56");
+    expect(area("definitions")).toHaveTextContent("219,681 tok · estimate");
+    const context = area("context");
+    expect(context).toHaveTextContent("73,227 tok · estimate");
+    expect(context?.querySelector("[title]")?.getAttribute("title")).toBe(
+      "Estimate from each block's share of the measured requests' bytes: 36,613 tokens of steering and 36,614 tokens of context",
+    );
+    expect(screen.getByTestId("area-note")).toHaveTextContent(
+      "The other input areas come from 10 measured requests.",
+    );
+    expect(screen.getByTestId("area-note")).not.toHaveTextContent(
+      "not recorded yet",
+    );
+  });
+
+  it("keeps the standing context where the recorder reported it, and fills the rest from the windows", async () => {
+    await renderTab(
+      props({
+        cost: readOk(
+          releaseCost({
+            standingContext: {
+              toolDefinitions: {
+                resentTokens: 40_000,
+                cost: usd("120000", "estimated"),
+              },
+              steering: null,
+              contextFrames: null,
+            },
+          }),
+        ),
+        context: readOk(runContext({ composition: RELEASE_SPLIT })),
+      }),
+    );
+    expect(area("definitions")).toHaveTextContent("$0.12");
+    expect(area("definitions")).toHaveTextContent("40,000 tok · estimate");
+    expect(area("context")).toHaveTextContent("73,227 tok · estimate");
+    expect(screen.getByTestId("area-note")).toHaveTextContent(
+      "Every call after the first re-sent the run's standing context: 40,000 tokens of tool definitions.",
+    );
+  });
+
+  it("leaves a block no window carried not recorded, never zero (negative)", async () => {
+    // A wrapped run's windows: no context block, and no steering here.
+    await renderTab(
+      props({
+        context: readOk(
+          runContext({
+            source: "wrapped",
+            composition: contextComposition({
+              blocks: {
+                system: 3_600,
+                steering: null,
+                tools: 14_400,
+                context: null,
+                conversation: 12_000,
+              },
+            }),
+          }),
+        ),
+      }),
+    );
+    for (const name of ["context", "steering"]) {
+      expect(part(name)).toHaveTextContent("not recorded");
+      expect(part(name)?.textContent).not.toMatch(/\d/);
+    }
+    expect(part("conversation")).toHaveTextContent("12,000 tok · 40%");
+    // Context holds steering and context blocks, and the windows carried
+    // neither.
+    expect(area("context")).toHaveTextContent("not recorded");
+    expect(area("context")?.textContent).not.toMatch(/\d/);
+  });
+
+  it("falls back to the rollup's measured sources without windows, and leaves conversation and system not recorded", async () => {
+    await renderTab(
+      props({
+        cost: readOk(
+          releaseCost({
+            tokenSources: {
+              toolDefinitionTokens: 146_454,
+              contextFrameTokens: null,
+              steeringTokens: 7_323,
+            },
+          }),
+        ),
+      }),
+    );
+    // Each a share of the run's 732,270 input tokens.
+    expect(part("definitions")).toHaveTextContent("146,454 tok · 20%");
+    expect(part("steering")).toHaveTextContent("7,323 tok · 1%");
+    for (const name of ["conversation", "context", "system"]) {
+      expect(part(name)).toHaveTextContent("not recorded");
+      expect(part(name)?.textContent).not.toMatch(/\d/);
+    }
+    expect(screen.getByTestId("composition-note")).toHaveTextContent(
+      "Tool definitions, Context and Steering are the recorder's own estimates over every call",
+    );
+    // The areas come from the windows alone, so none is filled.
+    for (const name of ["initial", "followUp", "system"])
+      expect(area(name)).toHaveTextContent("not recorded");
+  });
+
+  it("says no request recorded a split when nothing measured one (negative)", async () => {
+    await renderTab(props());
+    expect(screen.getByTestId("composition-note")).toHaveTextContent(
+      "No request of this run recorded how its prompt splits into parts.",
+    );
+  });
+
+  it("says the windows could not be read rather than that none were recorded (negative)", async () => {
+    await renderTab(props({ context: readError("unavailable", 503) }));
+    expect(screen.queryByTestId("composition-note")).toBeNull();
+    expect(screen.getByTestId("prompt-composition")).toHaveTextContent(
+      "Prompt composition could not be loaded: the control plane answered unavailable.",
+    );
+    for (const each of screen.getAllByTestId("composition-part"))
+      expect(each).toHaveTextContent("not recorded");
+  });
+
+  it("counts the tools' result tokens in Tool results and on the Tool calls tile", async () => {
+    await renderTab(
+      props({
+        cost: readOk(
+          releaseCost({
+            byTool: [
+              { name: "Grep", calls: 4, resultTokens: 800, cost: null },
+              {
+                name: "Read",
+                calls: 5,
+                resultTokens: 60_000,
+                cost: usd("300000", "estimated"),
+              },
+            ],
+          }),
+        ),
+      }),
+    );
+    expect(area("results")).toHaveTextContent("$0.30");
+    expect(area("results")).toHaveTextContent("60,800 tok");
+    expect(screen.getByTestId("inst-calls-results")).toHaveTextContent(
+      "60,800 tokens of tool results",
+    );
+  });
+
+  it("draws no result token line when no tool call recorded its result tokens (negative)", async () => {
+    await renderTab(props());
+    expect(screen.queryByTestId("inst-calls-results")).toBeNull();
+    expect(area("results")).toHaveTextContent("not recorded");
+    expect(area("results")?.textContent).not.toMatch(/\d/);
   });
 });
 

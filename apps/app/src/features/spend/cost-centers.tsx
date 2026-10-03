@@ -40,7 +40,7 @@ export function CostCenterTable({ report }: { report: SpendReport }) {
       {report.rows.length === 0 ? (
         <Empty>{t("groups.cost_center.empty")}</Empty>
       ) : (
-        <table className="w-full min-w-[560px] text-sm">
+        <table className="w-full min-w-140 text-base">
           <thead>
             <tr>
               <HeaderCell>{t("groups.cost_center.key")}</HeaderCell>

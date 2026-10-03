@@ -15,27 +15,41 @@
  *   without `spent_tokens` counts its included items. Claude Code delivers
  *   steering through `SessionStart` context, which rides the conversation,
  *   so the request cannot say which bytes are steering. The manifest can.
- * - `context_frame_tokens`: left absent. Claude Code's hook context rides the
- *   conversation too, and nothing marks it apart (ADR-200), so no count here
- *   would be honest.
+ * - `context_frame_tokens`: the text Oxagen's own hooks handed the agent
+ *   after its start (#5339). That is a later hook's `additionalContext`,
+ *   such as recalled memories or an operator's message, and a `Stop` block's
+ *   reason. The text rides the conversation, so the request cannot say which
+ *   bytes are Oxagen's (ADR-200). The hook answer can, so the daemon notes
+ *   each answer's text here as it leaves ({@link
+ *   SystemContextTracker.noteInjectedContext}). The text stays in the
+ *   conversation, so every later call carries it again, and each call counts
+ *   the running total, the way each call counts the steering. A compaction
+ *   or a `/clear` empties the total. The count leaves out context a person's
+ *   own hooks add, which Oxagen never sees, so a total of zero is left absent
+ *   and never written as zero.
  *
  * Claude Code reports none of the three, so each count is an estimate:
  * `budgetTokens`, the UTF-8 byte count over four, the unit the steering
  * assembler already budgets in. Each count carries its basis beside it.
  *
- * What each path can measure (ADR-062, amendment of 2026-10-02):
+ * What each path can measure (ADR-062, amendments of 2026-10-02 and
+ * 2026-10-03):
  *
  * - The loopback proxy records the request, so a proxied call carries the
- *   tool definition count, the steering count, the system context digest,
- *   and its parts ({@link SystemContextTracker.measure}).
+ *   tool definition count, the steering count, the context frame count, the
+ *   system context digest, and its parts ({@link
+ *   SystemContextTracker.measure}).
  * - An OTel `api_request` record and a transcript `assistant` record carry
  *   usage and ids, never the request. On a session the proxy did not carry,
- *   the counted row of a call carries the steering count alone
- *   ({@link SystemContextTracker.measureUnseen}). The manifest says what
- *   steering the session was delivered, whichever path saw the call. The
- *   tool definitions and the system context stay absent. A digest over the
- *   steering parts alone would read as the whole context, and a change to a
- *   tool would look like no change.
+ *   the counted row of a call carries the steering count and the context
+ *   frame count ({@link SystemContextTracker.measureUnseen}). The manifest
+ *   and the hook answers say what Oxagen delivered, whichever path saw the
+ *   call. The tool definitions and the system context stay absent. A digest
+ *   over the steering parts alone would read as the whole context, and a
+ *   change to a tool would look like no change.
+ * - The context frames are a count and never a part. They ride the
+ *   conversation, not the prefix the digest covers, so a new recall does not
+ *   read as a changed system context.
  *
  * Only a call that carries the session's conversation carries its steering.
  * Claude Code also makes side calls, such as a session title or a check of a
@@ -108,6 +122,14 @@ const MEMORY_REQUESTS = 512;
 
 /** How many distinct system contexts one turn lists before listing again. */
 const LISTED_PER_TURN = 16;
+
+/**
+ * How many hook answers the tracker keeps a running total for. A call reads
+ * the total as of when it was made, and its OTel or transcript record can
+ * arrive after later answers left. This many answers can pass before the
+ * record arrives and the call still reads its own total.
+ */
+const INJECTED_MARKS_MAX = 32;
 
 const U32_MAX = 4_294_967_295;
 const NAME_MAX = 512;
@@ -538,6 +560,29 @@ function steeringFactsOf(
   };
 }
 
+/**
+ * The context frame count and its basis, or nothing when Oxagen's hooks had
+ * handed the agent no text that the call still carries. Zero is left absent:
+ * a person's own hooks can add context Oxagen never sees, so zero from
+ * Oxagen is not zero context frames.
+ */
+function contextFactsOf(tokens: number): TokenSourceFacts {
+  if (tokens <= 0) return {};
+  return {
+    context_frame_tokens: tokens,
+    context_frame_tokens_basis: "estimated",
+  };
+}
+
+/**
+ * The running total of the context Oxagen's hooks handed one session, in
+ * tokens, as of one hook answer. `at` is when the answer left.
+ */
+export interface InjectedContextMark {
+  at: string;
+  tokens: number;
+}
+
 /** What a tracker carries over a restart. */
 export interface SystemContextState {
   /** The latest manifest's steering parts. Absent until a manifest seals. */
@@ -551,6 +596,26 @@ export interface SystemContextState {
   listedTurn?: string;
   /** The system context digests already listed on this chain this turn. */
   listed?: string[];
+  /**
+   * The running totals of the context Oxagen's hooks handed the session
+   * after its start, oldest first, at most {@link INJECTED_MARKS_MAX}.
+   * Absent until a hook hands the agent text.
+   */
+  injected?: InjectedContextMark[];
+  /** The running total before the oldest mark in `injected`. */
+  injectedFloor?: number;
+}
+
+/** The marks a saved state carries, dropping any that is malformed. */
+function injectedMarksOf(value: unknown): InjectedContextMark[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((mark): InjectedContextMark[] => {
+    if (typeof mark !== "object" || mark === null) return [];
+    const { at, tokens } = mark as Record<string, unknown>;
+    if (typeof at !== "string" || typeof tokens !== "number") return [];
+    if (!Number.isFinite(tokens)) return [];
+    return [{ at, tokens: clampU32(tokens) }];
+  });
 }
 
 /** The facts to add to one `llm_call` body, and what to do once it seals. */
@@ -571,6 +636,8 @@ export class SystemContextTracker {
   private steering: SteeringContext | undefined;
   private listedTurn: string | undefined;
   private listed: string[];
+  private injected: InjectedContextMark[];
+  private injectedFloor: number;
 
   constructor(
     state?: SystemContextState,
@@ -583,6 +650,10 @@ export class SystemContextTracker {
         : { parts, tokens: state?.steeringTokens ?? sum(parts) };
     this.listedTurn = state?.listedTurn;
     this.listed = [...(state?.listed ?? [])];
+    this.injected = injectedMarksOf(state?.injected);
+    const floor = state?.injectedFloor;
+    this.injectedFloor =
+      typeof floor === "number" && Number.isFinite(floor) ? clampU32(floor) : 0;
   }
 
   state(): SystemContextState {
@@ -593,6 +664,9 @@ export class SystemContextTracker {
     }
     if (this.listedTurn !== undefined) state.listedTurn = this.listedTurn;
     if (this.listed.length > 0) state.listed = [...this.listed];
+    if (this.injected.length > 0)
+      state.injected = this.injected.map((mark) => ({ ...mark }));
+    if (this.injectedFloor > 0) state.injectedFloor = this.injectedFloor;
     return state;
   }
 
@@ -603,25 +677,90 @@ export class SystemContextTracker {
   }
 
   /**
+   * Note text an Oxagen hook answer handed the agent after its start, at
+   * `at`, when the answer left (#5339). The text joins the conversation, so
+   * every call made from `at` on carries it. Empty text notes nothing.
+   *
+   * The caller passes only text the session's own conversation reads. The
+   * start's text is the steering manifest's to count, and a subagent's text
+   * stays in the subagent's conversation.
+   */
+  noteInjectedContext(text: string, at: string): void {
+    const tokens = clampU32(budgetTokens(text));
+    if (tokens === 0) return;
+    this.markInjected(at, this.injectedTotal() + tokens);
+  }
+
+  /**
+   * Empty the running total at `at`: a compaction or a `/clear` took the
+   * text out of the conversation. A call made before `at` still reads the
+   * total it was made with.
+   */
+  clearInjectedContext(at: string): void {
+    if (this.injected.length === 0 && this.injectedFloor === 0) return;
+    this.markInjected(at, 0);
+  }
+
+  private injectedTotal(): number {
+    return this.injected.at(-1)?.tokens ?? this.injectedFloor;
+  }
+
+  private markInjected(at: string, tokens: number): void {
+    this.injected.push({ at, tokens: clampU32(tokens) });
+    while (this.injected.length > INJECTED_MARKS_MAX) {
+      const oldest = this.injected.shift();
+      if (oldest !== undefined) this.injectedFloor = oldest.tokens;
+    }
+  }
+
+  /**
+   * The context Oxagen's hooks had handed the session when a call was made
+   * at `at`: the latest mark at or before it. A record can arrive after
+   * later answers left, since OTel exports in batches and the transcript is
+   * read behind the session. A call with no readable time reads the latest
+   * total. A call older than every mark kept reads the total before them.
+   */
+  private injectedAt(at: string | undefined): number {
+    const when = at === undefined ? Number.NaN : Date.parse(at);
+    if (Number.isNaN(when)) return this.injectedTotal();
+    for (let index = this.injected.length - 1; index >= 0; index -= 1) {
+      const mark = this.injected[index];
+      if (mark === undefined) continue;
+      const markAt = Date.parse(mark.at);
+      if (Number.isNaN(markAt) || markAt <= when) return mark.tokens;
+    }
+    return this.injectedFloor;
+  }
+
+  /**
    * Measure one model call. `content` is the proxy's exchange body, `attrs`
-   * the frame's attrs, and `turn` a key that changes when the turn does.
+   * the frame's attrs, `turn` a key that changes when the turn does, and
+   * `at` when the call was made.
    */
   measure(
     content: DraftContent | undefined,
     attrs: Record<string, string> | undefined,
     turn: string,
+    at?: string,
   ): SystemContextMeasure {
     const recorded = requestOf(content);
     const resolved =
       recorded === undefined
         ? undefined
         : resolveRequest(recorded.request, this.memory);
-    // A request the tracker cannot read or resolve keeps the steering count.
-    // Its tools are out of sight, so the side call rule below cannot apply.
-    // The usual cause is a request too large for the proxy to hold, and a
-    // side call's short prompt is never that large.
+    // A request the tracker cannot read or resolve keeps the steering and
+    // context frame counts. Its tools are out of sight, so the side call rule
+    // below cannot apply. The usual cause is a request too large for the
+    // proxy to hold, and a side call's short prompt is never that large.
     if (recorded === undefined || resolved === undefined)
-      return this.checked(steeringFactsOf(this.steering), {}, () => {});
+      return this.checked(
+        {
+          ...steeringFactsOf(this.steering),
+          ...contextFactsOf(this.injectedAt(at)),
+        },
+        {},
+        () => {},
+      );
 
     // Remembered under the digest a later cut request names: the proxy's
     // attr, or for a request stored whole, the digest of its own text, which
@@ -637,13 +776,18 @@ export class SystemContextTracker {
     // A request that declares no tools reads as a side call. Claude Code's
     // main thread sends the session's tools on every call. A side call, such
     // as a session title, sends a short prompt of its own without them, and
-    // without the conversation the steering rode in on. So it takes no
-    // steering count, and its parts name no steering. The rule only ever
-    // takes steering away. It misses two cases: a session run with every
-    // tool turned off loses its count, and a subagent's proxied call, which
-    // declares tools, keeps the root session's count.
-    const steering = resolved.tools.length > 0 ? this.steering : undefined;
-    const facts = steeringFactsOf(steering);
+    // without the conversation the steering and the hook context rode in on.
+    // So it takes no steering or context frame count, and its parts name no
+    // steering. The rule only ever takes counts away. It misses two cases: a
+    // session run with every tool turned off loses its counts, and a
+    // subagent's proxied call, which declares tools, keeps the root
+    // session's counts.
+    const main = resolved.tools.length > 0;
+    const steering = main ? this.steering : undefined;
+    const facts: TokenSourceFacts = {
+      ...steeringFactsOf(steering),
+      ...(main ? contextFactsOf(this.injectedAt(at)) : {}),
+    };
     const parts: SystemContextPart[] = [
       ...resolved.system,
       ...resolved.instructions,
@@ -678,14 +822,22 @@ export class SystemContextTracker {
   /**
    * The token sources of a model call whose request the recorder never saw:
    * the counted OTel or transcript row of a call the proxy did not carry
-   * (#4493). Only the steering count is known without the request. The tool
-   * definition count, the context frame count, and the system context stay
-   * absent, never zero. Nothing changes on the tracker, so there is nothing
-   * to commit. The caller asks only for a call that carries the session's
-   * conversation, since a side call carries no steering.
+   * (#4493). Two counts are known without the request: the steering, from
+   * the manifest, and the context frames, from the hook answers noted before
+   * `at`, when the call was made (#5339). The tool definition count and the
+   * system context stay absent, never zero. Nothing changes on the tracker,
+   * so there is nothing to commit. The caller asks only for a call that
+   * carries the session's conversation, since a side call carries neither.
    */
-  measureUnseen(): TokenSourceFacts {
-    return this.checked(steeringFactsOf(this.steering), {}, () => {}).facts;
+  measureUnseen(at?: string): TokenSourceFacts {
+    return this.checked(
+      {
+        ...steeringFactsOf(this.steering),
+        ...contextFactsOf(this.injectedAt(at)),
+      },
+      {},
+      () => {},
+    ).facts;
   }
 
   /**

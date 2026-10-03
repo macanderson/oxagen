@@ -9,9 +9,11 @@
 //   1. Role gate: assertOrgRole, org Owner or Admin, or the workspace's Owner
 //      (INV-29).
 //   2. The checks the sync applies when it writes the head
-//      (`repository.link.write.ts`): the installation, the repository, another
-//      workspace's steering claim, and this workspace's heads. A steering PR
-//      that could never take effect is refused before it is opened.
+//      (`repository.link.write.ts`): the installation, the repository, and
+//      this workspace's heads. A steering PR that could never take effect is
+//      refused before it is opened. Another workspace's heads refuse nothing,
+//      so a repository any number of workspaces link, or one another
+//      workspace steers by, links here too (ADR-293).
 //   3. workspace.toml on the steering repository's production branch:
 //      - it lists the repository already: `status: listed`, no PR. The next
 //        steering sync writes the head.

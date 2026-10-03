@@ -84,6 +84,20 @@ export const TACHO_GATEWAY_SESSION_HEADER = "x-tacho-gateway-session" as const;
 export const TACHO_GATEWAY_GENESIS_HEADER = "x-tacho-gateway-genesis" as const;
 
 /**
+ * The Accept header every MCP POST this package sends carries: the gateway's
+ * forward to the hosted server, and the stdio shim's post to the gateway.
+ *
+ * The MCP streamable HTTP transport says a client MUST list both media types,
+ * because the server may answer a POST with JSON or with an event stream. The
+ * hosted server (`apps/mcp`, xmcp on the MCP SDK's transport) enforces that.
+ * It refuses any other Accept with a 406 whose JSON-RPC id is null, so no
+ * client can match the refusal to its request. The gateway once sent
+ * `application/json` alone, and every call through it failed (#5356).
+ */
+export const MCP_STREAMABLE_HTTP_ACCEPT =
+  "application/json, text/event-stream" as const;
+
+/**
  * How a model call's usage was learned, on the `llm_call` frame that carries
  * it (`attrs[TACHO_METERING_ATTR]`).
  *

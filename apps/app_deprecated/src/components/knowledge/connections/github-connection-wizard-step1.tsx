@@ -31,10 +31,10 @@ export function GitHubInstallGate({
           <GithubIcon className="h-8 w-8 text-foreground" aria-hidden="true" />
         </div>
         <div className="flex flex-col gap-1.5">
-          <p className="text-sm font-semibold text-foreground">
+          <p className="text-base font-semibold text-foreground">
             Install the GitHub App
           </p>
-          <p className="text-xs text-muted-foreground max-w-xs">
+          <p className="text-sm text-muted-foreground max-w-xs">
             The Oxagen GitHub App must be installed for this workspace before
             you can add repositories. Visit Workspace Settings to connect it.
           </p>
@@ -44,7 +44,7 @@ export function GitHubInstallGate({
       <div className="flex flex-col gap-2">
         <a
           href={settingsHref}
-          className="flex w-full items-center justify-center gap-2 rounded-md bg-foreground px-4 py-2.5 text-sm font-semibold text-background hover:bg-foreground/90 transition-colors"
+          className="flex w-full items-center justify-center gap-2 rounded-md bg-foreground px-4 py-2.5 text-base font-semibold text-background hover:bg-foreground/90 transition-colors"
           data-testid="github-gate-settings-link"
         >
           <GithubIcon className="h-4 w-4" aria-hidden="true" />
@@ -52,7 +52,7 @@ export function GitHubInstallGate({
         </a>
         <button
           type="button"
-          className="rounded-md border border-border/60 bg-card px-4 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors"
+          className="rounded-md border border-border/60 bg-card px-4 py-2 text-base text-muted-foreground hover:bg-muted transition-colors"
           onClick={onClose}
           data-testid="github-gate-cancel-btn"
         >

@@ -8,6 +8,8 @@
 // collapsed into "something went wrong". Link and unlink still answer with
 // most `main_repo_*` codes. No handler has raised `main_repo_bound` since
 // #4616 removed the bind, and its sentence stays until that code is retired.
+// Another workspace's heads refuse no link (ADR-293), so neither
+// `main_repo_claimed` nor `repository_linked_elsewhere` has a sentence here.
 // A write the platform has not registered yet (`tool_not_registered`) names
 // the capability when the caller passes it.
 import { useTranslations } from "next-intl";
@@ -42,12 +44,8 @@ export function useRepositoriesFailure(): (
             return t("mainRepo");
           case "repository_already_linked":
             return t("repositoryAlreadyLinked");
-          case "main_repo_claimed":
-            return t("mainRepoClaimed");
           case "main_repo_unbound":
             return t("mainRepoUnbound");
-          case "repository_linked_elsewhere":
-            return t("repositoryLinkedElsewhere");
           case "main_repo_unlink_refused":
             return t("mainRepoUnlinkRefused");
           case "repository_not_linked":

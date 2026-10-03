@@ -55,7 +55,7 @@ function TranscriptLines({ lines }: { lines: Line[] }) {
   return lines.map((l) =>
     l.kind === "cmd" ? (
       <div key={l.id} className="lp-line flex items-start gap-2">
-        <span className="select-none text-[var(--_ember-b,#D4AF37)]">$</span>
+        <span className="select-none text-brand">$</span>
         <span className="break-all">
           {l.text}
           {l.caret && <span className="lp-caret ml-0.5 align-baseline" />}
@@ -67,10 +67,10 @@ function TranscriptLines({ lines }: { lines: Line[] }) {
         className={
           "lp-line break-all pl-4 " +
           (l.kind === "ok"
-            ? "text-[#57A97C]"
+            ? "text-success"
             : l.kind === "dim"
-              ? "text-white/40"
-              : "text-white/70")
+              ? "text-foreground/40"
+              : "text-foreground/70")
         }
       >
         {l.text}
@@ -164,20 +164,22 @@ export function TypewriterTerminal({
   }, [steps]);
 
   return (
-    <div className="lp-term w-full overflow-hidden rounded-xl text-left font-mono text-[12.5px] leading-relaxed sm:text-[13.5px]">
+    // The terminal is dark in both themes, so it carries the dark class and
+    // every token inside it resolves to its value on ink.
+    <div className="lp-term dark w-full overflow-hidden rounded-xl text-left font-mono text-sm leading-relaxed">
       {/* title bar */}
-      <div className="flex items-center gap-2 border-b border-white/10 px-4 py-2.5">
-        <span className="size-3 rounded-full bg-[#C0453C]" />
-        <span className="size-3 rounded-full bg-[#C66A4A]" />
-        <span className="size-3 rounded-full bg-[#57A97C]" />
-        <span className="ml-3 select-none text-[11px] text-white/40">
+      <div className="flex items-center gap-2 border-b border-foreground/10 px-4 py-2.5">
+        <span className="size-3 rounded-full bg-error" />
+        <span className="size-3 rounded-full bg-warning" />
+        <span className="size-3 rounded-full bg-success" />
+        <span className="ml-3 select-none text-xs text-foreground/40">
           {title}
         </span>
       </div>
 
       {/* transcript — ghost and live lines share one grid cell; the ghost
           sets the height, the live lines paint over it. */}
-      <div className="grid px-4 py-4 text-white/85">
+      <div className="grid px-4 py-4 text-foreground/85">
         <div
           aria-hidden
           className="invisible col-start-1 row-start-1 space-y-1"

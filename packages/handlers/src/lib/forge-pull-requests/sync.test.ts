@@ -159,6 +159,47 @@ describe("upsertObserved", () => {
     expect(out).toMatchObject({ outcome: "recorded", links: 0 });
   });
 
+  it("links the work order a backfill event names, with no run", async () => {
+    const d = deps();
+    const out = await upsertObserved(d, {
+      ...REQUEST,
+      facts: FACTS,
+      workOrderId: "0192d4a8-7c1e-7a00-8000-0000000000f1",
+    });
+    expect(d.runPublicId).not.toHaveBeenCalled();
+    expect(d.linkWorkOrders).toHaveBeenCalledTimes(1);
+    expect(d.linkWorkOrders).toHaveBeenCalledWith(
+      SCOPE,
+      "pr-1",
+      ["0192d4a8-7c1e-7a00-8000-0000000000f1"],
+      null,
+    );
+    expect(out.links).toBe(1);
+  });
+
+  it("links the named work order beside the run's, naming the run", async () => {
+    const d = deps();
+    const out = await upsertObserved(d, {
+      ...REQUEST,
+      link: { rootSessionUuid: "0192d4a8-7c1e-7a00-8000-0000000000a1", opened: false },
+      workOrderId: "0192d4a8-7c1e-7a00-8000-0000000000f1",
+    });
+    expect(d.linkWorkOrders).toHaveBeenLastCalledWith(
+      SCOPE,
+      "pr-1",
+      ["0192d4a8-7c1e-7a00-8000-0000000000f1"],
+      "tse_4q8r1t6v3x5z0b2d7h2k9m",
+    );
+    expect(out.links).toBe(4);
+  });
+
+  it("links no work order when the event names none (negative)", async () => {
+    const d = deps();
+    const out = await upsertObserved(d, { ...REQUEST, facts: FACTS });
+    expect(d.linkWorkOrders).not.toHaveBeenCalled();
+    expect(out.links).toBe(0);
+  });
+
   it.each(["no_connection", "unreadable"] as const)(
     "writes nothing when the forge read answers %s (negative)",
     async (answer) => {
@@ -299,3 +340,44 @@ describe("recordObserved", () => {
     expect(d.record).toHaveBeenCalledWith(SCOPE, "pr-1", TARGET, capture, NOW);
   });
 });
+
+describe("closing issues (ADR-292)", () => {
+  const ISSUE = {
+    nodeId: "I_kwDOABCD",
+    repository: "acme/api",
+    number: 7,
+    url: "https://github.com/acme/api/issues/7",
+    title: "Tags drop on save",
+    state: "open" as const,
+  };
+
+  it("reads the head's closing issues with the capture and links them with the record", async () => {
+    const linkIssues = vi.fn(async () => 1);
+    const d = deps({
+      readClosingIssues: vi.fn(async () => [ISSUE]),
+      linkIssues,
+    });
+    const capture = await captureObserved(d, REQUEST, TARGET);
+    expect(capture.closingIssues).toEqual([ISSUE]);
+    await recordObserved(d, REQUEST, "pr-1", TARGET, capture);
+    expect(linkIssues).toHaveBeenCalledWith(SCOPE, "pr-1", [ISSUE]);
+  });
+
+  it("clears the links when the head names no issue", async () => {
+    const linkIssues = vi.fn(async () => 0);
+    const d = deps({ readClosingIssues: vi.fn(async () => []), linkIssues });
+    const capture = await captureObserved(d, REQUEST, TARGET);
+    await recordObserved(d, REQUEST, "pr-1", TARGET, capture);
+    expect(linkIssues).toHaveBeenCalledWith(SCOPE, "pr-1", []);
+  });
+
+  it("leaves the links as they were when the forge could not be asked (negative)", async () => {
+    const linkIssues = vi.fn(async () => 0);
+    const d = deps({ readClosingIssues: vi.fn(async () => null), linkIssues });
+    const capture = await captureObserved(d, REQUEST, TARGET);
+    expect(capture.closingIssues).toBeNull();
+    await recordObserved(d, REQUEST, "pr-1", TARGET, capture);
+    expect(linkIssues).not.toHaveBeenCalled();
+  });
+});
+

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runCostGet } from "./run.cost";
 import { RUN_CONTEXT_WINDOW_MAX, runContextGet } from "./run.context.get";
 
 const window = (over: Record<string, unknown> = {}) => ({
@@ -54,6 +55,18 @@ describe("get_run_context contract", () => {
     ).toBe(false);
   });
 
+  it("lets every org role that reads a run's cost read its context, Billing included (#5340)", () => {
+    // The Cost tab reads both, so a role allowed one and refused the other
+    // meets a refusal inside a tab it can open.
+    expect(runContextGet.defaultRoles?.org?.Billing).toBe("allow");
+    expect(runContextGet.defaultRoles?.org).toEqual(
+      runCostGet.defaultRoles?.org,
+    );
+    expect(runContextGet.defaultRoles?.workspace).toEqual(
+      runCostGet.defaultRoles?.workspace,
+    );
+  });
+
   it("answers each window with its blocks and their token shares", () => {
     const out = runContextGet.output.parse(answer());
     expect(out.windows[0]).toEqual(window());
@@ -82,6 +95,39 @@ describe("get_run_context contract", () => {
     ])
       expect(
         runContextGet.output.safeParse(answer({ windows: [bad] })).success,
+      ).toBe(false);
+  });
+
+  it("carries the run's composition, reads an answer from before as null, and refuses a block outside the five (#5295)", () => {
+    const composition = {
+      requests: 12,
+      requestsWithoutTokens: 1,
+      promptTokens: 120_000,
+      blocks: {
+        system: 12_000,
+        steering: null,
+        tools: 36_000,
+        context: null,
+        conversation: 72_000,
+      },
+      initialConversationTokens: 900,
+      basis: "apportioned",
+    };
+    expect(
+      runContextGet.output.parse(answer({ composition })).composition,
+    ).toEqual(composition);
+    expect(runContextGet.output.parse(answer()).composition).toBeNull();
+    expect(
+      runContextGet.output.parse(answer({ composition: null })).composition,
+    ).toBeNull();
+    for (const bad of [
+      { ...composition, blocks: { ...composition.blocks, memory: 10 } },
+      { ...composition, blocks: { ...composition.blocks, system: -1 } },
+      { ...composition, basis: "measured" },
+      { ...composition, requests: undefined },
+    ])
+      expect(
+        runContextGet.output.safeParse(answer({ composition: bad })).success,
       ).toBe(false);
   });
 

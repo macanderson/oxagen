@@ -29,6 +29,13 @@
 // default (#4332), `retire_agent` revokes their drafts, and `grant_mandate`
 // refuses one with `agent_retired`, so the server holds the line either way.
 //
+// A row's status is the word the record stores, with a line under it when an
+// active mandate's window has not opened or has closed (#3152). This ledger
+// printed the stored word alone, so a mandate the gate already refused read
+// "active" here. It draws through `MandateStatus` in `@/ui`, the same as the
+// Agents table, judged by `windowOf` at the answer's own instant, so the two
+// pages cannot disagree about one row.
+//
 // A row's mandate id is the link to that mandate's own page (#2957): its
 // authority, its ledger and its two governed writes. It was plain text here
 // while the Agents tab one lane over already linked the same id, which left
@@ -43,6 +50,7 @@ import {
   blindSpotOf,
   type MandateList,
   type MandateRow,
+  windowOf,
 } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
@@ -51,6 +59,7 @@ import { AgentAvatar } from "@/ui/agent-avatar";
 import { linkText, mono, panel } from "@/ui/control-styles";
 import { MandateAuthorityList } from "@/ui/mandate-authority";
 import { MandateScope } from "@/ui/mandate-scope";
+import { MandateStatus } from "@/ui/mandate-status";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { useFormatter } from "@/ui/formatter";
@@ -66,11 +75,14 @@ export type LedgerGrant = {
 
 function Row({
   mandate,
+  asOf,
   at,
   grant,
   harness,
 }: {
   mandate: MandateRow;
+  /** The instant the answer was counted at (`MandateList.asOf`). */
+  asOf: string;
   at: ToolsAt;
   grant: LedgerGrant | null;
   /** The harness the mandate's agent registered, or null when the page holds none. */
@@ -91,7 +103,7 @@ function Row({
         >
           {mandate.id}
         </SafeLink>
-        <div className="text-xs text-muted-foreground md:truncate">
+        <div className="text-sm text-muted-foreground md:truncate">
           {mandate.impacts.join(", ")}
         </div>
       </td>
@@ -119,7 +131,7 @@ function Row({
             {mandate.requestedBy === null ? null : (
               <div
                 data-requested-by={mandate.requestedBy}
-                className="text-xs text-muted-foreground md:truncate"
+                className="text-sm text-muted-foreground md:truncate"
               >
                 {t("requestedBy", { user: mandate.requestedBy })}
               </div>
@@ -129,7 +141,7 @@ function Row({
           <>
             <span className={mono}>{mandate.grantedBy}</span>
             {mandate.roleAtGrant === null ? null : (
-              <div className="text-xs text-muted-foreground md:truncate">
+              <div className="text-sm text-muted-foreground md:truncate">
                 {mandate.roleAtGrant}
               </div>
             )}
@@ -175,7 +187,10 @@ function Row({
         {format.dateTime(new Date(mandate.validTo), { dateStyle: "medium" })}
       </td>
       <td className="px-3 py-2">
-        {t(`status.${mandate.status}`)}
+        <MandateStatus
+          mandate={mandate}
+          windowState={windowOf(mandate, new Date(asOf))}
+        />
         {grant === null ||
         mandate.status !== "draft" ||
         grant.retired.has(mandate.agentId) ? null : (
@@ -231,10 +246,10 @@ export function MandatesLedger({
     <section aria-labelledby="tools-mandates" className={`${panel} p-4`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 id="tools-mandates" className="text-base font-semibold">
+          <h2 id="tools-mandates" className="text-lg font-semibold">
             {title}
           </h2>
-          <p className="mt-1 max-w-prose text-sm text-muted-foreground">
+          <p className="mt-1 max-w-prose text-base text-muted-foreground">
             {t("lead")}
           </p>
         </div>
@@ -249,7 +264,7 @@ export function MandatesLedger({
               <p
                 data-state="incomplete"
                 data-blind-spot={blindSpot}
-                className="max-w-prose text-sm text-foreground"
+                className="max-w-prose text-base text-foreground"
               >
                 {blindSpot === "truncated"
                   ? t("truncated", { shown: String(read.value.truncatedAt) })
@@ -257,11 +272,11 @@ export function MandatesLedger({
               </p>
             )}
             {read.value.mandates.length > 0 ? null : (
-              <div className="flex flex-col gap-1 text-sm">
+              <div className="flex flex-col gap-1 text-base">
                 <p data-state="empty" data-blind-spot={blindSpot ?? undefined}>
                   {blindSpot === null ? t("empty") : t("emptyListed")}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   {blindSpot === null
                     ? t("emptyDetail")
                     : t("emptyListedDetail")}
@@ -270,8 +285,8 @@ export function MandatesLedger({
             )}
             {read.value.mandates.length === 0 ? null : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-3xl text-left text-sm">
-                  <thead className="text-xs uppercase tracking-wide text-muted-foreground">
+                <table className="w-full min-w-3xl text-left text-base">
+                  <thead className="text-sm uppercase tracking-wide text-muted-foreground">
                     <tr>
                       {COLUMNS.map((column) => (
                         <th
@@ -297,6 +312,7 @@ export function MandatesLedger({
                       <Row
                         key={mandate.id}
                         mandate={mandate}
+                        asOf={read.value.asOf}
                         at={at}
                         grant={grant}
                         harness={

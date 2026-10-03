@@ -86,7 +86,7 @@ export function OpenInFleet({
       <span
         id="regAuto"
         role="status"
-        className="text-xs text-muted-foreground md:ml-auto"
+        className="text-sm text-muted-foreground md:ml-auto"
       >
         {left >= AUTO_OPEN_SECONDS ? t("auto") : t("autoIn", { n: left })}
       </span>

@@ -60,7 +60,7 @@ const head = {
 const repo = { ...head, role: "linked" as const, steering: false };
 const steeringRepo = { ...head, role: "main" as const, steering: true };
 const PROPOSE_ONLY_MESSAGE =
-  "The steering repository takes changes through a steering PR. Call propose_steering, or push a branch from a clone with a credential that can write to it.";
+  "A steering repository takes changes through a steering PR from the workspace it steers. Propose the change there, or push a branch from a clone with a credential that can write to it.";
 /** What GitHub's mint answers for a repository the installation lacks. */
 const NOT_COVERED = new Error(
   "GitHub App token mint failed (422): There is at least one repository that does not exist or is not accessible to the parent installation.",
@@ -70,6 +70,9 @@ function deps() {
     enabled: (): boolean => true,
     governedRepository: vi.fn<GithubTokenIssueDeps["governedRepository"]>(
       async () => repo,
+    ),
+    steersAnyWorkspace: vi.fn<GithubTokenIssueDeps["steersAnyWorkspace"]>(
+      async () => false,
     ),
     installation: vi.fn<GithubTokenIssueDeps["installation"]>(async () => ({
       installationId: "9",
@@ -296,5 +299,57 @@ describe("the steering repository", () => {
       );
     }
     expect(mocks.steeringMint).not.toHaveBeenCalled();
+  });
+});
+
+describe("another workspace's steering repository", () => {
+  // ADR-293: any workspace may link a repository another workspace steers
+  // by. The linked head reads `steering: false` here, and a token for the
+  // repository would still carry the shared App's ruleset bypass.
+  it.each(["covered", "uncovered", "unconnected"])(
+    "refuses steering_repo_propose_only for a linked repository another workspace steers by, and mints nothing when the installation is %s",
+    async (setup) => {
+      const d = deps();
+      d.steersAnyWorkspace.mockResolvedValue(true);
+      if (setup === "uncovered") d.mint.mockRejectedValue(NOT_COVERED);
+      if (setup === "unconnected") d.installation.mockResolvedValue(null);
+      await expect(
+        createTachoGithubTokenIssueHandler(d)(input, ctx),
+      ).rejects.toMatchObject({
+        code: "conflict",
+        reason: "steering_repo_propose_only",
+        message: PROPOSE_ONLY_MESSAGE,
+      });
+      expect(d.steersAnyWorkspace).toHaveBeenCalledWith("42");
+      expect(d.installation).not.toHaveBeenCalled();
+      expect(d.mint).not.toHaveBeenCalled();
+    },
+  );
+
+  it("asks every workspace only after the caller's role holds", async () => {
+    const d = deps();
+    mocks.role.mockRejectedValue(new Error("role removed"));
+    await expect(
+      createTachoGithubTokenIssueHandler(d)(input, ctx),
+    ).rejects.toThrow("role removed");
+    expect(d.steersAnyWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("skips the cross-workspace read for this workspace's own steering repository", async () => {
+    const d = deps();
+    d.governedRepository.mockResolvedValue(steeringRepo);
+    await expect(
+      createTachoGithubTokenIssueHandler(d)(input, ctx),
+    ).rejects.toMatchObject({ reason: "steering_repo_propose_only" });
+    expect(d.steersAnyWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("mints for a linked repository no workspace steers by (negative)", async () => {
+    const d = deps();
+    await expect(
+      createTachoGithubTokenIssueHandler(d)(input, ctx),
+    ).resolves.toMatchObject({ token: "ghs_scoped" });
+    expect(d.steersAnyWorkspace).toHaveBeenCalledWith("42");
+    expect(d.mint).toHaveBeenCalledTimes(1);
   });
 });

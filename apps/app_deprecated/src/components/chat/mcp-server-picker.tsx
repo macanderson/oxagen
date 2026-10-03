@@ -85,7 +85,7 @@ export function McpServerPicker({
     <button
       type="button"
       onClick={allActive ? deactivateAll : activateAll}
-      className="text-xs text-primary hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className="text-sm text-primary hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
     >
       {allActive ? "Deactivate all" : "Activate all"}
     </button>
@@ -95,7 +95,7 @@ export function McpServerPicker({
   // mobile bottom sheet. Rows get a ≥44px touch target on phones.
   const serverList =
     servers.length === 0 ? (
-      <p className="text-xs text-muted-foreground">No MCP servers installed.</p>
+      <p className="text-sm text-muted-foreground">No MCP servers installed.</p>
     ) : (
       <ul className="flex flex-col gap-2">
         {servers.map((server) => {
@@ -117,13 +117,13 @@ export function McpServerPicker({
               />
               <label
                 htmlFor={switchId}
-                className="flex flex-1 cursor-pointer items-center gap-1.5 text-sm"
+                className="flex flex-1 cursor-pointer items-center gap-1.5 text-base"
               >
                 <span className="flex-1 truncate">{server.name}</span>
                 <HealthDot status={server.healthStatus} />
               </label>
               {server.toolCount > 0 && (
-                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
                   {server.toolCount}t
                 </span>
               )}
@@ -156,7 +156,7 @@ export function McpServerPicker({
       >
         <Server className="h-4 w-4" />
         {activeCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+          <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
             {activeCount}
           </span>
         )}
@@ -171,7 +171,7 @@ export function McpServerPicker({
             className="max-h-[70vh] rounded-t-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))]"
           >
             <SheetHeader className="mb-2">
-              <SheetTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              <SheetTitle className="text-base font-semibold uppercase tracking-wide text-muted-foreground">
                 MCP Servers
               </SheetTitle>
               <SheetDescription className="sr-only">
@@ -191,7 +191,7 @@ export function McpServerPicker({
             className="absolute bottom-full left-0 mb-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-card p-3 shadow-md"
           >
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 MCP Servers
               </span>
               <div className="flex gap-1">{toggleAllButton}</div>

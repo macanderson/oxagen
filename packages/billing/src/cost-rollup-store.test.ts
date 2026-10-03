@@ -17,6 +17,7 @@ import {
 } from "./cost-rollup";
 import { PriceBookSliceLimitError } from "./price-book";
 import {
+  createStandingSplit,
   inAppRunTotal,
   ledgerToolStatus,
   modelCallHidesTurn,
@@ -295,6 +296,58 @@ describe("the token sources a rollup writes (#4493)", () => {
     ]);
   });
 
+  // #5339. A Claude Code session recorded through its hooks, OTel and
+  // transcript alone carries the steering and the context Oxagen's hooks
+  // handed it, and no tool definitions. A call made before any hook handed
+  // text carries no context count, and a session no hook handed text to
+  // keeps the sum null, never zero.
+  it("sums a hook-only session's context frames, and leaves them null when none were handed", async () => {
+    const hookOnly = (context: number | null): RunTokenSources => ({
+      toolDefinitionTokens: null,
+      contextFrameTokens: context,
+      steeringTokens: 80,
+    });
+    const handed = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+      modelCalls: [
+        measured("2026-10-03T10:01:00.000Z", hookOnly(null)),
+        measured("2026-10-03T10:02:00.000Z", hookOnly(42)),
+        measured("2026-10-03T10:03:00.000Z", hookOnly(54)),
+      ],
+    });
+    await rebuildRunTotals(WORKER, handed.d);
+    expect(handed.sourcesWritten).toEqual([
+      {
+        toolDefinitionTokens: null,
+        contextFrameTokens: 96,
+        steeringTokens: 240,
+      },
+    ]);
+    // The second call sent the 42 first. The third re-sent those 42 and sent
+    // the next 12 first, so 42 were re-sent in all.
+    expect(handed.written[0]?.breakdown.standing?.contextFrameTokens).toEqual({
+      cached: 0,
+      uncached: 42,
+    });
+
+    const none = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+      modelCalls: [
+        measured("2026-10-03T10:01:00.000Z", hookOnly(null)),
+        measured("2026-10-03T10:02:00.000Z", hookOnly(null)),
+      ],
+    });
+    await rebuildRunTotals(WORKER, none.d);
+    expect(none.sourcesWritten).toEqual([
+      {
+        toolDefinitionTokens: null,
+        contextFrameTokens: null,
+        steeringTokens: 160,
+      },
+    ]);
+    expect(none.written[0]?.breakdown.standing?.contextFrameTokens).toBeNull();
+  });
+
   it("writes every source as null when no call measured any", async () => {
     const { d, sourcesWritten } = deps({
       runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
@@ -311,8 +364,10 @@ describe("the token sources a rollup writes (#4493)", () => {
 
   // #4572 item 2: the row kept each source's sum alone, so a reader took one
   // call's share as the average, and 0, 100, 100, 100 read 225 re-sent. The
-  // rollup now keeps the tokens on the calls after the first.
-  it("keeps each source's tokens on the calls after the first, whatever the first held", async () => {
+  // rollup now keeps the tokens on the calls themselves. #5339: a call
+  // re-sends only what an earlier call carried, so the first call to carry
+  // the 100, after a first call that carried none, sent them first.
+  it("keeps each source's re-sent tokens on the calls that re-sent them", async () => {
     const tools = (n: number): RunTokenSources => ({
       toolDefinitionTokens: n,
       contextFrameTokens: null,
@@ -329,7 +384,7 @@ describe("the token sources a rollup writes (#4493)", () => {
     });
     await rebuildRunTotals(WORKER, d);
     expect(written[0]?.breakdown.standing).toEqual({
-      toolDefinitionTokens: { cached: 0, uncached: 300 },
+      toolDefinitionTokens: { cached: 0, uncached: 200 },
       contextFrameTokens: null,
       steeringTokens: null,
     });
@@ -367,6 +422,208 @@ describe("the token sources a rollup writes (#4493)", () => {
       contextFrameTokens: null,
       steeringTokens: { cached: 80, uncached: 40 },
     });
+  });
+
+  /** The split over `calls`, fed in order, as the rollup feeds it. */
+  const splitOf = (calls: readonly PricedModelCall[]) => {
+    const split = createStandingSplit();
+    for (const call of calls) split.add(call);
+    return split.finish();
+  };
+  const context = (
+    at: string,
+    n: number | null,
+    cacheRead = 0,
+  ): PricedModelCall => ({
+    ...measured(at, {
+      toolDefinitionTokens: null,
+      contextFrameTokens: n,
+      steeringTokens: null,
+    }),
+    tokens: { ...ZERO_TOKENS, cache_read: cacheRead, input_uncached: 10 },
+  });
+
+  // #5339. Context frames grow during a run: each hook answer adds text the
+  // calls after it carry. A call re-sends only what the call before it
+  // carried, so each answer's first send is not counted as re-sent.
+  it("leaves each new part's first send out of a growing source's re-sent tokens", () => {
+    expect(
+      splitOf([
+        context("2026-10-03T10:01:00.000Z", 1_000, 900),
+        context("2026-10-03T10:02:00.000Z", 1_000, 900),
+        context("2026-10-03T10:03:00.000Z", 1_500, 900),
+        context("2026-10-03T10:04:00.000Z", 2_200),
+      ]).contextFrameTokens,
+      // 0, then 1,000, then 1,000 of the 1,500, then 1,500 of the 2,200,
+      // which the last call sent uncached.
+    ).toEqual({ cached: 2_000, uncached: 1_500 });
+  });
+
+  it("re-sends a source that holds still whole on every call after the first", () => {
+    const flat = [1, 2, 3, 4].map((minute) =>
+      context(`2026-10-03T10:0${minute}:00.000Z`, 800, 900),
+    );
+    // The same as before #5339: three calls re-sent all 800.
+    expect(splitOf(flat).contextFrameTokens).toEqual({
+      cached: 2_400,
+      uncached: 0,
+    });
+  });
+
+  it("skips a call that carried none of a source, and keeps the last count that did", () => {
+    expect(
+      splitOf([
+        context("2026-10-03T10:01:00.000Z", 600, 900),
+        // A side call, such as a session title, carries no context.
+        context("2026-10-03T10:02:00.000Z", null, 900),
+        context("2026-10-03T10:03:00.000Z", 900, 900),
+      ]).contextFrameTokens,
+    ).toEqual({ cached: 600, uncached: 0 });
+    // A side call's zero tool definitions do not reset what the session's
+    // own calls carried.
+    const tools = (at: string, n: number): PricedModelCall => ({
+      ...measured(at, {
+        toolDefinitionTokens: n,
+        contextFrameTokens: null,
+        steeringTokens: null,
+      }),
+      tokens: { ...ZERO_TOKENS, cache_read: 900, input_uncached: 10 },
+    });
+    expect(
+      splitOf([
+        tools("2026-10-03T10:01:00.000Z", 100),
+        tools("2026-10-03T10:02:00.000Z", 0),
+        tools("2026-10-03T10:03:00.000Z", 100),
+      ]).toolDefinitionTokens,
+    ).toEqual({ cached: 100, uncached: 0 });
+    // A source no call reported stays null, never zero.
+    expect(
+      splitOf([context("2026-10-03T10:01:00.000Z", null)]).contextFrameTokens,
+    ).toBeNull();
+  });
+
+  it("stores the run's window composition in the breakdown (#5341)", async () => {
+    const composition = {
+      requests: 2,
+      requestsWithoutTokens: 1,
+      promptTokens: 9_000,
+      blocks: {
+        system: 1_000,
+        steering: null,
+        tools: 3_000,
+        context: null,
+        conversation: 5_000,
+      },
+      initialConversationTokens: 1_500,
+    };
+    const { d, written } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+    });
+    const readWindowComposition = vi.fn(async () => composition);
+    d.readWindowComposition = readWindowComposition;
+    const record = await rebuildRunTotals(WORKER, d);
+    expect(readWindowComposition).toHaveBeenCalledWith(
+      expect.objectContaining({ meta: meta(WORKER, "prn_worker_operator") }),
+    );
+    expect(record?.breakdown.windows).toEqual(composition);
+    expect(written[0]?.breakdown.windows).toEqual(composition);
+  });
+
+  it("stores null for a run that recorded no window, never a zero (negative)", async () => {
+    const { d, written } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+    });
+    d.readWindowComposition = async () => null;
+    await rebuildRunTotals(WORKER, d);
+    expect(written[0]?.breakdown.windows).toBeNull();
+  });
+
+  it("stores no composition when the rollup reads no windows (negative)", async () => {
+    const { d, written } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+    });
+    await rebuildRunTotals(WORKER, d);
+    expect(written[0]?.breakdown).not.toHaveProperty("windows");
+  });
+
+  it("makes no window read for an open run and keeps the composition its row carries (#5341)", async () => {
+    const stored = {
+      requests: 1,
+      requestsWithoutTokens: 0,
+      promptTokens: 2_000,
+      blocks: {
+        system: 500,
+        steering: null,
+        tools: null,
+        context: null,
+        conversation: 1_500,
+      },
+      initialConversationTokens: 1_500,
+    };
+    const open = { ...meta(WORKER, "prn_worker_operator"), sealedAt: null };
+    const { d, written } = deps({ runs: { [WORKER]: open } });
+    const readWindowComposition = vi.fn(async () => null);
+    d.readWindowComposition = readWindowComposition;
+    d.readCarried = async () => ({ accepted: null, windows: stored });
+    await rebuildRunTotals(WORKER, d);
+    expect(readWindowComposition).not.toHaveBeenCalled();
+    expect(written[0]?.breakdown.windows).toEqual(stored);
+  });
+
+  it("keeps an open run's row without a composition when it carries none (negative)", async () => {
+    const open = { ...meta(WORKER, "prn_worker_operator"), sealedAt: null };
+    const { d, written } = deps({ runs: { [WORKER]: open } });
+    const readWindowComposition = vi.fn(async () => null);
+    d.readWindowComposition = readWindowComposition;
+    await rebuildRunTotals(WORKER, d);
+    expect(readWindowComposition).not.toHaveBeenCalled();
+    expect(written[0]?.breakdown).not.toHaveProperty("windows");
+
+    // A stored null stays null: the sealed run measured nothing.
+    d.readCarried = async () => ({ accepted: null, windows: null });
+    await rebuildRunTotals(WORKER, d);
+    expect(written[1]?.breakdown.windows).toBeNull();
+    expect(readWindowComposition).not.toHaveBeenCalled();
+  });
+
+  it("walks the windows again at the seal rather than carrying the open run's (#5341)", async () => {
+    const { d, written } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+    });
+    const readWindowComposition = vi.fn(async () => null);
+    d.readWindowComposition = readWindowComposition;
+    d.readCarried = async () => ({
+      accepted: null,
+      windows: {
+        requests: 1,
+        requestsWithoutTokens: 0,
+        promptTokens: 10,
+        blocks: {
+          system: null,
+          steering: null,
+          tools: null,
+          context: null,
+          conversation: 10,
+        },
+        initialConversationTokens: 10,
+      },
+    });
+    await rebuildRunTotals(WORKER, d);
+    expect(readWindowComposition).toHaveBeenCalledTimes(1);
+    expect(written[0]?.breakdown.windows).toBeNull();
+  });
+
+  it("writes nothing when the windows cannot be read, so the job retries", async () => {
+    const { d, written } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+    });
+    d.readWindowComposition = async () => {
+      throw new Error("clickhouse down");
+    };
+    await expect(rebuildRunTotals(WORKER, d)).rejects.toThrow(
+      "clickhouse down",
+    );
+    expect(written).toHaveLength(0);
   });
 
   it("writes nothing when the calls cannot be read, so the job retries", async () => {
@@ -726,6 +983,54 @@ describe("the breakdown jsonb (#4069)", () => {
     const stored = throughJsonb(serializeBreakdown(kept));
     expect(stored.standing).toEqual(kept.standing);
     expect(reviveBreakdown(stored)).toEqual(kept);
+  });
+
+  // #5339. An estimated count keeps its basis through jsonb, and a row with
+  // no key, every row rolled up before, reads as Claude Code's own count.
+  it("writes a tool's estimated basis and reads it back, and reads no key as reported", () => {
+    const [grep, read] = breakdown.tools;
+    const kept = {
+      ...breakdown,
+      tools: [grep!, { ...read!, resultTokensBasis: "estimated" as const }],
+    };
+    const stored = throughJsonb(serializeBreakdown(kept));
+    expect(stored.tools[1].resultTokensBasis).toBe("estimated");
+    expect("resultTokensBasis" in stored.tools[0]).toBe(false);
+    expect(reviveBreakdown(stored)).toEqual(kept);
+    expect(
+      reviveBreakdown(throughJsonb(serializeBreakdown(breakdown))).tools[1],
+    ).not.toHaveProperty("resultTokensBasis");
+  });
+
+  it("writes the run's window composition and reads it back, null included (#5341)", () => {
+    const windows = {
+      requests: 3,
+      requestsWithoutTokens: 0,
+      promptTokens: 12_000,
+      blocks: {
+        system: 2_000,
+        steering: 500,
+        tools: 4_000,
+        context: null,
+        conversation: 5_500,
+      },
+      initialConversationTokens: 900,
+    };
+    const kept = { ...breakdown, windows };
+    const stored = throughJsonb(serializeBreakdown(kept));
+    expect(stored.windows).toEqual(windows);
+    expect(reviveBreakdown(stored)).toEqual(kept);
+    const none = throughJsonb(serializeBreakdown({ ...breakdown, windows: null }));
+    expect(none.windows).toBeNull();
+    expect(reviveBreakdown(none).windows).toBeNull();
+  });
+
+  it("reads a row rolled up before #5341 with no window composition, never a zero", () => {
+    const stored = throughJsonb(serializeBreakdown(breakdown));
+    expect("windows" in stored).toBe(false);
+    const revived = reviveBreakdown(stored);
+    expect(revived).not.toHaveProperty("windows");
+    expect(revived.windows).toBeUndefined();
   });
 
   it("reads a row rolled up before #4572 with no priced tokens and no split", () => {

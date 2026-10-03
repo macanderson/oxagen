@@ -106,7 +106,7 @@ function Part({
         <h3 id={id} className={eyebrow}>
           {title}
         </h3>
-        <span className="font-mono text-sm text-dim">{tally}</span>
+        <span className="font-mono text-xs text-dim">{tally}</span>
       </div>
       <p className="text-sm text-muted-foreground">{sub}</p>
       <Unrecorded issue={STEERING_GAPS.assembler} />

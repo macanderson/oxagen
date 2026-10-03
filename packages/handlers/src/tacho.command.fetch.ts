@@ -32,7 +32,7 @@ import {
   resolveEnrolledHost,
   touchHost,
 } from "./lib/tacho-host";
-import { hostCedarReader } from "./lib/tacho-host-cedar";
+import { hostCedarReader, readCedarForEnvelope } from "./lib/tacho-host-cedar";
 import { hostSkillsReader } from "./lib/tacho-host-skills";
 import { type AckedCommand, recordWorkOrderAcks } from "./lib/work-records/runtime";
 import { logger } from "./logger";
@@ -183,10 +183,12 @@ export function createTachoCommandFetchHandler(
     });
     // `seen` carries the features this poll advertised, which decide whether
     // the host parses skills and Cedar at all. Both are read at once, so the
-    // production port answers them with one read.
+    // production port answers them with one read. The acknowledgements have
+    // landed, so Cedar policies the reader cannot give leave Cedar out of the
+    // etag rather than fail the poll (`readCedarForEnvelope`).
     const [skills, policy] = await Promise.all([
       skillsReader.read(tachoCommandFetch.name, ctx, seen),
-      cedarReader.read(tachoCommandFetch.name, ctx, seen),
+      readCedarForEnvelope(cedarReader, tachoCommandFetch.name, ctx, seen),
     ]);
     const control = await withTenantDb((tx) =>
       controlEnvelope(tx as never, ctx, seen, now, skills, policy),

@@ -122,7 +122,7 @@ function Glyph({ kind }: { kind: RunOutputKind }) {
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
-      className="size-[13px]"
+      className="size-3.25"
     >
       {GLYPH[kind]}
     </svg>
@@ -186,7 +186,7 @@ function href(place: Place, view: View) {
  * text-underline-offset:2px; text-decoration-color:var(--rule) }`.
  */
 const linkQuiet =
-  "rounded-sm text-sm text-muted-foreground underline decoration-rule underline-offset-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+  "rounded-sm text-xs text-muted-foreground underline decoration-rule underline-offset-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
 /**
  * `.ro-dot { position:absolute; left:-30px; top:6px; width:23px; height:23px;
@@ -200,7 +200,7 @@ const DOT_TONE: Partial<Record<RunOutputNode["state"], string>> = {
 };
 
 /** `.ro-tick { position:absolute; left:-23px; top:12px; width:9px; height:1px; background:var(--rule) }` */
-const tick = "absolute -left-[23px] top-3 h-px w-[9px] bg-rule";
+const tick = "absolute -left-5.75 top-3 h-px w-2.25 bg-rule";
 
 /**
  * `fr 118`: the frame that recorded the node, which opens the Frames tab on
@@ -221,7 +221,7 @@ function Frame({
     <SafeLink
       to={frameHref(place, { seq, chainRef: node?.chainRef })}
       title={t("frameTitle")}
-      className="shrink-0 rounded-md border border-border bg-background px-1.5 py-px font-mono text-sm text-dim hover:border-rule hover:text-foreground"
+      className="shrink-0 rounded-md border border-border bg-background px-1.5 py-px font-mono text-xs text-dim hover:border-rule hover:text-foreground"
     >
       {t("frame", { seq })}
     </SafeLink>
@@ -232,7 +232,7 @@ function Frame({
 function Stat({ stat }: { stat: RunOutputNode["stat"] }) {
   if (stat === null) return null;
   return (
-    <span className={`${mono} shrink-0 text-sm tabular-nums`}>
+    <span className={`${mono} shrink-0 text-xs tabular-nums`}>
       <b className="font-semibold text-success">+{stat.added}</b>{" "}
       <b className="font-semibold text-warning">&minus;{stat.removed}</b>
     </span>
@@ -265,11 +265,11 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
     <li
       data-kind={node.kind}
       data-state={node.state}
-      className="relative min-w-0 py-[7px]"
+      className="relative min-w-0 py-1.75"
     >
       <span
         aria-hidden="true"
-        className={`absolute -left-[30px] top-1.5 grid size-[23px] place-items-center rounded-full border bg-card ${
+        className={`absolute -left-7.5 top-1.5 grid size-5.75 place-items-center rounded-full border bg-card ${
           would
             ? "border-dashed border-border text-dim"
             : (DOT_TONE[node.state] ?? "border-border text-muted-foreground")
@@ -280,9 +280,9 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
       <div
         className={`min-w-0 ${
           gate
-            ? "rounded-[10px] border border-info/40 bg-info/10 px-3 py-2.5"
+            ? "rounded-xl border border-info/40 bg-info/10 px-3 py-2.5"
             : would
-              ? "rounded-[10px] border border-dashed border-rule px-3 py-2"
+              ? "rounded-xl border border-dashed border-rule px-3 py-2"
               : ""
         }`}
       >
@@ -301,9 +301,9 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
           <Stat stat={node.stat} />
           <Frame node={node} place={place} />
         </div>
-        <div className="mt-[3px] flex flex-wrap items-baseline gap-2 text-sm leading-normal">
+        <div className="mt-0.75 flex flex-wrap items-baseline gap-2 text-xs leading-normal">
           {node.where === null ? null : (
-            <span className="min-w-0 font-mono text-sm text-dim [overflow-wrap:anywhere]">
+            <span className="min-w-0 font-mono text-xs text-dim [overflow-wrap:anywhere]">
               {node.where}
             </span>
           )}
@@ -319,16 +319,16 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
           ) : null}
         </div>
         {gate ? (
-          <div className="mt-[9px] flex flex-wrap items-center gap-2.5">
+          <div className="mt-2.25 flex flex-wrap items-center gap-2.5">
             <SafeLink
               to={routes.run(place.org, place.ws, place.runId, {
                 tab: "actions",
               })}
-              className={`${buttonSecondary} min-h-7 px-2.5 text-xs`}
+              className={`${buttonSecondary} min-h-7 px-2.5 text-sm`}
             >
               {t("reviewApproval")}
             </SafeLink>
-            <span className="text-sm text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               {t("gateHint")}
             </span>
           </div>
@@ -363,10 +363,10 @@ function ReadMark({
   return (
     <li
       data-kind="read"
-      className="relative flex min-w-0 flex-wrap items-baseline gap-2 py-[5px]"
+      className="relative flex min-w-0 flex-wrap items-baseline gap-2 py-1.25"
     >
       <span aria-hidden="true" className={tick} />
-      <span className="min-w-0 text-sm text-dim">
+      <span className="min-w-0 text-xs text-dim">
         {t("readMark")}{" "}
         {keyedByOccurrence(shown, (name) => name).map(
           ({ item: name, key }, i) => (
@@ -374,7 +374,7 @@ function ReadMark({
             // many times the name appeared before it.
             <span key={key}>
               {i === 0 ? null : ", "}
-              <b className="break-all font-mono text-sm font-medium text-muted-foreground">
+              <b className="break-all font-mono text-xs font-medium text-muted-foreground">
                 {name}
               </b>
             </span>
@@ -435,7 +435,7 @@ function NodeGroup({
           <Node key={key} node={node} place={place} />
         ))}
         {group.items.length > FOLD_OVER ? (
-          <li className="relative py-[5px]">
+          <li className="relative py-1.25">
             <span aria-hidden="true" className={tick} />
             <SafeLink to={fold} className={linkQuiet}>
               {folds
@@ -486,13 +486,13 @@ export function OutputsSpine({
     <section
       aria-label={t("label")}
       data-testid="run-outputs"
-      className="rounded-xl border border-border bg-card px-[18px] pb-[13px] pt-[15px] text-card-foreground"
+      className="rounded-xl border border-border bg-card px-4.5 pb-3.25 pt-3.75 text-card-foreground"
     >
       <div className="mb-3 flex flex-wrap items-center gap-2.5">
         <h2 className={`${eyebrowQuiet} m-0`}>{t("title")}</h2>
         <span
           data-testid="run-outputs-tally"
-          className="ml-auto font-mono text-sm text-dim"
+          className="ml-auto font-mono text-xs text-dim"
         >
           {counts.join(" · ")}
         </span>
@@ -507,14 +507,14 @@ export function OutputsSpine({
       </div>
 
       {nodes.length === 0 ? (
-        <p className="border-l-2 border-dashed border-border py-2.5 pl-3 text-sm text-muted-foreground">
+        <p className="border-l-2 border-dashed border-border py-2.5 pl-3 text-base text-muted-foreground">
           {complete ? t("empty") : t("cut")}
         </p>
       ) : (
         <ol
-          className={`relative m-0 list-none py-0 pl-[30px] before:absolute before:bottom-1.5 before:left-[11px] before:top-1.5 before:w-px before:content-[''] ${
+          className={`relative m-0 list-none py-0 pl-7.5 before:absolute before:bottom-1.5 before:left-2.75 before:top-1.5 before:w-px before:content-[''] ${
             live
-              ? "before:bg-gradient-to-b before:from-rule before:from-[78%] before:to-transparent"
+              ? "before:bg-gradient-to-b before:from-rule before:from-78% before:to-transparent"
               : "before:bg-rule"
           }`}
         >
@@ -540,7 +540,7 @@ export function OutputsSpine({
         </ol>
       )}
 
-      <p className="mt-[11px] flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border pt-2.5 text-sm text-dim">
+      <p className="mt-2.75 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border pt-2.5 text-xs text-dim">
         <span>{t("footer")}</span>
         {complete ? null : <span>{t("cut")}</span>}
       </p>

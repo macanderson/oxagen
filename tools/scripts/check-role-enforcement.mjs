@@ -56,21 +56,22 @@
  * ## The baseline
  *
  * #3258's audit found 27 more contracts with the first shape, too many to fix
- * as one PR change (SCR-004: each needs a maintainer decision, whether the
- * answer is "assert the role" or "the contract over-declared and should
- * relax"), so they are named in `ROLE_ENFORCEMENT_BASELINE` below and reported
- * as a warning rather than a failure. Nothing may be ADDED to the baseline: it
- * is a fixed, hand-maintained list, so the moment a NEW contract takes on this
- * shape, the check fails and names it, and the only way past it is to add the
- * role assertion (preferred) or correct the contract's declared
- * `sensitivity`/`defaultRoles` to what the handler actually enforces.
+ * in that PR, so they were named in `ROLE_ENFORCEMENT_BASELINE` below and
+ * reported as a warning rather than a failure. #3458 read each one against
+ * its handler and emptied the list: the handlers that lacked a gate call
+ * `assertContractRole` now, and the six authorized by a credential other than
+ * a role moved to `ROLE_ENFORCEMENT_EXEMPT`, each with its reason. Nothing may
+ * be ADDED to the baseline. A NEW contract with this shape fails the check,
+ * and the only way past it is to add the role assertion (preferred) or
+ * correct the contract's declared `sensitivity`/`defaultRoles` to what the
+ * handler actually enforces.
  *
  * Every baseline stem is checked against its current contract and handler on
  * each run. A stem is stale, and fails the check until it is removed, when its
  * handler now calls a role gate, when its contract no longer declares a
  * restriction, when its contract became platform-only, when its contract is
- * gone, or when no handler can be found for it. Left in place, a stale stem would absorb a later regression as a known
- * gap instead of failing the build.
+ * gone, or when no handler can be found for it. Left in place, a stale stem
+ * would absorb a later regression as a known gap instead of failing the build.
  *
  * Exit codes:
  *   0 — no gap outside the baseline.
@@ -146,33 +147,45 @@ export const ROLE_ENFORCEMENT_EXEMPT = new Map([
     "scim.request",
     "the identity provider's SCIM token authorizes the call, and the handler refuses a user or an API key",
   ],
+  // #3458: the six baseline stems whose handler authorizes by a credential.
+  [
+    "org.create",
+    "the caller creates an organization and holds no role in it until it exists; the handler requires a signed-in user and makes them its Owner",
+  ],
+  [
+    "tacho.bundle.get",
+    "only an enrolled host's own API key passes: resolveEnrolledHost (lib/tacho-host.ts) refuses any credential but a live tacho_host_v1 key bound to that host",
+  ],
+  [
+    "tacho.command.fetch",
+    "only an enrolled host's own API key passes: resolveEnrolledHost (lib/tacho-host.ts) refuses any credential but a live tacho_host_v1 key bound to that host",
+  ],
+  [
+    "tacho.events.ingest",
+    "only an enrolled host's own API key passes: resolveEnrolledHost (lib/tacho-host.ts) refuses any credential but a live tacho_host_v1 key bound to that host",
+  ],
+  [
+    "tacho.host.enroll",
+    "the single-use enrollment token is the only credential on the call, the handler resolves the tenant from it, and the contract grants no role",
+  ],
+  [
+    "telemetry.stella.ingest",
+    "only an enrolled Stella install's API key passes: the handler refuses a call with no API key and a key without the server-provisioned enrollment scope",
+  ],
 ]);
 
 /**
- * Contracts already known to declare a role restriction their handler does
- * not enforce, tracked by #3258's follow-up rather than fixed in that PR
- * (each needs its own "assert the role, or relax the contract" decision).
- * A stem here is the contract file's basename without `.ts`. #4194 took out
- * seven whose handlers enforce through a helper or an inline check the old
- * scan could not see: `api.key.list`, `api.key.rotate`, `steering.pr.merge`,
- * `org.member.add`, `org.member.remove`, `org.member_role.change`, and
- * `privacy.data.export`.
+ * Contracts known to declare a role restriction their handler does not
+ * enforce. A stem here is the contract file's basename without `.ts`. #3458
+ * emptied it, and nothing may be added to it. #4194 took out seven whose
+ * handlers enforce through a helper or an inline check the old scan could not
+ * see:
+ * `api.key.list`, `api.key.rotate`, `steering.pr.merge`, `org.member.add`,
+ * `org.member.remove`, `org.member_role.change`, and `privacy.data.export`.
+ *
+ * @type {ReadonlySet<string>}
  */
-export const ROLE_ENFORCEMENT_BASELINE = new Set([
-  "integration.install",
-  "org.create",
-  "run.frame_body.get",
-  "run.transcript.get",
-  "schema.delete",
-  "schema.label.delete",
-  "schema.property.delete",
-  "schema.relationship.delete",
-  "tacho.bundle.get",
-  "tacho.command.fetch",
-  "tacho.events.ingest",
-  "tacho.host.enroll",
-  "telemetry.stella.ingest",
-]);
+export const ROLE_ENFORCEMENT_BASELINE = new Set();
 
 /** Non-recursive: only the top-level contract files, never `v2/`. */
 function listContractFiles(dir) {

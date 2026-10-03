@@ -123,7 +123,7 @@ function ApprovalCard({
       <dl
         data-testid="chain"
         aria-label={t("chain.title")}
-        className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs"
+        className="grid grid-cols-dl gap-x-3 gap-y-1 text-sm"
       >
         <dt className="text-muted-foreground">{t("chain.who")}</dt>
         {recorded(item.requester)}
@@ -156,13 +156,13 @@ function ApprovalCard({
           {metered.length === 0 ? null : (
             <p
               data-testid="mandate-period-basis"
-              className="text-xs text-muted-foreground"
+              className="text-sm text-muted-foreground"
             >
               {t("mandatePeriodBasis")}
             </p>
           )}
           {perCallOnly.length === 0 ? null : (
-            <p data-testid="mandate-per-call-only" className="text-xs">
+            <p data-testid="mandate-per-call-only" className="text-sm">
               {t("mandatePerCallOnly", { mandate: mandate.id })}
               {perCallOnly.map((measure) =>
                 measure.perCall === null ? null : (
@@ -178,11 +178,11 @@ function ApprovalCard({
           )}
         </>
       ) : item.mandateId === null ? null : (
-        <p data-testid="mandate-unread" className="text-xs">
+        <p data-testid="mandate-unread" className="text-sm">
           {t("mandateUnread", { mandate: item.mandateId })}
         </p>
       )}
-      <p className="text-xs">
+      <p className="text-sm">
         {t.rich("timesOut", {
           clock: () => (
             <Clock
@@ -196,7 +196,7 @@ function ApprovalCard({
       {item.runId === null ? null : (
         <SafeLink
           to={routes.run(org, ws, item.runId)}
-          className={`${linkText} self-start text-xs`}
+          className={`${linkText} self-start text-sm`}
         >
           {t("openRun")}
         </SafeLink>
@@ -245,11 +245,11 @@ export function ApprovalsPanel({
   return (
     <section aria-labelledby={headingId} className={`${panel} p-4`}>
       <div className={`${panelHeader} -mx-4 -mt-4 mb-3`}>
-        <h2 id={headingId} className="text-sm font-semibold">
+        <h2 id={headingId} className="text-base font-semibold">
           {t("title")}
         </h2>
         {approvals.ok ? (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             {/*
               The figure the header and the waiting tile both stand behind: the
               count the read took, marked `+` when the read stopped before the
@@ -272,9 +272,9 @@ export function ApprovalsPanel({
       {!approvals.ok ? (
         <ReadFailure read={approvals} section={t("title")} />
       ) : approvals.value.items.length === 0 ? (
-        <div className="flex flex-col gap-1 text-sm">
+        <div className="flex flex-col gap-1 text-base">
           <p>{t("empty")}</p>
-          <p className="text-xs text-muted-foreground">{t("emptyDetail")}</p>
+          <p className="text-sm text-muted-foreground">{t("emptyDetail")}</p>
         </div>
       ) : (
         <ul className="grid gap-3 md:grid-cols-2">

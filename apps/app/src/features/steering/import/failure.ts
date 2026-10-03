@@ -2,10 +2,11 @@
 // kernel classified the refusal and put the handler's HandlerError reason in
 // `code` (ARCHITECTURE.md §3.2). Each reason commit_markdown_import and its
 // steering PR opener throw has its own sentence, an organization out of
-// credit for the parse's model calls is told so, and any other code is printed
-// as recorded.
+// credit for the parse's model calls is told so, a call that never answered
+// asks for a reload, and any other code is printed as recorded.
 import { useTranslations } from "next-intl";
 import type { ActionResult } from "@/server/kernel";
+import { unanswered } from "@/ui/action-failure";
 
 export type ImportFailure = Exclude<ActionResult<unknown>, { ok: true }>;
 
@@ -15,6 +16,18 @@ export const TOO_LARGE = {
   reason: "invalid",
   code: "import_too_large",
 } as const satisfies ImportFailure;
+
+/**
+ * A review or match call that never answered. The kernel names its own
+ * errors `kernel_failure`, so this code means no answer reached the page,
+ * most often because a deploy restarted the app mid-call (#5318). A deploy
+ * also changes every server action id, so a retry from the same page fails
+ * too and only a reload helps (#5319). Neither call writes anything.
+ */
+export const NO_ANSWER = unanswered("action_failed");
+
+/** A commit call that never answered. The steering PR and the memories may exist anyway. */
+export const COMMIT_NO_ANSWER = unanswered("commit_unanswered");
 
 /** The file a refused parse input names, as `documents.3.content` names the fourth file sent. */
 export function fileOfField(
@@ -74,6 +87,8 @@ export function useImportFailure(): (
       case "exhausted":
         return t("exhausted", { code: failure.code });
       case "unavailable":
+        if (failure.code === NO_ANSWER.code) return t("noAnswer");
+        if (failure.code === COMMIT_NO_ANSWER.code) return t("commitNoAnswer");
         return t("unavailable", { code: failure.code });
     }
   };

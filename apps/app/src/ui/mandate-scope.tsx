@@ -36,7 +36,7 @@ export function MandateScope({ tools }: { tools: MandateRow["tools"] }) {
     return (
       <span
         data-scope="every-tool"
-        className="rounded bg-foreground px-1.5 py-0.5 text-xs font-medium text-background"
+        className="rounded-sm bg-foreground px-1.5 py-0.5 text-sm font-medium text-background"
       >
         {t("everyTool")}
       </span>
@@ -58,7 +58,7 @@ export function MandateScope({ tools }: { tools: MandateRow["tools"] }) {
         // tooltip shows it whole (#4665). Elsewhere it breaks onto a new line.
         <li
           key={pattern}
-          className={`${mono} break-all text-xs md:[td_&]:truncate`}
+          className={`${mono} break-all text-sm md:[td_&]:truncate`}
         >
           {pattern}
         </li>

@@ -1506,3 +1506,77 @@ describe("the oldest unshipped event in stats()", () => {
     expect(wal.stats().oldestUnshippedAt).toBe(again.ts);
   });
 });
+
+describe("a session's events since an instant", () => {
+  // The day budget's restart seed reads one UTC day of each session through
+  // `eventsSince`, so the walk has to stop where the day began.
+  const MIDNIGHT = Date.parse("2026-10-03T00:00:00.000Z");
+
+  /** `minimalSession` with each event at the time listed for its seq. */
+  function sessionAt(times: readonly string[]): TachoEvent[] {
+    return minimalSession().map((event) => ({
+      ...event,
+      ts: times[event.seq] ?? event.ts,
+    }));
+  }
+
+  it("walks back from the tail and stops at the first event before the instant", () => {
+    const wal = new Wal(scratchPaths().wal);
+    const session = sessionAt([
+      "2026-10-02T09:00:00.000Z",
+      "2026-10-02T23:00:00.000Z",
+      "2026-10-03T00:30:00.000Z",
+      // Written after seq 2 with a time before midnight, as a spooled hook
+      // drained late is. The walk stops here, so seq 2 is not returned.
+      "2026-10-02T23:59:58.000Z",
+      "2026-10-03T00:00:00.000Z",
+      "2026-10-03T01:00:00.000Z",
+      "2026-10-03T02:00:00.000Z",
+      "2026-10-03T03:00:00.000Z",
+    ]);
+    expect(session).toHaveLength(8);
+    const uuid = session[0]!.session_uuid;
+    wal.append(session);
+
+    const today = wal.eventsSince(uuid, MIDNIGHT);
+    expect(today.map((event) => event.seq)).toEqual([4, 5, 6, 7]);
+    // An event at the instant itself is in, and the result is in seq order.
+    expect(today[0]!.ts).toBe("2026-10-03T00:00:00.000Z");
+    expect(today).toEqual(session.slice(4));
+  });
+
+  it("answers nothing for a session whose last event is older, or that has no file (negative)", () => {
+    const wal = new Wal(scratchPaths().wal);
+    const session = sessionAt([]);
+    const uuid = session[0]!.session_uuid;
+    wal.append(session);
+    // Every event of `minimalSession` is dated 2026-09-08.
+    expect(wal.eventsSince(uuid, MIDNIGHT)).toEqual([]);
+    const september = Date.parse("2026-09-01T00:00:00.000Z");
+    expect(wal.eventsSince(uuid, september)).toEqual(session);
+    const absent = "5c1f0a2e-0000-4000-8000-0000000000ff";
+    expect(wal.eventsSince(absent, MIDNIGHT)).toEqual([]);
+  });
+
+  it("keeps an event whose ts does not parse, and walks on past it to the real stop", () => {
+    // A walk that stopped here would leave out seq 2, a frame from the day,
+    // and the restart seed would undercount by its cost.
+    const wal = new Wal(scratchPaths().wal);
+    const session = sessionAt([
+      "2026-10-02T09:00:00.000Z",
+      "2026-10-02T23:00:00.000Z",
+      "2026-10-03T00:30:00.000Z",
+      "not a time",
+      "2026-10-03T01:00:00.000Z",
+      "2026-10-03T02:00:00.000Z",
+      "2026-10-03T03:00:00.000Z",
+      "2026-10-03T04:00:00.000Z",
+    ]);
+    const uuid = session[0]!.session_uuid;
+    wal.append(session);
+
+    const today = wal.eventsSince(uuid, MIDNIGHT);
+    expect(today.map((event) => event.seq)).toEqual([2, 3, 4, 5, 6, 7]);
+    expect(today[1]!.ts).toBe("not a time");
+  });
+});

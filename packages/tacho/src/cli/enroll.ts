@@ -83,6 +83,7 @@ import {
 } from "./credential";
 import { restoreGithubRepositories } from "./github";
 import { agentDeps } from "./agent-deps";
+import { registerClaudeCodeMcp } from "./claude-code-mcp";
 import { daemonServiceSpec } from "./daemon-service";
 import { policyModeText } from "./policy-mode";
 import { shippingHealth, type ShippingHealth } from "./status";
@@ -375,27 +376,37 @@ function requestedMcpEndpoint(
 }
 
 /**
- * `host` with its three command fields moved to the binary running now, or
- * undefined when they already name it. All three move together: the hook,
- * the daemon and the MCP shim are computed from one bin dir, and a host.json
- * naming two layouts would run a hook from one install and a daemon from
- * another.
+ * `host` with its three command fields and its version moved to the binary
+ * running now, or undefined when they already name it. All three commands
+ * move together: the hook, the daemon and the MCP shim are computed from one
+ * bin dir, and a host.json naming two layouts would run a hook from one
+ * install and a daemon from another. The version moves with them, and on its
+ * own when an upgrade keeps the same paths, because the daemon stamps it on
+ * every event and reports it to the control plane (#5365).
  */
 export function repointCommands(
   host: HostFile,
   runtime: CliDeps["runtime"],
+  wrapperVersion: string,
 ): HostFile | undefined {
-  const same =
-    host.hook_command === runtime.hookCommand &&
-    sameArgv(host.daemon_command, runtime.daemonCommand) &&
-    sameArgv(host.mcp_stdio_command ?? [], runtime.mcpStdioCommand);
-  if (same) return undefined;
+  if (sameCommands(host, runtime) && host.wrapper_version === wrapperVersion)
+    return undefined;
   return {
     ...host,
     hook_command: runtime.hookCommand,
     daemon_command: runtime.daemonCommand,
     mcp_stdio_command: runtime.mcpStdioCommand,
+    wrapper_version: wrapperVersion,
   };
+}
+
+/** Whether `host` already runs the hook, daemon and MCP shim of `runtime`. */
+function sameCommands(host: HostFile, runtime: CliDeps["runtime"]): boolean {
+  return (
+    host.hook_command === runtime.hookCommand &&
+    sameArgv(host.daemon_command, runtime.daemonCommand) &&
+    sameArgv(host.mcp_stdio_command ?? [], runtime.mcpStdioCommand)
+  );
 }
 
 function sameArgv(a: readonly string[], b: readonly string[]): boolean {
@@ -790,7 +801,7 @@ async function enrollSteps(
     // to upgrade; that only works if the running binary wins. The transient
     // guard the fresh-enrollment path applies below holds here too: a bin
     // dir that is gone once this process exits must not be recorded.
-    const repointed = repointCommands(host, deps.runtime);
+    const repointed = repointCommands(host, deps.runtime, deps.wrapperVersion);
     if (repointed !== undefined) {
       if (deps.runtime.transient !== undefined) {
         warnings.push(
@@ -805,9 +816,14 @@ async function enrollSteps(
         // the environment it later runs in says.
         host = { ...repointed, harness_files: harnessFilesRecord(deps.paths) };
         writeHostFile(deps.paths.hostFile, host);
-        deps.out(
-          `      service and hooks now run from ${deps.runtime.binDir} (was ${existing.hook_command})`,
-        );
+        if (!sameCommands(existing, deps.runtime))
+          deps.out(
+            `      service and hooks now run from ${deps.runtime.binDir} (was ${existing.hook_command})`,
+          );
+        if (existing.wrapper_version !== deps.wrapperVersion)
+          deps.out(
+            `      host.json now records version ${deps.wrapperVersion} (was ${existing.wrapper_version})`,
+          );
       }
     }
   } else {
@@ -1319,6 +1335,44 @@ async function enrollSteps(
         deps.out("      already present; nothing to change");
       }
     });
+    // Oxagen's own tools for the hooked session (#5287): the Stop hook asks
+    // a run that showed trouble to call `record_reflection`, and only this
+    // entry gives the session that tool. Its own step, after the hooks, so a
+    // failure here warns and leaves Claude Code hooked: the hooks work
+    // without it, and without it the Stop hook asks for nothing.
+    if (
+      harnesses.includes("claude-code") &&
+      !unhooked.includes("claude-code") &&
+      deps.editClaudeUserConfig !== undefined
+    ) {
+      deps.out(`      Claude Code MCP server: ${deps.paths.claudeUserConfig}`);
+      try {
+        const registered = registerClaudeCodeMcp(host, deps);
+        host = registered.host;
+        if (registered.result === "skipped")
+          warnings.push(
+            `Claude Code was not given Oxagen's tools: ${registered.reason ?? "unknown reason"}. Until it has them, the Stop hook asks Claude Code for no reflection.`,
+          );
+        else if (registered.result === "written")
+          deps.out(
+            "      `oxagen` server written; a new Claude Code session lists Oxagen's tools",
+          );
+        else deps.out("      already present; nothing to change");
+        if (registered.displaced)
+          warnings.push(
+            "an MCP server already used the name `oxagen` in Claude Code; it was moved aside and unenroll restores it",
+          );
+      } catch (error) {
+        // The registration may have recorded the file, or a server it moved
+        // aside, in host.json before it failed. The later writes below start
+        // from `host`, so they must not drop that record.
+        host = readHostFile(deps.paths.hostFile) ?? host;
+        warnings.push(
+          `Claude Code was not given Oxagen's tools: ${error instanceof Error ? error.message : String(error)}. The hooks are written. Run \`oxagen agent enroll\` again to add the tools; until then the Stop hook asks Claude Code for no reflection.`,
+        );
+        deps.out("      not written (see the warning below)");
+      }
+    }
     hook("codex", () => {
       deps.out(`      Codex: ${deps.paths.codexHooks}`);
       const merged = mergeCodexHooks(deps.readCodexHooks(), hookConfig);

@@ -302,6 +302,100 @@ fi
 # port either way, so this is defence in depth rather than the only control.
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Draining the current container (#5318).
+#
+# `docker rm -f` used to stop the current container with SIGKILL, so every
+# request it was serving died with it. On 2026-10-03 that cut off a Markdown
+# import 41 seconds into its model call. Now the current container gets
+# SIGTERM and keeps running under another name while the new one starts.
+#
+# This works on one port because a Next server answers SIGTERM by closing its
+# listener at once and finishing the requests it already holds. The port is
+# free for the new container straight away. Caddy's idle keep-alive
+# connections to the old process close with the listener (Node's
+# server.close() closes idle connections), so Caddy dials again and reaches
+# the new container, while the requests in progress finish on the old one.
+#
+# A service with no SIGTERM handler runs node as PID 1, which ignores the
+# signal and keeps the port. After PORT_RELEASE_SECONDS it gets SIGKILL, as
+# every service did before.
+# ---------------------------------------------------------------------------
+
+# How long a probe waits for the current container to let go of the port.
+readonly PORT_RELEASE_SECONDS=10
+# The longest a request in progress may run on the old container after the
+# swap. Caddy gives up on an upstream after 300 seconds, so a longer drain
+# keeps nothing alive that Caddy still waits for.
+readonly DRAIN_SECONDS_MAX=300
+drain_seconds=$(field '.drain_seconds // 120')
+[[ $drain_seconds =~ ^[0-9]{1,3}$ && $drain_seconds -le $DRAIN_SECONDS_MAX ]] \
+  || fail "oxagen-run.json: 'drain_seconds' must be a whole number from 0 to $DRAIN_SECONDS_MAX, got '$drain_seconds'"
+
+# The name the current container runs under while it finishes its requests,
+# or empty when there is none.
+draining=""
+
+# True once nothing listens on the port: curl exits 7 when the connection is
+# refused. An HTTP answer of any status, or a timeout, means a process still
+# holds the port.
+port_released() {
+  local tries=$(($1 * 2)) code
+  while ((tries > 0)); do
+    curl -s -o /dev/null --max-time 1 "http://127.0.0.1:$port$health_path" && code=0 || code=$?
+    [[ $code -eq 7 ]] && return 0
+    tries=$((tries - 1))
+    sleep 0.5
+  done
+  return 1
+}
+
+# Signal the current container to stop taking connections and rename it out of
+# the way. `--restart=no` comes first: with `unless-stopped`, Docker restarts
+# a process that exits on a signal sent with `docker kill`, and the restarted
+# copy would take the port back from the new container.
+retire_current() {
+  docker inspect "$CONTAINER" >/dev/null 2>&1 || return 0
+  docker update --restart=no "$CONTAINER" >/dev/null 2>&1 || true
+  if ! docker rename "$CONTAINER" "$CONTAINER-draining-$release_id" >/dev/null 2>&1; then
+    # Nothing is draining, so start_container removes it as it always did.
+    log "could not rename $CONTAINER; it stops with the swap"
+    return 0
+  fi
+  draining="$CONTAINER-draining-$release_id"
+  docker kill --signal TERM "$draining" >/dev/null 2>&1 || true
+  if port_released "$PORT_RELEASE_SECONDS"; then
+    log "$draining closed port $port and is finishing its requests"
+  else
+    log "$draining still held port $port ${PORT_RELEASE_SECONDS}s after SIGTERM; stopping it now"
+    docker kill "$draining" >/dev/null 2>&1 || true
+    port_released "$PORT_RELEASE_SECONDS" \
+      || log "port $port still answers; the new container may fail to bind it"
+  fi
+  if [[ $overlap != true ]]; then
+    # No memory for both copies, so the old one goes before the new one
+    # starts. Its requests get the port wait's few seconds to finish.
+    timeout "$PORT_RELEASE_SECONDS" docker wait "$draining" >/dev/null 2>&1 || true
+    docker rm -f "$draining" >/dev/null 2>&1 || true
+    draining=""
+  fi
+}
+
+# Give the old container up to drain_seconds to finish, then remove it. Called
+# after the node lock is released, so a long drain does not hold up the next
+# service's deploy; that deploy's memory budget counts the draining container.
+finish_draining() {
+  [[ -n $draining ]] || return 0
+  log "waiting up to ${drain_seconds}s for $draining to finish its requests"
+  if timeout "$drain_seconds" docker wait "$draining" >/dev/null 2>&1; then
+    log "$draining finished its requests"
+  else
+    log "$draining still had requests open after ${drain_seconds}s; stopping it"
+  fi
+  docker rm -f "$draining" >/dev/null 2>&1 || true
+  draining=""
+}
+
 # Hold the node-wide lock through replacement, health checks, and rollback.
 # A per-service CI lock cannot stop two different services from both spending
 # the same remaining RAM. Refuse before changing the current release or container.
@@ -310,9 +404,32 @@ exec 201>/opt/oxagen/service-deploy.lock
 flock -w 300 201 || fail "another deployment holds the node memory budget; retry this deployment"
 python3 "$(dirname "${BASH_SOURCE[0]}")/ensure-caddy-memory.py" \
   || fail "Caddy memory limit could not be established; the current service is unchanged"
-python3 "$(dirname "${BASH_SOURCE[0]}")/memory-budget.py" \
-  --service "$SERVICE" --memory "$memory" \
-  || fail "node memory preflight refused this deployment; the current service is unchanged"
+
+# A deploy that died mid-drain leaves its old container behind. It holds
+# memory the budget below would count, and a name nothing else removes.
+remove_stale_draining() {
+  local name
+  while IFS= read -r name; do
+    [[ $name == "$CONTAINER-draining-"* ]] || continue
+    log "removing $name, left draining by an earlier deploy"
+    docker rm -f "$name" >/dev/null 2>&1 || true
+  done < <(docker ps -a --format '{{.Names}}' 2>/dev/null || true)
+}
+
+remove_stale_draining
+
+# Count the current container beside the incoming one when there is room for
+# both. With no room, the old container stops before the new one starts, which
+# is how every deploy worked before (#5318).
+overlap=true
+if ! python3 "$(dirname "${BASH_SOURCE[0]}")/memory-budget.py" \
+  --service "$SERVICE" --memory "$memory" --overlap; then
+  overlap=false
+  log "no memory to run two copies of $SERVICE; the current one stops before the new one starts"
+  python3 "$(dirname "${BASH_SOURCE[0]}")/memory-budget.py" \
+    --service "$SERVICE" --memory "$memory" \
+    || fail "node memory preflight refused this deployment; the current service is unchanged"
+fi
 
 previous=""
 [[ -L $CURRENT ]] && previous=$(readlink -f "$CURRENT")
@@ -422,6 +539,7 @@ ln -sfn "$release" "$CURRENT"
 trap - EXIT
 rm -f "$tarball"
 
+retire_current
 start_container "$release"
 
 deployed=false
@@ -456,6 +574,11 @@ if [[ $deployed != true ]]; then
     rm -f "$CURRENT"
   fi
 
+  # The requests the old container held still finish, whichever release now
+  # serves the port.
+  flock -u 201
+  finish_draining
+
   # Either way this deploy did not succeed, so the SSM command fails and the
   # workflow goes red. A rollback that reported success would be the worst of
   # both: production quietly running the old code while the merge looks shipped.
@@ -478,3 +601,6 @@ done
 
 docker image prune -f >/dev/null 2>&1 || true
 log "deployed $SERVICE $release_id"
+
+flock -u 201
+finish_draining

@@ -6,11 +6,16 @@
 // the runtime it runs on.
 //
 // Every figure is this agent's own row of the 30-day rollup (`tokens.ts`).
-// The design's eight token classes split input six ways and nothing records
-// that split yet (G3), so the six input classes say so and the two classes
-// the rollup does record, output and reasoning, carry their figures. Coaching
-// is derived from that split, so it waits on the same gap and says so rather
-// than claiming there is nothing to change. The one exception is the cache
+// The design's eight token classes split input six ways. The row carries
+// all six as its runs' sums: tool results, context frames, tool definitions
+// and steering from the measured sources (#5295), and conversation and
+// system from the runs' request windows (#5341). A class no run measured
+// reads not recorded. Output and reasoning carry the rollup's own figures.
+// The six input classes come from different measurements and overlap, so
+// they are not a partition of input, and the note under them says so.
+// Coaching is derived from a split of input by class, which the record does
+// not hold yet (G3), so it says so rather than claiming there is nothing to
+// change. The one exception is the cache
 // TTL, which the idle cache finding proposes from the request frames. Beside
 // it sits the agent's cache keep-alive setting (lane F32), which an org Owner
 // or Admin turns off or on from here.
@@ -110,7 +115,7 @@ function TokenUse({
   if (row === null) {
     return (
       <Panel id="agent-token-use" title={t("title")}>
-        <p className="text-sm text-muted-foreground">{t("none")}</p>
+        <p className="text-base text-muted-foreground">{t("none")}</p>
       </Panel>
     );
   }
@@ -122,7 +127,7 @@ function TokenUse({
       aside={
         <span
           data-testid="token-badge"
-          className={`${mono} text-sm text-muted-foreground`}
+          className={`${mono} text-xs text-muted-foreground`}
         >
           {t("badge", { tokens: n(r.total) })}
           {" · "}
@@ -138,7 +143,7 @@ function TokenUse({
     >
       <ul className="flex flex-col gap-2.5" data-testid="token-classes">
         {TOKEN_CLASSES.map((c) => {
-          const value = c.recorded === null ? null : r[c.recorded];
+          const value = r[c.recorded];
           return (
             <li key={c.key} data-class={c.key} className="flex flex-col gap-1">
               <span className="flex items-baseline justify-between gap-3 text-sm">
@@ -172,7 +177,7 @@ function TokenUse({
           );
         })}
       </ul>
-      <NotBacked gap="G3">{t("inputSplit", { input: n(r.input) })}</NotBacked>
+      <Note>{t("inputSplit", { input: n(r.input) })}</Note>
       <Facts
         rows={[
           {
@@ -385,7 +390,7 @@ function Coaching({
       <div className="-mx-4 -mb-4 border-t border-border px-4 py-3">
         <SafeLink
           to={routes.spend(org, ws, { tab: "findings" })}
-          className={`${linkText} text-sm`}
+          className={`${linkText} text-base`}
         >
           {t("all")}
         </SafeLink>
@@ -692,7 +697,7 @@ export function Overview({
   deliveries: Read<SteeringDeliveries> | null;
   spend: Read<unknown> | null;
   spendRow: AgentSpendRow | null;
-  /** The open findings, for the cache TTL line; null when the tab read none. */
+  /** The agent's open findings, for the cache TTL line; null when the tab read none. */
   findings: Read<SpendFindings> | null;
   lastRun: RunRow | null;
   operatorName: string | null;

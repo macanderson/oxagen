@@ -83,17 +83,17 @@ export function ConnectorPickerStep({
                   size={28}
                 />
                 <div className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-sm font-semibold text-foreground">
+                  <span className="text-base font-semibold text-foreground">
                     {connector.displayName}
                   </span>
                   {connector.isOAuthOnly && (
-                    <Badge variant="outline" className="w-fit text-[10px]">
+                    <Badge variant="outline" className="w-fit text-xs">
                       OAuth
                     </Badge>
                   )}
                 </div>
               </div>
-              <p className="line-clamp-2 text-xs text-muted-foreground">
+              <p className="line-clamp-2 text-sm text-muted-foreground">
                 {connector.description}
               </p>
 
@@ -133,7 +133,7 @@ export function ConnectorPickerStep({
       {oauthNotice && (
         <div
           role="status"
-          className="flex flex-col gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground"
+          className="flex flex-col gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground"
           data-testid="oauth-redirect-notice"
         >
           <p>

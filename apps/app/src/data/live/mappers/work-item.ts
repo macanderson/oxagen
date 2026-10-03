@@ -8,7 +8,7 @@ import type { workItemGet } from "@oxagen/oxagen/contracts/work.item.get";
 import type { z } from "zod";
 import type { WorkItemDetail, WorkRun, WorkSend } from "@/data/contracts/work";
 import type { ContractOutput } from "@/server/kernel";
-import { toCost, toMoney, toViewer, toWorkItemRow } from "./work-list";
+import { toCost, toForgePullRequest, toMoney, toViewer, toWorkItemRow } from "./work-list";
 
 type ItemOut = ContractOutput<typeof workItemGet>;
 type SendOut = ItemOut["sends"][number];
@@ -102,6 +102,7 @@ function toSend(send: SendOut): z.input<typeof WorkSend> {
             merged: toMerged(send.pull_request.merged),
             closedAt: send.pull_request.closed_at,
           },
+    pullRequests: send.pull_requests.map(toForgePullRequest),
     requiredChecks: send.required_checks === null ? null : [...send.required_checks],
     checks: send.checks.map(toCheck),
     earlierChecks:

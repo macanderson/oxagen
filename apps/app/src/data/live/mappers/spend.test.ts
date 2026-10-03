@@ -9,6 +9,7 @@ import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.ge
 import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
+import { spendUnproductive } from "@oxagen/oxagen/contracts/spend.unproductive";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { describe, expect, it } from "vitest";
 import {
@@ -21,6 +22,7 @@ import {
   SpendReport,
   SpendWaste,
   UnpricedModels,
+  UnproductiveSpend,
 } from "@/data/contracts/spend";
 import {
   toFleetSpend,
@@ -32,6 +34,7 @@ import {
   toSpendReport,
   toSpendWaste,
   toUnpricedModels,
+  toUnproductiveSpend,
 } from "./spend";
 
 const tokens = {
@@ -150,6 +153,160 @@ describe("toSpendReport", () => {
     expect(view.rows[0]?.topRuns).toEqual([run]);
     expect(view.rows[1]?.topRuns).toEqual([]);
   });
+
+  it("copies a work item row's work item and each run's operator, and leaves both off where get_spend sent none (#2962)", () => {
+    const operator = {
+      id: "prn_7h2",
+      name: "Marcus Bell",
+      email: null,
+      avatarUrl: null,
+      role: null,
+    };
+    const run = {
+      runId: "tse_01k9",
+      name: null,
+      startedAt: "2026-09-14T09:30:00.000Z",
+      agentKey: "claude-code",
+      harness: null,
+      operatorKey: "prn_7h2",
+      operator,
+      cost: priced,
+      calls: 12,
+    };
+    const workItem = {
+      id: "wi_01k9",
+      number: "OPS-88",
+      subject: "Fix the login page",
+    };
+    const out = spendGet.output.parse({
+      period: { from: "2026-09-14", to: "2026-09-15" },
+      groupBy: "work_item",
+      total: figure,
+      days: [],
+      reported: null,
+      rows: [
+        {
+          ...figure,
+          key: workItem.id,
+          provider: null,
+          operator: null,
+          workItem,
+          tokens: wireTokens,
+          topRuns: [run],
+        },
+        {
+          ...figure,
+          key: "~no_work_item",
+          provider: null,
+          operator: null,
+          workItem: null,
+          tokens: wireTokens,
+          topRuns: [{ ...run, operator: null }],
+        },
+      ],
+    });
+    const view = SpendReport.parse(toSpendReport(out));
+    expect(view.rows[0]?.workItem).toEqual(workItem);
+    expect(view.rows[0]?.topRuns?.[0]?.operator).toEqual(operator);
+    expect(view.rows[1]?.workItem).toBeNull();
+    expect(view.rows[1]?.topRuns?.[0]?.operator).toBeNull();
+
+    const old = spendGet.output.parse({
+      ...out,
+      groupBy: "agent",
+      rows: [
+        {
+          ...figure,
+          key: "claude-code",
+          provider: null,
+          operator: null,
+          tokens: wireTokens,
+          topRuns: [{ ...run, operator: undefined }],
+        },
+      ],
+    });
+    const plain = SpendReport.parse(toSpendReport(old));
+    expect(plain.rows[0]).not.toHaveProperty("workItem");
+    expect(plain.rows[0]?.topRuns?.[0]).not.toHaveProperty("operator");
+  });
+
+  it("copies a row's prompt sources, keeps an unmeasured one null, and leaves a row without them without (#5295)", () => {
+    const sources = {
+      toolDefinitionTokens: 18_000,
+      contextFrameTokens: null,
+      steeringTokens: 400,
+      toolResultTokens: 2_000,
+    };
+    const out = spendGet.output.parse({
+      period: { from: "2026-09-01", to: "2026-09-30" },
+      groupBy: "agent",
+      total: figure,
+      days: [],
+      reported: null,
+      rows: [
+        {
+          ...figure,
+          key: "acme.core.cc",
+          provider: null,
+          operator: null,
+          tokens: wireTokens,
+          topRuns: [],
+          tokenSources: sources,
+        },
+        {
+          ...figure,
+          key: "acme.core.review",
+          provider: null,
+          operator: null,
+          tokens: wireTokens,
+          topRuns: [],
+        },
+      ],
+    });
+    const view = SpendReport.parse(toSpendReport(out));
+    expect(view.rows[0]?.tokenSources).toEqual(sources);
+    expect(view.rows[1]).not.toHaveProperty("tokenSources");
+  });
+
+  it("copies a row's request windows, keeps a null one null, and leaves a row without them without (#5341)", () => {
+    const windows = {
+      runs: 2,
+      requests: 9,
+      requestsWithoutTokens: 1,
+      promptTokens: 40_000,
+      blocks: {
+        system: 4_000,
+        steering: null,
+        tools: 12_000,
+        context: null,
+        conversation: 24_000,
+      },
+    };
+    const row = {
+      ...figure,
+      provider: null,
+      operator: null,
+      tokens: wireTokens,
+      topRuns: [],
+    };
+    const out = spendGet.output.parse({
+      period: { from: "2026-09-01", to: "2026-09-30" },
+      groupBy: "agent",
+      total: figure,
+      days: [],
+      reported: null,
+      rows: [
+        { ...row, key: "acme.core.cc", windows },
+        { ...row, key: "acme.core.idle", windows: null },
+        { ...row, key: "acme.core.review" },
+      ],
+    });
+    const view = SpendReport.parse(toSpendReport(out));
+    expect(view.rows[0]?.windows).toEqual(windows);
+    // No run measured them: null, never a row of zeros.
+    expect(view.rows[1]?.windows).toBeNull();
+    expect(view.rows[2]).not.toHaveProperty("windows");
+  });
 });
 
 describe("toFleetSpend", () => {
@@ -206,6 +363,28 @@ describe("toFleetSpend", () => {
 });
 
 describe("toSpendDrill", () => {
+  /** Nothing measured: the fields a drill always carries, at their absent values. */
+  const unmeasured = {
+    tokens: { ...wireTokens, input_uncached: 0, cache_read: 0, output: 0 },
+    cacheHitRate: null,
+    modelCalls: 0,
+    observed: null,
+    standing: {
+      toolDefinitionTokens: null,
+      contextFrameTokens: null,
+      steeringTokens: null,
+    },
+    resultTokens: null,
+    byAgent: [],
+    byOperator: [],
+    byModel: [],
+  };
+  const estimated = {
+    micros: "2400",
+    currency: "USD",
+    basis: "estimated",
+  } as const;
+
   it("keeps the series, the averages and a tool drill's unpriced money as null", () => {
     const out = spendDrill.output.parse({
       kind: "tool",
@@ -218,7 +397,16 @@ describe("toSpendDrill", () => {
       ],
       averages: { perCall: null, perRun: null },
       share: null,
-      byTool: [{ name: "github__create_pull_request", calls: 3, runs: 1 }],
+      ...unmeasured,
+      byTool: [
+        {
+          name: "github__create_pull_request",
+          calls: 3,
+          runs: 1,
+          resultTokens: null,
+          cost: null,
+        },
+      ],
     });
     const view = SpendDrill.parse(toSpendDrill(out));
     expect(view).toMatchObject({
@@ -227,7 +415,23 @@ describe("toSpendDrill", () => {
       perCall: null,
       perRun: null,
       share: null,
-      tools: [{ name: "github__create_pull_request", calls: 3, runs: 1 }],
+      cacheHitRate: null,
+      observed: null,
+      resultTokens: null,
+      standing: {
+        toolDefinitionTokens: null,
+        contextFrameTokens: null,
+        steeringTokens: null,
+      },
+      tools: [
+        {
+          name: "github__create_pull_request",
+          calls: 3,
+          runs: 1,
+          resultTokens: null,
+          cost: null,
+        },
+      ],
     });
     expect(view.series.map((d) => [d.day, d.cost])).toEqual([
       ["2026-09-14", null],
@@ -235,7 +439,53 @@ describe("toSpendDrill", () => {
     ]);
   });
 
-  it("carries an operator's averages in micros", () => {
+  it("copies a tool's result tokens and their estimate with the estimated basis", () => {
+    const row = {
+      key: "acme.core.cc",
+      provider: null,
+      operator: null,
+      runs: 1,
+      calls: 3,
+      cost: estimated,
+      tokens: wireTokens,
+      resultTokens: 800,
+    };
+    const out = spendDrill.output.parse({
+      kind: "tool",
+      key: "Bash",
+      period: { from: "2026-08-17", to: "2026-09-15" },
+      total: { ...figure, cost: estimated, accepted: null },
+      series: [{ day: "2026-09-15", cost: estimated, calls: 3, runs: 1 }],
+      averages: {
+        perCall: { micros: "800", currency: "USD" },
+        perRun: { micros: "2400", currency: "USD" },
+      },
+      share: null,
+      ...unmeasured,
+      tokens: wireTokens,
+      cacheHitRate: 0.4,
+      resultTokens: 800,
+      byTool: [
+        { name: "Bash", calls: 3, runs: 1, resultTokens: 800, cost: estimated },
+      ],
+      byAgent: [row],
+    });
+    const view = SpendDrill.parse(toSpendDrill(out));
+    expect(view.total.cost).toEqual(estimated);
+    expect(view.resultTokens).toBe(800);
+    expect(view.cacheHitRate).toBe(0.4);
+    expect(view.tools[0]?.cost).toEqual(estimated);
+    expect(view.byAgent).toEqual([row]);
+  });
+
+  it("carries an operator's averages, tokens, observed part, standing context and cross-cuts", () => {
+    const marcus = {
+      id: "prn_marcusbell",
+      name: "Marcus Bell",
+      email: null,
+      avatarUrl: null,
+      role: null,
+    };
     const out = spendDrill.output.parse({
       kind: "operator",
       key: "prn_marcusbell",
@@ -247,12 +497,97 @@ describe("toSpendDrill", () => {
         perRun: { micros: "1028806", currency: "USD" },
       },
       share: 0.31,
+      tokens: wireTokens,
+      cacheHitRate: 0.4,
+      modelCalls: 18,
+      observed: { micros: "6000000", currency: "USD" },
+      standing: {
+        toolDefinitionTokens: 4000,
+        contextFrameTokens: null,
+        steeringTokens: 0,
+      },
+      resultTokens: 1500,
       byTool: [],
+      byAgent: [],
+      byOperator: [
+        {
+          key: "prn_marcusbell",
+          provider: null,
+          operator: marcus,
+          runs: 12,
+          calls: 40,
+          cost: priced,
+          tokens: wireTokens,
+          resultTokens: null,
+        },
+      ],
+      byModel: [
+        {
+          key: "claude-sonnet-5",
+          provider: "anthropic",
+          operator: null,
+          runs: 12,
+          calls: 18,
+          cost: priced,
+          tokens: wireTokens,
+          resultTokens: null,
+        },
+      ],
     });
     const view = SpendDrill.parse(toSpendDrill(out));
     expect(view.perCall).toEqual({ micros: "4200", currency: "USD" });
     expect(view.perRun).toEqual({ micros: "1028806", currency: "USD" });
     expect(view.share).toBe(0.31);
+    expect(view.tokens).toEqual(wireTokens);
+    expect(view.modelCalls).toBe(18);
+    expect(view.observed).toEqual({ micros: "6000000", currency: "USD" });
+    // A source measured at 0 stays 0; one nothing measured stays null.
+    expect(view.standing).toEqual({
+      toolDefinitionTokens: 4000,
+      contextFrameTokens: null,
+      steeringTokens: 0,
+    });
+    expect(view.byOperator[0]?.operator).toEqual(marcus);
+    expect(view.byModel.map((row) => [row.key, row.provider, row.cost])).toEqual(
+      [["claude-sonnet-5", "anthropic", priced]],
+    );
+  });
+});
+
+describe("toSpendReport observed and composition", () => {
+  it("copies the gateway's part and the prompt composition, and leaves both out when the contract did", () => {
+    const base = {
+      period: { from: "2026-09-01", to: "2026-09-15" },
+      groupBy: "model",
+      total: figure,
+      days: [],
+      reported: null,
+      rows: [],
+    };
+    const composition = {
+      toolDefinitionTokens: 4000,
+      contextFrameTokens: null,
+      steeringTokens: 0,
+      toolResultTokens: 1200,
+    };
+    const view = SpendReport.parse(
+      toSpendReport(
+        spendGet.output.parse({
+          ...base,
+          observed: { micros: "9000000", currency: "USD" },
+          composition,
+        }),
+      ),
+    );
+    expect(view.observed).toEqual({ micros: "9000000", currency: "USD" });
+    expect(view.composition).toEqual(composition);
+    // An answer built before get_spend read them carries neither, and the
+    // view does not invent them.
+    const older = SpendReport.parse(
+      toSpendReport(spendGet.output.parse(base)),
+    );
+    expect(older.observed).toBeUndefined();
+    expect(older.composition).toBeUndefined();
   });
 });
 
@@ -280,6 +615,7 @@ describe("toSpendWaste", () => {
           ],
         },
       ],
+      findingsOutsidePeriod: 0,
     });
     const view = SpendWaste.parse(toSpendWaste(out));
     expect(view.causes[0]?.provingRuns).toEqual([
@@ -289,7 +625,7 @@ describe("toSpendWaste", () => {
     expect(view.wasted?.basis).toBe("gateway_observed");
   });
 
-  it("keeps a period with no waste null rather than zero", () => {
+  it("keeps a period with no waste null rather than zero, with the open findings outside it", () => {
     const out = spendWasteList.output.parse({
       period: { from: "2026-09-01", to: "2026-09-15" },
       wasted: null,
@@ -297,14 +633,81 @@ describe("toSpendWaste", () => {
       runsWithWaste: 0,
       largestCause: null,
       causes: [],
+      findingsOutsidePeriod: 4,
     });
     expect(SpendWaste.parse(toSpendWaste(out))).toEqual({
       wasted: null,
       share: null,
       runsWithWaste: 0,
       largestCause: null,
+      findingsOutsidePeriod: 4,
       causes: [],
     });
+  });
+
+  // #5294: the calls findings claim are causes the page draws.
+  it("copies every claimed cause with its basis", () => {
+    const cost = {
+      micros: "1807000",
+      currency: "USD",
+      basis: "client_attested",
+    } as const;
+    const out = spendWasteList.output.parse({
+      period: { from: "2026-10-01", to: "2026-10-02" },
+      wasted: cost,
+      share: 0.004,
+      runsWithWaste: 1,
+      largestCause: "repeated_calls",
+      causes: [
+        "repeated_calls",
+        "spin_loops",
+        "retry_loops",
+        "recurring_runs",
+        "spend_with_no_outcome",
+      ].map((cause) => ({
+        cause,
+        wasted: cost,
+        runs: 1,
+        runIds: ["tse_01k5rn9t4"],
+        provingRuns: [{ runId: "tse_01k5rn9t4", name: null }],
+      })),
+      findingsOutsidePeriod: 0,
+    });
+    const view = SpendWaste.parse(toSpendWaste(out));
+    expect(view.largestCause).toBe("repeated_calls");
+    expect(view.causes.map((c) => c.cause)).toEqual([
+      "repeated_calls",
+      "spin_loops",
+      "retry_loops",
+      "recurring_runs",
+      "spend_with_no_outcome",
+    ]);
+    expect(view.causes.every((c) => c.wasted.basis === "client_attested")).toBe(
+      true,
+    );
+  });
+});
+
+describe("toUnproductiveSpend", () => {
+  it("copies the headline, its parts, and the open findings outside the period", () => {
+    const usd = (micros: string) => ({ micros, currency: "USD" });
+    const out = spendUnproductive.output.parse({
+      period: { from: "2026-10-01", to: "2026-10-02" },
+      unproductive: usd("0"),
+      spend: null,
+      share: null,
+      parts: [
+        { detector: 2, saving: usd("0"), findings: 0 },
+        { detector: 3, saving: usd("0"), findings: 0 },
+        { detector: 5, saving: usd("0"), findings: 0 },
+      ],
+      estimate: { saving: usd("0"), findings: 0 },
+      findingsOutsidePeriod: 4,
+    });
+    const view = UnproductiveSpend.parse(toUnproductiveSpend(out));
+    expect(view.period).toEqual({ from: "2026-10-01", to: "2026-10-02" });
+    expect(view.findingsOutsidePeriod).toBe(4);
+    expect(view.spend).toBeNull();
   });
 });
 
@@ -381,9 +784,13 @@ describe("toSpendFindings", () => {
       annualised: { ...saving, micros: "17649600000" },
       counts: { findings: 1, high: 1, medium: 0, operators: 3 },
       findings: [listedFinding],
+      truncated: false,
+      nextCursor: null,
+      offset: 0,
     });
     const view = SpendFindings.parse(toSpendFindings(out));
     expect(view.saving).toEqual(saving);
+    expect(view.truncated).toBe(false);
     expect(view.spend?.basis).toBe("mixed");
     expect(view.share).toBe(0.64);
     expect(view.counts).toEqual({
@@ -418,6 +825,9 @@ describe("toSpendFindings", () => {
       annualised: { ...saving, micros: "17649600000" },
       counts: { findings: 1, high: 1, medium: 0, operators: 3 },
       findings: [{ ...listedFinding, recommendation }],
+      truncated: false,
+      nextCursor: null,
+      offset: 0,
     });
     const view = SpendFindings.parse(toSpendFindings(out));
     expect(view.findings[0]?.recommendation).toEqual(recommendation);
@@ -433,6 +843,9 @@ describe("toSpendFindings", () => {
       annualised: null,
       counts: { findings: 0, high: 0, medium: 0, operators: 0 },
       findings: [],
+      truncated: false,
+      nextCursor: null,
+      offset: 0,
     });
     const view = SpendFindings.parse(toSpendFindings(out));
     expect(view).toEqual({
@@ -443,7 +856,32 @@ describe("toSpendFindings", () => {
       annualised: null,
       counts: { findings: 0, high: 0, medium: 0, operators: 0 },
       findings: [],
+      truncated: false,
+      nextCursor: null,
+      offset: 0,
     });
+  });
+
+  it("copies the count of every open finding, truncated, and the next page's cursor when the list is cut (#5262, #5303)", () => {
+    const out = findingList.output.parse({
+      status: "open",
+      window: listedFinding.window,
+      saving,
+      spend: null,
+      share: null,
+      annualised: saving,
+      counts: { findings: 62, high: 62, medium: 0, operators: 3 },
+      findings: Array.from({ length: 50 }, () => listedFinding),
+      truncated: true,
+      nextCursor: "c2",
+      offset: 0,
+    });
+    const view = SpendFindings.parse(toSpendFindings(out));
+    expect(view.truncated).toBe(true);
+    expect(view.counts.findings).toBe(62);
+    expect(view.findings).toHaveLength(50);
+    expect(view.nextCursor).toBe("c2");
+    expect(view.offset).toBe(0);
   });
 
   it("copies one finding's arithmetic and the runs it cites", () => {

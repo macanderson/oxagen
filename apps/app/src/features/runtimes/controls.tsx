@@ -188,7 +188,7 @@ export function AddRuntime({
         <form
           noValidate
           aria-label={t("title")}
-          className="flex flex-col gap-4 text-sm"
+          className="flex flex-col gap-4 text-base"
           onSubmit={(event) => {
             event.preventDefault();
             void submit();
@@ -252,7 +252,7 @@ export function AddRuntime({
             </label>
             <p
               id={`${baseId}-containment-hint`}
-              className="text-xs text-muted-foreground"
+              className="text-sm text-muted-foreground"
             >
               {t("containmentHint")}
             </p>
@@ -335,7 +335,7 @@ function DialogButton({
         title={title}
         testId={`${testId}-dialog`}
       >
-        <div className="flex flex-col gap-3 text-sm">{children}</div>
+        <div className="flex flex-col gap-3 text-base">{children}</div>
       </SheetDialog>
     </>
   );
@@ -503,7 +503,7 @@ export function ContainmentSwitch({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2 text-base">
         {/* The label wraps the switch so its whole row is the 44px phone target. */}
         <label
           htmlFor={id}
@@ -532,7 +532,7 @@ export function ContainmentSwitch({
       <p
         id={`${id}-state`}
         data-testid="runtime-containment-value"
-        className="text-sm text-muted-foreground"
+        className="text-base text-muted-foreground"
       >
         {required ? t("required") : t("notRequired")}
       </p>
@@ -635,7 +635,7 @@ export function Unenroll({
         testId="runtime-unenroll-dialog"
       >
         <form
-          className="flex flex-col gap-3 text-sm"
+          className="flex flex-col gap-3 text-base"
           onSubmit={(event) => {
             event.preventDefault();
             void confirm();
@@ -650,7 +650,7 @@ export function Unenroll({
           </p>
           <p
             data-testid="runtime-unenroll-warn"
-            className="rounded-[10px] border border-critical/45 bg-critical/10 px-3.5 py-2.5 text-sm text-foreground"
+            className="rounded-xl border border-critical/45 bg-critical/10 px-3.5 py-2.5 text-sm text-foreground"
           >
             {t("scope", { agent })}
           </p>

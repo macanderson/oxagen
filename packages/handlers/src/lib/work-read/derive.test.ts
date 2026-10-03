@@ -40,6 +40,7 @@ import {
   at,
   decision,
   f,
+  forgePull,
   item,
   lookups,
   withCommand,
@@ -476,6 +477,7 @@ describe("the row", () => {
       runtime: { name: "Laptop", tier: "gateway" },
       requested_at: at(4),
       pull_request: null,
+      pull_requests: [],
       checks: "no_pull_request",
       gate: { open: false, block: "run_active", detail: "waiting_for_claim" },
       accepted: false,
@@ -503,6 +505,53 @@ describe("the row", () => {
       accepted: false,
       pull_request: { repository: REPOSITORY, number: 612, url: `https://github.com/${REPOSITORY}/pull/612`, head: SHA1 },
     });
+  });
+
+  it("lists every pull request the forge store holds for the send, newest first", () => {
+    const newer = forgePull({ id: "fpr_700", number: 700, url: `https://github.com/${REPOSITORY}/pull/700`, state: "draft", headSha: SHA2, stateSeenAt: at(30) });
+    const older = forgePull({ state: "merged", title: null });
+    const out = row(IN_REVIEW, { lookups: lookups({ pullRequests: new Map([[O1, [newer, older]]]) }) });
+    expect(out.send?.pull_requests).toEqual([
+      {
+        id: "fpr_700",
+        provider: "github",
+        repository: REPOSITORY,
+        number: 700,
+        url: `https://github.com/${REPOSITORY}/pull/700`,
+        title: "Show the expiry message",
+        state: "draft",
+        head: SHA2,
+        state_seen_at: at(30),
+      },
+      {
+        id: "fpr_612",
+        provider: "github",
+        repository: REPOSITORY,
+        number: 612,
+        url: `https://github.com/${REPOSITORY}/pull/612`,
+        title: null,
+        state: "merged",
+        head: SHA1,
+        state_seen_at: at(20),
+      },
+    ]);
+    // The facts still decide the pull request acceptance is judged on.
+    expect(out.send?.pull_request).toMatchObject({ number: 612, head: SHA1 });
+    expect(out.send?.checks).toBe("passing");
+  });
+
+  it("links the facts' pull request through the forge store when it holds the same one", () => {
+    const held = forgePull({ url: "https://github.example.com/aintel/platform/pull/612", repository: REPOSITORY.toLowerCase() });
+    const out = row(IN_REVIEW, { lookups: lookups({ pullRequests: new Map([[O1, [held]]]) }) });
+    expect(out.send?.pull_request?.url).toBe("https://github.example.com/aintel/platform/pull/612");
+  });
+
+  it("keeps the GitHub link when the forge store holds another pull request (negative)", () => {
+    const other = forgePull({ number: 700, url: "https://github.example.com/aintel/platform/pull/700" });
+    const gitlab = forgePull({ provider: "gitlab", url: "https://gitlab.com/aintel/platform/-/merge_requests/612" });
+    const out = row(IN_REVIEW, { lookups: lookups({ pullRequests: new Map([[O1, [other, gitlab]]]) }) });
+    expect(out.send?.pull_request?.url).toBe(`https://github.com/${REPOSITORY}/pull/612`);
+    expect(out.send?.pull_requests.map((pull) => pull.number)).toEqual([700, 612]);
   });
 
   it("closes Accept on a head a person already accepted", () => {

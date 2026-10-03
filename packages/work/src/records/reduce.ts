@@ -24,6 +24,9 @@
 //     changed. A running order keeps the brief it was sent with.
 //   - Reopening keeps every earlier fact and starts a fresh delivery on a new
 //     revision.
+//   - A revert of the merged pull request is the provider's fact and moves
+//     nothing: a done item stays done until a person reopens it. The send
+//     shows the revert, and the Outcomes revert count reads it.
 import type { Sha256Digest } from "@oxagen/run-evidence";
 import {
   type CheckConclusion,
@@ -180,6 +183,12 @@ export interface OrderProjection {
   released: boolean;
   /** The send is over. Another send may start. */
   closed: boolean;
+  /**
+   * The first merged pull request that reverted this send's merged pull
+   * request, with its merge commit. Null until the send merged and a revert
+   * that names its pull request merged. It moves no state.
+   */
+  revert: { repository: string; number: number; mergeCommit: string; at: string } | null;
 }
 
 /** A work item, as its facts describe it. */
@@ -371,6 +380,25 @@ function reduceOrder(
     if (fact.runId !== null && !runIds.includes(fact.runId)) runIds.push(fact.runId);
   }
 
+  // A revert's columns name the reverting pull request, and its data names
+  // the pull request it reverts, so it is matched on that and never through
+  // onPullRequest. It counts only for the merged pull request the send
+  // follows, and the first one stands. Nothing above reads it: a revert
+  // leaves done, closed, and released as they were.
+  const revertFact =
+    merge === null || pullRequest === null
+      ? undefined
+      : ofKind(facts, "reverted").find(
+          (fact) =>
+            fact.data.reverts === pullRequest.number &&
+            fact.repository !== null &&
+            fact.repository.toLowerCase() === pullRequest.repository.toLowerCase(),
+        );
+  const revert =
+    revertFact && revertFact.repository !== null && revertFact.prNumber !== null
+      ? { repository: revertFact.repository, number: revertFact.prNumber, mergeCommit: revertFact.data.merge_commit, at: revertFact.occurredAt }
+      : null;
+
   return {
     orderId: request.orderId as string,
     send: request.data.send,
@@ -399,6 +427,7 @@ function reduceOrder(
     done,
     released,
     closed,
+    revert,
   };
 }
 

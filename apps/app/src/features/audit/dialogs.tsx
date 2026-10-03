@@ -99,12 +99,12 @@ function Missing({ id, gap, text }: { id: string; gap: Gap; text: string }) {
 }
 
 const field = "flex flex-col gap-1 text-sm";
-const label = "text-xs font-medium text-muted-foreground";
+const label = "text-sm font-medium text-muted-foreground";
 /**
  * A 44 px tap target and 16 px text on a phone (audit.md, Mobile), so the
  * browser does not zoom the page when a field takes focus.
  */
-const control = `${inputBase} max-md:min-h-11 max-md:text-base`;
+const control = `${inputBase} max-md:min-h-11 max-md:text-input-touch`;
 
 /** A submit the missing write keeps disabled, described by the sentence that says why. */
 function DisabledSubmit({
@@ -235,7 +235,7 @@ export function BundleDialog({ org, gap }: { org: string; gap: Gap }) {
                 </option>
               </select>
             </label>
-            <p id={fieldsId} className="text-xs text-muted-foreground">
+            <p id={fieldsId} className="text-sm text-muted-foreground">
               {t("fieldsNotRecorded")}
             </p>
           </fieldset>
@@ -357,7 +357,7 @@ export function RotateDialog({ gap }: { gap: Gap }) {
       subtitle={t("subtitle")}
       footer={<DisabledSubmit label={t("submit")} describedBy={noteId} />}
     >
-      <dl className="mb-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+      <dl className="mb-3 grid grid-cols-dl gap-x-4 gap-y-1.5 text-sm">
         <dt className={fact}>{t("facts.generation")}</dt>
         <dd data-recorded="false" className={fact}>
           {recorded("notRecorded")}

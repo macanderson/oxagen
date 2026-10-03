@@ -165,7 +165,7 @@ function PendingRow({
           <b className="block break-all font-mono text-sm font-semibold">
             {item.tool}
           </b>
-          <span className="block text-xs text-muted-foreground">
+          <span className="block text-sm text-muted-foreground">
             {[agent, wsName].filter((part) => part !== null).join(" · ")}
           </span>
         </span>
@@ -211,7 +211,7 @@ function ResolvedRow({
           <b className="block break-all font-mono text-sm font-semibold">
             {item.tool}
           </b>
-          <span className="block text-xs text-muted-foreground">
+          <span className="block text-sm text-muted-foreground">
             {[agent, wsName].filter((part) => part !== null).join(" · ")}
           </span>
         </span>
@@ -259,7 +259,7 @@ function ResolvedCard({
       <p className={`${mono} break-all font-semibold`}>{item.tool}</p>
       <dl
         aria-label={t("chain")}
-        className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs"
+        className="grid grid-cols-dl gap-x-3 gap-y-1 text-sm"
       >
         <dt className="text-muted-foreground">{t("who")}</dt>
         {recorded(item.requester)}
@@ -306,7 +306,7 @@ function ResolvedCard({
       {item.runId === null ? null : (
         <SafeLink
           to={routes.run(org, ws, item.runId)}
-          className={`${linkText} self-start text-xs`}
+          className={`${linkText} self-start text-sm`}
         >
           {t("openRun")}
         </SafeLink>
@@ -316,7 +316,7 @@ function ResolvedCard({
 }
 
 const eyebrow =
-  "mb-2 text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground";
+  "mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground";
 
 export function ApprovalsDrawer({
   data,
@@ -439,11 +439,11 @@ export function ApprovalsDrawer({
         aria-hidden={approvalsOpen ? undefined : true}
         inert={!approvalsOpen}
         data-open={approvalsOpen ? "" : undefined}
-        className={`fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-border bg-app-raised-bg text-app-raised-fg shadow-pop transition-transform motion-reduce:transition-none md:w-[min(680px,90vw)] ${
+        className={`fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-border bg-app-raised-bg text-app-raised-fg shadow-pop transition-transform motion-reduce:transition-none md:w-(--approvals-w) ${
           approvalsOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        <div className="flex items-center gap-2.5 border-b border-border px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <div className="flex items-center gap-2.5 border-b border-border px-4 py-3 pt-(--drawer-pad-top)">
           <h3 className="text-base font-semibold">{t("title")}</h3>
           {waitingLabel === null ? null : (
             <Badge tone={n !== null && n > 0 ? "approval" : "quiet"}>
@@ -464,7 +464,7 @@ export function ApprovalsDrawer({
         <div
           ref={bodyRef}
           data-testid="apdrawer-body"
-          className="min-h-0 flex-1 overflow-y-auto px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+          className="min-h-0 flex-1 overflow-y-auto px-4 py-4 pb-(--drawer-pad-bottom)"
         >
           {selected !== null ? (
             <>
@@ -488,7 +488,7 @@ export function ApprovalsDrawer({
                 />
               ) : (
                 (cards[selected.id] ?? (
-                  <p className="text-sm text-muted-foreground">{t("gone")}</p>
+                  <p className="text-base text-muted-foreground">{t("gone")}</p>
                 ))
               )}
             </>
@@ -538,7 +538,7 @@ export function ApprovalsDrawer({
                     <p
                       data-testid="approval-row-not-backed"
                       data-gap={ROW_GAP}
-                      className="mt-2 text-xs text-muted-foreground"
+                      className="mt-2 text-sm text-muted-foreground"
                     >
                       {t("rowNotBacked")}
                     </p>
@@ -552,7 +552,7 @@ export function ApprovalsDrawer({
                   >
                     {waitingUnread ? t("emptyRead") : t("empty")}
                   </p>
-                  <p className="mt-2 text-sm text-muted-foreground">
+                  <p className="mt-2 text-xs text-muted-foreground">
                     {t.rich("emptyDetail", {
                       code: (chunks) => (
                         <span className="font-mono">{chunks}</span>
@@ -564,7 +564,7 @@ export function ApprovalsDrawer({
               {data.approvals.truncated ? (
                 <p
                   data-testid="apdrawer-truncated"
-                  className="mt-2 text-xs text-muted-foreground"
+                  className="mt-2 text-sm text-muted-foreground"
                 >
                   {t("truncated", { count: data.approvals.workspaces.length })}
                 </p>
@@ -591,7 +591,7 @@ export function ApprovalsDrawer({
                   </ul>
                 </>
               ) : null}
-              <p className="mt-4 rounded-lg border border-border bg-hl px-3 py-2.5 text-sm text-muted-foreground">
+              <p className="mt-4 rounded-lg border border-border bg-hl px-3 py-2.5 text-xs text-muted-foreground">
                 {t("note")}
               </p>
             </>

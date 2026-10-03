@@ -942,7 +942,7 @@ describe("states", () => {
     const loading = screen.getByRole("status", { name: "Loading steering" });
     expect(loading).toHaveAttribute("aria-busy", "true");
     expect(loading.querySelectorAll(".h-9")).toHaveLength(7);
-    expect(loading.querySelectorAll(".h-\\[88px\\]")).toHaveLength(4);
+    expect(loading.querySelectorAll(".h-22")).toHaveLength(4);
     // Every bone is the design's shimmer, as on every other page, and none pulses.
     expect(loading.querySelectorAll(".skeleton").length).toBeGreaterThan(0);
     expect(loading.querySelector(".animate-pulse")).toBeNull();
@@ -1406,7 +1406,7 @@ describe("Proposals", () => {
       "https://github.com/acme/core-platform/pull/519",
     );
     expect(github).toHaveAttribute("target", "_blank");
-    expect(github.closest("td")?.className).toContain("z-[1]");
+    expect(github.closest("td")?.className).toContain("z-1");
   });
 
   it("lists a candidate with no pull request yet as an open proposal", async () => {

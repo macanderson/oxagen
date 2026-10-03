@@ -23,7 +23,14 @@ authority by measure from the ledger.
 
 ## Output
 
-`{ items: Mandate[] }`.
+`{ items: Mandate[], asOf }`.
+
+`asOf` is the one instant every row's authority was counted at, an ISO 8601
+timestamp. The handler reads it once, before any row, so every `periodKey` in
+the answer is the period that instant falls in, and two rows can never sit in
+two periods. A reader judges each mandate's window (`validFrom`, `validTo`)
+against `asOf` rather than its own clock. The page's authority is read in a
+fixed number of round trips whatever its length.
 
 The mandate shape (spec §6.9 part 3): `agentId` (`agt_…`), `impacts`,
 `limits` (measure → `{ perCall?, perPeriod?, period: daily | weekly | monthly,
@@ -40,6 +47,10 @@ resolved, the same as `get_mandate`; see that doc for the fallback a
 pre-ADR-108 row takes.
 
 ## Readers
+
+The narrowing below is a condition on the mandate rows, so its cost does not
+grow with the number of agents in the workspace. When `agentId` names an
+agent, only that agent is read.
 
 An org Owner, Admin, Billing or Compliance reads every mandate in the
 workspace. `defaultRoles` otherwise matches `request_mandate`'s workspace

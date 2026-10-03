@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { Fragment, type ReactNode } from "react";
 import type { RuntimeEnrollment } from "@/data/contracts/runtimes";
 import { Badge } from "@/ui/badge";
+import { HarnessIcon } from "@/ui/harness-icon";
 import {
   mono,
   panel,
@@ -120,7 +121,7 @@ export function Facts({
   rows: readonly { term: string; value: ReactNode; testId: string }[];
 }) {
   return (
-    <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-[minmax(8rem,auto)_1fr]">
+    <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-form">
       {rows.map((row) => (
         <Fragment key={row.term}>
           <dt className="text-muted-foreground">{row.term}</dt>
@@ -149,7 +150,7 @@ export function Sub({
       // Under a numeric cell the sub-line keeps its own face: the cell's mono
       // is for the figure above it. In a table cell on a wide screen it ends
       // in an ellipsis, as every cell value does; in a key-value list it wraps.
-      className={`block text-xs text-muted-foreground md:[td_&]:truncate ${monoFace ? mono : "font-sans"}`}
+      className={`block text-sm text-muted-foreground md:[td_&]:truncate ${monoFace ? mono : "font-sans"}`}
     >
       {children}
     </span>
@@ -280,14 +281,15 @@ export function HarnessNames({ host }: { host: RuntimeEnrollment }) {
           data-harness={harness}
           className="md:[td_&]:truncate"
         >
+          <HarnessIcon harness={harness} size={16} className="mr-1.5" />
           <HarnessLabel harness={harness} />{" "}
           {harness === "claude-code" && host.claudeVersionAtEnroll !== null ? (
             <span className="text-muted-foreground">
               <span className={mono}>{host.claudeVersionAtEnroll}</span>{" "}
-              <span className="text-xs">{t("atEnrollment")}</span>
+              <span className="text-sm">{t("atEnrollment")}</span>
             </span>
           ) : (
-            <span className="text-xs">
+            <span className="text-sm">
               <NotBacked gap="version">{t("versionUnrecorded")}</NotBacked>
             </span>
           )}

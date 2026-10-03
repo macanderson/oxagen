@@ -116,8 +116,8 @@ function ForkDialog({
             onSubmit={(e) => void submit(e)}
             className="flex flex-col gap-3"
           >
-            <p className="text-sm text-muted-foreground">{t("body")}</p>
-            <label htmlFor={fieldId} className="text-sm font-medium">
+            <p className="text-base text-muted-foreground">{t("body")}</p>
+            <label htmlFor={fieldId} className="text-base font-medium">
               {t("seqLabel")}
             </label>
             <input
@@ -131,7 +131,7 @@ function ForkDialog({
               }}
               className={inputBase}
             />
-            <p className="text-xs text-muted-foreground">{t("seqHelp")}</p>
+            <p className="text-sm text-muted-foreground">{t("seqHelp")}</p>
             {failure === null ? null : (
               <FormAlert testId="run-fork-failure">{failure}</FormAlert>
             )}
@@ -142,11 +142,11 @@ function ForkDialog({
             />
           </form>
         ) : (
-          <div role="status" className="flex flex-col gap-3 text-sm">
+          <div role="status" className="flex flex-col gap-3 text-base">
             <p>{t("minted")}</p>
             <code
               data-testid="fork-attempt"
-              className={`${mono} break-all rounded-md bg-muted px-2 py-1 text-xs`}
+              className={`${mono} break-all rounded-md bg-muted px-2 py-1 text-sm`}
             >
               {attempt}
             </code>
@@ -226,8 +226,8 @@ export function BisectDialog({
             onSubmit={(e) => void submit(e)}
             className="flex flex-col gap-3"
           >
-            <p className="text-sm text-muted-foreground">{t("body")}</p>
-            <label htmlFor={fieldId} className="text-sm font-medium">
+            <p className="text-base text-muted-foreground">{t("body")}</p>
+            <label htmlFor={fieldId} className="text-base font-medium">
               {t("otherLabel")}
             </label>
             <RecordPicker
@@ -240,7 +240,7 @@ export function BisectDialog({
               onChange={setOther}
               aria-describedby={`${fieldId}-help`}
             />
-            <p id={`${fieldId}-help`} className="text-xs text-muted-foreground">
+            <p id={`${fieldId}-help`} className="text-sm text-muted-foreground">
               {t("otherHelp")}
             </p>
             {failure === null ? null : (
@@ -253,7 +253,7 @@ export function BisectDialog({
             />
           </form>
         ) : (
-          <div role="status" className="flex flex-col gap-2 text-sm">
+          <div role="status" className="flex flex-col gap-2 text-base">
             {result.divergentSeq === null ? (
               <p data-testid="bisect-same">
                 {t("same", { aligned: result.aligned })}
@@ -266,7 +266,7 @@ export function BisectDialog({
                     aligned: result.aligned,
                   })}
                 </p>
-                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                <dl className="grid grid-cols-dl gap-x-3 gap-y-1 text-sm">
                   <dt className="text-muted-foreground">{t("keyA")}</dt>
                   <dd className={`${mono} break-all`}>
                     {result.keyA ?? t("noFrame")}

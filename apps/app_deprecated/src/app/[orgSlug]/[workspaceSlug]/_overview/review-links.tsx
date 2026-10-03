@@ -43,7 +43,7 @@ export function ReviewLinks({ orgSlug, workspaceSlug }: ReviewLinksProps) {
             <li key={key}>
               <Link
                 href={href}
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+                className="inline-flex items-center gap-1.5 text-base font-medium text-primary hover:underline"
               >
                 <Icon className="size-4" aria-hidden="true" />
                 {label}

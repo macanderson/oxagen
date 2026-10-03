@@ -11,6 +11,7 @@
  * builds them.
  */
 import { describe, expect, it } from "vitest";
+import { digestText } from "./context";
 import {
   CURSOR_ENFORCEMENT_EVENTS,
   CURSOR_HOOK_EVENTS,
@@ -398,5 +399,142 @@ describe("who sent a prompt", () => {
     expect(end?.attrs["hook.loop_count"]).toBe("1");
     expect(end?.body).not.toHaveProperty("prompt_source");
     expect(end?.body).not.toHaveProperty("prompt_origin");
+  });
+});
+
+/**
+ * Cursor's subagent and error text has no body member, so whatever the
+ * adapter passes through lands in a `hook.*` attribute. Attributes skip the
+ * retention mandate, so the text must leave the adapter as a digest and a
+ * length (#5381). The members are the ones Cursor's hook reference lists as
+ * of 2026-10-03.
+ */
+describe("Cursor's free text reaches the record only as a digest", () => {
+  const TASK = "Rewrite src/billing.ts and keep the webhook secret in .env";
+  const DESCRIPTION = "Billing refactor helper for the proration bug";
+  const SUMMARY = "Moved proration into billing/proration.ts and added tests";
+
+  it("digests a subagent's task, description and summary", () => {
+    const translated = translateCursorPayload({
+      conversation_id: CONVERSATION,
+      generation_id: "gen-3",
+      ...MODEL,
+      subagent_type: "explore",
+      status: "completed",
+      task: TASK,
+      description: DESCRIPTION,
+      summary: SUMMARY,
+      duration_ms: 5400,
+      message_count: 6,
+      tool_call_count: 4,
+      ...CURSOR_3_22_COMMON,
+      hook_event_name: "subagentStop",
+    }) as Record<string, unknown>;
+    expect(translated["hook_event_name"]).toBe("SubagentStop");
+    expect(translated["task"]).toBeUndefined();
+    expect(translated["description"]).toBeUndefined();
+    expect(translated["summary"]).toBeUndefined();
+
+    const drafts = normalizeHook(translated, {}, { sessionUuid: "uuid-1" });
+    expect(drafts).toHaveLength(1);
+    const [stop] = drafts;
+    expect(stop?.kind).toBe("subagent_stop");
+    const sealed = JSON.stringify(stop);
+    for (const text of [TASK, DESCRIPTION, SUMMARY])
+      expect(sealed).not.toContain(text);
+    expect(stop?.attrs["hook.task"]).toBeUndefined();
+    expect(stop?.attrs["hook.description"]).toBeUndefined();
+    expect(stop?.attrs["hook.summary"]).toBeUndefined();
+    expect(stop?.attrs).toMatchObject({
+      "hook.task_digest": digestText(TASK),
+      "hook.task_length": String(TASK.length),
+      "hook.description_digest": digestText(DESCRIPTION),
+      "hook.description_length": String(DESCRIPTION.length),
+      "hook.summary_digest": digestText(SUMMARY),
+      "hook.summary_length": String(SUMMARY.length),
+    });
+  });
+
+  it("digests the task a subagent starts with", () => {
+    const [start] = normalizeHook(
+      translateCursorPayload({
+        conversation_id: CONVERSATION,
+        subagent_id: "sa-1",
+        subagent_type: "explore",
+        task: TASK,
+        ...CURSOR_3_22_COMMON,
+        hook_event_name: "subagentStart",
+      }),
+      {},
+      { sessionUuid: "uuid-1" },
+    );
+    expect(start?.kind).toBe("subagent_start");
+    expect(JSON.stringify(start)).not.toContain(TASK);
+    expect(start?.attrs["hook.task"]).toBeUndefined();
+    expect(start?.attrs["hook.task_digest"]).toBe(digestText(TASK));
+    expect(start?.attrs["hook.task_length"]).toBe(String(TASK.length));
+  });
+
+  it("reads a failed tool call's error_message as the tool error", () => {
+    const error =
+      "ENOENT: no such file or directory, open '/Users/kim/repo/.env.local'";
+    const translated = translateCursorPayload({
+      conversation_id: CONVERSATION,
+      generation_id: "gen-3",
+      tool_name: "Read",
+      tool_input: { path: ".env.local" },
+      tool_use_id: "toolu_9",
+      cwd: "/Users/kim/repo",
+      error_message: error,
+      duration: 3,
+      ...CURSOR_3_22_COMMON,
+      hook_event_name: "postToolUseFailure",
+    }) as Record<string, unknown>;
+    expect(translated["hook_event_name"]).toBe("PostToolUseFailure");
+    expect(translated["error"]).toBe(error);
+    expect(translated["error_message"]).toBeUndefined();
+
+    const drafts = normalizeHook(translated, {}, { sessionUuid: "uuid-1" });
+    // A failed call seals no effect frame beside its tool_call.
+    expect(drafts).toHaveLength(1);
+    const [failed] = drafts;
+    expect(failed?.kind).toBe("tool_call");
+    expect(failed?.body).toMatchObject({
+      tool_status: "error",
+      tool_error_class: "ENOENT",
+      tool_error_message_digest: digestText(error),
+    });
+    expect(failed?.attrs["hook.error_message"]).toBeUndefined();
+    expect(failed?.attrs["hook.error"]).toBeUndefined();
+    // The frame's content holds the call's input, not the error, so only the
+    // body and the attributes are read here.
+    const kept = JSON.stringify({ body: failed?.body, attrs: failed?.attrs });
+    expect(kept).not.toContain(error);
+  });
+
+  it("digests a session's error_message, which no body member reads", () => {
+    const error = "Agent loop failed while editing /Users/kim/repo/plan.md";
+    const [end] = normalizeHook(
+      translateCursorPayload({
+        conversation_id: CONVERSATION,
+        reason: "error",
+        error_message: error,
+        ...CURSOR_3_22_COMMON,
+        hook_event_name: "sessionEnd",
+      }),
+      {},
+      { sessionUuid: "uuid-1" },
+    );
+    expect(end?.kind).toBe("agent_stop");
+    expect(end?.body).toMatchObject({
+      session_end_reason: "error",
+      session_outcome: "aborted",
+    });
+    expect(JSON.stringify(end)).not.toContain(error);
+    expect(end?.attrs["hook.error_message"]).toBeUndefined();
+    expect(end?.attrs["hook.error_message_digest"]).toBe(digestText(error));
+    expect(end?.attrs["hook.error_message_length"]).toBe(
+      String(error.length),
+    );
   });
 });

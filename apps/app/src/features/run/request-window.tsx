@@ -26,6 +26,7 @@ import type { SafePath } from "@/shared/safe-path";
 import { eyebrowQuiet, linkText, mono } from "@/ui/control-styles";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
+import { ModelLabel, ProviderMark } from "@/ui/provider-mark";
 import { ReadFailure } from "@/ui/read-failure";
 import { Fact, Facts, NoValue } from "./parts";
 
@@ -103,7 +104,7 @@ export function CompositionBar({ recorded }: { recorded: ContextWindow }) {
   const size = (block: ContextBlock) => block.tokens ?? block.bytes;
   const whole = drawn.reduce((sum, block) => sum + size(block), 0);
   return (
-    <div data-testid="window-composition" className="flex flex-col gap-[7px]">
+    <div data-testid="window-composition" className="flex flex-col gap-1.75">
       {/* `display:flex; height:12px; border-radius:6px; overflow:hidden; border:1px solid var(--border)` */}
       <div
         aria-hidden="true"
@@ -119,17 +120,17 @@ export function CompositionBar({ recorded }: { recorded: ContextWindow }) {
           />
         ))}
       </div>
-      <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0 text-sm text-muted-foreground">
+      <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0 text-xs text-muted-foreground">
         {drawn.map((block) => (
           <li
             key={block.kind}
             data-testid="window-part"
             data-kind={block.kind}
-            className="inline-flex items-center gap-[5px]"
+            className="inline-flex items-center gap-1.25"
           >
             <i
               aria-hidden="true"
-              className={`inline-block size-2 rounded-[2px] ${BLOCK_HUE[block.kind]}`}
+              className={`inline-block size-2 rounded-xs ${BLOCK_HUE[block.kind]}`}
             />
             {t(`block.${block.kind}`)}{" "}
             <b className="font-semibold tabular-nums text-foreground">
@@ -184,7 +185,7 @@ function Section({
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className={`${eyebrowQuiet} m-0`}>{title}</p>
         {aside === undefined ? null : (
-          <span className="text-sm text-dim">{aside}</span>
+          <span className="text-xs text-dim">{aside}</span>
         )}
       </div>
       {children}
@@ -223,9 +224,25 @@ export function RequestWindow({
   return (
     <div data-testid="window-panel" className="flex min-w-0 flex-col gap-3.5">
       <Facts>
-        <Fact label={t("provider")}>{recorded.provider ?? <NoValue />}</Fact>
+        <Fact label={t("provider")}>
+          {recorded.provider === null ? (
+            <NoValue />
+          ) : (
+            <span className="inline-flex items-center gap-1.5">
+              <ProviderMark
+                provider={recorded.provider}
+                model={recorded.model}
+              />
+              {recorded.provider}
+            </span>
+          )}
+        </Fact>
         <Fact label={t("model")} code>
-          {recorded.model ?? <NoValue />}
+          {recorded.model === null ? (
+            <NoValue />
+          ) : (
+            <ModelLabel model={recorded.model} provider={recorded.provider} />
+          )}
         </Fact>
         <Fact label={t("tools")}>
           <BlockFact recorded={recorded} kind="tools" />
@@ -269,14 +286,14 @@ export function RequestWindow({
       <Section title={t("stack")}>
         <ol
           data-testid="window-stack"
-          className="m-0 flex list-none flex-col gap-[7px] p-0"
+          className="m-0 flex list-none flex-col gap-1.75 p-0"
         >
           {recorded.blocks.map((block) => (
             <li
               key={block.kind}
               data-testid="window-stack-row"
               data-kind={block.kind}
-              className="flex min-w-0 items-center gap-2 rounded-lg border border-border border-l-[3px] border-l-rule bg-background px-[11px] py-2 text-sm"
+              className="flex min-w-0 items-center gap-2 rounded-lg border border-border border-l-3 border-l-rule bg-background px-2.75 py-2 text-xs"
             >
               <b className={`${mono} text-foreground`}>
                 {t(`block.${block.kind}`)}

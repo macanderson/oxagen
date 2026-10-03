@@ -307,6 +307,15 @@ export async function Run({
   // its count is in the tab strip on every tab, and GitHub's latency streams
   // inside the boundaries that draw it (#3970).
   const issues = readRunIssues(ctx, source, run.id);
+  // The run's change set from Oxagen's own pull request store (ADR-292),
+  // started beside the work read for the same reason: the Changes panel draws
+  // it inside the boundary that waits on both. A thrown read folds to the
+  // Run page's own read error, so the panel says the read failed.
+  const changes = source.changes
+    .changeSet(ctx, "run", run.id)
+    .catch(() =>
+      readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
+    );
   // The tabs that list the run's frames read them to their end. Every other
   // tab needs only their counts, which the `steps` read carries.
   const listsFrames =
@@ -403,7 +412,7 @@ export async function Run({
         place={place}
         parked={parked}
       />
-      <div className="grid grid-cols-1 items-start gap-3.5 min-[67.5rem]:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 items-start gap-3.5 lg:grid-cols-main">
         <div className="flex min-w-0 flex-col">
           <SummaryPanel
             run={run}
@@ -430,6 +439,7 @@ export async function Run({
           <Suspense fallback={<ChangesLoading />}>
             <ChangesPanel
               work={work}
+              changes={changes}
               outputs={outputs}
               run={run}
               place={place}

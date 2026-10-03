@@ -44,6 +44,7 @@ import {
   panel,
 } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
+import { HarnessIcon } from "@/ui/harness-icon";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import type { Harness } from "./agent-form";
@@ -78,7 +79,7 @@ const HOOK_FILE: Partial<Record<Harness, string>> = {
 
 type Place = { org: string; ws: string };
 
-const column = "mx-auto flex w-full max-w-[772px] flex-col";
+const column = "mx-auto flex w-full max-w-193 flex-col";
 const footer = "flex flex-col gap-2 md:flex-row md:items-center";
 const phoneWide = "max-md:w-full";
 
@@ -122,7 +123,7 @@ function TopBar({
   const brand = useTranslations("ui.brand");
   const fleet = routes.fleet(place.org, place.ws);
   return (
-    <header className="flex items-center gap-3 py-[18px]">
+    <header className="flex items-center gap-3 py-4.5">
       <SafeLink
         to={fleet}
         aria-label={brand("home")}
@@ -133,7 +134,7 @@ function TopBar({
       {email === null ? null : (
         <span
           data-testid="register-email"
-          className={`${mono} ml-auto truncate text-xs text-muted-foreground max-md:sr-only`}
+          className={`${mono} ml-auto truncate text-sm text-muted-foreground max-md:sr-only`}
         >
           {email}
         </span>
@@ -153,7 +154,7 @@ function TopBar({
 function Caption() {
   const t = useTranslations("onboarding.register");
   return (
-    <p className="mx-auto mt-[22px] max-w-[772px] text-center text-xs text-muted-foreground">
+    <p className="mx-auto mt-5.5 max-w-193 text-center text-sm text-muted-foreground">
       {t("caption")}
     </p>
   );
@@ -191,7 +192,7 @@ export async function RegisterGate({
           agent={mayRegister(ctx) ? agent : null}
         />
         <Rail step={step} place={place} agent={agent} />
-        <div className="flex flex-col gap-[18px] pt-7">{children}</div>
+        <div className="flex flex-col gap-4.5 pt-7">{children}</div>
       </div>
       <Caption />
     </div>
@@ -215,12 +216,12 @@ export function RegisterSkeleton() {
         className="grid grid-cols-2 gap-3.5 md:grid-cols-4"
       >
         {[0, 1, 2, 3].map((n) => (
-          <div key={n} className={`${block} h-16 rounded-[11px]`} />
+          <div key={n} className={`${block} h-16 rounded-xl`} />
         ))}
       </div>
       <div aria-hidden="true" className={`${panel} flex flex-col`}>
         <div className="border-b border-border bg-hl px-4 py-3">
-          <div className={`${block} h-4 w-44 rounded`} />
+          <div className={`${block} h-4 w-44 rounded-sm`} />
         </div>
         <div className="flex flex-col gap-2 p-4">
           {[0, 1, 2, 3, 4, 5, 6].map((n) => (
@@ -248,7 +249,7 @@ function StepHeader({
         {t(`${step}.title`)}
       </h1>
       {lead === null ? null : (
-        <p className="max-w-xl text-sm text-muted-foreground">{lead}</p>
+        <p className="max-w-xl text-base text-muted-foreground">{lead}</p>
       )}
     </div>
   );
@@ -285,14 +286,14 @@ function Denied({ ctx, viewer }: { ctx: WsCtx; viewer: string }) {
         <LockIcon aria-hidden className="size-4" />
       </span>
       <h1 className="text-lg font-semibold text-foreground">{t("title")}</h1>
-      <p className="max-w-md text-sm text-muted-foreground">
+      <p className="max-w-md text-base text-muted-foreground">
         {t.rich("body", {
           org: ctx.orgName,
           b: (chunks) => (
             <b className="font-semibold text-foreground">{chunks}</b>
           ),
           code: (chunks) => (
-            <span className={`${mono} rounded bg-hl px-1`}>{chunks}</span>
+            <span className={`${mono} rounded-sm bg-hl px-1`}>{chunks}</span>
           ),
           permission,
         })}
@@ -306,7 +307,7 @@ function Denied({ ctx, viewer }: { ctx: WsCtx; viewer: string }) {
           {t("back")}
         </SafeLink>
       </div>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 pt-3 text-left text-sm">
+      <dl className="grid grid-cols-dl gap-x-5 gap-y-1.5 pt-3 text-left text-sm">
         <dt className="text-muted-foreground">{t("signedIn")}</dt>
         <dd>
           {viewer} · <span className={mono}>{ctx.orgRole}</span> ·{" "}
@@ -325,8 +326,8 @@ function NoAgent({ place }: { place: Place }) {
   const t = useTranslations("onboarding.register.noAgent");
   return (
     <section data-testid="register-no-agent" className={`${panel} p-4`}>
-      <h2 className="text-sm font-semibold">{t("title")}</h2>
-      <p className="max-w-prose pt-1 text-sm text-muted-foreground">
+      <h2 className="text-base font-semibold">{t("title")}</h2>
+      <p className="max-w-prose pt-1 text-base text-muted-foreground">
         {t("body")}
       </p>
       <p className="pt-2">
@@ -354,7 +355,7 @@ function PlaceFailure({ failure }: { failure: OnboardingFailure }) {
   const failureText = useOnboardingFailure();
   return (
     <div data-testid="register-place-failure" className={`${panel} p-4`}>
-      <p className="text-sm text-muted-foreground">{failureText(failure)}</p>
+      <p className="text-base text-muted-foreground">{failureText(failure)}</p>
     </div>
   );
 }
@@ -453,7 +454,7 @@ function Waiting({
           className="size-3.5 flex-none animate-spin rounded-full border-2 border-border border-t-accent-text motion-reduce:animate-none"
         />
         <h2 className="text-sm font-semibold">{t("title")}</h2>
-        <span className={`${mono} ml-auto text-sm text-muted-foreground`}>
+        <span className={`${mono} ml-auto text-xs text-muted-foreground`}>
           {t("polling")}
         </span>
       </div>
@@ -475,6 +476,7 @@ function Waiting({
             )}
             {harness === null ? null : (
               <Badge tone="quiet" dot={false}>
+                <HarnessIcon harness={harness} size={14} />
                 {harnessT(harness)}
               </Badge>
             )}
@@ -508,7 +510,7 @@ function Waiting({
         <p
           data-testid="not-backed"
           data-element="collector-log"
-          className="text-xs text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           {logT("notRecorded")}
         </p>
@@ -536,7 +538,7 @@ function LogBlock({ lines, waiting }: { lines: LogLine[]; waiting: string }) {
   return (
     <ol
       data-testid="first-frame-log"
-      className={`${mono} flex flex-col gap-1 overflow-x-auto text-sm`}
+      className={`${mono} flex flex-col gap-1 overflow-x-auto text-xs`}
     >
       {lines.map((line) => (
         <li
@@ -589,7 +591,7 @@ function Received({
       <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3">
         <Badge tone="allowed">{t("connected")}</Badge>
         <h2 className="text-sm font-semibold">{t("title")}</h2>
-        <span className={`${mono} ml-auto text-sm text-muted-foreground`}>
+        <span className={`${mono} ml-auto text-xs text-muted-foreground`}>
           {precise(receivedAt)}
         </span>
       </div>
@@ -597,7 +599,7 @@ function Received({
         {run.ok ? (
           <ol
             data-testid="first-frames"
-            className={`${mono} divide-y divide-border overflow-x-auto rounded-lg border border-border text-sm`}
+            className={`${mono} divide-y divide-border overflow-x-auto rounded-lg border border-border text-xs`}
           >
             {run.value.frames.frames.slice(0, 2).map((frame) => (
               <li
@@ -663,7 +665,7 @@ function ReadError({ read }: { read: Exclude<Read<unknown>, { ok: true }> }) {
       data-testid="first-frame-error"
       className={`${panel} flex flex-col items-center gap-3 px-6 py-7 text-center`}
     >
-      <h2 className="text-base font-semibold">{t("error.title")}</h2>
+      <h2 className="text-lg font-semibold">{t("error.title")}</h2>
       <ReadFailure read={read} section={t("waiting.title")} />
       <CheckAgain />
     </section>
@@ -688,7 +690,7 @@ function WaitFooter({ place, agent }: { place: Place; agent: string }) {
       >
         {t("back")}
       </SafeLink>
-      <span className="text-xs text-muted-foreground md:ml-auto">
+      <span className="text-sm text-muted-foreground md:ml-auto">
         {t("run.caption")}
       </span>
     </div>

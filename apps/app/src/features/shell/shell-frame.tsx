@@ -19,19 +19,19 @@ function ChromeSkeleton({ loading }: { loading: string }) {
         aria-hidden="true"
         className="sticky top-0 hidden h-dvh border-r border-sidebar-border bg-sidebar-bg md:col-start-1 md:row-span-2 md:row-start-1 md:block"
       >
-        <div className="m-3.5 h-6 w-24 animate-pulse rounded bg-sidebar-accent motion-reduce:animate-none" />
+        <div className="m-3.5 h-6 w-24 animate-pulse rounded-sm bg-sidebar-accent motion-reduce:animate-none" />
         <div className="mx-3.5 mb-2 h-11 animate-pulse rounded-lg bg-sidebar-accent motion-reduce:animate-none" />
         <div className="mx-3.5 h-11 animate-pulse rounded-lg bg-sidebar-accent motion-reduce:animate-none" />
       </div>
       <div
         role="status"
         data-testid="shell-loading"
-        className="sticky top-0 z-30 flex h-[53px] items-center border-b border-app-topbar-border bg-app-topbar-bg px-4 md:col-start-2 md:row-start-1"
+        className="sticky top-0 z-30 flex h-13.25 items-center border-b border-app-topbar-border bg-app-topbar-bg px-4 md:col-start-2 md:row-start-1"
       >
         <span className="sr-only">{loading}</span>
         <div
           aria-hidden="true"
-          className="h-4 w-48 animate-pulse rounded bg-muted motion-reduce:animate-none"
+          className="h-4 w-48 animate-pulse rounded-sm bg-muted motion-reduce:animate-none"
         />
       </div>
     </>
@@ -49,7 +49,7 @@ export async function ShellFrame({
   return (
     <div
       data-testid="shell"
-      className="min-h-dvh bg-app-panel-bg text-app-panel-fg md:grid md:grid-cols-[var(--sidebar-width)_minmax(0,1fr)] md:grid-rows-[auto_1fr]"
+      className="min-h-dvh bg-app-panel-bg text-app-panel-fg md:grid md:grid-cols-shell md:grid-rows-shell"
     >
       {/* Before first paint: apply the stored theme so the page never flashes the wrong one. */}
       <script
@@ -62,7 +62,7 @@ export async function ShellFrame({
       </Suspense>
       <div
         data-shell-page=""
-        className="min-w-0 pb-[calc(6rem+env(safe-area-inset-bottom))] md:col-start-2 md:row-start-2 md:pb-0"
+        className="min-w-0 pb-(--frame-pad-bottom) md:col-start-2 md:row-start-2 md:pb-0"
       >
         <main id="main" className="mx-auto flex w-full flex-col gap-4">
           <ShellRoutePageName>{children}</ShellRoutePageName>

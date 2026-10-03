@@ -23,6 +23,7 @@ import {
 } from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
   alreadyMerged,
+  MERGE_CLAIM_SECONDS,
   refusedWrite,
   type AppendRow,
   type ProposalGuard,
@@ -42,7 +43,11 @@ import {
   type SyncStateWrite,
   type SyncStore,
 } from "./context.steering.sync.store";
-import { setSharedMergeLockForTests } from "./steering-repo/merge-queue";
+import {
+  readSteeringLayout,
+  setSharedMergeLockForTests,
+  stampHead,
+} from "./steering-repo/merge-queue";
 
 // The merge queue's lock across processes is a Postgres advisory lock, and
 // these doubles run without a database. Every suite that imports them merges
@@ -294,10 +299,14 @@ export class MemoryStore implements SteeringStore {
       guard?.noClaimSince !== undefined &&
       current.mergeClaimedAt !== null &&
       current.mergeClaimedAt.getTime() > guard.noClaimSince.getTime();
+    const claimOwned =
+      guard?.claimedAt === undefined ||
+      current.mergeClaimedAt?.getTime() === guard.claimedAt.getTime();
     if (
       !from.includes(current.status as ProposalStatus) ||
       (guard?.headSha !== undefined && current.headSha !== guard.headSha) ||
-      claimStands
+      claimStands ||
+      !claimOwned
     )
       throw refusedWrite(current, from, guard);
     const next = { ...this.proposals[i]!, ...patch, updatedAt: new Date() };
@@ -891,7 +900,7 @@ export class FakeGitHub implements SteeringGitHub {
     }
     return out;
   }
-  private mergeBase(base: string, head: string): string | undefined {
+  private commonAncestor(base: string, head: string): string | undefined {
     const onBase = new Set(this.lineage(this.shaOf(base)));
     return this.lineage(this.shaOf(head)).find((s) => onBase.has(s));
   }
@@ -1068,7 +1077,7 @@ export class FakeGitHub implements SteeringGitHub {
       : null;
   }
   async changedPaths(_repo: SteeringRepository, base: string, head: string) {
-    const mergeBase = this.mergeBase(base, head);
+    const mergeBase = this.commonAncestor(base, head);
     const from = mergeBase ? this.tree(mergeBase) : new Map<string, string>();
     const to = this.tree(this.shaOf(head));
     return [...new Set([...from.keys(), ...to.keys()])]
@@ -1243,7 +1252,7 @@ export class FakeGitHub implements SteeringGitHub {
     base: string,
     head: string,
   ): Promise<SteeringChangedFile[]> {
-    const mergeBase = this.mergeBase(base, head);
+    const mergeBase = this.commonAncestor(base, head);
     const from = mergeBase ? this.tree(mergeBase) : new Map<string, string>();
     const to = this.tree(this.shaOf(head));
     return [...new Set([...from.keys(), ...to.keys()])]
@@ -1286,6 +1295,9 @@ export class FakeGitHub implements SteeringGitHub {
   async holdsCommit(_repo: SteeringRepository, head: string, ancestor: string) {
     return this.lineage(this.shaOf(head)).includes(ancestor);
   }
+  async mergeBase(_repo: SteeringRepository, head: string, base: string) {
+    return this.commonAncestor(base, head) ?? null;
+  }
   /** The commit's parents: its first, then the branch a merge brought in. */
   async commitParents(_repo: SteeringRepository, sha: string) {
     const out: string[] = [];
@@ -1315,7 +1327,7 @@ export class FakeGitHub implements SteeringGitHub {
     const main = args.base;
     if (this.lineage(head).includes(main))
       return { headSha: head, parents: null };
-    const mergeBase = this.mergeBase(main, head);
+    const mergeBase = this.commonAncestor(main, head);
     const baseTree = mergeBase
       ? this.tree(mergeBase)
       : new Map<string, string>();
@@ -1399,6 +1411,58 @@ export class FakeGitHub implements SteeringGitHub {
       url: `https://github.com/a-intel/platform/deployments/${args.environment}`,
     };
   }
+}
+
+/**
+ * Move every merge claim back past MERGE_CLAIM_SECONDS, as ten minutes
+ * passing would. A retry resumes a merge an earlier call claimed only once
+ * that claim has lapsed (#4567), and the harness clock moves one second a
+ * call.
+ */
+export function lapseMergeClaims(h: { store: MemoryStore; now: () => Date }): void {
+  const lapsed = new Date(h.now().getTime() - (MERGE_CLAIM_SECONDS + 1) * 1000);
+  for (const proposal of h.store.proposals)
+    if (proposal.mergeClaimedAt !== null)
+      Object.assign(proposal, { mergeClaimedAt: lapsed });
+}
+
+/**
+ * Leave a steering repo PR the way a merge from Oxagen leaves it when it stops
+ * after the host merged: Oxagen's stamp commit on the checked head, merged on
+ * the host, and the row moved to the stamp. Answers the merge commit. A
+ * resume test starts from here, because every merge from Oxagen in a steering
+ * repo lands a stamp, and a PR merged at any other head is someone else's
+ * (#4504).
+ */
+export async function landStampOnHost(
+  h: { github: FakeGitHub; now: () => Date },
+  row: ProposalRow,
+): Promise<string> {
+  const layout = await readSteeringLayout(h.github, REPO);
+  const main = await h.github.branchHead(REPO, REPO.defaultBranch);
+  const { prNumber, branch, headSha } = row;
+  if (
+    layout.layout !== "steering" ||
+    main === null ||
+    prNumber === null ||
+    branch === null ||
+    headSha === null
+  )
+    throw new Error("landStampOnHost needs an open steering repo PR");
+  const stamp = await stampHead({
+    host: h.github,
+    repo: REPO,
+    number: prNumber,
+    branch,
+    head: headSha,
+    main,
+    settings: layout.settings,
+    at: h.now(),
+    approval: { approvedBy: [REVIEWER], withoutReview: false },
+    mergedBy: REVIEWER,
+  });
+  Object.assign(row, { headSha: stamp.sha });
+  return h.github.mergeOnHost(prNumber);
 }
 
 export interface Harness extends SteeringDeps {

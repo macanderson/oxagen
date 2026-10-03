@@ -591,7 +591,6 @@ describe("linkWorkspaceRepository", () => {
     ["conflict", "github_not_connected"],
     ["conflict", "main_repo"],
     ["conflict", "repository_already_linked"],
-    ["conflict", "main_repo_claimed"],
     ["conflict", "main_repo_unbound"],
     ["conflict", "workspace_toml_unreadable"],
     ["not_found", "repository_not_installed"],

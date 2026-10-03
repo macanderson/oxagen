@@ -82,12 +82,12 @@ export function Field({
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-foreground">
+      <label htmlFor={id} className="text-base font-medium text-foreground">
         {label}
       </label>
       {children}
       {hint === undefined ? null : (
-        <p id={`${id}-hint`} className="text-xs text-muted-foreground">
+        <p id={`${id}-hint`} className="text-sm text-muted-foreground">
           {hint}
         </p>
       )}
@@ -371,7 +371,7 @@ export function DefinitionFields({
               ),
             );
           }}
-          className="min-w-44 flex-1 text-xs text-muted-foreground"
+          className="min-w-44 flex-1 text-sm text-muted-foreground"
         />
       </Field>
       {type === "openapi" && names.length > 0 ? (
@@ -446,7 +446,7 @@ export function RegistryOfferChip({ server }: { server: RegistryServer }) {
   return (
     <span
       data-offer={offer}
-      className="rounded border border-border px-1.5 py-0.5 text-sm text-foreground"
+      className="rounded-sm border border-border px-1.5 py-0.5 text-xs text-foreground"
     >
       {t(offer)}
     </span>
@@ -576,7 +576,7 @@ export function DiscoveryProgress({
       data-status={view.kind === "read" ? view.discovery?.status : undefined}
       className="flex flex-col gap-2 rounded-lg border border-border px-3 py-2.5"
     >
-      <p id={`${id}-title`} className="text-sm font-medium text-foreground">
+      <p id={`${id}-title`} className="text-base font-medium text-foreground">
         {t("title")}
       </p>
       {server === null ? (

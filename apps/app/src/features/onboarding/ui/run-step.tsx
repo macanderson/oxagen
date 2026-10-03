@@ -25,6 +25,7 @@ import {
   panel,
 } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
+import { HarnessIcon } from "@/ui/harness-icon";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { GateFooter, GateHeader } from "./gate-shell";
 import type { WrapAgentFacts } from "./wrap-step";
@@ -92,8 +93,8 @@ function Waiting({
     <section data-testid="first-frame-waiting" className={panel}>
       <div className={cardHeader}>
         <Spinner />
-        <h3 className="text-sm font-semibold">{t("waitingTitle")}</h3>
-        <span className="ml-auto font-mono text-sm text-muted-foreground">
+        <h3 className="text-base font-semibold">{t("waitingTitle")}</h3>
+        <span className="ml-auto font-mono text-xs text-muted-foreground">
           {t("polling")}
         </span>
       </div>
@@ -105,6 +106,7 @@ function Waiting({
             </Badge>
           )}
           <Badge tone="quiet" dot={false}>
+            <HarnessIcon harness={agent.harness} size={14} />
             {harnessName}
           </Badge>
           <Badge tone="quiet" dot={false}>
@@ -126,7 +128,7 @@ function Waiting({
           {host === null ? null : (
             <p
               data-testid="first-frame-log-not-backed"
-              className="whitespace-normal py-1 font-sans text-xs text-muted-foreground"
+              className="whitespace-normal py-1 font-sans text-sm text-muted-foreground"
             >
               {t("log.notBacked")}
             </p>
@@ -168,14 +170,14 @@ function Received({ received }: { received: ReceivedFrame }) {
     <section data-testid="first-frame-received" className={panel}>
       <div className={cardHeader}>
         <Badge tone="allowed">{t("connected")}</Badge>
-        <h3 className="text-sm font-semibold">{t("receivedTitle")}</h3>
-        <span className="ml-auto font-mono text-sm text-muted-foreground">
+        <h3 className="text-base font-semibold">{t("receivedTitle")}</h3>
+        <span className="ml-auto font-mono text-xs text-muted-foreground">
           {time(received.receivedAt)}
         </span>
       </div>
       <div className="flex flex-col gap-3 px-4 py-3.5">
         {received.frames === null ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             {t("framesNotRecorded")}
           </p>
         ) : (
@@ -319,7 +321,7 @@ export function RunStep({
           className={`${panel} flex flex-col gap-2.5 p-5`}
         >
           <h2 className="text-lg font-semibold">{t("errorTitle")}</h2>
-          <p className="text-sm leading-relaxed text-muted-foreground">
+          <p className="text-base leading-relaxed text-muted-foreground">
             {t("errorBody", {
               at: format.dateTime(new Date(host.enrolledAt), {
                 timeStyle: "medium",
@@ -327,10 +329,10 @@ export function RunStep({
               seconds: silentFor,
             })}
           </p>
-          <p className="text-sm leading-relaxed text-muted-foreground">
+          <p className="text-base leading-relaxed text-muted-foreground">
             {t.rich("errorFix", { mono: monoChunk })}
           </p>
-          <p className="font-mono text-sm text-muted-foreground">
+          <p className="font-mono text-xs text-muted-foreground">
             {t("errorRequest", { id: host.hostEnrollmentId })}
           </p>
           <button
@@ -343,7 +345,7 @@ export function RunStep({
           >
             {t("checkAgain")}
           </button>
-          <p role="status" className="text-sm empty:hidden">
+          <p role="status" className="text-base empty:hidden">
             {status}
           </p>
         </section>

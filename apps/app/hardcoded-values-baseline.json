@@ -1,0 +1,759 @@
+{
+  "src/app/global-error.tsx": {
+    "<button>": 1
+  },
+  "src/app/globals.css": {
+    "css:animation": 5,
+    "css:animation-delay": 4,
+    "css:box-shadow": 1,
+    "css:inset": 1,
+    "css:max-width": 1,
+    "css:padding": 5
+  },
+  "src/features/agents/agent-actions.tsx": {
+    "<button>": 3
+  },
+  "src/features/agents/agents-table.tsx": {
+    "<button>": 2
+  },
+  "src/features/agents/binding-controls.tsx": {
+    "<button>": 2
+  },
+  "src/features/agents/cache-keep-alive-controls.tsx": {
+    "<button>": 1
+  },
+  "src/features/agents/cost-center-controls.tsx": {
+    "<button>": 1
+  },
+  "src/features/agents/enrollment-controls.tsx": {
+    "<button>": 3
+  },
+  "src/features/agents/kill-switch.tsx": {
+    "<button>": 3
+  },
+  "src/features/agents/mandate-request.tsx": {
+    "<button>": 1
+  },
+  "src/features/agents/role-controls.tsx": {
+    "<button>": 2
+  },
+  "src/features/agents/state-actions.tsx": {
+    "<button>": 2
+  },
+  "src/features/agents/stub-action.tsx": {
+    "<button>": 1
+  },
+  "src/features/agents/tool-schema.tsx": {
+    "<button>": 1
+  },
+  "src/features/agents/toolbelt-views.tsx": {
+    "<button>": 7
+  },
+  "src/features/audit/dialogs.tsx": {
+    "<button>": 2
+  },
+  "src/features/audit/events.tsx": {
+    "<button>": 2
+  },
+  "src/features/audit/sections.tsx": {
+    "<button>": 4
+  },
+  "src/features/auth/cli-consent-form.tsx": {
+    "<button>": 2
+  },
+  "src/features/auth/invite-decision.tsx": {
+    "<button>": 2
+  },
+  "src/features/auth/invite-view.tsx": {
+    "<button>": 2
+  },
+  "src/features/auth/two-factor-form.tsx": {
+    "<button>": 1
+  },
+  "src/features/auth/ui/auth-card.tsx": {
+    "after:content-['']": 1,
+    "before:content-['']": 1
+  },
+  "src/features/auth/ui/invite-hint.tsx": {
+    "<button>": 1
+  },
+  "src/features/auth/ui/oauth-buttons.tsx": {
+    "<button>": 1
+  },
+  "src/features/auth/ui/sso-sign-in.tsx": {
+    "<button>": 1
+  },
+  "src/features/auth/verify-panel.tsx": {
+    "<button>": 1
+  },
+  "src/features/billing/change-plan.tsx": {
+    "<button>": 1
+  },
+  "src/features/billing/state-dialogs.tsx": {
+    "<button>": 1
+  },
+  "src/features/billing/statements.tsx": {
+    "<button>": 2
+  },
+  "src/features/billing/usage-credits.tsx": {
+    "<button>": 1
+  },
+  "src/features/create/clone-editor.tsx": {
+    "<button>": 2
+  },
+  "src/features/create/create-host.tsx": {
+    "<button>": 5
+  },
+  "src/features/create/parts.tsx": {
+    "<button>": 2
+  },
+  "src/features/create/record-wizard.tsx": {
+    "<button>": 1
+  },
+  "src/features/create/skill-wizard.tsx": {
+    "<button>": 1
+  },
+  "src/features/fleet/approval-decision.tsx": {
+    "<button>": 3
+  },
+  "src/features/fleet/board.tsx": {
+    "<button>": 9
+  },
+  "src/features/fleet/header-actions.tsx": {
+    "<button>": 1
+  },
+  "src/features/fleet/list-bar.tsx": {
+    "<button>": 1,
+    "flex-[1_1_200px]": 1
+  },
+  "src/features/fleet/state-actions.tsx": {
+    "<button>": 5
+  },
+  "src/features/fleet/steer-fleet.tsx": {
+    "<button>": 4
+  },
+  "src/features/fleet/waiting-tile.tsx": {
+    "<button>": 1
+  },
+  "src/features/mandate/ledger.tsx": {
+    "<button>": 1
+  },
+  "src/features/mandate/mandate-actions.tsx": {
+    "<button>": 2
+  },
+  "src/features/mcp-studio/add-server.tsx": {
+    "<button>": 2
+  },
+  "src/features/mcp-studio/changes-tab.tsx": {
+    "<button>": 3,
+    "[overflow-wrap:anywhere]": 2
+  },
+  "src/features/mcp-studio/connection-tab.tsx": {
+    "[overflow-wrap:anywhere]": 1
+  },
+  "src/features/mcp-studio/credential-form.tsx": {
+    "<button>": 1
+  },
+  "src/features/mcp-studio/machine-fields.tsx": {
+    "<button>": 3
+  },
+  "src/features/mcp-studio/tool-panel.tsx": {
+    "<button>": 5
+  },
+  "src/features/mcp-studio/tools-tab.tsx": {
+    "<button>": 1
+  },
+  "src/features/mcp-studio/try-tab.tsx": {
+    "<button>": 2
+  },
+  "src/features/onboarding/rail.tsx": {
+    "<button>": 1
+  },
+  "src/features/onboarding/ui/cancel-registration.tsx": {
+    "<button>": 1
+  },
+  "src/features/onboarding/ui/first-frame.tsx": {
+    "<button>": 2
+  },
+  "src/features/onboarding/ui/first-run.tsx": {
+    "<button>": 1
+  },
+  "src/features/onboarding/ui/gate-shell.tsx": {
+    "<button>": 1
+  },
+  "src/features/onboarding/ui/gate-states.tsx": {
+    "<button>": 1
+  },
+  "src/features/onboarding/ui/installer.tsx": {
+    "<button>": 2,
+    "transition-[width]": 1
+  },
+  "src/features/onboarding/ui/register-form.tsx": {
+    "<button>": 1
+  },
+  "src/features/onboarding/ui/request-access.tsx": {
+    "<button>": 1
+  },
+  "src/features/onboarding/ui/run-step.tsx": {
+    "<button>": 1
+  },
+  "src/features/onboarding/ui/wrap-agent.tsx": {
+    "<button>": 6
+  },
+  "src/features/onboarding/ui/wrap-step.tsx": {
+    "<button>": 4
+  },
+  "src/features/organization/avatar-actions.tsx": {
+    "<button>": 1
+  },
+  "src/features/organization/copy-id.tsx": {
+    "<button>": 1
+  },
+  "src/features/organization/create-key-dialog.tsx": {
+    "<button>": 1
+  },
+  "src/features/organization/data-plane-modes.tsx": {
+    "<button>": 1
+  },
+  "src/features/organization/dialog.tsx": {
+    "<button>": 1
+  },
+  "src/features/organization/invitation-controls.tsx": {
+    "<button>": 2
+  },
+  "src/features/organization/invite-dialog.tsx": {
+    "<button>": 1
+  },
+  "src/features/organization/member-row-actions.tsx": {
+    "<button>": 3
+  },
+  "src/features/organization/model-funding-form.tsx": {
+    "<button>": 3
+  },
+  "src/features/organization/notifications-controls.tsx": {
+    "<button>": 6
+  },
+  "src/features/organization/role-actions.tsx": {
+    "<button>": 4
+  },
+  "src/features/organization/sso-controls.tsx": {
+    "<button>": 2
+  },
+  "src/features/organization/sso-group-roles.tsx": {
+    "<button>": 2
+  },
+  "src/features/organization/sso-provider-form.tsx": {
+    "<button>": 1
+  },
+  "src/features/organization/stub-dialog.tsx": {
+    "<button>": 1
+  },
+  "src/features/record/archive-dialog.tsx": {
+    "<button>": 1
+  },
+  "src/features/record/header.tsx": {
+    "<button>": 3
+  },
+  "src/features/record/page-failure.tsx": {
+    "<button>": 2
+  },
+  "src/features/record/propose-dialog.tsx": {
+    "<button>": 1
+  },
+  "src/features/record/statement-editor.tsx": {
+    "[font-feature-settings:var(--ox-font-mono-features)]": 1,
+    "[overflow-wrap:break-word]": 1,
+    "[tab-size:2]": 1
+  },
+  "src/features/repositories/change-detail.tsx": {
+    "<button>": 4,
+    "[--cell-max:32rem]": 1
+  },
+  "src/features/repositories/configuration.tsx": {
+    "<button>": 1
+  },
+  "src/features/repositories/init-wizard.tsx": {
+    "<button>": 3,
+    "[--cell-max:32rem]": 1
+  },
+  "src/features/repositories/instruction-drift.tsx": {
+    "<button>": 1
+  },
+  "src/features/repositories/repositories-tab.tsx": {
+    "<button>": 5
+  },
+  "src/features/repositories/repositories.tsx": {
+    "<button>": 1
+  },
+  "src/features/repositories/repository-dialog.tsx": {
+    "<button>": 5
+  },
+  "src/features/repositories/states.tsx": {
+    "<button>": 4
+  },
+  "src/features/repositories/unlink-dialog.tsx": {
+    "<button>": 1
+  },
+  "src/features/repositories/working-copies.tsx": {
+    "<button>": 3
+  },
+  "src/features/run-outcomes/connections.tsx": {
+    "<button>": 2
+  },
+  "src/features/run/context-tab.tsx": {
+    "<button>": 1,
+    "[overflow-wrap:anywhere]": 1
+  },
+  "src/features/run/copy-text.tsx": {
+    "<button>": 2,
+    "[direction:rtl]": 1,
+    "[text-align:left]": 1
+  },
+  "src/features/run/delivery-report.tsx": {
+    "<button>": 1
+  },
+  "src/features/run/frame-player.tsx": {
+    "<button>": 3
+  },
+  "src/features/run/interjection-answer.tsx": {
+    "<button>": 2
+  },
+  "src/features/run/interjection.tsx": {
+    "[overflow-wrap:anywhere]": 5
+  },
+  "src/features/run/linked-work.tsx": {
+    "[overflow-wrap:anywhere]": 1,
+    "before:content-['▸']": 1,
+    "group-open:before:content-['▾']": 1
+  },
+  "src/features/run/model-fit.tsx": {
+    "<button>": 1
+  },
+  "src/features/run/outputs.tsx": {
+    "[overflow-wrap:anywhere]": 2,
+    "before:content-['']": 1
+  },
+  "src/features/run/parked-calls.tsx": {
+    "bg-critical/[0.09]": 1
+  },
+  "src/features/run/player-bar.tsx": {
+    "<button>": 1
+  },
+  "src/features/run/record-actions.tsx": {
+    "<button>": 6
+  },
+  "src/features/run/replay-actions.tsx": {
+    "<button>": 3
+  },
+  "src/features/run/run-controls.tsx": {
+    "<button>": 6
+  },
+  "src/features/run/seal-run.tsx": {
+    "<button>": 3
+  },
+  "src/features/run/timeline.tsx": {
+    "before:content-['']": 1
+  },
+  "src/features/run/transcript-view.tsx": {
+    "<button>": 14,
+    "[overflow-wrap:anywhere]": 1,
+    "duration-200": 1,
+    "style:width": 2,
+    "transition-[width]": 1
+  },
+  "src/features/runtimes/controls.tsx": {
+    "<button>": 6
+  },
+  "src/features/runtimes/runtime.tsx": {
+    "after:content-['']": 1
+  },
+  "src/features/runtimes/runtimes.tsx": {
+    "after:content-['']": 1
+  },
+  "src/features/shell/account-dialog.tsx": {
+    "<button>": 9
+  },
+  "src/features/shell/account-styles.ts": {
+    "[overflow-wrap:anywhere]": 1
+  },
+  "src/features/shell/approvals-drawer.tsx": {
+    "<button>": 4
+  },
+  "src/features/shell/assistant-attachments.tsx": {
+    "<button>": 1
+  },
+  "src/features/shell/assistant-engine-notice.tsx": {
+    "<button>": 1
+  },
+  "src/features/shell/assistant-flyout.tsx": {
+    "<button>": 4,
+    "before:content-['']": 1,
+    "duration-200": 3,
+    "duration-300": 1,
+    "ease-[cubic-bezier(.32,.72,0,1)]": 1,
+    "motion-reduce:duration-100": 1,
+    "transition-[translate,opacity,visibility]": 4,
+    "transition-[translate,opacity]": 1
+  },
+  "src/features/shell/assistant-launcher.tsx": {
+    "<button>": 1
+  },
+  "src/features/shell/assistant-parked-approvals.tsx": {
+    "<button>": 3
+  },
+  "src/features/shell/assistant-reply-feedback.tsx": {
+    "<button>": 4
+  },
+  "src/features/shell/assistant-send-or-stop.tsx": {
+    "<button>": 2
+  },
+  "src/features/shell/assistant-sessions.tsx": {
+    "<button>": 2
+  },
+  "src/features/shell/assistant-stream-reply.tsx": {
+    "<button>": 2
+  },
+  "src/features/shell/assistant-suggestions.tsx": {
+    "<button>": 1
+  },
+  "src/features/shell/assistant-tool-calls.tsx": {
+    "before:content-['▸']": 1,
+    "group-open:before:content-['▾']": 1
+  },
+  "src/features/shell/mobile-nav.tsx": {
+    "<button>": 2
+  },
+  "src/features/shell/notifications-dialog.tsx": {
+    "<button>": 1
+  },
+  "src/features/shell/pause-workspace-dialog.tsx": {
+    "<button>": 2
+  },
+  "src/features/shell/sign-out-button.tsx": {
+    "<button>": 1
+  },
+  "src/features/shell/switchers.tsx": {
+    "<button>": 1
+  },
+  "src/features/shell/topbar.tsx": {
+    "<button>": 4
+  },
+  "src/features/skills/search.tsx": {
+    "<button>": 1
+  },
+  "src/features/skills/versions.tsx": {
+    "<button>": 3
+  },
+  "src/features/spend/budget-dialog.tsx": {
+    "<button>": 1
+  },
+  "src/features/spend/export-dialog.tsx": {
+    "<button>": 1
+  },
+  "src/features/spend/fix-dialog.tsx": {
+    "<button>": 4
+  },
+  "src/features/spend/month-table.tsx": {
+    "<button>": 2
+  },
+  "src/features/spend/operator-ranking-pseudonyms.tsx": {
+    "<button>": 1
+  },
+  "src/features/spend/price-dialog.tsx": {
+    "<button>": 2
+  },
+  "src/features/spend/remove-rate-dialog.tsx": {
+    "<button>": 3
+  },
+  "src/features/spend/stub-dialog.tsx": {
+    "<button>": 1
+  },
+  "src/features/spend/tool-chart.tsx": {
+    "<button>": 1
+  },
+  "src/features/steering-repo/health-banner-view.tsx": {
+    "<button>": 1
+  },
+  "src/features/steering-repo/provisioning.tsx": {
+    "<button>": 7
+  },
+  "src/features/steering-repo/setup-dialog.tsx": {
+    "<button>": 1
+  },
+  "src/features/steering/governance.tsx": {
+    "<button>": 3
+  },
+  "src/features/steering/import/files-step.tsx": {
+    "<button>": 2
+  },
+  "src/features/steering/import/import-markdown.tsx": {
+    "<button>": 4
+  },
+  "src/features/steering/library-all.tsx": {
+    "[--cell-max:32rem]": 1
+  },
+  "src/features/steering/memories/dismiss-dialog.tsx": {
+    "<button>": 1
+  },
+  "src/features/steering/memories/drawer.tsx": {
+    "<button>": 3
+  },
+  "src/features/steering/memories/panel.tsx": {
+    "<button>": 3
+  },
+  "src/features/steering/memories/promote-dialog.tsx": {
+    "<button>": 1
+  },
+  "src/features/steering/memory-shelf.tsx": {
+    "<button>": 4,
+    "[--cell-max:32rem]": 1
+  },
+  "src/features/steering/proposal-list.tsx": {
+    "after:content-['']": 1
+  },
+  "src/features/steering/steering-pr-controls.tsx": {
+    "<button>": 4
+  },
+  "src/features/steering/stub-action.tsx": {
+    "<button>": 1
+  },
+  "src/features/steering/write-controls.tsx": {
+    "<button>": 4
+  },
+  "src/features/tools/add-connection.tsx": {
+    "<button>": 1
+  },
+  "src/features/tools/approval-rule-controls.tsx": {
+    "<button>": 4
+  },
+  "src/features/tools/belt-view.tsx": {
+    "<button>": 3
+  },
+  "src/features/tools/clone-toolbelt.tsx": {
+    "<button>": 2
+  },
+  "src/features/tools/connection-drawer.tsx": {
+    "<button>": 1
+  },
+  "src/features/tools/grant-mandate.tsx": {
+    "<button>": 1
+  },
+  "src/features/tools/import-provider.tsx": {
+    "<button>": 13
+  },
+  "src/features/tools/provider-dialog.tsx": {
+    "<button>": 4
+  },
+  "src/features/tools/provider-row.tsx": {
+    "<button>": 2
+  },
+  "src/features/tools/provider-status.tsx": {
+    "<button>": 2
+  },
+  "src/features/tools/registry-browser.tsx": {
+    "<button>": 3
+  },
+  "src/features/tools/stub-action.tsx": {
+    "<button>": 2
+  },
+  "src/features/tools/switch-controls.tsx": {
+    "<button>": 2
+  },
+  "src/features/tools/toggle-link.tsx": {
+    "<button>": 1
+  },
+  "src/features/tools/tool-dialog.tsx": {
+    "<button>": 4
+  },
+  "src/features/work/item/brief-dialog.tsx": {
+    "<button>": 2
+  },
+  "src/features/work/item/brief-panel.tsx": {
+    "[overflow-wrap:anywhere]": 4
+  },
+  "src/features/work/item/copy-value.tsx": {
+    "<button>": 1
+  },
+  "src/features/work/item/cost-history.tsx": {
+    "[overflow-wrap:anywhere]": 1
+  },
+  "src/features/work/item/delivery-panel.tsx": {
+    "[overflow-wrap:anywhere]": 1
+  },
+  "src/features/work/item/head.tsx": {
+    "[overflow-wrap:anywhere]": 1
+  },
+  "src/features/work/item/inline-actions.tsx": {
+    "<button>": 2
+  },
+  "src/features/work/item/item-actions.tsx": {
+    "<button>": 1
+  },
+  "src/features/work/item/source-triage.tsx": {
+    "[overflow-wrap:anywhere]": 4
+  },
+  "src/features/work/item/triage-dialogs.tsx": {
+    "<button>": 1
+  },
+  "src/features/work/new-item.tsx": {
+    "<button>": 1
+  },
+  "src/features/work/setup/add-collector.tsx": {
+    "<button>": 1,
+    "[overflow-wrap:anywhere]": 1
+  },
+  "src/features/work/setup/collectors.tsx": {
+    "[overflow-wrap:anywhere]": 2
+  },
+  "src/features/work/setup/priorities-editor.tsx": {
+    "<button>": 4
+  },
+  "src/features/work/setup/priorities.tsx": {
+    "[overflow-wrap:anywhere]": 2
+  },
+  "src/features/work/setup/reconnect.tsx": {
+    "<button>": 1
+  },
+  "src/features/work/work-page.tsx": {
+    "<button>": 1
+  },
+  "src/features/work/work-table.tsx": {
+    "[overflow-wrap:anywhere]": 1,
+    "after:content-['']": 1
+  },
+  "src/ui/attachment.tsx": {
+    "<button>": 1
+  },
+  "src/ui/auth-shell.tsx": {
+    "[background:repeating-linear-gradient(0deg,transparent_0_47px,var(--border)_47px_48px),repeating-linear-gradient(90deg,transparent_0_47px,var(--border)_47px_48px)]": 1,
+    "[mask-image:linear-gradient(180deg,#000_0%,transparent_78%)]": 1
+  },
+  "src/ui/avatar-editor.tsx": {
+    "<button>": 6
+  },
+  "src/ui/avatar.tsx": {
+    "style:height": 1,
+    "style:letterSpacing": 1,
+    "style:width": 1
+  },
+  "src/ui/choice-group.tsx": {
+    "<button>": 1
+  },
+  "src/ui/clone-button.tsx": {
+    "<button>": 1
+  },
+  "src/ui/code-panel.tsx": {
+    "[font-feature-settings:var(--ox-font-mono-features)]": 1
+  },
+  "src/ui/control-styles.ts": {
+    "[overflow-wrap:anywhere]": 1
+  },
+  "src/ui/create-button.tsx": {
+    "<button>": 1
+  },
+  "src/ui/diff-view.tsx": {
+    "[overflow-wrap:anywhere]": 1
+  },
+  "src/ui/faceted-list-table.tsx": {
+    "<button>": 1,
+    "after:content-['↑']": 1,
+    "after:content-['↓']": 1,
+    "after:content-['↕']": 1,
+    "flex-[1_1_14rem]": 1
+  },
+  "src/ui/field.tsx": {
+    "<button>": 1
+  },
+  "src/ui/form-feedback.tsx": {
+    "<button>": 1
+  },
+  "src/ui/hover-card.tsx": {
+    "duration-100": 1
+  },
+  "src/ui/list-table.tsx": {
+    "<button>": 1,
+    "after:content-['↕']": 1,
+    "data-[sort=ascending]:after:content-['↑']": 1,
+    "data-[sort=descending]:after:content-['↓']": 1,
+    "flex-[1_1_200px]": 1
+  },
+  "src/ui/message-scroller.tsx": {
+    "[contain-intrinsic-size:auto_10rem]": 1,
+    "[content-visibility:auto]": 1,
+    "data-[active=false]:duration-400": 1,
+    "data-[active=false]:ease-[cubic-bezier(0.7,0,0.84,0)]": 1,
+    "data-[active=true]:ease-[cubic-bezier(0.23,1,0.32,1)]": 1,
+    "duration-200": 1,
+    "transition-[translate,scale,opacity]": 1
+  },
+  "src/ui/page-states.tsx": {
+    "<button>": 3
+  },
+  "src/ui/phone.css": {
+    "css:gap": 2,
+    "css:max-height": 1,
+    "css:max-width": 1,
+    "css:min-height": 2,
+    "css:min-width": 1,
+    "css:padding": 2,
+    "css:padding-bottom": 1,
+    "css:padding-top": 1
+  },
+  "src/ui/record-picker.tsx": {
+    "<button>": 1
+  },
+  "src/ui/select.tsx": {
+    "duration-100": 1
+  },
+  "src/ui/source-filename.tsx": {
+    "<button>": 1
+  },
+  "src/ui/toast.tsx": {
+    "[&[data-ending-style]:not([data-limited]):not([data-swipe-direction])]:[transform:translateY(150%)]": 1,
+    "[--gap:0.75rem]": 1,
+    "[--height:var(--toast-frontmost-height,var(--toast-height))]": 1,
+    "[--offset-y:calc(var(--toast-offset-y)*-1+calc(var(--toast-index)*var(--gap)*-1)+var(--toast-swipe-movement-y))]": 1,
+    "[--peek:0.75rem]": 1,
+    "[--scale:calc(max(0,1-(var(--toast-index)*0.1)))]": 1,
+    "[--shrink:calc(1-var(--scale))]": 1,
+    "[transform:translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--peek))-(var(--shrink)*var(--height))))_scale(var(--scale))]": 1,
+    "[transition:transform_500ms_cubic-bezier(0.22,1,0.36,1),opacity_500ms,height_150ms]": 1,
+    "after:content-['']": 2,
+    "after:h-[calc(var(--gap)+1px)]": 1,
+    "data-ending-style:data-[swipe-direction=down]:[transform:translateY(calc(var(--toast-swipe-movement-y)+150%))]": 1,
+    "data-ending-style:data-[swipe-direction=left]:[transform:translateX(calc(var(--toast-swipe-movement-x)-150%))_translateY(var(--offset-y))]": 1,
+    "data-ending-style:data-[swipe-direction=right]:[transform:translateX(calc(var(--toast-swipe-movement-x)+150%))_translateY(var(--offset-y))]": 1,
+    "data-ending-style:data-[swipe-direction=up]:[transform:translateY(calc(var(--toast-swipe-movement-y)-150%))]": 1,
+    "data-expanded:[transform:translateX(var(--toast-swipe-movement-x))_translateY(var(--offset-y))]": 1,
+    "data-expanded:data-ending-style:data-[swipe-direction=down]:[transform:translateY(calc(var(--toast-swipe-movement-y)+150%))]": 1,
+    "data-expanded:data-ending-style:data-[swipe-direction=left]:[transform:translateX(calc(var(--toast-swipe-movement-x)-150%))_translateY(var(--offset-y))]": 1,
+    "data-expanded:data-ending-style:data-[swipe-direction=right]:[transform:translateX(calc(var(--toast-swipe-movement-x)+150%))_translateY(var(--offset-y))]": 1,
+    "data-expanded:data-ending-style:data-[swipe-direction=up]:[transform:translateY(calc(var(--toast-swipe-movement-y)-150%))]": 1,
+    "data-starting-style:[transform:translateY(150%)]": 1,
+    "duration-250": 1,
+    "ease-[cubic-bezier(0.22,1,0.36,1)]": 1,
+    "z-[calc(1000-var(--toast-index))]": 1
+  },
+  "src/ui/transcript-skins.css": {
+    "css:animation": 4,
+    "css:border-radius": 12,
+    "css:box-shadow": 1,
+    "css:gap": 11,
+    "css:height": 10,
+    "css:left": 4,
+    "css:margin": 3,
+    "css:margin-bottom": 2,
+    "css:margin-left": 1,
+    "css:margin-right": 2,
+    "css:margin-top": 5,
+    "css:max-height": 4,
+    "css:min-width": 3,
+    "css:padding": 14,
+    "css:padding-bottom": 2,
+    "css:padding-inline": 1,
+    "css:padding-left": 3,
+    "css:padding-top": 2,
+    "css:top": 6,
+    "css:width": 6
+  }
+}

@@ -1158,7 +1158,7 @@ export function AssistantFlyout({
       onKeyDown={(e) => {
         if (e.key === "Escape") setAssistantOpen(false);
       }}
-      className={`fixed inset-y-0 left-0 z-50 flex w-full flex-col border-r border-border bg-app-raised-bg pb-[env(safe-area-inset-bottom)] text-app-raised-fg shadow-pop duration-300 ease-[cubic-bezier(.32,.72,0,1)] motion-reduce:translate-x-0 motion-reduce:duration-100 md:left-(--sidebar-width) md:w-[min(var(--assistant-width),calc(100vw-var(--sidebar-width)-56px))] ${
+      className={`fixed inset-y-0 left-0 z-50 flex w-full flex-col border-r border-border bg-app-raised-bg pb-safe-bottom text-app-raised-fg shadow-pop duration-300 ease-[cubic-bezier(.32,.72,0,1)] motion-reduce:translate-x-0 motion-reduce:duration-100 md:left-(--sidebar-width) md:w-(--assistant-width) md:max-w-(--assistant-max-w) ${
         assistantOpen
           ? // Visible at once, so the close button can take focus on open…
             "visible translate-x-0 opacity-100 transition-[translate,opacity]"
@@ -1179,7 +1179,7 @@ export function AssistantFlyout({
         >
           <StellaWordmark
             title={t("label")}
-            className="h-[18px] w-auto"
+            className="h-4.5 w-auto"
             data-testid="assistant-wordmark"
           />
         </h2>
@@ -1323,7 +1323,7 @@ export function AssistantFlyout({
                       scrollAnchor={entry.kind === "asked"}
                     >
                       {entry.kind === "asked" ? (
-                        <div className="ml-auto flex w-fit max-w-[85%] flex-col items-end gap-1">
+                        <div className="ml-auto flex w-fit max-w-5/6 flex-col items-end gap-1">
                           <p className="w-fit max-w-full rounded-lg bg-secondary px-3 py-2 text-sm leading-5 text-secondary-foreground">
                             {entry.text}
                           </p>
@@ -1384,7 +1384,7 @@ export function AssistantFlyout({
                           ) : null}
                           <p
                             data-testid="assistant-recorded-as"
-                            className="mt-1 font-mono text-sm text-muted-foreground"
+                            className="mt-1 font-mono text-xs text-muted-foreground"
                           >
                             {t("recordedAs")}{" "}
                             {org !== null && ws !== null ? (
@@ -1467,7 +1467,7 @@ export function AssistantFlyout({
                           {entry.detail === null ? null : (
                             <p
                               data-testid="assistant-refusal-code"
-                              className="mt-1 ml-6 font-mono text-sm text-muted-foreground"
+                              className="mt-1 ml-6 font-mono text-xs text-muted-foreground"
                             >
                               {entry.detail}
                             </p>
@@ -1609,7 +1609,7 @@ export function AssistantFlyout({
                 <p
                   id={`${ASSISTANT_PANEL_ID}-send-hint`}
                   data-testid="assistant-send-hint"
-                  className="mt-1.5 px-1 text-sm text-muted-foreground"
+                  className="mt-1.5 px-1 text-xs text-muted-foreground"
                 >
                   {enterToSubmit
                     ? t("composer.sendHintEnter")

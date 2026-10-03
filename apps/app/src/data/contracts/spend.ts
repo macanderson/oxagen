@@ -30,6 +30,7 @@ export const SpendGroupKind = z.enum([
   "task",
   "cost_center",
   "mcp_server",
+  "work_item",
 ]);
 export type SpendGroupKind = z.infer<typeof SpendGroupKind>;
 
@@ -44,6 +45,12 @@ export const UNASSIGNED_COST_CENTER_KEY = "~none";
  * results carried. A server name has no `~`, so no server collides with it.
  */
 export const OTHER_SPEND_KEY = "~other";
+
+/**
+ * The key of the `work_item` row that holds the runs that served no work
+ * item (#2962). A work item's key is its public id, so none collides with it.
+ */
+export const NO_WORK_ITEM_KEY = "~no_work_item";
 
 /**
  * The key of the row that holds the in-app assistant's spend, in every
@@ -103,6 +110,12 @@ const SpendTopRun = z.object({
   harness: z.string().nullable().optional(),
   /** The operator's principal public id; null for a run with no operator. */
   operatorKey: z.string().nullable(),
+  /**
+   * Who `operatorKey` names, so the run line prints a person (#2962). Null
+   * for a run with no operator and for one nobody can name; absent from a
+   * view built before get_spend answered it.
+   */
+  operator: OperatorFacts.nullable().optional(),
   cost: Cost.nullable(),
   calls: Count,
 });
@@ -112,8 +125,9 @@ const SpendRow = SpendFigure.extend({
   tokens: SpendTokens,
   /**
    * A principal public id, an agent key, a model id, a tool name, a task
-   * reference, a cost-center label, an MCP server name,
-   * {@link OTHER_SPEND_KEY}, or {@link ASSISTANT_SPEND_KEY}.
+   * reference, a cost-center label, an MCP server name, a work item's public
+   * id, {@link OTHER_SPEND_KEY}, {@link NO_WORK_ITEM_KEY}, or
+   * {@link ASSISTANT_SPEND_KEY}.
    */
   key: z.string().min(1),
   /** The model's provider on a model row; null elsewhere. */
@@ -121,11 +135,61 @@ const SpendRow = SpendFigure.extend({
   /** The person an operator row names; null on every other row. */
   operator: OperatorFacts.nullable(),
   /**
+   * The work item a `work_item` row names (#2962); null on the
+   * {@link NO_WORK_ITEM_KEY} row, absent on the assistant row and on every
+   * other grouping.
+   */
+  workItem: z
+    .object({
+      id: PublicId,
+      number: z.string().min(1),
+      subject: z.string(),
+    })
+    .nullable()
+    .optional(),
+  /**
    * The row's costliest runs, at most eight. Absent from a view built
    * before get_spend listed them. Always empty on the
    * {@link ASSISTANT_SPEND_KEY} row.
    */
   topRuns: z.array(SpendTopRun).optional(),
+  /**
+   * What the row's runs spent on each prompt source the recorder measures,
+   * summed (#5295). A source no run measured is null, never a zero. Present
+   * on a row of whole runs (operator, agent, task, cost center) and absent on
+   * a model, tool, or MCP server row.
+   */
+  tokenSources: z
+    .object({
+      toolDefinitionTokens: Count.nullable(),
+      contextFrameTokens: Count.nullable(),
+      steeringTokens: Count.nullable(),
+      toolResultTokens: Count.nullable(),
+    })
+    .optional(),
+  /**
+   * The row's runs' request windows summed block by block (#5341), the one
+   * record of their conversation and system tokens. Each block is its byte
+   * share of the prompt total each request reported. Null when no run of the
+   * row stored a window composition, and absent where `tokenSources` is.
+   */
+  windows: z
+    .object({
+      /** The runs whose rollup stored windows; every sum covers these alone. */
+      runs: Count,
+      requests: Count,
+      requestsWithoutTokens: Count,
+      promptTokens: Count,
+      blocks: z.object({
+        system: Count.nullable(),
+        steering: Count.nullable(),
+        tools: Count.nullable(),
+        context: Count.nullable(),
+        conversation: Count.nullable(),
+      }),
+    })
+    .nullable()
+    .optional(),
 });
 
 /**
@@ -161,6 +225,27 @@ export const SpendReport = z.object({
    * meter; null when there is none.
    */
   reported: Money.nullable().optional(),
+  /**
+   * The part of the total the gateway metered, a floor: a model with mixed
+   * or estimated frames counts as not observed. Null when no part is known
+   * to be the gateway's. Absent from a view built before get_spend answered
+   * it.
+   */
+  observed: Money.nullable().optional(),
+  /**
+   * What the period's model calls carried besides the conversation, in
+   * tokens: the standing context by source, and the tool results counted
+   * once each. A part no run recorded is null. Absent from a view built
+   * before get_spend answered it.
+   */
+  composition: z
+    .object({
+      toolDefinitionTokens: Count.nullable(),
+      contextFrameTokens: Count.nullable(),
+      steeringTokens: Count.nullable(),
+      toolResultTokens: Count.nullable(),
+    })
+    .optional(),
   /** Runs still open whose cost is in these figures as a running estimate. */
   estimatedRuns: z.number().int().nonnegative().optional(),
   /** Runs in `total.runs` whose cost `total.cost` leaves out. */
@@ -181,7 +266,32 @@ export const FleetSpend = z.object({
 });
 export type FleetSpend = z.infer<typeof FleetSpend>;
 
-/** `get_spend_drill`: one operator, agent or tool over its trailing window. */
+/**
+ * One row of a drill's cross-cut: the part of the key's figure one agent, one
+ * operator or one model holds. On a tool drill the cost, the calls and the
+ * result tokens are the tool's own in those runs.
+ */
+const DrillCutRow = z.object({
+  /** The agent key, the operator's principal public id, or the model id. */
+  key: z.string().min(1),
+  /** The model's provider on a model row; null elsewhere. */
+  provider: z.string().nullable(),
+  /** The person an operator row names; null elsewhere. */
+  operator: OperatorFacts.nullable(),
+  runs: Count,
+  calls: Count,
+  cost: Cost.nullable(),
+  tokens: SpendTokens,
+  /** The tool's result tokens on a tool drill; null elsewhere. */
+  resultTokens: Count.nullable(),
+});
+export type DrillCutRow = z.infer<typeof DrillCutRow>;
+
+/**
+ * `get_spend_drill`: one operator, agent or tool over its trailing window. A
+ * tool drill's cost is what its results cost as input to later calls, an
+ * estimate its runs already paid, so it carries the `estimated` basis.
+ */
 export const SpendDrill = z.object({
   kind: SpendDrillKind,
   key: z.string().min(1),
@@ -191,25 +301,71 @@ export const SpendDrill = z.object({
   series: z.array(SpendDay),
   perCall: Money.nullable(),
   perRun: Money.nullable(),
-  /** The key's share of the workspace's spend over the window. */
+  /** The key's share of the workspace's spend over the window; null on a tool. */
   share: Ratio.nullable(),
+  /** The key's runs' tokens by class; on a tool drill, the runs that called it. */
+  tokens: SpendTokens,
+  /** cache_read ÷ (input_uncached + cache_read) over `tokens`; null with no input. */
+  cacheHitRate: Ratio.nullable(),
+  /** The model calls the key's runs made; `total.calls` counts tool calls too. */
+  modelCalls: Count,
+  /** The part of the cost the gateway metered, a floor; null on a tool drill. */
+  observed: Money.nullable(),
+  /** The standing context the key's calls carried; null for a source nothing measured. */
+  standing: z.object({
+    toolDefinitionTokens: Count.nullable(),
+    contextFrameTokens: Count.nullable(),
+    steeringTokens: Count.nullable(),
+  }),
+  /** The tool-result tokens: the tool's own on a tool drill, every tool's otherwise. */
+  resultTokens: Count.nullable(),
   tools: z.array(
-    z.object({ name: z.string().min(1), calls: Count, runs: Count }),
+    z.object({
+      name: z.string().min(1),
+      calls: Count,
+      runs: Count,
+      resultTokens: Count.nullable(),
+      /** Those result tokens priced as input: an estimate its runs already paid. */
+      cost: Cost.nullable(),
+    }),
   ),
+  byAgent: z.array(DrillCutRow),
+  byOperator: z.array(DrillCutRow),
+  byModel: z.array(DrillCutRow),
   /** The key's runs whose cost the total leaves out; absent on a tool drill. */
   unmeteredRuns: UnmeteredRuns.optional(),
 });
 export type SpendDrill = z.infer<typeof SpendDrill>;
 
-/** `list_waste`: spend the frames show bought nothing, by cause. */
+/**
+ * The causes `list_waste` names: a cache written and never read, then the
+ * calls findings claim, in counting order (ADR-208).
+ */
+const WASTE_CAUSES = [
+  "cache_write_never_read",
+  "spin_loops",
+  "retry_loops",
+  "repeated_calls",
+  "recurring_runs",
+  "spend_with_no_outcome",
+] as const;
+const WasteCause = z.enum(WASTE_CAUSES);
+
+/**
+ * `list_waste`: spend the frames show bought nothing, by cause, largest
+ * first. `wasted` is the unproductive spend headline for the period plus the
+ * cache-write cause. `findingsOutsidePeriod` counts the open findings whose
+ * calls all ran outside the period.
+ */
 export const SpendWaste = z.object({
   wasted: Cost.nullable(),
   share: Ratio.nullable(),
   runsWithWaste: Count,
-  largestCause: z.enum(["cache_write_never_read"]).nullable(),
+  largestCause: WasteCause.nullable(),
+  findingsOutsidePeriod: Count,
   causes: z.array(
     z.object({
-      cause: z.enum(["cache_write_never_read"]),
+      cause: WasteCause,
       wasted: Cost,
       runs: Count,
       /**
@@ -341,6 +497,8 @@ const FindingFigure = z.object({ saving: Money, findings: Count });
  * totals. `spend` and `share` are null when the period's spend has no single
  * figure. `parts` holds detectors 2, 3, and 5 in that order and `estimate`
  * detector 4: each sits beside the headline and stays out of it.
+ * `findingsOutsidePeriod` counts the open findings whose calls all ran
+ * outside the period: the list shows them, and the headline does not.
  */
 export const UnproductiveSpend = z.object({
   period: DayRange,
@@ -353,6 +511,7 @@ export const UnproductiveSpend = z.object({
     }),
   ),
   estimate: FindingFigure,
+  findingsOutsidePeriod: Count,
 });
 export type UnproductiveSpend = z.infer<typeof UnproductiveSpend>;
 
@@ -528,9 +687,14 @@ export const SpendFinding = z.object({
 });
 export type SpendFinding = z.infer<typeof SpendFinding>;
 
-/** `list_findings`: the open findings largest saving first, with the totals the page leads with. */
+/**
+ * `list_findings`: one page of the open findings, largest saving first, with
+ * the totals the page leads with. A page holds at most 50 findings. The
+ * counts and totals cover every open finding the read matches, listed or
+ * not (#5262), and `nextCursor` reads the next page (#5303).
+ */
 export const SpendFindings = z.object({
-  /** The span the listed findings cover; null when none is listed. */
+  /** The span every open finding covers; null when none is open. */
   window: FindingWindow.nullable(),
   saving: Cost.nullable(),
   /** The workspace's priced spend over `window`. */
@@ -539,15 +703,33 @@ export const SpendFindings = z.object({
   share: z.number().nonnegative().nullable(),
   annualised: Cost.nullable(),
   counts: z.object({
+    /** Every open finding, listed or not. */
     findings: Count,
     high: Count,
     medium: Count,
-    /** Distinct operators whose runs the listed findings cite. */
+    /** Distinct operators whose runs the open findings cite. */
     operators: Count,
   }),
   findings: z.array(SpendFinding),
+  /** True when the workspace holds more open findings than `findings` lists. */
+  truncated: z.boolean(),
+  /** The cursor that reads the next page; null on the last page. */
+  nextCursor: z.string().min(1).nullable(),
+  /** The findings before this page: a finding's rank is this plus its place on the page. */
+  offset: Count,
 });
 export type SpendFindings = z.infer<typeof SpendFindings>;
+
+/**
+ * Which page of the open findings a read asks for, and which findings (#5303).
+ * A level and a subject narrow the read to the findings about one agent,
+ * operator or tool, and a cursor reads the page after the one that named it.
+ */
+export type SpendFindingsQuery = {
+  level?: SpendFinding["level"];
+  subject?: string;
+  cursor?: string;
+};
 
 /** `get_finding_evidence`: the arithmetic the job wrote with one finding. */
 export const SpendFindingEvidence = z.object({

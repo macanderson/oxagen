@@ -73,6 +73,7 @@ export {
   lastLedgerKind,
   lockMandate,
   parseMandateRow,
+  readAuthorities,
   readAuthority,
   release,
   releaseParked,

@@ -18,6 +18,13 @@
 // Both are scoped through `resolveRun`, which is where a run outside the
 // caller's workspace becomes `not_found`. Each block's tokens are its byte
 // share of the prompt total the vendor reported, so the blocks sum to it.
+// The composition sums each block over every window the run recorded, which
+// is how the Cost tab reads a run's prompt split (#5295). A ledger run's is
+// summed over the windows its walk reached. A wrapped run's is summed over
+// every chain of the run, its subagents' included, with the read and the sum
+// the cost rollup stores on the run's row (#5341), so the Cost tab and the
+// Agent page agree. The `windows` list stays the root chain's, which is the
+// chain the Context tab draws.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   RUN_CONTEXT_ASSEMBLY_MAX,
@@ -26,16 +33,15 @@ import {
   type RunContextGetOutput,
 } from "@oxagen/oxagen/contracts/run.context.get";
 import {
-  type AttemptEventReadRecord,
-  assemblyOf,
-  isContextWindowEvent,
-  isLaterLlmCallSighting,
-  ledgerContextWindows,
-  type RecordedAssembly,
-  type RecordedWindow,
-  tachoContextWindow,
+  type ContextWindowReading,
+  streamedWindowComposition,
   type TachoModelCallRow,
+  walkLedgerContextWindows,
+  type WindowComposition,
+  windowComposition,
+  wrappedContextWindows,
 } from "@oxagen/run-ledger";
+import { readTachoWindowFrames } from "@oxagen/telemetry";
 import { readTachoModelCalls } from "./lib/run-context";
 import {
   defaultRunReadDeps,
@@ -55,82 +61,57 @@ export type RunContextGetDeps = RunReadDeps & {
     sessionUuid: string,
     limit: number,
   ) => Promise<TachoModelCallRow[]>;
+  /** The windowed `llm_call` rows on the listed chains of a wrapped run. */
+  windowFrames: typeof readTachoWindowFrames;
 };
 
-type Reading = {
-  windows: RecordedWindow[];
-  assemblies: RecordedAssembly[];
-  unmeasured: number;
-  /** False when the walk stopped at its cap. */
-  walked: boolean;
-};
-
-/** A ledger run's windows, from its model-call and manifest events. */
-async function ledgerReading(
+/**
+ * A wrapped run's composition over every chain of the run: the root and each
+ * subagent session `tachoChildSessions` lists, the chains the cost rollup
+ * reads. A reader built without the session list sums the root alone.
+ */
+async function wrappedComposition(
   deps: RunContextGetDeps,
-  runId: string,
-): Promise<Reading> {
-  const kept: AttemptEventReadRecord[] = [];
-  let after = "0";
-  let walked = 0;
-  for (;;) {
-    const want = Math.min(LEDGER_PAGE, LEDGER_EVENT_CAP - walked);
-    if (want <= 0) return { ...ledgerContextWindows(kept), walked: false };
-    const page = await deps.store.readAttemptEventsSince(runId, after, want);
-    walked += page.length;
-    for (const event of page)
-      if (isContextWindowEvent(event.eventType)) kept.push(event);
-    const last = page.at(-1);
-    if (!last || page.length < want)
-      return { ...ledgerContextWindows(kept), walked: true };
-    after = last.runSeq;
-  }
+  scope: { orgId: string; workspaceId: string },
+  rootSessionUuid: string,
+): Promise<WindowComposition | null> {
+  const children =
+    deps.tachoChildSessions === undefined
+      ? []
+      : await deps.tachoChildSessions(rootSessionUuid);
+  const run = {
+    ...scope,
+    rootSessionUuid,
+    sessionUuids: [rootSessionUuid, ...children],
+  };
+  return streamedWindowComposition((consume) =>
+    deps.windowFrames(run, consume),
+  );
 }
 
-function manifestBody(body: string): unknown {
-  try {
-    return JSON.parse(body) as unknown;
-  } catch {
-    return null;
-  }
+/**
+ * A ledger run's windows, from its model-call and manifest events. The walk
+ * is the one the cost rollup reads a run's composition through (#5341).
+ */
+function ledgerReading(
+  deps: RunContextGetDeps,
+  runId: string,
+): Promise<ContextWindowReading> {
+  return walkLedgerContextWindows(
+    (after, limit) => deps.store.readAttemptEventsSince(runId, after, limit),
+    { cap: LEDGER_EVENT_CAP, page: LEDGER_PAGE },
+  );
 }
 
 /** A wrapped session's windows, from its `llm_call` and manifest rows. */
 async function wrappedReading(
   deps: RunContextGetDeps,
   sessionUuid: string,
-): Promise<Reading> {
+): Promise<ContextWindowReading> {
   // One over the cap, so a full read is told apart from a cut one.
   const rows = await deps.modelCalls(sessionUuid, TACHO_ROW_CAP + 1);
-  const read = rows.slice(0, TACHO_ROW_CAP);
-  const windows: RecordedWindow[] = [];
-  const assemblies: RecordedAssembly[] = [];
-  const unmeasuredCalls: TachoModelCallRow[] = [];
-  for (const row of read) {
-    if (row.kind === "steering.manifest") {
-      const assembly = assemblyOf(String(row.seq), manifestBody(row.body));
-      if (assembly !== null) assemblies.push(assembly);
-      continue;
-    }
-    const recorded = tachoContextWindow(row);
-    if (recorded !== null) windows.push(recorded);
-    else if (!isLaterLlmCallSighting(row)) unmeasuredCalls.push(row);
-  }
-  // A call the transcript reported first and the proxy measured second is
-  // one call with a window, not an unmeasured one beside it. The two are
-  // joined on the vendor's request id, so a first sighting that recorded
-  // none stays counted as unmeasured: the read cannot show it is the same
-  // call, and it does not guess.
-  const measured = new Set(
-    windows.flatMap((w) => (w.modelCallId === null ? [] : [w.modelCallId])),
-  );
-  const unmeasured = unmeasuredCalls.filter(
-    (row) => row.requestId === "" || !measured.has(row.requestId),
-  ).length;
   return {
-    windows,
-    assemblies,
-    unmeasured,
+    ...wrappedContextWindows(rows.slice(0, TACHO_ROW_CAP)),
     walked: rows.length <= TACHO_ROW_CAP,
   };
 }
@@ -144,6 +125,18 @@ export function createRunContextGetHandler(
       run.source === "tacho"
         ? await wrappedReading(deps, run.sessionUuid)
         : await ledgerReading(deps, run.runId);
+    // A ledger run's composition is summed over every window the walk
+    // reached, before the list is cut to the contract's length, so a long
+    // run's composition is not a prefix's. A wrapped run's is summed over
+    // every chain of the run.
+    const composition =
+      run.source === "tacho"
+        ? await wrappedComposition(
+            deps,
+            { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+            run.sessionUuid,
+          )
+        : windowComposition(reading.windows);
     return {
       runId: input.runId,
       source: run.source === "tacho" ? "wrapped" : "ledger",
@@ -154,6 +147,8 @@ export function createRunContextGetHandler(
         reading.walked &&
         reading.windows.length <= RUN_CONTEXT_WINDOW_MAX &&
         reading.assemblies.length <= RUN_CONTEXT_ASSEMBLY_MAX,
+      composition:
+        composition === null ? null : { ...composition, basis: "apportioned" },
     };
   };
 }
@@ -161,4 +156,5 @@ export function createRunContextGetHandler(
 export const runContextGetHandler = createRunContextGetHandler({
   ...defaultRunReadDeps(),
   modelCalls: readTachoModelCalls,
+  windowFrames: readTachoWindowFrames,
 });

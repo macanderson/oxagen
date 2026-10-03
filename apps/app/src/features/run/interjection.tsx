@@ -33,6 +33,7 @@ import {
   mono,
   panel,
 } from "@/ui/control-styles";
+import { HarnessIcon } from "@/ui/harness-icon";
 import { formatDuration } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
@@ -125,7 +126,7 @@ function Pane({
         <h2 id={id} className={eyebrow}>
           {title}
         </h2>
-        <span className={`${mono} text-sm text-muted-foreground`}>
+        <span className={`${mono} text-xs text-muted-foreground`}>
           {source}
         </span>
       </div>
@@ -151,14 +152,14 @@ function FrameRow({
         pending ? "interjection-frame-pending" : "interjection-frame"
       }
       data-kind={type}
-      className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${pending ? "border-dashed border-border text-muted-foreground" : "border-border"}`}
+      className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2 text-base ${pending ? "border-dashed border-border text-muted-foreground" : "border-border"}`}
     >
       <span className="min-w-0 [overflow-wrap:anywhere]">
         <span className={`${mono} font-semibold`}>{type}</span>{" "}
         <span className="text-muted-foreground">{summary}</span>
       </span>
       {at === null ? null : (
-        <span className={`${mono} shrink-0 text-sm text-muted-foreground`}>
+        <span className={`${mono} shrink-0 text-xs text-muted-foreground`}>
           {clock(at, true)}
         </span>
       )}
@@ -177,9 +178,10 @@ function Header({
 }) {
   const t = useTranslations("run.interjection");
   const run = detail.run;
+  const harness = run.harness?.name ?? null;
   const facts = [
     run.agentKey,
-    run.harness?.name ?? null,
+    harness,
     run.operatorName,
     t("tier", { tier: run.enforcementTier }),
     row?.repository ?? null,
@@ -190,7 +192,7 @@ function Header({
       status = (
         <>
           <Badge tone="approval">{t("status.waiting")}</Badge>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             {t("status.waitingCaption")}
           </span>
         </>
@@ -216,7 +218,7 @@ function Header({
             {run.id}
           </span>
         </p>
-        <h1 className="text-2xl font-bold leading-tight text-foreground [overflow-wrap:anywhere]">
+        <h1 className="text-xl font-bold leading-tight text-foreground [overflow-wrap:anywhere]">
           {run.name ?? run.taskRef ?? run.id}
         </h1>
         <ul
@@ -225,6 +227,9 @@ function Header({
         >
           {facts.map((fact) => (
             <li key={fact} className="[overflow-wrap:anywhere]">
+              {fact === harness ? (
+                <HarnessIcon harness={harness} size={16} className="mr-1.5" />
+              ) : null}
               {fact}
             </li>
           ))}
@@ -288,7 +293,7 @@ function Note({
   return (
     <p
       data-testid="interjection-note"
-      className="rounded-md border-l-2 border-gold bg-gold/10 px-3.5 py-2.5 text-sm text-foreground"
+      className="rounded-md border-l-2 border-gold bg-gold/10 px-3.5 py-2.5 text-base text-foreground"
     >
       {text}
     </p>
@@ -323,14 +328,14 @@ function AgentView({
         data-testid="interjection-question"
         className="flex flex-col gap-2 rounded-lg border-l-2 border-gold bg-app-panel-bg p-3"
       >
-        <p className="flex items-center justify-between gap-2 text-sm font-semibold">
+        <p className="flex items-center justify-between gap-2 text-base font-semibold">
           <span className="flex items-center gap-2">
             {t("question.from")}
             <Badge tone="quiet" dot={false} mono>
               {t("question.label")}
             </Badge>
           </span>
-          <span className={`${mono} text-sm text-muted-foreground`}>
+          <span className={`${mono} text-xs text-muted-foreground`}>
             {clock(row?.raisedAt ?? interject.observedAt)}
           </span>
         </p>
@@ -339,18 +344,18 @@ function AgentView({
         ) : row === null ? (
           <p
             data-testid="interjection-missing"
-            className="text-sm text-muted-foreground"
+            className="text-base text-muted-foreground"
           >
             {t("unavailable.missing")}
           </p>
         ) : (
-          <p className="whitespace-pre-wrap text-sm">{row.question}</p>
+          <p className="whitespace-pre-wrap text-base">{row.question}</p>
         )}
         {row !== null && open ? (
           row.body === null ? (
             <p
               data-testid="interjection-no-body"
-              className="text-sm text-muted-foreground"
+              className="text-base text-muted-foreground"
             >
               {t("unavailable.noBody")}
             </p>
@@ -371,7 +376,7 @@ function AgentView({
           data-testid="interjection-reply"
           className="flex flex-col gap-1.5 rounded-lg border border-l-2 border-border border-l-foreground/40 bg-app-panel-bg p-3"
         >
-          <p className="flex items-center justify-between gap-2 text-sm font-semibold">
+          <p className="flex items-center justify-between gap-2 text-base font-semibold">
             <span className="flex min-w-0 items-center gap-2">
               {row.answeredBy === null ? (
                 t("reply.timeout")
@@ -384,12 +389,12 @@ function AgentView({
                 {t("reply.label")}
               </Badge>
             </span>
-            <span className={`${mono} text-sm text-muted-foreground`}>
+            <span className={`${mono} text-xs text-muted-foreground`}>
               {clock(row.answeredAt)}
             </span>
           </p>
           {row.answer === null ? null : (
-            <p className="whitespace-pre-wrap text-sm">{row.answer}</p>
+            <p className="whitespace-pre-wrap text-base">{row.answer}</p>
           )}
         </div>
       ) : null}
@@ -434,7 +439,7 @@ function AnswerRecord({
         <span className="flex items-center gap-2">
           <h3
             id="interjection-answer-title"
-            className="text-sm font-semibold"
+            className="text-base font-semibold"
           >
             {t("answer.title")}
           </h3>
@@ -442,7 +447,7 @@ function AnswerRecord({
             {t("answer.closed")}
           </Badge>
         </span>
-        <span className={`${mono} text-sm text-muted-foreground`}>
+        <span className={`${mono} text-xs text-muted-foreground`}>
           {clock(answeredAt)}
         </span>
       </div>
@@ -473,7 +478,7 @@ function AnswerRecord({
           tab: "transcript",
         })}
         data-testid="interjection-transcript"
-        className={`${linkText} text-sm`}
+        className={`${linkText} text-base`}
       >
         {t("answer.transcript")}
       </SafeLink>
@@ -512,14 +517,14 @@ function OperatorQuestion({
               </Badge>
             ) : null}
           </span>
-          <span className={`${mono} text-sm text-muted-foreground`}>
+          <span className={`${mono} text-xs text-muted-foreground`}>
             {clock(interject.observedAt)}
           </span>
         </p>
         {row === null ? null : (
           <p
             data-testid="interjection-repository"
-            className="text-sm [overflow-wrap:anywhere]"
+            className="text-base [overflow-wrap:anywhere]"
           >
             {row.repository === null
               ? t("repositoryUnresolved")
@@ -535,17 +540,17 @@ function OperatorQuestion({
         >
           <h3
             id="interjection-timeout-title"
-            className="text-sm font-semibold"
+            className="text-base font-semibold"
           >
             {t("timeout.title")}
           </h3>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t("timeout.body", {
               minutes: Math.round(body.timeoutMs / 60_000),
             })}
           </p>
           {stage === "waiting" ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {t("timeout.closes", { at: clock(row.expiresAt) })}
             </p>
           ) : null}
@@ -607,7 +612,7 @@ function Frames({
         ) : null}
       </ol>
       {cut ? (
-        <p className="text-xs text-muted-foreground">{t("frames.cut")}</p>
+        <p className="text-sm text-muted-foreground">{t("frames.cut")}</p>
       ) : null}
     </Pane>
   );
@@ -647,7 +652,7 @@ export function RunInterjection({
     >
       <Header detail={detail} row={row} stage={stage} />
       <Note row={row} stage={stage} interject={interject} answer={answer} />
-      <div className="grid grid-cols-1 gap-4 min-[67.5rem]:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <AgentView
           question={question}
           row={row}

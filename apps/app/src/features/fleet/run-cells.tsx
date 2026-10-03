@@ -1,7 +1,7 @@
 "use client";
 // The Fleet runs table's cells that board.tsx draws from one row each: the
-// pull requests, the lines changed, the tokens and the status word, and the
-// Tokens shown tile. Kept out of board.tsx to keep that file
+// harness, the pull requests, the lines changed, the tokens and the status
+// word, and the Tokens shown tile. Kept out of board.tsx to keep that file
 // under 1,500 lines.
 import { GitPullRequestIcon } from "@phosphor-icons/react";
 import { useLocale, useTranslations } from "next-intl";
@@ -22,6 +22,8 @@ import {
   statValue,
 } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
+import { HarnessIcon } from "@/ui/harness-icon";
+import { useHarnessName } from "@/ui/harness-name";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { PullRequestLink } from "@/ui/navigation";
 import { StatusBadge } from "@/ui/status-badge";
@@ -32,6 +34,45 @@ import {
   pullRequestLabel,
   type RowState,
 } from "./view";
+
+/**
+ * A row's harness: its logo, its product name and the version it reported.
+ * A run the ledger recorded names no harness of its own, so the cell shows
+ * the harness its agent registered, the one the avatar badge shows, and says
+ * so on hover. With neither, it reads "not recorded".
+ */
+export function HarnessCell({
+  run,
+  registered,
+}: {
+  run: RunRow;
+  /** The harness the run's agent registered, when the roster holds it. */
+  registered: string | undefined;
+}) {
+  const t = useTranslations("fleet.runs");
+  const nameOf = useHarnessName();
+  const harness = run.harness?.name ?? registered;
+  if (harness === undefined)
+    return <span className="text-muted-foreground">{t("notRecorded")}</span>;
+  const version = run.harness?.version ?? null;
+  return (
+    <span
+      data-testid="row-harness"
+      data-harness={harness}
+      data-basis={run.harness ? "run" : "agent"}
+      {...(run.harness ? {} : { title: t("harnessRegistered") })}
+      className="flex min-w-0 items-center gap-2 whitespace-nowrap"
+    >
+      <HarnessIcon harness={harness} size={18} />
+      <span className="min-w-0 md:truncate">
+        {nameOf(harness)}
+        {version === null ? null : (
+          <span className="font-mono text-muted-foreground"> {version}</span>
+        )}
+      </span>
+    </span>
+  );
+}
 
 /** The tone a recorded pull-request state reads in; the Run page uses the same ladder. */
 const PR_STATE_TONE: Record<NonNullable<RunPullRequest["state"]>, BadgeTone> = {
@@ -58,7 +99,7 @@ function PullRequestItem({ pull }: { pull: RunPullRequest }) {
     <li className="flex items-center gap-x-1.5 gap-y-0.5 max-md:flex-wrap">
       {url === null ? (
         <span
-          className={`${mono} min-w-0 text-sm md:truncate`}
+          className={`${mono} min-w-0 text-xs md:truncate`}
           title={pull.url}
         >
           {label}
@@ -77,7 +118,7 @@ function PullRequestItem({ pull }: { pull: RunPullRequest }) {
           onClick={(event) => {
             event.stopPropagation();
           }}
-          className={`${linkText} flex min-w-0 items-center gap-1 whitespace-nowrap font-mono text-sm`}
+          className={`${linkText} flex min-w-0 items-center gap-1 whitespace-nowrap font-mono text-xs`}
         >
           <GitPullRequestIcon aria-hidden className="size-3 flex-none" />
           <span className="min-w-0 md:truncate">{label}</span>
@@ -88,7 +129,7 @@ function PullRequestItem({ pull }: { pull: RunPullRequest }) {
           data-testid="row-pr-state"
           data-state="unknown"
           title={t("stateUnknownHint")}
-          className="whitespace-nowrap text-sm text-muted-foreground"
+          className="whitespace-nowrap text-xs text-muted-foreground"
         >
           {t("stateUnknown")}
         </span>
@@ -158,7 +199,7 @@ export function PullRequestsCell({ run }: { run: RunRow }) {
         <PullRequestItem key={pull.url} pull={pull} />
       ))}
       {pulls.length > shown.length ? (
-        <li className="text-sm text-muted-foreground md:truncate">
+        <li className="text-xs text-muted-foreground md:truncate">
           {t("more", { count: pulls.length - shown.length })}
         </li>
       ) : null}
@@ -196,7 +237,7 @@ export function DiffCell({ diff }: { diff: RunDiff | null | undefined }) {
         })}
       </span>
       {diff.basis === "git_observed" ? (
-        <span className="block text-sm text-muted-foreground md:truncate">
+        <span className="block text-xs text-muted-foreground md:truncate">
           {t("uncommitted")}
         </span>
       ) : null}
@@ -233,12 +274,12 @@ export function TokensCell({ run }: { run: RunRow }) {
     >
       {formatCount(shown.total, locale)}
       {shown.cached === null ? null : (
-        <span className="block text-sm text-muted-foreground md:truncate">
+        <span className="block text-xs text-muted-foreground md:truncate">
           {t("tokens.cached", { ratio: formatRatio(shown.cached, locale) })}
         </span>
       )}
       {shown.reported ? (
-        <span className="block text-sm text-muted-foreground md:truncate">
+        <span className="block text-xs text-muted-foreground md:truncate">
           {t("tokens.reported")}
         </span>
       ) : null}
@@ -274,7 +315,7 @@ export function TokensTile({ listed }: { listed: readonly ListedRun[] }) {
           <span
             data-testid="tokens-not-recorded"
             data-recorded="false"
-            className="text-base font-medium text-muted-foreground"
+            className="text-lg font-medium text-muted-foreground"
           >
             {t("notRecorded")}
           </span>

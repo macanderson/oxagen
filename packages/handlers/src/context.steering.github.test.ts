@@ -1592,6 +1592,24 @@ describe("the GitHub seam's merge-queue calls", () => {
     });
   });
 
+  it("reads the merge base from the compare, and none for commits with no shared history", async () => {
+    const { gh, repo, calls } = await restSeam({
+      [`GET ${REPO_PATH}/compare/m2...h1?per_page=1`]: () => ({
+        status: "diverged",
+        merge_base_commit: { sha: "m1" },
+      }),
+      [`GET ${REPO_PATH}/compare/m3...h1?per_page=1`]: refuse(500, "Server Error"),
+    });
+    await expect(gh.mergeBase(repo, "h1", "h1")).resolves.toBe("h1");
+    expect(calls).toEqual([]);
+    await expect(gh.mergeBase(repo, "h1", "m2")).resolves.toBe("m1");
+    // GitHub answers 404 for two commits with no shared history.
+    await expect(gh.mergeBase(repo, "h2", "m2")).resolves.toBeNull();
+    await expect(gh.mergeBase(repo, "h1", "m3")).rejects.toMatchObject({
+      reason: "github_refused",
+    });
+  });
+
   it("reads a commit's parents in order, none for a root commit", async () => {
     const { gh, repo } = await restSeam({
       [`GET ${REPO_PATH}/git/commits/s1`]: () => ({

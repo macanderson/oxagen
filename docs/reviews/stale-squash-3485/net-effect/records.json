@@ -1,0 +1,3795 @@
+[
+ {
+  "commit": "5fb695c9aa9fb173a2604202746ebdb7102b3ec3",
+  "parents": [
+   "583d7f87f89874ae7dcb0a162b19387c38733aa1"
+  ],
+  "subject": "web: carry the LinkedIn Insight Tag on every published page (#3144)",
+  "pr": 3144,
+  "kind": "squash",
+  "head": "540595d9e3c3428a742cfae96eadb84ad0a1fc46",
+  "forkPoint": "583d7f87f89874ae7dcb0a162b19387c38733aa1",
+  "finalMergeBase": "583d7f87f89874ae7dcb0a162b19387c38733aa1",
+  "githubBaseSha": "583d7f87f89874ae7dcb0a162b19387c38733aa1",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "583d7f87f89874ae7dcb0a162b19387c38733aa1",
+    "mainCommitsSinceFork": 0
+   }
+  ]
+ },
+ {
+  "commit": "52cd30adc09a30709e120efe2981fc29e700c95a",
+  "parents": [
+   "5fb695c9aa9fb173a2604202746ebdb7102b3ec3"
+  ],
+  "subject": "desktop: the control plane for every AI app on this machine, developer or not (#3134)",
+  "pr": 3134,
+  "kind": "squash",
+  "head": "1216d1ebe01b2de37603e8aac117acfa25742806",
+  "forkPoint": "5fa94408c4a9bcc2523b58a5908d88374c74aaff",
+  "finalMergeBase": "583d7f87f89874ae7dcb0a162b19387c38733aa1",
+  "githubBaseSha": "583d7f87f89874ae7dcb0a162b19387c38733aa1",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "5fb695c9aa9fb173a2604202746ebdb7102b3ec3",
+    "mainCommitsSinceFork": 2,
+    "filesChangedSinceFork": 13
+   }
+  ]
+ },
+ {
+  "commit": "3c0206f439ddc61088ace6b1fd3714b9eb7b7c11",
+  "parents": [
+   "52cd30adc09a30709e120efe2981fc29e700c95a"
+  ],
+  "subject": "billing: bind production to the Stripe sandbox end-to-end \u2014 plan prices, the chat upgrade card, and production billing.plans (#3139)",
+  "pr": 3139,
+  "kind": "squash",
+  "head": "a119bf5995ecb733180a1c101fd70c39498e9e6a",
+  "forkPoint": "583d7f87f89874ae7dcb0a162b19387c38733aa1",
+  "finalMergeBase": "583d7f87f89874ae7dcb0a162b19387c38733aa1",
+  "githubBaseSha": "583d7f87f89874ae7dcb0a162b19387c38733aa1",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "52cd30adc09a30709e120efe2981fc29e700c95a",
+    "mainCommitsSinceFork": 2,
+    "filesChangedSinceFork": 66
+   }
+  ]
+ },
+ {
+  "commit": "69b031027ff3932d20add4d13c887db41e79a84e",
+  "parents": [
+   "3c0206f439ddc61088ace6b1fd3714b9eb7b7c11"
+  ],
+  "subject": "app: remove the graph-paper background from the content panel (#3159)",
+  "pr": 3159,
+  "kind": "squash",
+  "head": "71285772731a5131aefc16cb4b131d3d56aec119",
+  "forkPoint": "3c0206f439ddc61088ace6b1fd3714b9eb7b7c11",
+  "finalMergeBase": "3c0206f439ddc61088ace6b1fd3714b9eb7b7c11",
+  "githubBaseSha": "3c0206f439ddc61088ace6b1fd3714b9eb7b7c11",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "3c0206f439ddc61088ace6b1fd3714b9eb7b7c11",
+    "mainCommitsSinceFork": 0
+   }
+  ]
+ },
+ {
+  "commit": "9c1cfd2e66b7fe46fb3851a2678837117b0a5985",
+  "parents": [
+   "69b031027ff3932d20add4d13c887db41e79a84e"
+  ],
+  "subject": "billing: provision an org onto enterprise with a credit floor it cannot exhaust (#3140)",
+  "pr": 3140,
+  "kind": "squash",
+  "head": "0f298746f6dbf3c7368d29807fc7e9772667bd14",
+  "forkPoint": "583d7f87f89874ae7dcb0a162b19387c38733aa1",
+  "finalMergeBase": "52cd30adc09a30709e120efe2981fc29e700c95a",
+  "githubBaseSha": "52cd30adc09a30709e120efe2981fc29e700c95a",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "69b031027ff3932d20add4d13c887db41e79a84e",
+    "mainCommitsSinceFork": 4,
+    "filesChangedSinceFork": 76
+   }
+  ]
+ },
+ {
+  "commit": "40411258486fd0ca3eeaeb870776a7591e4521ec",
+  "parents": [
+   "9c1cfd2e66b7fe46fb3851a2678837117b0a5985"
+  ],
+  "subject": "ci: a main commit no run will ever answer stops being the finding (#3158)",
+  "pr": 3158,
+  "kind": "squash",
+  "head": "a60131edb5bc60509999f8ac5f5e63e5d5fe5ecc",
+  "forkPoint": "3c0206f439ddc61088ace6b1fd3714b9eb7b7c11",
+  "finalMergeBase": "9c1cfd2e66b7fe46fb3851a2678837117b0a5985",
+  "githubBaseSha": "9c1cfd2e66b7fe46fb3851a2678837117b0a5985",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "9c1cfd2e66b7fe46fb3851a2678837117b0a5985",
+    "mainCommitsSinceFork": 2,
+    "filesChangedSinceFork": 19
+   }
+  ]
+ },
+ {
+  "commit": "6415b815f12ae8feb2b7440d07450ae709c70b95",
+  "parents": [
+   "40411258486fd0ca3eeaeb870776a7591e4521ec"
+  ],
+  "subject": "desktop: wear the hive, and cut light, dark and maskable icons from one source (#3156)",
+  "pr": 3156,
+  "kind": "squash",
+  "head": "cf5573aa203c0a21d761f68143d25daf29e11ecc",
+  "forkPoint": "5fa94408c4a9bcc2523b58a5908d88374c74aaff",
+  "finalMergeBase": "40411258486fd0ca3eeaeb870776a7591e4521ec",
+  "githubBaseSha": "40411258486fd0ca3eeaeb870776a7591e4521ec",
+  "integrations": 3,
+  "sides": [
+   {
+    "parent": "40411258486fd0ca3eeaeb870776a7591e4521ec",
+    "mainCommitsSinceFork": 7,
+    "filesChangedSinceFork": 101
+   }
+  ]
+ },
+ {
+  "commit": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+  "parents": [
+   "6415b815f12ae8feb2b7440d07450ae709c70b95"
+  ],
+  "subject": "iam: a machine key may invoke only what its purpose is for (#3154)",
+  "pr": 3154,
+  "kind": "squash",
+  "head": "8e93670a005f105875cfd0f146af59814d704f0f",
+  "forkPoint": "5fa94408c4a9bcc2523b58a5908d88374c74aaff",
+  "finalMergeBase": "6415b815f12ae8feb2b7440d07450ae709c70b95",
+  "githubBaseSha": "6415b815f12ae8feb2b7440d07450ae709c70b95",
+  "integrations": 4,
+  "sides": [
+   {
+    "parent": "6415b815f12ae8feb2b7440d07450ae709c70b95",
+    "mainCommitsSinceFork": 8,
+    "filesChangedSinceFork": 139
+   }
+  ]
+ },
+ {
+  "commit": "c0f3482ec90be27895f57dc1b91894e8de67d554",
+  "parents": [
+   "78396892c777f21c566f0e9c5d82eb70e5535cb8"
+  ],
+  "subject": "tacho: the connected tier in the spec, and the gateway comment that still named the host key (#3161)",
+  "pr": 3161,
+  "kind": "squash",
+  "head": "a538664ebd846c4a8f97dc79ed8b789d08a67792",
+  "forkPoint": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+  "finalMergeBase": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+  "githubBaseSha": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+    "mainCommitsSinceFork": 0
+   }
+  ]
+ },
+ {
+  "commit": "88e8e71934597c39bcc671415a611bec9718dcf1",
+  "parents": [
+   "c0f3482ec90be27895f57dc1b91894e8de67d554"
+  ],
+  "subject": "desktop: document what a local bundle actually needs (#3162)",
+  "pr": 3162,
+  "kind": "squash",
+  "head": "7e147f6bc6cb8482b278026a651b01a5ac6abc4a",
+  "forkPoint": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+  "finalMergeBase": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+  "githubBaseSha": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "c0f3482ec90be27895f57dc1b91894e8de67d554",
+    "mainCommitsSinceFork": 1,
+    "filesChangedSinceFork": 2
+   }
+  ]
+ },
+ {
+  "commit": "0217c5ff3e5d8962b92e71106950b07204ea09a1",
+  "parents": [
+   "88e8e71934597c39bcc671415a611bec9718dcf1"
+  ],
+  "subject": "app: put Fleet in the nav spec, and keep Agents in the four thumb slots (#3163)",
+  "pr": 3163,
+  "kind": "squash",
+  "head": "a694da60346d6e8f4ba01104bedd134f1fd041bc",
+  "forkPoint": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+  "finalMergeBase": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+  "githubBaseSha": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "88e8e71934597c39bcc671415a611bec9718dcf1",
+    "mainCommitsSinceFork": 2,
+    "filesChangedSinceFork": 3
+   }
+  ]
+ },
+ {
+  "commit": "2c9a3f3ec4149bc43e30ee57d97d8a1cf45d83e3",
+  "parents": [
+   "0217c5ff3e5d8962b92e71106950b07204ea09a1"
+  ],
+  "subject": "ci: a commit seconds old has no run yet, which is not the same as no run (#3165)",
+  "pr": 3165,
+  "kind": "squash",
+  "head": "6d235d426cd019547b86e7565652d0ac5299d359",
+  "forkPoint": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+  "finalMergeBase": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+  "githubBaseSha": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "0217c5ff3e5d8962b92e71106950b07204ea09a1",
+    "mainCommitsSinceFork": 3,
+    "filesChangedSinceFork": 6
+   }
+  ]
+ },
+ {
+  "commit": "765fdb7fc01d3d32cf1c1d79a135eb07855a420a",
+  "parents": [
+   "2c9a3f3ec4149bc43e30ee57d97d8a1cf45d83e3"
+  ],
+  "subject": "app: Fleet is a fourth primary destination, so Agents overflows on mobile (#3164)",
+  "pr": 3164,
+  "kind": "squash",
+  "head": "267be157d7ba88762ec31323067f75c7d05b9b69",
+  "forkPoint": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+  "finalMergeBase": "2c9a3f3ec4149bc43e30ee57d97d8a1cf45d83e3",
+  "githubBaseSha": "2c9a3f3ec4149bc43e30ee57d97d8a1cf45d83e3",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "2c9a3f3ec4149bc43e30ee57d97d8a1cf45d83e3",
+    "mainCommitsSinceFork": 4,
+    "filesChangedSinceFork": 10
+   }
+  ]
+ },
+ {
+  "commit": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+  "parents": [
+   "765fdb7fc01d3d32cf1c1d79a135eb07855a420a"
+  ],
+  "subject": "app: reconcile the nav expectations #3163 and #3164 each half-wrote (#3166)",
+  "pr": 3166,
+  "kind": "squash",
+  "head": "3865bac1b77dbbfbd310e1f05cea7b77fb72b7e4",
+  "forkPoint": "765fdb7fc01d3d32cf1c1d79a135eb07855a420a",
+  "finalMergeBase": "765fdb7fc01d3d32cf1c1d79a135eb07855a420a",
+  "githubBaseSha": "765fdb7fc01d3d32cf1c1d79a135eb07855a420a",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "765fdb7fc01d3d32cf1c1d79a135eb07855a420a",
+    "mainCommitsSinceFork": 0
+   }
+  ]
+ },
+ {
+  "commit": "522fec3065a7f28fd80b575fb678365305de589d",
+  "parents": [
+   "33aad5b30408c751b8d86c0ef872f11f0f137c84"
+  ],
+  "subject": "app: Mission Control rebuild serves app.oxagen.sh (WL-52 cutover) (#2997)",
+  "pr": 2997,
+  "kind": "squash",
+  "head": "871432aaf667dbc33e79ce786b414344bb5f61b1",
+  "forkPoint": "a2c719b76c4048fc9d00b2112184c98a5b894440",
+  "finalMergeBase": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+  "githubBaseSha": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+  "integrations": 16,
+  "sides": [
+   {
+    "parent": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+    "mainCommitsSinceFork": 68,
+    "filesChangedSinceFork": 778
+   }
+  ]
+ },
+ {
+  "commit": "40a42ca3f03049e4b2615d444de301b11b9a0c51",
+  "parents": [
+   "522fec3065a7f28fd80b575fb678365305de589d"
+  ],
+  "subject": "desktop: ad-hoc sign macOS bundles so an unsigned build can actually be opened (#3175)",
+  "pr": 3175,
+  "kind": "squash",
+  "head": "a3ff276f192ac8cd2bab88b4aad9fa3b2b2a4c1d",
+  "forkPoint": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+  "finalMergeBase": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+  "githubBaseSha": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "522fec3065a7f28fd80b575fb678365305de589d",
+    "mainCommitsSinceFork": 1,
+    "filesChangedSinceFork": 4726
+   }
+  ]
+ },
+ {
+  "commit": "9d6cf3277503987dc3a13219a36b2d0799a91169",
+  "parents": [
+   "40a42ca3f03049e4b2615d444de301b11b9a0c51"
+  ],
+  "subject": "Two halves of the tacho outage the rate limiter did not cover: a BigInt that JSON drops, and a daemon with no backoff (#3170)",
+  "pr": 3170,
+  "kind": "squash",
+  "head": "2b73debcedbe2ebb7607185f84120576d938dc2d",
+  "forkPoint": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+  "finalMergeBase": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+  "githubBaseSha": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "40a42ca3f03049e4b2615d444de301b11b9a0c51",
+    "mainCommitsSinceFork": 2,
+    "filesChangedSinceFork": 4727
+   }
+  ]
+ },
+ {
+  "commit": "5aea6daa8ace5040b70d7fd04a297cf4f207db27",
+  "parents": [
+   "9d6cf3277503987dc3a13219a36b2d0799a91169"
+  ],
+  "subject": "api: the distributed rate limiter has never written a counter, and tacho paid for it in 503s (#3169)",
+  "pr": 3169,
+  "kind": "squash",
+  "head": "e164ece127f983ed55b56ba18ca6b58d18e4a205",
+  "forkPoint": "765fdb7fc01d3d32cf1c1d79a135eb07855a420a",
+  "finalMergeBase": "522fec3065a7f28fd80b575fb678365305de589d",
+  "githubBaseSha": "522fec3065a7f28fd80b575fb678365305de589d",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "9d6cf3277503987dc3a13219a36b2d0799a91169",
+    "mainCommitsSinceFork": 4,
+    "filesChangedSinceFork": 4730
+   }
+  ]
+ },
+ {
+  "commit": "c16b381255fc4073d7eab95c35118cba7cad606d",
+  "parents": [
+   "5aea6daa8ace5040b70d7fd04a297cf4f207db27"
+  ],
+  "subject": "infra: alarm on a container restarting in a loop on the app service (#3190)",
+  "pr": 3190,
+  "kind": "squash",
+  "head": "15a08bbbacfdd4e45ff13b74f0e33ead795a1ada",
+  "forkPoint": "522fec3065a7f28fd80b575fb678365305de589d",
+  "finalMergeBase": "522fec3065a7f28fd80b575fb678365305de589d",
+  "githubBaseSha": "522fec3065a7f28fd80b575fb678365305de589d",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "5aea6daa8ace5040b70d7fd04a297cf4f207db27",
+    "mainCommitsSinceFork": 3,
+    "filesChangedSinceFork": 47
+   }
+  ]
+ },
+ {
+  "commit": "301350d1af00404fee283403653b4ae2c9a2a70d",
+  "parents": [
+   "c16b381255fc4073d7eab95c35118cba7cad606d"
+  ],
+  "subject": "app: the Tools import gate reads the workspace role its capability grants (#3194)",
+  "pr": 3194,
+  "kind": "squash",
+  "head": "5e01aa8f5590fa993aabe5649819cdf34e111ab5",
+  "forkPoint": "522fec3065a7f28fd80b575fb678365305de589d",
+  "finalMergeBase": "522fec3065a7f28fd80b575fb678365305de589d",
+  "githubBaseSha": "522fec3065a7f28fd80b575fb678365305de589d",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "c16b381255fc4073d7eab95c35118cba7cad606d",
+    "mainCommitsSinceFork": 4,
+    "filesChangedSinceFork": 54
+   }
+  ]
+ },
+ {
+  "commit": "e308dba3d31ad9dcee6121a0875e77890d6133b5",
+  "parents": [
+   "301350d1af00404fee283403653b4ae2c9a2a70d"
+  ],
+  "subject": "app: restore /cli/complete and metadataBase after the WL-52 cutover (#3191)",
+  "pr": 3191,
+  "kind": "squash",
+  "head": "d78fff98b1a705c9edd2a7a5a36923f2573eaa8e",
+  "forkPoint": "522fec3065a7f28fd80b575fb678365305de589d",
+  "finalMergeBase": "301350d1af00404fee283403653b4ae2c9a2a70d",
+  "githubBaseSha": "301350d1af00404fee283403653b4ae2c9a2a70d",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "301350d1af00404fee283403653b4ae2c9a2a70d",
+    "mainCommitsSinceFork": 5,
+    "filesChangedSinceFork": 57
+   }
+  ]
+ },
+ {
+  "commit": "74e40e73c2feb23d632fdced66ed953da89f8bf9",
+  "parents": [
+   "e308dba3d31ad9dcee6121a0875e77890d6133b5"
+  ],
+  "subject": "telemetry: integrity guards on the ClickHouse migration runner (#3192)",
+  "pr": 3192,
+  "kind": "squash",
+  "head": "cf9dc105449fe7a05240c3b5f7c997d61f3798ab",
+  "forkPoint": "522fec3065a7f28fd80b575fb678365305de589d",
+  "finalMergeBase": "301350d1af00404fee283403653b4ae2c9a2a70d",
+  "githubBaseSha": "301350d1af00404fee283403653b4ae2c9a2a70d",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "e308dba3d31ad9dcee6121a0875e77890d6133b5",
+    "mainCommitsSinceFork": 6,
+    "filesChangedSinceFork": 70
+   }
+  ]
+ },
+ {
+  "commit": "339fa92b240192e815772415e34dd85d004eecb8",
+  "parents": [
+   "74e40e73c2feb23d632fdced66ed953da89f8bf9"
+  ],
+  "subject": "test: give whole-tree architecture probes their own timeout budget (#3196)",
+  "pr": 3196,
+  "kind": "squash",
+  "head": "7e895a836c29b338aa071c8d6104e11dec3c4836",
+  "forkPoint": "522fec3065a7f28fd80b575fb678365305de589d",
+  "finalMergeBase": "522fec3065a7f28fd80b575fb678365305de589d",
+  "githubBaseSha": "522fec3065a7f28fd80b575fb678365305de589d",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "74e40e73c2feb23d632fdced66ed953da89f8bf9",
+    "mainCommitsSinceFork": 7,
+    "filesChangedSinceFork": 79
+   }
+  ]
+ },
+ {
+  "commit": "c0d40b1d47174196a2a2d7f02f442d6f1674faee",
+  "parents": [
+   "339fa92b240192e815772415e34dd85d004eecb8"
+  ],
+  "subject": "tacho: pace ingest against the reported budget, and stop a re-enrollment wedging the WAL forever (#3204)",
+  "pr": 3204,
+  "kind": "squash",
+  "head": "199bcf26ddd0eb85f73614ba46e71f1267adac81",
+  "forkPoint": "5aea6daa8ace5040b70d7fd04a297cf4f207db27",
+  "finalMergeBase": "5aea6daa8ace5040b70d7fd04a297cf4f207db27",
+  "githubBaseSha": "5aea6daa8ace5040b70d7fd04a297cf4f207db27",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "339fa92b240192e815772415e34dd85d004eecb8",
+    "mainCommitsSinceFork": 5,
+    "filesChangedSinceFork": 78
+   }
+  ]
+ },
+ {
+  "commit": "5b722d1d4cb166740b447905ef0ead4ec95f2b2a",
+  "parents": [
+   "c0d40b1d47174196a2a2d7f02f442d6f1674faee"
+  ],
+  "subject": "db: control_commands outcome CHECK comes off before the rows are remapped (#3206)",
+  "pr": 3206,
+  "kind": "squash",
+  "head": "77f0f2ce905555dc68cb126138292d7d0f0ab755",
+  "forkPoint": "40a42ca3f03049e4b2615d444de301b11b9a0c51",
+  "finalMergeBase": "40a42ca3f03049e4b2615d444de301b11b9a0c51",
+  "githubBaseSha": "5aea6daa8ace5040b70d7fd04a297cf4f207db27",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "c0d40b1d47174196a2a2d7f02f442d6f1674faee",
+    "mainCommitsSinceFork": 8,
+    "filesChangedSinceFork": 126
+   }
+  ]
+ },
+ {
+  "commit": "53c299b6004e63cf746f95bc5954bf69db91ff9a",
+  "parents": [
+   "5b722d1d4cb166740b447905ef0ead4ec95f2b2a"
+  ],
+  "subject": "iam: an allowlist that judges the wrong address is a false control, not a weak one (#3205)",
+  "pr": 3205,
+  "kind": "squash",
+  "head": "950829c017e1e50533fc4c24a03dfedb5e42d590",
+  "forkPoint": "5aea6daa8ace5040b70d7fd04a297cf4f207db27",
+  "finalMergeBase": "5aea6daa8ace5040b70d7fd04a297cf4f207db27",
+  "githubBaseSha": "5aea6daa8ace5040b70d7fd04a297cf4f207db27",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "5b722d1d4cb166740b447905ef0ead4ec95f2b2a",
+    "mainCommitsSinceFork": 7,
+    "filesChangedSinceFork": 84
+   }
+  ]
+ },
+ {
+  "commit": "5a74a10a3d567a423734b5dc2c1a27783f2e39a8",
+  "parents": [
+   "53c299b6004e63cf746f95bc5954bf69db91ff9a"
+  ],
+  "subject": "desktop: entitle the macOS sidecars to a JIT, or signing kills them (#3208)",
+  "pr": 3208,
+  "kind": "squash",
+  "head": "2d28cae0c18ec5852cd7525d6d5df1b2da1d6253",
+  "forkPoint": "5aea6daa8ace5040b70d7fd04a297cf4f207db27",
+  "finalMergeBase": "5aea6daa8ace5040b70d7fd04a297cf4f207db27",
+  "githubBaseSha": "5aea6daa8ace5040b70d7fd04a297cf4f207db27",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "53c299b6004e63cf746f95bc5954bf69db91ff9a",
+    "mainCommitsSinceFork": 8,
+    "filesChangedSinceFork": 95
+   }
+  ]
+ },
+ {
+  "commit": "efb68b586973fb7497c933092b77e40638eb1802",
+  "parents": [
+   "5a74a10a3d567a423734b5dc2c1a27783f2e39a8"
+  ],
+  "subject": "tacho: the daemon hook test raced a production connect budget, and threw the reason away (#3203)",
+  "pr": 3203,
+  "kind": "squash",
+  "head": "2cae97d5fecffbb7cb05d62bf162ca00e32a1971",
+  "forkPoint": "522fec3065a7f28fd80b575fb678365305de589d",
+  "finalMergeBase": "522fec3065a7f28fd80b575fb678365305de589d",
+  "githubBaseSha": "9d6cf3277503987dc3a13219a36b2d0799a91169",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "5a74a10a3d567a423734b5dc2c1a27783f2e39a8",
+    "mainCommitsSinceFork": 12,
+    "filesChangedSinceFork": 132
+   }
+  ]
+ },
+ {
+  "commit": "37e8e265dd5204aa3105847db9d47d1ee2e58bda",
+  "parents": [
+   "efb68b586973fb7497c933092b77e40638eb1802"
+  ],
+  "subject": "tacho: digest the Anthropic user email instead of storing the address (#3173)",
+  "pr": 3173,
+  "kind": "squash",
+  "head": "a023160574a79625693dc2822cc46447880444f0",
+  "forkPoint": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+  "finalMergeBase": "339fa92b240192e815772415e34dd85d004eecb8",
+  "githubBaseSha": "339fa92b240192e815772415e34dd85d004eecb8",
+  "integrations": 3,
+  "sides": [
+   {
+    "parent": "efb68b586973fb7497c933092b77e40638eb1802",
+    "mainCommitsSinceFork": 14,
+    "filesChangedSinceFork": 4794
+   }
+  ]
+ },
+ {
+  "commit": "127571f733eb418dd3bdf2569919e33a66126923",
+  "parents": [
+   "37e8e265dd5204aa3105847db9d47d1ee2e58bda"
+  ],
+  "subject": "tacho: persist the local MCP endpoint so tachod can read it (#3181)",
+  "pr": 3181,
+  "kind": "squash",
+  "head": "206d550f3adde6bc4de2ba272a14d07f9c751cd5",
+  "forkPoint": "a2c719b76c4048fc9d00b2112184c98a5b894440",
+  "finalMergeBase": "522fec3065a7f28fd80b575fb678365305de589d",
+  "githubBaseSha": "522fec3065a7f28fd80b575fb678365305de589d",
+  "integrations": 17,
+  "sides": [
+   {
+    "parent": "37e8e265dd5204aa3105847db9d47d1ee2e58bda",
+    "mainCommitsSinceFork": 83,
+    "filesChangedSinceFork": 5405
+   }
+  ]
+ },
+ {
+  "commit": "4dc85bae09b032bc61a819efcaf6885e7834c45f",
+  "parents": [
+   "127571f733eb418dd3bdf2569919e33a66126923"
+  ],
+  "subject": "database: an org-only read of a workspace-scoped table raises, and the static check retires (#3195)",
+  "pr": 3195,
+  "kind": "squash",
+  "head": "28f3e9f2056c62ecdc5784fe6e4f6d04d1a00e58",
+  "forkPoint": "522fec3065a7f28fd80b575fb678365305de589d",
+  "finalMergeBase": "127571f733eb418dd3bdf2569919e33a66126923",
+  "githubBaseSha": "127571f733eb418dd3bdf2569919e33a66126923",
+  "integrations": 3,
+  "sides": [
+   {
+    "parent": "127571f733eb418dd3bdf2569919e33a66126923",
+    "mainCommitsSinceFork": 15,
+    "filesChangedSinceFork": 170
+   }
+  ]
+ },
+ {
+  "commit": "c212383c86cf301eaa977fa60a5bec54b6e8c305",
+  "parents": [
+   "4dc85bae09b032bc61a819efcaf6885e7834c45f"
+  ],
+  "subject": "desktop: make publish:downloads survive a coloured shell and a republish (#3174)",
+  "pr": 3174,
+  "kind": "squash",
+  "head": "af44da3c44a9eb51d531eef1357942a8b63ec4ef",
+  "forkPoint": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+  "finalMergeBase": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+  "githubBaseSha": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "4dc85bae09b032bc61a819efcaf6885e7834c45f",
+    "mainCommitsSinceFork": 17,
+    "filesChangedSinceFork": 4946
+   }
+  ]
+ },
+ {
+  "commit": "70f55ef97fd472561132e704dcd54f7ff30bcc3d",
+  "parents": [
+   "c212383c86cf301eaa977fa60a5bec54b6e8c305"
+  ],
+  "subject": "docs: residue merges, it does not iterate \u2014 and CI is the gate, not your laptop (#3215)",
+  "pr": 3215,
+  "kind": "squash",
+  "head": "c1ac664b7816399ac147e89d7020ae78851518db",
+  "forkPoint": "efb68b586973fb7497c933092b77e40638eb1802",
+  "finalMergeBase": "efb68b586973fb7497c933092b77e40638eb1802",
+  "githubBaseSha": "efb68b586973fb7497c933092b77e40638eb1802",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "c212383c86cf301eaa977fa60a5bec54b6e8c305",
+    "mainCommitsSinceFork": 4,
+    "filesChangedSinceFork": 324
+   }
+  ]
+ },
+ {
+  "commit": "a0d7afa759a43c4b1ddca4de76f1bd923aa1c8d5",
+  "parents": [
+   "70f55ef97fd472561132e704dcd54f7ff30bcc3d"
+  ],
+  "subject": "tacho: reserve the gateway credential, and serve a connected app only what its mandate permits (#3182)",
+  "pr": 3182,
+  "kind": "squash",
+  "head": "9e3921d1ee45d7c4e48664bd29ebd7e6e27398b6",
+  "forkPoint": "a2c719b76c4048fc9d00b2112184c98a5b894440",
+  "finalMergeBase": "4dc85bae09b032bc61a819efcaf6885e7834c45f",
+  "githubBaseSha": "4dc85bae09b032bc61a819efcaf6885e7834c45f",
+  "integrations": 19,
+  "sides": [
+   {
+    "parent": "70f55ef97fd472561132e704dcd54f7ff30bcc3d",
+    "mainCommitsSinceFork": 87,
+    "filesChangedSinceFork": 5537
+   }
+  ]
+ },
+ {
+  "commit": "e42e997e61b44a2c0d67661ad14c381ca9d63f0c",
+  "parents": [
+   "a0d7afa759a43c4b1ddca4de76f1bd923aa1c8d5"
+  ],
+  "subject": "iam: a CLI session key acts for its creator, not a machine mandate (#3222)",
+  "pr": 3222,
+  "kind": "squash",
+  "head": "1c4b72ef69a091783cd8459103d52276f7f00ad7",
+  "forkPoint": "5b722d1d4cb166740b447905ef0ead4ec95f2b2a",
+  "finalMergeBase": "5b722d1d4cb166740b447905ef0ead4ec95f2b2a",
+  "githubBaseSha": "127571f733eb418dd3bdf2569919e33a66126923",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "a0d7afa759a43c4b1ddca4de76f1bd923aa1c8d5",
+    "mainCommitsSinceFork": 9,
+    "filesChangedSinceFork": 359
+   }
+  ]
+ },
+ {
+  "commit": "30adbbb3672d54f82b9f62e9fd1cf1704b1c22f2",
+  "parents": [
+   "e42e997e61b44a2c0d67661ad14c381ca9d63f0c"
+  ],
+  "subject": "Sweep: the P0/P1 review findings that merged without their fix (#3178)",
+  "pr": 3178,
+  "kind": "squash",
+  "head": "d98301fa11af02d8848ec20aa95ae105ee4d1d43",
+  "forkPoint": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+  "finalMergeBase": "e42e997e61b44a2c0d67661ad14c381ca9d63f0c",
+  "githubBaseSha": "e42e997e61b44a2c0d67661ad14c381ca9d63f0c",
+  "integrations": 5,
+  "sides": [
+   {
+    "parent": "e42e997e61b44a2c0d67661ad14c381ca9d63f0c",
+    "mainCommitsSinceFork": 21,
+    "filesChangedSinceFork": 4959
+   }
+  ]
+ },
+ {
+  "commit": "b1dcefdcaca72fbe2c9a36678d0a81db0794b76b",
+  "parents": [
+   "30adbbb3672d54f82b9f62e9fd1cf1704b1c22f2"
+  ],
+  "subject": "app: a person can change their own name and avatar again (#3209)",
+  "pr": 3209,
+  "kind": "squash",
+  "head": "93586824e9a8391014d00cca6369964d8e07b4da",
+  "forkPoint": "5aea6daa8ace5040b70d7fd04a297cf4f207db27",
+  "finalMergeBase": "30adbbb3672d54f82b9f62e9fd1cf1704b1c22f2",
+  "githubBaseSha": "30adbbb3672d54f82b9f62e9fd1cf1704b1c22f2",
+  "integrations": 3,
+  "sides": [
+   {
+    "parent": "30adbbb3672d54f82b9f62e9fd1cf1704b1c22f2",
+    "mainCommitsSinceFork": 18,
+    "filesChangedSinceFork": 469
+   }
+  ]
+ },
+ {
+  "commit": "86e26d6b65123d4cbe75bf8ad5ea400a552c56bc",
+  "parents": [
+   "b1dcefdcaca72fbe2c9a36678d0a81db0794b76b"
+  ],
+  "subject": "app: the in-app assistant answers again (#3216)",
+  "pr": 3216,
+  "kind": "squash",
+  "head": "daf8cacd45360340d45cc72ad374aa816bc3405c",
+  "forkPoint": "5aea6daa8ace5040b70d7fd04a297cf4f207db27",
+  "finalMergeBase": "b1dcefdcaca72fbe2c9a36678d0a81db0794b76b",
+  "githubBaseSha": "b1dcefdcaca72fbe2c9a36678d0a81db0794b76b",
+  "integrations": 3,
+  "sides": [
+   {
+    "parent": "b1dcefdcaca72fbe2c9a36678d0a81db0794b76b",
+    "mainCommitsSinceFork": 19,
+    "filesChangedSinceFork": 507
+   }
+  ]
+ },
+ {
+  "commit": "a7542142b11fd71987f525ff22052c1f27bf7e09",
+  "parents": [
+   "86e26d6b65123d4cbe75bf8ad5ea400a552c56bc"
+  ],
+  "subject": "iam: a CLI session key acts for the person who created it, and MCP keeps them (#3234)",
+  "pr": 3234,
+  "kind": "squash",
+  "head": "8d34242c0dadd3b3ec8e625894f9f44ee12bb50a",
+  "forkPoint": "b1dcefdcaca72fbe2c9a36678d0a81db0794b76b",
+  "finalMergeBase": "b1dcefdcaca72fbe2c9a36678d0a81db0794b76b",
+  "githubBaseSha": "b1dcefdcaca72fbe2c9a36678d0a81db0794b76b",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "86e26d6b65123d4cbe75bf8ad5ea400a552c56bc",
+    "mainCommitsSinceFork": 1,
+    "filesChangedSinceFork": 25
+   }
+  ]
+ },
+ {
+  "commit": "425df76c0b6c6eea7927a49e61a3fcc491cb138a",
+  "parents": [
+   "a7542142b11fd71987f525ff22052c1f27bf7e09"
+  ],
+  "subject": "docs: what a CLI session key acts as, and where apps/app keeps its UI (#3229)",
+  "pr": 3229,
+  "kind": "squash",
+  "head": "6c777457c1a01d0277009adbb7556e8cebec0821",
+  "forkPoint": "a0d7afa759a43c4b1ddca4de76f1bd923aa1c8d5",
+  "finalMergeBase": "b1dcefdcaca72fbe2c9a36678d0a81db0794b76b",
+  "githubBaseSha": "b1dcefdcaca72fbe2c9a36678d0a81db0794b76b",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "a7542142b11fd71987f525ff22052c1f27bf7e09",
+    "mainCommitsSinceFork": 5,
+    "filesChangedSinceFork": 120
+   }
+  ]
+ },
+ {
+  "commit": "6f7da3476ead84f1d3751d6ce2cc0ca359232715",
+  "parents": [
+   "425df76c0b6c6eea7927a49e61a3fcc491cb138a"
+  ],
+  "subject": "api: reconcile the two rate-limiter fixes, which are green apart and red together (#3183)",
+  "pr": 3183,
+  "kind": "squash",
+  "head": "51e9df950bf07bb7032b85117982087339dcbdc6",
+  "forkPoint": "765fdb7fc01d3d32cf1c1d79a135eb07855a420a",
+  "finalMergeBase": "a7542142b11fd71987f525ff22052c1f27bf7e09",
+  "githubBaseSha": "a7542142b11fd71987f525ff22052c1f27bf7e09",
+  "integrations": 7,
+  "sides": [
+   {
+    "parent": "425df76c0b6c6eea7927a49e61a3fcc491cb138a",
+    "mainCommitsSinceFork": 27,
+    "filesChangedSinceFork": 5002
+   }
+  ]
+ },
+ {
+  "commit": "a5f542ea19aa7222386283392fab62fcffb3065f",
+  "parents": [
+   "6f7da3476ead84f1d3751d6ce2cc0ca359232715"
+  ],
+  "subject": "billing: a refunded or disputed GAU purchase withdraws its units (#3187)",
+  "pr": 3187,
+  "kind": "squash",
+  "head": "a9db65fbb42168cf670262ee3247d74420582c5e",
+  "forkPoint": "a2c719b76c4048fc9d00b2112184c98a5b894440",
+  "finalMergeBase": "a7542142b11fd71987f525ff22052c1f27bf7e09",
+  "githubBaseSha": "a7542142b11fd71987f525ff22052c1f27bf7e09",
+  "integrations": 22,
+  "sides": [
+   {
+    "parent": "6f7da3476ead84f1d3751d6ce2cc0ca359232715",
+    "mainCommitsSinceFork": 95,
+    "filesChangedSinceFork": 5591
+   }
+  ]
+ },
+ {
+  "commit": "3355510d005da6566bd72610638d46be646b8f21",
+  "parents": [
+   "a5f542ea19aa7222386283392fab62fcffb3065f"
+  ],
+  "subject": "handlers: extend the pg-test timeout budget to onboarding.pg.test.ts (#3248)",
+  "pr": 3248,
+  "kind": "squash",
+  "head": "585227f10fd0d02f1aefb72ef7890ec6ffa6d100",
+  "forkPoint": "6f7da3476ead84f1d3751d6ce2cc0ca359232715",
+  "finalMergeBase": "6f7da3476ead84f1d3751d6ce2cc0ca359232715",
+  "githubBaseSha": "6f7da3476ead84f1d3751d6ce2cc0ca359232715",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "a5f542ea19aa7222386283392fab62fcffb3065f",
+    "mainCommitsSinceFork": 1,
+    "filesChangedSinceFork": 26
+   }
+  ]
+ },
+ {
+  "commit": "5ce06b58793679c60190231e177e062b35a02e69",
+  "parents": [
+   "3355510d005da6566bd72610638d46be646b8f21"
+  ],
+  "subject": "The gateway enforcement tier, the probe's plane key, and two provisioning guards (#3238)",
+  "pr": 3238,
+  "kind": "squash",
+  "head": "ce5703d485295c33e188c96dcc1885dbfa459d55",
+  "forkPoint": "b1dcefdcaca72fbe2c9a36678d0a81db0794b76b",
+  "finalMergeBase": "a5f542ea19aa7222386283392fab62fcffb3065f",
+  "githubBaseSha": "a5f542ea19aa7222386283392fab62fcffb3065f",
+  "integrations": 2,
+  "sides": [
+   {
+    "parent": "3355510d005da6566bd72610638d46be646b8f21",
+    "mainCommitsSinceFork": 6,
+    "filesChangedSinceFork": 112
+   }
+  ]
+ },
+ {
+  "commit": "42ac9827132b1da2d3107ba2c3c92c3ac919bca0",
+  "parents": [
+   "5ce06b58793679c60190231e177e062b35a02e69"
+  ],
+  "subject": "ontology: make the Neo4j tenancy seam guard test scoping, not spelling (#3193)",
+  "pr": 3193,
+  "kind": "squash",
+  "head": "5c1de2d4c9d0d25ed101da19d39c9b2dc13efef8",
+  "forkPoint": "522fec3065a7f28fd80b575fb678365305de589d",
+  "finalMergeBase": "a5f542ea19aa7222386283392fab62fcffb3065f",
+  "githubBaseSha": "a5f542ea19aa7222386283392fab62fcffb3065f",
+  "integrations": 7,
+  "sides": [
+   {
+    "parent": "5ce06b58793679c60190231e177e062b35a02e69",
+    "mainCommitsSinceFork": 29,
+    "filesChangedSinceFork": 607
+   }
+  ]
+ },
+ {
+  "commit": "5ef612e22f3ba36fd370e00ce14f9100cd920a33",
+  "parents": [
+   "42ac9827132b1da2d3107ba2c3c92c3ac919bca0"
+  ],
+  "subject": "billing: measure the plan-change proration direction instead of inferring it (#3171)",
+  "pr": 3171,
+  "kind": "squash",
+  "head": "8e4bd7851bbd33501750d7d8a3e8a7f4b94224a1",
+  "forkPoint": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+  "finalMergeBase": "5ce06b58793679c60190231e177e062b35a02e69",
+  "githubBaseSha": "5ce06b58793679c60190231e177e062b35a02e69",
+  "integrations": 8,
+  "sides": [
+   {
+    "parent": "42ac9827132b1da2d3107ba2c3c92c3ac919bca0",
+    "mainCommitsSinceFork": 31,
+    "filesChangedSinceFork": 5046
+   }
+  ]
+ },
+ {
+  "commit": "e3b1b49c5afaed279cb1ebcee72cfbc77774b2bf",
+  "parents": [
+   "5ef612e22f3ba36fd370e00ce14f9100cd920a33"
+  ],
+  "subject": "app: a Workspace settings dialog that binds a main repository (#3233)",
+  "pr": 3233,
+  "kind": "squash",
+  "head": "aa722188e4ddf59f75a194fb5a1225f5d5fd015a",
+  "forkPoint": "b1dcefdcaca72fbe2c9a36678d0a81db0794b76b",
+  "finalMergeBase": "5ef612e22f3ba36fd370e00ce14f9100cd920a33",
+  "githubBaseSha": "5ef612e22f3ba36fd370e00ce14f9100cd920a33",
+  "integrations": 5,
+  "sides": [
+   {
+    "parent": "5ef612e22f3ba36fd370e00ce14f9100cd920a33",
+    "mainCommitsSinceFork": 9,
+    "filesChangedSinceFork": 170
+   }
+  ]
+ },
+ {
+  "commit": "5e08d60c8d16f9c7666a6c4743786716bd7e6aed",
+  "parents": [
+   "e3b1b49c5afaed279cb1ebcee72cfbc77774b2bf"
+  ],
+  "subject": "app: the assistant asks about the agent being registered, and focus survives the md boundary (#3261)",
+  "pr": 3261,
+  "kind": "squash",
+  "head": "8f372f9800d285ac8ea5600c615f1bb8927fbae7",
+  "forkPoint": "42ac9827132b1da2d3107ba2c3c92c3ac919bca0",
+  "finalMergeBase": "42ac9827132b1da2d3107ba2c3c92c3ac919bca0",
+  "githubBaseSha": "42ac9827132b1da2d3107ba2c3c92c3ac919bca0",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "e3b1b49c5afaed279cb1ebcee72cfbc77774b2bf",
+    "mainCommitsSinceFork": 2,
+    "filesChangedSinceFork": 122
+   }
+  ]
+ },
+ {
+  "commit": "a44c54151988534878534c8d828030b2a16432d1",
+  "parents": [
+   "5e08d60c8d16f9c7666a6c4743786716bd7e6aed"
+  ],
+  "subject": "spec: repository binding, working copies, and one pull-request lifecycle for every governed file (#3242)",
+  "pr": 3242,
+  "kind": "squash",
+  "head": "0ed7668941c63e4f14786343cc203868569e2e72",
+  "forkPoint": "a7542142b11fd71987f525ff22052c1f27bf7e09",
+  "finalMergeBase": "a7542142b11fd71987f525ff22052c1f27bf7e09",
+  "githubBaseSha": "425df76c0b6c6eea7927a49e61a3fcc491cb138a",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "5e08d60c8d16f9c7666a6c4743786716bd7e6aed",
+    "mainCommitsSinceFork": 9,
+    "filesChangedSinceFork": 227
+   }
+  ]
+ },
+ {
+  "commit": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+  "parents": [
+   "a44c54151988534878534c8d828030b2a16432d1"
+  ],
+  "subject": "handlers: steer on the ref the binding approved, and settle the ADR-087 collision (#3265)",
+  "pr": 3265,
+  "kind": "squash",
+  "head": "c5a09770c298bc2c87468ac907a071916d7c988f",
+  "forkPoint": "a44c54151988534878534c8d828030b2a16432d1",
+  "finalMergeBase": "a44c54151988534878534c8d828030b2a16432d1",
+  "githubBaseSha": "a44c54151988534878534c8d828030b2a16432d1",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "a44c54151988534878534c8d828030b2a16432d1",
+    "mainCommitsSinceFork": 0
+   }
+  ]
+ },
+ {
+  "commit": "ddea5d3e94f8a77dcedc8a304333385d339db5fa",
+  "parents": [
+   "ad25ec704a716c7e247a81facd3d08eab2f3ae6c"
+  ],
+  "subject": "app: the page declares the record it is showing, and the shell stops reading the URL (#3275)",
+  "pr": 3275,
+  "kind": "squash",
+  "head": "05c359a53650b9cbe7cede37777a377453974ea3",
+  "forkPoint": "a44c54151988534878534c8d828030b2a16432d1",
+  "finalMergeBase": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+  "githubBaseSha": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+    "mainCommitsSinceFork": 1,
+    "filesChangedSinceFork": 16
+   }
+  ]
+ },
+ {
+  "commit": "237eade28dec7857e32ff3753d53a10508feee03",
+  "parents": [
+   "ddea5d3e94f8a77dcedc8a304333385d339db5fa"
+  ],
+  "subject": "feat(app): hide revoked API keys by default and page the roster (#3270)",
+  "pr": 3270,
+  "kind": "squash",
+  "head": "291f0d9f7dd9c075442b324e19443bbc9c4b7ccd",
+  "forkPoint": "a44c54151988534878534c8d828030b2a16432d1",
+  "finalMergeBase": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+  "githubBaseSha": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "ddea5d3e94f8a77dcedc8a304333385d339db5fa",
+    "mainCommitsSinceFork": 2,
+    "filesChangedSinceFork": 23
+   }
+  ]
+ },
+ {
+  "commit": "0aa9af27811b585e1735cb55944c498153507d67",
+  "parents": [
+   "237eade28dec7857e32ff3753d53a10508feee03"
+  ],
+  "subject": "fix(agent): the assistant's run store carries an archive, so a turn can seal (#3274)",
+  "pr": 3274,
+  "kind": "squash",
+  "head": "e8be16076659ef22fe124339aff8fc008c2984dc",
+  "forkPoint": "a44c54151988534878534c8d828030b2a16432d1",
+  "finalMergeBase": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+  "githubBaseSha": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "237eade28dec7857e32ff3753d53a10508feee03",
+    "mainCommitsSinceFork": 3,
+    "filesChangedSinceFork": 34
+   }
+  ]
+ },
+ {
+  "commit": "ae542258e303341175a75db7a52d5e65fe4d0c6f",
+  "parents": [
+   "0aa9af27811b585e1735cb55944c498153507d67"
+  ],
+  "subject": "spec: list W13 in \u00a719, mark it out of rev1, and correct a status line reading `complete` (#3280)",
+  "pr": 3280,
+  "kind": "squash",
+  "head": "c815071f81819576c712b8bdd65454ab8227f0c8",
+  "forkPoint": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+  "finalMergeBase": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+  "githubBaseSha": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "0aa9af27811b585e1735cb55944c498153507d67",
+    "mainCommitsSinceFork": 3,
+    "filesChangedSinceFork": 22
+   }
+  ]
+ },
+ {
+  "commit": "8713a429bacc238e32bec9f37b5163f2596c6577",
+  "parents": [
+   "ae542258e303341175a75db7a52d5e65fe4d0c6f"
+  ],
+  "subject": "docs: name the two eras, and register what changes when the second one starts (Refs #3268) (#3267)",
+  "pr": 3267,
+  "kind": "squash",
+  "head": "e0a0e16fdcc42b4377348554acb4a6f182fe4971",
+  "forkPoint": "a44c54151988534878534c8d828030b2a16432d1",
+  "finalMergeBase": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+  "githubBaseSha": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "ae542258e303341175a75db7a52d5e65fe4d0c6f",
+    "mainCommitsSinceFork": 5,
+    "filesChangedSinceFork": 38
+   }
+  ]
+ },
+ {
+  "commit": "85377729aec595ffd62cfa316ee2989d21c317b2",
+  "parents": [
+   "8713a429bacc238e32bec9f37b5163f2596c6577"
+  ],
+  "subject": "handlers: stamp Context records with the approved repository name, and make the steering rig pin its projection (#3278)",
+  "pr": 3278,
+  "kind": "squash",
+  "head": "e5d18c76d50a82c5cfa490abef8cbf38b8e7be73",
+  "forkPoint": "a44c54151988534878534c8d828030b2a16432d1",
+  "finalMergeBase": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+  "githubBaseSha": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "8713a429bacc238e32bec9f37b5163f2596c6577",
+    "mainCommitsSinceFork": 6,
+    "filesChangedSinceFork": 39
+   }
+  ]
+ },
+ {
+  "commit": "216a5f1424d76454f9e1606f63f3dc587e9a5a7c",
+  "parents": [
+   "85377729aec595ffd62cfa316ee2989d21c317b2"
+  ],
+  "subject": "ADR-090: Oxagen governs skill resolution \u2014 reverse the 2026-09-15 narrowing and go all in on Skills (#3284)",
+  "pr": 3284,
+  "kind": "squash",
+  "head": "4a1918b1b84723db2a262e2805e62f005f86d1de",
+  "forkPoint": "ae542258e303341175a75db7a52d5e65fe4d0c6f",
+  "finalMergeBase": "85377729aec595ffd62cfa316ee2989d21c317b2",
+  "githubBaseSha": "85377729aec595ffd62cfa316ee2989d21c317b2",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "85377729aec595ffd62cfa316ee2989d21c317b2",
+    "mainCommitsSinceFork": 2,
+    "filesChangedSinceFork": 7
+   }
+  ]
+ },
+ {
+  "commit": "02278c9132914d5754f2165f5b720410c80f688b",
+  "parents": [
+   "216a5f1424d76454f9e1606f63f3dc587e9a5a7c"
+  ],
+  "subject": "app: the Run page, and runs you can tell apart in the Fleet list (WL-35) (#3282)",
+  "pr": 3282,
+  "kind": "squash",
+  "head": "3ef1689f8fb5bb416b65df282022aaf7f1295f49",
+  "forkPoint": "a44c54151988534878534c8d828030b2a16432d1",
+  "finalMergeBase": "85377729aec595ffd62cfa316ee2989d21c317b2",
+  "githubBaseSha": "85377729aec595ffd62cfa316ee2989d21c317b2",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "216a5f1424d76454f9e1606f63f3dc587e9a5a7c",
+    "mainCommitsSinceFork": 8,
+    "filesChangedSinceFork": 46
+   }
+  ]
+ },
+ {
+  "commit": "2dcf28146a438f5fbd28e200e5cb7962457449ef",
+  "parents": [
+   "02278c9132914d5754f2165f5b720410c80f688b"
+  ],
+  "subject": "app: the assistant flyout's header stops saying the run id is not a link (#3287)",
+  "pr": 3287,
+  "kind": "squash",
+  "head": "dad74f3d8f3cae99c052f2469d76c7acb92f5e06",
+  "forkPoint": "02278c9132914d5754f2165f5b720410c80f688b",
+  "finalMergeBase": "02278c9132914d5754f2165f5b720410c80f688b",
+  "githubBaseSha": "02278c9132914d5754f2165f5b720410c80f688b",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "02278c9132914d5754f2165f5b720410c80f688b",
+    "mainCommitsSinceFork": 0
+   }
+  ]
+ },
+ {
+  "commit": "86b91de815aba772bebe66ab30c5a33aafd704ea",
+  "parents": [
+   "2dcf28146a438f5fbd28e200e5cb7962457449ef"
+  ],
+  "subject": "fix(iam): role-change lockout + feat(ingestion): one main repository per workspace, globally (#3269)",
+  "pr": 3269,
+  "kind": "squash",
+  "head": "1031dcdf94839749a34966768bd35371f32a265e",
+  "forkPoint": "a44c54151988534878534c8d828030b2a16432d1",
+  "finalMergeBase": "02278c9132914d5754f2165f5b720410c80f688b",
+  "githubBaseSha": "02278c9132914d5754f2165f5b720410c80f688b",
+  "integrations": 2,
+  "sides": [
+   {
+    "parent": "2dcf28146a438f5fbd28e200e5cb7962457449ef",
+    "mainCommitsSinceFork": 10,
+    "filesChangedSinceFork": 112
+   }
+  ]
+ },
+ {
+  "commit": "c9db463e954a8a6ade37211a05c2c1b1639b20ed",
+  "parents": [
+   "86b91de815aba772bebe66ab30c5a33aafd704ea"
+  ],
+  "subject": "steering: compile active must/should context records into the bundle's context.system (ADR-091, Refs #2592) (#3289)",
+  "pr": 3289,
+  "kind": "squash",
+  "head": "888223be7bfeb8d5b2eb84a681199fc18d76f601",
+  "forkPoint": "02278c9132914d5754f2165f5b720410c80f688b",
+  "finalMergeBase": "02278c9132914d5754f2165f5b720410c80f688b",
+  "githubBaseSha": "2dcf28146a438f5fbd28e200e5cb7962457449ef",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "86b91de815aba772bebe66ab30c5a33aafd704ea",
+    "mainCommitsSinceFork": 2,
+    "filesChangedSinceFork": 15
+   }
+  ]
+ },
+ {
+  "commit": "9933c72713d774b583651cf3964d5bfbb0dcf7e1",
+  "parents": [
+   "c9db463e954a8a6ade37211a05c2c1b1639b20ed"
+  ],
+  "subject": "docs: make the clear-prose skill required for any prose, internal or external (#3291)",
+  "pr": 3291,
+  "kind": "squash",
+  "head": "507cf88cd2f637c2342d92072bc86dede78a8010",
+  "forkPoint": "2dcf28146a438f5fbd28e200e5cb7962457449ef",
+  "finalMergeBase": "2dcf28146a438f5fbd28e200e5cb7962457449ef",
+  "githubBaseSha": "2dcf28146a438f5fbd28e200e5cb7962457449ef",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "c9db463e954a8a6ade37211a05c2c1b1639b20ed",
+    "mainCommitsSinceFork": 2,
+    "filesChangedSinceFork": 31
+   }
+  ]
+ },
+ {
+  "commit": "d6ac5576a7fc35b9e8562585ab6d4ea25f148ae4",
+  "parents": [
+   "9933c72713d774b583651cf3964d5bfbb0dcf7e1"
+  ],
+  "subject": "app: workspace Settings is the last item in the Workspace nav section (#3306)",
+  "pr": 3306,
+  "kind": "squash",
+  "head": "fc853387dc6f1bbe6a17244618280383e6201702",
+  "forkPoint": "2dcf28146a438f5fbd28e200e5cb7962457449ef",
+  "finalMergeBase": "2dcf28146a438f5fbd28e200e5cb7962457449ef",
+  "githubBaseSha": "2dcf28146a438f5fbd28e200e5cb7962457449ef",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "9933c72713d774b583651cf3964d5bfbb0dcf7e1",
+    "mainCommitsSinceFork": 3,
+    "filesChangedSinceFork": 33
+   }
+  ]
+ },
+ {
+  "commit": "66c51714328442d03d1b27beb05a7f8f140d9065",
+  "parents": [
+   "d6ac5576a7fc35b9e8562585ab6d4ea25f148ae4"
+  ],
+  "subject": "ADRs and architecture: steering and gating, the assembler, the gateway, the tier ladder, the contained tier (#3294)",
+  "pr": 3294,
+  "kind": "squash",
+  "head": "ede62e65300dfeb9903b725711a064b064130234",
+  "forkPoint": "02278c9132914d5754f2165f5b720410c80f688b",
+  "finalMergeBase": "9933c72713d774b583651cf3964d5bfbb0dcf7e1",
+  "githubBaseSha": "9933c72713d774b583651cf3964d5bfbb0dcf7e1",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "d6ac5576a7fc35b9e8562585ab6d4ea25f148ae4",
+    "mainCommitsSinceFork": 5,
+    "filesChangedSinceFork": 38
+   }
+  ]
+ },
+ {
+  "commit": "4a45e2c398b84326d9e670fc08ce3ea9edf75453",
+  "parents": [
+   "66c51714328442d03d1b27beb05a7f8f140d9065"
+  ],
+  "subject": "app: lay the Billing page out as the Mission Control design draws it, and wire Change plan (#3309)",
+  "pr": 3309,
+  "kind": "squash",
+  "head": "763fcb48d995ceea19f484eaf771bbe741d35ce9",
+  "forkPoint": "2dcf28146a438f5fbd28e200e5cb7962457449ef",
+  "finalMergeBase": "2dcf28146a438f5fbd28e200e5cb7962457449ef",
+  "githubBaseSha": "86b91de815aba772bebe66ab30c5a33aafd704ea",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "66c51714328442d03d1b27beb05a7f8f140d9065",
+    "mainCommitsSinceFork": 5,
+    "filesChangedSinceFork": 61
+   }
+  ]
+ },
+ {
+  "commit": "65f70a910644d517f8cb4e95e17ff439e7d8e86e",
+  "parents": [
+   "4a45e2c398b84326d9e670fc08ce3ea9edf75453"
+  ],
+  "subject": "app: a turn the person walks away from is owned to completion, not discarded (ADR-092) (#3292)",
+  "pr": 3292,
+  "kind": "squash",
+  "head": "2fb0cea950ab173e90a29fd0990e2570ecbb0002",
+  "forkPoint": "2dcf28146a438f5fbd28e200e5cb7962457449ef",
+  "finalMergeBase": "4a45e2c398b84326d9e670fc08ce3ea9edf75453",
+  "githubBaseSha": "4a45e2c398b84326d9e670fc08ce3ea9edf75453",
+  "integrations": 2,
+  "sides": [
+   {
+    "parent": "4a45e2c398b84326d9e670fc08ce3ea9edf75453",
+    "mainCommitsSinceFork": 6,
+    "filesChangedSinceFork": 102
+   }
+  ]
+ },
+ {
+  "commit": "4f86e753b91f0f3aa409fb6fdc0c856d7a8ae566",
+  "parents": [
+   "65f70a910644d517f8cb4e95e17ff439e7d8e86e"
+  ],
+  "subject": "BYOK for any OpenAI-compatible endpoint, and close an SSRF bypass in the outbound-URL guard (#3290)",
+  "pr": 3290,
+  "kind": "squash",
+  "head": "438718d4a97563f5672a5c56d5b98c569d524417",
+  "forkPoint": "a44c54151988534878534c8d828030b2a16432d1",
+  "finalMergeBase": "9933c72713d774b583651cf3964d5bfbb0dcf7e1",
+  "githubBaseSha": "9933c72713d774b583651cf3964d5bfbb0dcf7e1",
+  "integrations": 2,
+  "sides": [
+   {
+    "parent": "65f70a910644d517f8cb4e95e17ff439e7d8e86e",
+    "mainCommitsSinceFork": 17,
+    "filesChangedSinceFork": 198
+   }
+  ]
+ },
+ {
+  "commit": "1608d2e0c5668b59524124ad5e15a994e91be1cd",
+  "parents": [
+   "4f86e753b91f0f3aa409fb6fdc0c856d7a8ae566"
+  ],
+  "subject": "M0: organisation graph placement, a real-Neo4j cross-tenant probe, and per-pattern tenant anchors (#3310)",
+  "pr": 3310,
+  "kind": "squash",
+  "head": "1d4296a16f169812b79a96a6229a9309074c7b52",
+  "forkPoint": "02278c9132914d5754f2165f5b720410c80f688b",
+  "finalMergeBase": "4f86e753b91f0f3aa409fb6fdc0c856d7a8ae566",
+  "githubBaseSha": "4f86e753b91f0f3aa409fb6fdc0c856d7a8ae566",
+  "integrations": 4,
+  "sides": [
+   {
+    "parent": "4f86e753b91f0f3aa409fb6fdc0c856d7a8ae566",
+    "mainCommitsSinceFork": 9,
+    "filesChangedSinceFork": 154
+   }
+  ]
+ },
+ {
+  "commit": "0d39610e324beccdb946945496d4a5977025cf78",
+  "parents": [
+   "1608d2e0c5668b59524124ad5e15a994e91be1cd"
+  ],
+  "subject": "tacho: the loopback model proxy, observed metering, an enforced session budget and a real interrupt (Phase 4) (#3319)",
+  "pr": 3319,
+  "kind": "squash",
+  "head": "4ce3ab50e61dd7c70120f59054eda45c7d55533b",
+  "forkPoint": "2dcf28146a438f5fbd28e200e5cb7962457449ef",
+  "finalMergeBase": "d6ac5576a7fc35b9e8562585ab6d4ea25f148ae4",
+  "githubBaseSha": "d6ac5576a7fc35b9e8562585ab6d4ea25f148ae4",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "1608d2e0c5668b59524124ad5e15a994e91be1cd",
+    "mainCommitsSinceFork": 9,
+    "filesChangedSinceFork": 186
+   }
+  ]
+ },
+ {
+  "commit": "cc26fe14ed3935d657bcdd35892cb3901cd8da32",
+  "parents": [
+   "0d39610e324beccdb946945496d4a5977025cf78"
+  ],
+  "subject": "desktop: a line-by-line review; install and uninstall fixed and proven against a snapshot rig (#3321)",
+  "pr": 3321,
+  "kind": "squash",
+  "head": "29faedf15014fb01a5acc9e568fe1337f6ae63a8",
+  "forkPoint": "2dcf28146a438f5fbd28e200e5cb7962457449ef",
+  "finalMergeBase": "d6ac5576a7fc35b9e8562585ab6d4ea25f148ae4",
+  "githubBaseSha": "d6ac5576a7fc35b9e8562585ab6d4ea25f148ae4",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "0d39610e324beccdb946945496d4a5977025cf78",
+    "mainCommitsSinceFork": 10,
+    "filesChangedSinceFork": 211
+   }
+  ]
+ },
+ {
+  "commit": "fef22b88a8f7ab2add5b811dd36597981d1a966a",
+  "parents": [
+   "cc26fe14ed3935d657bcdd35892cb3901cd8da32"
+  ],
+  "subject": "Organization \u203a Model funding: bring your own model key from the app (#3308)",
+  "pr": 3308,
+  "kind": "squash",
+  "head": "ad64a20e1549fe4a1bf445982080c0698de6120b",
+  "forkPoint": "a44c54151988534878534c8d828030b2a16432d1",
+  "finalMergeBase": "4f86e753b91f0f3aa409fb6fdc0c856d7a8ae566",
+  "githubBaseSha": "4f86e753b91f0f3aa409fb6fdc0c856d7a8ae566",
+  "integrations": 5,
+  "sides": [
+   {
+    "parent": "cc26fe14ed3935d657bcdd35892cb3901cd8da32",
+    "mainCommitsSinceFork": 21,
+    "filesChangedSinceFork": 347
+   }
+  ]
+ },
+ {
+  "commit": "b7a0f0989b2ff8193df748e0931f32d321a5704f",
+  "parents": [
+   "fef22b88a8f7ab2add5b811dd36597981d1a966a"
+  ],
+  "subject": "Spec and plan: one assembler, two planes, the gateway, and the four-word tier ladder (#3307)",
+  "pr": 3307,
+  "kind": "squash",
+  "head": "e26e1262cf768c245d8bcd5c9c000f506ef4da9d",
+  "forkPoint": "02278c9132914d5754f2165f5b720410c80f688b",
+  "finalMergeBase": "66c51714328442d03d1b27beb05a7f8f140d9065",
+  "githubBaseSha": "66c51714328442d03d1b27beb05a7f8f140d9065",
+  "integrations": 2,
+  "sides": [
+   {
+    "parent": "fef22b88a8f7ab2add5b811dd36597981d1a966a",
+    "mainCommitsSinceFork": 13,
+    "filesChangedSinceFork": 304
+   }
+  ]
+ },
+ {
+  "commit": "c5c714e130b0fb0378f3498d293df69cc2b0e920",
+  "parents": [
+   "b7a0f0989b2ff8193df748e0931f32d321a5704f"
+  ],
+  "subject": "billing: bill the in-app agent's platform-funded tokens at exactly cost (#3322)",
+  "pr": 3322,
+  "kind": "squash",
+  "head": "fc8cf4598de318a6efc61518bbebb57f7fa4709b",
+  "forkPoint": "d6ac5576a7fc35b9e8562585ab6d4ea25f148ae4",
+  "finalMergeBase": "b7a0f0989b2ff8193df748e0931f32d321a5704f",
+  "githubBaseSha": "b7a0f0989b2ff8193df748e0931f32d321a5704f",
+  "integrations": 2,
+  "sides": [
+   {
+    "parent": "b7a0f0989b2ff8193df748e0931f32d321a5704f",
+    "mainCommitsSinceFork": 9,
+    "filesChangedSinceFork": 287
+   }
+  ]
+ },
+ {
+  "commit": "d9aa25791f42f895588015533656abdc8649c239",
+  "parents": [
+   "c5c714e130b0fb0378f3498d293df69cc2b0e920"
+  ],
+  "subject": "app: the in-app assistant renders markdown, highlights code, and reveals replies (#3341)",
+  "pr": 3341,
+  "kind": "squash",
+  "head": "62214fe757260553d82ccf18c79a57e55012590f",
+  "forkPoint": "cc26fe14ed3935d657bcdd35892cb3901cd8da32",
+  "finalMergeBase": "b7a0f0989b2ff8193df748e0931f32d321a5704f",
+  "githubBaseSha": "b7a0f0989b2ff8193df748e0931f32d321a5704f",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "c5c714e130b0fb0378f3498d293df69cc2b0e920",
+    "mainCommitsSinceFork": 3,
+    "filesChangedSinceFork": 92
+   }
+  ]
+ },
+ {
+  "commit": "36304eb7ffe9d729a1222f5b141b677f06203289",
+  "parents": [
+   "d9aa25791f42f895588015533656abdc8649c239"
+  ],
+  "subject": "Brand: obsidian and white palette, three faces, across the design system and apps (#3346)",
+  "pr": 3346,
+  "kind": "squash",
+  "head": "8bca6ad3c82f5ca64c9a9682eb21b141bb15bbd4",
+  "forkPoint": "b7a0f0989b2ff8193df748e0931f32d321a5704f",
+  "finalMergeBase": "b7a0f0989b2ff8193df748e0931f32d321a5704f",
+  "githubBaseSha": "b7a0f0989b2ff8193df748e0931f32d321a5704f",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "d9aa25791f42f895588015533656abdc8649c239",
+    "mainCommitsSinceFork": 2,
+    "filesChangedSinceFork": 22
+   }
+  ]
+ },
+ {
+  "commit": "b9beb0e5c898ec937aa1dddcfe604858b0e6e3db",
+  "parents": [
+   "36304eb7ffe9d729a1222f5b141b677f06203289"
+  ],
+  "subject": "tacho: ship prompts, transcripts and per-call tokens so the Run page has cost and content (#3342)",
+  "pr": 3342,
+  "kind": "squash",
+  "head": "ec9b3a6073c1e4b73fb18ed1ea48e5889d037ec6",
+  "forkPoint": "cc26fe14ed3935d657bcdd35892cb3901cd8da32",
+  "finalMergeBase": "cc26fe14ed3935d657bcdd35892cb3901cd8da32",
+  "githubBaseSha": "b7a0f0989b2ff8193df748e0931f32d321a5704f",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "36304eb7ffe9d729a1222f5b141b677f06203289",
+    "mainCommitsSinceFork": 5,
+    "filesChangedSinceFork": 260
+   }
+  ]
+ },
+ {
+  "commit": "837f93a533cee151c49755b5a8bf2ff68e5e00be",
+  "parents": [
+   "b9beb0e5c898ec937aa1dddcfe604858b0e6e3db"
+  ],
+  "subject": "M0: a workspace is born with its main repository; a second repository links and unlinks (\u00a717 M0) (#3326)",
+  "pr": 3326,
+  "kind": "squash",
+  "head": "2130fdff096f567a327b8a52d94882805836e4a6",
+  "forkPoint": "a44c54151988534878534c8d828030b2a16432d1",
+  "finalMergeBase": "d9aa25791f42f895588015533656abdc8649c239",
+  "githubBaseSha": "d9aa25791f42f895588015533656abdc8649c239",
+  "integrations": 5,
+  "sides": [
+   {
+    "parent": "b9beb0e5c898ec937aa1dddcfe604858b0e6e3db",
+    "mainCommitsSinceFork": 27,
+    "filesChangedSinceFork": 588
+   }
+  ]
+ },
+ {
+  "commit": "b6261450c8b384a869dc2414d37996e0e66d06d0",
+  "parents": [
+   "837f93a533cee151c49755b5a8bf2ff68e5e00be"
+  ],
+  "subject": "app: fix the five review findings left on the assistant reveal (#3350)",
+  "pr": 3350,
+  "kind": "squash",
+  "head": "8a04d7dceedf8076368bcea645461d945e61cd24",
+  "forkPoint": "d9aa25791f42f895588015533656abdc8649c239",
+  "finalMergeBase": "d9aa25791f42f895588015533656abdc8649c239",
+  "githubBaseSha": "d9aa25791f42f895588015533656abdc8649c239",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "837f93a533cee151c49755b5a8bf2ff68e5e00be",
+    "mainCommitsSinceFork": 3,
+    "filesChangedSinceFork": 300
+   }
+  ]
+ },
+ {
+  "commit": "c3e8dc704eaf843b24d59274cb63954d85fe1107",
+  "parents": [
+   "b6261450c8b384a869dc2414d37996e0e66d06d0"
+  ],
+  "subject": "app: the Mission Control transcript on every run's page (#3345)",
+  "pr": 3345,
+  "kind": "squash",
+  "head": "a7722e20e65eb89c003704e5b8af236d1bed921d",
+  "forkPoint": "b7a0f0989b2ff8193df748e0931f32d321a5704f",
+  "finalMergeBase": "b9beb0e5c898ec937aa1dddcfe604858b0e6e3db",
+  "githubBaseSha": "b9beb0e5c898ec937aa1dddcfe604858b0e6e3db",
+  "integrations": 2,
+  "sides": [
+   {
+    "parent": "b6261450c8b384a869dc2414d37996e0e66d06d0",
+    "mainCommitsSinceFork": 6,
+    "filesChangedSinceFork": 320
+   }
+  ]
+ },
+ {
+  "commit": "29da3bdcee28a4c2e265a99d9c5983dcde8972f7",
+  "parents": [
+   "c3e8dc704eaf843b24d59274cb63954d85fe1107"
+  ],
+  "subject": "run replay 1/3: capture frame bodies at the host and the assistant (#3351)",
+  "pr": 3351,
+  "kind": "squash",
+  "head": "c75e66885b68c3da274e4a057ea6a72b96338019",
+  "forkPoint": "cc26fe14ed3935d657bcdd35892cb3901cd8da32",
+  "finalMergeBase": "b6261450c8b384a869dc2414d37996e0e66d06d0",
+  "githubBaseSha": "b6261450c8b384a869dc2414d37996e0e66d06d0",
+  "integrations": 2,
+  "sides": [
+   {
+    "parent": "c3e8dc704eaf843b24d59274cb63954d85fe1107",
+    "mainCommitsSinceFork": 9,
+    "filesChangedSinceFork": 413
+   }
+  ]
+ },
+ {
+  "commit": "61ef2997b7f9a80966cbaea544ef0848bc818985",
+  "parents": [
+   "29da3bdcee28a4c2e265a99d9c5983dcde8972f7"
+  ],
+  "subject": "tacho: compile steering from the pinned version, and cache it on the steering version (#3311, #3312) (#3325)",
+  "pr": 3325,
+  "kind": "squash",
+  "head": "bf13cfa08581363dd28f6d7a6d148316edb22268",
+  "forkPoint": "4a45e2c398b84326d9e670fc08ce3ea9edf75453",
+  "finalMergeBase": "c3e8dc704eaf843b24d59274cb63954d85fe1107",
+  "githubBaseSha": "c3e8dc704eaf843b24d59274cb63954d85fe1107",
+  "integrations": 6,
+  "sides": [
+   {
+    "parent": "29da3bdcee28a4c2e265a99d9c5983dcde8972f7",
+    "mainCommitsSinceFork": 15,
+    "filesChangedSinceFork": 560
+   }
+  ]
+ },
+ {
+  "commit": "0855f14d88bb8e20bef480f22da10a8b731eeb7d",
+  "parents": [
+   "61ef2997b7f9a80966cbaea544ef0848bc818985"
+  ],
+  "subject": "tacho: fix the three P1 review findings that missed the merge of #3342 (#3364)",
+  "pr": 3364,
+  "kind": "squash",
+  "head": "20b97d1b20fe273409ea29b4be6ccee254e43935",
+  "forkPoint": "61ef2997b7f9a80966cbaea544ef0848bc818985",
+  "finalMergeBase": "61ef2997b7f9a80966cbaea544ef0848bc818985",
+  "githubBaseSha": "61ef2997b7f9a80966cbaea544ef0848bc818985",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "61ef2997b7f9a80966cbaea544ef0848bc818985",
+    "mainCommitsSinceFork": 0
+   }
+  ]
+ },
+ {
+  "commit": "9b6219ca3ff0213f46b24f3c4096d233c4575a1f",
+  "parents": [
+   "0855f14d88bb8e20bef480f22da10a8b731eeb7d"
+  ],
+  "subject": "Cursor is the fourth wrapped harness, and every export must load in all four (ADR-099) (#3347)",
+  "pr": 3347,
+  "kind": "squash",
+  "head": "9d3dce5fca108a4599600e6025b435f1f52a5cd5",
+  "forkPoint": "b7a0f0989b2ff8193df748e0931f32d321a5704f",
+  "finalMergeBase": "61ef2997b7f9a80966cbaea544ef0848bc818985",
+  "githubBaseSha": "61ef2997b7f9a80966cbaea544ef0848bc818985",
+  "integrations": 5,
+  "sides": [
+   {
+    "parent": "0855f14d88bb8e20bef480f22da10a8b731eeb7d",
+    "mainCommitsSinceFork": 10,
+    "filesChangedSinceFork": 378
+   }
+  ]
+ },
+ {
+  "commit": "f789da208900d7a0cb43e859b5dc3caabbf5f9c0",
+  "parents": [
+   "9b6219ca3ff0213f46b24f3c4096d233c4575a1f"
+  ],
+  "subject": "Sync frontend PWA assets and Mission Control messaging from oxagen-brand tip (#3380)",
+  "pr": 3380,
+  "kind": "squash",
+  "head": "92a20e1637ae7674cacf3ce36f9bdc71ae0ca5f4",
+  "forkPoint": "61ef2997b7f9a80966cbaea544ef0848bc818985",
+  "finalMergeBase": "61ef2997b7f9a80966cbaea544ef0848bc818985",
+  "githubBaseSha": "61ef2997b7f9a80966cbaea544ef0848bc818985",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "9b6219ca3ff0213f46b24f3c4096d233c4575a1f",
+    "mainCommitsSinceFork": 2,
+    "filesChangedSinceFork": 101
+   }
+  ]
+ },
+ {
+  "commit": "e5f8fb71025e84c1c0404600838c74c4416c76df",
+  "parents": [
+   "f789da208900d7a0cb43e859b5dc3caabbf5f9c0"
+  ],
+  "subject": "feat(steering): warn and optionally refuse a prompt when a checkout's .oxagen/ is behind the production branch (#3276)",
+  "pr": 3276,
+  "kind": "squash",
+  "head": "5b027c0f065731ea415712852d0dfbe97fd3a7b4",
+  "forkPoint": "a44c54151988534878534c8d828030b2a16432d1",
+  "finalMergeBase": "9b6219ca3ff0213f46b24f3c4096d233c4575a1f",
+  "githubBaseSha": "9b6219ca3ff0213f46b24f3c4096d233c4575a1f",
+  "integrations": 18,
+  "sides": [
+   {
+    "parent": "f789da208900d7a0cb43e859b5dc3caabbf5f9c0",
+    "mainCommitsSinceFork": 35,
+    "filesChangedSinceFork": 838
+   }
+  ]
+ },
+ {
+  "commit": "4c0610c396498e5fd9fdb39b1dc2f675e702e4e0",
+  "parents": [
+   "e5f8fb71025e84c1c0404600838c74c4416c76df"
+  ],
+  "subject": "iam: a Tacho host key may poll for commands again (#3381)",
+  "pr": 3381,
+  "kind": "squash",
+  "head": "f538137b734a4117c69ca380649fd07f64c154c8",
+  "forkPoint": "0855f14d88bb8e20bef480f22da10a8b731eeb7d",
+  "finalMergeBase": "0855f14d88bb8e20bef480f22da10a8b731eeb7d",
+  "githubBaseSha": "0855f14d88bb8e20bef480f22da10a8b731eeb7d",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "e5f8fb71025e84c1c0404600838c74c4416c76df",
+    "mainCommitsSinceFork": 3,
+    "filesChangedSinceFork": 375
+   }
+  ]
+ },
+ {
+  "commit": "3985213735ece9c24a018d600f3bbc4d50069801",
+  "parents": [
+   "4c0610c396498e5fd9fdb39b1dc2f675e702e4e0"
+  ],
+  "subject": "docs(mission-control): page-by-page gap inventory vs roadmap spec (#3386)",
+  "pr": 3386,
+  "kind": "squash",
+  "head": "8bdd811673bde7c4b9217fb2453c3a6d61344f2e",
+  "forkPoint": "f789da208900d7a0cb43e859b5dc3caabbf5f9c0",
+  "finalMergeBase": "f789da208900d7a0cb43e859b5dc3caabbf5f9c0",
+  "githubBaseSha": "f789da208900d7a0cb43e859b5dc3caabbf5f9c0",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "4c0610c396498e5fd9fdb39b1dc2f675e702e4e0",
+    "mainCommitsSinceFork": 2,
+    "filesChangedSinceFork": 105
+   }
+  ]
+ },
+ {
+  "commit": "6a0c51fbb5a6146e4e8d38233f1fdabad327102f",
+  "parents": [
+   "3985213735ece9c24a018d600f3bbc4d50069801"
+  ],
+  "subject": "tacho: keep a drained transcript cursor until the registry forgets the session (#3361)",
+  "pr": 3361,
+  "kind": "squash",
+  "head": "dc157d622691d2e4b577ac07a5946c13a67531b7",
+  "forkPoint": "b9beb0e5c898ec937aa1dddcfe604858b0e6e3db",
+  "finalMergeBase": "0855f14d88bb8e20bef480f22da10a8b731eeb7d",
+  "githubBaseSha": "0855f14d88bb8e20bef480f22da10a8b731eeb7d",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "3985213735ece9c24a018d600f3bbc4d50069801",
+    "mainCommitsSinceFork": 11,
+    "filesChangedSinceFork": 527
+   }
+  ]
+ },
+ {
+  "commit": "93329d51a27255ab3261134290f500322ed67904",
+  "parents": [
+   "6a0c51fbb5a6146e4e8d38233f1fdabad327102f"
+  ],
+  "subject": "tacho: pack ingest batches under the route's request limit, and split a 413 (#3363)",
+  "pr": 3363,
+  "kind": "squash",
+  "head": "b304acbe8e7ee96cb0606f83e0447b3b97682577",
+  "forkPoint": "b9beb0e5c898ec937aa1dddcfe604858b0e6e3db",
+  "finalMergeBase": "0855f14d88bb8e20bef480f22da10a8b731eeb7d",
+  "githubBaseSha": "0855f14d88bb8e20bef480f22da10a8b731eeb7d",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "6a0c51fbb5a6146e4e8d38233f1fdabad327102f",
+    "mainCommitsSinceFork": 12,
+    "filesChangedSinceFork": 527
+   }
+  ]
+ },
+ {
+  "commit": "08b8996eeb28c8c44d2dc0d7cbe0ac90b415db10",
+  "parents": [
+   "93329d51a27255ab3261134290f500322ed67904"
+  ],
+  "subject": "fix(tacho): skip the Claude Code hook check on hosts that never enrolled it (#3320) (#3376)",
+  "pr": 3376,
+  "kind": "squash",
+  "head": "89228f6f4c12ea6d3095e49c27cb95679ca29d24",
+  "forkPoint": "61ef2997b7f9a80966cbaea544ef0848bc818985",
+  "finalMergeBase": "61ef2997b7f9a80966cbaea544ef0848bc818985",
+  "githubBaseSha": "61ef2997b7f9a80966cbaea544ef0848bc818985",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "93329d51a27255ab3261134290f500322ed67904",
+    "mainCommitsSinceFork": 8,
+    "filesChangedSinceFork": 393
+   }
+  ]
+ },
+ {
+  "commit": "853ebbf8719aeed640232f605e769f6b612d3d87",
+  "parents": [
+   "08b8996eeb28c8c44d2dc0d7cbe0ac90b415db10"
+  ],
+  "subject": "Every date in the app renders in your time zone, Pacific by default (#3337)",
+  "pr": 3337,
+  "kind": "squash",
+  "head": "20b78e8f0f0c445f8980e9d6d53e2d5eb7c1383b",
+  "forkPoint": "cc26fe14ed3935d657bcdd35892cb3901cd8da32",
+  "finalMergeBase": "9b6219ca3ff0213f46b24f3c4096d233c4575a1f",
+  "githubBaseSha": "9b6219ca3ff0213f46b24f3c4096d233c4575a1f",
+  "integrations": 7,
+  "sides": [
+   {
+    "parent": "08b8996eeb28c8c44d2dc0d7cbe0ac90b415db10",
+    "mainCommitsSinceFork": 20,
+    "filesChangedSinceFork": 682
+   }
+  ]
+ },
+ {
+  "commit": "fdc930036d45001b33203ecf10d5fe45acd656be",
+  "parents": [
+   "853ebbf8719aeed640232f605e769f6b612d3d87"
+  ],
+  "subject": "infra: run-db-migrations.sh can apply an out-of-order migration on request (#3401)",
+  "pr": 3401,
+  "kind": "squash",
+  "head": "a3f75dcfe1b272a4d27bcedf5ab3c5a33efb4dc6",
+  "forkPoint": "853ebbf8719aeed640232f605e769f6b612d3d87",
+  "finalMergeBase": "853ebbf8719aeed640232f605e769f6b612d3d87",
+  "githubBaseSha": "853ebbf8719aeed640232f605e769f6b612d3d87",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "853ebbf8719aeed640232f605e769f6b612d3d87",
+    "mainCommitsSinceFork": 0
+   }
+  ]
+ },
+ {
+  "commit": "bc627397fa4966e7f3dce23dabb27b7797996c60",
+  "parents": [
+   "fdc930036d45001b33203ecf10d5fe45acd656be"
+  ],
+  "subject": "Fix OAuth login errors that looked like a blank login page (#3388)",
+  "pr": 3388,
+  "kind": "squash",
+  "head": "d18efd90d0a3a88b162e971f7a702fa8e24a6d62",
+  "forkPoint": "f789da208900d7a0cb43e859b5dc3caabbf5f9c0",
+  "finalMergeBase": "853ebbf8719aeed640232f605e769f6b612d3d87",
+  "githubBaseSha": "853ebbf8719aeed640232f605e769f6b612d3d87",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "fdc930036d45001b33203ecf10d5fe45acd656be",
+    "mainCommitsSinceFork": 8,
+    "filesChangedSinceFork": 200
+   }
+  ]
+ },
+ {
+  "commit": "a8ba511c7c215d2afc1e6c9e4dc952297a7833d2",
+  "parents": [
+   "bc627397fa4966e7f3dce23dabb27b7797996c60"
+  ],
+  "subject": "tacho: keep the detector's enrollment id paired with its harness list (#3402)",
+  "pr": 3402,
+  "kind": "squash",
+  "head": "f62e0eb7d040240e02b126cf90bb0805afa9de0d",
+  "forkPoint": "853ebbf8719aeed640232f605e769f6b612d3d87",
+  "finalMergeBase": "853ebbf8719aeed640232f605e769f6b612d3d87",
+  "githubBaseSha": "853ebbf8719aeed640232f605e769f6b612d3d87",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "bc627397fa4966e7f3dce23dabb27b7797996c60",
+    "mainCommitsSinceFork": 2,
+    "filesChangedSinceFork": 22
+   }
+  ]
+ },
+ {
+  "commit": "8a4f3c19553404015f32f57f24e08547347c7c2d",
+  "parents": [
+   "a8ba511c7c215d2afc1e6c9e4dc952297a7833d2"
+  ],
+  "subject": "Restore ebook lead gate and move contacts to oxagen.sh (#3389)",
+  "pr": 3389,
+  "kind": "squash",
+  "head": "ee9d05a37844305209fb1e94602e43fea906d7f3",
+  "forkPoint": "f789da208900d7a0cb43e859b5dc3caabbf5f9c0",
+  "finalMergeBase": "853ebbf8719aeed640232f605e769f6b612d3d87",
+  "githubBaseSha": "853ebbf8719aeed640232f605e769f6b612d3d87",
+  "integrations": 2,
+  "sides": [
+   {
+    "parent": "a8ba511c7c215d2afc1e6c9e4dc952297a7833d2",
+    "mainCommitsSinceFork": 10,
+    "filesChangedSinceFork": 219
+   }
+  ]
+ },
+ {
+  "commit": "b7acce8f4e2c2b5552fb0fbd20f3b9912e0ae919",
+  "parents": [
+   "8a4f3c19553404015f32f57f24e08547347c7c2d"
+  ],
+  "subject": "HOTFIX: stop leaking the lead's email from the public /book/redeem response (#3412)",
+  "pr": 3412,
+  "kind": "squash",
+  "head": "abbb8b6b40e5167569178f310c2282661b665453",
+  "forkPoint": "8a4f3c19553404015f32f57f24e08547347c7c2d",
+  "finalMergeBase": "8a4f3c19553404015f32f57f24e08547347c7c2d",
+  "githubBaseSha": "8a4f3c19553404015f32f57f24e08547347c7c2d",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "8a4f3c19553404015f32f57f24e08547347c7c2d",
+    "mainCommitsSinceFork": 0
+   }
+  ]
+ },
+ {
+  "commit": "4bdc73c75f8ed5dfc61f8054f8b2564e92a732cd",
+  "parents": [
+   "b7acce8f4e2c2b5552fb0fbd20f3b9912e0ae919"
+  ],
+  "subject": "fix(billing): restore Stripe Checkout for upgrades and GAU purchases (#3392)",
+  "pr": 3392,
+  "kind": "squash",
+  "head": "c235f1c8b228e2835de55f89d4f523f64b6926f7",
+  "forkPoint": "f789da208900d7a0cb43e859b5dc3caabbf5f9c0",
+  "finalMergeBase": "08b8996eeb28c8c44d2dc0d7cbe0ac90b415db10",
+  "githubBaseSha": "08b8996eeb28c8c44d2dc0d7cbe0ac90b415db10",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "b7acce8f4e2c2b5552fb0fbd20f3b9912e0ae919",
+    "mainCommitsSinceFork": 12,
+    "filesChangedSinceFork": 269
+   }
+  ]
+ },
+ {
+  "commit": "b35d47eb3033b895117f7f59835678b82a4d993c",
+  "parents": [
+   "4bdc73c75f8ed5dfc61f8054f8b2564e92a732cd"
+  ],
+  "subject": "web: restore the demo and contact lead forms after ADR-043 dropped cms (#3390)",
+  "pr": 3390,
+  "kind": "squash",
+  "head": "9998dec71f324c61981fec2c43456f8006dadb4f",
+  "forkPoint": "f789da208900d7a0cb43e859b5dc3caabbf5f9c0",
+  "finalMergeBase": "4bdc73c75f8ed5dfc61f8054f8b2564e92a732cd",
+  "githubBaseSha": "4bdc73c75f8ed5dfc61f8054f8b2564e92a732cd",
+  "integrations": 5,
+  "sides": [
+   {
+    "parent": "4bdc73c75f8ed5dfc61f8054f8b2564e92a732cd",
+    "mainCommitsSinceFork": 13,
+    "filesChangedSinceFork": 295
+   }
+  ]
+ },
+ {
+  "commit": "f62edacf9847af3949ca4e4bb341abc80b13dddb",
+  "parents": [
+   "b35d47eb3033b895117f7f59835678b82a4d993c"
+  ],
+  "subject": "app: Account dialog, avatar editor and user menu as the W11 mockup draws them (#3327)",
+  "pr": 3327,
+  "kind": "squash",
+  "head": "cda0079a8d04e310513f99d1c51bbe144be54afa",
+  "forkPoint": "4f86e753b91f0f3aa409fb6fdc0c856d7a8ae566",
+  "finalMergeBase": "b35d47eb3033b895117f7f59835678b82a4d993c",
+  "githubBaseSha": "b35d47eb3033b895117f7f59835678b82a4d993c",
+  "integrations": 10,
+  "sides": [
+   {
+    "parent": "b35d47eb3033b895117f7f59835678b82a4d993c",
+    "mainCommitsSinceFork": 31,
+    "filesChangedSinceFork": 904
+   }
+  ]
+ },
+ {
+  "commit": "dacf3fa7d13606c493b6fea3122c8405cc62c3bd",
+  "parents": [
+   "f62edacf9847af3949ca4e4bb341abc80b13dddb"
+  ],
+  "subject": "desktop: sign-in stops holding the setup wizard for five minutes, and a spec for the remaining gateway gaps (#3332)",
+  "pr": 3332,
+  "kind": "squash",
+  "head": "689d5b565dc1095237dab9b290cfd339bdd6bd7d",
+  "forkPoint": "1608d2e0c5668b59524124ad5e15a994e91be1cd",
+  "finalMergeBase": "f62edacf9847af3949ca4e4bb341abc80b13dddb",
+  "githubBaseSha": "f62edacf9847af3949ca4e4bb341abc80b13dddb",
+  "integrations": 13,
+  "sides": [
+   {
+    "parent": "f62edacf9847af3949ca4e4bb341abc80b13dddb",
+    "mainCommitsSinceFork": 31,
+    "filesChangedSinceFork": 975
+   }
+  ]
+ },
+ {
+  "commit": "1e4c197aa8727c9bf49c5873b9a321e55774f4a7",
+  "parents": [
+   "dacf3fa7d13606c493b6fea3122c8405cc62c3bd"
+  ],
+  "subject": "brand: re-sync every frontend to house kit 2.3.0, and the Mission Control ship audit (#3385)",
+  "pr": 3385,
+  "kind": "squash",
+  "head": "454942df7c95b73fc64a3c02ffa2c1abf9d17fd5",
+  "forkPoint": "9b6219ca3ff0213f46b24f3c4096d233c4575a1f",
+  "finalMergeBase": "f62edacf9847af3949ca4e4bb341abc80b13dddb",
+  "githubBaseSha": "f62edacf9847af3949ca4e4bb341abc80b13dddb",
+  "integrations": 8,
+  "sides": [
+   {
+    "parent": "dacf3fa7d13606c493b6fea3122c8405cc62c3bd",
+    "mainCommitsSinceFork": 17,
+    "filesChangedSinceFork": 693
+   }
+  ]
+ },
+ {
+  "commit": "566b23723c5fff888a6bda7ef55c45358fb87696",
+  "parents": [
+   "1e4c197aa8727c9bf49c5873b9a321e55774f4a7"
+  ],
+  "subject": "cost: record and show run cost \u2014 auto-seeded price book, negotiated rates, unpriced-model surfacing (#3271)",
+  "pr": 3271,
+  "kind": "squash",
+  "head": "29212e7e6218aabfab52d174f8afcbd1de0ab70c",
+  "forkPoint": "a44c54151988534878534c8d828030b2a16432d1",
+  "finalMergeBase": "1e4c197aa8727c9bf49c5873b9a321e55774f4a7",
+  "githubBaseSha": "1e4c197aa8727c9bf49c5873b9a321e55774f4a7",
+  "integrations": 27,
+  "sides": [
+   {
+    "parent": "1e4c197aa8727c9bf49c5873b9a321e55774f4a7",
+    "mainCommitsSinceFork": 52,
+    "filesChangedSinceFork": 1262
+   }
+  ]
+ },
+ {
+  "commit": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+  "parents": [
+   "566b23723c5fff888a6bda7ef55c45358fb87696"
+  ],
+  "subject": "run replay 2/3: transcript steps with tool i/o, chain and seal, live stream (#3352)",
+  "pr": 3352,
+  "kind": "squash",
+  "head": "cda98f98a3e44e4e4895622179d8547031145765",
+  "forkPoint": "b7a0f0989b2ff8193df748e0931f32d321a5704f",
+  "finalMergeBase": "566b23723c5fff888a6bda7ef55c45358fb87696",
+  "githubBaseSha": "566b23723c5fff888a6bda7ef55c45358fb87696",
+  "integrations": 17,
+  "sides": [
+   {
+    "parent": "566b23723c5fff888a6bda7ef55c45358fb87696",
+    "mainCommitsSinceFork": 30,
+    "filesChangedSinceFork": 1112
+   }
+  ]
+ },
+ {
+  "commit": "f5db811b560e450915b0825ecff5c0a17e27df79",
+  "parents": [
+   "6651347332fcbd1f010f31edcd5cb3f9d1998d98"
+  ],
+  "subject": "docs: the app route map names the mandate page and says whose [orgSlug] segments are (#3441)",
+  "pr": 3441,
+  "kind": "squash",
+  "head": "26820574224c2b8c8b4134873ad259bc42bab2b8",
+  "forkPoint": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+  "finalMergeBase": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+  "githubBaseSha": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+    "mainCommitsSinceFork": 0
+   }
+  ]
+ },
+ {
+  "commit": "2752159aa315e88867a19a44f5e5ca4cc8cd4bd7",
+  "parents": [
+   "f5db811b560e450915b0825ecff5c0a17e27df79"
+  ],
+  "subject": "fix(skills): round-trip harness labels instead of splitting on newline (#3433)",
+  "pr": 3433,
+  "kind": "squash",
+  "head": "e56ab03841ee8119f67348d65fa6b2a2618a9a2c",
+  "forkPoint": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+  "finalMergeBase": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+  "githubBaseSha": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "f5db811b560e450915b0825ecff5c0a17e27df79",
+    "mainCommitsSinceFork": 1,
+    "filesChangedSinceFork": 2
+   }
+  ]
+ },
+ {
+  "commit": "05175cc76e6332e28ba7ca6a11cdff0deec6cc5b",
+  "parents": [
+   "2752159aa315e88867a19a44f5e5ca4cc8cd4bd7"
+  ],
+  "subject": "tacho: one unfamiliar OTel field no longer drops a whole export (#3425)",
+  "pr": 3425,
+  "kind": "squash",
+  "head": "6d8503db1043b213f330eba1732789cb79d434c3",
+  "forkPoint": "566b23723c5fff888a6bda7ef55c45358fb87696",
+  "finalMergeBase": "566b23723c5fff888a6bda7ef55c45358fb87696",
+  "githubBaseSha": "566b23723c5fff888a6bda7ef55c45358fb87696",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "2752159aa315e88867a19a44f5e5ca4cc8cd4bd7",
+    "mainCommitsSinceFork": 3,
+    "filesChangedSinceFork": 159
+   }
+  ]
+ },
+ {
+  "commit": "88823c40fa4f2e62d3232d0113b8bab4bfa5c738",
+  "parents": [
+   "05175cc76e6332e28ba7ca6a11cdff0deec6cc5b"
+  ],
+  "subject": "An archived workspace accepts no machine credential (ADR-104) (#3432)",
+  "pr": 3432,
+  "kind": "squash",
+  "head": "53095cb89630d899d5cfbee27489c3858547f7dd",
+  "forkPoint": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+  "finalMergeBase": "05175cc76e6332e28ba7ca6a11cdff0deec6cc5b",
+  "githubBaseSha": "05175cc76e6332e28ba7ca6a11cdff0deec6cc5b",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "05175cc76e6332e28ba7ca6a11cdff0deec6cc5b",
+    "mainCommitsSinceFork": 3,
+    "filesChangedSinceFork": 23
+   }
+  ]
+ },
+ {
+  "commit": "275fc0bcd8a80796870fada2757b94b0c62cda17",
+  "parents": [
+   "88823c40fa4f2e62d3232d0113b8bab4bfa5c738"
+  ],
+  "subject": "fix(mandates): a retired agent's mandate is revoked, not left active (#3437)",
+  "pr": 3437,
+  "kind": "squash",
+  "head": "560b2d3945c5323d6e024ebbbafc9376e6f76ad7",
+  "forkPoint": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+  "finalMergeBase": "88823c40fa4f2e62d3232d0113b8bab4bfa5c738",
+  "githubBaseSha": "88823c40fa4f2e62d3232d0113b8bab4bfa5c738",
+  "integrations": 2,
+  "sides": [
+   {
+    "parent": "88823c40fa4f2e62d3232d0113b8bab4bfa5c738",
+    "mainCommitsSinceFork": 4,
+    "filesChangedSinceFork": 42
+   }
+  ]
+ },
+ {
+  "commit": "accaa23b68e50079e90d90fad6c75b4b59eb9402",
+  "parents": [
+   "275fc0bcd8a80796870fada2757b94b0c62cda17"
+  ],
+  "subject": "Store a mandate limit's measure kind instead of guessing it (ADR-108) (#3442)",
+  "pr": 3442,
+  "kind": "squash",
+  "head": "ecbf83c072773faf48aaf2e9e847a74ef53ad754",
+  "forkPoint": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+  "finalMergeBase": "275fc0bcd8a80796870fada2757b94b0c62cda17",
+  "githubBaseSha": "275fc0bcd8a80796870fada2757b94b0c62cda17",
+  "integrations": 3,
+  "sides": [
+   {
+    "parent": "275fc0bcd8a80796870fada2757b94b0c62cda17",
+    "mainCommitsSinceFork": 5,
+    "filesChangedSinceFork": 63
+   }
+  ]
+ },
+ {
+  "commit": "80424b9a11ad5c171e49fdf849138c071df38c78",
+  "parents": [
+   "accaa23b68e50079e90d90fad6c75b4b59eb9402"
+  ],
+  "subject": "fix(mandates): list_mandates admits the roles request_mandate admits (#3440)",
+  "pr": 3440,
+  "kind": "squash",
+  "head": "489f1ead93baa1d71b28016ca85eb88f38c2cd98",
+  "forkPoint": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+  "finalMergeBase": "accaa23b68e50079e90d90fad6c75b4b59eb9402",
+  "githubBaseSha": "accaa23b68e50079e90d90fad6c75b4b59eb9402",
+  "integrations": 4,
+  "sides": [
+   {
+    "parent": "accaa23b68e50079e90d90fad6c75b4b59eb9402",
+    "mainCommitsSinceFork": 6,
+    "filesChangedSinceFork": 94
+   }
+  ]
+ },
+ {
+  "commit": "6244091007f6d11fbf0469b348b3f7607fc756e4",
+  "parents": [
+   "80424b9a11ad5c171e49fdf849138c071df38c78"
+  ],
+  "subject": "saving workflow",
+  "pr": null,
+  "kind": "direct"
+ },
+ {
+  "commit": "e857c2804a5c5635ec1458a26a99c2b5f7c4c284",
+  "parents": [
+   "80424b9a11ad5c171e49fdf849138c071df38c78"
+  ],
+  "subject": "web, docs: System / Light / Dark theme control in the footer; web footer in columns (#3443)",
+  "pr": 3443,
+  "kind": "squash",
+  "head": "3996f0602d03d40fc670bcceeec878c4675834d9",
+  "forkPoint": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+  "finalMergeBase": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+  "githubBaseSha": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "80424b9a11ad5c171e49fdf849138c071df38c78",
+    "mainCommitsSinceFork": 7,
+    "filesChangedSinceFork": 103
+   }
+  ]
+ },
+ {
+  "commit": "2ed193333e488fba1bb6e0a1a6de6b056fccd089",
+  "parents": [
+   "e857c2804a5c5635ec1458a26a99c2b5f7c4c284"
+  ],
+  "subject": "Bound a review at three rounds, then carry what is left (#3453)",
+  "pr": 3453,
+  "kind": "squash",
+  "head": "cf88b43c7090b63c5b59b1ba130445a7772f658e",
+  "forkPoint": "80424b9a11ad5c171e49fdf849138c071df38c78",
+  "finalMergeBase": "80424b9a11ad5c171e49fdf849138c071df38c78",
+  "githubBaseSha": "80424b9a11ad5c171e49fdf849138c071df38c78",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "e857c2804a5c5635ec1458a26a99c2b5f7c4c284",
+    "mainCommitsSinceFork": 1,
+    "filesChangedSinceFork": 10
+   }
+  ]
+ },
+ {
+  "commit": "4493965157691ab234beda058a842a1fac9f2e5a",
+  "parents": [
+   "2ed193333e488fba1bb6e0a1a6de6b056fccd089"
+  ],
+  "subject": "web: fix the three Codex P2s on the theme control (#3460)",
+  "pr": 3460,
+  "kind": "squash",
+  "head": "c788a568806107d8f23878fe1ce193f4b6bcdedc",
+  "forkPoint": "2ed193333e488fba1bb6e0a1a6de6b056fccd089",
+  "finalMergeBase": "2ed193333e488fba1bb6e0a1a6de6b056fccd089",
+  "githubBaseSha": "2ed193333e488fba1bb6e0a1a6de6b056fccd089",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "2ed193333e488fba1bb6e0a1a6de6b056fccd089",
+    "mainCommitsSinceFork": 0
+   }
+  ]
+ },
+ {
+  "commit": "d70ce7ea1dea13fe05b2539744c754a9d7b2e1f8",
+  "parents": [
+   "4493965157691ab234beda058a842a1fac9f2e5a"
+  ],
+  "subject": "fix(iam): backfill the mandate grants #3440 added for existing orgs (#3457)",
+  "pr": 3457,
+  "kind": "squash",
+  "head": "75a2c734d0878819fd918703670b2412dbbb2ae2",
+  "forkPoint": "80424b9a11ad5c171e49fdf849138c071df38c78",
+  "finalMergeBase": "2ed193333e488fba1bb6e0a1a6de6b056fccd089",
+  "githubBaseSha": "2ed193333e488fba1bb6e0a1a6de6b056fccd089",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "4493965157691ab234beda058a842a1fac9f2e5a",
+    "mainCommitsSinceFork": 3,
+    "filesChangedSinceFork": 12
+   }
+  ]
+ },
+ {
+  "commit": "37b98fa37f68be36566a294e95d2c840cf6a7eb2",
+  "parents": [
+   "d70ce7ea1dea13fe05b2539744c754a9d7b2e1f8"
+  ],
+  "subject": "chore(backlog): triage cleanup, 2 issues (#3455)",
+  "pr": 3455,
+  "kind": "squash",
+  "head": "4d7bd17ec5c52a41ab8319994d20f558280f206b",
+  "forkPoint": "05175cc76e6332e28ba7ca6a11cdff0deec6cc5b",
+  "finalMergeBase": "05175cc76e6332e28ba7ca6a11cdff0deec6cc5b",
+  "githubBaseSha": "2ed193333e488fba1bb6e0a1a6de6b056fccd089",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "d70ce7ea1dea13fe05b2539744c754a9d7b2e1f8",
+    "mainCommitsSinceFork": 8,
+    "filesChangedSinceFork": 96
+   }
+  ]
+ },
+ {
+  "commit": "e1285479c2cbc95bc96086d9626c255e13fee2eb",
+  "parents": [
+   "37b98fa37f68be36566a294e95d2c840cf6a7eb2"
+  ],
+  "subject": "tacho: roll back sticky OTel fields when the record that carried them is refused (#3454)",
+  "pr": 3454,
+  "kind": "squash",
+  "head": "09061a75adda174284e4de269d0d517c72e404b9",
+  "forkPoint": "80424b9a11ad5c171e49fdf849138c071df38c78",
+  "finalMergeBase": "80424b9a11ad5c171e49fdf849138c071df38c78",
+  "githubBaseSha": "2ed193333e488fba1bb6e0a1a6de6b056fccd089",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "37b98fa37f68be36566a294e95d2c840cf6a7eb2",
+    "mainCommitsSinceFork": 5,
+    "filesChangedSinceFork": 19
+   }
+  ]
+ },
+ {
+  "commit": "f74733235505fe942a9e7977d72ad731b75aa92a",
+  "parents": [
+   "e1285479c2cbc95bc96086d9626c255e13fee2eb"
+  ],
+  "subject": "ADR-103 and phase 1a: take `oxagen tacho` out of --help, keep every command working (#3463)",
+  "pr": 3463,
+  "kind": "squash",
+  "head": "3f28e0d63b59b1ddf7e27aa7cd30daabd670289b",
+  "forkPoint": "1e4c197aa8727c9bf49c5873b9a321e55774f4a7",
+  "finalMergeBase": "1e4c197aa8727c9bf49c5873b9a321e55774f4a7",
+  "githubBaseSha": "2ed193333e488fba1bb6e0a1a6de6b056fccd089",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "e1285479c2cbc95bc96086d9626c255e13fee2eb",
+    "mainCommitsSinceFork": 15,
+    "filesChangedSinceFork": 356
+   }
+  ]
+ },
+ {
+  "commit": "bfac22fbe9785d9255520fb6fe8ffd7052848ff2",
+  "parents": [
+   "f74733235505fe942a9e7977d72ad731b75aa92a"
+  ],
+  "subject": "Advisory check for a stale-merge-base squash-merge revert, and a machine-key-scope purpose guard (#3470)",
+  "pr": 3470,
+  "kind": "squash",
+  "head": "4d64533df00148b05d81d7b61e964a9a1442cd72",
+  "forkPoint": "e857c2804a5c5635ec1458a26a99c2b5f7c4c284",
+  "finalMergeBase": "f74733235505fe942a9e7977d72ad731b75aa92a",
+  "githubBaseSha": "f74733235505fe942a9e7977d72ad731b75aa92a",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "f74733235505fe942a9e7977d72ad731b75aa92a",
+    "mainCommitsSinceFork": 6,
+    "filesChangedSinceFork": 21
+   }
+  ]
+ },
+ {
+  "commit": "6e048825113a5108c4e085f4d7e76232b23277dd",
+  "parents": [
+   "6244091007f6d11fbf0469b348b3f7607fc756e4",
+   "bfac22fbe9785d9255520fb6fe8ffd7052848ff2"
+  ],
+  "subject": "Merge branch 'main' of https://github.com/macanderson/oxagen",
+  "pr": null,
+  "kind": "merge",
+  "forkPoint": "80424b9a11ad5c171e49fdf849138c071df38c78",
+  "sides": [
+   {
+    "parent": "6244091007f6d11fbf0469b348b3f7607fc756e4",
+    "mainCommitsSinceFork": 1,
+    "filesChangedSinceFork": 2
+   },
+   {
+    "parent": "bfac22fbe9785d9255520fb6fe8ffd7052848ff2",
+    "mainCommitsSinceFork": 8,
+    "filesChangedSinceFork": 38
+   }
+  ]
+ },
+ {
+  "commit": "8c4ed72f8fccf30425a5f9296f2df204c32c94f1",
+  "parents": [
+   "6e048825113a5108c4e085f4d7e76232b23277dd"
+  ],
+  "subject": "Pin Node 24.21.0 everywhere: local, CI, CI image and production runtimes",
+  "pr": null,
+  "kind": "direct"
+ },
+ {
+  "commit": "762d2d27e1c991021e4960fb0658a24bd79395f2",
+  "parents": [
+   "8c4ed72f8fccf30425a5f9296f2df204c32c94f1"
+  ],
+  "subject": "fix(tacho): restore recorder sticky state when a seal refuses a record (#3465)",
+  "pr": 3465,
+  "kind": "squash",
+  "head": "118a0264b7469acad99f4ebd0e24d62cfa155548",
+  "forkPoint": "80424b9a11ad5c171e49fdf849138c071df38c78",
+  "finalMergeBase": "f74733235505fe942a9e7977d72ad731b75aa92a",
+  "githubBaseSha": "f74733235505fe942a9e7977d72ad731b75aa92a",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "8c4ed72f8fccf30425a5f9296f2df204c32c94f1",
+    "mainCommitsSinceFork": 11,
+    "filesChangedSinceFork": 56
+   }
+  ]
+ },
+ {
+  "commit": "8d8f792a291e6d7030fc695367c500ae53b174da",
+  "parents": [
+   "762d2d27e1c991021e4960fb0658a24bd79395f2"
+  ],
+  "subject": "feat(migrations): db:lint-migrations catches a migration stamped behind its merge base (#3466)",
+  "pr": 3466,
+  "kind": "squash",
+  "head": "d1b513cf5308832dd1e319f2b68a07ed35927fa8",
+  "forkPoint": "80424b9a11ad5c171e49fdf849138c071df38c78",
+  "finalMergeBase": "80424b9a11ad5c171e49fdf849138c071df38c78",
+  "githubBaseSha": "4493965157691ab234beda058a842a1fac9f2e5a",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "762d2d27e1c991021e4960fb0658a24bd79395f2",
+    "mainCommitsSinceFork": 12,
+    "filesChangedSinceFork": 56
+   }
+  ]
+ },
+ {
+  "commit": "5a89a419bdc11e93bb80943e0a776b77e3c8c9ed",
+  "parents": [
+   "8d8f792a291e6d7030fc695367c500ae53b174da"
+  ],
+  "subject": "iam: gateway-forwarded calls attribute evidence to the credential, not the enroller (#3151) (#3468)",
+  "pr": 3468,
+  "kind": "squash",
+  "head": "1ed77348e08f599a2c7179c71a70f8779dd07210",
+  "forkPoint": "80424b9a11ad5c171e49fdf849138c071df38c78",
+  "finalMergeBase": "8d8f792a291e6d7030fc695367c500ae53b174da",
+  "githubBaseSha": "8d8f792a291e6d7030fc695367c500ae53b174da",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "8d8f792a291e6d7030fc695367c500ae53b174da",
+    "mainCommitsSinceFork": 13,
+    "filesChangedSinceFork": 58
+   }
+  ]
+ },
+ {
+  "commit": "e7b67dcf63f69dd4ddfe9963ef64dbc92db81119",
+  "parents": [
+   "5a89a419bdc11e93bb80943e0a776b77e3c8c9ed"
+  ],
+  "subject": "fix(kill-switch): accept usr_ public id for operator target (#3471)",
+  "pr": 3471,
+  "kind": "squash",
+  "head": "25a68490029ab1c11d1e3e9e69b743057ed37dde",
+  "forkPoint": "80424b9a11ad5c171e49fdf849138c071df38c78",
+  "finalMergeBase": "8d8f792a291e6d7030fc695367c500ae53b174da",
+  "githubBaseSha": "8d8f792a291e6d7030fc695367c500ae53b174da",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "5a89a419bdc11e93bb80943e0a776b77e3c8c9ed",
+    "mainCommitsSinceFork": 14,
+    "filesChangedSinceFork": 66
+   }
+  ]
+ },
+ {
+  "commit": "79d393a33480b440779594534d7c0b1c47501a23",
+  "parents": [
+   "e7b67dcf63f69dd4ddfe9963ef64dbc92db81119"
+  ],
+  "subject": "fix(agent): read back a resolved approval, including one auto-approved with no person (#3153) (#3467)",
+  "pr": 3467,
+  "kind": "squash",
+  "head": "a47a5e9eb2c0a963ff5fe05aefc7c81916f426be",
+  "forkPoint": "80424b9a11ad5c171e49fdf849138c071df38c78",
+  "finalMergeBase": "e7b67dcf63f69dd4ddfe9963ef64dbc92db81119",
+  "githubBaseSha": "e7b67dcf63f69dd4ddfe9963ef64dbc92db81119",
+  "integrations": 3,
+  "sides": [
+   {
+    "parent": "e7b67dcf63f69dd4ddfe9963ef64dbc92db81119",
+    "mainCommitsSinceFork": 15,
+    "filesChangedSinceFork": 87
+   }
+  ]
+ },
+ {
+  "commit": "23f5c708f62e408da80bca8cc83c4c75839b33dc",
+  "parents": [
+   "79d393a33480b440779594534d7c0b1c47501a23"
+  ],
+  "subject": "fix(#3237): correct stale ADR-109 reference, record the one-time stale-merge audit (#3482)",
+  "pr": 3482,
+  "kind": "squash",
+  "head": "6fe2e08aace610927ff5045cd95bb56e388b14f6",
+  "forkPoint": "79d393a33480b440779594534d7c0b1c47501a23",
+  "finalMergeBase": "79d393a33480b440779594534d7c0b1c47501a23",
+  "githubBaseSha": "79d393a33480b440779594534d7c0b1c47501a23",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "79d393a33480b440779594534d7c0b1c47501a23",
+    "mainCommitsSinceFork": 0
+   }
+  ]
+ },
+ {
+  "commit": "cc9e072e27f5d6c10c3b908d39e09cc078190fd2",
+  "parents": [
+   "23f5c708f62e408da80bca8cc83c4c75839b33dc"
+  ],
+  "subject": "book: the second edition, 21 parts, built from one manuscript, with print fixed (ADR-109) (#3456)",
+  "pr": 3456,
+  "kind": "squash",
+  "head": "c938ef7f20d9243ddb8c8518dc8a6e34911ac4c7",
+  "forkPoint": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+  "finalMergeBase": "8d8f792a291e6d7030fc695367c500ae53b174da",
+  "githubBaseSha": "8d8f792a291e6d7030fc695367c500ae53b174da",
+  "integrations": 3,
+  "sides": [
+   {
+    "parent": "23f5c708f62e408da80bca8cc83c4c75839b33dc",
+    "mainCommitsSinceFork": 24,
+    "filesChangedSinceFork": 243
+   }
+  ]
+ },
+ {
+  "commit": "2e9967b787757db7e4878163090255b32eaefef1",
+  "parents": [
+   "cc9e072e27f5d6c10c3b908d39e09cc078190fd2"
+  ],
+  "subject": "web: theme control keeps a choice without storage and colours the browser chrome (#3462)",
+  "pr": 3462,
+  "kind": "squash",
+  "head": "d41e17f7acc4595cdd2b019bdfb569e226df13a0",
+  "forkPoint": "2ed193333e488fba1bb6e0a1a6de6b056fccd089",
+  "finalMergeBase": "8d8f792a291e6d7030fc695367c500ae53b174da",
+  "githubBaseSha": "8d8f792a291e6d7030fc695367c500ae53b174da",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "cc9e072e27f5d6c10c3b908d39e09cc078190fd2",
+    "mainCommitsSinceFork": 16,
+    "filesChangedSinceFork": 189
+   }
+  ]
+ },
+ {
+  "commit": "96ed08717b6485563c0b9df93394a1717adad725",
+  "parents": [
+   "2e9967b787757db7e4878163090255b32eaefef1"
+  ],
+  "subject": "ADR-103 phase 1b: the wrapping commands land on `oxagen agent` (#3469)",
+  "pr": 3469,
+  "kind": "squash",
+  "head": "abdb243bff0e500b6d011c8270f79b3d65094167",
+  "forkPoint": "f74733235505fe942a9e7977d72ad731b75aa92a",
+  "finalMergeBase": "f74733235505fe942a9e7977d72ad731b75aa92a",
+  "githubBaseSha": "f74733235505fe942a9e7977d72ad731b75aa92a",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "2e9967b787757db7e4878163090255b32eaefef1",
+    "mainCommitsSinceFork": 12,
+    "filesChangedSinceFork": 180
+   }
+  ]
+ },
+ {
+  "commit": "a604fce5e9b9b5b9ae976563bdc2cc16c538ab1f",
+  "parents": [
+   "96ed08717b6485563c0b9df93394a1717adad725"
+  ],
+  "subject": "Fix invalid logo on auth pages and favicon background (#3475)",
+  "pr": 3475,
+  "kind": "squash",
+  "head": "9d00238b4c074ca30eb6ea4d3471a1a2532f2d66",
+  "forkPoint": "8d8f792a291e6d7030fc695367c500ae53b174da",
+  "finalMergeBase": "e7b67dcf63f69dd4ddfe9963ef64dbc92db81119",
+  "githubBaseSha": "e7b67dcf63f69dd4ddfe9963ef64dbc92db81119",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "96ed08717b6485563c0b9df93394a1717adad725",
+    "mainCommitsSinceFork": 7,
+    "filesChangedSinceFork": 157
+   }
+  ]
+ },
+ {
+  "commit": "756469151e607377c5dc508bfa780dbc6cb27a34",
+  "parents": [
+   "a604fce5e9b9b5b9ae976563bdc2cc16c538ab1f"
+  ],
+  "subject": "fix(tacho): keep Claude Code's tool search on behind the loopback proxy (#3476)",
+  "pr": 3476,
+  "kind": "squash",
+  "head": "da3fd5fdf081ab3dbcb75f784d2cb1cc88ec0a3f",
+  "forkPoint": "8d8f792a291e6d7030fc695367c500ae53b174da",
+  "finalMergeBase": "8d8f792a291e6d7030fc695367c500ae53b174da",
+  "githubBaseSha": "5a89a419bdc11e93bb80943e0a776b77e3c8c9ed",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "a604fce5e9b9b5b9ae976563bdc2cc16c538ab1f",
+    "mainCommitsSinceFork": 8,
+    "filesChangedSinceFork": 164
+   }
+  ]
+ },
+ {
+  "commit": "5eb96f4b50de2788300299e1a4ca8dba62f82a5a",
+  "parents": [
+   "756469151e607377c5dc508bfa780dbc6cb27a34"
+  ],
+  "subject": "Remove stale docs and align guidance with current sources (#3481)",
+  "pr": 3481,
+  "kind": "squash",
+  "head": "59e8cac78755a9be0d0630c8636973e5443aa1b3",
+  "forkPoint": "e7b67dcf63f69dd4ddfe9963ef64dbc92db81119",
+  "finalMergeBase": "756469151e607377c5dc508bfa780dbc6cb27a34",
+  "githubBaseSha": "756469151e607377c5dc508bfa780dbc6cb27a34",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "756469151e607377c5dc508bfa780dbc6cb27a34",
+    "mainCommitsSinceFork": 7,
+    "filesChangedSinceFork": 144
+   }
+  ]
+ },
+ {
+  "commit": "89de4525fd02992be4c0f2f89b80aff6d3372458",
+  "parents": [
+   "5eb96f4b50de2788300299e1a4ca8dba62f82a5a"
+  ],
+  "subject": "cost rollup runs again, and tachod stops parsing its whole WAL per drain (#3464)",
+  "pr": 3464,
+  "kind": "squash",
+  "head": "0ad1ed3f1641be34c098f7fe8ddb5c0562f1c73d",
+  "forkPoint": "2ed193333e488fba1bb6e0a1a6de6b056fccd089",
+  "finalMergeBase": "e7b67dcf63f69dd4ddfe9963ef64dbc92db81119",
+  "githubBaseSha": "e7b67dcf63f69dd4ddfe9963ef64dbc92db81119",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "5eb96f4b50de2788300299e1a4ca8dba62f82a5a",
+    "mainCommitsSinceFork": 21,
+    "filesChangedSinceFork": 722
+   }
+  ]
+ },
+ {
+  "commit": "6e1de20875114505f564ea8c94ce97de63a7450f",
+  "parents": [
+   "89de4525fd02992be4c0f2f89b80aff6d3372458"
+  ],
+  "subject": "Match light and dark app themes to the mockup palettes (#3491)",
+  "pr": 3491,
+  "kind": "squash",
+  "head": "cf074539d33ea6019cdfdc6a38674376ce6800c1",
+  "forkPoint": "5eb96f4b50de2788300299e1a4ca8dba62f82a5a",
+  "finalMergeBase": "5eb96f4b50de2788300299e1a4ca8dba62f82a5a",
+  "githubBaseSha": "89de4525fd02992be4c0f2f89b80aff6d3372458",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "89de4525fd02992be4c0f2f89b80aff6d3372458",
+    "mainCommitsSinceFork": 1,
+    "filesChangedSinceFork": 7
+   }
+  ]
+ },
+ {
+  "commit": "cc8f0b8462a957b1c01f5757d8996d1e304c61d6",
+  "parents": [
+   "6e1de20875114505f564ea8c94ce97de63a7450f"
+  ],
+  "subject": "fix(iam): enforce create_connection's declared Owner/Admin role in the handler (#3487)",
+  "pr": 3487,
+  "kind": "squash",
+  "head": "94cb43b855a43dad8fa8e0a63aef415a12f2e47e",
+  "forkPoint": "79d393a33480b440779594534d7c0b1c47501a23",
+  "finalMergeBase": "79d393a33480b440779594534d7c0b1c47501a23",
+  "githubBaseSha": "23f5c708f62e408da80bca8cc83c4c75839b33dc",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "6e1de20875114505f564ea8c94ce97de63a7450f",
+    "mainCommitsSinceFork": 9,
+    "filesChangedSinceFork": 608
+   }
+  ]
+ },
+ {
+  "commit": "f779d4e7842f064988a2e5e5f96b75572aee175f",
+  "parents": [
+   "cc8f0b8462a957b1c01f5757d8996d1e304c61d6"
+  ],
+  "subject": "fix(mandates): refuse a non-ISO-4217 unit on an amount measure at declaration (#3484)",
+  "pr": 3484,
+  "kind": "squash",
+  "head": "a96d3c9f8047a68a0c11be0aad7466d7aae7b340",
+  "forkPoint": "79d393a33480b440779594534d7c0b1c47501a23",
+  "finalMergeBase": "79d393a33480b440779594534d7c0b1c47501a23",
+  "githubBaseSha": "23f5c708f62e408da80bca8cc83c4c75839b33dc",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "cc8f0b8462a957b1c01f5757d8996d1e304c61d6",
+    "mainCommitsSinceFork": 10,
+    "filesChangedSinceFork": 612
+   }
+  ]
+ },
+ {
+  "commit": "33e1401276470d4828a777c8ab04d3c8820ba454",
+  "parents": [
+   "f779d4e7842f064988a2e5e5f96b75572aee175f"
+  ],
+  "subject": "fix(billing): observed usage is per-class and per-price-window, not one aggregate (#3488)",
+  "pr": 3488,
+  "kind": "squash",
+  "head": "d121291d1bcfada4c886299c84ccb37a7f30adb8",
+  "forkPoint": "23f5c708f62e408da80bca8cc83c4c75839b33dc",
+  "finalMergeBase": "23f5c708f62e408da80bca8cc83c4c75839b33dc",
+  "githubBaseSha": "5eb96f4b50de2788300299e1a4ca8dba62f82a5a",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "f779d4e7842f064988a2e5e5f96b75572aee175f",
+    "mainCommitsSinceFork": 10,
+    "filesChangedSinceFork": 623
+   }
+  ]
+ },
+ {
+  "commit": "5e60e6ab535f38f6d4bba3ccff0fc82ab3a7102f",
+  "parents": [
+   "33e1401276470d4828a777c8ab04d3c8820ba454"
+  ],
+  "subject": "Tools: the Auto-approvals tab and Grant a mandate (#3439)",
+  "pr": 3439,
+  "kind": "squash",
+  "head": "0b1e00dd8238c9f5a86a7b62a46fcd0f70199685",
+  "forkPoint": "566b23723c5fff888a6bda7ef55c45358fb87696",
+  "finalMergeBase": "5eb96f4b50de2788300299e1a4ca8dba62f82a5a",
+  "githubBaseSha": "5eb96f4b50de2788300299e1a4ca8dba62f82a5a",
+  "integrations": 7,
+  "sides": [
+   {
+    "parent": "33e1401276470d4828a777c8ab04d3c8820ba454",
+    "mainCommitsSinceFork": 36,
+    "filesChangedSinceFork": 943
+   }
+  ]
+ },
+ {
+  "commit": "024597f6a3d6d411ab0df9879eb6c068a4661e1a",
+  "parents": [
+   "5e60e6ab535f38f6d4bba3ccff0fc82ab3a7102f"
+  ],
+  "subject": "Mission Control: create a skill, an agent or a context record through a pull request (#3479)",
+  "pr": 3479,
+  "kind": "squash",
+  "head": "f086fe52b9daaedab99130457d6006c6b7b96dbc",
+  "forkPoint": "566b23723c5fff888a6bda7ef55c45358fb87696",
+  "finalMergeBase": "5eb96f4b50de2788300299e1a4ca8dba62f82a5a",
+  "githubBaseSha": "5eb96f4b50de2788300299e1a4ca8dba62f82a5a",
+  "integrations": 6,
+  "sides": [
+   {
+    "parent": "5e60e6ab535f38f6d4bba3ccff0fc82ab3a7102f",
+    "mainCommitsSinceFork": 37,
+    "filesChangedSinceFork": 981
+   }
+  ]
+ },
+ {
+  "commit": "6e669a9a538e98afd312f5348ef5fc77aaddafc1",
+  "parents": [
+   "024597f6a3d6d411ab0df9879eb6c068a4661e1a"
+  ],
+  "subject": "feat(cms): sync website leads to Attio (#3480)",
+  "pr": 3480,
+  "kind": "squash",
+  "head": "0fccf5a9809ce3e0884b4653c89bc6ef14c9ce2e",
+  "forkPoint": "e7b67dcf63f69dd4ddfe9963ef64dbc92db81119",
+  "finalMergeBase": "024597f6a3d6d411ab0df9879eb6c068a4661e1a",
+  "githubBaseSha": "024597f6a3d6d411ab0df9879eb6c068a4661e1a",
+  "integrations": 3,
+  "sides": [
+   {
+    "parent": "024597f6a3d6d411ab0df9879eb6c068a4661e1a",
+    "mainCommitsSinceFork": 15,
+    "filesChangedSinceFork": 833
+   }
+  ]
+ },
+ {
+  "commit": "0ffe9e6f1a6ad242b64f1af1104eb4c22ad6cb8a",
+  "parents": [
+   "6e669a9a538e98afd312f5348ef5fc77aaddafc1"
+  ],
+  "subject": "Mission Control: adversarial review of the gap inventory and a six-session build plan (#3495)",
+  "pr": 3495,
+  "kind": "squash",
+  "head": "e1239c8451d7f9026fd6093950cc0a94c475de3a",
+  "forkPoint": "cc8f0b8462a957b1c01f5757d8996d1e304c61d6",
+  "finalMergeBase": "cc8f0b8462a957b1c01f5757d8996d1e304c61d6",
+  "githubBaseSha": "33e1401276470d4828a777c8ab04d3c8820ba454",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "6e669a9a538e98afd312f5348ef5fc77aaddafc1",
+    "mainCommitsSinceFork": 5,
+    "filesChangedSinceFork": 216
+   }
+  ]
+ },
+ {
+  "commit": "f86fbb191881d61444ad63cbecc07a7ece02cb96",
+  "parents": [
+   "0ffe9e6f1a6ad242b64f1af1104eb4c22ad6cb8a"
+  ],
+  "subject": "ADR-112 phase 3: measure the docs scope by occurrence, and rewrite the corpus README (#3489)",
+  "pr": 3489,
+  "kind": "squash",
+  "head": "5e36f3cd0dd7849a3762ac00d78b21ee90f3945c",
+  "forkPoint": "756469151e607377c5dc508bfa780dbc6cb27a34",
+  "finalMergeBase": "33e1401276470d4828a777c8ab04d3c8820ba454",
+  "githubBaseSha": "33e1401276470d4828a777c8ab04d3c8820ba454",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "0ffe9e6f1a6ad242b64f1af1104eb4c22ad6cb8a",
+    "mainCommitsSinceFork": 10,
+    "filesChangedSinceFork": 761
+   }
+  ]
+ },
+ {
+  "commit": "f1562e5583191e12f5d6abffd9c424f9ea888b61",
+  "parents": [
+   "f86fbb191881d61444ad63cbecc07a7ece02cb96"
+  ],
+  "subject": "Assistant: tighten line-height in replies and list items (#3507)",
+  "pr": 3507,
+  "kind": "squash",
+  "head": "b062582f98de482067043eb17aeee98c98aca862",
+  "forkPoint": "f86fbb191881d61444ad63cbecc07a7ece02cb96",
+  "finalMergeBase": "f86fbb191881d61444ad63cbecc07a7ece02cb96",
+  "githubBaseSha": "f86fbb191881d61444ad63cbecc07a7ece02cb96",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "f86fbb191881d61444ad63cbecc07a7ece02cb96",
+    "mainCommitsSinceFork": 0
+   }
+  ]
+ },
+ {
+  "commit": "57b194e9e246f5844f77caaf644eb882f4f85536",
+  "parents": [
+   "f1562e5583191e12f5d6abffd9c424f9ea888b61"
+  ],
+  "subject": "release: one-button releases, model-written notes on docs.oxagen.sh, and a house-brand downloads page published by CI (#3496)",
+  "pr": 3496,
+  "kind": "squash",
+  "head": "ea7aaeed6a826b3d83c5f2cbbf06ae9221516b0c",
+  "forkPoint": "cc8f0b8462a957b1c01f5757d8996d1e304c61d6",
+  "finalMergeBase": "f1562e5583191e12f5d6abffd9c424f9ea888b61",
+  "githubBaseSha": "f1562e5583191e12f5d6abffd9c424f9ea888b61",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "f1562e5583191e12f5d6abffd9c424f9ea888b61",
+    "mainCommitsSinceFork": 8,
+    "filesChangedSinceFork": 243
+   }
+  ]
+ },
+ {
+  "commit": "604e37a97d02479ec8f288e67337c659c1852c39",
+  "parents": [
+   "57b194e9e246f5844f77caaf644eb882f4f85536"
+  ],
+  "subject": "Configuration tab as a form over the file; syntax-coloured source editor; dark-mode tokens (#3483)",
+  "pr": 3483,
+  "kind": "squash",
+  "head": "672d65279c3c32f5bed42f06fad309a235b05724",
+  "forkPoint": "e7b67dcf63f69dd4ddfe9963ef64dbc92db81119",
+  "finalMergeBase": "6e669a9a538e98afd312f5348ef5fc77aaddafc1",
+  "githubBaseSha": "6e669a9a538e98afd312f5348ef5fc77aaddafc1",
+  "integrations": 2,
+  "sides": [
+   {
+    "parent": "57b194e9e246f5844f77caaf644eb882f4f85536",
+    "mainCommitsSinceFork": 20,
+    "filesChangedSinceFork": 894
+   }
+  ]
+ },
+ {
+  "commit": "89918dc2cdcd951b807dfa95c7665bc5c2a894a7",
+  "parents": [
+   "604e37a97d02479ec8f288e67337c659c1852c39"
+  ],
+  "subject": "Escape the docs homepage apostrophe to restore CI (#3498)",
+  "pr": 3498,
+  "kind": "squash",
+  "head": "e6b323ac90095f9f8b30e644e4dd6583bb0df2dc",
+  "forkPoint": "33e1401276470d4828a777c8ab04d3c8820ba454",
+  "finalMergeBase": "33e1401276470d4828a777c8ab04d3c8820ba454",
+  "githubBaseSha": "33e1401276470d4828a777c8ab04d3c8820ba454",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "604e37a97d02479ec8f288e67337c659c1852c39",
+    "mainCommitsSinceFork": 8,
+    "filesChangedSinceFork": 270
+   }
+  ]
+ },
+ {
+  "commit": "a1e8031b9548fb7eb154484a9f1ef3680948b12f",
+  "parents": [
+   "89918dc2cdcd951b807dfa95c7665bc5c2a894a7"
+  ],
+  "subject": "Workforce management leads; Mission Control is retired as the product name (ADR-113) (#3497)",
+  "pr": 3497,
+  "kind": "squash",
+  "head": "0ea8fb39f7cdd2d01ee85c8adab54607c31e4c2f",
+  "forkPoint": "9b6219ca3ff0213f46b24f3c4096d233c4575a1f",
+  "finalMergeBase": "89918dc2cdcd951b807dfa95c7665bc5c2a894a7",
+  "githubBaseSha": "89918dc2cdcd951b807dfa95c7665bc5c2a894a7",
+  "integrations": 5,
+  "sides": [
+   {
+    "parent": "89918dc2cdcd951b807dfa95c7665bc5c2a894a7",
+    "mainCommitsSinceFork": 64,
+    "filesChangedSinceFork": 1801
+   }
+  ]
+ },
+ {
+  "commit": "8f003567fbda6f3922d95c50ba81e2a3f6d9565c",
+  "parents": [
+   "a1e8031b9548fb7eb154484a9f1ef3680948b12f"
+  ],
+  "subject": "Repositories page, and Settings leaves the workspace menu (#3459)",
+  "pr": 3459,
+  "kind": "squash",
+  "head": "1f772bf14d415d6d475057394919294699c20f47",
+  "forkPoint": "566b23723c5fff888a6bda7ef55c45358fb87696",
+  "finalMergeBase": "89918dc2cdcd951b807dfa95c7665bc5c2a894a7",
+  "githubBaseSha": "89918dc2cdcd951b807dfa95c7665bc5c2a894a7",
+  "integrations": 8,
+  "sides": [
+   {
+    "parent": "a1e8031b9548fb7eb154484a9f1ef3680948b12f",
+    "mainCommitsSinceFork": 46,
+    "filesChangedSinceFork": 1210
+   }
+  ]
+ },
+ {
+  "commit": "3b68d0a5d3d92fe5a22d9e756f2693da123c41e4",
+  "parents": [
+   "8f003567fbda6f3922d95c50ba81e2a3f6d9565c"
+  ],
+  "subject": "Phase 3 on apps/docs: take the product name off the published docs, keep every live name (#3506)",
+  "pr": 3506,
+  "kind": "squash",
+  "head": "4d6871c6e5d958a3ca310e84926eb38eb3d8d7a5",
+  "forkPoint": "f86fbb191881d61444ad63cbecc07a7ece02cb96",
+  "finalMergeBase": "8f003567fbda6f3922d95c50ba81e2a3f6d9565c",
+  "githubBaseSha": "8f003567fbda6f3922d95c50ba81e2a3f6d9565c",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "8f003567fbda6f3922d95c50ba81e2a3f6d9565c",
+    "mainCommitsSinceFork": 6,
+    "filesChangedSinceFork": 351
+   }
+  ]
+ },
+ {
+  "commit": "798ff280f16eab621ea0a038f5f34d4f25628d2f",
+  "parents": [
+   "3b68d0a5d3d92fe5a22d9e756f2693da123c41e4"
+  ],
+  "subject": "build(api): ship the CRM backfill script in the node release (#3510)",
+  "pr": 3510,
+  "kind": "squash",
+  "head": "574b14af4c0ad104d7624e43529af576a6c7a808",
+  "forkPoint": "89918dc2cdcd951b807dfa95c7665bc5c2a894a7",
+  "finalMergeBase": "89918dc2cdcd951b807dfa95c7665bc5c2a894a7",
+  "githubBaseSha": "8f003567fbda6f3922d95c50ba81e2a3f6d9565c",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "3b68d0a5d3d92fe5a22d9e756f2693da123c41e4",
+    "mainCommitsSinceFork": 3,
+    "filesChangedSinceFork": 308
+   }
+  ]
+ },
+ {
+  "commit": "cb30ad453cc1a249f487e153f88bc18a87d5a147",
+  "parents": [
+   "798ff280f16eab621ea0a038f5f34d4f25628d2f"
+  ],
+  "subject": "fix(context): require kind/force/statement on publish_context_record (#3302) (#3486)",
+  "pr": 3486,
+  "kind": "squash",
+  "head": "99aef4b426da3858cd0fa07260730251788450e8",
+  "forkPoint": "79d393a33480b440779594534d7c0b1c47501a23",
+  "finalMergeBase": "8f003567fbda6f3922d95c50ba81e2a3f6d9565c",
+  "githubBaseSha": "8f003567fbda6f3922d95c50ba81e2a3f6d9565c",
+  "integrations": 3,
+  "sides": [
+   {
+    "parent": "798ff280f16eab621ea0a038f5f34d4f25628d2f",
+    "mainCommitsSinceFork": 25,
+    "filesChangedSinceFork": 1036
+   }
+  ]
+ },
+ {
+  "commit": "0ff76f3deee34d9d4b581c8ad0e49c0aa4edafb5",
+  "parents": [
+   "cb30ad453cc1a249f487e153f88bc18a87d5a147"
+  ],
+  "subject": "fix(database): rehash the storage manifest so main can deploy again",
+  "pr": null,
+  "kind": "direct"
+ },
+ {
+  "commit": "5ea4ca94a425e31e2ae360e159c4fbe7ac700861",
+  "parents": [
+   "0ff76f3deee34d9d4b581c8ad0e49c0aa4edafb5"
+  ],
+  "subject": "fix(db): re-record the storage manifest's stale contentHash (#3514)",
+  "pr": 3514,
+  "kind": "squash",
+  "head": "50f9e5688422415937b83e4e1d8d531bde00ea07",
+  "forkPoint": "cb30ad453cc1a249f487e153f88bc18a87d5a147",
+  "finalMergeBase": "cb30ad453cc1a249f487e153f88bc18a87d5a147",
+  "githubBaseSha": "cb30ad453cc1a249f487e153f88bc18a87d5a147",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "0ff76f3deee34d9d4b581c8ad0e49c0aa4edafb5",
+    "mainCommitsSinceFork": 1,
+    "filesChangedSinceFork": 1
+   }
+  ]
+ },
+ {
+  "commit": "cd0c2514db0a57d8fa05e9c29134e5cc15cd01b2",
+  "parents": [
+   "5ea4ca94a425e31e2ae360e159c4fbe7ac700861"
+  ],
+  "subject": "chore: drop Vercel deploy config, and repair what the AWS cutover broke (#3518)",
+  "pr": 3518,
+  "kind": "squash",
+  "head": "5b4fd0eaefc1d42ee2a5aec4e98dcdb65022148e",
+  "forkPoint": "cb30ad453cc1a249f487e153f88bc18a87d5a147",
+  "finalMergeBase": "0ff76f3deee34d9d4b581c8ad0e49c0aa4edafb5",
+  "githubBaseSha": "0ff76f3deee34d9d4b581c8ad0e49c0aa4edafb5",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "5ea4ca94a425e31e2ae360e159c4fbe7ac700861",
+    "mainCommitsSinceFork": 2,
+    "filesChangedSinceFork": 1
+   }
+  ]
+ },
+ {
+  "commit": "9e588b5c2378186d57b9c4414f1577d6a8c986bd",
+  "parents": [
+   "cd0c2514db0a57d8fa05e9c29134e5cc15cd01b2"
+  ],
+  "subject": "Wait for record wizard navigation effect in regression test (#3515)",
+  "pr": 3515,
+  "kind": "squash",
+  "head": "a12d284a0483f72d475b0631331a658122fa6932",
+  "forkPoint": "cb30ad453cc1a249f487e153f88bc18a87d5a147",
+  "finalMergeBase": "5ea4ca94a425e31e2ae360e159c4fbe7ac700861",
+  "githubBaseSha": "5ea4ca94a425e31e2ae360e159c4fbe7ac700861",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "cd0c2514db0a57d8fa05e9c29134e5cc15cd01b2",
+    "mainCommitsSinceFork": 3,
+    "filesChangedSinceFork": 28
+   }
+  ]
+ },
+ {
+  "commit": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+  "parents": [
+   "9e588b5c2378186d57b9c4414f1577d6a8c986bd"
+  ],
+  "subject": "release: one version across every manifest, pnpm dist:local, and pnpm release:<bump>:publish from the laptop (#3512)",
+  "pr": 3512,
+  "kind": "squash",
+  "head": "ac514fb7298f85e87b2ed67bf72a380710ae7b4e",
+  "forkPoint": "f86fbb191881d61444ad63cbecc07a7ece02cb96",
+  "finalMergeBase": "9e588b5c2378186d57b9c4414f1577d6a8c986bd",
+  "githubBaseSha": "9e588b5c2378186d57b9c4414f1577d6a8c986bd",
+  "integrations": 2,
+  "sides": [
+   {
+    "parent": "9e588b5c2378186d57b9c4414f1577d6a8c986bd",
+    "mainCommitsSinceFork": 13,
+    "filesChangedSinceFork": 403
+   }
+  ]
+ },
+ {
+  "commit": "c28415e00b00230f889fe17c0adebd887e9b1fe3",
+  "parents": [
+   "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4"
+  ],
+  "subject": "Remove obsolete release helpers after extraction (#3527)",
+  "pr": 3527,
+  "kind": "squash",
+  "head": "c516e19202326cd0b410ab7370dcedc22bcb9f70",
+  "forkPoint": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+  "finalMergeBase": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+  "githubBaseSha": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+    "mainCommitsSinceFork": 0
+   }
+  ]
+ },
+ {
+  "commit": "ebff744cb3ed1038d435c7d861cfc48b80551a0f",
+  "parents": [
+   "c28415e00b00230f889fe17c0adebd887e9b1fe3"
+  ],
+  "subject": "Issues: a title standard that reads without opening the issue, and four issue fields (#3513)",
+  "pr": 3513,
+  "kind": "squash",
+  "head": "79355b22f8da90f4ad254cb43c5f747636e19ce2",
+  "forkPoint": "cb30ad453cc1a249f487e153f88bc18a87d5a147",
+  "finalMergeBase": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+  "githubBaseSha": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "c28415e00b00230f889fe17c0adebd887e9b1fe3",
+    "mainCommitsSinceFork": 6,
+    "filesChangedSinceFork": 65
+   }
+  ]
+ },
+ {
+  "commit": "234b33225525469883902c683ecca349484cfec7",
+  "parents": [
+   "ebff744cb3ed1038d435c7d861cfc48b80551a0f"
+  ],
+  "subject": "Mission Control: approve and deny from Fleet and Run, honest trust columns on Fleet, and run controls with a delivery mode (#3516)",
+  "pr": 3516,
+  "kind": "squash",
+  "head": "db8be6c055a8296df7f9e66e6429bfa609103769",
+  "forkPoint": "f86fbb191881d61444ad63cbecc07a7ece02cb96",
+  "finalMergeBase": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+  "githubBaseSha": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+  "integrations": 4,
+  "sides": [
+   {
+    "parent": "ebff744cb3ed1038d435c7d861cfc48b80551a0f",
+    "mainCommitsSinceFork": 16,
+    "filesChangedSinceFork": 423
+   }
+  ]
+ },
+ {
+  "commit": "a55139c66137d2fa3dd2d48178529a0337aa40e3",
+  "parents": [
+   "234b33225525469883902c683ecca349484cfec7"
+  ],
+  "subject": "Mission Control: roles and enrollment as writes on the agent page, toolbelt schemas, budgets on the agent, and send an invitation (#3517)",
+  "pr": 3517,
+  "kind": "squash",
+  "head": "f08d367fb294d1ea83ac6c521fb3d3588d2ea90a",
+  "forkPoint": "f86fbb191881d61444ad63cbecc07a7ece02cb96",
+  "finalMergeBase": "234b33225525469883902c683ecca349484cfec7",
+  "githubBaseSha": "234b33225525469883902c683ecca349484cfec7",
+  "integrations": 5,
+  "sides": [
+   {
+    "parent": "234b33225525469883902c683ecca349484cfec7",
+    "mainCommitsSinceFork": 17,
+    "filesChangedSinceFork": 475
+   }
+  ]
+ },
+ {
+  "commit": "516dcf18f591283421ecd8c5c2191dd361359ce7",
+  "parents": [
+   "a55139c66137d2fa3dd2d48178529a0337aa40e3"
+  ],
+  "subject": "Tools: a connections table, servers in the registry, and a mandate ledger that links (#3519)",
+  "pr": 3519,
+  "kind": "squash",
+  "head": "da5f9e19a003bd7b18f955a29ba321f37ee6a93b",
+  "forkPoint": "f86fbb191881d61444ad63cbecc07a7ece02cb96",
+  "finalMergeBase": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+  "githubBaseSha": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+  "integrations": 3,
+  "sides": [
+   {
+    "parent": "a55139c66137d2fa3dd2d48178529a0337aa40e3",
+    "mainCommitsSinceFork": 18,
+    "filesChangedSinceFork": 515
+   }
+  ]
+ },
+ {
+  "commit": "2d054f03044479b5693eac255b22df8671f9c920",
+  "parents": [
+   "516dcf18f591283421ecd8c5c2191dd361359ce7"
+  ],
+  "subject": "fix(run): render a model response as the message it was, not as its SSE stream (#3520)",
+  "pr": 3520,
+  "kind": "squash",
+  "head": "8666f7bd08249d5b502aa9130b97e8bc206cd7d0",
+  "forkPoint": "0ff76f3deee34d9d4b581c8ad0e49c0aa4edafb5",
+  "finalMergeBase": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+  "githubBaseSha": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "516dcf18f591283421ecd8c5c2191dd361359ce7",
+    "mainCommitsSinceFork": 9,
+    "filesChangedSinceFork": 215
+   }
+  ]
+ },
+ {
+  "commit": "02417c928606a150e08cb2966a2c8a79dd942c79",
+  "parents": [
+   "2d054f03044479b5693eac255b22df8671f9c920"
+  ],
+  "subject": "Fix 20 reported authorization, billing, and reliability bugs (#3522)",
+  "pr": 3522,
+  "kind": "squash",
+  "head": "dd631e491bb894abc42835e89e539693a0784853",
+  "forkPoint": "5ea4ca94a425e31e2ae360e159c4fbe7ac700861",
+  "finalMergeBase": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+  "githubBaseSha": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "2d054f03044479b5693eac255b22df8671f9c920",
+    "mainCommitsSinceFork": 9,
+    "filesChangedSinceFork": 234
+   }
+  ]
+ },
+ {
+  "commit": "0d03a96b93d32c7919cc157a38605ff1e3ac5b43",
+  "parents": [
+   "02417c928606a150e08cb2966a2c8a79dd942c79"
+  ],
+  "subject": "fix(app): show assembled responses in transcript bodies",
+  "pr": null,
+  "kind": "direct"
+ },
+ {
+  "commit": "760deb3a84a7b8838ce0f0ac96a37291c43dab07",
+  "parents": [
+   "0d03a96b93d32c7919cc157a38605ff1e3ac5b43"
+  ],
+  "subject": "Restrict shared organization row writes to organization scope",
+  "pr": null,
+  "kind": "direct"
+ },
+ {
+  "commit": "394ee6ae2ab2ad0b6f5bd3dbc04b955619a0924e",
+  "parents": [
+   "0d03a96b93d32c7919cc157a38605ff1e3ac5b43"
+  ],
+  "subject": "Repair combined CI failures blocking production deployment (#3528)",
+  "pr": 3528,
+  "kind": "squash",
+  "head": "b6754f232cabd5e45d8cda7eac0404bb1e8bb538",
+  "forkPoint": "0d03a96b93d32c7919cc157a38605ff1e3ac5b43",
+  "finalMergeBase": "0d03a96b93d32c7919cc157a38605ff1e3ac5b43",
+  "githubBaseSha": "0d03a96b93d32c7919cc157a38605ff1e3ac5b43",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "0d03a96b93d32c7919cc157a38605ff1e3ac5b43",
+    "mainCommitsSinceFork": 0
+   }
+  ]
+ },
+ {
+  "commit": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "parents": [
+   "760deb3a84a7b8838ce0f0ac96a37291c43dab07",
+   "394ee6ae2ab2ad0b6f5bd3dbc04b955619a0924e"
+  ],
+  "subject": "Merge remote-tracking branch 'origin/main' into fix/workspace-null-write-isolation",
+  "pr": null,
+  "kind": "merge",
+  "forkPoint": "0d03a96b93d32c7919cc157a38605ff1e3ac5b43",
+  "sides": [
+   {
+    "parent": "760deb3a84a7b8838ce0f0ac96a37291c43dab07",
+    "mainCommitsSinceFork": 1,
+    "filesChangedSinceFork": 6
+   },
+   {
+    "parent": "394ee6ae2ab2ad0b6f5bd3dbc04b955619a0924e",
+    "mainCommitsSinceFork": 1,
+    "filesChangedSinceFork": 23
+   }
+  ]
+ },
+ {
+  "commit": "75d6a305a6178d773c15088ab1cb37bd296c7021",
+  "parents": [
+   "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d"
+  ],
+  "subject": "Fix nested approval correlation and persist ordinary timeouts (#3529)",
+  "pr": 3529,
+  "kind": "squash",
+  "head": "d82cbbfd43e88e4c75dbae8ebbf9b9d777e23ba2",
+  "forkPoint": "0d03a96b93d32c7919cc157a38605ff1e3ac5b43",
+  "finalMergeBase": "394ee6ae2ab2ad0b6f5bd3dbc04b955619a0924e",
+  "githubBaseSha": "394ee6ae2ab2ad0b6f5bd3dbc04b955619a0924e",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+    "mainCommitsSinceFork": 3,
+    "filesChangedSinceFork": 29
+   }
+  ]
+ },
+ {
+  "commit": "17e6a7ec16782eed6ed4240177e151668956bfa5",
+  "parents": [
+   "75d6a305a6178d773c15088ab1cb37bd296c7021"
+  ],
+  "subject": "Fix billing cost validation, balance reads, and reload races (#3530)",
+  "pr": 3530,
+  "kind": "squash",
+  "head": "a442b1b846ae4835aa2c3bb248112fe072f51c92",
+  "forkPoint": "0d03a96b93d32c7919cc157a38605ff1e3ac5b43",
+  "finalMergeBase": "394ee6ae2ab2ad0b6f5bd3dbc04b955619a0924e",
+  "githubBaseSha": "394ee6ae2ab2ad0b6f5bd3dbc04b955619a0924e",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "75d6a305a6178d773c15088ab1cb37bd296c7021",
+    "mainCommitsSinceFork": 4,
+    "filesChangedSinceFork": 41
+   }
+  ]
+ },
+ {
+  "commit": "650520953d626e7b48eca2b1f997dc69622e8b95",
+  "parents": [
+   "17e6a7ec16782eed6ed4240177e151668956bfa5"
+  ],
+  "subject": "Repair missing installers before resuming publication (#3531)",
+  "pr": 3531,
+  "kind": "squash",
+  "head": "825cc253bc8917b5b04ad055f2c5894bc15969a9",
+  "forkPoint": "0d03a96b93d32c7919cc157a38605ff1e3ac5b43",
+  "finalMergeBase": "394ee6ae2ab2ad0b6f5bd3dbc04b955619a0924e",
+  "githubBaseSha": "0d03a96b93d32c7919cc157a38605ff1e3ac5b43",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "17e6a7ec16782eed6ed4240177e151668956bfa5",
+    "mainCommitsSinceFork": 5,
+    "filesChangedSinceFork": 47
+   }
+  ]
+ },
+ {
+  "commit": "1fc029f4d73b8b217169a20f0758132d8b277ff9",
+  "parents": [
+   "650520953d626e7b48eca2b1f997dc69622e8b95"
+  ],
+  "subject": "Fix creation proposal authority and artifact consistency (#3532)",
+  "pr": 3532,
+  "kind": "squash",
+  "head": "9c0d0b51d0527f9116a7c89afa643c80e170adab",
+  "forkPoint": "0d03a96b93d32c7919cc157a38605ff1e3ac5b43",
+  "finalMergeBase": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "githubBaseSha": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "650520953d626e7b48eca2b1f997dc69622e8b95",
+    "mainCommitsSinceFork": 6,
+    "filesChangedSinceFork": 50
+   }
+  ]
+ },
+ {
+  "commit": "f71c36219b4a4949eae76c2418c7d40f9c14b178",
+  "parents": [
+   "1fc029f4d73b8b217169a20f0758132d8b277ff9"
+  ],
+  "subject": "Scope ClickHouse reads and coordinate migration processes (#3533)",
+  "pr": 3533,
+  "kind": "squash",
+  "head": "e4d9395f516d42687ecb4631af8f34aa03f3fbcc",
+  "forkPoint": "0d03a96b93d32c7919cc157a38605ff1e3ac5b43",
+  "finalMergeBase": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "githubBaseSha": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "1fc029f4d73b8b217169a20f0758132d8b277ff9",
+    "mainCommitsSinceFork": 7,
+    "filesChangedSinceFork": 78
+   }
+  ]
+ },
+ {
+  "commit": "899d4ef084040645f5f586eb846876e282234af0",
+  "parents": [
+   "f71c36219b4a4949eae76c2418c7d40f9c14b178"
+  ],
+  "subject": "Bound GitHub requests and retry scoped graph reads (#3537)",
+  "pr": 3537,
+  "kind": "squash",
+  "head": "7eb67b3b4986ceabdd9892cf6832094d430ec18b",
+  "forkPoint": "0d03a96b93d32c7919cc157a38605ff1e3ac5b43",
+  "finalMergeBase": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "githubBaseSha": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "f71c36219b4a4949eae76c2418c7d40f9c14b178",
+    "mainCommitsSinceFork": 8,
+    "filesChangedSinceFork": 97
+   }
+  ]
+ },
+ {
+  "commit": "5fc860e7aa6d74d8378932f00afca193c74934e8",
+  "parents": [
+   "899d4ef084040645f5f586eb846876e282234af0"
+  ],
+  "subject": "Validate workflow lane commits and correct build instructions (#3539)",
+  "pr": 3539,
+  "kind": "squash",
+  "head": "5bb7d504df14f7afe8c1210f730c1c3eb309e22b",
+  "forkPoint": "0d03a96b93d32c7919cc157a38605ff1e3ac5b43",
+  "finalMergeBase": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "githubBaseSha": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "integrations": 2,
+  "sides": [
+   {
+    "parent": "899d4ef084040645f5f586eb846876e282234af0",
+    "mainCommitsSinceFork": 9,
+    "filesChangedSinceFork": 111
+   }
+  ]
+ },
+ {
+  "commit": "9141343d88c569050801d6241c26fe1bcce66072",
+  "parents": [
+   "5fc860e7aa6d74d8378932f00afca193c74934e8"
+  ],
+  "subject": "Preserve desktop uninstall recovery state on failure (#3538)",
+  "pr": 3538,
+  "kind": "squash",
+  "head": "38f4f30ef69345a6e25bfe2378b1e73466b33985",
+  "forkPoint": "0d03a96b93d32c7919cc157a38605ff1e3ac5b43",
+  "finalMergeBase": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "githubBaseSha": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "integrations": 2,
+  "sides": [
+   {
+    "parent": "5fc860e7aa6d74d8378932f00afca193c74934e8",
+    "mainCommitsSinceFork": 10,
+    "filesChangedSinceFork": 119
+   }
+  ]
+ },
+ {
+  "commit": "276b92d999bf4fbeaa24c353433485b3654c859e",
+  "parents": [
+   "9141343d88c569050801d6241c26fe1bcce66072"
+  ],
+  "subject": "Restore main before the unreviewed RLS push (#3543)",
+  "pr": 3543,
+  "kind": "squash",
+  "head": "7ca020f098e43cca979075112fb5e85193798219",
+  "forkPoint": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "finalMergeBase": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "githubBaseSha": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "9141343d88c569050801d6241c26fe1bcce66072",
+    "mainCommitsSinceFork": 8,
+    "filesChangedSinceFork": 108
+   }
+  ]
+ },
+ {
+  "commit": "7f0304955b275b2c69cabeb7db9ebfc81262cae7",
+  "parents": [
+   "276b92d999bf4fbeaa24c353433485b3654c859e"
+  ],
+  "subject": "Fix Tacho WAL scans exceeding the string size limit (#3544)",
+  "pr": 3544,
+  "kind": "squash",
+  "head": "412f83cd865c598217c7535e7f6aaf339f11f27f",
+  "forkPoint": "0d03a96b93d32c7919cc157a38605ff1e3ac5b43",
+  "finalMergeBase": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "githubBaseSha": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "276b92d999bf4fbeaa24c353433485b3654c859e",
+    "mainCommitsSinceFork": 12,
+    "filesChangedSinceFork": 123
+   }
+  ]
+ },
+ {
+  "commit": "3840114433e0ea11b5eba0a10a10ac9ad3dcef3e",
+  "parents": [
+   "7f0304955b275b2c69cabeb7db9ebfc81262cae7"
+  ],
+  "subject": "Preserve GitHub record identity across repositories (#3545)",
+  "pr": 3545,
+  "kind": "squash",
+  "head": "84d8a343136fd338f13bd926aa3a43efff588ef0",
+  "forkPoint": "0d03a96b93d32c7919cc157a38605ff1e3ac5b43",
+  "finalMergeBase": "394ee6ae2ab2ad0b6f5bd3dbc04b955619a0924e",
+  "githubBaseSha": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "7f0304955b275b2c69cabeb7db9ebfc81262cae7",
+    "mainCommitsSinceFork": 13,
+    "filesChangedSinceFork": 127
+   }
+  ]
+ },
+ {
+  "commit": "39d9860b652be517d6d0f7224bb5f911fcc1dcef",
+  "parents": [
+   "3840114433e0ea11b5eba0a10a10ac9ad3dcef3e"
+  ],
+  "subject": "Run platform defaults after production migrations (#3546)",
+  "pr": 3546,
+  "kind": "squash",
+  "head": "5c552bae060cb50c96b87ea9d90edf66e11e2702",
+  "forkPoint": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "finalMergeBase": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "githubBaseSha": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "3840114433e0ea11b5eba0a10a10ac9ad3dcef3e",
+    "mainCommitsSinceFork": 11,
+    "filesChangedSinceFork": 134
+   }
+  ]
+ },
+ {
+  "commit": "4f3b1b674e39ec6428162d3b70f83e6c796f4767",
+  "parents": [
+   "39d9860b652be517d6d0f7224bb5f911fcc1dcef"
+  ],
+  "subject": "Retain redacted frame evidence and restrict shared row writes (#3550)",
+  "pr": 3550,
+  "kind": "squash",
+  "head": "700f92c075913d3689b1c51645bb86ea01ddba30",
+  "forkPoint": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "finalMergeBase": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "githubBaseSha": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "39d9860b652be517d6d0f7224bb5f911fcc1dcef",
+    "mainCommitsSinceFork": 12,
+    "filesChangedSinceFork": 143
+   }
+  ]
+ },
+ {
+  "commit": "a699327c25d0388632c59264e7c29ec0a48aaa80",
+  "parents": [
+   "4f3b1b674e39ec6428162d3b70f83e6c796f4767"
+  ],
+  "subject": "Require local access tokens for secret reads and edits (#3553)",
+  "pr": 3553,
+  "kind": "squash",
+  "head": "30b026977a91848f50f76c14a983f54a5bfa8d49",
+  "forkPoint": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "finalMergeBase": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "githubBaseSha": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "4f3b1b674e39ec6428162d3b70f83e6c796f4767",
+    "mainCommitsSinceFork": 13,
+    "filesChangedSinceFork": 149
+   }
+  ]
+ },
+ {
+  "commit": "2aa46bf7ce79e51b40efcb3111ab35d1b8c10663",
+  "parents": [
+   "a699327c25d0388632c59264e7c29ec0a48aaa80"
+  ],
+  "subject": "Preserve sealed events when WAL body storage fails (#3555)",
+  "pr": 3555,
+  "kind": "squash",
+  "head": "305da087f212eda791eff584645b3e3120d626ed",
+  "forkPoint": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "finalMergeBase": "a699327c25d0388632c59264e7c29ec0a48aaa80",
+  "githubBaseSha": "a699327c25d0388632c59264e7c29ec0a48aaa80",
+  "integrations": 1,
+  "sides": [
+   {
+    "parent": "a699327c25d0388632c59264e7c29ec0a48aaa80",
+    "mainCommitsSinceFork": 14,
+    "filesChangedSinceFork": 160
+   }
+  ]
+ },
+ {
+  "commit": "11cc318c11b0db2bce87b907ece557cece01581f",
+  "parents": [
+   "2aa46bf7ce79e51b40efcb3111ab35d1b8c10663"
+  ],
+  "subject": "fix(audit): reconstruct historical main integration losses (#3556)",
+  "pr": 3556,
+  "kind": "squash",
+  "head": "ece82e9b7f41f57e2a44a814e5f2f662f2d64d94",
+  "forkPoint": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "finalMergeBase": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "githubBaseSha": "3840114433e0ea11b5eba0a10a10ac9ad3dcef3e",
+  "integrations": 0,
+  "sides": [
+   {
+    "parent": "2aa46bf7ce79e51b40efcb3111ab35d1b8c10663",
+    "mainCommitsSinceFork": 15,
+    "filesChangedSinceFork": 165
+   }
+  ]
+ }
+]

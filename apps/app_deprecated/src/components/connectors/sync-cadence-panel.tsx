@@ -124,7 +124,7 @@ export function SyncCadencePanel() {
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm font-medium text-foreground">Sync cadence</p>
+      <p className="text-base font-medium text-foreground">Sync cadence</p>
 
       <RadioGroup
         value={selectedMode}
@@ -143,10 +143,10 @@ export function SyncCadencePanel() {
           >
             <Radio value={opt.value} className="mt-0.5 shrink-0" />
             <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="text-sm font-medium text-foreground">
+              <span className="text-base font-medium text-foreground">
                 {opt.label}
               </span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 {opt.description}
               </span>
             </div>
@@ -169,16 +169,16 @@ export function SyncCadencePanel() {
               className="w-32"
               aria-invalid={Boolean(intervalError)}
             />
-            <span className="text-sm text-muted-foreground">
+            <span className="text-base text-muted-foreground">
               seconds ({formatSeconds(intervalSeconds)})
             </span>
           </div>
           {intervalError ? (
-            <p role="alert" className="text-xs text-destructive">
+            <p role="alert" className="text-sm text-destructive">
               {intervalError}
             </p>
           ) : (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Min: {formatSeconds(minInterval)} — Max:{" "}
               {formatSeconds(maxInterval)}
             </p>

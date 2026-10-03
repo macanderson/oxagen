@@ -258,6 +258,7 @@ export function runtimesSource(reads: {
       tree: refuse,
     },
     steeringRepo: { get: refuse },
+    changes: { changeSet: refuse, revisionDiff: refuse },
     tools: {
       versions: refuse,
       grants: refuse,

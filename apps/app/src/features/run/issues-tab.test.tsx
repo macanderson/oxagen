@@ -5,7 +5,9 @@
 // tracker; the Status filter and the Rows pager over them; then Linked work,
 // whose every row says how Oxagen knows it, from the same work and outputs
 // reads the header and the Changes panel draw; then the issue connections
-// panel.
+// panel. Between the table and Linked work, each issue with a GitHub or
+// GitLab issue page opens its change set from Oxagen's own pull request
+// store (ADR-292), read through the lane's action when it opens.
 import {
   act,
   cleanup,
@@ -23,6 +25,7 @@ import type { RunWork } from "@/data/contracts/run-work";
 import { type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { changeSet } from "@/test/change-views";
 import { optionNames, pickOption } from "@/test/select";
 import { runIssue, runIssues } from "./issues.builders";
 import {
@@ -46,6 +49,11 @@ vi.mock("../run-outcomes/provider-actions", () => ({
   loadRunIssueProviders: vi.fn(),
   authorizeRunIssues: vi.fn(),
 }));
+const { readChangeSet, readRevisionDiff } = vi.hoisted(() => ({
+  readChangeSet: vi.fn(),
+  readRevisionDiff: vi.fn(),
+}));
+vi.mock("./actions", () => ({ readChangeSet, readRevisionDiff }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
@@ -341,7 +349,7 @@ describe("the Issues panel", () => {
       issues: readOk(
         runIssues({
           complete: false,
-          warnings: ["closing_issues_read_failed"],
+          warnings: ["closing_issues_not_read"],
         }),
       ),
     });
@@ -874,6 +882,64 @@ describe("Linked work", () => {
       ["11", "", "−old line"],
       ["", "11", "+new line"],
     ]);
+  });
+});
+
+// ADR-292: an issue has no page, so its change set opens under the table.
+describe("Changes by issue", () => {
+  it("offers each issue with an issue page, reads its change set by that page when opened, and draws it", async () => {
+    const user = userEvent.setup();
+    readChangeSet.mockReset();
+    readChangeSet.mockResolvedValue({
+      ok: true,
+      value: changeSet({ scope: "issue" }),
+    });
+    const { container } = await renderIssues({
+      issues: readOk(
+        runIssues({
+          issues: [
+            ...DEMO,
+            runIssue({
+              ref: "ENG-4121",
+              repository: null,
+              number: null,
+              statusRead: "not_github",
+              status: null,
+              readAt: null,
+              url: "https://linear.app/acme/issue/ENG-4121",
+            }),
+          ],
+        }),
+      ),
+    });
+    const panel = within(await screen.findByTestId("run-issue-changes"));
+    const toggles = panel.getAllByRole("button");
+    expect(toggles.map((toggle) => toggle.textContent)).toEqual([
+      "▸Changes for a-intel/platform#482",
+      "▸Changes for a-intel/platform#490",
+      "▸Changes for a-intel/platform#480",
+    ]);
+    expect(readChangeSet).not.toHaveBeenCalled();
+    const [first] = toggles;
+    if (first === undefined) throw new Error("a toggle");
+    await user.click(first);
+    expect(readChangeSet).toHaveBeenCalledExactlyOnceWith(
+      "acme",
+      "core-platform",
+      "issue",
+      "https://github.com/a-intel/platform/issues/482",
+    );
+    expect(await panel.findByTestId("change-set")).toBeTruthy();
+    expect(panel.getAllByTestId("change-pull")).toHaveLength(2);
+    await expectNoAxe(container);
+  });
+
+  it("draws nothing when no issue has an issue page (negative)", async () => {
+    await renderIssues({
+      issues: readOk(runIssues({ issues: [runIssue({ url: null })] })),
+    });
+    await screen.findAllByTestId("run-issue");
+    expect(screen.queryByTestId("run-issue-changes")).toBeNull();
   });
 });
 

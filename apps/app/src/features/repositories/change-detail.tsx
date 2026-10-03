@@ -185,7 +185,7 @@ export function ChangeDetail({
           type="button"
           data-testid="change-back"
           data-touch-target=""
-          className={`${buttonSecondary} min-h-7 px-2.5 py-1 text-xs`}
+          className={`${buttonSecondary} min-h-7 px-2.5 py-1 text-sm`}
           onClick={onBack}
         >
           {t("back")}
@@ -199,7 +199,7 @@ export function ChangeDetail({
         <span className="inline-flex items-center gap-2">
           <CiLight status={status} />
           {passed === undefined || total === undefined ? null : (
-            <span className={`${mono} text-sm text-muted-foreground`}>
+            <span className={`${mono} text-xs text-muted-foreground`}>
               {passed} / {total}
             </span>
           )}
@@ -304,7 +304,7 @@ function Loaded({
                 ? changes("kinds.steering_pr")
                 : changes("kinds.steering_record")}
             </Badge>
-            <span className={`${mono} text-sm text-dim`}>
+            <span className={`${mono} text-xs text-dim`}>
               {isSteeringPrKind(pr.kind)
                 ? pr.onMerge.path
                 : changes("kindPaths.steering_record")}
@@ -373,11 +373,11 @@ function Loaded({
 
       <div className="border-b border-border px-4 py-3.5">
         <SectionLabel id="change-checks">{t("checksTitle")}</SectionLabel>
-        <div className="min-w-0 overflow-x-auto rounded-[10px] border border-border">
+        <div className="min-w-0 overflow-x-auto rounded-xl border border-border">
           <table
             aria-label={t("checksLabel")}
             data-testid="change-checks"
-            className="w-full min-w-[520px] border-collapse text-sm"
+            className="w-full min-w-130 border-collapse text-sm"
           >
             <thead>
               <tr className="border-b border-border">
@@ -440,14 +440,14 @@ function Loaded({
         <ol
           aria-labelledby="change-merge"
           data-testid="change-merge-steps"
-          className="overflow-hidden rounded-[10px] border border-border text-sm"
+          className="overflow-hidden rounded-xl border border-border text-sm"
         >
           {(
             ["squash", "deleteBranch", "reindex", "ledger", "audit"] as const
           ).map((step, index) => (
             <li
               key={step}
-              className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3 border-b border-border px-3.5 py-2.5 last:border-b-0"
+              className="grid grid-cols-icon gap-3 border-b border-border px-3.5 py-2.5 last:border-b-0"
             >
               <b className="font-semibold text-foreground">{index + 1}</b>
               <span className="text-muted-foreground">
@@ -503,7 +503,7 @@ function Loaded({
             >
               {t("closeButton")}
             </button>
-            <span data-testid="change-governance" className="text-xs text-dim">
+            <span data-testid="change-governance" className="text-sm text-dim">
               {!reported || failed !== null
                 ? t("waiting")
                 : pr.governanceMode === null
@@ -593,7 +593,7 @@ function ClosePullRequestDialog({
           data-testid="closepr-submit"
           data-touch-target=""
           disabled={pending}
-          className="inline-flex min-h-9 items-center justify-center rounded-[9px] border border-error bg-error px-[13px] py-1.5 text-sm font-medium text-error-foreground hover:bg-error/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-45"
+          className="inline-flex min-h-9 items-center justify-center rounded-xl border border-error bg-error px-3.25 py-1.5 text-sm font-medium text-error-foreground hover:bg-error/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-45"
           onClick={() => {
             void submit();
           }}
@@ -606,10 +606,10 @@ function ClosePullRequestDialog({
         {failure === null ? null : (
           <FormAlert testId="closepr-failure">{failure}</FormAlert>
         )}
-        <p className="text-sm leading-relaxed text-foreground">{t("lead")}</p>
+        <p className="text-base leading-relaxed text-foreground">{t("lead")}</p>
         <div
           data-testid="closepr-comment"
-          className="rounded-[10px] border border-border bg-hl px-3.5 py-3 text-sm text-foreground"
+          className="rounded-xl border border-border bg-hl px-3.5 py-3 text-sm text-foreground"
         >
           <p>{closedBy}</p>
           <hr className="my-2.5 border-border" />
@@ -627,7 +627,7 @@ function ClosePullRequestDialog({
         <p
           data-state="not-recorded"
           data-gap={REPOSITORY_GAPS.lifecycle}
-          className="text-xs text-dim"
+          className="text-sm text-dim"
         >
           {t("notPosted")}
         </p>

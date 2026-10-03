@@ -70,10 +70,10 @@ export default function ModelSettingsInline({
             aria-hidden="true"
           />
           <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-base font-medium text-foreground">
               Model settings updated
             </p>
-            <p className="truncate text-xs text-muted-foreground">
+            <p className="truncate text-sm text-muted-foreground">
               Default tier: {tier}
             </p>
           </div>
@@ -95,7 +95,7 @@ export default function ModelSettingsInline({
           className="h-4 w-4 shrink-0 text-muted-foreground"
           aria-hidden="true"
         />
-        <span className="text-sm font-semibold text-foreground">
+        <span className="text-base font-semibold text-foreground">
           Model settings
         </span>
       </div>
@@ -126,7 +126,7 @@ export default function ModelSettingsInline({
       {formState === "error" && errorMessage !== null && (
         <p
           role="alert"
-          className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-base text-destructive"
         >
           {errorMessage}
         </p>

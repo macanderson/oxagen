@@ -24,6 +24,7 @@ import { Badge } from "@/ui/badge";
 import { buttonSecondary, mono } from "@/ui/control-styles";
 import { DesktopDownloads } from "@/ui/desktop-downloads";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
+import { HarnessIcon } from "@/ui/harness-icon";
 import { formatCount } from "@/ui/money-format";
 import { OutcomePanel } from "@/ui/form-feedback";
 import { SafeLink } from "@/ui/navigation";
@@ -111,7 +112,10 @@ function HostPanel({
             term: t("harness"),
             value: (
               <>
-                {agents(`harness.${detail.identity.harness}`)}
+                <span className="inline-flex items-center gap-2">
+                  <HarnessIcon harness={detail.identity.harness} size={16} />
+                  {agents(`harness.${detail.identity.harness}`)}
+                </span>
                 <Sub>{t("harnessSub")}</Sub>
               </>
             ),
@@ -269,14 +273,14 @@ function TierDelivers({
             {rung === tier ? (
               <Badge tone="allowed">{t("thisAgent")}</Badge>
             ) : null}
-            <span className="text-xs text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               {t(`rungs.${rung}`)}
             </span>
           </li>
         ))}
       </ol>
       {tier === null ? (
-        <p className="text-xs text-muted-foreground">{t("noRun")}</p>
+        <p className="text-sm text-muted-foreground">{t("noRun")}</p>
       ) : null}
       <Facts
         rows={[
@@ -302,7 +306,7 @@ function NeedsRole() {
   return (
     <p
       data-testid="runtime-needs-role"
-      className="max-w-prose text-xs text-muted-foreground"
+      className="max-w-prose text-sm text-muted-foreground"
     >
       {t("needsRole")}
     </p>

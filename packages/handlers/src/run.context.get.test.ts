@@ -93,9 +93,17 @@ function llmCall(
   };
 }
 
+const CHILD_UUID = "0192d4a8-7c1e-7a00-8000-00000000c0df";
+
+/** Whether a row is one the window read returns: an `llm_call` that carries a window. */
+const windowed = (row: TachoModelCallRow) =>
+  row.kind === "llm_call" && (row.attrs?.["oxagen.window"] ?? "") !== "";
+
 function harness(opts: {
   events?: ReturnType<typeof event>[];
   rows?: TachoModelCallRow[];
+  /** The rows of each subagent chain under the root, by session uuid. */
+  children?: Record<string, TachoModelCallRow[]>;
   tier?: "observe" | "gateway";
 }) {
   const stores = memoryStores(
@@ -108,6 +116,12 @@ function harness(opts: {
     ],
   );
   const asked: { sessionUuid: string; limit: number }[] = [];
+  const windowReads: {
+    orgId: string;
+    workspaceId: string;
+    rootSessionUuid: string;
+    sessionUuids: readonly string[];
+  }[] = [];
   const deps: RunContextGetDeps = {
     queries: stores.queries,
     store: {
@@ -130,8 +144,30 @@ function harness(opts: {
           : [],
       );
     },
+    tachoChildSessions: (root) =>
+      Promise.resolve(
+        root === SESSION_UUID ? Object.keys(opts.children ?? {}) : [],
+      ),
+    // The window read: each listed chain's windowed `llm_call` rows.
+    windowFrames: async (args, consume) => {
+      windowReads.push(args);
+      for (const session of args.sessionUuids) {
+        const rows =
+          session === SESSION_UUID
+            ? (opts.rows ?? [])
+            : (opts.children?.[session] ?? []);
+        await consume(
+          rows.filter(windowed).map((row) => ({
+            ...row,
+            kind: "llm_call" as const,
+            attrs: row.attrs ?? {},
+            body: "" as const,
+          })),
+        );
+      }
+    },
   };
-  return { handler: createRunContextGetHandler(deps), asked };
+  return { handler: createRunContextGetHandler(deps), asked, windowReads };
 }
 
 const sum = (values: readonly (number | null)[]) =>
@@ -332,6 +368,116 @@ describe("get_run_context — bounds and scope", () => {
 
     expect(out.windows).toHaveLength(500);
     expect(out.complete).toBe(false);
+  });
+
+  it("sums the composition over every window it read, the ones past the list's cap included (#5295)", async () => {
+    const rows = Array.from({ length: 501 }, (_, i) => llmCall(i));
+    const { handler } = harness({ rows });
+
+    const out = await handler({ runId: TACHO_ID }, ctx());
+
+    // Each call's total is 42,000 tokens, split 2,000 : 6,000 : 12,000 by
+    // bytes, which is 4,200, 12,600 and 25,200 tokens.
+    const perCall = 1_311 + 40_022 + 667;
+    expect(out.composition).toEqual({
+      requests: 501,
+      requestsWithoutTokens: 0,
+      promptTokens: perCall * 501,
+      blocks: {
+        system: 4_200 * 501,
+        steering: null,
+        tools: 12_600 * 501,
+        // A wrapped window has no context block, so it is null, not zero.
+        context: null,
+        conversation: 25_200 * 501,
+      },
+      initialConversationTokens: 25_200,
+      basis: "apportioned",
+    });
+  });
+
+  it("sums an in-app run's five blocks, its context block included (#5295)", async () => {
+    const { handler } = harness({
+      events: [
+        started(2, "prov-1-0"),
+        completed(3, "prov-1-0", 12_000),
+        started(4, "prov-1-1"),
+        completed(5, "prov-1-1", 24_000),
+      ],
+    });
+
+    const out = await handler({ runId: LEDGER_ID }, ctx());
+
+    expect(out.composition?.requests).toBe(2);
+    expect(out.composition?.promptTokens).toBe(36_000);
+    expect(out.composition?.blocks.context).not.toBeNull();
+    const blocks = out.composition?.blocks;
+    expect(
+      sum([
+        blocks?.system ?? null,
+        blocks?.steering ?? null,
+        blocks?.tools ?? null,
+        blocks?.context ?? null,
+        blocks?.conversation ?? null,
+      ]),
+    ).toBe(36_000);
+  });
+
+  it("sums a wrapped run's composition over every chain, its subagents' included, and lists the root's windows alone (#5341)", async () => {
+    const { handler, windowReads } = harness({
+      rows: [llmCall(1)],
+      children: {
+        [CHILD_UUID]: [
+          llmCall(1, {
+            attrs: { "oxagen.window": "system=500:1;conversation=1500:4" },
+            inputTokens: 2_000,
+            cacheReadTokens: null,
+            cacheCreationTokens: null,
+          }),
+          // A subagent call the proxy did not measure adds nothing.
+          llmCall(2, { attrs: {} }),
+        ],
+      },
+    });
+
+    const out = await handler({ runId: TACHO_ID }, ctx());
+
+    // The read names the run's own scope and both chains, root first.
+    expect(windowReads).toEqual([
+      {
+        orgId: ctx().orgId,
+        workspaceId: ctx().workspaceId,
+        rootSessionUuid: SESSION_UUID,
+        sessionUuids: [SESSION_UUID, CHILD_UUID],
+      },
+    ]);
+    // The Context tab's list is the root chain's.
+    expect(out.windows.map((w) => w.seq)).toEqual(["1"]);
+    const root = 1_311 + 40_022 + 667;
+    expect(out.composition).toEqual({
+      requests: 2,
+      requestsWithoutTokens: 0,
+      promptTokens: root + 2_000,
+      blocks: {
+        system: 4_200 + 500,
+        steering: null,
+        tools: 12_600,
+        context: null,
+        conversation: 25_200 + 1_500,
+      },
+      initialConversationTokens: 25_200,
+      basis: "apportioned",
+    });
+  });
+
+  it("answers no composition for a run that recorded no window (negative)", async () => {
+    const { handler } = harness({
+      rows: [llmCall(3, { attrs: {} })],
+    });
+
+    const out = await handler({ runId: TACHO_ID }, ctx());
+
+    expect(out.composition).toBeNull();
   });
 
   it("does not find a run in another workspace", async () => {

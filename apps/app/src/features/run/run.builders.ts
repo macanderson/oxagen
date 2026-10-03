@@ -30,6 +30,7 @@ import type {
 import type { MandateList } from "@/data/contracts/mandates";
 import type {
   ContextAssembly,
+  ContextComposition,
   ContextWindow,
   RunContext,
 } from "@/data/contracts/run-context";
@@ -37,10 +38,12 @@ import type { RunIssues } from "@/data/contracts/run-issues";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { CommandReport, RunRow } from "@/data/contracts/runs";
 import type { PriceBook, SpendFindingEvidence } from "@/data/contracts/spend";
+import type { ChangeSet, RevisionDiff } from "@/data/contracts/changes";
 import type { DataSource } from "@/data/ports";
 import { countsAsError, frameFolds, tachoFrame } from "@oxagen/run-ledger";
 import type { AgentDetail, AgentPage } from "@/data/contracts/agents";
 import { type Read, readOk } from "@/data/read";
+import { emptyChangeSet } from "@/test/change-views";
 
 /** The instant every Run test renders at. */
 export const NOW = Date.parse("2026-09-15T09:00:00.000Z");
@@ -679,6 +682,31 @@ export function runContext(overrides: Partial<RunContext> = {}): RunContext {
     unmeasured: 0,
     assemblies: [],
     complete: true,
+    composition: null,
+    ...overrides,
+  };
+}
+
+/**
+ * The composition `get_run_context` sums over `contextWindow` and a second,
+ * later request of the same shape whose conversation grew to 9,600 tokens:
+ * two in-app requests, 30,000 prompt tokens in all (#5295).
+ */
+export function contextComposition(
+  overrides: Partial<ContextComposition> = {},
+): ContextComposition {
+  return {
+    requests: 2,
+    requestsWithoutTokens: 0,
+    promptTokens: 30_000,
+    blocks: {
+      system: 3_600,
+      steering: 1_800,
+      tools: 14_400,
+      context: 3_600,
+      conversation: 6_600,
+    },
+    initialConversationTokens: 1_200,
     ...overrides,
   };
 }
@@ -892,9 +920,10 @@ type RunReads = {
    */
   findings?: Read<RunFindings>;
   /**
-   * `get_run_context`, read by the Context tab and by the Governed actions
-   * tab when a model request or a manifest is open (#3894). A test that says
-   * nothing about it gets a run that recorded no window.
+   * `get_run_context`, read by the Context tab, by the Cost tab for the
+   * run's prompt composition (#5295), and by the Governed actions tab when a
+   * model request or a manifest is open (#3894). A test that says nothing
+   * about it gets a run that recorded no window.
    */
   context?: Read<RunContext>;
   /**
@@ -932,6 +961,15 @@ type RunReads = {
    * run that reads it fails loudly.
    */
   interjections?: Read<InterjectionQueue>;
+  /**
+   * `get_change_set` for the run, started with the page and awaited by the
+   * Changes panel (ADR-292). A test that says nothing about it gets a run
+   * with no pull request on record. A function answers the read itself,
+   * which is how a test hands a read that throws.
+   */
+  changes?: Read<ChangeSet> | (() => Promise<Read<ChangeSet>>);
+  /** `get_revision_diff`, never read while the page renders; refused when absent. */
+  revisionDiff?: Read<RevisionDiff>;
 };
 
 /** The agent read a test left out: refused, so nothing about the agent is invented. */
@@ -962,6 +1000,8 @@ export function runSource(reads: RunReads) {
     /** The page prices nothing, so any read of the price book is a defect (#4069). */
     priceBook: unknown[][];
     interjections: unknown[][];
+    changeSet: unknown[][];
+    revisionDiff: unknown[][];
   } = {
     get: [],
     frameBody: [],
@@ -980,6 +1020,8 @@ export function runSource(reads: RunReads) {
     agent: [],
     priceBook: [],
     interjections: [],
+    changeSet: [],
+    revisionDiff: [],
   };
   const refuse = () => Promise.reject(new Error("not a Run read"));
   const answer = <T>(
@@ -1148,6 +1190,14 @@ export function runSource(reads: RunReads) {
       tree: refuse,
     },
     steeringRepo: { get: refuse },
+    changes: {
+      changeSet: (...args: unknown[]) => {
+        calls.changeSet.push(args);
+        const asked = reads.changes ?? readOk(emptyChangeSet("run"));
+        return typeof asked === "function" ? asked() : Promise.resolve(asked);
+      },
+      revisionDiff: answer("revisionDiff", reads.revisionDiff),
+    },
     tools: {
       versions: refuse,
       grants: refuse,

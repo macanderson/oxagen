@@ -200,7 +200,10 @@ forbid (principal, action, resource);`,
     });
   });
 
-  it("refuses a workspace with more tools than the bundle carries", () => {
+  // Builds and validates a schema over MAX_TOOLS + 1 tools in one synchronous
+  // pass, which takes about 20 seconds in CI. Vitest 3 fails a synchronous test
+  // that returns after its timeout, so this one names its own.
+  it("refuses a workspace with more tools than the bundle carries", { timeout: 60_000 }, () => {
     const entry: CedarToolEntry = {
       version: 1,
       risk: "low",

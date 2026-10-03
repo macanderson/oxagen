@@ -159,7 +159,7 @@ export function RemoveProvider({
           </button>
         }
       >
-        <div className="flex flex-col gap-3 text-sm">
+        <div className="flex flex-col gap-3 text-base">
           <p className="text-foreground">{t("stops")}</p>
           <p className="text-muted-foreground">{t("kept")}</p>
           <p className="text-muted-foreground">{t("switchNote")}</p>
@@ -231,7 +231,7 @@ function Reimport({ at, server }: { at: ToolsAt; server: McpServer }) {
         <p
           role="status"
           data-testid="provider-reimport-done"
-          className="text-xs text-foreground"
+          className="text-sm text-foreground"
         >
           {outcome}
         </p>
@@ -273,7 +273,7 @@ function EditProvider({ server }: { server: McpServer }) {
         ]}
       />
       <StubField id={`edit-connection-${server.id}`} label={t("connection")} />
-      <p className="text-xs text-muted-foreground">{t("hint")}</p>
+      <p className="text-sm text-muted-foreground">{t("hint")}</p>
     </StubAction>
   );
 }
@@ -358,12 +358,12 @@ export function ProviderDialog({
             {t(`healthWarning.${server.healthStatus}`)}
           </p>
         ) : null}
-        <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]">
+        <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-rail">
           <Row term={t("facts.system")}>{server.name}</Row>
           <Row term={t("facts.transport")}>
             <span className="flex flex-col gap-0.5">
               <span className={mono}>{t("transportMcp")}</span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 {t("transportLine")}
               </span>
             </span>
@@ -420,7 +420,7 @@ export function ProviderDialog({
           <p
             data-state="not-backed"
             data-gap={gapRef("oauth")}
-            className="text-xs text-muted-foreground"
+            className="text-sm text-muted-foreground"
           >
             {t("reviewNotBacked")}
           </p>
@@ -473,7 +473,7 @@ export function ProviderDialog({
                       <span className="flex flex-col gap-0.5">
                         <span className="font-medium">{version.name}</span>
                         <span
-                          className={`${mono} text-xs text-muted-foreground`}
+                          className={`${mono} text-sm text-muted-foreground`}
                         >
                           {versionLabel(version)}
                         </span>
@@ -501,7 +501,7 @@ export function ProviderDialog({
             </Table>
           )}
           {complete ? null : (
-            <p className="text-xs text-muted-foreground">{t("partial")}</p>
+            <p className="text-sm text-muted-foreground">{t("partial")}</p>
           )}
         </section>
       </div>

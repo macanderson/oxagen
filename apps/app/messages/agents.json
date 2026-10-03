@@ -575,7 +575,7 @@
             "output": "Output",
             "reasoning": "Reasoning"
           },
-          "inputSplit": "Input is recorded as one figure, {input} tokens, and not split by class yet. The six input classes wait on that split.",
+          "inputSplit": "Input is {input} tokens. Each input class is an estimate summed over this agent's runs. Conversation and system come from the prompt each request sent. Conversation counts every earlier message a request sent again, tool results included, so the input classes overlap.",
           "cacheRate": "Cache hit rate",
           "cacheRateValue": "{rate} with {read} of {input} input tokens served from cache",
           "perRun": "Per run",
@@ -938,7 +938,7 @@
           "countedAsInput": "counted as input",
           "note": "Cache hit rate {rate}. The findings job flags a toolbelt wider than the agent uses, because those tokens are paid on every call whether the tool is used or not.",
           "noteNoCache": "No input token is recorded, so there is no cache hit rate.",
-          "notBacked": "A class’s rate and cost, and the tool-definition share of input, are not recorded per class yet."
+          "notBacked": "A class’s rate and cost are not recorded per class yet. Tool definitions is the recorder's estimate summed over this agent's runs, and the input classes above already count it."
         },
         "last30": {
           "title": "Last 30 days",
@@ -1123,12 +1123,6 @@
         "validTo": "Expires",
         "status": "Status"
       },
-      "status": {
-        "draft": "requested",
-        "active": "active",
-        "expired": "expired",
-        "revoked": "revoked"
-      },
       "request": {
         "open": "Request a mandate",
         "title": "Request a mandate",
@@ -1169,7 +1163,6 @@
       "noneListedDetail": "An org Owner, Admin, Billing or Compliance reader sees every mandate recorded in the workspace. Ask one of them whether this agent holds authority, or read the Tools ledger with that role.",
       "retired": "This agent is retired, so it cannot be given a mandate: its principal is suspended and authority granted now could never be drawn. The mandates recorded for it stay listed.",
       "noneEffectiveUpcoming": "No mandate recorded for this agent is in effect yet, so it cannot carry a consequence. A mandate granted below has not reached the date it starts on; any others are a request awaiting a decision, or history.",
-      "startsOn": "starts {date}",
       "cannotMove": "cannot move money",
       "active": "{count} active",
       "chain": {

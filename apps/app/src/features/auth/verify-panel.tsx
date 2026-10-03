@@ -1,9 +1,9 @@
 "use client";
-// Email verification (mockup `obVerify`). The design asks for a six-digit code;
-// this deployment verifies by link (Better Auth `emailVerification`, no email
-// OTP plugin, #3883), so the card holds what the link flow can do: say a spent link
-// expired, and send a new one. The reply to a resend never reveals whether an
-// account is waiting.
+// Email verification (the v3 mockup's `verify` step, the design of record under
+// ADR-226). The design sends a link, and this deployment verifies by link
+// (Better Auth `emailVerification`, #3883). The card holds what the link flow
+// can do: say a spent link expired, and send a new one. The reply to a resend
+// never reveals whether an account is waiting.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { AuthOutcomeKey } from "./auth-errors";
@@ -73,7 +73,7 @@ export function VerifyPanel({
         <p
           role="status"
           data-testid="verify-resent"
-          className="rounded-[9px] border border-success/40 bg-success/10 px-3 py-2.5 text-sm text-foreground"
+          className="rounded-xl border border-success/40 bg-success/10 px-3 py-2.5 text-sm text-foreground"
         >
           {t("verify.resent")}
         </p>
@@ -99,7 +99,7 @@ export function VerifyPanel({
               </button>
             </p>
             {error ? (
-              <p className="text-sm text-error-ink">{t(`errors.${error}`)}</p>
+              <p className="text-base text-error-ink">{t(`errors.${error}`)}</p>
             ) : null}
           </>
         ) : (

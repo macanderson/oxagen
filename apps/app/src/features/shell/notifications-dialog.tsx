@@ -112,7 +112,7 @@ export function NotificationsDialog({ data }: { data: ShellData }) {
       testId="notifications-dialog"
       footer={
         <>
-          <p className="mr-auto min-w-0 flex-1 basis-60 text-left text-xs text-muted-foreground">
+          <p className="mr-auto min-w-0 flex-1 basis-60 text-left text-sm text-muted-foreground">
             {unread === null
               ? t.rich("footerUnknown", {
                   code: (chunks) => <span className="font-mono">{chunks}</span>,
@@ -137,11 +137,11 @@ export function NotificationsDialog({ data }: { data: ShellData }) {
       }
     >
       {feed === null ? (
-        <p className="text-sm text-muted-foreground">{t("noWorkspace")}</p>
+        <p className="text-base text-muted-foreground">{t("noWorkspace")}</p>
       ) : !feed.ok ? (
         <ReadFailure read={feed} section={t("title")} />
       ) : items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("empty")}</p>
+        <p className="text-base text-muted-foreground">{t("empty")}</p>
       ) : (
         <ul className="overflow-hidden rounded-lg border border-border">
           {items.map((n) => (
@@ -159,7 +159,7 @@ export function NotificationsDialog({ data }: { data: ShellData }) {
                   {n.unread ? (
                     <span
                       aria-hidden="true"
-                      className="mr-1.5 inline-block size-[5px] rounded-full bg-gold align-middle"
+                      className="mr-1.5 inline-block size-1.25 rounded-full bg-gold align-middle"
                     />
                   ) : null}
                   {n.unread ? (
@@ -168,17 +168,17 @@ export function NotificationsDialog({ data }: { data: ShellData }) {
                   {n.title}
                 </p>
                 {n.body === null ? null : (
-                  <p className="text-xs text-muted-foreground">{n.body}</p>
+                  <p className="text-sm text-muted-foreground">{n.body}</p>
                 )}
                 {n.event === null ? null : (
-                  <p className="mt-0.5 font-mono text-sm text-muted-foreground">
+                  <p className="mt-0.5 font-mono text-xs text-muted-foreground">
                     {n.event}
                   </p>
                 )}
               </div>
               <time
                 dateTime={n.createdAt}
-                className="flex-none font-mono text-sm text-muted-foreground"
+                className="flex-none font-mono text-xs text-muted-foreground"
               >
                 {time(n.createdAt)}
               </time>
@@ -190,7 +190,7 @@ export function NotificationsDialog({ data }: { data: ShellData }) {
         <p
           role="status"
           data-testid="mark-receipt"
-          className="mt-2 text-xs text-muted-foreground"
+          className="mt-2 text-sm text-muted-foreground"
         >
           {t("marked", { count: receipt.marked })}
           {receipt.left > 0
@@ -199,7 +199,7 @@ export function NotificationsDialog({ data }: { data: ShellData }) {
         </p>
       )}
       {failure === null ? null : (
-        <p role="alert" className="mt-2 text-xs text-destructive">
+        <p role="alert" className="mt-2 text-sm text-destructive">
           {failure}
         </p>
       )}

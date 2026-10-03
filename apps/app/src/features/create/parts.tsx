@@ -35,11 +35,11 @@ export function Rail({
           key={s.id}
           data-state={s.state}
           aria-current={s.state === "current" ? "step" : undefined}
-          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-muted/40 py-0.5 pl-1 pr-3 text-xs text-muted-foreground data-[state=current]:border-brand data-[state=current]:text-foreground"
+          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-muted/40 py-0.5 pl-1 pr-3 text-sm text-muted-foreground data-[state=current]:border-brand data-[state=current]:text-foreground"
         >
           <span
             aria-hidden="true"
-            className={`grid size-[18px] place-items-center rounded-full border text-sm font-bold ${
+            className={`grid size-4.5 place-items-center rounded-full border text-xs font-bold ${
               s.state === "current"
                 ? "border-brand bg-brand text-brand-foreground"
                 : s.state === "done"
@@ -83,7 +83,7 @@ export function DescriptionField({
   const [seed, setSeed] = useState(0);
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor="wizard-desc" className="text-sm font-medium">
+      <label htmlFor="wizard-desc" className="text-base font-medium">
         {t("describe.label")}
       </label>
       <textarea
@@ -100,10 +100,10 @@ export function DescriptionField({
           api.write({ desc: value });
           if ((value.trim() !== "") !== was) api.update({});
         }}
-        className="block w-full min-w-0 rounded-md border border-input-border bg-input-bg px-3 py-2.5 text-sm text-input-fg placeholder:text-input-placeholder focus-visible:border-input-border-focus focus-visible:outline-2 focus-visible:outline-input-ring"
+        className="block w-full min-w-0 rounded-md border border-input-border bg-input-bg px-3 py-2.5 text-base text-input-fg placeholder:text-input-placeholder focus-visible:border-input-border-focus focus-visible:outline-2 focus-visible:outline-input-ring"
       />
       {hint ? (
-        <p id="wizard-desc-hint" className="text-xs text-muted-foreground">
+        <p id="wizard-desc-hint" className="text-sm text-muted-foreground">
           {hint}
         </p>
       ) : null}
@@ -113,7 +113,7 @@ export function DescriptionField({
             <button
               key={s}
               type="button"
-              className={`${buttonSecondary} min-h-8 px-3 py-1 text-xs`}
+              className={`${buttonSecondary} min-h-8 px-3 py-1 text-sm`}
               onClick={() => {
                 api.update({ desc: s });
                 setSeed((n) => n + 1);
@@ -143,7 +143,7 @@ export function DraftNote({ title, body }: { title: string; body: string }) {
         aria-hidden="true"
         className="mt-0.5 size-4 flex-none text-muted-foreground"
       />
-      <div className="flex flex-col gap-0.5 text-sm">
+      <div className="flex flex-col gap-0.5 text-base">
         <p className="font-semibold text-foreground">{title}</p>
         <p className="text-muted-foreground">{body}</p>
       </div>
@@ -174,12 +174,12 @@ export function OptionCard({
       aria-pressed={pressed}
       disabled={disabled}
       onClick={onPress}
-      className="flex flex-col gap-1.5 rounded-xl border border-border bg-card p-3.5 text-left text-sm transition-colors hover:border-input-border-hover aria-pressed:border-brand disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className="flex flex-col gap-1.5 rounded-xl border border-border bg-card p-3.5 text-left text-base transition-colors hover:border-input-border-hover aria-pressed:border-brand disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
       <span className="font-semibold text-foreground">{title}</span>
       <span className="text-muted-foreground">{body}</span>
       {note ? (
-        <span className="text-xs text-muted-foreground">{note}</span>
+        <span className="text-sm text-muted-foreground">{note}</span>
       ) : null}
     </button>
   );
@@ -207,7 +207,7 @@ export function FileEditor({
   const lines = value.split("\n").length;
   return (
     <section aria-label={path} className={`${panel} flex flex-col`}>
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-sm">
         {rename ? (
           <SourceFilename path={path} {...rename} />
         ) : (
@@ -268,10 +268,10 @@ export function PullRequestPlan({
 }) {
   const t = useTranslations("create.pr");
   return (
-    <div className="flex flex-col gap-3 text-sm">
+    <div className="flex flex-col gap-3 text-base">
       <p>{lead}</p>
       <div className={`${panel} overflow-hidden`}>
-        <p className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+        <p className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
           <GitPullRequestIcon aria-hidden="true" className="size-3.5" />
           <span className={`${mono} text-foreground`}>
             {base ?? t("unknownBase")}
@@ -294,7 +294,7 @@ export function PullRequestPlan({
               </span>
               <span className="sr-only">{t(`change.${f.change}`)}</span>
               <span className={`${mono} min-w-0 break-all`}>{f.path}</span>
-              <span className="text-xs text-muted-foreground">{f.note}</span>
+              <span className="text-sm text-muted-foreground">{f.note}</span>
             </li>
           ))}
         </ul>
@@ -305,7 +305,7 @@ export function PullRequestPlan({
           {checks.map((c) => (
             <li
               key={c.name}
-              className="flex flex-col gap-0.5 sm:grid sm:grid-cols-[8rem_1fr] sm:gap-3"
+              className="flex flex-col gap-0.5 sm:grid sm:grid-cols-rail-sm sm:gap-3"
             >
               <span className="font-medium text-foreground">{c.name}</span>
               <span className="text-muted-foreground">{c.detail}</span>

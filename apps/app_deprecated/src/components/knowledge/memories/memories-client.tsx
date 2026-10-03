@@ -468,7 +468,7 @@ function ScoreMeter({ value, label }: { value: number; label: string }) {
           style={{ width: `${pct}%` }}
         />
       </div>
-      <span className="text-[10px] tabular-nums text-muted-foreground">
+      <span className="text-xs tabular-nums text-muted-foreground">
         {pct}%
       </span>
     </div>
@@ -498,7 +498,7 @@ function CopyableId({ id }: { id: string }) {
       type="button"
       onClick={handleCopy}
       title={id}
-      className="inline-flex items-center gap-1 font-mono text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+      className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors"
     >
       <Fingerprint className="h-2.5 w-2.5" />
       {copied ? "copied!" : truncateId(id)}
@@ -597,7 +597,7 @@ function FilterBar({
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search lesson, source, or node ref..."
             aria-label="Search memories"
-            className="w-full rounded-md border border-border/60 bg-background py-1.5 pl-8 pr-8 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full rounded-md border border-border/60 bg-background py-1.5 pl-8 pr-8 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
           {searchQuery && (
             <button
@@ -614,7 +614,7 @@ function FilterBar({
           <Filter className="h-3.5 w-3.5 text-muted-foreground" />
           <label
             htmlFor="min-confidence"
-            className="text-[11px] text-muted-foreground whitespace-nowrap"
+            className="text-xs text-muted-foreground whitespace-nowrap"
           >
             Min confidence
           </label>
@@ -627,7 +627,7 @@ function FilterBar({
             onChange={(e) => setMinConfidence(Number(e.target.value))}
             className="h-1 w-20 cursor-pointer accent-primary"
           />
-          <span className="text-[10px] tabular-nums text-muted-foreground w-7">
+          <span className="text-xs tabular-nums text-muted-foreground w-7">
             {minConfidence}%
           </span>
         </div>
@@ -635,7 +635,7 @@ function FilterBar({
           <Quote className="h-3.5 w-3.5 text-muted-foreground" />
           <label
             htmlFor="min-citations"
-            className="text-[11px] text-muted-foreground whitespace-nowrap"
+            className="text-xs text-muted-foreground whitespace-nowrap"
           >
             Min citations
           </label>
@@ -651,14 +651,14 @@ function FilterBar({
               )
             }
             aria-label="Minimum number of citations"
-            className="h-6 w-14 rounded-md border border-border/60 bg-background px-1.5 text-[11px] tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-6 w-14 rounded-md border border-border/60 bg-background px-1.5 text-xs tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
         <div className="flex items-center gap-2">
           <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
           <label
             htmlFor="sort-by"
-            className="text-[11px] text-muted-foreground whitespace-nowrap"
+            className="text-xs text-muted-foreground whitespace-nowrap"
           >
             Sort
           </label>
@@ -667,7 +667,7 @@ function FilterBar({
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as MemorySort)}
             aria-label="Sort memories"
-            className="h-6 rounded-md border border-border/60 bg-background px-1.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-6 rounded-md border border-border/60 bg-background px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
           >
             {(Object.keys(SORT_LABELS) as MemorySort[]).map((key) => (
               <option key={key} value={key}>
@@ -691,7 +691,7 @@ function FilterBar({
               aria-pressed={active}
               aria-label={`Filter by ${cfg.label}`}
               onClick={() => toggleClass(cls)}
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all border ${
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-all border ${
                 active
                   ? `${cfg.color} border-current/20`
                   : "bg-muted/40 text-muted-foreground border-transparent hover:bg-muted"
@@ -718,7 +718,7 @@ function FilterBar({
                 aria-pressed={active}
                 aria-label={`Filter by ${cfg.label}`}
                 onClick={() => toggleKind(kind)}
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all border ${
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-all border ${
                   active
                     ? `${cfg.color} border-current/20`
                     : "bg-muted/40 text-muted-foreground border-transparent hover:bg-muted"
@@ -737,7 +737,7 @@ function FilterBar({
                   if (activeKinds.has(k)) toggleKind(k);
                 }
               }}
-              className="text-[10px] text-muted-foreground hover:text-foreground ml-1"
+              className="text-xs text-muted-foreground hover:text-foreground ml-1"
             >
               Clear filters
             </button>
@@ -798,31 +798,31 @@ function MemoryRow({
           <TruncatedText
             text={record.lesson}
             lines={2}
-            className="text-sm text-foreground leading-snug"
+            className="text-base text-foreground leading-snug"
           />
         </div>
 
         {/* Badges row */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <Badge
-            className={`${kindCfg.color} text-[10px] px-1.5 py-0 border-0 font-medium`}
+            className={`${kindCfg.color} text-xs px-1.5 py-0 border-0 font-medium`}
           >
             {kindCfg.label}
           </Badge>
           <Badge
-            className={`${classCfg.color} text-[10px] px-1.5 py-0 border-0 font-medium`}
+            className={`${classCfg.color} text-xs px-1.5 py-0 border-0 font-medium`}
           >
             {classCfg.label}
           </Badge>
           {record.enforcementScore != null && (
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               enforcement {record.enforcementScore}
             </span>
           )}
         </div>
 
         {/* Meta row */}
-        <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
+        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
           <span className="flex items-center gap-1">
             <Clock className="h-2.5 w-2.5" />
             {formatRelativeTime(record.createdAt)}
@@ -884,7 +884,7 @@ function PromoteFlow({
 
   if (targets.length === 0) {
     return (
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         FACT is the top of the confidence ladder — nothing left to promote to.
       </p>
     );
@@ -948,7 +948,7 @@ function PromoteFlow({
 
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border/60 p-3">
-      <p className="text-xs font-medium text-foreground">
+      <p className="text-sm font-medium text-foreground">
         Promote to {CLASS_CONFIG[target].label}
       </p>
 
@@ -956,7 +956,7 @@ function PromoteFlow({
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor={`promote-enforcement-${memoryId}`}
-            className="text-[11px] text-muted-foreground"
+            className="text-xs text-muted-foreground"
           >
             Enforcement:{" "}
             <span className="tabular-nums">{enforcementScore}</span>
@@ -985,7 +985,7 @@ function PromoteFlow({
           />
           <label
             htmlFor={`promote-fact-confirm-${memoryId}`}
-            className="text-[11px] text-foreground"
+            className="text-xs text-foreground"
           >
             I confirm this is a durable, org-wide fact — always fully enforced
             (100) and human-confirmed, not just policy. This cannot be casually
@@ -1007,7 +1007,7 @@ function PromoteFlow({
       />
 
       {error && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}
@@ -1118,7 +1118,7 @@ function DemoteFlow({
 
   return (
     <div className="flex flex-col gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3">
-      <p className="text-xs font-medium text-foreground">
+      <p className="text-sm font-medium text-foreground">
         Demote to {CLASS_CONFIG[target].label}
       </p>
 
@@ -1126,7 +1126,7 @@ function DemoteFlow({
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor={`demote-enforcement-${memoryId}`}
-            className="text-[11px] text-muted-foreground"
+            className="text-xs text-muted-foreground"
           >
             Enforcement:{" "}
             <span className="tabular-nums">{enforcementScore}</span>
@@ -1158,7 +1158,7 @@ function DemoteFlow({
       />
 
       {error && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}
@@ -1217,7 +1217,7 @@ function PromotionCandidatesPanel({
           className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400"
           aria-hidden="true"
         />
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+        <span className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
           Suggested to promote
         </span>
       </div>
@@ -1231,7 +1231,7 @@ function PromotionCandidatesPanel({
               <TruncatedText
                 text={c.lesson}
                 lines={1}
-                className="text-xs text-foreground flex-1"
+                className="text-sm text-foreground flex-1"
               />
               {expandedId !== c.id && (
                 <div className="flex flex-shrink-0 items-center gap-1.5">
@@ -1260,9 +1260,9 @@ function PromotionCandidatesPanel({
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <Badge
-                className={`${getKindConfig(c.memoryKind).color} text-[10px] px-1.5 py-0 border-0 font-medium`}
+                className={`${getKindConfig(c.memoryKind).color} text-xs px-1.5 py-0 border-0 font-medium`}
               >
                 {getKindConfig(c.memoryKind).label}
               </Badge>
@@ -1301,19 +1301,19 @@ function PromotionCandidatesPanel({
 function MetaField({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] font-medium text-muted-foreground">
+      <span className="text-xs font-medium text-muted-foreground">
         {label}
       </span>
-      <span className="text-xs text-foreground break-all">{value}</span>
+      <span className="text-sm text-foreground break-all">{value}</span>
     </div>
   );
 }
 
 const SECTION_LABEL_CLS =
-  "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
+  "text-xs font-semibold uppercase tracking-wide text-muted-foreground";
 
 const FIELD_INPUT_CLS =
-  "w-full rounded-md border border-border/60 bg-background px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50";
+  "w-full rounded-md border border-border/60 bg-background px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50";
 
 function MemoryDetail({
   record: initialRecord,
@@ -1485,7 +1485,7 @@ function MemoryDetail({
             <Badge className={kindCfg.color}>{kindCfg.label}</Badge>
             <Badge className={classCfg.color}>{classCfg.label}</Badge>
           </SheetTitle>
-          <SheetDescription className="text-xs font-mono break-all text-muted-foreground">
+          <SheetDescription className="text-sm font-mono break-all text-muted-foreground">
             {record.publicId}
           </SheetDescription>
         </SheetHeader>
@@ -1572,13 +1572,13 @@ function MemoryDetail({
               <h3 className={SECTION_LABEL_CLS}>Identifiers</h3>
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground w-16 flex-shrink-0">
+                  <span className="text-xs text-muted-foreground w-16 flex-shrink-0">
                     Public ID
                   </span>
                   <CopyableId id={record.publicId} />
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground w-16 flex-shrink-0">
+                  <span className="text-xs text-muted-foreground w-16 flex-shrink-0">
                     Internal
                   </span>
                   <CopyableId id={record.id} />
@@ -1588,7 +1588,7 @@ function MemoryDetail({
 
             {/* Error feedback from a failed mutation */}
             {error && (
-              <p role="alert" className="text-xs text-destructive">
+              <p role="alert" className="text-sm text-destructive">
                 {error}
               </p>
             )}
@@ -1617,7 +1617,7 @@ function MemoryDetail({
                   <div className="flex items-center gap-2">
                     {confirmDelete ? (
                       <>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-sm text-muted-foreground">
                           Delete permanently?
                         </span>
                         <Button
@@ -1696,10 +1696,10 @@ function MemoryDetail({
               <h3 className={SECTION_LABEL_CLS}>Salience</h3>
 
               <div className="flex flex-col gap-1">
-                <span className="text-[11px] text-muted-foreground">Class</span>
+                <span className="text-xs text-muted-foreground">Class</span>
                 <div className="flex items-center gap-2">
                   <Badge className={classCfg.color}>{classCfg.label}</Badge>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     Use Promote (in view mode) to move up the confidence ladder.
                   </span>
                 </div>
@@ -1708,7 +1708,7 @@ function MemoryDetail({
               <div className="flex flex-col gap-1.5">
                 <label
                   htmlFor="edit-memory-confidence"
-                  className="text-[11px] text-muted-foreground"
+                  className="text-xs text-muted-foreground"
                 >
                   Confidence:{" "}
                   <span className="tabular-nums">
@@ -1732,7 +1732,7 @@ function MemoryDetail({
                 <div className="flex flex-col gap-1.5">
                   <label
                     htmlFor="edit-memory-enforcement"
-                    className="text-[11px] text-muted-foreground"
+                    className="text-xs text-muted-foreground"
                   >
                     Enforcement:{" "}
                     <span className="tabular-nums">{editEnforcement}</span>
@@ -1751,12 +1751,12 @@ function MemoryDetail({
                 </div>
               )}
               {record.memoryClass === "FACT" && (
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   Enforcement is fixed at 100 for a FACT.
                 </p>
               )}
               {record.memoryClass === "OBSERVATION" && (
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   An OBSERVATION has no enforcement — promote it to a RULE to
                   set one.
                 </p>
@@ -1783,7 +1783,7 @@ function MemoryDetail({
 
             {/* Error */}
             {error && (
-              <p role="alert" className="text-xs text-destructive">
+              <p role="alert" className="text-sm text-destructive">
                 {error}
               </p>
             )}
@@ -1894,7 +1894,7 @@ function MemoryCreate({
             <BrainCircuit className="h-4 w-4" aria-hidden="true" />
             New memory
           </SheetTitle>
-          <SheetDescription className="text-xs text-muted-foreground">
+          <SheetDescription className="text-sm text-muted-foreground">
             Capture a lesson, constraint, or gotcha for agents in this
             workspace. Leave Kind or Class on &ldquo;Auto-detect&rdquo; to let
             the assistant classify it. Facts require human confirmation — use
@@ -1968,7 +1968,7 @@ function MemoryCreate({
                 </option>
               ))}
             </select>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Observation sinks below recall as confidence decays; Rule sets a
               policy that agents must weigh against enforcement.
             </p>
@@ -1978,7 +1978,7 @@ function MemoryCreate({
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor="create-memory-enforcement"
-                className="text-[11px] text-muted-foreground"
+                className="text-xs text-muted-foreground"
               >
                 Enforcement:{" "}
                 <span className="tabular-nums">{enforcementScore}</span>
@@ -1999,7 +1999,7 @@ function MemoryCreate({
 
           {/* Error */}
           {error && (
-            <p role="alert" className="text-xs text-destructive">
+            <p role="alert" className="text-sm text-destructive">
               {error}
             </p>
           )}
@@ -2269,10 +2269,10 @@ export function MemoriesClient({
             aria-hidden="true"
           />
           <div>
-            <p className="text-sm font-semibold text-foreground">
+            <p className="text-base font-semibold text-foreground">
               Agent Memories
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Lessons, constraints, and gotchas written by agents during this
               workspace&apos;s sessions.
             </p>
@@ -2338,10 +2338,10 @@ export function MemoriesClient({
                     className={`h-3.5 w-3.5 flex-shrink-0 ${cfg.color.split(" ").slice(1).join(" ")}`}
                   />
                   <div className="flex flex-col min-w-0">
-                    <span className="text-sm font-semibold tabular-nums text-foreground">
+                    <span className="text-base font-semibold tabular-nums text-foreground">
                       {classCounts[cls]}
                     </span>
-                    <span className="text-[10px] text-muted-foreground truncate">
+                    <span className="text-xs text-muted-foreground truncate">
                       {cfg.label}
                     </span>
                   </div>
@@ -2373,7 +2373,7 @@ export function MemoriesClient({
       {filtered.length > 0 ? (
         <div className="rounded-lg border border-border/60 overflow-hidden">
           <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5 bg-muted/30">
-            <span className="text-[11px] font-medium text-muted-foreground">
+            <span className="text-xs font-medium text-muted-foreground">
               {filtered.length} memor{filtered.length !== 1 ? "ies" : "y"}
               {activeClasses.size > 0 ||
               activeKinds.size > 0 ||
@@ -2383,7 +2383,7 @@ export function MemoriesClient({
                 ? " (filtered)"
                 : ""}
             </span>
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               {SORT_LABELS[sortBy]}
             </span>
           </div>
@@ -2401,12 +2401,12 @@ export function MemoriesClient({
         <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border/60 py-16">
           <BrainCircuit className="h-8 w-8 text-muted-foreground/50" />
           <div className="text-center">
-            <p className="text-sm font-medium text-muted-foreground">
+            <p className="text-base font-medium text-muted-foreground">
               {records.length === 0
                 ? "No memories yet"
                 : "No memories match your filters"}
             </p>
-            <p className="text-xs text-muted-foreground/70 mt-1 max-w-xs">
+            <p className="text-sm text-muted-foreground/70 mt-1 max-w-xs">
               {records.length === 0
                 ? "Memories appear here as agents learn during this workspace's sessions, when you ask the assistant to remember something, or when you add one with “New Memory”."
                 : "Try adjusting your class/kind filters, confidence threshold, or search query."}
@@ -2416,7 +2416,7 @@ export function MemoriesClient({
       )}
 
       {/* Footer */}
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         Showing {records.length}
         {total > records.length ? ` of ${total}` : ""} memor
         {records.length !== 1 ? "ies" : "y"} in this workspace.

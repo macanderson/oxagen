@@ -18,14 +18,39 @@ import {
 } from "@oxagen/oxagen/contracts/finding.shared";
 import { FINDINGS_LIST_MAX } from "@oxagen/oxagen/contracts/finding.list";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
-import { and, arrayContains, desc, eq } from "drizzle-orm";
+import {
+  and,
+  arrayContains,
+  asc,
+  desc,
+  eq,
+  gt,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
+import { isCursorInstant } from "./lib/cursor-instant";
 
 export type FindingScope = { orgId: string; workspaceId: string };
 export type FindingRow = typeof schema.findings.$inferSelect;
 export type FindingStatus = Finding["status"];
+type FindingLevel = Finding["level"];
 
-/** Which findings a list reads: one status, and optionally only those citing one run. */
-export type FindingFilter = { status: FindingStatus; runId?: string };
+/**
+ * Which findings a list reads: one status, and optionally only those citing
+ * one run, only those at one level, only those about one subject, and only
+ * those of one kind (#5303).
+ */
+export type FindingFilter = {
+  status: FindingStatus;
+  runId?: string;
+  level?: FindingLevel;
+  subject?: string;
+  kind?: Finding["kind"];
+};
 
 const findings = schema.findings;
 
@@ -121,11 +146,6 @@ export function toEvidence(
   };
 }
 
-/** The operators the row's cited runs name. */
-export function operatorKeysOf(row: FindingRow): readonly string[] {
-  return (row.citedFrames as StoredEvidence).operatorKeys;
-}
-
 /**
  * The kinds whose detectors cite each run as a whole and store no frames:
  * cache writes never read, the standing context every request re-sends, and
@@ -171,34 +191,231 @@ export function citationOf(row: FindingRow, runId: string): FindingRunCitation {
 }
 
 /**
- * A workspace's findings in one status: open by saving, decided by most
- * recent decision. With a run, only the findings whose cited runs hold it.
+ * The findings a list matches: one status, with a run only those citing it,
+ * with a level or a subject only those at that level or about that key, and
+ * with a kind only those of that kind.
+ */
+function matching(scope: FindingScope, filter: FindingFilter) {
+  return and(
+    eq(findings.orgId, scope.orgId),
+    eq(findings.workspaceId, scope.workspaceId),
+    eq(findings.status, filter.status),
+    filter.runId === undefined
+      ? undefined
+      : arrayContains(findings.citedRuns, [filter.runId]),
+    filter.level === undefined ? undefined : eq(findings.level, filter.level),
+    filter.subject === undefined
+      ? undefined
+      : eq(findings.subject, filter.subject),
+    filter.kind === undefined ? undefined : eq(findings.kind, filter.kind),
+  );
+}
+
+/**
+ * The decision instant at millisecond precision. A cursor carries the
+ * instant as a JavaScript date, which holds milliseconds, so the order and
+ * the cursor compare the same value. Postgres keeps microseconds, and two
+ * decisions in one millisecond then fall back to the id.
+ */
+const decidedAtMs = sql`date_trunc('milliseconds', ${findings.decidedAt})`;
+
+/**
+ * A list's order: open by saving, decided by most recent decision. The id
+ * breaks ties, so the findings past FINDINGS_LIST_MAX are the same on every
+ * read, and a cursor holds one place in the order (#5303). The table's
+ * decision check gives every decided row a decision instant. Were one
+ * missing, Postgres would sort it first, and the cursor allows for that.
+ */
+function listOrder(filter: FindingFilter) {
+  return [
+    filter.status === "open"
+      ? desc(findings.estimatedSavingMicros)
+      : desc(decidedAtMs),
+    asc(findings.id),
+  ];
+}
+
+/**
+ * Where a page ended (#5303): the last finding's place in the list order,
+ * and how many findings the pages up to it held. `key` is the saving in
+ * micros for an open list, and the decision instant for a decided list.
+ */
+export type FindingCursor = {
+  status: FindingStatus;
+  key: string | null;
+  id: string;
+  /** The findings before the page this cursor reads. */
+  offset: number;
+};
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** A saving in micros: a positive bigint, as the column's check holds it. */
+const MICROS_RE = /^[1-9]\d{0,18}$/;
+const BIGINT_MAX = 9_223_372_036_854_775_807n;
+const STATUSES: readonly string[] = ["open", "applied", "dismissed"];
+
+function isStatus(value: unknown): value is FindingStatus {
+  return typeof value === "string" && STATUSES.includes(value);
+}
+
+/** The cursor that reads the page after `row`, the last finding of a page. */
+export function cursorAfter(
+  status: FindingStatus,
+  row: Pick<FindingRow, "id" | "estimatedSavingMicros" | "decidedAt">,
+  offset: number,
+): string {
+  const key =
+    status === "open"
+      ? row.estimatedSavingMicros.toString()
+      : (row.decidedAt?.toISOString() ?? null);
+  return Buffer.from(
+    JSON.stringify([status, key, row.id, offset]),
+    "utf8",
+  ).toString("base64url");
+}
+
+/** Null for anything that is not a cursor this handler wrote. */
+export function decodeFindingCursor(raw: string): FindingCursor | null {
+  try {
+    const value: unknown = JSON.parse(
+      Buffer.from(raw, "base64url").toString("utf8"),
+    );
+    if (!Array.isArray(value) || value.length !== 4) return null;
+    const [status, key, id, offset] = value as unknown[];
+    if (
+      !isStatus(status) ||
+      typeof id !== "string" ||
+      !UUID_RE.test(id) ||
+      typeof offset !== "number" ||
+      !Number.isSafeInteger(offset) ||
+      offset < 0
+    )
+      return null;
+    if (status === "open") {
+      // Past the bigint range, Postgres would refuse the value with a 500.
+      if (
+        typeof key !== "string" ||
+        !MICROS_RE.test(key) ||
+        BigInt(key) > BIGINT_MAX
+      )
+        return null;
+      return { status, key, id, offset };
+    }
+    if (key === null) return { status, key: null, id, offset };
+    if (typeof key !== "string" || !isCursorInstant(key)) return null;
+    return { status, key, id, offset };
+  } catch {
+    // Not base64url JSON: a hand-edited or foreign cursor.
+    return null;
+  }
+}
+
+/** The findings after the cursor in the list order: the next page's rows. */
+function afterCursor(cursor: FindingCursor | null): SQL | undefined {
+  if (cursor === null) return undefined;
+  if (cursor.status === "open") {
+    const saving = BigInt(cursor.key ?? "0");
+    return or(
+      lt(findings.estimatedSavingMicros, saving),
+      and(
+        eq(findings.estimatedSavingMicros, saving),
+        gt(findings.id, cursor.id),
+      ),
+    );
+  }
+  // A row with no decision instant sorts before every row with one.
+  if (cursor.key === null)
+    return or(
+      and(isNull(findings.decidedAt), gt(findings.id, cursor.id)),
+      isNotNull(findings.decidedAt),
+    );
+  // Bound as text with a cast, as list_runs binds its instant: compared with
+  // an expression rather than a column, a Date would reach the driver as is.
+  const at = sql`${cursor.key}::timestamptz`;
+  return or(
+    lt(decidedAtMs, at),
+    and(eq(decidedAtMs, at), gt(findings.id, cursor.id)),
+  );
+}
+
+/**
+ * One page of a workspace's findings in one status, in list order: at most
+ * FINDINGS_LIST_MAX, plus one more when a later page exists. With a cursor,
+ * the page starts after the finding it names. The filter narrows the page
+ * as `matching` says.
  */
 export async function readFindingRows(
   scope: FindingScope,
   filter: FindingFilter,
+  after: FindingCursor | null = null,
 ): Promise<FindingRow[]> {
   return withTenantDb((tx) =>
     tx
       .select()
       .from(findings)
-      .where(
-        and(
-          eq(findings.orgId, scope.orgId),
-          eq(findings.workspaceId, scope.workspaceId),
-          eq(findings.status, filter.status),
-          filter.runId === undefined
-            ? undefined
-            : arrayContains(findings.citedRuns, [filter.runId]),
-        ),
-      )
-      .orderBy(
-        filter.status === "open"
-          ? desc(findings.estimatedSavingMicros)
-          : desc(findings.decidedAt),
-      )
-      .limit(FINDINGS_LIST_MAX),
+      .where(and(matching(scope, filter), afterCursor(after)))
+      .orderBy(...listOrder(filter))
+      .limit(FINDINGS_LIST_MAX + 1),
   );
+}
+
+/**
+ * What a list's counts and totals read from one finding: its figures, and
+ * the operators its cited runs name. The evidence stays unread, since a
+ * workspace can hold more findings than one answer lists (#5262).
+ */
+export type FindingTotalRow = Pick<
+  FindingRow,
+  | "confidence"
+  | "estimatedSavingMicros"
+  | "currency"
+  | "savingBasis"
+  | "windowStart"
+  | "windowEnd"
+> & { operatorKeys: readonly string[] };
+
+/** The operator keys the stored evidence lists, from their JSON text. */
+function keysOf(text: string | null): string[] {
+  if (text === null) return [];
+  const parsed: unknown = JSON.parse(text);
+  return Array.isArray(parsed)
+    ? parsed.filter((key): key is string => typeof key === "string")
+    : [];
+}
+
+/**
+ * Every finding a list matches, in list order and with no limit or cursor,
+ * as the figures its counts and totals read. A page answers at most
+ * FINDINGS_LIST_MAX findings, and its counts and totals still cover all of
+ * them, on every page.
+ */
+export async function readFindingTotals(
+  scope: FindingScope,
+  filter: FindingFilter,
+): Promise<FindingTotalRow[]> {
+  const rows = await withTenantDb((tx) =>
+    tx
+      .select({
+        confidence: findings.confidence,
+        estimatedSavingMicros: findings.estimatedSavingMicros,
+        currency: findings.currency,
+        savingBasis: findings.savingBasis,
+        windowStart: findings.windowStart,
+        windowEnd: findings.windowEnd,
+        // As JSON text, so any stored shape parses.
+        operatorKeys: sql<
+          string | null
+        >`(${findings.citedFrames} -> 'operatorKeys')::text`,
+      })
+      .from(findings)
+      .where(matching(scope, filter))
+      .orderBy(...listOrder(filter)),
+  );
+  return rows.map(({ operatorKeys, ...row }) => ({
+    ...row,
+    operatorKeys: keysOf(operatorKeys),
+  }));
 }
 
 export async function readFindingRow(

@@ -16,8 +16,14 @@
 // Each runs in the send's own tenant scope. Facts carry dedupe keys, so a
 // redelivered event or a retried function records nothing twice. GitHub's
 // webhook carries no delivery id here, and the keys are what stop a repeat.
+//
+// A delivery of a merged pull request whose body names a send's merged pull
+// request as `Reverts <owner>/<repo>#<n>`, the line GitHub's Revert button
+// writes, records `reverted` on that send. The item stays done: a person
+// reopens it, and the revert only feeds the Outcomes count (ADR-286, amended
+// 2026-10-03). A revert made without that line records nothing.
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
-import { type FactInput, type FactKind, type MergedBy, WorkRecordError } from "@oxagen/work/records";
+import { type FactInput, type FactKind, HEAD_SHA_PATTERN, type MergedBy, WorkRecordError } from "@oxagen/work/records";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNull } from "drizzle-orm";
 import {
@@ -33,11 +39,20 @@ import {
 import { endWorkOrderRuns } from "./runtime";
 import { appendFacts, readWorkItem, type WorkScope } from "./store";
 
+/**
+ * The largest pull request number a fact can carry: work.item_facts.pr_number
+ * is a Postgres integer. A larger number names no pull request Oxagen can
+ * record, and writing it would abort the whole transaction.
+ */
+export const MAX_PULL_REQUEST_NUMBER = 2_147_483_647;
+
 /** A GitHub pull request URL's repository (lower case) and number, or null. Pure. */
 export function parsePullRequestUrl(url: string): { repository: string; number: number } | null {
   const match = /^https:\/\/github\.com\/([A-Za-z0-9][A-Za-z0-9-]{0,38})\/([A-Za-z0-9._-]{1,100})\/pull\/([1-9][0-9]{0,9})(?:[/?#].*)?$/.exec(url);
   if (match === null) return null;
-  return { repository: `${match[1]}/${match[2]}`.toLowerCase(), number: Number(match[3]) };
+  const number = Number(match[3]);
+  if (number > MAX_PULL_REQUEST_NUMBER) return null;
+  return { repository: `${match[1]}/${match[2]}`.toLowerCase(), number };
 }
 
 /** A send linked to a run, with the repository its brief changes. */
@@ -190,7 +205,52 @@ export async function recordRunPullRequest(
 export interface PullRequestDelivery {
   repository: string;
   number: number;
+  /**
+   * The pull requests in the same repository the body says this one reverts,
+   * by number (revertedPullRequestsOf). Read only from the `closed` delivery
+   * of a merged pull request: an edit after the merge names nothing, so
+   * nobody can mark a send reverted by editing an old pull request's body.
+   */
+  reverts: number[];
   pull: PullRequestRead;
+}
+
+/** The most pull requests one body may name as reverted. Any after these are left out. */
+export const MAX_REVERT_TARGETS = 20;
+
+/**
+ * The line GitHub's Revert button writes at the start of the reverting pull
+ * request's body: `Reverts <owner>/<repo>#<n>`. The owner and the name follow
+ * GitHub's rules, as parsePullRequestUrl's do.
+ *
+ * `revertTargetsOf` in @oxagen/billing reads the same line for the Spend
+ * outcome rows with looser rules: a bare `#<n>` counts there, and a revert
+ * counts only on the branch the target merged into. Work counts only the full
+ * line, and does not read the branch (ADR-286, amended 2026-10-03).
+ */
+const REVERTS_LINE = /^[ \t]*Reverts[ \t]+([A-Za-z0-9][A-Za-z0-9-]{0,38})\/([A-Za-z0-9._-]{1,100})#([1-9][0-9]{0,9})\b/gim;
+
+/**
+ * The pull requests a body says it reverts, by number, in the order it names
+ * them and at most MAX_REVERT_TARGETS. Only a line that starts with
+ * `Reverts <owner>/<repo>#<n>` counts, as GitHub's Revert button writes it. A
+ * bare `#<n>`, a commit hash, and a revert made with `git revert` alone name
+ * nothing here. A pull request in another repository is left out, because a
+ * merge here changes nothing there, and so is the pull request's own number.
+ * Pure.
+ */
+export function revertedPullRequestsOf(body: string | null, repository: string, number: number): number[] {
+  if (body === null) return [];
+  const own = repository.toLowerCase();
+  const out: number[] = [];
+  for (const match of body.matchAll(REVERTS_LINE)) {
+    const target = Number(match[3]);
+    if (target > MAX_PULL_REQUEST_NUMBER) continue;
+    if (`${match[1]}/${match[2]}`.toLowerCase() !== own || target === number || out.includes(target)) continue;
+    out.push(target);
+    if (out.length === MAX_REVERT_TARGETS) break;
+  }
+  return out;
 }
 
 function text(value: unknown): string | null {
@@ -234,6 +294,7 @@ export function workPullRequestDeliveryOf(
   return {
     repository: fullName.toLowerCase(),
     number,
+    reverts: body["action"] === "closed" && p["merged"] === true ? revertedPullRequestsOf(text(p["body"]), fullName, number) : [],
     pull: {
       headSha: headSha !== null && /^[0-9a-f]{40}$/.test(headSha) ? headSha : null,
       baseRef: baseRef ?? "",
@@ -248,14 +309,63 @@ export function workPullRequestDeliveryOf(
 }
 
 /**
+ * Record a merged revert on every send in `scope` whose merged pull request it
+ * names: one `reverted` fact per send, naming the reverting pull request, its
+ * merge commit, and the pull request it reverts. A send counts only when the
+ * named pull request is the one it follows and it merged. The fact moves no
+ * state, so a done item stays done. The dedupe key names the send and the
+ * reverting pull request, so a redelivery records nothing. A send whose
+ * record refuses the fact is left out, as recordRunPullRequest leaves one out.
+ * Returns the facts recorded.
+ */
+async function recordReverts(tx: Tx, scope: WorkScope, delivery: PullRequestDelivery): Promise<number> {
+  const { pull } = delivery;
+  const mergeCommit = pull.merged ? pull.mergeCommitSha : null;
+  if (mergeCommit === null || !HEAD_SHA_PATTERN.test(mergeCommit) || delivery.reverts.length === 0) return 0;
+  let recorded = 0;
+  for (const target of delivery.reverts) {
+    for (const send of await ordersForPullRequest(tx, scope, delivery.repository, target)) {
+      try {
+        const write = await tx.transaction(async (savepoint) => {
+          const record = await readWorkItem(savepoint as Tx, scope, send.itemId);
+          const order = record.projection.orders.find((entry) => entry.orderId === send.orderId);
+          if (order === undefined || order.merge === null) return null;
+          const current = order.pullRequest;
+          if (current === null || current.repository.toLowerCase() !== delivery.repository || current.number !== target) return null;
+          const fact: FactInput<FactKind> = {
+            kind: "reverted",
+            source: "provider",
+            itemRevision: 1,
+            orderId: send.orderId,
+            repository: delivery.repository,
+            prNumber: delivery.number,
+            actor: "github",
+            occurredAt: pull.mergedAt ?? pull.updatedAt,
+            dedupeKey: `reverted:${send.orderId}:${delivery.repository}#${delivery.number}`,
+            data: { merge_commit: mergeCommit, reverts: target },
+          };
+          return appendFacts(savepoint as Tx, scope, { itemId: send.itemId, facts: [fact] });
+        });
+        if (write !== null && !write.repeat) recorded += 1;
+      } catch (error) {
+        if (!(error instanceof WorkRecordError)) throw error;
+      }
+    }
+  }
+  return recorded;
+}
+
+/**
  * Record a `pull_request` delivery on every send in `scope` that linked the
- * pull request: its head, a merge, or a close without merging. Checks are
- * read at Accept and by Read checks, not here. Returns the facts recorded.
+ * pull request: its head, a merge, or a close without merging. A merged
+ * revert of a send's merged pull request records `reverted` on that send
+ * (recordReverts). Checks are read at Accept and by Read checks, not here.
+ * Returns the facts recorded.
  */
 export async function recordWorkPullRequestDelivery(scope: WorkScope, delivery: PullRequestDelivery, now: Date): Promise<number> {
-  return runInTenantScope(scope, () =>
-    withTenantDb(async (tx) => {
-      let recorded = 0;
+  return runInTenantScope(scope, async () => {
+    const recorded = await withTenantDb(async (tx) => {
+      let count = 0;
       for (const send of await ordersForPullRequest(tx, scope, delivery.repository, delivery.number)) {
         const record = await readWorkItem(tx, scope, send.itemId);
         const order = record.projection.orders.find((entry) => entry.orderId === send.orderId);
@@ -271,9 +381,14 @@ export async function recordWorkPullRequestDelivery(scope: WorkScope, delivery: 
         const own = facts.filter((fact) => fact.kind === "head_observed" || fact.kind === "merged" || fact.kind === "pr_closed");
         if (own.length === 0) continue;
         const write = await tx.transaction((savepoint) => appendFacts(savepoint as Tx, scope, { itemId: send.itemId, facts: own }));
-        if (!write.repeat) recorded += own.length;
+        if (!write.repeat) count += own.length;
       }
-      return recorded;
-    }),
-  );
+      return count;
+    });
+    if (delivery.reverts.length === 0) return recorded;
+    // A revert writes other sends, in a transaction of its own, so a failure
+    // there cannot take back this pull request's own facts. It still throws,
+    // and the route logs it.
+    return recorded + (await withTenantDb((tx) => recordReverts(tx, scope, delivery)));
+  });
 }

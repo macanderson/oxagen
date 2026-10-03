@@ -53,6 +53,13 @@ describe("harness_files", () => {
     const host = readHostFile(path);
     const paths = withRecordedHarnessFiles(unenrolling, host);
     expect(paths.claudeSettings).toBe(enrolled.claudeSettings);
+    // Claude Code keeps its user config inside CLAUDE_CONFIG_DIR when that
+    // is set, and in the home directory when it is not (#5287).
+    expect(enrolled.claudeUserConfig).toBe(
+      "/Users/dev/claude-work/.claude.json",
+    );
+    expect(unenrolling.claudeUserConfig).toBe("/Users/dev/.claude.json");
+    expect(paths.claudeUserConfig).toBe(enrolled.claudeUserConfig);
     expect(paths.claudeProjects).toBe(enrolled.claudeProjects);
     expect(paths.codexHooks).toBe(enrolled.codexHooks);
     expect(paths.cursorHooks).toEqual(enrolled.cursorHooks);

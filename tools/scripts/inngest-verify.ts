@@ -107,72 +107,72 @@ export function checkKeyPosture(signingKey: string): void {
 }
 
 /**
- * Statuses that mean the serve endpoint is still coming up, not that the
- * wiring is wrong. The deploy step runs the moment the new API tasks start,
- * and on 2026-10-03 the API answered the first sync with 503
- * `service_overloaded` ("Retry after 2 seconds"). The step failed on that one
- * answer, main went red, and the new functions never synced.
+ * Answers that mean the api could not take the sync just now, not that Inngest
+ * refused it. Right after a deploy, Inngest sends the new process every step it
+ * is waiting to run, and they fill the api's `background` admission lane, which
+ * `/api/inngest` shares (apps/api/src/middleware/admission.ts). The deploy of
+ * 60e2da346 (#5324) failed here on a 503 `service_overloaded` that asked for a
+ * retry after 2 seconds. A 400 for a bad function config is still final.
  */
-const SYNC_RETRYABLE_STATUSES = new Set([429, 502, 503, 504]);
-/** Total time the sync may keep retrying a starting endpoint. */
-const SYNC_BUDGET_MS = 120_000;
-/** The longest single wait, whatever Retry-After asks for. */
-const SYNC_MAX_WAIT_MS = 15_000;
+const RETRYABLE_SYNC_STATUSES = new Set([429, 502, 503, 504]);
+/** Total time the sync may spend waiting between attempts before the deploy fails. */
+const SYNC_RETRY_BUDGET_MS = 90_000;
+const SYNC_DEFAULT_RETRY_MS = 2_000;
+const SYNC_MIN_RETRY_MS = 1_000;
+const SYNC_MAX_RETRY_MS = 15_000;
 
-export interface SyncDeps {
+/**
+ * How long to wait before retrying a sync answered with `status`, or null when
+ * the answer is final. A `Retry-After` in seconds is honoured within
+ * SYNC_MIN_RETRY_MS and SYNC_MAX_RETRY_MS; any other value waits the default.
+ */
+export function syncRetryDelayMs(
+  status: number,
+  retryAfter: string | null,
+): number | null {
+  if (!RETRYABLE_SYNC_STATUSES.has(status)) return null;
+  const seconds = retryAfter?.trim() ? Number(retryAfter) : Number.NaN;
+  if (!Number.isFinite(seconds) || seconds < 0) return SYNC_DEFAULT_RETRY_MS;
+  return Math.min(Math.max(seconds * 1000, SYNC_MIN_RETRY_MS), SYNC_MAX_RETRY_MS);
+}
+
+interface SyncOptions {
   fetchImpl?: typeof fetch;
   sleepImpl?: (ms: number) => Promise<void>;
-  now?: () => number;
+  budgetMs?: number;
 }
 
-/**
- * How long to wait before the next sync attempt. Honours a Retry-After given
- * in seconds, falls back to a backoff that grows with the attempt, and caps
- * both so one answer cannot stall the deploy.
- */
-export function syncRetryDelayMs(retryAfter: string | null, attempt: number): number {
-  const seconds = retryAfter === null ? Number.NaN : Number(retryAfter);
-  const asked = Number.isFinite(seconds) && seconds >= 0 ? seconds * 1_000 : 2_000 * attempt;
-  return Math.min(Math.max(asked, 1_000), SYNC_MAX_WAIT_MS);
-}
-
-/**
- * Step 2 — sync the app so Inngest knows the functions and the callback URL.
- *
- * A 429, 502, 503, or 504, or a connection that fails, is retried until the
- * budget runs out. Any other failure (a 401 from a key mismatch, a 404 from a
- * wrong URL) fails at once, because waiting does not fix it.
- */
-export async function syncApp(url: string, deps: SyncDeps = {}): Promise<void> {
-  const fetchImpl = deps.fetchImpl ?? fetch;
-  const sleepImpl = deps.sleepImpl ?? sleep;
-  const now = deps.now ?? Date.now;
-  const deadline = now() + SYNC_BUDGET_MS;
-  for (let attempt = 1; ; attempt += 1) {
-    let response: Response;
-    try {
-      response = await fetchImpl(url, { method: "PUT" });
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      const wait = syncRetryDelayMs(null, attempt);
-      if (now() + wait > deadline) fail(`sync of ${url} failed: ${reason}`);
-      console.log(`inngest-verify: sync attempt ${attempt} failed (${reason}), retrying in ${wait}ms`);
-      await sleepImpl(wait);
-      continue;
-    }
+/** Step 2 — sync the app so Inngest knows the functions and the callback URL. */
+export async function syncApp(
+  url: string,
+  {
+    fetchImpl = fetch,
+    sleepImpl = sleep,
+    budgetMs = SYNC_RETRY_BUDGET_MS,
+  }: SyncOptions = {},
+): Promise<void> {
+  let waited = 0;
+  for (let attempt = 1; ; attempt++) {
+    const response = await fetchImpl(url, { method: "PUT" });
     const body = await response.text();
     if (response.ok) {
       console.log(`inngest-verify: app synced (${body.slice(0, 200)})`);
       return;
     }
-    const wait = syncRetryDelayMs(response.headers.get("retry-after"), attempt);
-    if (!SYNC_RETRYABLE_STATUSES.has(response.status) || now() + wait > deadline) {
-      fail(`sync of ${url} returned ${response.status}: ${body.slice(0, 300)}`);
+    const delay = syncRetryDelayMs(
+      response.status,
+      response.headers.get("retry-after"),
+    );
+    if (delay === null || waited + delay > budgetMs) {
+      fail(
+        `sync of ${url} returned ${response.status} on attempt ${attempt}: ${body.slice(0, 300)}`,
+      );
     }
     console.log(
-      `inngest-verify: sync attempt ${attempt} returned ${response.status}, retrying in ${wait}ms`,
+      `inngest-verify: sync attempt ${attempt} returned ${response.status}, retrying in ${delay / 1000}s`,
     );
-    await sleepImpl(wait);
+    waited += delay;
+    await sleepImpl(delay);
   }
 }
 

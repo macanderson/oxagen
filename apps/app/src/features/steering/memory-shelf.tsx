@@ -156,7 +156,7 @@ function MemoryDialog({
         </>
       }
     >
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+      <dl className="grid grid-cols-dl gap-x-4 gap-y-2 text-sm">
         <dt className="text-muted-foreground">{t("dialog.class")}</dt>
         <dd data-term="class">
           <ClassBadge memoryClass={memory.memoryClass} />{" "}
@@ -169,7 +169,7 @@ function MemoryDialog({
           <NotRecordedCell gap={STEERING_GAPS.memory} />
         </dd>
         <dt className="text-muted-foreground">{t("dialog.origin")}</dt>
-        <dd className="font-mono text-sm" data-term="origin">
+        <dd className="font-mono text-xs" data-term="origin">
           {t("provenance", {
             ref: memory.publicRef,
             source: memory.source,
@@ -380,7 +380,7 @@ export function MemoryShelfBody({
                 >
                   {memory.body}
                 </button>
-                <span className="mt-0.5 block font-mono text-sm text-dim md:truncate">
+                <span className="mt-0.5 block font-mono text-xs text-dim md:truncate">
                   {t("provenance", {
                     ref: memory.publicRef,
                     source: memory.source,

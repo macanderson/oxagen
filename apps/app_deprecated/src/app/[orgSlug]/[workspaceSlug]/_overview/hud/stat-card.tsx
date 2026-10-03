@@ -44,7 +44,7 @@ export function StatCard({
           with the value below instead, so a label like "Spend · month to
           date" never truncates just because a sparkline reserved half the
           card. `truncate` stays as the narrow-viewport backstop. */}
-      <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+      <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {Icon ? (
           <Icon className="size-3.5 shrink-0" aria-hidden="true" />
         ) : null}
@@ -56,7 +56,7 @@ export function StatCard({
             {value}
           </span>
           {(sub || delta) && (
-            <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
               {delta}
               {sub}
             </span>

@@ -1150,6 +1150,71 @@
                         }
                       ]
                     },
+                    "pull_requests": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "github",
+                              "gitlab"
+                            ]
+                          },
+                          "repository": {
+                            "type": "string"
+                          },
+                          "number": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "open",
+                              "draft",
+                              "closed",
+                              "merged"
+                            ]
+                          },
+                          "head": {
+                            "type": "string"
+                          },
+                          "state_seen_at": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "provider",
+                          "repository",
+                          "number",
+                          "url",
+                          "title",
+                          "state",
+                          "head",
+                          "state_seen_at"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
                     "checks": {
                       "type": "string",
                       "enum": [
@@ -1224,6 +1289,7 @@
                     "runtime",
                     "requested_at",
                     "pull_request",
+                    "pull_requests",
                     "checks",
                     "gate",
                     "accepted"

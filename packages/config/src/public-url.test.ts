@@ -9,6 +9,7 @@ import {
   assertPublicHttpUrl,
   fetchWithoutRedirects,
   redactUrlCredentials,
+  redactUrlSecrets,
   UnsafeOutboundUrlError,
 } from "./public-url";
 
@@ -327,5 +328,52 @@ describe("redactUrlCredentials", () => {
         "from https://a:1@one.example/v1 to https://b:2@two.example/v1",
       ),
     ).toBe("from https://***@one.example/v1 to https://***@two.example/v1");
+  });
+});
+
+describe("redactUrlSecrets", () => {
+  it("hides the userinfo and every query value whose name holds a secret (#3720)", () => {
+    expect(
+      redactUrlSecrets(
+        "https://admin:hunter2@mcp.example.com/sse?api_key=sk-live-1&Access-Token=t0k&region=eu",
+      ),
+    ).toBe(
+      "https://***@mcp.example.com/sse?api_key=***&Access-Token=***&region=eu",
+    );
+  });
+
+  it.each([
+    ["key", "https://mcp.example.com/mcp?key=AIzaSecret"],
+    ["token", "https://mcp.example.com/mcp?token=abc"],
+    ["client_secret", "https://mcp.example.com/mcp?client_secret=abc"],
+    ["sig", "https://mcp.example.com/mcp?sig=abc"],
+    ["x-goog-token", "https://mcp.example.com/mcp?x-goog-token=abc"],
+    ["api%5Fkey", "https://mcp.example.com/mcp?api%5Fkey=abc"],
+    ["%74oken", "https://mcp.example.com/mcp?%74oken=abc"],
+    ["subscription-key", "https://apim.example.com/v1?subscription-key=abc"],
+    ["a fragment's access_token", "https://mcp.example.com/cb#access_token=abc"],
+  ])("hides the value of %s", (_name, url) => {
+    const out = redactUrlSecrets(url);
+    expect(out).not.toContain("abc");
+    expect(out).not.toContain("AIzaSecret");
+    expect(out).toMatch(/=\*\*\*$/);
+  });
+
+  it("keeps a query with no secret in it, and the fragment, as they were", () => {
+    for (const url of [
+      "https://host.example/v1?api-version=2024-10-01",
+      "https://host.example/v1?owner=a@b.example#models",
+      "https://host.example/v1?flag&region=eu",
+      "https://host.example/v1",
+      "not a url at all",
+    ]) {
+      expect(redactUrlSecrets(url)).toBe(url);
+    }
+  });
+
+  it("does not throw on a malformed escape in a name", () => {
+    expect(redactUrlSecrets("https://host.example/v1?%E0%A4%A=1&token=x")).toBe(
+      "https://host.example/v1?%E0%A4%A=1&token=***",
+    );
   });
 });

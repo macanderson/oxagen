@@ -195,7 +195,7 @@ export function SuggestedPromptChips({
         <p
           role="alert"
           data-testid="chip-error"
-          className="text-xs text-destructive text-center"
+          className="text-sm text-destructive text-center"
         >
           {chipError}
         </p>
@@ -234,9 +234,9 @@ export function SuggestedPromptChips({
               <div
                 key={`${index}-${label}`}
                 className={cn(
-                  "inline-flex items-center gap-0.5 rounded-full border border-border bg-muted/60 pl-3 pr-1 text-xs font-medium text-foreground",
+                  "inline-flex items-center gap-0.5 rounded-full border border-border bg-muted/60 pl-3 pr-1 text-sm font-medium text-foreground",
                   "transition-all hover:border-border/80 hover:shadow-sm",
-                  stacked && "min-h-11 w-full rounded-xl text-sm",
+                  stacked && "min-h-11 w-full rounded-xl text-base",
                   pending &&
                     activatingIndex !== index &&
                     "pointer-events-none opacity-40",
@@ -292,12 +292,12 @@ export function SuggestedPromptChips({
               className={cn(
                 // Base chip style
                 "inline-flex items-center rounded-full border border-border",
-                "bg-muted/60 px-3 py-1.5 text-xs font-medium text-foreground",
+                "bg-muted/60 px-3 py-1.5 text-sm font-medium text-foreground",
                 "transition-all hover:bg-muted hover:border-border/80 hover:shadow-sm",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 "active:scale-95",
                 // v2 mobile empty state: thumb-friendly full-width rows.
-                stacked && "min-h-11 w-full justify-center rounded-xl text-sm",
+                stacked && "min-h-11 w-full justify-center rounded-xl text-base",
                 // Activating state
                 activatingIndex === index && "opacity-60 pointer-events-none",
                 // Disabled while any chip is activating

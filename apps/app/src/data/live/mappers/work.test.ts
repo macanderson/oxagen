@@ -30,6 +30,18 @@ const HEAD = "3f9a2c1d4e5f60718293a4b5c6d7e8f901234567";
 const EARLIER = "2d4f6a80123456789abcdef0123456789abcdef0";
 const DIGEST = `sha256:${"a".repeat(64)}`;
 const AT = "2026-10-02T12:58:00.000Z";
+/** Pull request #612 as the forge store holds it: merged. */
+const FORGE_PULL = {
+  id: "fpr_01k6pull",
+  provider: "github",
+  repository: "acme/platform",
+  number: 612,
+  url: "https://github.com/acme/platform/pull/612",
+  title: "Return a Retry-After header on 429",
+  state: "merged",
+  head: HEAD,
+  state_seen_at: AT,
+};
 
 function row(overrides: Record<string, unknown> = {}) {
   return {
@@ -60,6 +72,7 @@ function row(overrides: Record<string, unknown> = {}) {
       runtime: { name: "CI runner 6", tier: "gateway" },
       requested_at: AT,
       pull_request: { repository: "acme/platform", number: 612, url: "https://github.com/acme/platform/pull/612", head: HEAD },
+      pull_requests: [FORGE_PULL],
       checks: "failing",
       gate: { open: false, block: "check_failed", detail: "test: failure" },
       accepted: false,
@@ -122,6 +135,22 @@ describe("toWorkItemList", () => {
     );
     expect(merged.items[0]?.wait).toEqual({ kind: "merged_by_app", login: "oxagen-connect[bot]", at: AT });
     expect(merged.items[0]?.send?.gate).toEqual({ open: false, block: "merged_by_app", detail: "oxagen-connect[bot]" });
+  });
+
+  it("copies every pull request the forge store holds for the send", () => {
+    expect(view.items[0]?.send?.pullRequests).toEqual([
+      {
+        id: "fpr_01k6pull",
+        provider: "github",
+        repository: "acme/platform",
+        number: 612,
+        url: "https://github.com/acme/platform/pull/612",
+        title: "Return a Retry-After header on 429",
+        state: "merged",
+        head: HEAD,
+        stateSeenAt: AT,
+      },
+    ]);
   });
 
   it("keeps an unknown cost null and invents no zero", () => {
@@ -228,6 +257,7 @@ describe("toWorkItemDetail", () => {
           merged: null,
           closed_at: null,
         },
+        pull_requests: [{ ...FORGE_PULL, id: "fpr_01k6second", number: 613, title: null, state: "draft", head: EARLIER }, FORGE_PULL],
         required_checks: ["test"],
         checks: [{ name: "test", conclusion: "pending", required: true }],
         earlier_checks: { head: EARLIER, checks: [{ name: "test", conclusion: "success", required: true }] },
@@ -308,6 +338,15 @@ describe("toWorkItemDetail", () => {
     ).toBe(false);
   });
 
+  it("keeps each pull request's forge state beside the facts' pull request", () => {
+    const [send] = view.sends;
+    expect(send?.pullRequests.map((pull) => [pull.id, pull.number, pull.state, pull.title])).toEqual([
+      ["fpr_01k6second", 613, "draft", null],
+      ["fpr_01k6pull", 612, "merged", "Return a Retry-After header on 429"],
+    ]);
+    expect(send?.pullRequest).toMatchObject({ number: 612, head: HEAD, merged: null });
+  });
+
   it("keeps the stale acceptance and the earlier head's results beside the current head", () => {
     const [send] = view.sends;
     expect(send?.acceptance).toBeNull();
@@ -361,6 +400,7 @@ describe("toWorkTargetList and toWorkOutcomes", () => {
       touches: { per_item: null, brief_approvals: 0, acceptances: 0, returns: 1, triage_overrides: 0, triage_corrections: 0 },
       cost: { runs: 1, known_runs: 0, total: null },
       reopens: { cohort: 0, reopened: 0, waiting: 0 },
+      reverts: { cohort: 3, reverted: 1, waiting: 2 },
       delivery: {
         sends: 2,
         claimed: 1,
@@ -380,6 +420,7 @@ describe("toWorkTargetList and toWorkOutcomes", () => {
     expect(view.leadTime).toEqual({ medianHours: null, p90Hours: null, sample: 0 });
     expect(view.cost).toEqual({ runs: 1, knownRuns: 0, total: null });
     expect(view.closed).toEqual({ cancelled: 0, declined: 1, duplicate: 2 });
+    expect(view.reverts).toEqual({ cohort: 3, reverted: 1, waiting: 2 });
     expect(view.weeks.map(({ week, complete }) => ({ week, complete }))).toEqual([
       { week: "2026-09-21", complete: true },
       { week: "2026-09-28", complete: false },

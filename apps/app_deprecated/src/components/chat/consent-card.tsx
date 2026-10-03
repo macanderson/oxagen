@@ -90,21 +90,21 @@ export function ConsentCard({
       <div className="flex items-center gap-2">
         <ShieldCheck className="h-4 w-4 text-primary" />
         <span className="font-semibold">Allow external tool?</span>
-        <span className="text-xs text-muted-foreground">{toolName}</span>
-        <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+        <span className="text-sm text-muted-foreground">{toolName}</span>
+        <span className="ml-auto text-sm tabular-nums text-muted-foreground">
           {expired || settled
             ? null
             : `Expires in ${formatRemaining(remaining)}`}
         </span>
       </div>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         The agent wants to call <span className="font-mono">{toolName}</span> on
         an external MCP server for the first time. Granting lets it run this
         tool without asking again.
       </p>
 
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Plug className="h-3.5 w-3.5" />
         <span className="font-mono">{serverId}</span>
         <span aria-hidden>·</span>
@@ -114,7 +114,7 @@ export function ConsentCard({
       <StructuredField label="Sample input" value={inputPreview} />
 
       {!settled && !expired ? (
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
           <Checkbox
             checked={grantAll}
             onCheckedChange={(v) => setGrantAll(v === true)}
@@ -124,15 +124,15 @@ export function ConsentCard({
         </label>
       ) : null}
 
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <div className="flex items-center justify-end gap-2">
         {settled ? (
           <span
             className={
               optimistic === "granted"
-                ? "inline-flex items-center gap-1 text-xs font-medium text-success"
-                : "inline-flex items-center gap-1 text-xs font-medium text-destructive"
+                ? "inline-flex items-center gap-1 text-sm font-medium text-success"
+                : "inline-flex items-center gap-1 text-sm font-medium text-destructive"
             }
           >
             {optimistic === "granted" ? (
@@ -143,7 +143,7 @@ export function ConsentCard({
             {optimistic}
           </span>
         ) : expired ? (
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+          <span className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground">
             Expired
           </span>
         ) : (

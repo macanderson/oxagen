@@ -206,6 +206,7 @@ const source: DataSource = {
     tree: refuse,
   },
   steeringRepo: { get: refuse },
+  changes: { changeSet: refuse, revisionDiff: refuse },
   tools: {
     versions: refuse,
     grants: refuse,
@@ -591,7 +592,7 @@ describe("Events", () => {
       "[data-slot=select-trigger], input:not([type=hidden]):not([aria-hidden=true])",
     )) {
       expect(each.className).toContain("max-md:min-h-11");
-      expect(each.className).toContain("max-md:text-base");
+      expect(each.className).toContain("max-md:text-input-touch");
     }
 
     // The table's page is narrowed by the result and sized by Rows; the
@@ -1305,7 +1306,7 @@ describe("tabs", () => {
       // Every field is a 44 px tap target with 16 px text on a phone (audit.md, Mobile).
       for (const each of dialog.querySelectorAll("input, select, textarea")) {
         expect(each.className).toContain("max-md:min-h-11");
-        expect(each.className).toContain("max-md:text-base");
+        expect(each.className).toContain("max-md:text-input-touch");
       }
     },
   );

@@ -18,6 +18,8 @@ interface Commit {
   files: Map<string, string>;
   message: string;
   at: string;
+  /** When the change was first written. A rebase keeps it, as git does. */
+  authoredAt: string;
 }
 
 export const GITLAB_PROJECT = {
@@ -59,6 +61,8 @@ export class FakeGitLabApi {
   rebasePolls = 1;
   /** Poll a rebase forever, as when GitLab's rebase worker is stuck. */
   rebaseStuck = false;
+  /** Runs when GitLab takes a rebase request, before it reads the branch. */
+  onRebase: (() => void) | null = null;
   /** The result of the last rebase of each merge request. */
   rebaseState = new Map<number, { polls: number; error: string | null }>();
   /**
@@ -97,11 +101,13 @@ export class FakeGitLabApi {
   clock = Date.parse("2026-09-23T10:00:00.000Z");
 
   constructor(files: Record<string, string> = {}) {
+    const at = this.tick();
     this.commits.set("c0", {
       parent: null,
       files: new Map(Object.entries(files)),
       message: "initial",
-      at: this.tick(),
+      at,
+      authoredAt: at,
     });
     this.branches.set("main", "c0");
   }
@@ -138,9 +144,12 @@ export class FakeGitLabApi {
   }
   /**
    * Rebase a merge request's branch onto its target, as GitLab's rebase
-   * worker does: the branch's own changes land in one commit on top of the
-   * target. A path both sides changed differently is a conflict, reported the
-   * way GitLab reports it, as the merge request's `merge_error`.
+   * worker does: each commit the branch holds past the target is replayed on
+   * top of it, oldest first, with its message and author date. A commit that
+   * changes nothing on the new base is dropped, as git drops it. A path a
+   * commit changes that the target changed differently is a conflict,
+   * reported the way GitLab reports it, as the merge request's `merge_error`,
+   * and the branch is left as it was.
    */
   rebase(iid: number): string | null {
     const mr = this.mr(iid);
@@ -148,24 +157,46 @@ export class FakeGitLabApi {
     const target = this.branches.get(mr.targetBranch)!;
     const base = this.mergeBase(head, target);
     if (base === target) return null;
-    const before = base
-      ? this.commits.get(base)!.files
-      : new Map<string, string>();
-    const mine = this.commits.get(head)!.files;
-    const files = new Map(this.commits.get(target)!.files);
-    for (const path of new Set([...before.keys(), ...mine.keys()])) {
-      const was = before.get(path);
-      const now = mine.get(path);
-      if (now === was) continue;
-      const theirs = files.get(path);
-      if (theirs !== was && theirs !== now)
-        return `Rebase failed: conflict in ${path}`;
-      if (now === undefined) files.delete(path);
-      else files.set(path, now);
+    const own = this.lineage(head);
+    const replay = own.slice(0, base ? own.indexOf(base) : own.length).reverse();
+    let files = new Map(this.commits.get(target)!.files);
+    const replayed: { files: Map<string, string>; from: Commit }[] = [];
+    for (const sha of replay) {
+      const commit = this.commits.get(sha)!;
+      const before = commit.parent
+        ? this.commits.get(commit.parent)!.files
+        : new Map<string, string>();
+      const next = new Map(files);
+      for (const path of new Set([...before.keys(), ...commit.files.keys()])) {
+        const was = before.get(path);
+        const now = commit.files.get(path);
+        if (now === was) continue;
+        const theirs = next.get(path);
+        if (theirs !== was && theirs !== now)
+          return `Rebase failed: conflict in ${path}`;
+        if (now === undefined) next.delete(path);
+        else next.set(path, now);
+      }
+      if (JSON.stringify([...next]) === JSON.stringify([...files])) continue;
+      replayed.push({ files: next, from: commit });
+      files = next;
     }
     this.branches.set(mr.sourceBranch, target);
-    this.addCommit(mr.sourceBranch, files, `rebase ${mr.sourceBranch}`);
+    for (const { files: tree, from } of replayed)
+      this.addCommit(mr.sourceBranch, tree, from.message, from.authoredAt);
     return null;
+  }
+
+  /**
+   * Every commit `to` holds that `from` does not, newest first, as GitLab
+   * lists the range `from..to`.
+   */
+  range(from: string, to: string): string[] {
+    const fromSha = this.sha(from);
+    const toSha = this.sha(to);
+    if (!toSha) return [];
+    const held = new Set(fromSha ? this.lineage(fromSha) : []);
+    return this.lineage(toSha).filter((sha) => !held.has(sha));
   }
   /**
    * A commit anyone with push access makes on a branch. A push to an open
@@ -189,14 +220,17 @@ export class FakeGitLabApi {
     branch: string,
     files: Map<string, string>,
     message: string,
+    authoredAt?: string,
   ): string {
     this.seq += 1;
     const sha = `gl${this.seq}`;
+    const at = this.tick();
     this.commits.set(sha, {
       parent: this.branches.get(branch) ?? null,
       files,
       message,
-      at: this.tick(),
+      at,
+      authoredAt: authoredAt ?? at,
     });
     this.branches.set(branch, sha);
     this.recordVersions(branch);
@@ -300,6 +334,25 @@ function restOver(api: FakeGitLabApi): GitLabRest {
         api.tags.set(name, sha);
         return answer<T>(201, { name, commit: { id: sha } });
       }
+      if (route === "GET /repository/commits") {
+        const range = /^(.+)\.\.(.+)$/.exec(
+          url.searchParams.get("ref_name") ?? "",
+        );
+        if (!range) throw new GitLabApiError(400, "ref_name must be a range");
+        const size = Number(url.searchParams.get("per_page") ?? 20);
+        const page = Number(url.searchParams.get("page") ?? 1);
+        const listed = api.range(range[1]!, range[2]!).map((sha) => {
+          const commit = api.commits.get(sha)!;
+          return {
+            id: sha,
+            parent_ids: commit.parent === null ? [] : [commit.parent],
+            message: commit.message,
+            author_email: "author@example.com",
+            authored_date: commit.authoredAt,
+          };
+        });
+        return answer<T>(200, listed.slice((page - 1) * size, page * size));
+      }
       const commitRoute = /^GET \/repository\/commits\/([^/]+)$/.exec(route);
       if (commitRoute) {
         const sha = decodeURIComponent(commitRoute[1]!);
@@ -340,6 +393,9 @@ function restOver(api: FakeGitLabApi): GitLabRest {
         const mr = api.mr(iid);
         if (mrRoute[1] === "PUT" && mrRoute[3] === "/rebase") {
           api.rebases.push(iid);
+          const push = api.onRebase;
+          api.onRebase = null;
+          push?.();
           api.rebaseState.set(iid, {
             polls: api.rebasePolls,
             error: api.rebase(iid),
@@ -478,7 +534,13 @@ function clientOver(api: FakeGitLabApi): GitLabClient {
         }
         if (JSON.stringify([...files]) === before)
           throw new GitLabApiError(400, "No changes to commit");
-        return { sha: api.addCommit(branch, files, message) };
+        // GitLab writes on the branch's tip at the moment of the write and
+        // answers the parent it used.
+        const tip = api.branches.get(branch);
+        return {
+          sha: api.addCommit(branch, files, message),
+          parentIds: tip ? [tip] : [],
+        };
       },
       async compare({ project, from, to }) {
         api.guard(project);

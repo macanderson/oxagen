@@ -173,6 +173,28 @@ describe("the WAL after a restart", () => {
     expect(restarted.lastEvent(OLD_SESSION)).toEqual(events.at(-1));
     expect(read).toBeLessThan(size / 10);
   });
+
+  it("reads one day of a long session back from the tail, not the whole file, for the day budget", () => {
+    const paths = scratchPaths();
+    const dayStart = Date.parse("2026-09-24T00:00:00.000Z");
+    // A second apart, the last ten on the 24th and the rest on the 23rd.
+    const events = longSession(OLD_SESSION).map((event) => ({
+      ...event,
+      ts: new Date(dayStart + (event.seq - (EVENTS - 10)) * 1_000).toISOString(),
+    }));
+    new Wal(paths.wal).append(events);
+    const size = statSync(join(paths.wal, `${OLD_SESSION}.ndjson`)).size;
+
+    const restarted = new Wal(paths.wal);
+    let today: TachoEvent[] = [];
+    const read = eventBytesDuring(() => {
+      today = restarted.eventsSince(OLD_SESSION, dayStart);
+    });
+    expect(today.map((event) => event.seq)).toEqual(
+      events.slice(EVENTS - 10).map((event) => event.seq),
+    );
+    expect(read).toBeLessThan(size / 10);
+  });
 });
 
 describe("compaction", () => {

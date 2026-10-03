@@ -495,10 +495,10 @@ ${pillars.map((p) => `          <li><a href="${urls.pillar(p.slug)}">${esc(p.nam
 }
 
 /**
- * Space Grotesk sets the first line of a hero headline and nothing else on a
- * blog page (the wordmark is an SVG). The hero line inherits the heading
- * weight, 600, so a page with a hero preloads that one file and a page
- * without a hero preloads none.
+ * Space Grotesk sets every h1, h2, and h3 on a blog page (Mac, 2026-10-02,
+ * oxageninc/brand#83), and the wordmark is an SVG. Each heading takes the
+ * site's heading weight, 600, so every blog page preloads that one file. A
+ * page built with no heading face (`heroFont` unset) preloads none.
  */
 export const HERO_FONT_PRELOAD =
   '<link rel="preload" href="/fonts/space-grotesk-latin-600.woff2" as="font" type="font/woff2" crossorigin>';
@@ -628,7 +628,7 @@ export function indexPage({ pillars, posts, wordmark, image, latest }) {
   <section class="blog-hero tex tex-hex">
     <div class="wrap">
       <p class="eyebrow">Research</p>
-      <h1><span class="hero-line-1">What the research says about agents,</span><br><span class="gold">and how to govern them</span></h1>
+      <h1>What the research says about agents,<br><span class="gold">and how to govern them</span></h1>
       <p class="blog-hero-sub">${esc(BLOG_DESCRIPTION)}</p>
     </div>
   </section>
@@ -684,7 +684,7 @@ export function pillarPage({ pillar, pillars, posts, wordmark, latest }) {
     ${heroArt(pillar.images.banner)}
     <div class="wrap"><div class="pillar-hero-copy">
       <p class="eyebrow"><a href="${urls.blog()}">Research</a> · Pillar</p>
-      <h1 class="hero-line-1">${esc(pillar.name)}</h1>
+      <h1>${esc(pillar.name)}</h1>
       <p class="pillar-tagline">${esc(pillar.tagline)}</p>
       <p class="pillar-desc">${esc(pillar.description)}</p>
     </div></div>
@@ -777,6 +777,7 @@ ${html}
     wordmark,
     pillars,
     latest,
+    heroFont: true,
     extraHead: `<meta property="article:published_time" content="${post.date}">${post.updated ? `\n<meta property="article:modified_time" content="${post.updated}">` : ""}${post.pillars.map((p) => `\n<meta property="article:section" content="${esc(pillars.find((x) => x.slug === p)?.name ?? p)}">`).join("")}${post.tags.map((t) => `\n<meta property="article:tag" content="${esc(t)}">`).join("")}`,
     ldjson: {
       "@context": "https://schema.org",

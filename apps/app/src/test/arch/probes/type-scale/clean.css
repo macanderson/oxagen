@@ -1,11 +1,11 @@
-/* Probe for type-scale.test.ts: every size here comes from a token or sits
-   at or above the floor, so the scan finds nothing. */
+/* Probe for type-scale.test.ts: every size here reads a token, so the scan
+   finds nothing. */
 .a {
   font-size: var(--ox-a-body);
-  font-size: 16px;
-  font-size: 0.875rem;
-  font-size: 1em;
+  font-size: var(--ox-a-2xs);
+  font-size: calc(var(--ox-a-base) * 18 / 7);
+  font: inherit;
   letter-spacing: 0.09em;
-  --text-xs: var(--ox-a-body);
-  --text-xs--line-height: var(--text-sm--line-height);
+  --text-xs: var(--ox-a-2xs);
+  --text-xs--line-height: var(--ox-a-2xs-leading);
 }

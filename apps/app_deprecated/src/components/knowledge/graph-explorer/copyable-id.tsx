@@ -51,7 +51,7 @@ export function CopyableId({
       aria-label={`Copy ${label ?? "identifier"} ${value}`}
       className={cn(
         "group inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-muted/40 px-1.5 py-0.5",
-        "font-mono text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+        "font-mono text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
         className,
       )}

@@ -358,6 +358,9 @@ export type Provider =
   | "mistral"
   | "deepseek"
   | "voyage"
+  | "zai"
+  | "moonshot"
+  | "qwen"
   | "";
 
 export interface TokenUsageRow {
@@ -754,7 +757,12 @@ export interface ErrorEventRow {
   /** Nil UUID when org-level or pre-scope. */
   workspace_id: string | null;
   severity: "fatal" | "error" | "warn";
-  /** Which runtime captured it. */
+  /**
+   * Which runtime captured it. "runner" is a background job calling a
+   * capability under the kernel's `runner` surface (error-reporting.ts).
+   * infra/tools/check-store-drift.sh counts rows per value, and its test holds
+   * its list to this union.
+   */
   source: "api" | "app" | "mcp" | "inngest" | "runner";
   /** Error constructor name, e.g. "TypeError". */
   error_class: string;
@@ -823,7 +831,9 @@ export async function hashPrompt(text: string): Promise<string> {
  * The leading `creator` segment (split on `:` or `/`) is authoritative when it
  * names a known vendor; otherwise we fall back to recognising the model family
  * by id prefix. Covers every vendor @oxagen/ai routes to (text + image + video)
- * so token_usage.provider is never blank for a real call.
+ * so token_usage.provider is never blank for a real call. OpenRouter spells
+ * some creators differently (`z-ai/glm-…`, `x-ai/grok-…`, `meta-llama/…`,
+ * `mistralai/…`, `moonshotai/…`), and those map to the same vendor.
  */
 export function providerFromModelId(modelId: string): Provider {
   const head = (modelId.split(/[:/]/)[0] ?? "").toLowerCase();
@@ -837,7 +847,22 @@ export function providerFromModelId(modelId: string): Provider {
     case "mistral":
     case "deepseek":
     case "voyage":
+    case "zai":
+    case "moonshot":
+    case "qwen":
       return head;
+    case "z-ai":
+    case "zhipu":
+    case "zhipuai":
+      return "zai";
+    case "x-ai":
+      return "xai";
+    case "meta-llama":
+      return "meta";
+    case "mistralai":
+      return "mistral";
+    case "moonshotai":
+      return "moonshot";
   }
   const id = modelId.toLowerCase();
   if (id.startsWith("claude")) return "anthropic";
@@ -862,6 +887,20 @@ export function providerFromModelId(modelId: string): Provider {
   if (id.startsWith("flux")) return "bfl";
   if (id.startsWith("grok")) return "xai";
   if (id.startsWith("voyage")) return "voyage";
+  if (id.startsWith("glm")) return "zai";
+  if (id.startsWith("llama")) return "meta";
+  if (
+    id.startsWith("mistral") ||
+    id.startsWith("mixtral") ||
+    id.startsWith("codestral") ||
+    id.startsWith("devstral") ||
+    id.startsWith("magistral") ||
+    id.startsWith("ministral")
+  )
+    return "mistral";
+  if (id.startsWith("deepseek")) return "deepseek";
+  if (id.startsWith("kimi")) return "moonshot";
+  if (id.startsWith("qwen")) return "qwen";
   return "";
 }
 

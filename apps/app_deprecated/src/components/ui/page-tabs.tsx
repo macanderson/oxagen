@@ -153,7 +153,7 @@ export function PageTabs({ tabs, className }: PageTabsProps) {
               className={cn(
                 // Base tab styles — no wrapping, px spacing, consistent height
                 "relative flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 pb-2.5 pt-1.5",
-                "text-sm font-medium leading-none",
+                "text-base font-medium leading-none",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
                 "transition-colors duration-150",
                 // State
@@ -169,7 +169,7 @@ export function PageTabs({ tabs, className }: PageTabsProps) {
                 <span
                   className={cn(
                     "inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1",
-                    "text-[10px] font-semibold leading-none",
+                    "text-xs font-semibold leading-none",
                     isActive
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-muted-foreground",

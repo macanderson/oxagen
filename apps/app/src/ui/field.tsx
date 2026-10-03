@@ -37,7 +37,7 @@ export function Field({
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <div className="flex items-center justify-between gap-3">
-        <label htmlFor={id} className="text-sm font-medium text-foreground">
+        <label htmlFor={id} className="text-base font-medium text-foreground">
           {label}
         </label>
         {labelAside}
@@ -58,12 +58,12 @@ export function Field({
         ) : null}
       </div>
       {error ? (
-        <p id={errorId} className="text-sm text-error-ink">
+        <p id={errorId} className="text-base text-error-ink">
           {error}
         </p>
       ) : null}
       {hint ? (
-        <p id={hintId} className="text-xs text-muted-foreground">
+        <p id={hintId} className="text-sm text-muted-foreground">
           {hint}
         </p>
       ) : null}
@@ -98,7 +98,7 @@ export function PasswordField({
             setShown((s) => !s);
           }}
           aria-controls={props.id}
-          className="inline-flex items-center rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          className="inline-flex items-center rounded-sm px-2 py-1 text-sm text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
         >
           {shown ? hideLabel : showLabel}
         </button>

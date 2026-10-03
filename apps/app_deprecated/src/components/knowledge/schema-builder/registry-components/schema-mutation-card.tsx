@@ -38,21 +38,21 @@ export default function SchemaMutationCard({
     <div className="rounded-xl border border-border bg-card px-4 py-3 space-y-2">
       <div className="flex items-center gap-2 flex-wrap">
         <span
-          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${badge.className}`}
+          className={`inline-flex items-center rounded-full px-2 py-0.5 text-sm font-medium ${badge.className}`}
         >
           {badge.label}
         </span>
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-sm text-muted-foreground">
           {schemaName}
         </span>
         {labelName && (
           <>
-            <span className="text-xs text-muted-foreground">/</span>
-            <span className="font-mono text-xs">{labelName}</span>
+            <span className="text-sm text-muted-foreground">/</span>
+            <span className="font-mono text-sm">{labelName}</span>
           </>
         )}
       </div>
-      <p className="text-sm text-muted-foreground">{summary}</p>
+      <p className="text-base text-muted-foreground">{summary}</p>
     </div>
   );
 }

@@ -44,11 +44,11 @@ const strong = (chunks: ReactNode) => <b>{chunks}</b>;
 
 /** `.eyebrow.q`: a panel's section eyebrow. */
 const sectionEyebrow =
-  "mb-1.5 text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground";
+  "mb-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground";
 
 /** `.kv`: a two-column definition list. */
 const kv =
-  "grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm [&>dt]:text-muted-foreground [&>dd]:min-w-0 [&>dd]:text-foreground";
+  "grid grid-cols-dl-clip gap-x-4 gap-y-2 text-sm [&>dt]:text-muted-foreground [&>dd]:min-w-0 [&>dd]:text-foreground";
 
 function Panel({ kind, children }: { kind: RecordKind; children: ReactNode }) {
   const term = useTranslations("ui.record");
@@ -139,8 +139,8 @@ function Meter({
     grey: "bg-rule",
   }[tone];
   return (
-    <li data-meter={name} className="grid gap-[5px]">
-      <span className="flex text-sm text-muted-foreground">
+    <li data-meter={name} className="grid gap-1.25">
+      <span className="flex text-xs text-muted-foreground">
         {label}
         <span className="ms-auto font-semibold tabular-nums text-foreground">
           {value === null ? (
@@ -158,10 +158,10 @@ function Meter({
       </span>
       <div
         aria-hidden="true"
-        className="mt-1 h-1.5 overflow-hidden rounded-[3px] bg-hl"
+        className="mt-1 h-1.5 overflow-hidden rounded-xs bg-hl"
       >
         <i
-          className={`block h-full rounded-[3px] ${fill}`}
+          className={`block h-full rounded-xs ${fill}`}
           style={{ width: `${String(share)}%` }}
         />
       </div>
@@ -219,7 +219,7 @@ function Meters({
       <p
         data-state="not-recorded"
         data-gap={RECORD_GAPS.violated}
-        className="text-sm text-dim"
+        className="text-xs text-dim"
       >
         {t("thirdNotRecorded")}
       </p>
@@ -315,11 +315,11 @@ function ConstraintPanel({
         data-testid="record-boundary"
         data-effect={constraintEffect ?? "unknown"}
         data-grant="none"
-        className={`mb-3.5 grid gap-1.5 rounded-[10px] border px-3.5 py-3 ${tone}`}
+        className={`mb-3.5 grid gap-1.5 rounded-xl border px-3.5 py-3 ${tone}`}
       >
         <span
           data-word=""
-          className="font-mono text-sm font-semibold uppercase tracking-[0.06em]"
+          className="font-mono text-sm font-semibold uppercase tracking-wider"
         >
           {constraintEffect ?? t("effectUnknownWord")}
         </span>

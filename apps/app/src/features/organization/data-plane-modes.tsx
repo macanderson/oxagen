@@ -27,7 +27,7 @@ export function DataPlaneModes({
       <div
         role="group"
         aria-label={t("modesLabel")}
-        className="inline-flex w-fit max-w-full flex-wrap gap-0.5 rounded-[9px] border border-border bg-hl p-0.5"
+        className="inline-flex w-fit max-w-full flex-wrap gap-0.5 rounded-xl border border-border bg-hl p-0.5"
       >
         {PLANE_MODES.map((mode) => (
           <button

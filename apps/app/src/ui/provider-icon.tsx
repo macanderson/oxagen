@@ -48,7 +48,7 @@ export function ProviderIcon({
       aria-hidden="true"
       data-provider-icon="initial"
       style={side}
-      className={`${box} text-xs font-semibold text-muted-foreground`}
+      className={`${box} text-sm font-semibold text-muted-foreground`}
     >
       {name.trim().charAt(0).toUpperCase() || "?"}
     </span>

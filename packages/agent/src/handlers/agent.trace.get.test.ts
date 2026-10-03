@@ -250,7 +250,7 @@ describe("agent.trace.get handler", () => {
     expect(out.executionId).toBe("aex_root");
   });
 
-  it("derives turnMetrics + replayDeterministic from steps via @oxagen/engram", async () => {
+  it("derives turnMetrics + metricsInRange from the stored steps", async () => {
     setup({
       root: exec(),
       steps: [
@@ -293,7 +293,7 @@ describe("agent.trace.get handler", () => {
     expect(metric.tokens).toBe(15); // step's inputTokens(10) + outputTokens(5)
     expect(metric.toolCalls).toBe(1);
     expect(metric.outcome).toBe("success");
-    expect(out.replayDeterministic).toBe(true);
+    expect(out.metricsInRange).toBe(true);
   });
 
   it("does not nest a child whose parent was not collected (root stays root)", async () => {
@@ -478,16 +478,16 @@ describe("agent.trace.get handler — turn metrics", () => {
         outcome: "interrupted",
       },
     ]);
-    expect(out.replayDeterministic).toBe(true);
+    expect(out.metricsInRange).toBe(true);
   });
 
-  it("flags the trace as non-deterministic when a turn reports negative tokens", async () => {
+  it("flags the metrics as out of range when a turn reports negative tokens", async () => {
     setup({
       root: exec(),
       steps: [step({ publicId: "aes_bad", inputTokens: -5, outputTokens: 1 })],
     });
     const out = await agentTraceGetHandler({ executionId: "aex_root" }, CTX);
-    expect(out.replayDeterministic).toBe(false);
+    expect(out.metricsInRange).toBe(false);
   });
 });
 

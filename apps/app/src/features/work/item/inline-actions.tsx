@@ -184,7 +184,7 @@ export function RefreshChecks({
         <p
           role="status"
           data-testid="work-checks-unread"
-          className="text-xs text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           {t("unread", { reason: unread })}
         </p>

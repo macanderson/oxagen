@@ -52,8 +52,8 @@ export function SetPasswordForm() {
   return (
     <section aria-label="Set password" className="flex flex-col gap-3">
       <div>
-        <h3 className="text-sm font-medium">Set a password</h3>
-        <p className="text-xs text-muted-foreground mt-0.5">
+        <h3 className="text-base font-medium">Set a password</h3>
+        <p className="text-sm text-muted-foreground mt-0.5">
           Add a password so you can sign in with your email address in addition
           to your connected accounts.
         </p>
@@ -102,13 +102,13 @@ export function SetPasswordForm() {
         </div>
 
         {status === "error" && errorMsg && (
-          <p className="text-sm text-destructive" role="alert">
+          <p className="text-base text-destructive" role="alert">
             {errorMsg}
           </p>
         )}
 
         {status === "saved" && (
-          <p className="text-sm text-success" role="status">
+          <p className="text-base text-success" role="status">
             Password set. You can now sign in with your email and password.
           </p>
         )}

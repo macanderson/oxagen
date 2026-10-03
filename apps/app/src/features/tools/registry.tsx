@@ -118,7 +118,7 @@ function CategoryChips({
       >
         {filtered || complete ? t("allCategories") : t("allOnPage")}
         {filtered ? null : (
-          <span className={`${mono} text-sm text-dim`}>
+          <span className={`${mono} text-xs text-dim`}>
             {formatCount(items.length, locale)}
           </span>
         )}
@@ -142,7 +142,7 @@ function CategoryChips({
           className={chip}
         >
           <span className={mono}>{tag}</span>
-          <span className={`${mono} text-sm text-dim`}>
+          <span className={`${mono} text-xs text-dim`}>
             {formatCount(count, locale)}
           </span>
         </ToggleLink>
@@ -210,7 +210,7 @@ function ProviderChips({
           <ProviderIcon name={server.name} iconUrl={server.iconUrl} size={16} />
           <span>{server.name}</span>
           {complete ? (
-            <span className={`${mono} text-sm text-dim`}>
+            <span className={`${mono} text-xs text-dim`}>
               {formatCount(versions.length, locale)}
             </span>
           ) : null}
@@ -260,7 +260,7 @@ function NamesToggle({
     <div
       role="group"
       aria-label={t("names.label")}
-      className="inline-flex rounded-[9px] border border-border p-0.5"
+      className="inline-flex rounded-xl border border-border p-0.5"
     >
       {(["labels", "api"] as const).map((style) => (
         <ToggleLink
@@ -298,7 +298,7 @@ function CategoriesDialog() {
       testId="tools-categories"
     >
       <p className="text-sm text-foreground">{t("lead")}</p>
-      <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+      <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-rail">
         {(
           [
             "moves_money",
@@ -315,7 +315,7 @@ function CategoriesDialog() {
           </div>
         ))}
       </dl>
-      <p className="text-xs text-muted-foreground">{t("decides")}</p>
+      <p className="text-sm text-muted-foreground">{t("decides")}</p>
     </StubAction>
   );
 }
@@ -352,7 +352,7 @@ function Row({
       </td>
       <td className={cell}>
         {provider === null ? (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             {t(`declaredSource.${version.source}`)}
           </span>
         ) : (
@@ -377,7 +377,7 @@ function Row({
         {version.classification === null ? (
           <NotCarried />
         ) : (
-          <span className="text-xs text-foreground">
+          <span className="text-sm text-foreground">
             {t(`egress.${version.classification.egress}`)}
           </span>
         )}
@@ -386,12 +386,12 @@ function Row({
         <FinancialCell version={version} />
       </td>
       <td className={cell}>
-        <span className="text-xs text-foreground">
+        <span className="text-sm text-foreground">
           {t(`origin.${version.schemaOrigin}`)}
         </span>
       </td>
       <td className={cell}>
-        <span className={`${mono} text-xs text-muted-foreground`}>
+        <span className={`${mono} text-sm text-muted-foreground`}>
           {version.schemaDigest.slice(0, 12)}
         </span>
       </td>
@@ -491,7 +491,7 @@ export function Registry({
             <h2 id="tools-registry" className={panelTitle}>
               {t("title")}
             </h2>
-            <p className="text-xs text-muted-foreground">{t("caption")}</p>
+            <p className="text-sm text-muted-foreground">{t("caption")}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <NamesToggle
@@ -503,7 +503,7 @@ export function Registry({
             />
             <span
               data-testid="tools-shown"
-              className={`${mono} rounded border border-border px-1.5 py-0.5 text-sm text-muted-foreground`}
+              className={`${mono} rounded-sm border border-border px-1.5 py-0.5 text-xs text-muted-foreground`}
             >
               {totalKnown
                 ? t("shownOf", {
@@ -548,7 +548,7 @@ export function Registry({
         {items.length === 0 ? (
           <p
             data-state="empty"
-            className={`${panelBody} text-sm text-muted-foreground`}
+            className={`${panelBody} text-base text-muted-foreground`}
           >
             {t(emptyKey({ category, provider, cursor }))}
           </p>
@@ -638,7 +638,7 @@ export function Registry({
         <div className={`${panelBody} flex flex-col gap-2`}>
           <p
             data-state="facets-declared"
-            className="max-w-prose text-xs text-muted-foreground"
+            className="max-w-prose text-sm text-muted-foreground"
           >
             {category === null
               ? nextCursor === null

@@ -42,7 +42,7 @@ export function FieldWrapper({
         {description && !error && (
           <p
             id={`${id}-description`}
-            className="text-xs text-muted-foreground pl-[52px]"
+            className="text-sm text-muted-foreground pl-[52px]"
           >
             {description}
           </p>
@@ -51,7 +51,7 @@ export function FieldWrapper({
           <p
             id={`${id}-error`}
             role="alert"
-            className="text-xs text-destructive pl-[52px]"
+            className="text-sm text-destructive pl-[52px]"
           >
             {error}
           </p>
@@ -72,12 +72,12 @@ export function FieldWrapper({
       </Label>
       {children}
       {description && !error && (
-        <p id={`${id}-description`} className="text-xs text-muted-foreground">
+        <p id={`${id}-description`} className="text-sm text-muted-foreground">
           {description}
         </p>
       )}
       {error && (
-        <p id={`${id}-error`} role="alert" className="text-xs text-destructive">
+        <p id={`${id}-error`} role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}

@@ -289,13 +289,44 @@ export const workAgentRefSchema = z
   })
   .strict();
 
-/** A send's pull request, by repository and number. */
+/**
+ * A send's pull request, by repository and number, from the send's facts. Its
+ * head is the one acceptance and the required checks are judged on (ADR-251).
+ * `url` is the forge store's link when it holds the same pull request.
+ */
 export const workPullRequestRefSchema = z
   .object({
     repository: z.string(),
     number: z.number().int().positive(),
     url: z.string(),
     head: workHeadShaSchema.nullable(),
+  })
+  .strict();
+
+/** The pull request states the forge store records, with a draft as its own state. */
+const WORK_FORGE_PULL_REQUEST_STATES = ["open", "draft", "closed", "merged"] as const;
+
+/**
+ * One pull request a send has, as the forge store last recorded it (ADR-292).
+ * A send can have more than one. These say what the pull request is and its
+ * state now. Acceptance, the checks, and the gate still read the send's facts.
+ */
+export const workForgePullRequestSchema = z
+  .object({
+    /** The forge store's id (`fpr_…`). */
+    id: z.string(),
+    provider: z.enum(["github", "gitlab"]),
+    /** Lower-cased owner/name, or the GitLab project path. */
+    repository: z.string(),
+    number: z.number().int().positive(),
+    url: z.string(),
+    /** The title as the forge last reported it. Text from outside the workspace: render it as text. */
+    title: z.string().nullable(),
+    state: z.enum(WORK_FORGE_PULL_REQUEST_STATES),
+    /** The head commit the forge last reported. */
+    head: z.string().regex(/^[0-9a-f]{40}([0-9a-f]{24})?$/),
+    /** When Oxagen last read the state. */
+    state_seen_at: z.string(),
   })
   .strict();
 
@@ -312,6 +343,8 @@ export const workSendSummarySchema = z
     runtime: z.object({ name: z.string().nullable(), tier: workRuntimeTierSchema }).strict(),
     requested_at: z.string(),
     pull_request: workPullRequestRefSchema.nullable(),
+    /** Every pull request the send has in the forge store, newest first. */
+    pull_requests: z.array(workForgePullRequestSchema),
     checks: workChecksWordSchema,
     gate: workGateSchema,
     /** A person accepted the pull request's current head. */

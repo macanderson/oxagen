@@ -38,11 +38,11 @@ export function ForgotPasswordForm() {
   if (status === "sent") {
     return (
       <div role="status" className="flex flex-col gap-3">
-        <p className="text-sm text-foreground">
+        <p className="text-base text-foreground">
           If an account with that email exists, we&rsquo;ve sent a link to reset
           your password. Check your inbox (and spam folder).
         </p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           The link expires in 1 hour. If you don&rsquo;t receive an email within
           a few minutes, you can request another.
         </p>
@@ -84,7 +84,7 @@ export function ForgotPasswordForm() {
       </div>
 
       {status === "error" && errorMsg ? (
-        <p className="text-sm text-destructive" role="alert">
+        <p className="text-base text-destructive" role="alert">
           {errorMsg}
         </p>
       ) : null}

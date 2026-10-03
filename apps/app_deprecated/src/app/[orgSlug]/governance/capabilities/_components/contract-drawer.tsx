@@ -44,8 +44,8 @@ function ChainSection({
 }) {
   return (
     <section className="flex flex-col gap-2 py-3" aria-label={title}>
-      <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        <span className="flex size-5 items-center justify-center rounded-full bg-muted font-mono text-[10px] text-foreground">
+      <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="flex size-5 items-center justify-center rounded-full bg-muted font-mono text-xs text-foreground">
           {step}
         </span>
         {title}
@@ -59,7 +59,7 @@ function RoleGrantChips({ roles }: { roles: Record<string, string> }) {
   const entries = Object.entries(roles);
   if (entries.length === 0) {
     return (
-      <span className="text-xs text-muted-foreground">No default grants</span>
+      <span className="text-sm text-muted-foreground">No default grants</span>
     );
   }
   return (
@@ -92,16 +92,16 @@ function FieldTable({
 }) {
   if (fields.length === 0) {
     return (
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         {title}: no top-level fields (opaque or empty schema).
       </p>
     );
   }
   return (
     <div className="flex flex-col gap-1">
-      <p className="text-xs font-medium text-foreground">{title}</p>
+      <p className="text-sm font-medium text-foreground">{title}</p>
       <div className="overflow-x-auto rounded-md border border-border">
-        <table className="w-full text-left text-xs">
+        <table className="w-full text-left text-sm">
           <thead className="text-muted-foreground">
             <tr className="border-b border-border">
               <th className="px-2 py-1.5 font-medium">Field</th>
@@ -130,11 +130,11 @@ function FieldTable({
 function UsageLine({ usage }: { usage: CapabilityUsageSlice | null }) {
   if (usage === null) {
     return (
-      <p className="text-xs text-muted-foreground">Usage data unavailable.</p>
+      <p className="text-sm text-muted-foreground">Usage data unavailable.</p>
     );
   }
   return (
-    <p className="text-xs text-muted-foreground">
+    <p className="text-sm text-muted-foreground">
       Last 30 days:{" "}
       <span className="font-medium text-foreground">
         {formatUsdFromMicros(usage.costMicros)}
@@ -152,12 +152,12 @@ function UsageLine({ usage }: { usage: CapabilityUsageSlice | null }) {
 function AuditList({ events }: { events: AuditEvent[] | null }) {
   if (events === null) {
     return (
-      <p className="text-xs text-muted-foreground">Audit feed unavailable.</p>
+      <p className="text-sm text-muted-foreground">Audit feed unavailable.</p>
     );
   }
   if (events.length === 0) {
     return (
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         No recent audit events name this capability.
       </p>
     );
@@ -167,7 +167,7 @@ function AuditList({ events }: { events: AuditEvent[] | null }) {
       {events.map((e, i) => (
         <li
           key={`${e.occurredAt}-${i}`}
-          className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"
+          className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm"
         >
           <Badge
             size="sm"
@@ -224,12 +224,12 @@ export function ContractDrawer({
     >
       <div className="flex flex-col" data-testid="contract-drawer">
         {insights?.error ? (
-          <p className="py-2 text-xs text-error">{insights.error}</p>
+          <p className="py-2 text-sm text-error">{insights.error}</p>
         ) : null}
 
         <ChainSection step={1} title="Identity — who may call it">
           <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span>Fallback effect:</span>
               <Badge
                 size="sm"
@@ -247,9 +247,9 @@ export function ContractDrawer({
                 </Badge>
               ) : null}
             </div>
-            <p className="text-xs text-muted-foreground">Org role grants</p>
+            <p className="text-sm text-muted-foreground">Org role grants</p>
             <RoleGrantChips roles={summary.orgRoles} />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Workspace role grants
             </p>
             <RoleGrantChips roles={summary.workspaceRoles} />
@@ -307,11 +307,11 @@ export function ContractDrawer({
                 <FieldTable title="Output" fields={detail.outputFields} />
               </>
             ) : insights ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Field specs unavailable.
               </p>
             ) : (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Loading field specs…
               </p>
             )}
@@ -347,7 +347,7 @@ export function ContractDrawer({
             {insights ? (
               <UsageLine usage={insights.usage} />
             ) : (
-              <p className="text-xs text-muted-foreground">Loading usage…</p>
+              <p className="text-sm text-muted-foreground">Loading usage…</p>
             )}
           </div>
         </ChainSection>
@@ -382,7 +382,7 @@ export function ContractDrawer({
 
         <ChainSection step={6} title="Audit record — what it leaves behind">
           <div className="flex flex-col gap-1.5">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Every invocation is recorded by the kernel
               {detail?.auditTargetIdField
                 ? ` with the acted-on ${summary.auditTargetKind ?? "object"} (from input.${detail.auditTargetIdField})`
@@ -392,7 +392,7 @@ export function ContractDrawer({
             {insights ? (
               <AuditList events={insights.audit} />
             ) : (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Loading audit feed…
               </p>
             )}
@@ -409,7 +409,7 @@ export function ContractDrawer({
               className="flex flex-col gap-1.5 py-3"
               aria-label="Chaining"
             >
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 Chaining
               </h3>
               <div className="flex flex-wrap gap-1.5">

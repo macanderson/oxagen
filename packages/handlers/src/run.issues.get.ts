@@ -4,7 +4,8 @@
 //
 // - `task`: the run's own task reference, `stated`.
 // - `resolves`: an issue a pull request the run recorded opening closes, as
-//   GitHub records the closing reference, `observed`. A wrapped run's
+//   the forge store's issue links record the closing reference (ADR-292),
+//   `observed`. A wrapped run's
 //   receipts are its `oxagen:pr_link` frames and a ledger run's are its
 //   `provider_publish.pull_request_opened` events. A pull request matched by
 //   branch or head commit adds nothing, because it does not show the run
@@ -44,6 +45,8 @@ import {
   type IssueState,
   type IssueStateRequest,
 } from "./lib/run-issues-tracker";
+import { unlinkedRepositoryResolver } from "./lib/run-pr-link-repository";
+import { githubConnectionFor } from "./lib/run-pull-request-backfill";
 import {
   defaultRunReadDeps,
   resolveRun,
@@ -69,6 +72,12 @@ export type RunIssuesDeps = RunReadDeps & {
   repositories: typeof connectedRunRepositories;
   closingIssues: typeof readClosingIssues;
   tracker: typeof readIssueStates;
+  /**
+   * The id of the workspace's own GitHub connection that reads an owner's
+   * repositories, or null when none does. What a recorded pull request in a
+   * repository the workspace does not link closes is read through it.
+   */
+  githubConnection: typeof githubConnectionFor;
 };
 
 /** The most frames and closing pull requests one row carries (the contract's bound). */
@@ -81,7 +90,9 @@ const ROW_REF_MAX = 20;
  */
 const LIST_CUTTING = new Set([
   "closing_issue_limit",
+  "closing_issues_not_read",
   "closing_issues_read_failed",
+  "pull_request_not_stored",
   "recorded_repository_not_connected",
   "issue_frame_limit",
   "ledger_event_limit",
@@ -215,15 +226,29 @@ export function createRunIssuesGetHandler(
       frames = commandFrames;
       // A link past the cap is a pull request whose closing list is unread.
       if (links.length > WORK_PR_LINK_CAP) warnings.add("closing_issue_limit");
+      // A pull request in a repository the workspace does not link is read
+      // through the workspace's own GitHub connection for its owner, as
+      // get_run_work reads it (#5296).
+      const unlinkedRepository = unlinkedRepositoryResolver(
+        scope,
+        deps.githubConnection,
+        "get_run_issues",
+      );
       for (const row of links.slice(0, WORK_PR_LINK_CAP)) {
         const link = prLinkOf(row);
         if (link === null) continue;
-        const repository = repositories.find(
+        const linked = repositories.find(
           (candidate) =>
             candidate.owner.toLowerCase() === link.owner.toLowerCase() &&
             candidate.name.toLowerCase() === link.name.toLowerCase(),
         );
-        if (repository === undefined) {
+        const repository = linked ?? (await unlinkedRepository(link));
+        // A failed lookup leaves that pull request's closing list unread.
+        if (repository === "lookup_failed") {
+          warnings.add("closing_issues_read_failed");
+          continue;
+        }
+        if (repository === "not_connected") {
           warnings.add("recorded_repository_not_connected");
           continue;
         }
@@ -445,4 +470,5 @@ export const runIssuesGetHandler = createRunIssuesGetHandler({
   repositories: connectedRunRepositories,
   closingIssues: readClosingIssues,
   tracker: readIssueStates,
+  githubConnection: githubConnectionFor,
 });

@@ -91,6 +91,7 @@ import {
   AUTHOR,
   ctx,
   harness,
+  landStampOnHost,
   MemorySyncStore,
   REPO,
   REVIEWER,
@@ -423,7 +424,11 @@ function fakePublisher(published: string[]): SteeringPublisher {
   };
   return {
     repository: (repo) => repo.fullName,
-    store: { highestVersion: async () => 20, versionAt: async () => null },
+    store: {
+      highestVersion: async () => 20,
+      versionAt: async () => null,
+      current: async () => null,
+    },
     publish: async (_repo, commit) => held(commit),
     withLock: (_repo, fn) => fn(held),
   };
@@ -943,7 +948,7 @@ describe("merge_steering_pr on a governance proposal", () => {
     const deps = steeringMode("team");
     const proposalId = await proposeSolo(deps);
     deps.store.proposals[0]!.mergeClaimedAt = new Date("2026-09-15T09:00:00.000Z");
-    const mergeSha = deps.github.mergeOnHost(deps.github.pulls[0]!.number);
+    const mergeSha = await landStampOnHost(deps, deps.store.proposals[0]!);
     const verify = vi.fn(async () => {
       throw new Error("The governance merge has no authenticated provenance.");
     });
@@ -972,15 +977,16 @@ describe("merge_steering_pr on a governance proposal", () => {
   it("answers the version an earlier call published when it resumes a merged PR", async () => {
     const deps = steeringMode("team");
     const proposalId = await proposeSolo(deps);
-    // An earlier call claimed the row, merged and published the PR, then
-    // failed before its record landed.
+    // An earlier call claimed the row, merged its stamp and published the
+    // PR, then failed before its record landed.
     deps.store.proposals[0]!.mergeClaimedAt = new Date("2026-09-15T09:00:00.000Z");
-    const mergeSha = deps.github.mergeOnHost(deps.github.pulls[0]!.number);
+    const mergeSha = await landStampOnHost(deps, deps.store.proposals[0]!);
     const seams = doubles();
     const published: SteeringPublisher = {
       ...fakePublisher(seams.published),
       store: {
         highestVersion: async () => 21,
+        current: async () => null,
         versionAt: async (_repository, commit) =>
           commit === mergeSha ? { version: 21, published: true } : null,
       },
@@ -1017,9 +1023,33 @@ describe("merge_steering_pr on a governance proposal", () => {
     expect(deps.requestSync).toHaveBeenCalledOnce();
   });
 
+  // #4504: a call that crashed before its stamp leaves a claim behind, so the
+  // claim alone does not prove Oxagen merged the PR.
+  it("refuses a claimed PR someone merged on the host at the checked head, with no stamp of Oxagen's", async () => {
+    const deps = steeringMode("team");
+    const proposalId = await proposeSolo(deps);
+    deps.store.proposals[0]!.mergeClaimedAt = new Date("2026-09-15T09:00:00.000Z");
+    deps.github.mergeOnHost(deps.github.pulls[0]!.number);
+    deps.requestSync = vi.fn(async () => undefined);
+    const seams = doubles();
+
+    await expect(
+      createMergeSteeringPrHandler(deps, mergeSeams(seams))({ proposalId }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "merged_outside_oxagen",
+      message: expect.stringContaining("was merged outside Oxagen"),
+    });
+    expect(deps.store.proposals[0]).toMatchObject({ status: "checks_passed", mergedByUserId: null });
+    expect(seams.published).toEqual([]);
+    expect(deps.events).toEqual([]);
+    expect(deps.requestSync).toHaveBeenCalledOnce();
+  });
+
   it("brings a branch that fell behind up to date and runs the steering checks again", async () => {
     const deps = steeringMode("team");
     const proposalId = await proposeSolo(deps);
+    const start = deps.github.heads.get(REPO.defaultBranch);
     const main = deps.github.commit(
       REPO.defaultBranch,
       "steering/platform/release-notes.md",
@@ -1036,9 +1066,11 @@ describe("merge_steering_pr on a governance proposal", () => {
     expect(deps.github.updates).toEqual([
       expect.objectContaining({ branch: STEERING_BRANCH }),
     ]);
-    // Once on the head the proposal holds, once on the updated head against
+    // Once on the head the proposal holds, against the commit its branch
+    // started from, so the release notes main gained since do not read as
+    // a file this PR removes (#5139). Then once on the updated head, against
     // the production head it now holds.
-    expect(seams.checked.map((c) => c.base)).toEqual([main, main]);
+    expect(seams.checked.map((c) => c.base)).toEqual([start, main]);
     expect(seams.checked[1]?.head).not.toBe(seams.checked[0]?.head);
     expect(deps.store.proposals[0]?.status).toBe("merged");
     expect(await lastLedgerLine(deps)).toMatchObject({

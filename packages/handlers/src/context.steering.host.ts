@@ -133,6 +133,7 @@ export function createSteeringHost(
     commitFiles: (repo, args) => on(repo).commitFiles(repo, args),
     holdsCommit: (repo, head, ancestor) =>
       on(repo).holdsCommit(repo, head, ancestor),
+    mergeBase: (repo, head, base) => on(repo).mergeBase(repo, head, base),
     commitParents: (repo, sha) => on(repo).commitParents(repo, sha),
     updateBranch: (repo, args) => on(repo).updateBranch(repo, args),
     resetBranch: (repo, branch, args) =>

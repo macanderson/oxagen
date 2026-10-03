@@ -99,7 +99,7 @@ export function ChartContainer({
         data-slot="chart"
         data-chart={`chart-${id}`}
         style={style}
-        className={`flex min-w-0 justify-center text-xs tabular-nums ${RECHARTS_DEFAULTS} ${className}`}
+        className={`flex min-w-0 justify-center text-sm tabular-nums ${RECHARTS_DEFAULTS} ${className}`}
       >
         <ResponsiveContainer initialDimension={initialDimension}>
           {children}
@@ -135,7 +135,7 @@ export const ChartTooltip = Tooltip;
  * the text above it stays sharp, a hairline ring rather than a border.
  */
 const TOOLTIP_SURFACE =
-  "relative isolate grid min-w-32 gap-1.5 rounded-xl bg-popover/55 dark:bg-popover/70 px-3 py-2 text-xs text-popover-foreground shadow-pop ring-1 ring-foreground/5 dark:ring-foreground/10 before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-lg dark:before:backdrop-blur-2xl before:backdrop-saturate-150";
+  "relative isolate grid min-w-32 gap-1.5 rounded-xl bg-popover/55 dark:bg-popover/70 px-3 py-2 text-sm text-popover-foreground shadow-pop ring-1 ring-foreground/5 dark:ring-foreground/10 before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-lg dark:before:backdrop-blur-2xl before:backdrop-saturate-150";
 
 /**
  * The tooltip body. recharts clones it with the hovered point's payload, so
@@ -176,7 +176,7 @@ export function ChartTooltipContent({
               {several ? (
                 <span
                   aria-hidden="true"
-                  className="size-2.5 shrink-0 rounded-[2px]"
+                  className="size-2.5 shrink-0 rounded-xs"
                   style={{ backgroundColor: entry.color }}
                 />
               ) : null}
@@ -223,7 +223,7 @@ export function ChartLegendContent({
           <li key={key} className="flex items-center gap-1.5">
             <span
               aria-hidden="true"
-              className="size-2 shrink-0 rounded-[2px]"
+              className="size-2 shrink-0 rounded-xs"
               style={{ backgroundColor: item.color }}
             />
             {config[key]?.label ?? item.value}

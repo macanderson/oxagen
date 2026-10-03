@@ -8,8 +8,24 @@
 // and pages the findings; Evidence opens one finding's arithmetic in a dialog
 // and Fix opens the change that removes it. Each card's share of the spend is
 // divided through the micros seam and printed as a ratio (INV-09, INV-10).
+//
+// The list is the open backlog, whatever each finding's window, and the
+// headline counts only the calls that ran in the period (#5294). So the hero
+// names the days it counts, and says the share's spend counts calls by the
+// day they ran where the Spend tile counts runs by the day they started.
+// When the headline is zero while open findings claim calls outside the
+// period, the hero says how many, so a zero beside a full list reads true.
+//
+// list_findings lists at most 50 findings a page, and a workspace can hold
+// more, since the findings job never caps a finding the headline counts
+// (#5262). The counts cover every open finding on every page. When the list
+// is cut, a line above the cards says which findings the page shows of how
+// many in all, and links under the cards open the next page or go back to
+// the first (#5303). The cursor only reads forward, so the way back is the
+// first page, as on an agent's incident list (#4693).
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
+import { compareMicros } from "@/data/contracts/money";
 import type {
   SpendFindingEvidence,
   SpendFindings,
@@ -18,7 +34,14 @@ import type {
 } from "@/data/contracts/spend";
 import type { Read } from "@/data/read";
 import { routes, type SafePath } from "@/shared/safe-path";
-import { eyebrow, linkText, mono, panel } from "@/ui/control-styles";
+import {
+  buttonSecondary,
+  eyebrow,
+  linkText,
+  mono,
+  panel,
+} from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
@@ -44,20 +67,36 @@ import type { SpendAt } from "./view";
 const MIXED_CURRENCY = "unproductive_mixed_currency";
 
 /**
- * The headline and its share of the period's spend, side by side (rule 5).
- * A read that did not answer says why in place of the figures.
+ * The headline and its share of the period's spend, side by side (rule 5),
+ * with the days the headline counts. A read that did not answer says why in
+ * place of the figures.
  */
 function Headline({ headline }: { headline: Read<UnproductiveSpend> }) {
   const t = useTranslations("spend.findings");
   const locale = useLocale();
+  const format = useFormatter();
   if (!headline.ok) {
     if (headline.reason === "error" && headline.code === MIXED_CURRENCY)
       return (
-        <p className="text-sm text-muted-foreground">{t("mixedCurrency")}</p>
+        <p className="text-base text-muted-foreground">{t("mixedCurrency")}</p>
       );
     return <ReadFailure read={headline} section={t("hero")} />;
   }
-  const { unproductive, spend, share } = headline.value;
+  const { period, unproductive, spend, share, findingsOutsidePeriod } =
+    headline.value;
+  // The period is a range of UTC days, so each day prints in UTC: in the
+  // viewer's zone a day's first instant can fall on the day before.
+  const day = (iso: string) =>
+    format.dateTime(new Date(`${iso}T00:00:00.000Z`), {
+      dateStyle: "medium",
+      timeZone: "UTC",
+    });
+  const outside =
+    findingsOutsidePeriod > 0 &&
+    compareMicros(unproductive, {
+      micros: "0",
+      currency: unproductive.currency,
+    }) === 0;
   return (
     <>
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
@@ -74,6 +113,12 @@ function Headline({ headline }: { headline: Read<UnproductiveSpend> }) {
           {share === null ? <NotRecordedValue /> : formatRatio(share, locale)}
         </span>
       </div>
+      <p
+        data-testid="spend-headline-window"
+        className="text-base text-muted-foreground"
+      >
+        {t("heroWindow", { from: day(period.from), to: day(period.to) })}
+      </p>
       <p className="text-sm text-muted-foreground">
         {spend === null ? (
           t("heroNoSpend")
@@ -83,6 +128,17 @@ function Headline({ headline }: { headline: Read<UnproductiveSpend> }) {
           </>
         )}
       </p>
+      {spend === null ? null : (
+        <p className="text-base text-muted-foreground">{t("heroSpendNote")}</p>
+      )}
+      {outside ? (
+        <p
+          data-testid="spend-headline-outside"
+          className="text-base text-muted-foreground"
+        >
+          {t("heroOutside", { count: findingsOutsidePeriod })}
+        </p>
+      ) : null}
     </>
   );
 }
@@ -107,7 +163,7 @@ function PartFigures({ headline }: { headline: Read<UnproductiveSpend> }) {
       <h3 className={eyebrow}>{t("title")}</h3>
       <dl
         data-testid="spend-headline-parts"
-        className="grid grid-cols-[minmax(0,1fr)_max-content_max-content] gap-x-4 gap-y-1.5 text-sm"
+        className="grid grid-cols-row-end gap-x-4 gap-y-1.5 text-sm"
       >
         {parts.map((part) => (
           <div
@@ -129,7 +185,7 @@ function PartFigures({ headline }: { headline: Read<UnproductiveSpend> }) {
         <div data-detector="4" className="contents">
           <dt className="text-muted-foreground">
             {t("estimate")}{" "}
-            <span className="rounded-sm border border-border px-1 text-sm">
+            <span className="rounded-sm border border-border px-1 text-xs">
               {t("estimated")}
             </span>
           </dt>
@@ -146,9 +202,51 @@ function PartFigures({ headline }: { headline: Read<UnproductiveSpend> }) {
   );
 }
 
+/**
+ * The links between pages of the list: the next page when one follows, and
+ * the first page from any later one.
+ */
+function FindingsPages({
+  at,
+  cursor,
+  next,
+}: {
+  at: SpendAt;
+  cursor: string | null;
+  next: string | null;
+}) {
+  const t = useTranslations("spend.findings.pages");
+  if (cursor === null && next === null) return null;
+  return (
+    <nav
+      aria-label={t("label")}
+      data-testid="spend-findings-pages"
+      className="flex flex-wrap gap-2"
+    >
+      {cursor === null ? null : (
+        <SafeLink
+          to={routes.spend(at.org, at.ws, { tab: "findings" })}
+          className={buttonSecondary}
+        >
+          {t("first")}
+        </SafeLink>
+      )}
+      {next === null ? null : (
+        <SafeLink
+          to={routes.spend(at.org, at.ws, { tab: "findings", cursor: next })}
+          className={buttonSecondary}
+        >
+          {t("next")}
+        </SafeLink>
+      )}
+    </nav>
+  );
+}
+
 export function FindingsSection({
   headline,
   findings,
+  cursor = null,
   operators,
   at,
   evidence,
@@ -157,6 +255,8 @@ export function FindingsSection({
   /** The period's unproductive spend, the figure the hero leads with. */
   headline: Read<UnproductiveSpend>;
   findings: SpendFindings;
+  /** The cursor of the page shown; null on the first page (#5303). */
+  cursor?: string | null;
   /** The operator rollup, to name the person an operator finding is about. */
   operators: SpendReport["rows"];
   at: SpendAt;
@@ -177,7 +277,7 @@ export function FindingsSection({
       <section
         aria-labelledby="spend-findings-hero"
         data-testid="spend-findings-hero"
-        className={`${panel} grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]`}
+        className={`${panel} grid gap-6 p-5 lg:grid-cols-split-end`}
       >
         <div className="flex flex-col gap-1.5">
           <h2 id="spend-findings-hero" className={eyebrow}>
@@ -214,22 +314,55 @@ export function FindingsSection({
           </ul>
         </div>
       </section>
-      {findings.findings.length === 0 ? (
+      {findings.findings.length === 0 && cursor !== null ? (
+        // A cursor past the last finding: the findings after it were decided
+        // since the page before was read.
+        <section
+          data-state="empty"
+          className={`${panel} flex flex-col gap-3 p-6`}
+        >
+          <p className="text-sm text-muted-foreground">{t("pages.empty")}</p>
+          <FindingsPages at={at} cursor={cursor} next={null} />
+        </section>
+      ) : findings.findings.length === 0 ? (
         <section
           data-state="empty"
           className={`${panel} flex flex-col gap-2 p-6`}
         >
-          <h2 className="text-base font-semibold">{t("emptyTitle")}</h2>
-          <p className="text-sm text-muted-foreground">{t("empty")}</p>
+          <h2 className="text-lg font-semibold">{t("emptyTitle")}</h2>
+          <p className="text-base text-muted-foreground">{t("empty")}</p>
         </section>
       ) : (
-        <FindingsList
-          findings={findings.findings}
-          spend={findings.spend}
-          names={names}
-          harnesses={harnesses}
-          at={at}
-        />
+        <>
+          {findings.truncated ? (
+            <p
+              data-testid="spend-findings-truncated"
+              className="text-base text-muted-foreground"
+            >
+              {t("truncated", {
+                from: formatCount(findings.offset + 1, locale),
+                to: formatCount(
+                  findings.offset + findings.findings.length,
+                  locale,
+                ),
+                total: formatCount(findings.counts.findings, locale),
+              })}
+            </p>
+          ) : null}
+          {/* A new page remounts the list, so its filters and its own pager
+              start over on the findings it now holds. */}
+          <FindingsList
+            key={findings.offset}
+            findings={findings.findings}
+            firstRank={findings.offset + 1}
+            cursor={cursor}
+            spend={findings.spend}
+            names={names}
+            harnesses={harnesses}
+            at={at}
+          />
+          <FindingsPages at={at} cursor={cursor} next={findings.nextCursor} />
+        </>
       )}
       <div className="flex flex-col gap-2 border-l-2 border-gold py-1 pl-3 text-sm text-muted-foreground">
         <p>{t("note")}</p>
@@ -293,7 +426,7 @@ export function FindingEvidence({
             })}
           </Tile>
         </TileStrip>
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-sm">
+        <dl className="grid grid-cols-dl-max gap-x-4 gap-y-1.5 text-sm">
           <dt className="text-muted-foreground">
             {t("findings.evidence.confidence")}
           </dt>
@@ -366,7 +499,7 @@ export function FindingEvidence({
                     </SafeLink>
                     <span
                       data-testid="run-id"
-                      className={`${mono} block truncate text-sm text-dim`}
+                      className={`${mono} block truncate text-xs text-dim`}
                     >
                       {run.runId}
                     </span>

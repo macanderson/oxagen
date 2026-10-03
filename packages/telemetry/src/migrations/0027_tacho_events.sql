@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS tacho_events (
   tool_decision_source LowCardinality(String),
   tool_denial_kind String,
   tool_result_tokens Nullable(UInt32),
+  tool_result_tokens_basis LowCardinality(String),
   batch_size Nullable(UInt8),
   batch_index Nullable(UInt8),
   attribution_skill String,

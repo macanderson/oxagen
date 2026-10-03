@@ -25,6 +25,7 @@ import {
 } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { useFormatter } from "@/ui/formatter";
+import { HarnessIcon } from "@/ui/harness-icon";
 import { SafeLink } from "@/ui/navigation";
 import { StateWrap } from "@/ui/state-wrap";
 import { cell, Table } from "@/ui/table";
@@ -80,7 +81,10 @@ function TargetRow({ target }: { target: WorkTarget }) {
     >
       <td className={cell}>
         <span className="font-medium">{target.name}</span>
-        <span className={`${mono} block text-sm text-muted-foreground`}>
+        <span
+          className={`${mono} flex items-center gap-1.5 text-sm text-muted-foreground`}
+        >
+          <HarnessIcon harness={target.harness} size={14} />
           {target.harness}
         </span>
       </td>
@@ -188,7 +192,7 @@ export function RuntimesTab({
         </h2>
         <span
           data-testid="work-targets-ready"
-          className="text-xs text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           {t("runtimes.caption", { count: ready })}
         </span>

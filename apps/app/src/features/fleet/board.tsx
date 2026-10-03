@@ -76,6 +76,7 @@ import { toast } from "@/ui/toast";
 import { dispatchRunCommand, exportFleetRun } from "./actions";
 import {
   DiffCell,
+  HarnessCell,
   PullRequestsCell,
   RowStatusBadge,
   TokensCell,
@@ -209,7 +210,7 @@ function Tiles({
           liveRuns === null ? (
             <span
               data-testid="live-not-counted"
-              className="text-base font-medium text-muted-foreground"
+              className="text-lg font-medium text-muted-foreground"
             >
               {t("live.notCounted")}
             </span>
@@ -234,7 +235,7 @@ function Tiles({
           spend.total !== null ? (
             <Money value={spend.total} />
           ) : (
-            <span className="text-base font-medium text-muted-foreground">
+            <span className="text-lg font-medium text-muted-foreground">
               {spend.mixedCurrency ? t("spend.mixed") : t("spend.notRecorded")}
             </span>
           )
@@ -340,7 +341,7 @@ function Chips({
           onClick={() => {
             onChip(name);
           }}
-          className={`${buttonSecondary} px-2.5 py-1 text-xs ${chip === name ? "border-rule bg-hl font-semibold text-foreground" : ""}`}
+          className={`${buttonSecondary} px-2.5 py-1 text-sm ${chip === name ? "border-rule bg-hl font-semibold text-foreground" : ""}`}
         >
           {t(`chips.${name}`)}
         </button>
@@ -411,7 +412,7 @@ function ColumnPicker({
               />
               <span>{t(`columns.${column}`)}</span>
               {fixed ? (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   {t("columnsPicker.fixed")}
                 </span>
               ) : null}
@@ -449,6 +450,10 @@ function RunRowView({
   const to = routes.run(org, ws, run.id);
   const title = runTitle(run);
   const cost = shownCost(run);
+  // The harness the agent registered, for a run that recorded none. The
+  // avatar badge and the Harness column read the same one.
+  const registered =
+    run.agentKey === null ? undefined : agentHarnesses[run.agentKey];
   const operatorLabel =
     run.operatorName ??
     (run.operatorKind === null
@@ -480,13 +485,13 @@ function RunRowView({
               }}
               data-touch-target=""
               title={title ?? undefined}
-              className="block truncate text-sm text-foreground hover:underline max-md:leading-[44px]"
+              className="block truncate text-sm text-foreground hover:underline max-md:leading-11"
             >
               {title ?? t("untitled")}
             </SafeLink>
             <span
               data-testid="row-id"
-              className={`${mono} block truncate text-sm text-dim`}
+              className={`${mono} block truncate text-xs text-dim`}
             >
               {run.id}
             </span>
@@ -497,19 +502,17 @@ function RunRowView({
           <td key={column} className={`${cell} min-w-48`}>
             <AgentCard
               agentKey={run.agentKey}
-              harness={
-                run.harness?.name ??
-                (run.agentKey === null
-                  ? undefined
-                  : agentHarnesses[run.agentKey])
-              }
+              harness={run.harness?.name ?? registered}
               notRecorded={t("notRecorded")}
-              sub={
-                run.harness
-                  ? `${run.harness.name}${run.harness.version ? ` ${run.harness.version}` : ""}`
-                  : t(`source.${run.source}`)
-              }
+              // The Harness column names the harness and its version.
+              sub={t(`source.${run.source}`)}
             />
+          </td>
+        );
+      case "harness":
+        return (
+          <td key={column} className={cell}>
+            <HarnessCell run={run} registered={registered} />
           </td>
         );
       case "operator":
@@ -518,7 +521,7 @@ function RunRowView({
             {operatorLabel === null ? (
               notRecorded
             ) : (
-              <span className="flex min-w-0 items-center gap-[7px]">
+              <span className="flex min-w-0 items-center gap-1.75">
                 <Avatar
                   value={run.operatorAvatarUrl}
                   initials={initialsOf(run.operatorName ?? operatorLabel)}
@@ -595,7 +598,7 @@ function RunRowView({
             ) : (
               <>
                 <Money value={cost.value} />
-                <span className="block text-sm text-muted-foreground md:truncate">
+                <span className="block text-xs text-muted-foreground md:truncate">
                   {cost.estimate ? (
                     // A running rollup, or before any rollup the agent's own
                     // figure, which Spend shown counts as an estimate too.
@@ -626,7 +629,7 @@ function RunRowView({
         return (
           <td
             key={column}
-            className={`${cell} whitespace-nowrap font-mono text-sm text-muted-foreground`}
+            className={`${cell} whitespace-nowrap font-mono text-xs text-muted-foreground`}
           >
             <Started at={run.startedAt} now={now} />
           </td>
@@ -656,7 +659,7 @@ function RunRowView({
             data-testid={`row-${action}`}
             data-touch-target=""
             aria-label={t("rowAction", { action: t(action), run: run.id })}
-            className={`${buttonSecondary} px-2.5 py-1 text-xs`}
+            className={`${buttonSecondary} px-2.5 py-1 text-sm`}
           >
             {t(action)}
           </SafeLink>
@@ -674,7 +677,7 @@ function RunRowView({
               if (action === "pause") onPause(run);
               else onExport(run);
             }}
-            className={`${buttonSecondary} px-2.5 py-1 text-xs`}
+            className={`${buttonSecondary} px-2.5 py-1 text-sm`}
           >
             {t(action)}
           </button>
@@ -980,7 +983,7 @@ function PauseDialog({
               id={warningId}
               role="alert"
               data-testid="pause-cancel-warning"
-              className="rounded-lg border border-border bg-hl px-3 py-2 text-xs font-medium"
+              className="rounded-lg border border-border bg-hl px-3 py-2 text-sm font-medium"
             >
               {t("ledgerCancelWarning")}
             </p>
@@ -997,7 +1000,7 @@ function PauseDialog({
           ) : (
             <p className="text-sm text-muted-foreground">{t("body")}</p>
           )}
-          <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-[7px] text-sm">
+          <dl className="grid grid-cols-dl items-baseline gap-x-4 gap-y-1.75 text-sm">
             <dt className="text-dim">{t("run")}</dt>
             <dd className={mono}>{run.id}</dd>
             <dt className="text-dim">{t("position")}</dt>
@@ -1022,12 +1025,12 @@ function PauseDialog({
           {refusal === null ? null : (
             <p
               data-testid="pause-refusal"
-              className="rounded-lg border border-border bg-hl px-3 py-2 text-xs text-muted-foreground"
+              className="rounded-lg border border-border bg-hl px-3 py-2 text-sm text-muted-foreground"
             >
               {command(refusal)}
             </p>
           )}
-          <label htmlFor={fieldId} className="text-xs font-medium">
+          <label htmlFor={fieldId} className="text-sm font-medium">
             {ledger ? command("reasonLabel") : t("reason")}
           </label>
           <textarea
@@ -1039,9 +1042,9 @@ function PauseDialog({
             onChange={(event) => {
               setReason(event.target.value);
             }}
-            className={`${textareaBase} resize-y max-md:text-base`}
+            className={`${textareaBase} resize-y max-md:text-input-touch`}
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {ledger ? command("ledgerReasonHelp") : t("note")}
           </p>
           {failure === null ? null : (
@@ -1238,7 +1241,7 @@ export function FleetBoard({
           <p
             role="status"
             data-testid="prs-unread"
-            className="border-b border-border px-3 py-2 text-xs text-muted-foreground"
+            className="border-b border-border px-3 py-2 text-sm text-muted-foreground"
           >
             {t("prs.unread")}
           </p>
@@ -1248,7 +1251,7 @@ export function FleetBoard({
             aria-labelledby="fleet-runs"
             aria-busy={reading}
             data-testid="runs-table"
-            className={`w-full min-w-[560px] border-collapse text-sm ${reading ? "opacity-60" : ""}`}
+            className={`w-full min-w-140 border-collapse text-sm ${reading ? "opacity-60" : ""}`}
           >
             <thead>
               <tr className="border-b border-border">
@@ -1331,7 +1334,7 @@ export function FleetBoard({
                   <td
                     colSpan={columns.length + 1}
                     data-testid="runs-none"
-                    className="px-4 py-[18px] text-center text-dim"
+                    className="px-4 py-4.5 text-center text-dim"
                   >
                     {emptyText}
                   </td>

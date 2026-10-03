@@ -72,13 +72,16 @@ export const RUN_PULL_REQUEST_LINKED_EVENT = "run/pull-request.linked";
  * diff of its head commit, and the link to the run that named it. Sent by the
  * GitHub App webhook route for each `pull_request` delivery and each
  * workspace connected to the installation, with the pull request's facts from
- * the payload, and by the tacho ingest handler beside `run/pull-request.linked`
- * for each link a run records, with the run's root session and no facts.
+ * the payload, by the tacho ingest handler beside `run/pull-request.linked`
+ * for each link a run records, with the run's root session and no facts, and
+ * by `forge.pull-request-backfill` for each link recorded before the forge
+ * store existed, with the run's root session, the work order, or both
+ * (ADR-292).
  *
  * Data is `{ orgId, workspaceId, provider, repository, number, pullKey,
- * facts?, link? }`. `pullKey` names the pull request within the workspace, and
- * the function runs one event per key at a time. The id names the delivery
- * or the link, so a re-sent one asks once.
+ * facts?, link?, workOrderId? }`. `pullKey` names the pull request within
+ * the workspace, and the function runs one event per key at a time. The id
+ * names the delivery or the link, so a re-sent one asks once.
  */
 export const FORGE_PULL_REQUEST_OBSERVED_EVENT = "forge/pull-request.observed";
 
@@ -87,11 +90,31 @@ export const FORGE_PULL_REQUEST_OBSERVED_EVENT = "forge/pull-request.observed";
  * `forge.pull-request-sync` once per revision, with the id
  * `forge-diff-ready:<revision id>`, after the revision row names the stored
  * bytes. Work outcome checks and other readers that need the exact diff a
- * head carried subscribe to it. Data is `{ orgId, workspaceId, pullRequestId,
- * revisionId, provider, repository, number, headSha, diffKey, diffSha256 }`.
+ * head carried subscribe to it. `forge.revision-certification` queues each
+ * revision for the witness from it (ADR-294). Data is `{ orgId, workspaceId,
+ * pullRequestId, revisionId, provider, repository, number, headSha, diffKey,
+ * diffSha256 }`.
  */
 export const FORGE_PULL_REQUEST_DIFF_READY_EVENT =
   "forge/pull-request-diff.ready";
+
+/** The data of `forge/pull-request-diff.ready`. */
+export type ForgePullRequestDiffReadyEventData = {
+  orgId: string;
+  workspaceId: string;
+  /** `forge.pull_requests.id`. */
+  pullRequestId: string;
+  /** `forge.pull_request_revisions.id`. */
+  revisionId: string;
+  provider: "github" | "gitlab";
+  repository: string;
+  number: number;
+  headSha: string;
+  /** The stored diff's object key. */
+  diffKey: string;
+  /** The stored diff's sha256, in lower-case hex. */
+  diffSha256: string;
+};
 
 /**
  * Starts the timeout of one interjection a host raised (#3941, D8). Sent by

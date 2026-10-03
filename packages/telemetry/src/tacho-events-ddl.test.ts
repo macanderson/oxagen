@@ -209,6 +209,24 @@ describe("tacho_events DDL", () => {
     );
   });
 
+  it("carries the result tokens' basis beside them, forward as well as generated (#5339)", () => {
+    // 0027 for a cluster bootstrapped today, 0038 for every cluster that
+    // applied 0027 before the member existed. An empty basis is an old row.
+    const ddl = tachoEventsMigration();
+    expect(ddl).toContain(
+      "  tool_result_tokens Nullable(UInt32),\n  tool_result_tokens_basis LowCardinality(String),\n",
+    );
+    const forward = readFileSync(
+      join(here, "migrations", "0038_tacho_events_tool_result_tokens_basis.sql"),
+      "utf8",
+    );
+    // No DEFAULT clause: a new row whose producer named no basis must read
+    // empty, never `reported`.
+    expect(forward).toContain(
+      "ADD COLUMN IF NOT EXISTS tool_result_tokens_basis LowCardinality(String) AFTER tool_result_tokens;",
+    );
+  });
+
   it("expires rows thirteen months after the control plane received them (#3944)", () => {
     // The hot window ADR-058 sets for a run's frame rows. The clock is
     // received_at, the server's, never ts, which the producer chooses. The

@@ -70,7 +70,7 @@ const PROVIDER_OPTIONS: [ModelCredentialProvider, string][] = [
 ];
 
 const SELECT_CLASS =
-  "w-full max-w-xs rounded-md border border-border/60 bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50";
+  "w-full max-w-xs rounded-md border border-border/60 bg-background px-3 py-2 text-base text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -259,21 +259,21 @@ export function FundingForm({
         aria-labelledby="funding-status-heading"
         className="flex flex-col gap-2 rounded-md border border-border/60 p-4"
       >
-        <h2 id="funding-status-heading" className="text-sm font-semibold">
+        <h2 id="funding-status-heading" className="text-base font-semibold">
           Who pays for the assistant
         </h2>
         {loadError ? (
-          <p className="text-sm text-destructive" role="alert">
+          <p className="text-base text-destructive" role="alert">
             {loadError}
           </p>
         ) : !canEdit ? (
-          <p className="text-xs text-muted-foreground" role="note">
+          <p className="text-sm text-muted-foreground" role="note">
             Only organization owners and admins can see or change who pays for
             the assistant.
           </p>
         ) : configured ? (
           <div className="flex flex-col gap-1" data-testid="funding-status">
-            <p className="text-sm">
+            <p className="text-base">
               <KeyRound
                 className="mr-1.5 inline h-4 w-4 align-text-bottom"
                 aria-hidden="true"
@@ -281,24 +281,24 @@ export function FundingForm({
               Your key ({providerLabel(view?.provider ?? null)}, ends in{" "}
               <span className="font-mono">{view?.keyHint ?? "????"}</span>)
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {lastVerified
                 ? `Last verified ${lastVerified}.`
                 : "Not verified yet."}{" "}
               {rotated ? `Last changed ${rotated}.` : null}
               {view?.status === "disabled" ? " This key is disabled." : null}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Tokens run on your vendor account. Oxagen bills nothing for them.
             </p>
           </div>
         ) : (
           <div className="flex flex-col gap-1" data-testid="funding-status">
-            <p className="text-sm">
+            <p className="text-base">
               Oxagen&rsquo;s key &mdash; assistant usage is billed to your
               credits.
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Add your own key below to pay the vendor directly instead.
             </p>
           </div>
@@ -313,8 +313,8 @@ export function FundingForm({
         noValidate
       >
         <div className="flex flex-col gap-1">
-          <h2 className="text-sm font-semibold">Your own key</h2>
-          <p className="text-xs text-muted-foreground">
+          <h2 className="text-base font-semibold">Your own key</h2>
+          <p className="text-sm text-muted-foreground">
             Paste a key from OpenRouter or Vercel AI Gateway. It is stored
             encrypted and never shown again. Saving a new key replaces the old
             one. An OpenRouter key covers chat models only, so embeddings stay
@@ -360,12 +360,12 @@ export function FundingForm({
         </div>
 
         {keyError && (
-          <p className="text-sm text-destructive" role="alert">
+          <p className="text-base text-destructive" role="alert">
             {keyError}
           </p>
         )}
         {keyNotice && (
-          <p className="text-sm text-muted-foreground" role="status">
+          <p className="text-base text-muted-foreground" role="status">
             {keyNotice}
           </p>
         )}
@@ -394,7 +394,7 @@ export function FundingForm({
           </Button>
           {configured && removeStatus === "confirming" ? (
             <span className="flex items-center gap-1.5">
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 Remove your key and switch to Oxagen&rsquo;s?
               </span>
               <Button
@@ -438,10 +438,10 @@ export function FundingForm({
         noValidate
       >
         <div className="flex flex-col gap-1">
-          <h2 className="text-sm font-semibold">
+          <h2 className="text-base font-semibold">
             Monthly cap on assistant usage paid by Oxagen (credits)
           </h2>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             When the assistant runs on Oxagen&rsquo;s key, it stops for the rest
             of the month once this much has been spent. The cap does not apply
             while your own key is stored.
@@ -465,7 +465,7 @@ export function FundingForm({
           />
         </div>
 
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex items-center gap-2 text-base">
           <input
             type="checkbox"
             name="noCap"
@@ -478,7 +478,7 @@ export function FundingForm({
         </label>
 
         {capStatus === "error" && capError && (
-          <p className="text-sm text-destructive" role="alert">
+          <p className="text-base text-destructive" role="alert">
             {capError}
           </p>
         )}
@@ -498,7 +498,7 @@ export function FundingForm({
             {capStatus === "saving" ? "Saving…" : "Save cap"}
           </Button>
           {capStatus === "saved" && (
-            <span className="text-xs text-muted-foreground" role="status">
+            <span className="text-sm text-muted-foreground" role="status">
               Saved
             </span>
           )}

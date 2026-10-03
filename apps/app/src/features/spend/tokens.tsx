@@ -1,10 +1,13 @@
 // Spend › Tokens (spec "Tokens"): where the month's tokens went. By token
 // class sums the month's model rows once (another level would count the same
-// calls again), so its total is the Tokens tile. Prompt composition and By
-// harness read fields the rollup does not record yet (#2962), so they name
-// what is missing. By agent is the agent rollup's twelve largest rows; the
-// three prompt-part columns are not recorded, and a row opens the agent page.
-// Each agent's avatar carries the harness it registered (#4871).
+// calls again), so its total is the Tokens tile. Prompt composition reads
+// get_spend's composition for the standing context and the tool results, and
+// the classes for output and reasoning, each as a share of that total; the
+// conversation and the system prompt are not recorded (#5293). By harness
+// reads a field the rollup does not record yet (#2962), so it names what is
+// missing. By agent is the agent rollup's twelve largest rows; the three
+// prompt-part columns are not recorded, and a row opens the agent page. Each
+// agent's avatar carries the harness it registered (#4871).
 import { useLocale, useTranslations } from "next-intl";
 import { ASSISTANT_SPEND_KEY, type SpendReport } from "@/data/contracts/spend";
 import type { Read } from "@/data/read";
@@ -26,6 +29,7 @@ import {
   searchRequestsOf,
   sumClasses,
   TOKEN_CLASSES,
+  type TokenClasses,
   totalOf,
 } from "./rollup";
 import { Panel } from "./tables";
@@ -42,6 +46,38 @@ const PROMPT_PARTS = [
   "output",
   "reasoning",
 ] as const;
+
+type PromptPart = (typeof PROMPT_PARTS)[number];
+
+/**
+ * A prompt part's tokens over the month: the standing context and the tool
+ * results from get_spend's composition, and output and reasoning from the
+ * token classes. Null for a part nothing records: the conversation and the
+ * system prompt, and a part no run measured.
+ */
+function partTokens(
+  part: PromptPart,
+  composition: SpendReport["composition"],
+  classes: TokenClasses,
+): number | null {
+  switch (part) {
+    case "toolResults":
+      return composition?.toolResultTokens ?? null;
+    case "contextFrames":
+      return composition?.contextFrameTokens ?? null;
+    case "toolDefinitions":
+      return composition?.toolDefinitionTokens ?? null;
+    case "steering":
+      return composition?.steeringTokens ?? null;
+    case "output":
+      return classes.output;
+    case "reasoning":
+      return classes.reasoning;
+    case "conversation":
+    case "system":
+      return null;
+  }
+}
 
 /** How many agents the By agent panel lists. */
 const AGENTS_LISTED = 12;
@@ -80,7 +116,7 @@ export function TokensSection({
           id="spend-token-classes"
           title={t("byClass")}
           action={
-            <span className={`${mono} text-sm text-muted-foreground`}>
+            <span className={`${mono} text-xs text-muted-foreground`}>
               {t("classTotal", {
                 tokens: formatCount(total, locale),
                 from: month.period.from,
@@ -89,7 +125,7 @@ export function TokensSection({
             </span>
           }
           footer={
-            <dl className="grid w-full grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-sm">
+            <dl className="grid w-full grid-cols-dl-max gap-x-4 gap-y-1.5 text-sm">
               <dt>{t("cacheHit")}</dt>
               <dd className="text-foreground">
                 <Ratio value={cacheHitRate(classes)} /> {t("cacheHitNote")}
@@ -150,20 +186,45 @@ export function TokensSection({
             ))}
           </Table>
         </Panel>
-        <NotBackedPanel
+        <Panel
           id="spend-prompt-composition"
           title={t("composition")}
-          gap="rollup"
+          footer={t("compositionFooter")}
         >
-          {t("compositionMissing")}
-          <span className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-            {PROMPT_PARTS.map((part) => (
-              <span key={part} data-prompt-part={part}>
-                {t(`parts.${part}`)}
-              </span>
-            ))}
-          </span>
-        </NotBackedPanel>
+          <Table
+            label={t("composition")}
+            columns={[
+              { label: t("columns.part") },
+              { label: t("columns.tokens"), numeric: true },
+              { label: t("columns.share"), numeric: true },
+            ]}
+          >
+            {PROMPT_PARTS.map((part) => {
+              const tokens = partTokens(part, month.composition, classes);
+              return (
+                <tr key={part} data-prompt-part={part}>
+                  <th scope="row" className={`${cell} text-left font-normal`}>
+                    {t(`parts.${part}`)}
+                  </th>
+                  <td className={numericCell}>
+                    {tokens === null ? (
+                      <NotRecordedValue />
+                    ) : (
+                      formatCount(tokens, locale)
+                    )}
+                  </td>
+                  <td className={numericCell}>
+                    <Ratio
+                      value={
+                        tokens === null || total === 0 ? null : tokens / total
+                      }
+                    />
+                  </td>
+                </tr>
+              );
+            })}
+          </Table>
+        </Panel>
       </div>
       <NotBackedPanel id="spend-by-harness" title={t("byHarness")} gap="rollup">
         {t("harnessMissing")}

@@ -21,11 +21,11 @@ import type {
   UnpricedModels,
 } from "@/data/contracts/spend";
 import type { Read } from "@/data/read";
-import { mono } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { RowsPager } from "@/ui/pagination";
+import { ModelLabel, ProviderName } from "@/ui/provider-mark";
 import { Instant } from "./figures";
 import { PriceDialog } from "./price-dialog";
 import { RemoveRateDialog } from "./remove-rate-dialog";
@@ -102,7 +102,7 @@ function Effective({ entry }: { entry: PriceEntry }) {
   return (
     <>
       <Instant iso={entry.effectiveFrom} />
-      <span className="block text-xs text-muted-foreground md:truncate">
+      <span className="block text-sm text-muted-foreground md:truncate">
         {entry.effectiveTo === null
           ? t("book.open")
           : t("book.until", {
@@ -135,7 +135,7 @@ function WindowLine({ usage }: { usage: MissingClassWindow }) {
   return (
     <span
       data-window={usage.tokenClass}
-      className="block text-xs text-muted-foreground md:truncate"
+      className="block text-sm text-muted-foreground md:truncate"
     >
       {usage.tokenClass === "server_tool_request"
         ? t("unpriced.windowRequests", values)
@@ -168,7 +168,7 @@ function UnpricedSection({
       <p
         data-state="empty"
         data-testid="unpriced-none"
-        className="text-sm text-muted-foreground"
+        className="text-base text-muted-foreground"
       >
         {t("unpriced.none", {
           since: format.dateTime(new Date(since), { dateStyle: "medium" }),
@@ -184,7 +184,7 @@ function UnpricedSection({
         since: format.dateTime(new Date(since), { dateStyle: "medium" }),
       })}
     >
-      <table className="w-full text-sm">
+      <table className="w-full text-base">
         <thead>
           <tr>
             <HeaderCell>{t("unpriced.columns.model")}</HeaderCell>
@@ -204,7 +204,7 @@ function UnpricedSection({
               data-fully-unpriced={String(model.fullyUnpriced)}
             >
               <th scope="row" className={`${cell} font-normal`}>
-                <span className={mono}>{model.model}</span>
+                <ModelLabel model={model.model} provider={model.provider} />
               </th>
               <td className={cell}>
                 {model.provider === null ? (
@@ -212,7 +212,7 @@ function UnpricedSection({
                     {t("unpriced.noProvider")}
                   </span>
                 ) : (
-                  model.provider
+                  <ProviderName provider={model.provider} />
                 )}
               </td>
               <td className={cell}>
@@ -235,7 +235,7 @@ function UnpricedSection({
                       <span key={tokenClass}>
                         <span
                           data-class={tokenClass}
-                          className="rounded border border-border px-1.5 py-0.5 text-xs"
+                          className="rounded-sm border border-border px-1.5 py-0.5 text-sm"
                         >
                           {t(`class.${tokenClass}`)}
                         </span>
@@ -322,7 +322,7 @@ function PriceBookSection({
       />
       {entries.some((entry) => entry.effectiveFrom > read.value.at) ? (
         <section aria-label={t("book.scheduled")}>
-          <h3 className="px-4 py-3 text-sm font-medium">
+          <h3 className="px-4 py-3 text-base font-medium">
             {t("book.scheduled")}
           </h3>
           <PriceTable
@@ -361,7 +361,7 @@ function PriceTable({
       {entries.length === 0 ? (
         <Empty>{t("book.empty")}</Empty>
       ) : (
-        <table className="w-full text-sm">
+        <table className="w-full text-base">
           <thead>
             <tr>
               <HeaderCell>{t("book.columns.model")}</HeaderCell>
@@ -384,14 +384,16 @@ function PriceTable({
                 data-negotiated={String(entry.negotiated)}
               >
                 <th scope="row" className={`${cell} font-normal`}>
-                  <span className={mono}>{entry.model}</span>
+                  <ModelLabel model={entry.model} provider={entry.provider} />
                 </th>
-                <td className={cell}>{entry.provider}</td>
+                <td className={cell}>
+                  <ProviderName provider={entry.provider} />
+                </td>
                 <td className={cell}>{t(`class.${entry.tokenClass}`)}</td>
                 <td className={cell}>
                   <span className="inline-flex items-baseline gap-x-2 max-md:flex-wrap">
                     <Money value={entry.ratePerMillion} precision="exact" />
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-sm text-muted-foreground">
                       {t(`per.${entry.unit}`)}
                     </span>
                   </span>
@@ -407,8 +409,8 @@ function PriceTable({
                   <span
                     className={
                       entry.negotiated
-                        ? "rounded border border-success/45 bg-success/10 px-1.5 py-0.5 text-xs font-medium text-foreground"
-                        : "text-xs text-muted-foreground"
+                        ? "rounded-sm border border-success/45 bg-success/10 px-1.5 py-0.5 text-sm font-medium text-foreground"
+                        : "text-sm text-muted-foreground"
                     }
                   >
                     {t(`source.${entry.source}`)}
@@ -433,7 +435,7 @@ function PriceTable({
                       }}
                     />
                   ) : (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-sm text-muted-foreground">
                       {t("book.platformPriced")}
                     </span>
                   )}

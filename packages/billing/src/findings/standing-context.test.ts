@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { ZERO_TOKENS, type RunTotalsRecord } from "../cost-rollup";
-import type { StoredRunTotals } from "../cost-rollup-store";
+import {
+  createStandingSplit,
+  type StoredRunTotals,
+} from "../cost-rollup-store";
 import {
   detectFindings,
   type DetectInput,
@@ -204,6 +207,49 @@ describe("standing context", () => {
     expect(finding!.why).toContain(
       "The saving leaves out the context frames, which the fix does not change.",
     );
+  });
+
+  // #5339. The rollup's split counts a growing source as re-sent only as far
+  // as an earlier call carried it, and the finding prices that split. Four
+  // calls carried 20,000 tool definition tokens and 5,000 of steering each,
+  // and context that grew from none to 4,000 to 6,000: the context's first
+  // sends, 4,000 and 2,000, are not re-sent.
+  it("prices the rollup's re-sent split, which leaves a growing source's first sends out", () => {
+    const r = run({ contextFrameTokens: 16_000 });
+    const split = createStandingSplit();
+    for (const [minute, context] of [
+      [1, null],
+      [2, 4_000],
+      [3, 6_000],
+      [4, 6_000],
+    ] as const)
+      split.add({
+        at: new Date(START.getTime() + minute * 1_000),
+        model: "claude-sonnet-5",
+        provider: "anthropic",
+        tokens: { ...ZERO_TOKENS, input_uncached: 750, cache_read: 7_500 },
+        reportedCostMicros: null,
+        basis: "gateway_observed",
+        sources: {
+          toolDefinitionTokens: 20_000,
+          contextFrameTokens: context,
+          steeringTokens: 5_000,
+        },
+      });
+    r.breakdown.standing = split.finish();
+    const [finding] = detect([r]);
+    // 60,000 of tool definitions, 15,000 of steering, and 4,000 then 6,000
+    // of context frames, at 0.3 micros a token. Every call before #5339 would
+    // have counted 16,000 of context frames.
+    expect(finding!.evidence).toMatchObject({
+      measuredTokens: 85_000,
+      counterfactualTokens: 10_000,
+      measuredMicros: "25500",
+      counterfactualMicros: "3000",
+    });
+    expect(finding!.evidence.values).toMatchObject({
+      contextFrameTokens: 10_000,
+    });
   });
 
   it("writes nothing for a run whose only re-sent source is context frames", () => {

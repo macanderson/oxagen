@@ -122,7 +122,7 @@ export function FirstWorkspaceForm({ org }: { org: string }) {
           setName(e.target.value);
         }}
         error={nameError}
-        className="max-md:text-base"
+        className="max-md:text-input-touch"
       />
       <SteeringRepoDestinationFields
         org={org}

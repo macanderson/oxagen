@@ -1,0 +1,81 @@
+{
+  "name": "adopt_steering_merges",
+  "domain": "repository",
+  "description": "Adopt host merges of pull requests Oxagen opened on the workspace's steering repo, then publish main as the next steering version.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "vcs"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "health": {
+        "type": "string",
+        "enum": [
+          "healthy",
+          "drifted",
+          "disconnected",
+          "diverged"
+        ]
+      },
+      "adopted": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "commit": {
+              "type": "string"
+            },
+            "pullRequest": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "commit",
+            "pullRequest"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "publishedVersion": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "health",
+      "adopted",
+      "publishedVersion"
+    ],
+    "additionalProperties": false
+  }
+}

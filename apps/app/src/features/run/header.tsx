@@ -31,9 +31,12 @@ import { Badge } from "@/ui/badge";
 import { buttonSecondary, eyebrow, linkChip } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { useFormatter } from "@/ui/formatter";
+import { HarnessIcon } from "@/ui/harness-icon";
+import { useHarnessName } from "@/ui/harness-name";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { GitHubLink, PullRequestLink, SafeLink } from "@/ui/navigation";
+import { ProviderMark, providerNameOf } from "@/ui/provider-mark";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { BackfillBadge, BackfillNote, isBackfilled } from "./backfill";
@@ -62,7 +65,7 @@ function Chip({
     <span
       data-testid={testId}
       title={title}
-      className={`inline-flex min-w-0 max-w-full items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-hl px-[7px] py-0.5 leading-normal tracking-[0.02em] text-muted-foreground ${code ? "font-mono text-sm font-medium" : "text-sm font-semibold"}`}
+      className={`inline-flex min-w-0 max-w-full items-center gap-1.25 whitespace-nowrap rounded-md border border-border bg-hl px-1.75 py-0.5 leading-normal tracking-wide text-muted-foreground ${code ? "font-mono text-xs font-medium" : "text-xs font-semibold"}`}
     >
       {children}
     </span>
@@ -86,11 +89,12 @@ function harnessOf(agent: Read<AgentDetail> | null) {
  */
 export function useHarness(run: RunRow, agent: Read<AgentDetail> | null) {
   const ta = useTranslations("agents");
+  const nameOf = useHarnessName();
   const registered = harnessOf(agent);
   if (run.harness) {
     return {
       key: run.harness.name,
-      name: run.harness.name,
+      name: nameOf(run.harness.name),
       version: run.harness.version,
     };
   }
@@ -143,11 +147,13 @@ function Rig({
   const t = useTranslations("run.header");
   const harness = useHarness(run, agent);
   const model = run.model;
+  const providerName =
+    model === null ? null : providerNameOf(model.provider, model.slug);
   const effort = runEffort(run);
   return (
     <div
       data-testid="run-rig"
-      className="mt-2 flex flex-wrap items-center gap-[9px]"
+      className="mt-2 flex flex-wrap items-center gap-2.25"
     >
       <Chip>
         {harness === null ? (
@@ -156,6 +162,7 @@ function Rig({
           </span>
         ) : (
           <>
+            <HarnessIcon harness={harness.key} size={16} />
             {harness.name}
             {harness.version === null ? (
               <span className="font-normal text-dim">
@@ -169,17 +176,29 @@ function Rig({
           </>
         )}
       </Chip>
+      {/* The model with its maker's mark, then the maker's name in text, so
+          the provider reads without a hover (#5297). */}
       <Chip
         code
-        title={
-          model === null
-            ? undefined
-            : [model.provider, model.tier]
-                .filter((part): part is string => part !== null)
-                .join(" ")
-        }
+        testId="run-model"
+        title={model?.tier ?? undefined}
       >
-        {model === null ? t("modelNotRecorded") : model.slug}
+        {model === null ? (
+          t("modelNotRecorded")
+        ) : (
+          <>
+            <ProviderMark provider={model.provider} model={model.slug} />
+            {model.slug}
+            {providerName === null ? null : (
+              <span
+                data-testid="run-model-provider"
+                className="font-sans font-semibold"
+              >
+                {providerName}
+              </span>
+            )}
+          </>
+        )}
       </Chip>
       {/* The value only where the record holds it, titled with where it was
           read; otherwise not captured, titled with why (#3891). */}
@@ -419,7 +438,7 @@ function ForgeChip({
       to={target}
       title={title}
       data-testid={testId}
-      className={`${linkChip} ${code ? "font-mono text-sm font-medium" : ""}`}
+      className={`${linkChip} ${code ? "font-mono text-xs font-medium" : ""}`}
     >
       {children}
     </GitHubLink>
@@ -478,7 +497,7 @@ function PullChip({
         <PullRequestLink
           to={target}
           title={title}
-          className={`${linkChip} font-mono text-sm font-medium`}
+          className={`${linkChip} font-mono text-xs font-medium`}
         >
           {content}
         </PullRequestLink>
@@ -486,7 +505,7 @@ function PullChip({
       <span
         data-testid="run-pull-state"
         data-state={state ?? "unknown"}
-        className="whitespace-nowrap text-sm text-dim"
+        className="whitespace-nowrap text-xs text-dim"
       >
         {state === null ? t("pullState.unknown") : t(`pullState.${state}`)}
       </span>
@@ -700,9 +719,9 @@ function SubagentsFromWork({
   return (
     <div
       data-testid="run-subagents"
-      className="mt-2 flex flex-wrap items-center gap-[9px]"
+      className="mt-2 flex flex-wrap items-center gap-2.25"
     >
-      <span className="text-sm font-semibold uppercase tracking-[0.1em] text-dim">
+      <span className="text-xs font-semibold uppercase tracking-widest text-dim">
         {t("subagents")}
       </span>
       {subagents.slice(0, SUBAGENT_CHIPS).map((subagent) => (
@@ -713,7 +732,7 @@ function SubagentsFromWork({
         />
       ))}
       {subagents.length > SUBAGENT_CHIPS ? (
-        <span className="text-sm text-dim">
+        <span className="text-xs text-dim">
           {t("moreSubagents", { count: subagents.length - SUBAGENT_CHIPS })}
         </span>
       ) : null}
@@ -737,7 +756,7 @@ function When({ run }: { run: RunRow }) {
   return (
     <p
       data-testid="run-when"
-      className="mt-2 max-w-[70ch] text-sm text-muted-foreground"
+      className="mt-2 max-w-measure text-sm text-muted-foreground"
     >
       {t("started")} <time dateTime={run.startedAt}>{when(run.startedAt)}</time>
       {run.status === "live" ? null : run.sealSource === "idle_timeout" &&
@@ -929,7 +948,7 @@ function PauseBanner({
       data-testid="run-paused"
       data-source={run.source}
       data-state={state}
-      className="mb-3.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[10px] border border-info/40 bg-info/10 px-3.5 py-[11px] text-sm text-foreground"
+      className="mb-3.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-info/40 bg-info/10 px-3.5 py-2.75 text-sm text-foreground"
     >
       <span aria-hidden="true" className="text-info">
         ❙❙
@@ -1025,7 +1044,7 @@ export function RunHeader({
     <>
       <header
         data-testid="run-header"
-        className="mb-[18px] flex flex-wrap items-start gap-[18px]"
+        className="mb-4.5 flex flex-wrap items-start gap-4.5"
       >
         <div className="min-w-0">
           <p className={`${eyebrow} mb-2.5`}>{t("header.eyebrow")}</p>
@@ -1033,14 +1052,14 @@ export function RunHeader({
               it to copy. With automatic names off, get_run already sends
               the harness's own title as `name` (or null), so the header
               takes it as sent. */}
-          <h1 className="mb-1 break-words text-xl font-bold leading-tight text-foreground">
+          <h1 className="mb-1 break-words text-lg font-bold leading-tight text-foreground">
             {run.name ?? run.taskRef ?? t("header.untitled")}
           </h1>
           <CopyRunId id={run.id} />
           <div
             data-testid="run-chips"
             aria-label={t("header.chips")}
-            className="mt-2 flex flex-wrap items-center gap-[9px]"
+            className="mt-2 flex flex-wrap items-center gap-2.25"
           >
             <AgentCard
               layout="compact"
@@ -1084,7 +1103,7 @@ export function RunHeader({
           {run.completenessGaps.length === 0 ? null : (
             <p
               data-testid="run-gaps"
-              className="mt-1 max-w-prose text-xs text-muted-foreground"
+              className="mt-1 max-w-prose text-sm text-muted-foreground"
             >
               {t("gaps")}{" "}
               {run.completenessGaps.map((gap) => t(`gap.${gap}`)).join(", ")}

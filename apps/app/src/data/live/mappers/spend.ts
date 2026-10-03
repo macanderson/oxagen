@@ -61,6 +61,17 @@ export function toSpendReport(
       runs: day.runs,
     })),
     reported: out.reported,
+    ...(out.observed === undefined ? {} : { observed: out.observed }),
+    ...(out.composition === undefined
+      ? {}
+      : {
+          composition: {
+            toolDefinitionTokens: out.composition.toolDefinitionTokens,
+            contextFrameTokens: out.composition.contextFrameTokens,
+            steeringTokens: out.composition.steeringTokens,
+            toolResultTokens: out.composition.toolResultTokens,
+          },
+        }),
     estimatedRuns: out.estimatedRuns,
     unmeteredRuns: out.unmeteredRuns,
     rows: out.rows.map((row) => ({
@@ -69,6 +80,8 @@ export function toSpendReport(
       provider: row.provider,
       tokens: row.tokens,
       operator: row.operator,
+      // Only a work item row names one (#2962).
+      ...(row.workItem === undefined ? {} : { workItem: row.workItem }),
       topRuns: row.topRuns.map((run) => ({
         runId: run.runId,
         name: run.name,
@@ -76,9 +89,38 @@ export function toSpendReport(
         agentKey: run.agentKey,
         harness: run.harness ?? null,
         operatorKey: run.operatorKey,
+        // Absent from an answer built before get_spend named the operator.
+        ...(run.operator === undefined ? {} : { operator: run.operator }),
         cost: run.cost,
         calls: run.calls,
       })),
+      // A row that holds part of a run carries no sources (#5295).
+      ...(row.tokenSources === undefined
+        ? {}
+        : {
+            tokenSources: {
+              toolDefinitionTokens: row.tokenSources.toolDefinitionTokens,
+              contextFrameTokens: row.tokenSources.contextFrameTokens,
+              steeringTokens: row.tokenSources.steeringTokens,
+              toolResultTokens: row.tokenSources.toolResultTokens,
+            },
+          }),
+      // Null says no run of the row stored windows (#5341); a row that holds
+      // part of a run carries no key.
+      ...(row.windows === undefined
+        ? {}
+        : {
+            windows:
+              row.windows === null
+                ? null
+                : {
+                    runs: row.windows.runs,
+                    requests: row.windows.requests,
+                    requestsWithoutTokens: row.windows.requestsWithoutTokens,
+                    promptTokens: row.windows.promptTokens,
+                    blocks: { ...row.windows.blocks },
+                  },
+          }),
     })),
   };
 }
@@ -103,6 +145,29 @@ export function toFleetSpend(
   };
 }
 
+type DrillCutOut = ContractOutput<typeof spendDrill>["byAgent"][number];
+
+/** One cross-cut row, every figure copied whole with the basis it carried. */
+function toDrillCutRow(
+  row: DrillCutOut,
+): z.input<typeof SpendDrill>["byAgent"][number] {
+  return {
+    key: row.key,
+    provider: row.provider,
+    operator: row.operator,
+    runs: row.runs,
+    calls: row.calls,
+    cost: row.cost,
+    tokens: row.tokens,
+    resultTokens: row.resultTokens,
+  };
+}
+
+/**
+ * One key's drill as the page reads it. A tool drill's cost is the rollup's
+ * estimate of its results as input, copied with the `estimated` basis it
+ * carries; nothing here prices it.
+ */
 export function toSpendDrill(
   out: ContractOutput<typeof spendDrill>,
 ): z.input<typeof SpendDrill> {
@@ -120,11 +185,26 @@ export function toSpendDrill(
     perCall: out.averages.perCall,
     perRun: out.averages.perRun,
     share: out.share,
+    tokens: out.tokens,
+    cacheHitRate: out.cacheHitRate,
+    modelCalls: out.modelCalls,
+    observed: out.observed,
+    standing: {
+      toolDefinitionTokens: out.standing.toolDefinitionTokens,
+      contextFrameTokens: out.standing.contextFrameTokens,
+      steeringTokens: out.standing.steeringTokens,
+    },
+    resultTokens: out.resultTokens,
     tools: out.byTool.map((tool) => ({
       name: tool.name,
       calls: tool.calls,
       runs: tool.runs,
+      resultTokens: tool.resultTokens,
+      cost: tool.cost,
     })),
+    byAgent: out.byAgent.map(toDrillCutRow),
+    byOperator: out.byOperator.map(toDrillCutRow),
+    byModel: out.byModel.map(toDrillCutRow),
     unmeteredRuns: out.unmeteredRuns,
   };
 }
@@ -137,6 +217,7 @@ export function toSpendWaste(
     share: out.share,
     runsWithWaste: out.runsWithWaste,
     largestCause: out.largestCause,
+    findingsOutsidePeriod: out.findingsOutsidePeriod,
     causes: out.causes.map((cause) => ({
       cause: cause.cause,
       wasted: cause.wasted,
@@ -229,6 +310,7 @@ export function toUnproductiveSpend(
       findings: part.findings,
     })),
     estimate: { saving: out.estimate.saving, findings: out.estimate.findings },
+    findingsOutsidePeriod: out.findingsOutsidePeriod,
   };
 }
 
@@ -276,6 +358,9 @@ export function toSpendFindings(
       operators: out.counts.operators,
     },
     findings: out.findings.map(toFinding),
+    truncated: out.truncated,
+    nextCursor: out.nextCursor,
+    offset: out.offset,
   };
 }
 

@@ -267,10 +267,10 @@ export function WorkspacePluginsPanel({
       <div className="rounded-xl border border-border/60 bg-card p-6">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-foreground">
+            <h3 className="text-base font-semibold text-foreground">
               Installed Plugins
             </h3>
-            <p className="mt-0.5 text-xs text-muted-foreground">
+            <p className="mt-0.5 text-sm text-muted-foreground">
               Plugins enabled for this workspace.
             </p>
           </div>
@@ -287,7 +287,7 @@ export function WorkspacePluginsPanel({
 
         {plugins.length === 0 ? (
           <div className="rounded-lg border border-border/40 bg-muted/20 px-6 py-10 text-center">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               No plugins installed. Browse the marketplace to add MCP servers,
               integrations, and capabilities to this workspace.
             </p>
@@ -365,12 +365,12 @@ export function WorkspacePluginsPanel({
                         {plugin.title ?? plugin.name}
                       </p>
                       {plugin.title && plugin.title !== plugin.name && (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-sm text-muted-foreground">
                           {plugin.name}
                         </p>
                       )}
                       {plugin.description && (
-                        <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
+                        <p className="mt-0.5 text-sm text-muted-foreground line-clamp-1">
                           {plugin.description}
                         </p>
                       )}
@@ -379,10 +379,10 @@ export function WorkspacePluginsPanel({
 
                   <dl className="flex flex-wrap items-center gap-x-6 gap-y-2">
                     <div>
-                      <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         Type
                       </dt>
-                      <dd className="mt-0.5 text-sm">
+                      <dd className="mt-0.5 text-base">
                         <Badge
                           variant={pluginTypeBadgeVariant(plugin.pluginType)}
                           size="sm"
@@ -392,10 +392,10 @@ export function WorkspacePluginsPanel({
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         Enabled
                       </dt>
-                      <dd className="mt-0.5 text-sm">
+                      <dd className="mt-0.5 text-base">
                         <Switch
                           checked={plugin.wsEnabled}
                           onCheckedChange={(checked) =>
@@ -424,7 +424,7 @@ export function WorkspacePluginsPanel({
                 </div>
 
                 {errors[plugin.id] && (
-                  <p className="text-xs text-destructive">
+                  <p className="text-sm text-destructive">
                     {errors[plugin.id]}
                   </p>
                 )}

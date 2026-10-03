@@ -14,6 +14,8 @@ import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
 import { setRunPrOutcomesRunner } from "@oxagen/inngest-functions/run-pr-outcomes-runner";
 import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
 import { setForgePullRequestSyncRunner } from "@oxagen/inngest-functions/forge-pull-request-sync-runner";
+import { setForgeRevisionCertificationRunner } from "@oxagen/inngest-functions/forge-revision-certification-runner";
+import { setForgeBackfillRunner } from "@oxagen/inngest-functions/forge-pull-request-backfill-runner";
 import { setWorkOrderResultsRunner } from "@oxagen/inngest-functions/work-order-results-runner";
 import { setWorkOrderSendBackPorts } from "@oxagen/inngest-functions/work-order-send-back-ports";
 import { setSteeringRepoHealthRunner } from "@oxagen/inngest-functions/steering-repo-health-runner";
@@ -225,6 +227,24 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await forgeSync()).capture(request, pullRequestId, target),
     record: async (request, pullRequestId, target, capture) =>
       (await forgeSync()).record(request, pullRequestId, target, capture),
+  });
+  // The witness's queue (ADR-294) writes forge.revision_certifications
+  // through this package, for the same reason, and is loaded on its first
+  // run.
+  const forgeCertification = async () =>
+    (await import("./lib/forge-pull-requests/certification")).forgeCertificationRunner();
+  setForgeRevisionCertificationRunner({
+    queue: async (request) => (await forgeCertification()).queue(request),
+    certify: async (request, certificationId) =>
+      (await forgeCertification()).certify(request, certificationId),
+  });
+  // The forge backfill (ADR-292) reads the run links and work order facts
+  // that predate the forge store through this package, for the same reason,
+  // and is loaded on its first run.
+  const forgeBackfill = () => import("./lib/forge-pull-requests/backfill");
+  setForgeBackfillRunner({
+    range: async (source) => (await forgeBackfill()).forgeBackfillRange(source),
+    page: async (request) => (await forgeBackfill()).forgeBackfillPage(request),
   });
   // A work order's run end and pull request (ADR-251) write work records and
   // read GitHub through this package too, and load on their first run.
@@ -1260,6 +1280,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .repairSteeringRepoHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "adopt_steering_merges",
+    async () =>
+      (await import("./steering_repo.adopt"))
+        .adoptSteeringMergesHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "retry_steering_repo_provision",
     async () =>
       (await import("./steering_repo.provision.retry"))
@@ -1472,6 +1498,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./steering.pr.refresh"))
         .refreshSteeringPrHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_change_set",
+    async () =>
+      (await import("./forge.changes.get"))
+        .getChangeSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_revision_diff",
+    async () =>
+      (await import("./forge.revision.diff.get"))
+        .getRevisionDiffHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_steering_pr_diff",

@@ -225,6 +225,7 @@ describe("get_work_order_metrics", () => {
         partial: new Set(),
       }),
       readKindSavings: async () => [],
+      countFindingsOutside: async () => 0,
     })({ period: PERIOD }, ctx());
     expect(headline.unproductive.micros).toBe("150");
     expect(workspace?.unproductive).toEqual(headline.unproductive);

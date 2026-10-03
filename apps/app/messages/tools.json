@@ -623,12 +623,6 @@
         "status": "Status",
         "tools": "Tools"
       },
-      "status": {
-        "draft": "requested",
-        "active": "active",
-        "expired": "expired",
-        "revoked": "revoked"
-      },
       "truncated": "The newest {shown} mandates. This workspace has recorded at least that many, and older ones are not listed here.",
       "partial": "You see the mandates of the agents you created and any mandate you requested yourself.",
       "emptyListed": "No mandate is listed for you. The workspace may hold mandates you cannot see.",

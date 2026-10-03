@@ -16,6 +16,7 @@
 import { schema, withSystemDb, withTenantDb, type Tx } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import {
+  readGroupModelCallFrames,
   readModelCallFrames,
   readTachoFileChanges,
   readTachoToolCallObservations,
@@ -76,7 +77,7 @@ import {
 } from "./findings";
 import { openSpendProposals } from "./findings/open-proposals";
 import type { SpendProposalInput } from "./findings/proposal-opener";
-import { RECURRING_RUNS_MIN } from "./findings/recurring-runs";
+import { RECURRING_RUNS_MIN, runsByJob } from "./findings/recurring-runs";
 import { readRunPrompts } from "./findings-prompts";
 import { readResultUse } from "./findings-result-use";
 import {
@@ -109,26 +110,36 @@ const proposals = schema.steeringProposals;
 /** Tool calls one pass reads, newest first; past this the tool-call window starts at the oldest call read. */
 export const TOOL_CALL_READ_MAX = 200_000;
 /**
- * Runs one pass reads model-call frames for. Up to
- * `FRAME_RUNS_RECURRING_RESERVE` of them go to runs that share a first
- * prompt, and the rest go most repeats first, then the dearest. A run past
- * this cap has no frames, and `frameCoverage.capped` counts it (ADR-208,
- * ADR-210).
+ * Model-call frame reads one pass runs. A read is one ClickHouse query: one
+ * run's frames, or the frames of a recurring group's runs (#5168). Up to
+ * `FRAME_GROUP_READS_RESERVE` of them go to recurring groups. The rest go to
+ * single runs, most repeats first, then the dearest. A run no read covers has
+ * no frames, and `frameCoverage.capped` counts it (ADR-208, ADR-210).
  */
-export const FRAME_RUNS_READ_MAX = 200;
+export const FRAME_READS_MAX = 200;
 /**
- * The places in `FRAME_RUNS_READ_MAX` kept for runs whose first prompt
- * started `RECURRING_RUNS_MIN` or more runs in the window (#4594, ADR-210).
- * A scheduled job's runs are cheap and repeat no call, so without these
- * places the dearer runs fill the read first, and recurring runs (detector 7)
- * cannot price the job. A place the recurring runs do not need goes back to
- * the other runs.
+ * The reads in `FRAME_READS_MAX` kept for recurring groups (#5168, ADR-210).
+ * A group is a job whose first prompt started `RECURRING_RUNS_MIN` or more
+ * runs in the window, grouped as recurring runs (detector 7) groups them. Each
+ * group read takes one place, however many runs it covers, so a scheduled job
+ * of 2,500 runs costs one query. A place no group needs goes back to the
+ * single runs.
  */
-export const FRAME_RUNS_RECURRING_RESERVE = 50;
+export const FRAME_GROUP_READS_RESERVE = 50;
 /**
- * Model-call frames one pass holds across every run it reads (#4506). A run
- * whose frames would pass it is not read, and `frameCoverage.capped` counts
- * it with the runs past `FRAME_RUNS_READ_MAX`.
+ * Sessions one group read names at most. ClickHouse takes query parameters
+ * in the request URL and refuses a URL over 1 MiB (`http_max_uri_size`). A
+ * group read names each run's root and each of its sessions, about 45 bytes
+ * each once encoded, so 5,000 sessions keep the URL under half that limit. A
+ * group with more sessions is read in the fewest reads that each fit, and
+ * each read takes a place.
+ */
+export const FRAME_GROUP_READ_SESSIONS = 5_000;
+/**
+ * Model-call frames one pass holds across every run it reads (#4506). The
+ * plan sizes its group reads to fit it, by each run's model calls in the
+ * rollup. A run whose frames would pass it is not read, and
+ * `frameCoverage.capped` counts it with the runs no read covers.
  */
 export const FRAME_READ_MAX_FRAMES = 200_000;
 /** File-change frames one pass reads, newest first. */
@@ -147,6 +158,11 @@ export interface FrameRead {
   /** The run's public id. */
   runId: string;
   ref: FrameRunRef;
+  /**
+   * The group read that covers the run (#5168). Wrapped runs side by side
+   * with one group number are read in one query. Absent on a run read alone.
+   */
+  group?: number;
 }
 
 interface FindingsPassDeps {
@@ -326,6 +342,9 @@ export function toObservations(
       outputDigest: r.outputDigest,
       isMutating: r.isMutating,
       resultTokens: r.resultTokens,
+      ...(r.resultTokensBasis === "estimated"
+        ? { resultTokensBasis: "estimated" as const }
+        : {}),
       sessionUuid: r.sessionUuid === r.rootSessionUuid ? null : r.sessionUuid,
       status: r.status,
       errorClass: r.errorClass,
@@ -434,60 +453,164 @@ function mergeRef(stored: FrameRunRef, fromCalls: FrameRunRef): FrameRunRef {
   };
 }
 
-/** One run's first prompt group: the prompt's digest and how many runs it started. */
-interface PromptGroup {
-  digest: string;
+/** A wrapped run's frame source, which a group read names. */
+type WrappedRef = Extract<FrameRunRef, { kind: "tacho" }>;
+
+/** One run of a recurring group, as the plan reads it. */
+interface GroupRun {
+  read: FrameRead;
+  ref: WrappedRef;
+  /** The run's model calls in the rollup: about as many frames as the read returns. */
+  calls: number;
+}
+
+/** A recurring group as the plan reads it (#5168). */
+interface RecurringGroup {
+  /** The job key recurring runs (detector 7) groups by. */
+  job: string;
+  /** The group's runs with a wrapped frame source, in rank order. */
+  runs: GroupRun[];
+  /** Every run of the group, read or not. */
   size: number;
+  /** What every run of the group cost, in micros. */
+  costMicros: bigint;
 }
 
 /**
- * The first prompt group of each run whose first prompt started
- * `RECURRING_RUNS_MIN` or more of the window's runs (#4594). Recurring runs
- * (detector 7) group by the digest, and also by the prompt's source and
- * origin where the recorder reports them, and leave out a prompt a person
- * sent. Each of its groups sits inside one digest group, so a plan that
- * groups by the digest alone misses none of them.
+ * The window's recurring groups, dearest first (#5168). A group is a job
+ * whose first prompt started `RECURRING_RUNS_MIN` or more runs, grouped the
+ * way recurring runs groups them (`runsByJob`). A person's prompt starts no
+ * group. Each group read takes one place, whatever the group's size, so the
+ * dearest group goes first: its finding can price the most. Two groups of one
+ * cost go larger first, then by job key.
  */
 function recurringGroups(
   runs: readonly RunTotalsRecord[],
   firstPrompts: ReadonlyMap<string, RunFirstPrompt>,
-): Map<string, PromptGroup> {
-  const byDigest = new Map<string, string[]>();
-  for (const run of runs) {
-    const digest = firstPrompts.get(run.runId)?.digest;
-    if (digest === undefined) continue;
-    const list = byDigest.get(digest) ?? [];
-    list.push(run.runId);
-    byDigest.set(digest, list);
+  matched: readonly FrameRead[],
+): RecurringGroup[] {
+  const groupOf = new Map<string, RecurringGroup>();
+  const calls = new Map<string, number>();
+  const out: RecurringGroup[] = [];
+  for (const [job, list] of runsByJob(runs, firstPrompts)) {
+    if (list.length < RECURRING_RUNS_MIN) continue;
+    let costMicros = 0n;
+    for (const run of list) costMicros += run.costMicros ?? 0n;
+    const group: RecurringGroup = {
+      job,
+      runs: [],
+      size: list.length,
+      costMicros,
+    };
+    for (const run of list) {
+      groupOf.set(run.runId, group);
+      calls.set(run.runId, Math.max(0, run.modelCalls));
+    }
+    out.push(group);
   }
-  const out = new Map<string, PromptGroup>();
-  for (const [digest, runIds] of byDigest) {
-    if (runIds.length < RECURRING_RUNS_MIN) continue;
-    for (const runId of runIds)
-      out.set(runId, { digest, size: runIds.length });
+  // `matched` is in rank order. Only a wrapped run joins a group read, since
+  // the read names root sessions.
+  for (const read of matched) {
+    const group = groupOf.get(read.runId);
+    if (group === undefined || read.ref.kind !== "tacho") continue;
+    group.runs.push({ read, ref: read.ref, calls: calls.get(read.runId)! });
   }
-  return out;
+  return out.sort((a, b) => {
+    if (a.costMicros !== b.costMicros)
+      return a.costMicros > b.costMicros ? -1 : 1;
+    if (a.size !== b.size) return b.size - a.size;
+    return a.job < b.job ? -1 : a.job > b.job ? 1 : 0;
+  });
+}
+
+/** The sessions a group read names for one run, its root included. */
+function sessionsNamed(ref: WrappedRef): number {
+  return ref.sessionUuids.includes(ref.rootSessionUuid)
+    ? ref.sessionUuids.length
+    : ref.sessionUuids.length + 1;
+}
+
+/** Bounds on a pass's frame plan (ADR-210). */
+export interface FramePlanBounds {
+  /** The reads kept for recurring groups. */
+  groupReads: number;
+  /** The frames every group read together may return, by the rollup's model calls. */
+  groupFrames: number;
+  /** The sessions one group read names at most. */
+  groupSessions: number;
+}
+
+const FRAME_PLAN_BOUNDS: FramePlanBounds = {
+  groupReads: FRAME_GROUP_READS_RESERVE,
+  groupFrames: FRAME_READ_MAX_FRAMES,
+  groupSessions: FRAME_GROUP_READ_SESSIONS,
+};
+
+/**
+ * The group reads of a frame plan (#5168): at most `places` reads, the
+ * dearest group first. A read covers runs of one group, in rank order, and
+ * names at most `bounds.groupSessions` sessions. A group with more sessions
+ * takes more reads, one place each. Returns the runs read, each tagged with
+ * its read's number, and how many reads they take.
+ *
+ * Every group read together returns at most `bounds.groupFrames` frames, by
+ * each run's model calls in the rollup. A group query returns all of its rows
+ * at once, so the plan sizes the read before it runs. A group whose calls
+ * would pass that bound takes its runs in rank order while they fit, and the
+ * rest go back to the ranking. A group whose first run does not fit gets no
+ * read.
+ */
+function planGroupReads(
+  groups: readonly RecurringGroup[],
+  places: number,
+  bounds: FramePlanBounds,
+): { reads: FrameRead[]; used: number } {
+  const reads: FrameRead[] = [];
+  let used = 0;
+  let frames = bounds.groupFrames;
+  const close = (runs: readonly GroupRun[]) => {
+    for (const run of runs) reads.push({ ...run.read, group: used });
+    used += 1;
+  };
+  for (const group of groups) {
+    if (used >= places) break;
+    let open: GroupRun[] = [];
+    let sessions = 0;
+    for (const run of group.runs) {
+      if (run.calls > frames) break;
+      const named = sessionsNamed(run.ref);
+      if (open.length > 0 && sessions + named > bounds.groupSessions) {
+        close(open);
+        open = [];
+        sessions = 0;
+        if (used >= places) break;
+      }
+      frames -= run.calls;
+      sessions += named;
+      open.push(run);
+    }
+    if (open.length > 0) close(open);
+  }
+  return { reads, used };
 }
 
 /**
  * The runs a pass reads model-call frames for, and what the plan left out
- * (ADR-210). Every run in the window with a frame source is ranked: most
- * repeats first, then the dearest, then by run id.
+ * (ADR-210). The plan makes at most `limit` reads, and each read is one
+ * ClickHouse query.
  *
- * The plan keeps `reserve` of its `limit` places for recurring runs: runs
- * whose first prompt digest started `RECURRING_RUNS_MIN` or more runs in the
- * window (#4594). The ranking fills the first `limit - reserve` places. The
- * reserve then takes the recurring runs the ranking left out, smallest group
- * first, since recurring runs need at least half a group's calls priced to
- * write its finding. Two groups of one size go by digest, and one group's runs
- * keep their rank. A reserved place no recurring run needs goes to the next
- * run in the ranking.
+ * Up to `bounds.groupReads` of them go to recurring groups (#5168). A group
+ * read covers many runs of one recurring job, so a scheduled job is read
+ * whole in one query however many runs it has. Its runs leave the ranking,
+ * so no run is read twice. A place no group needs goes back to the ranking.
  *
- * The reserved runs come first in the read. When the frame cap stops the
- * read, it drops the ranked runs at the end and keeps these. `capped` counts
- * the ranked runs past the limit, and
- * `unmatched` the runs with no source, so a detector can tell a run with no
- * frames from a run the pass did not read.
+ * The other places go to single runs, ranked most repeats first, then the
+ * dearest, then by run id.
+ *
+ * The group reads come first in the read. When the frame cap stops the read,
+ * it drops single runs at the end and keeps these. `capped` counts the runs
+ * no read covers, and `unmatched` the runs with no source, so a detector can
+ * tell a run with no frames from a run the pass did not read.
  */
 export function planFrameReads(
   runs: readonly RunTotalsRecord[],
@@ -495,7 +618,7 @@ export function planFrameReads(
   repeatsByRun: ReadonlyMap<string, number>,
   limit: number,
   firstPrompts: ReadonlyMap<string, RunFirstPrompt> = new Map(),
-  reserve: number = FRAME_RUNS_RECURRING_RESERVE,
+  bounds: Partial<FramePlanBounds> = {},
 ): { reads: FrameRead[]; coverage: FrameCoverage } {
   const cost = (r: RunTotalsRecord) => r.costMicros ?? -1n;
   const ranked = [...runs].sort((a, b) => {
@@ -515,25 +638,17 @@ export function planFrameReads(
     else matched.push({ runId: run.runId, ref });
   }
   const places = Math.max(0, limit);
-  const kept = Math.min(Math.max(0, reserve), places);
-  const head = matched.slice(0, places - kept);
-  const left = matched.slice(head.length);
-  const groups = recurringGroups(runs, firstPrompts);
-  // The sort is stable, so one group's runs keep their rank.
-  const reserved = left
-    .filter((r) => groups.has(r.runId))
-    .sort((a, b) => {
-      const ga = groups.get(a.runId)!;
-      const gb = groups.get(b.runId)!;
-      if (ga.size !== gb.size) return ga.size - gb.size;
-      return ga.digest < gb.digest ? -1 : ga.digest > gb.digest ? 1 : 0;
-    })
-    .slice(0, kept);
-  const inReserve = new Set(reserved.map((r) => r.runId));
-  const rest = left
-    .filter((r) => !inReserve.has(r.runId))
-    .slice(0, kept - reserved.length);
-  const reads = [...reserved, ...head, ...rest];
+  const plan = { ...FRAME_PLAN_BOUNDS, ...bounds };
+  const grouped = planGroupReads(
+    recurringGroups(runs, firstPrompts, matched),
+    Math.min(Math.max(0, plan.groupReads), places),
+    plan,
+  );
+  const inGroup = new Set(grouped.reads.map((r) => r.runId));
+  const single = matched
+    .filter((r) => !inGroup.has(r.runId))
+    .slice(0, places - grouped.used);
+  const reads = [...grouped.reads, ...single];
   return {
     reads,
     coverage: {
@@ -816,36 +931,96 @@ function splitModellessFrames(
   return { frames, modelless };
 }
 
+/** One query of a pass's frame read: one run, or the runs of one group read. */
+interface ReadUnit {
+  runs: FrameRead[];
+  group: boolean;
+}
+
+/**
+ * The queries a frame read runs, in order. Wrapped runs side by side that
+ * carry one group number are one query when the caller can read a group
+ * (#5168). Every other run is a query of its own.
+ */
+function readUnits(runs: readonly FrameRead[], grouped: boolean): ReadUnit[] {
+  const out: ReadUnit[] = [];
+  for (const run of runs) {
+    const last = out.at(-1);
+    const joins =
+      grouped && run.group !== undefined && run.ref.kind === "tacho";
+    if (joins && last?.group === true && last.runs[0]!.group === run.group)
+      last.runs.push(run);
+    else out.push({ runs: [run], group: joins });
+  }
+  return out;
+}
+
 /**
  * Each run's rows from `read`, in the order the runs are given, while the
- * rows the pass holds stay at or under `cap` (#4506). A batch of
- * `concurrency` runs is read at once and admitted in order. The first run
- * whose rows would pass the cap is dropped whole, since a detector needs all
- * of a run's frames. Every run after it is dropped too, and no later batch is
- * read. `peak` is the most rows the pass kept. The batch in flight adds at
- * most `concurrency` runs' rows until it is admitted or dropped.
+ * rows the pass holds stay at or under `cap` (#4506). `concurrency` queries
+ * run at once and are admitted in order. A query is one run, or one group
+ * read through `readGroup` (#5168). A group's runs are admitted one by one,
+ * in order. The first run whose rows would pass the cap is dropped whole,
+ * since a detector needs all of a run's frames. Every run after it is dropped
+ * too, in its group or after it, and no later batch is read. `peak` is the
+ * most rows the pass kept. The batch in flight adds at most its own queries'
+ * rows until they are admitted or dropped.
  */
 export async function readFrameRows<T>(
   runs: readonly FrameRead[],
   read: (run: FrameRead) => Promise<T[]>,
   cap: number,
   concurrency: number = FRAME_READ_CONCURRENCY,
+  readGroup?: (runs: readonly FrameRead[]) => Promise<ReadonlyMap<string, T[]>>,
 ): Promise<{ rows: Map<string, T[]>; peak: number }> {
+  const units = readUnits(runs, readGroup !== undefined);
   const rows = new Map<string, T[]>();
   let held = 0;
   let peak = 0;
-  for (let i = 0; i < runs.length; i += concurrency) {
-    const batch = runs.slice(i, i + concurrency);
-    const results = await Promise.all(batch.map((r) => read(r)));
+  for (let i = 0; i < units.length; i += concurrency) {
+    const batch = units.slice(i, i + concurrency);
+    const results = await Promise.all(
+      batch.map(async (unit): Promise<ReadonlyMap<string, T[]>> => {
+        if (unit.group) return readGroup!(unit.runs);
+        const run = unit.runs[0]!;
+        return new Map([[run.runId, await read(run)]]);
+      }),
+    );
     for (let j = 0; j < batch.length; j += 1) {
-      const got = results[j] ?? [];
-      if (held + got.length > cap) return { rows, peak };
-      held += got.length;
-      peak = Math.max(peak, held);
-      rows.set(batch[j]!.runId, got);
+      const got = results[j]!;
+      for (const run of batch[j]!.runs) {
+        const list = got.get(run.runId) ?? [];
+        if (held + list.length > cap) return { rows, peak };
+        held += list.length;
+        peak = Math.max(peak, held);
+        rows.set(run.runId, list);
+      }
     }
   }
   return { rows, peak };
+}
+
+/**
+ * One group read's rows, by run public id (#5168). Every run of a group read
+ * is wrapped, so each is named by its root session.
+ */
+async function readGroupRows(
+  scope: FindingsScope,
+  runs: readonly FrameRead[],
+  keepModelless: boolean,
+): Promise<Map<string, ModelCallFrameRow[]>> {
+  const wrapped = runs.flatMap((r) =>
+    r.ref.kind === "tacho" ? [{ runId: r.runId, ref: r.ref }] : [],
+  );
+  const refs = wrapped.map((r) => r.ref);
+  const byRoot = await readGroupModelCallFrames(
+    keepModelless
+      ? { ...scope, runs: refs, keepModelless: true }
+      : { ...scope, runs: refs },
+  );
+  return new Map(
+    wrapped.map((r) => [r.runId, byRoot.get(r.ref.rootSessionUuid) ?? []]),
+  );
 }
 
 /** The price book slice that covers every row: their models and their span. */
@@ -878,6 +1053,10 @@ function rowsPriceSlice(
  * and the pass counts it as capped. Each run's rows are priced and released
  * in turn, so the pass never holds a second copy of every frame.
  *
+ * Runs with one group number are read in one query (#5168). Each run's rows
+ * are then priced on their own, under the run's own root, so a frame gets the
+ * key it gets from a read of its run alone.
+ *
  * With `keepModelless`, a run's calls that named no model come back too, as
  * `noModel` frames with no price, and count toward the cap (#4506).
  */
@@ -896,6 +1075,8 @@ export async function readPricedFrames(
           : { ...scope, run: r.ref },
       ),
     cap,
+    FRAME_READ_CONCURRENCY,
+    (group) => readGroupRows(scope, group, keepModelless),
   );
   const book = await loadPriceBookSlice(
     rowsPriceSlice(scope.orgId, rows.values()),
@@ -1427,10 +1608,11 @@ const productionDeps: FindingsPassDeps = {
 /**
  * One findings pass over a workspace's trailing window: read the run rows,
  * the tool calls, the file change frames, and each run's first prompt, file
- * changes, compactions, and outcomes; read and price the model-call frames of
- * up to `FRAME_RUNS_READ_MAX` runs and `FRAME_READ_MAX_FRAMES` frames, with
- * `FRAME_RUNS_RECURRING_RESERVE` of those runs kept for recurring prompts;
- * detect; and replace the open findings and their claims. The pass then gives
+ * changes, compactions, and outcomes; read and price model-call frames in up
+ * to `FRAME_READS_MAX` queries and `FRAME_READ_MAX_FRAMES` frames, with
+ * `FRAME_GROUP_READS_RESERVE` of those queries kept for recurring groups, each
+ * of which reads a scheduled job's runs in one query (#5168); detect; and
+ * replace the open findings and their claims. The pass then gives
  * each applied finding with no claim row the claims a replay finds for it. It
  * also reads the window's operator prompts, and opens the steering record
  * proposals its repeated instructions and findings support. A decision on a
@@ -1494,13 +1676,13 @@ export async function runFindingsPass(
   const ranked = runsWithRepeats(toolCalls);
   for (const [runId, n] of runsWithRetries(toolCalls, fileChangeTimes))
     ranked.set(runId, (ranked.get(runId) ?? 0) + n);
-  // A cheap scheduled job's runs get places of their own, so recurring runs
-  // can price them in a busy workspace (#4594).
+  // Each recurring group's runs are read in one query, so recurring runs can
+  // price a scheduled job of any size in a busy workspace (#5168).
   const { reads, coverage } = planFrameReads(
     runs,
     frameSources(runs, rows, runIdBySession, stored),
     ranked,
-    FRAME_RUNS_READ_MAX,
+    FRAME_READS_MAX,
     firstPrompts,
   );
   // A call that named no model bounds a request and is priced by nothing, so

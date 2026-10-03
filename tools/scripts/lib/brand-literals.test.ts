@@ -5,17 +5,34 @@ import { describe, expect, it } from "vitest";
 import {
   GUARDED,
   GUARDED_MARKUP,
+  GUARDED_PAGES,
   KEEP,
+  MARKUP_KEEP,
+  SEMANTIC_KEEP,
+  colorLiteral,
+  customProperties,
   declarations,
   groupOf,
+  headingsOf,
+  isButton,
+  isDisplayFace,
   isLiteral,
   layers,
   literalDrift,
   markupDrift,
+  markupSemanticDrift,
+  pageCss,
+  rawColorTokens,
+  rules,
+  shorthandFamily,
+  semanticDrift,
+  shorthandSize,
+  spacingLiteral,
   stripComments,
   stripMarkupComments,
   suggestion,
   tokenSizes,
+  typeDrift,
   withoutVars,
 } from "./brand-literals.mjs";
 
@@ -110,6 +127,8 @@ describe("the property groups", () => {
     ["--page-wrap", "width"],
     ["--text-sm", "font-size"],
     ["--text-2xl", "font-size"],
+    ["--fs-ui", "font-size"],
+    ["--fs-micro", "font-size"],
   ])("reads %s as %s", (prop, group) => {
     expect(groupOf(prop)).toBe(group);
   });
@@ -223,6 +242,16 @@ describe("naming the token", () => {
     expect(sizes.get("--ox-radius-card")).toBeCloseTo(12.96);
   });
 
+  it("reads a type step written as a multiple of its scale's base (oxageninc/brand#85)", () => {
+    const steps = tokenSizes(
+      "--ox-a-base: 0.875rem;\n--ox-a-body: var(--ox-a-base);\n--ox-a-micro: calc(var(--ox-a-base) * 0.857143);\n--ox-a-2xs: calc(var(--ox-a-base) * 0.714286);",
+    );
+    expect(steps.get("--ox-a-body")).toBe(14);
+    expect(steps.get("--ox-a-micro")).toBeCloseTo(12);
+    expect(steps.get("--ox-a-2xs")).toBeCloseTo(10);
+    expect(suggestion("font-size", "10px", "a", steps)).toBe("var(--ox-a-2xs) (10px)");
+  });
+
   it("reads no step without the base it multiplies, and no alias of an unknown token", () => {
     expect(tokenSizes("--ox-radius-lg: calc(var(--ox-radius-base) * 1);").size).toBe(0);
     expect(tokenSizes("--ox-radius-card: var(--ox-radius-2xl);").size).toBe(0);
@@ -318,6 +347,7 @@ describe("the guard", () => {
     const scales = Object.fromEntries(GUARDED.map((g) => [g.path, g.scale]));
     expect(scales["apps/web/assets/oxagen.css"]).toBe("m");
     expect(scales["apps/web/assets/blog.css"]).toBe("m");
+    expect(scales["apps/web/assets/legal.css"]).toBe("m");
     expect(scales["packages/ui/src/styles/globals.css"]).toBe("a");
     expect(scales["apps/app/src/app/globals.css"]).toBe("a");
   });
@@ -396,6 +426,364 @@ describe("the docs markup", () => {
     for (const { path, scale } of GUARDED_MARKUP) {
       expect(path.startsWith("apps/docs/"), path).toBe(true);
       expect(scale).toBe("a");
+    }
+  });
+
+  // oxageninc/brand#83: the landing pages keep Tailwind's steps, which the
+  // kit maps to its own, and are held to the bracket rule only.
+  it("holds a brackets entry to the bracket rule only", () => {
+    const hits = markupDrift(
+      new Map([
+        [
+          "landing.tsx",
+          'const a = "text-sm text-4xl text-[11px] text-[0.8em] text-[0.9em] text-[length:var(--ox-a-micro)]";',
+        ],
+      ]),
+      { tokens: TYPE_TOKENS, guarded: [{ path: "landing.tsx", scale: "a", brackets: true }] },
+    );
+    expect(hits.map((h) => [h.value, h.use])).toEqual([["text-[11px]", "var(--ox-a-body) (14px)"]]);
+  });
+});
+
+/** The kit's sizes after oxageninc/brand#83: no step under 14px. */
+const TYPE_TOKENS = `
+:root {
+  --ox-m-h1: 4.5rem;
+  --ox-m-h2: 2.5rem;
+  --ox-m-h3: 1.75rem;
+  --ox-m-h4: 1.25rem;
+  --ox-m-body: 1rem;
+  --ox-m-micro: 0.875rem;
+  --ox-a-h1: 1.875rem;
+  --ox-a-h2: 1.5rem;
+  --ox-a-h3: 1.25rem;
+  --ox-a-h4: 1rem;
+  --ox-a-body: 0.875rem;
+  --ox-a-micro: 0.875rem;
+}
+`;
+
+describe("the type rule: reading a page", () => {
+  it("keeps only a page's <style> blocks, with the page's own line numbers", () => {
+    const html = "<p>a</p>\n<style>\n.a { font-size: 12px; }\n</style>\n<p>b</p>\n";
+    const { css } = pageCss(html);
+    expect(css.split("\n")).toHaveLength(html.split("\n").length);
+    expect(css).not.toContain("<p>");
+    expect(declarations(css)).toEqual([{ prop: "font-size", value: "12px", line: 3 }]);
+  });
+
+  it("reads style attributes, SVG text sizes, and sizes a script sets", () => {
+    const html = [
+      '<p style="font-size:13px;color:red">b</p>',
+      '<svg><text font-size="11">c</text></svg>',
+      "<script>el('text', { x: 1, 'font-size': 9 })</script>",
+    ].join("\n");
+    expect(pageCss(html).inline).toEqual([
+      { prop: "font-size", value: "13px", line: 1 },
+      { prop: "color", value: "red", line: 1 },
+      { prop: "font-size", value: "11px", line: 2 },
+      { prop: "font-size", value: "9px", line: 3 },
+    ]);
+  });
+
+  it("lists each innermost rule with its selector, and no at-rule", () => {
+    const css = '@font-face { font-family: "A"; }\n.a,\n.b {\n  color: red;\n}\n@media (max-width: 9px) { h1 { font-size: 1px; } }\n';
+    expect(rules(css)).toEqual([
+      { selector: ".a, .b", body: "\n  color: red;\n", line: 2, bodyLine: 3 },
+      { selector: "h1", body: " font-size: 1px; ", line: 6, bodyLine: 6 },
+    ]);
+  });
+
+  it("finds the h1 to h3 a selector styles, and no pseudo-element or descendant", () => {
+    expect([...headingsOf(".hero h1, h2.title, h1 span, h2::before, h3:hover, .x > h4")]).toEqual([
+      "h1",
+      "h2",
+      "h3",
+    ]);
+  });
+
+  it.each([
+    ["400 var(--ox-m-body) / var(--ox-m-body-leading) var(--font-sans)", "var(--ox-m-body)", "var(--font-sans)"],
+    ["500 10px ui-monospace, monospace", "10px", "ui-monospace, monospace"],
+    ["400 var(--fs-small)/1.6 var(--ox-font)", "var(--fs-small)", "var(--ox-font)"],
+    ["inherit", null, null],
+    ["var(--ox-font)", null, null],
+  ])("reads the size and faces of the shorthand font: %s", (value, size, family) => {
+    expect(shorthandSize(value)).toBe(size);
+    expect(shorthandFamily(value)).toBe(family);
+  });
+});
+
+describe("the type rule: the heading face", () => {
+  it.each([
+    ["var(--ox-font-display)", true],
+    ["var(--font-display)", true],
+    ['"Space Grotesk", sans-serif', true],
+    ["var(--ox-font)", false],
+    ["var(--font-sans)", false],
+  ])("reads %s as Space Grotesk: %s", (value, display) => {
+    expect(isDisplayFace(value, new Map())).toBe(display);
+  });
+
+  it("follows a site's own property, and fails one it points at another face", () => {
+    const routed = customProperties([":root { --font-heading: var(--ox-font-display); }"]);
+    expect(isDisplayFace("var(--font-heading)", routed)).toBe(true);
+    const repointed = customProperties([":root { --font-display: var(--ox-font); }"]);
+    expect(isDisplayFace("var(--font-display)", repointed)).toBe(false);
+  });
+});
+
+describe("the type rule on the customer sites", () => {
+  const guarded = [
+    { path: "site.css", scale: "m" as const, site: "web" as const, faces: true },
+    { path: "app.css", scale: "a" as const },
+  ];
+  const pages = [
+    { path: "page.html", scale: "m" as const, site: "web" as const, with: ["site.css"] },
+  ];
+  it("lists a face named by hand, a size by hand in a page, and a heading in the wrong face", () => {
+    const files = new Map([
+      [
+        "site.css",
+        [
+          ":root { --fs-micro: var(--ox-m-micro); --fs-tiny: calc(var(--ox-m-micro) * 0.8); }",
+          "h1, h2, h3 { font-family: var(--ox-font-display); }",
+          ".tag { font-size: var(--fs-tiny); }",
+          ".code { font-family: ui-monospace, monospace; }",
+          '@font-face { font-family: "Aeonik"; src: url(x); }',
+        ].join("\n"),
+      ],
+      ["app.css", ".x { font-size: 10px; font-family: Arial; }\n"],
+      [
+        "page.html",
+        [
+          "<style>",
+          ".a { font-size: var(--fs-micro); }",
+          ".b { font-size: 15px; }",
+          ".c h2 { font-family: var(--ox-font); }",
+          "</style>",
+          '<p style="font-size:12px">x</p>',
+          "<script>el('text', { 'font-size': 11 })</script>",
+        ].join("\n"),
+      ],
+    ]);
+    expect(typeDrift(files, { tokens: TYPE_TOKENS, guarded, pages })).toEqual([
+      {
+        path: "site.css",
+        line: 4,
+        prop: "font-family",
+        value: "ui-monospace, monospace",
+        use: expect.stringContaining("var(--ox-font-mono) for code"),
+      },
+      { path: "page.html", line: 3, prop: "font-size", value: "15px", use: "var(--ox-m-body) (16px)" },
+      { path: "page.html", line: 6, prop: "font-size", value: "12px", use: "var(--ox-m-micro) (14px)" },
+      { path: "page.html", line: 7, prop: "font-size", value: "11px", use: "var(--ox-m-micro) (14px)" },
+      {
+        path: "page.html",
+        line: 4,
+        prop: "font-family",
+        value: "var(--ox-font)",
+        use: expect.stringContaining("Space Grotesk on h2"),
+      },
+    ]);
+  });
+
+  it("requires a faces file to set h1 to h3 in Space Grotesk, the kit's way or its own", () => {
+    const only = [{ path: "root.css", scale: "a" as const, site: "docs" as const, faces: true }];
+    const run = (css: string) =>
+      typeDrift(new Map([["root.css", css]]), { tokens: TYPE_TOKENS, guarded: only, pages: [] });
+    expect(run(":root { --x: 1px; }")).toEqual([
+      {
+        path: "root.css",
+        line: 1,
+        prop: "font-family",
+        value: "(none)",
+        use: expect.stringContaining("sets h1, h2, h3 in Space Grotesk"),
+      },
+    ]);
+    expect(run(":root { --font-heading: var(--font-display); }")).toEqual([]);
+    expect(run("h1,\nh2,\nh3 { font-family: var(--ox-font-display); }")).toEqual([]);
+    expect(
+      run(":root { --font-display: var(--ox-font); }\nh1, h2, h3 { font-family: var(--font-display); }").map(
+        (h) => `${h.line} ${h.value}`,
+      ),
+    ).toEqual(["2 var(--font-display)", "1 (none)"]);
+  });
+
+  it("skips a file it was not given, and a stylesheet of no site", () => {
+    expect(
+      typeDrift(new Map<string, string | null>([["site.css", null]]), {
+        tokens: TYPE_TOKENS,
+        guarded,
+        pages: [],
+      }),
+    ).toEqual([]);
+  });
+
+  it("guards the two customer sites, every page with the stylesheets it links", () => {
+    const sheets = new Set(GUARDED.map((g) => g.path));
+    for (const g of GUARDED.filter((x) => x.site)) {
+      expect(/^apps\/(web|docs)\//.test(g.path), g.path).toBe(true);
+      for (const w of g.with ?? []) expect(sheets.has(w), w).toBe(true);
+    }
+    expect(GUARDED.filter((g) => g.faces).map((g) => g.path)).toEqual([
+      "apps/docs/src/app/global.css",
+      "apps/web/assets/oxagen.css",
+    ]);
+    for (const p of GUARDED_PAGES) {
+      expect(p.path.startsWith("apps/web/"), p.path).toBe(true);
+      // A page either links the site stylesheet or sets its own heading face.
+      expect(Boolean(p.faces) !== Boolean(p.with?.length), p.path).toBe(true);
+      for (const w of p.with ?? []) expect(sheets.has(w), w).toBe(true);
+    }
+  });
+
+  it("keeps no font size by hand on a customer site", () => {
+    for (const g of GUARDED.filter((x) => x.site)) {
+      const sizes = (KEEP[g.path] ?? []).filter((entry) => entry.prop === "font-size");
+      expect(sizes, g.path).toEqual([]);
+    }
+  });
+});
+
+describe("the semantic rule: reading a value", () => {
+  it.each([
+    ["#09090B", true],
+    ["1px solid #fff", true],
+    ["rgba(0, 0, 0, 0.4)", true],
+    ["oklch(0.7 0.16 25)", true],
+    ["white", true],
+    ["var(--panel)", false],
+    ["color-mix(in oklch, var(--gold) 60%, transparent)", false],
+    ["transparent", false],
+    ["currentColor", false],
+    ["var(--x, #fff)", false],
+    ["url(\"data:image/svg+xml;utf8,<svg stroke='%23FFFFFF'/>\")", false],
+    ["1px solid var(--line)", false],
+  ])("reads %s as a colour by hand: %s", (value, literal) => {
+    expect(colorLiteral(value)).toBe(literal);
+  });
+
+  it("names the raw colour tokens a value reads, and passes the raw scales", () => {
+    expect(rawColorTokens("var(--ox-ink)")).toEqual(["--ox-ink"]);
+    expect(rawColorTokens("0 0 0 1px var(--ox-gold), var(--ox-shadow-pop)")).toEqual([
+      "--ox-gold",
+      "--ox-shadow-pop",
+    ]);
+    expect(
+      rawColorTokens(
+        "calc(var(--ox-space) * 3) var(--ox-radius-lg) var(--ox-m-body) var(--ox-font-mono) var(--ox-wrap)",
+      ),
+    ).toEqual([]);
+  });
+
+  it.each([
+    ["12px 22px", true],
+    ["0.5rem", true],
+    ["-12px", true],
+    ["calc(100% - 40px)", true],
+    ["0", false],
+    ["1px", false],
+    ["auto", false],
+    ["2em 5%", false],
+    ["calc(var(--ox-space) * 3) calc(var(--ox-space) * 5.5)", false],
+  ])("reads the spacing %s as a length by hand: %s", (value, literal) => {
+    expect(spacingLiteral(value)).toBe(literal);
+  });
+
+  it("finds a button by its class", () => {
+    expect(isButton(".btn")).toBe(true);
+    expect(isButton(".btn-primary:hover")).toBe(true);
+    expect(isButton(".nav .btn .arr")).toBe(true);
+    expect(isButton(".btns, .button-row")).toBe(false);
+  });
+});
+
+describe("the semantic rule on the customer sites", () => {
+  const guarded = [
+    { path: "site.css", scale: "m" as const, site: "web" as const },
+    { path: "app.css", scale: "a" as const },
+  ];
+  const pages = [{ path: "page.html", scale: "m" as const, site: "web" as const }];
+
+  it("lists colours, raw tokens, spacing, and button colours by hand, and passes the mapping layer", () => {
+    const files = new Map([
+      [
+        "site.css",
+        [
+          ":root { --panel: var(--ox-panel); --button-primary-bg: var(--gold); --bad: #fff; }",
+          ".card { background: var(--panel); color: var(--ox-text); padding: 12px 22px; }",
+          ".btn-primary { background-color: var(--button-primary-bg); color: var(--ox-ink); border-color: transparent; }",
+          ".btn-ghost { color: var(--ink); margin: calc(var(--ox-space) * 2); }",
+          ".x { border: 1px solid rgba(0, 0, 0, 0.4); gap: 0; }",
+        ].join("\n"),
+      ],
+      ["app.css", ".x { color: #fff; padding: 13px; }\n"],
+      [
+        "page.html",
+        [
+          '<svg><style>:root{color:#09090B}</style></svg>',
+          "<style>",
+          ".a { border-radius: 6px; box-shadow: 0 1px 2px var(--ink); }",
+          "</style>",
+          '<p style="color:white">x</p>',
+        ].join("\n"),
+      ],
+    ]);
+    const { hits, stale } = semanticDrift(files, { guarded, pages, keep: {} });
+    expect(hits.map((h) => `${h.path}:${h.line} ${h.prop}`)).toEqual([
+      "site.css:1 --bad",
+      "site.css:2 color",
+      "site.css:2 padding",
+      "site.css:3 color",
+      "site.css:4 color",
+      "site.css:5 border",
+      "page.html:3 border-radius",
+      "page.html:3 box-shadow",
+      "page.html:5 color",
+    ]);
+    expect(stale).toEqual([]);
+  });
+
+  it("passes a value its file keeps, and lists a kept value the file no longer writes", () => {
+    const files = new Map([["site.css", ".x { padding: 13px; }\n"]]);
+    const keep = {
+      "site.css": [
+        { group: "spacing" as const, values: ["13px", "7px"], why: "a reason long enough" },
+      ],
+    };
+    expect(semanticDrift(files, { guarded, pages: [], keep })).toEqual({
+      hits: [],
+      stale: [{ path: "site.css", group: "spacing", value: "7px" }],
+    });
+  });
+
+  it("lists palette classes, colours in brackets, and spacing in brackets in the docs markup", () => {
+    const src =
+      'const a = "text-white/40 hover:bg-zinc-800 bg-[#C0453C] text-[var(--_ember-b,#D4AF37)] p-[13px] gap-[0.5em] text-[var(--ember-ink)] bg-primary p-4";';
+    const { hits } = markupSemanticDrift(new Map([["page.tsx", src]]), {
+      guarded: [{ path: "page.tsx", scale: "a" }],
+      keep: {},
+    });
+    expect(hits.map((h) => h.value)).toEqual([
+      "text-white/40",
+      "hover:bg-zinc-800",
+      "bg-[#C0453C]",
+      "text-[var(--_ember-b,#D4AF37)]",
+      "p-[13px]",
+    ]);
+  });
+
+  it("keeps every allowlisted value on a guarded file, with a reason", () => {
+    const sheets = new Set([...GUARDED.filter((g) => g.site), ...GUARDED_PAGES].map((g) => g.path));
+    for (const [path, entries] of Object.entries(SEMANTIC_KEEP)) {
+      expect(sheets.has(path), path).toBe(true);
+      for (const e of entries) expect(e.why.length, `${path} ${e.group}`).toBeGreaterThan(10);
+    }
+    const markup = new Set(GUARDED_MARKUP.map((g) => g.path));
+    for (const [path, entries] of Object.entries(MARKUP_KEEP)) {
+      expect(markup.has(path), path).toBe(true);
+      for (const e of entries) expect(e.why.length, path).toBeGreaterThan(10);
     }
   });
 });

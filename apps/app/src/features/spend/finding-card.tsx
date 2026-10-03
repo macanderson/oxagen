@@ -362,6 +362,7 @@ function FindingText({
 export function FindingCard({
   finding,
   rank,
+  cursor = null,
   names,
   harnesses = {},
   spend,
@@ -369,6 +370,8 @@ export function FindingCard({
 }: {
   finding: SpendFinding;
   rank: number;
+  /** The cursor of the list page the card sits on, so its evidence closes back to that page (#5303). */
+  cursor?: string | null;
   /** An operator finding's subject is a `prn_…` id; this is the person's name for it. */
   names: Readonly<Record<string, string>>;
   /** An agent finding's subject is an agent key; this is its harness by key. */
@@ -393,7 +396,7 @@ export function FindingCard({
       data-kind={finding.kind}
       data-confidence={finding.confidence}
       data-level={finding.level}
-      className={`${panel} grid gap-4 p-4 md:grid-cols-[2rem_minmax(0,1fr)_auto]`}
+      className={`${panel} grid gap-4 p-4 md:grid-cols-icon-end`}
     >
       <span className={`${mono} text-sm text-muted-foreground`}>
         {formatCount(rank, locale)}
@@ -403,11 +406,11 @@ export function FindingCard({
           <h3 className="text-base font-semibold">
             {t(`findings.kind.${finding.kind}`)}
           </h3>
-          <span className="rounded-md border border-border px-1.5 py-0.5 text-sm text-muted-foreground">
+          <span className="rounded-md border border-border px-1.5 py-0.5 text-xs text-muted-foreground">
             {t(`findings.level.${finding.level}`)}
           </span>
           <span
-            className={`rounded-md border px-1.5 py-0.5 text-sm font-semibold ${finding.confidence === "high" ? "border-success/45 text-success" : "border-link/45 text-link"}`}
+            className={`rounded-md border px-1.5 py-0.5 text-xs font-semibold ${finding.confidence === "high" ? "border-success/45 text-success" : "border-link/45 text-link"}`}
           >
             {t(`findings.confidence.${finding.confidence}`)}
           </span>
@@ -443,7 +446,7 @@ export function FindingCard({
         <p className="text-sm text-muted-foreground">
           {t(`findings.kindDefinition.${finding.kind}`)}
         </p>
-        <p className={`${mono} text-sm text-muted-foreground`}>
+        <p className={`${mono} text-xs text-muted-foreground`}>
           {t("findings.evidenceLine", {
             runs: formatCount(finding.runs, locale),
             calls: formatCount(finding.calls, locale),
@@ -457,6 +460,7 @@ export function FindingCard({
           to={routes.spend(at.org, at.ws, {
             tab: "findings",
             finding: finding.id,
+            cursor: cursor ?? undefined,
           })}
           className={buttonSecondary}
         >

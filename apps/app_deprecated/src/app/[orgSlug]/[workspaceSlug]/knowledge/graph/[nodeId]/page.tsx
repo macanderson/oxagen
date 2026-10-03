@@ -132,14 +132,14 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
           className="mx-auto size-6 text-muted-foreground"
           aria-hidden="true"
         />
-        <h2 className="mt-3 text-sm font-semibold">Node not found</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          The node <span className="font-mono text-xs">{nodeId}</span> does not
+        <h2 className="mt-3 text-base font-semibold">Node not found</h2>
+        <p className="mt-1 text-base text-muted-foreground">
+          The node <span className="font-mono text-sm">{nodeId}</span> does not
           exist in this workspace, or you don&apos;t have access to it.
         </p>
         <Link
           href={backToGraph}
-          className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+          className="mt-4 inline-flex items-center gap-1 text-base font-medium text-primary hover:underline"
         >
           <ArrowLeft className="size-4" aria-hidden="true" /> Back to graph
         </Link>
@@ -155,7 +155,7 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
     <div className="space-y-5">
       <Link
         href={backToGraph}
-        className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+        className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-3.5" aria-hidden="true" /> Knowledge graph
       </Link>
@@ -170,7 +170,7 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
               {headingFor(node)}
             </h1>
             {node.description ? (
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-base text-muted-foreground">
                 {node.description}
               </p>
             ) : null}
@@ -183,11 +183,11 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
         <div className="grid gap-6 px-6 py-5 md:grid-cols-2">
           {/* Properties */}
           <section>
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               Properties
             </h2>
             {properties.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-base text-muted-foreground">
                 No properties recorded.
               </p>
             ) : (
@@ -196,10 +196,10 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
                   const str = typeof v === "string" ? v : JSON.stringify(v);
                   return (
                     <div key={k} className="contents">
-                      <dt className="text-xs font-medium text-muted-foreground">
+                      <dt className="text-sm font-medium text-muted-foreground">
                         {k}
                       </dt>
-                      <dd className="min-w-0 break-words text-sm">
+                      <dd className="min-w-0 break-words text-base">
                         {typeof v === "string" && isHttpUrl(v) ? (
                           <a
                             href={v}
@@ -226,11 +226,11 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
 
           {/* Metadata / provenance */}
           <section>
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               Metadata
             </h2>
             <dl className="grid gap-x-4 gap-y-1.5 sm:grid-cols-[minmax(7rem,auto)_1fr]">
-              <dt className="text-xs font-medium text-muted-foreground">
+              <dt className="text-sm font-medium text-muted-foreground">
                 Node ID
               </dt>
               {/* Citation rule: the raw id is never the primary identifier —
@@ -238,13 +238,13 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
               <dd className="min-w-0">
                 <CopyableId value={node.nodeId} label="ID" max={40} />
               </dd>
-              <dt className="text-xs font-medium text-muted-foreground">
+              <dt className="text-sm font-medium text-muted-foreground">
                 Label
               </dt>
-              <dd className="text-sm">{node.label}</dd>
+              <dd className="text-base">{node.label}</dd>
               {labels.length > 0 ? (
                 <>
-                  <dt className="text-xs font-medium text-muted-foreground">
+                  <dt className="text-sm font-medium text-muted-foreground">
                     Labels
                   </dt>
                   <dd className="flex flex-wrap gap-1">
@@ -258,18 +258,18 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
               ) : null}
               {createdAt ? (
                 <>
-                  <dt className="text-xs font-medium text-muted-foreground">
+                  <dt className="text-sm font-medium text-muted-foreground">
                     Created
                   </dt>
-                  <dd className="text-sm">{createdAt}</dd>
+                  <dd className="text-base">{createdAt}</dd>
                 </>
               ) : null}
               {updatedAt ? (
                 <>
-                  <dt className="text-xs font-medium text-muted-foreground">
+                  <dt className="text-sm font-medium text-muted-foreground">
                     Updated
                   </dt>
-                  <dd className="text-sm">{updatedAt}</dd>
+                  <dd className="text-base">{updatedAt}</dd>
                 </>
               ) : null}
             </dl>
@@ -281,7 +281,7 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
           boundary so a slow/large neighborhood never blocks the header and
           properties above from rendering. */}
       <div className="overflow-hidden rounded-xl border border-border bg-card px-6 py-5">
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           Neighbors
         </h2>
         <Suspense fallback={<LoadingState variant="detail" />}>

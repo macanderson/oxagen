@@ -333,7 +333,7 @@ const CLOSING_ISSUES_QUERY = `query ($owner: String!, $repo: String!, $number: I
     pullRequest(number: $number) {
       closingIssuesReferences(first: 25) {
         totalCount
-        nodes { number title url state repository { name owner { login } } }
+        nodes { id number title url state repository { name owner { login } } }
       }
     }
   }
@@ -346,6 +346,7 @@ interface GHClosingIssuesResponse {
         closingIssuesReferences?: {
           totalCount: number;
           nodes: {
+            id?: string;
             number: number;
             title: string;
             url: string;
@@ -1166,6 +1167,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
         title: node.title,
         url: node.url,
         state: node.state === "OPEN" ? "open" : "closed",
+        ...(node.id ? { nodeId: node.id } : {}),
       })),
       complete: refs.totalCount <= refs.nodes.length,
     };

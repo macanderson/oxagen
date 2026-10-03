@@ -536,11 +536,10 @@ describe("pages", () => {
   });
 });
 
-describe("hero font", () => {
-  // Mac, 2026-09-29: Space Grotesk sets the wordmark and hero line 1, and
-  // nothing else. The wordmark is an SVG, so on a blog page the face reaches
-  // only an element marked .hero-line-1, and only a page with a hero
-  // downloads it.
+describe("heading font", () => {
+  // Mac, 2026-10-02 (oxageninc/brand#83): Space Grotesk sets every h1, h2,
+  // and h3 on oxagen.sh, through the site stylesheet, so a heading carries no
+  // class of its own and every blog page preloads the one weight it uses.
   const postHtml = () =>
     postPage({
       post,
@@ -551,7 +550,7 @@ describe("hero font", () => {
       wordmark,
     });
 
-  it("marks line 1 of the index hero and leaves line 2 in the heading face", () => {
+  it("sets the index hero as one heading, with the gold line inside it", () => {
     const html = indexPage({
       pillars,
       posts: [post],
@@ -559,31 +558,31 @@ describe("hero font", () => {
       image: "/blog/og.png",
     });
     expect(html).toContain(
-      '<h1><span class="hero-line-1">What the research says about agents,</span><br><span class="gold">and how to govern them</span></h1>',
+      '<h1>What the research says about agents,<br><span class="gold">and how to govern them</span></h1>',
     );
-    expect(html.match(/hero-line-1/g)).toHaveLength(1);
+    expect(html).not.toContain("hero-line-1");
     expect(html).toContain(HERO_FONT_PRELOAD);
   });
 
-  it("marks the one-line pillar hero", () => {
+  it("sets the one-line pillar hero with no class of its own", () => {
     const html = pillarPage({
       pillar: pillars[0],
       pillars,
       posts: [post],
       wordmark,
     });
-    expect(html).toContain('<h1 class="hero-line-1">Alpha</h1>');
+    expect(html).toContain("<h1>Alpha</h1>");
     expect(html).toContain(HERO_FONT_PRELOAD);
   });
 
-  it("sets a post title in the heading face and preloads no Space Grotesk", () => {
+  it("sets a post title as a plain heading and preloads its Space Grotesk weight", () => {
     const html = postHtml();
     expect(html).toContain("<h1>Title &lt;&quot;quoted&quot;&gt;</h1>");
     expect(html).not.toContain("hero-line-1");
-    expect(html).not.toContain("space-grotesk");
+    expect(html).toContain(HERO_FONT_PRELOAD);
   });
 
-  it("preloads one Space Grotesk weight for a hero and none without one", () => {
+  it("preloads one Space Grotesk weight, and none for a page built without one", () => {
     expect(HERO_FONT_PRELOAD.match(/space-grotesk-latin-\d+/g)).toEqual([
       "space-grotesk-latin-600",
     ]);

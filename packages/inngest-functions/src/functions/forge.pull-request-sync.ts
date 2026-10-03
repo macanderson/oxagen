@@ -5,6 +5,7 @@ import { createFunction } from "../create-function";
 import {
   FORGE_PULL_REQUEST_DIFF_READY_EVENT,
   FORGE_PULL_REQUEST_OBSERVED_EVENT,
+  type ForgePullRequestDiffReadyEventData,
 } from "../events";
 import { forgePullRequestSyncRunner } from "../lib/forge-pull-request-sync-runner";
 
@@ -46,6 +47,7 @@ export const forgePullRequestSyncSchema = z.object({
   link: z
     .object({ rootSessionUuid: z.string().uuid(), opened: z.boolean() })
     .optional(),
+  workOrderId: z.string().uuid().optional(),
 });
 
 /**
@@ -53,7 +55,8 @@ export const forgePullRequestSyncSchema = z.object({
  *
  *   1. `upsert-pull-request` writes the row from the delivery's facts, or
  *      reads the forge once when the event carried none, and writes the link
- *      to the run that named it and to that run's work orders.
+ *      to the run that named it, to that run's work orders, and to the work
+ *      order the event names.
  *   2. `capture-diff` reads the head commit's diff against its merge base and
  *      puts the bytes in object storage under a key that names the head, so a
  *      retry writes the same object. It runs only when that head has no
@@ -107,23 +110,31 @@ export const [forgePullRequestSync] = createFunction(
         captured,
       ),
     );
-    if (recorded.newlyStored)
+    // A newly stored revision always names its key and digest. The checks
+    // say so to the type the event's readers parse (ADR-294).
+    if (
+      recorded.newlyStored &&
+      captured.diffKey !== null &&
+      captured.diffSha256 !== null
+    ) {
+      const data: ForgePullRequestDiffReadyEventData = {
+        orgId: request.orgId,
+        workspaceId: request.workspaceId,
+        pullRequestId,
+        revisionId: recorded.revisionId,
+        provider: request.provider,
+        repository: request.repository,
+        number: request.number,
+        headSha: target.headSha,
+        diffKey: captured.diffKey,
+        diffSha256: captured.diffSha256,
+      };
       await step.sendEvent("diff-ready", {
         name: FORGE_PULL_REQUEST_DIFF_READY_EVENT,
         id: `forge-diff-ready:${recorded.revisionId}`,
-        data: {
-          orgId: request.orgId,
-          workspaceId: request.workspaceId,
-          pullRequestId,
-          revisionId: recorded.revisionId,
-          provider: request.provider,
-          repository: request.repository,
-          number: request.number,
-          headSha: target.headSha,
-          diffKey: captured.diffKey,
-          diffSha256: captured.diffSha256,
-        },
+        data,
       });
+    }
     return {
       upserted,
       diffStatus: recorded.diffStatus,

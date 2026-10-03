@@ -256,3 +256,218 @@ export function tachoContextWindow(
 export function isLaterLlmCallSighting(row: TachoModelCallRow): boolean {
   return (row.attrs?.[LLM_CALL_DUPLICATE_OF_ATTR] ?? "") !== "";
 }
+
+/** A run's recorded windows and manifests, and how many calls carried no window. */
+export interface ContextWindowReading {
+  windows: RecordedWindow[];
+  assemblies: RecordedAssembly[];
+  /** Model calls the run recorded with no window. */
+  unmeasured: number;
+  /** False when the read stopped at its cap, so the lists are a prefix. */
+  walked: boolean;
+}
+
+/**
+ * A ledger run's windows, walked from its events a page at a time.
+ * `get_run_context` and the cost rollup both read a ledger run's windows
+ * through this walk (#5341).
+ *
+ * `readPage` answers the run's events after a `run_seq`, at most `limit`, in
+ * `run_seq` order: the run store's `readAttemptEventsSince`, which reads a
+ * compacted attempt from its archive segment. The walk keeps only the events
+ * `ledgerContextWindows` reads and stops after `bounds.cap` events, and
+ * `walked` says whether it reached the run's last event.
+ */
+export async function walkLedgerContextWindows(
+  readPage: (
+    afterRunSeq: string,
+    limit: number,
+  ) => Promise<readonly AttemptEventReadRecord[]>,
+  bounds: { cap: number; page: number },
+): Promise<ContextWindowReading> {
+  const kept: AttemptEventReadRecord[] = [];
+  let after = "0";
+  let walked = 0;
+  for (;;) {
+    const want = Math.min(bounds.page, bounds.cap - walked);
+    if (want <= 0) return { ...ledgerContextWindows(kept), walked: false };
+    const page = await readPage(after, want);
+    walked += page.length;
+    for (const event of page)
+      if (isContextWindowEvent(event.eventType)) kept.push(event);
+    const last = page.at(-1);
+    if (!last || page.length < want)
+      return { ...ledgerContextWindows(kept), walked: true };
+    after = last.runSeq;
+  }
+}
+
+function manifestBody(body: string): unknown {
+  try {
+    return JSON.parse(body) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A wrapped session's windows and manifests, from its `llm_call` and
+ * `steering.manifest` rows in frame order, and how many of its calls carried
+ * no window.
+ *
+ * A call only a transcript or OTel reported, or one the proxy saw on an API
+ * it does not parse, carries no window and is counted as unmeasured. A later
+ * sighting of a call is not counted twice. A call the transcript reported
+ * first and the proxy measured second is one call with a window, joined on
+ * the vendor's request id. A first sighting that names no request id stays
+ * counted as unmeasured, because the read cannot show it is the same call.
+ */
+export function wrappedContextWindows(
+  rows: readonly TachoModelCallRow[],
+): Omit<ContextWindowReading, "walked"> {
+  const windows: RecordedWindow[] = [];
+  const assemblies: RecordedAssembly[] = [];
+  const unmeasuredCalls: TachoModelCallRow[] = [];
+  for (const row of rows) {
+    if (row.kind === "steering.manifest") {
+      const assembly = assemblyOf(String(row.seq), manifestBody(row.body));
+      if (assembly !== null) assemblies.push(assembly);
+      continue;
+    }
+    const recorded = tachoContextWindow(row);
+    if (recorded !== null) windows.push(recorded);
+    else if (!isLaterLlmCallSighting(row)) unmeasuredCalls.push(row);
+  }
+  const measured = new Set(
+    windows.flatMap((w) => (w.modelCallId === null ? [] : [w.modelCallId])),
+  );
+  const unmeasured = unmeasuredCalls.filter(
+    (row) => row.requestId === "" || !measured.has(row.requestId),
+  ).length;
+  return { windows, assemblies, unmeasured };
+}
+
+/**
+ * A run's prompt composition: each block's tokens summed over every window
+ * the run recorded (#5295). Each window's blocks are already its byte share
+ * of the prompt total the vendor reported, so the blocks here sum to
+ * `promptTokens`, and the split is an estimate of where the tokens went.
+ */
+export interface WindowComposition {
+  /** The windows whose call reported its prompt total, which every sum below covers. */
+  requests: number;
+  /** Windows whose call reported no prompt total. Their blocks carry no tokens, so no sum counts them. */
+  requestsWithoutTokens: number;
+  /** The prompt tokens of the `requests` windows, summed: every block below added up. */
+  promptTokens: number;
+  /** Each block's tokens summed; null for a block none of the windows carried. */
+  blocks: Record<ContextWindowBlockKind, number | null>;
+  /**
+   * The conversation block of the run's first request: the first window that
+   * declared tools, else the first window. Null when that window reported no
+   * prompt total or carried no conversation block.
+   */
+  initialConversationTokens: number | null;
+}
+
+/** Whether a window declared at least one tool. */
+function declaredTools(window: RecordedWindow): boolean {
+  return window.blocks.some(
+    (block) => block.kind === "tools" && block.items > 0,
+  );
+}
+
+/**
+ * The prompt composition of `windows`, in frame order; null when no window
+ * reported a prompt total, so no block has a token to sum.
+ *
+ * The first request is the first window that declared tools. A harness such
+ * as Claude Code makes side calls of its own, a session title or a check of a
+ * Bash command's prefix, and a side call sends a short prompt and no tools
+ * (ADR-062, amendment of 2026-10-02). Read by that shape, a side call that
+ * came first is not taken for the person's first prompt. A run none of whose
+ * windows declared tools takes its first window.
+ */
+export function windowComposition(
+  windows: readonly RecordedWindow[],
+): WindowComposition | null {
+  const composition = createWindowComposition();
+  for (const window of windows) composition.add(window);
+  return composition.finish();
+}
+
+/**
+ * A wrapped run's prompt composition from its `llm_call` rows, which `stream`
+ * hands over in batches in frame order (#5341). A row with no window adds
+ * nothing. `get_run_context` and the cost rollup both sum a wrapped run's
+ * windows here, over every chain of the run, so a run's Cost tab and its
+ * part of the Agent page agree. Null when no window reported a prompt total.
+ */
+export async function streamedWindowComposition(
+  stream: (
+    consume: (rows: readonly TachoModelCallRow[]) => Promise<void>,
+  ) => Promise<void>,
+): Promise<WindowComposition | null> {
+  const composition = createWindowComposition();
+  await stream(async (rows) => {
+    for (const row of rows) {
+      const window = tachoContextWindow(row);
+      if (window !== null) composition.add(window);
+    }
+  });
+  return composition.finish();
+}
+
+/**
+ * {@link windowComposition} one window at a time, so a reader that streams a
+ * long run's windows holds the sums and not every window. Feed it the
+ * windows in frame order.
+ */
+export function createWindowComposition(): {
+  add: (window: RecordedWindow) => void;
+  finish: () => WindowComposition | null;
+} {
+  const blocks: Record<ContextWindowBlockKind, number | null> = {
+    system: null,
+    steering: null,
+    tools: null,
+    context: null,
+    conversation: null,
+  };
+  let requests = 0;
+  let requestsWithoutTokens = 0;
+  let promptTokens = 0;
+  let firstWindow: RecordedWindow | undefined;
+  let firstWithTools: RecordedWindow | undefined;
+  const add = (window: RecordedWindow): void => {
+    firstWindow ??= window;
+    if (firstWithTools === undefined && declaredTools(window))
+      firstWithTools = window;
+    if (window.promptTokens === null) {
+      requestsWithoutTokens += 1;
+      return;
+    }
+    requests += 1;
+    promptTokens += window.promptTokens;
+    for (const block of window.blocks)
+      if (block.tokens !== null)
+        blocks[block.kind] = (blocks[block.kind] ?? 0) + block.tokens;
+  };
+  const finish = (): WindowComposition | null => {
+    if (requests === 0) return null;
+    const first = firstWithTools ?? firstWindow;
+    const initial =
+      first === undefined || first.promptTokens === null
+        ? null
+        : (first.blocks.find((block) => block.kind === "conversation")
+            ?.tokens ?? null);
+    return {
+      requests,
+      requestsWithoutTokens,
+      promptTokens,
+      blocks: { ...blocks },
+      initialConversationTokens: initial,
+    };
+  };
+  return { add, finish };
+}

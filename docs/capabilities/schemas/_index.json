@@ -66,6 +66,18 @@
       "consumes": []
     },
     {
+      "name": "adopt_steering_merges",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "advance_onboarding",
       "domain": "onboarding",
       "surfaces": [
@@ -1269,6 +1281,18 @@
       "consumes": []
     },
     {
+      "name": "get_change_set",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_ci_status",
       "domain": "repo",
       "surfaces": [
@@ -1776,6 +1800,18 @@
         "mcp",
         "agent",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_revision_diff",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],

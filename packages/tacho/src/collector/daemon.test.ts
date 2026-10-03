@@ -34,6 +34,7 @@ import {
   testHostFile,
   unsignedBundle,
 } from "../host/test-support";
+import { TACHO_VERSION } from "../version";
 import {
   type ControlEnvelope,
   type DeliveredCommand,
@@ -1887,11 +1888,12 @@ describe("tachod", () => {
     expect(pollCount()).toBe(afterRefusal + 1);
 
     // The one line says which status, which tachod, what the server said,
-    // and what fixes it. Two refusals produced one line.
+    // and what fixes it. Two refusals produced one line. The tachod is the
+    // code running, not the version the host enrolled with (#5365).
     const refused = log.filter((l) => l.includes("command poll refused"));
     expect(refused).toHaveLength(1);
     expect(refused[0]).toContain("400");
-    expect(refused[0]).toContain(host.wrapper_version);
+    expect(refused[0]).toContain(TACHO_VERSION);
     expect(refused[0]).toContain("expected tacho.commands.v2");
     expect(refused[0]).toContain("upgraded");
     expect(log.filter((l) => l.includes("command poll failed"))).toHaveLength(

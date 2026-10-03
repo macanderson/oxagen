@@ -92,6 +92,12 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "forge.pull_request_revisions", policyClass: "standard" },
   { table: "forge.pull_request_runs", policyClass: "standard" },
   { table: "forge.pull_request_work_orders", policyClass: "standard" },
+  // The issues each pull request closes (ADR-292); org_id + workspace_id NOT
+  // NULL.
+  { table: "forge.pull_request_issues", policyClass: "standard" },
+  // The witness's queue of stored revisions (ADR-294); org_id + workspace_id
+  // NOT NULL.
+  { table: "forge.revision_certifications", policyClass: "standard" },
   { table: "agent.agent_executions", policyClass: "standard" },
   { table: "agent.agent_execution_steps", policyClass: "standard" },
   { table: "agent.agent_tool_calls", policyClass: "standard" },

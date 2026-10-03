@@ -76,6 +76,7 @@ import {
   embeddingsBackfill,
   embeddingsBackfillSchedule,
 } from "./functions/embeddings.backfill";
+import { similarityReconcile } from "./functions/similarity.reconcile";
 import { observabilityCaptureFailure } from "./functions/observability.capture-failure";
 import {
   evidenceRunExport,
@@ -88,6 +89,7 @@ import {
   runEnrichOnFailure,
   runEnrichmentSweep,
 } from "./functions/run.enrich";
+import { runEnrichScratchExpire } from "./functions/run.enrich-scratch-expire";
 import { runPullRequestBackfill } from "./functions/run.pull-request-backfill";
 import { forgePullRequestSync } from "./functions/forge.pull-request-sync";
 import {
@@ -95,6 +97,8 @@ import {
   workOrderResultsSweep,
   workOrderRunEnded,
 } from "./functions/work.order-results";
+import { forgeRevisionCertification } from "./functions/forge.revision-certification";
+import { forgePullRequestBackfill } from "./functions/forge.pull-request-backfill";
 import { agentInterjectionTimeout } from "./functions/agent.interjection-timeout";
 import { agentInterjectionTimeoutSweep } from "./functions/agent.interjection-timeout-sweep";
 import { conversationTitle } from "./functions/conversation.title";
@@ -173,6 +177,8 @@ export const functions: any[] = [
   stellaSessionArchive,
   embeddingsBackfill,
   embeddingsBackfillSchedule,
+  // Link entities ingestion wrote without a similarity match (#4148).
+  similarityReconcile,
   observabilityCaptureFailure,
   evidenceRunExport,
   evidenceRunExportOnFailure,
@@ -181,8 +187,13 @@ export const functions: any[] = [
   runEnrich,
   runEnrichOnFailure,
   runEnrichmentSweep,
+  runEnrichScratchExpire,
   runPullRequestBackfill,
   forgePullRequestSync,
+  // Queue each stored revision for the witness to certify (ADR-294).
+  forgeRevisionCertification,
+  // Move links recorded before the forge store existed into it (ADR-292).
+  forgePullRequestBackfill,
   workOrderRunEnded,
   workOrderPullRequestLinked,
   // Record what a lost run seal or pull request delivery left out (ADR-251).

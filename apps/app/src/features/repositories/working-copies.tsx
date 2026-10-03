@@ -109,7 +109,7 @@ export function WorkingCopies({
           title={t("filesTitle")}
         >
           <PanelBody>
-            <pre className="overflow-x-auto rounded-[10px] border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-[1.6] text-foreground">
+            <pre className="overflow-x-auto rounded-xl border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-relaxed text-foreground">
               {".oxagen/\n"}
               {`  ${WORKSPACE_TOML.replace(".oxagen/", "").padEnd(18)}`}
               <span className="text-code-comment">{t("filesToml")}</span>
@@ -127,7 +127,7 @@ export function WorkingCopies({
           title={t("syncTitle")}
         >
           <PanelBody>
-            <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-sm leading-relaxed max-sm:grid-cols-1">
+            <dl className="grid grid-cols-dl-clip gap-x-4 gap-y-2.5 text-sm leading-relaxed max-sm:grid-cols-1">
               {SYNC.map(({ key, command }) => (
                 <div key={key} className="contents" data-command={command}>
                   <dt className={`${mono} text-dim`}>{command}</dt>
@@ -206,7 +206,7 @@ function CopiesBody({
         <table
           aria-label={t("label")}
           data-testid="working-copies-table"
-          className="w-full min-w-[720px] border-collapse text-sm"
+          className="w-full min-w-180 border-collapse text-sm"
         >
           <thead>
             <tr className="border-b border-border">
@@ -244,7 +244,7 @@ function CopiesBody({
       {rows.length >= WORKING_COPY_LIMIT ? (
         <p
           data-testid="working-copies-truncated"
-          className="px-4 pb-3 pt-2 text-xs text-dim"
+          className="px-4 pb-3 pt-2 text-sm text-dim"
         >
           {t("truncated", { limit: WORKING_COPY_LIMIT })}
         </p>
@@ -284,7 +284,7 @@ function CopyRow({ row, readAt }: { row: WorkingCopy; readAt: Date | null }) {
           <span className={mono}>{row.branch}</span>
         )}
         {row.headCommit === null ? null : (
-          <span className={`${mono} block text-sm text-dim md:truncate`}>
+          <span className={`${mono} block text-xs text-dim md:truncate`}>
             {t("head", { commit: short(row.headCommit) })}
           </span>
         )}
@@ -342,7 +342,7 @@ function CopyRow({ row, readAt }: { row: WorkingCopy; readAt: Date | null }) {
             ? format.dateTime(seen, { dateStyle: "medium", timeStyle: "short" })
             : format.relativeTime(seen, readAt)}
         </time>
-        <span className="block text-sm text-dim">
+        <span className="block text-xs text-dim">
           {row.reportedBy === null
             ? t("reportedByKey")
             : row.reportedBy.name === null
@@ -416,7 +416,7 @@ export function ConnectDirectoryDialog({
       }
     >
       <div className="flex flex-col gap-3.5">
-        <p className="text-sm leading-relaxed text-foreground">
+        <p className="text-base leading-relaxed text-foreground">
           {t.rich("lead", { code })}
         </p>
         <section aria-labelledby="linkdir-command">
@@ -428,7 +428,7 @@ export function ConnectDirectoryDialog({
           </h3>
           <pre
             data-testid="linkdir-command"
-            className="overflow-x-auto rounded-[10px] border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-[1.6] text-foreground"
+            className="overflow-x-auto rounded-xl border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-relaxed text-foreground"
           >
             {`${commands[0]}  `}
             <span className="text-code-comment">{t("loginComment")}</span>
@@ -436,12 +436,12 @@ export function ConnectDirectoryDialog({
           </pre>
           <p
             data-testid="linkdir-hint"
-            className="mt-1.5 text-xs text-muted-foreground"
+            className="mt-1.5 text-sm text-muted-foreground"
           >
             {t.rich("hint", { code })}
           </p>
           {copied === "failed" ? (
-            <p role="alert" className="mt-1.5 text-xs text-error-ink">
+            <p role="alert" className="mt-1.5 text-sm text-error-ink">
               {t("copyFailed")}
             </p>
           ) : null}

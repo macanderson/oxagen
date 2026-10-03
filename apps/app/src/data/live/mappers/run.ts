@@ -291,6 +291,17 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
               cost: toCost(row.cost),
             })),
             standingContext: toStandingContext(rollup.standingContext),
+            // An answer from before the sources were read carries none, and
+            // each reads not recorded (#5295).
+            tokenSources:
+              rollup.tokenSources === undefined || rollup.tokenSources === null
+                ? null
+                : {
+                    toolDefinitionTokens:
+                      rollup.tokenSources.toolDefinitionTokens,
+                    contextFrameTokens: rollup.tokenSources.contextFrameTokens,
+                    steeringTokens: rollup.tokenSources.steeringTokens,
+                  },
             priceEntryIds: rollup.priceEntryIds,
             rolledUpAt: rollup.rolledUpAt,
             isEstimate: rollup.isEstimate,

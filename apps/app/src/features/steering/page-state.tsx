@@ -47,7 +47,7 @@ export function SteeringLoading() {
     >
       <div className={statStrip}>
         {[0, 1, 2, 3].map((tile) => (
-          <div key={tile} className={`${statTile} h-[88px]`}>
+          <div key={tile} className={`${statTile} h-22`}>
             <div className={`${bar} h-3 w-20`} />
             <div className={`${bar} mt-3 h-6 w-14`} />
           </div>
@@ -223,7 +223,7 @@ export function SteeringFailure({
             </>
           }
           after={
-            <dl className="mx-auto mt-5 grid max-w-[420px] grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-left text-sm">
+            <dl className="mx-auto mt-5 grid max-w-105 grid-cols-dl gap-x-4 gap-y-1.5 text-left text-sm">
               <dt className="text-muted-foreground">{t("denied.signedIn")}</dt>
               {/* The design sets the person's name in the sans face and the role and workspace, which are identifiers, in mono. */}
               <dd data-testid="steering-signed-in">

@@ -189,6 +189,29 @@ describe("resolveEntity — Pass B: no natural key match → new principal", () 
     expect(params["limit"]).toBe(BigInt(5));
   });
 
+  it("searches every candidate of the organisation and type, aliases included", async () => {
+    // The reconcile job narrows the same search to principals other than the
+    // node itself. Ingestion has no node yet, so its search stays unnarrowed.
+    mocks.scopedSession.mockReturnValue({
+      run: mocks.sessionRun,
+      close: mocks.sessionClose,
+    });
+    mocks.sessionRun
+      .mockResolvedValueOnce({ records: [] }) // Pass A miss
+      .mockResolvedValueOnce({ records: [] }); // Pass B no candidates
+
+    await resolveEntity(makeMutation(), "org-1");
+
+    const search = mocks.sessionRun.mock.calls[1];
+    const cypher = String(search?.[0]);
+    expect(cypher).toContain(
+      "WHERE n.orgId = $orgId AND n.entityType = $entityType\n",
+    );
+    expect(cypher).not.toContain("$excludeNodeId");
+    expect(cypher).not.toContain("ALIAS_OF");
+    expect(search?.[1]).not.toHaveProperty("excludeNodeId");
+  });
+
   it("passes correct telemetry to embedText", async () => {
     mocks.scopedSession.mockReturnValue({
       run: mocks.sessionRun,
@@ -557,6 +580,41 @@ describe("resolveEntity — Pass B when the embedder cannot answer", () => {
       expect(warn).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({ err: "socket hang up" }),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("writes the entity without a vector when the embedder answers 503 (#2974)", async () => {
+    // embedText throws EmbeddingUnavailableError once a 429 or a 5xx outlasts
+    // the SDK's retries. Pass A needs no vector, so the entity is still
+    // written, with no embedding, and marked for the reconcile job.
+    const unavailable = Object.assign(
+      new Error("Embeddings are unavailable: Voyage answered 503"),
+      { code: "embedding_unavailable", statusCode: 503 },
+    );
+    mocks.embedText.mockRejectedValue(unavailable);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const result = await resolveEntity(makeMutation(), "org-1");
+
+      expect(result.principalNodeId).toBe("new-node-id");
+      expect(result.action).toBe("created_principal");
+      expect(result.similarityDeferred).toBe(true);
+      expect(mocks.upsertEntityNode).toHaveBeenCalledTimes(1);
+      const written: unknown = mocks.upsertEntityNode.mock.calls[0]?.[0];
+      expect(written).toEqual(makeMutation());
+      expect(written).not.toHaveProperty("embedding");
+      const mark = mocks.sessionRun.mock.calls.find((c) =>
+        String(c[0]).includes("SET n.similarityDeferredAt = datetime()"),
+      );
+      expect(mark?.[1]).toEqual({ nodeId: "new-node-id", orgId: "org-1" });
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("embedding failed"),
+        expect.objectContaining({
+          err: "Embeddings are unavailable: Voyage answered 503",
+        }),
       );
     } finally {
       warn.mockRestore();

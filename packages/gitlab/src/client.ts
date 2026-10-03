@@ -622,7 +622,7 @@ export function createGitLabClient(options: GitLabClientOptions): GitLabClient {
     },
 
     async commitFiles(a) {
-      const data = await json<{ id: string }>(
+      const data = await json<{ id: string; parent_ids?: string[] | null }>(
         "POST",
         `${project(a.project)}/repository/commits`,
         {
@@ -633,7 +633,7 @@ export function createGitLabClient(options: GitLabClientOptions): GitLabClient {
           },
         },
       );
-      return { sha: data.id };
+      return { sha: data.id, parentIds: data.parent_ids ?? [] };
     },
 
     async compareDiff(a): Promise<GitLabCompareDiff> {

@@ -6,12 +6,17 @@
 // failures (404, denied, error), the busy skeleton, the read-only viewer, and
 // a viewer who may act and not accept are here too. The dialogs and the
 // writes they make are in work-item.dialogs.test.tsx, and the actions'
-// capability input in ../actions.test.ts.
-import { cleanup, render, screen, within } from "@testing-library/react";
+// capability input in ../actions.test.ts. The Changes panel draws the item's
+// change set from Oxagen's own pull request store, and each send opens its
+// own through the lane's action (ADR-292).
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ChangeSet } from "@/data/contracts/changes";
 import { WorkItemDetail, WorkTargetList } from "@/data/contracts/work";
 import { type Read, readError, readOk } from "@/data/read";
+import { changeSet, revisionDiff } from "@/test/change-views";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
@@ -29,6 +34,7 @@ import {
   mergedByAppItem,
   needsInfoItem,
   noAnswerItem,
+  otherPullItem,
   noRequiredChecksItem,
   possibleDuplicateItem,
   readyItem,
@@ -39,6 +45,8 @@ import {
   triageDraftItem,
   triageFailedItem,
   triagingItem,
+  twoPullsItem,
+  unrecordedPullItem,
   viewerOnlyItem,
   waitingItem,
   workItem,
@@ -60,7 +68,13 @@ vi.mock("next/navigation", () => ({
     throw new Error("NEXT_NOT_FOUND");
   },
 }));
+const { readChangeSet, readRevisionDiff } = vi.hoisted(() => ({
+  readChangeSet: vi.fn(),
+  readRevisionDiff: vi.fn(),
+}));
 vi.mock("../actions", () => ({
+  readChangeSet,
+  readRevisionDiff,
   reviseTriage: vi.fn(),
   retryTriage: vi.fn(),
   saveBrief: vi.fn(),
@@ -97,9 +111,17 @@ const ctx = unsafeMint(WsCtx, {
 
 async function renderRead(
   read: Read<WorkItemDetail>,
-  options: { targets?: Read<WorkTargetList>; dialog?: "send" | null } = {},
+  options: {
+    targets?: Read<WorkTargetList>;
+    dialog?: "send" | null;
+    changes?: Read<ChangeSet>;
+  } = {},
 ) {
-  const { source, calls, targetCalls } = workItemSource(read, options.targets);
+  const { source, calls, targetCalls, changeCalls } = workItemSource(
+    read,
+    options.targets,
+    options.changes,
+  );
   const element = await WorkItemPage({
     ctx,
     source,
@@ -107,7 +129,7 @@ async function renderRead(
     dialog: options.dialog ?? null,
   });
   const view = render(<IntlProvider>{element}</IntlProvider>);
-  return { calls, targetCalls, ...view };
+  return { calls, targetCalls, changeCalls, ...view };
 }
 
 const renderDetail = (detail: WorkItemDetail) => renderRead(readOk(detail));
@@ -376,6 +398,60 @@ describe("WorkItemPage › states", () => {
     expect(screen.getByTestId("work-brief-claim-c2")).toHaveTextContent("no claim");
   });
 
+  it("in review with two pull requests: lists each with its forge state and keeps the facts' head and gate", async () => {
+    await renderDetail(twoPullsItem());
+    const review = screen.getByTestId("work-panel-review");
+    expect(within(review).getByText("Pull requests")).toBeInTheDocument();
+    const rows = within(review).getAllByTestId("work-review-pull");
+    expect(rows.map((row) => row.getAttribute("data-pull-request"))).toEqual(["642", "641"]);
+    const [, older] = rows;
+    if (older === undefined) throw new Error("the second pull request row is missing");
+    expect(rows[0]).toHaveTextContent("acme/platform#642");
+    expect(rows[0]?.querySelector('[data-pull-state="draft"]')).toHaveTextContent("Draft");
+    expect(within(older).getByRole("link", { name: "acme/platform#641" })).toHaveAttribute(
+      "href",
+      "https://github.com/acme/platform/pull/641",
+    );
+    expect(rows[1]?.querySelector('[data-pull-state="merged"]')).toHaveTextContent("Merged");
+    expect(rows[1]).toHaveTextContent("Retry the export on 429");
+    // The head, the merge row, and Accept still read the send's facts.
+    expect(within(review).getByTestId("work-review-head")).toHaveTextContent("3f9a2c1");
+    expect(within(review).getByTestId("work-review-merge")).toHaveTextContent("Open");
+    expect(screen.getByTestId("work-action-accept")).toBeEnabled();
+    await expectNoAxe(document.body);
+  });
+
+  it("forge pull request with no fact: lists it and says Accept waits for the record", async () => {
+    await renderDetail(unrecordedPullItem());
+    const review = screen.getByTestId("work-panel-review");
+    expect(within(review).getAllByTestId("work-review-pull")).toHaveLength(1);
+    expect(review).toHaveTextContent("Accept waits until the send's record names one of these pull requests.");
+    expect(review).not.toHaveTextContent("The run opened no pull request.");
+    expect(within(review).queryByTestId("work-review-head")).toBeNull();
+    await expectNoAxe(document.body);
+  });
+
+  it("in review with another forge pull request: keeps the facts' one beside it", async () => {
+    await renderDetail(otherPullItem());
+    const review = screen.getByTestId("work-panel-review");
+    expect(within(review).getByText("Pull requests")).toBeInTheDocument();
+    expect(within(review).getByTestId("work-review-fact-pull")).toHaveTextContent("acme/platform#641");
+    const [other] = within(review).getAllByTestId("work-review-pull");
+    expect(other).toHaveTextContent("acme/platform#700");
+    expect(other?.querySelector('[data-pull-state="closed"]')).toHaveTextContent("Closed");
+  });
+
+  it("in review with no forge row: shows the facts' pull request as before (negative)", async () => {
+    await renderDetail(inReviewItem());
+    const review = screen.getByTestId("work-panel-review");
+    expect(within(review).queryByTestId("work-review-pulls")).toBeNull();
+    expect(within(review).getByText("Pull request")).toBeInTheDocument();
+    expect(within(review).getByRole("link", { name: "acme/platform#641" })).toHaveAttribute(
+      "href",
+      "https://github.com/acme/platform/pull/641",
+    );
+  });
+
   it("check failed: Accept is disabled with the failing check as its reason", async () => {
     await renderDetail(checkFailedItem());
     const accept = screen.getByTestId("work-action-accept");
@@ -497,6 +573,34 @@ describe("WorkItemPage › states", () => {
       "brief_approved",
     ]);
     expect(entries[2]).toHaveTextContent("Marcus Bell approved brief revision 1.");
+  });
+
+  it("history: names the pull request that reverted a done item, and the item stays done", async () => {
+    const done = doneItem();
+    const [first] = done.history;
+    if (first === undefined) throw new Error("The done item has no history entry.");
+    await renderDetail({
+      ...done,
+      history: [
+        first,
+        {
+          ...first,
+          kind: "reverted",
+          source: "provider",
+          at: "2026-10-02T09:00:00Z",
+          send: 1,
+          pullRequest: "acme/platform#650",
+          mergeCommit: "4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e",
+        },
+      ],
+    });
+    const entries = screen.getAllByTestId("work-history-entry");
+    expect(entries.map((entry) => entry.getAttribute("data-kind"))).toEqual(["collected", "reverted"]);
+    expect(entries[1]).toHaveTextContent(
+      "Pull request acme/platform#650 reverted send 1 as 4d5e6f7.",
+    );
+    expect(screen.getByTestId("work-acceptance")).toHaveTextContent("3f9a2c1");
+    expect(screen.getByTestId("work-action-reopen")).toHaveTextContent("Reopen the item");
   });
 });
 
@@ -638,5 +742,87 @@ describe("work-item.builders", () => {
       expect(() => WorkItemDetail.parse(build())).not.toThrow();
     }
     expect(() => WorkTargetList.parse(workTargets())).not.toThrow();
+  });
+});
+
+// ADR-292: the item's change set, and one per send, from the pull request store.
+describe("WorkItemPage › changes", () => {
+  it("reads the item's change set by its public id and draws its pull requests", async () => {
+    const { changeCalls } = await renderRead(readOk(runningItem()), {
+      changes: readOk(changeSet({ scope: "work_item" })),
+    });
+    expect(changeCalls).toEqual([[ctx, "work_item", "wi_12ab"]]);
+    const panel = within(screen.getByTestId("work-panel-changes"));
+    expect(panel.getByRole("heading", { level: 2, name: "Changes" })).toBeInTheDocument();
+    expect(
+      panel.getByRole("heading", { level: 3, name: "Pull requests" }),
+    ).toBeInTheDocument();
+    expect(panel.getAllByTestId("change-pull")).toHaveLength(2);
+    expect(panel.getAllByTestId("change-file")).toHaveLength(2);
+  });
+
+  it("opens each send's change set by its work order, read once when it opens", async () => {
+    const user = userEvent.setup();
+    readChangeSet.mockReset();
+    readChangeSet.mockResolvedValue({
+      ok: true,
+      value: changeSet({ scope: "work_order" }),
+    });
+    await renderRead(readOk(runningItem()));
+    const sends = within(screen.getByTestId("work-changes-sends"));
+    const toggle = sends.getByRole("button", { name: "Changes from send 1" });
+    expect(readChangeSet).not.toHaveBeenCalled();
+    await user.click(toggle);
+    expect(readChangeSet).toHaveBeenCalledExactlyOnceWith(
+      "acme",
+      "core-platform",
+      "work_order",
+      "wo_1a",
+    );
+    const set = within(await sends.findByTestId("change-set"));
+    expect(set.getAllByTestId("change-pull")).toHaveLength(2);
+  });
+
+  it("reads an opened file's diff through the lane's action, once per pull request", async () => {
+    const user = userEvent.setup();
+    readRevisionDiff.mockReset();
+    readRevisionDiff.mockImplementation(
+      (_org: string, _ws: string, revisionId: string, paths: string[]) =>
+        Promise.resolve({
+          ok: true,
+          value: revisionDiff(revisionId, paths[0] ?? "", "@@ -1,1 +1,1 @@\n-old\n+new"),
+        }),
+    );
+    await renderRead(readOk(runningItem()), {
+      changes: readOk(changeSet({ scope: "work_item" })),
+    });
+    const panel = within(screen.getByTestId("work-panel-changes"));
+    await user.click(panel.getByRole("button", { name: /src\/app\.ts/ }));
+    expect(readRevisionDiff.mock.calls).toEqual([
+      ["acme", "core-platform", "prv_482a", ["src/app.ts"]],
+      ["acme", "core-platform", "prv_490a", ["src/app.ts"]],
+    ]);
+    await waitFor(() => {
+      expect(panel.getAllByText("+new")).toHaveLength(2);
+    });
+  });
+
+  it("says the item has no pull request on record and lists no sends before the first send", async () => {
+    await renderDetail(readyItem());
+    const panel = within(screen.getByTestId("work-panel-changes"));
+    expect(panel.getByTestId("change-set-empty")).toHaveTextContent(
+      "No pull request is on record yet.",
+    );
+    expect(panel.queryByTestId("work-changes-sends")).toBeNull();
+  });
+
+  it("names a failed change set read in its panel and keeps the page (negative)", async () => {
+    await renderRead(readOk(runningItem()), {
+      changes: readError("work_records_unavailable", 503),
+    });
+    expect(screen.getByTestId("work-panel-changes")).toHaveTextContent(
+      "work_records_unavailable",
+    );
+    expect(screen.getByTestId("work-panel-delivery")).toBeInTheDocument();
   });
 });

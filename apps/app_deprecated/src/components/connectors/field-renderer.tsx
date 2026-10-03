@@ -236,7 +236,7 @@ export function FieldRenderer({
           disabled={disabled}
           className={
             isCode
-              ? "resize-y min-h-[140px] font-mono text-xs"
+              ? "resize-y min-h-[140px] font-mono text-sm"
               : "resize-y min-h-[80px]"
           }
           spellCheck={isCode ? false : undefined}
@@ -398,7 +398,7 @@ export function FieldRenderer({
             className="flex-1"
             aria-describedby={ariaDescribedBy}
           />
-          <span className="min-w-[3rem] text-right text-sm tabular-nums text-foreground">
+          <span className="min-w-[3rem] text-right text-base tabular-nums text-foreground">
             {typeof numVal === "number" ? numVal : "—"}
           </span>
         </div>

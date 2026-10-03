@@ -33,6 +33,7 @@ import {
 } from "../lib/config.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 import { apiPostOrThrow, printTable } from "../lib/api.js";
+import { addClaudeCodeMcp } from "./add-claude-code-mcp.js";
 import { moveOffTacho } from "./move-off-tacho.js";
 
 export interface TachoEnrollOptions {
@@ -193,6 +194,7 @@ export async function handleTachoStatus(
   const { status } = await import("@oxagen/recorder/cli");
   // Before the report, so it describes the machine as it now is.
   await moveOffTacho(writer);
+  await addClaudeCodeMcp(writer);
   const report = await status(opts, await tachoDeps(writer));
   // The same exit rule as `tacho status`: a host whose events are not
   // reaching Oxagen is not working, and every agent on the machine counts.

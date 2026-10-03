@@ -90,7 +90,7 @@ function RailCard({
         )}
       >
         <Icon className="size-4 shrink-0 text-muted-foreground" />
-        <span className="flex-1 truncate text-sm font-semibold">{title}</span>
+        <span className="flex-1 truncate text-base font-semibold">{title}</span>
         {live ? (
           <span
             className="size-1.5 shrink-0 rounded-full bg-info animate-pulse"
@@ -98,7 +98,7 @@ function RailCard({
           />
         ) : null}
         {badge != null ? (
-          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
             {badge}
           </span>
         ) : null}
@@ -220,7 +220,7 @@ function ProgressCard({
         <div className="flex flex-col gap-2">
           {isStreaming || turnUsage !== undefined ? (
             <div
-              className="flex items-center gap-1.5 text-xs"
+              className="flex items-center gap-1.5 text-sm"
               data-testid="progress-status-line"
             >
               <span
@@ -244,7 +244,7 @@ function ProgressCard({
               return (
                 <li
                   key={row.toolCallId}
-                  className="flex items-center gap-2 text-xs"
+                  className="flex items-center gap-2 text-sm"
                   data-testid="progress-row"
                 >
                   <span
@@ -268,7 +268,7 @@ function ProgressCard({
         </div>
       ) : (
         <p
-          className="py-2 text-center text-xs text-muted-foreground"
+          className="py-2 text-center text-sm text-muted-foreground"
           data-testid="progress-empty"
         >
           No steps yet — send a message to start a turn.

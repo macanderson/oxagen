@@ -234,7 +234,7 @@ function Body({
           />
           {/* A collector reads only linked repositories, so issue collection
               is turned on in the row once the link merges. */}
-          <p data-testid="repository-dialog-issues" className="text-sm text-muted-foreground">
+          <p data-testid="repository-dialog-issues" className="text-base text-muted-foreground">
             {t("issuesAfterLink")}
           </p>
         </>
@@ -303,7 +303,7 @@ function Body({
         <section aria-labelledby="repository-dialog-records">
           <h3
             id="repository-dialog-records"
-            className="mb-1.5 text-sm font-semibold text-muted-foreground"
+            className="mb-1.5 text-base font-semibold text-muted-foreground"
           >
             {t("recordsHere")}
           </h3>
@@ -435,7 +435,7 @@ function ProductionBranchForm({
     >
       <h3
         id={`${fieldId}-heading`}
-        className="text-sm font-semibold text-muted-foreground"
+        className="text-base font-semibold text-muted-foreground"
       >
         {t("heading")}
       </h3>
@@ -475,7 +475,7 @@ function ProductionBranchForm({
           id={fieldId}
           type="text"
           data-testid="repository-dialog-branch-input"
-          className={`mt-1 font-mono text-base sm:text-sm ${inputBase}`}
+          className={`mt-1 font-mono text-lg sm:text-base ${inputBase}`}
           placeholder={current}
           autoCapitalize="none"
           autoCorrect="off"
@@ -497,7 +497,7 @@ function ProductionBranchForm({
           <p
             role="status"
             data-testid="repository-dialog-branch-done"
-            className="mt-3 text-sm text-foreground"
+            className="mt-3 text-base text-foreground"
           >
             {done}
           </p>

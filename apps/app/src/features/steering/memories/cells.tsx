@@ -45,7 +45,7 @@ const STATE_TONE: Record<WorkspaceMemoryState, BadgeTone> = {
 
 /** A second line under a cell's value, cut with an ellipsis and shown whole on hover. */
 export const subLine =
-  "mt-0.5 block max-w-[28ch] truncate text-sm text-muted-foreground";
+  "mt-0.5 block max-w-cell truncate text-xs text-muted-foreground";
 
 /** The words for a memory's harness and type, from the tab's catalogue. */
 export function useMemoryWords() {
@@ -148,7 +148,7 @@ export function AgentValue({
   const known = Object.hasOwn(agents, agent) ? agents[agent] : undefined;
   if (known === undefined) {
     return (
-      <span className={`${mono} block max-w-[28ch] truncate`} data-truncate="">
+      <span className={`${mono} block max-w-cell truncate`} data-truncate="">
         {agent}
       </span>
     );
@@ -183,7 +183,7 @@ export function RepoValue({ repos }: { repos: readonly string[] | null }) {
     return <span className="text-muted-foreground">{t("none")}</span>;
   }
   return (
-    <span className={`${mono} block max-w-[24ch] truncate`} data-truncate="">
+    <span className={`${mono} block max-w-cell-narrow truncate`} data-truncate="">
       {repos.map((repo) => repo.replace(/^[^/]+\//, "")).join(" ")}
     </span>
   );

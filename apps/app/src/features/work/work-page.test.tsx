@@ -515,6 +515,45 @@ describe("Work › loaded", () => {
     ).toBeInTheDocument();
   });
 
+  it("draws every pull request the forge store holds for the send, each with its state", async () => {
+    const pull = {
+      id: "fpr_612",
+      provider: "github" as const,
+      repository: "a-intel/platform",
+      number: 612,
+      url: "https://github.com/a-intel/platform/pull/612",
+      title: "Renew the certificate",
+      state: "merged" as const,
+      head: HEAD,
+      stateSeenAt: "2026-09-30T14:00:00Z",
+    };
+    const item = workItem({
+      id: "wki_twopulls",
+      number: "WI-21",
+      tab: "review",
+      state: "review",
+      status: "in_review",
+      wait: { kind: "ready_for_review", head: HEAD },
+      send: sendSummary({
+        delivery: "run_ended",
+        pullRequest: PR,
+        pullRequests: [{ ...pull, id: "fpr_613", number: 613, state: "draft" }, pull],
+        checks: "passing",
+        gate: { open: true, block: null, detail: null },
+      }),
+    });
+    await renderWork({ list: workList([item]) }, "review");
+    const row = document.querySelector('tr[data-work-item="WI-21"]');
+    if (!(row instanceof HTMLElement)) throw new Error("no WI-21 row");
+    const pulls = [...row.querySelectorAll("[data-pull-request]")];
+    expect(pulls.map((entry) => entry.getAttribute("data-pull-request"))).toEqual(["613", "612"]);
+    expect(pulls[0]?.querySelector('[data-pull-state="draft"]')).toHaveTextContent("Draft");
+    expect(pulls[1]?.querySelector('[data-pull-state="merged"]')).toHaveTextContent("Merged");
+    // The head under them is the one the send's facts judge acceptance on.
+    expect(within(row).getByText("9e41b07")).toBeInTheDocument();
+    await expectNoAxe(document.body);
+  });
+
   it("draws Done newest first with its result, agent and finish", async () => {
     await renderWork({ list: workList(ALL) }, "done");
     expect(headers("Done")).toEqual([

@@ -498,3 +498,127 @@ describe("a model call the proxy did not carry", () => {
     expect(body(proxied)["system_context_digest"]).toMatch(/^sha256:/);
   });
 });
+
+/** Text an Oxagen hook answer handed the agent: a prompt's recall. */
+const RECALLED =
+  "Memories Oxagen recalled for this prompt, most relevant first:\n" +
+  "- Use pnpm, never npm.";
+/** Before the calls below, which the OTel and transcript records date at `at`. */
+const HANDED_AT = "2026-09-25T23:59:00.000Z";
+/** After them. */
+const LATE_AT = "2026-09-26T00:01:00.000Z";
+/** Between the handed text and the calls. */
+const RESTART_AT = "2026-09-25T23:59:30.000Z";
+
+/** The count the recall adds: its UTF-8 bytes over four, rounded up. */
+const RECALLED_TOKENS = Math.ceil(Buffer.byteLength(RECALLED, "utf8") / 4);
+
+function contextTokens(event: TachoEvent | undefined): unknown {
+  return event === undefined ? undefined : body(event)["context_frame_tokens"];
+}
+
+describe("the context Oxagen's hooks handed a session the proxy did not carry (#5339)", () => {
+  it("counts the handed text on the counted OTel and transcript rows", () => {
+    const chain = recorder();
+    chain.noteInjectedContext(RECALLED, HANDED_AT);
+    const rows = modelCalls([
+      ...chain.ingestOtlp(apiRequest("req_o")),
+      ...chain.ingestTranscriptLine(assistantRecord("req_t", 0)),
+    ]);
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(countsLlmCallUsage(row)).toBe(true);
+      expect(body(row)["context_frame_tokens"]).toBe(RECALLED_TOKENS);
+      expect(body(row)["context_frame_tokens_basis"]).toBe("estimated");
+      // The request is still out of sight.
+      expect(body(row)).not.toHaveProperty("tool_definition_tokens");
+      expect(body(row)).not.toHaveProperty("system_context_digest");
+    }
+  });
+
+  it("leaves the count absent, never zero, when no hook handed the agent text", () => {
+    const [row] = modelCalls(withManifest().ingestOtlp(apiRequest("req_o")));
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+    expectSteeringOnly(row);
+    expect(body(row)).not.toHaveProperty("context_frame_tokens");
+  });
+
+  it("counts nothing on a call made before the text was handed", () => {
+    const chain = recorder();
+    chain.noteInjectedContext(RECALLED, LATE_AT);
+    const [row] = modelCalls(chain.ingestOtlp(apiRequest("req_o")));
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+    expectNoSources(row);
+  });
+
+  it("counts nothing on a side call, a later sighting, or a subagent's row", () => {
+    const chain = recorder();
+    chain.noteInjectedContext(RECALLED, HANDED_AT);
+    chain.ingestTranscriptLine(assistantRecord("req_t", 0));
+    const rows = modelCalls([
+      ...chain.ingestOtlp(
+        apiRequest("req_side", { query_source: SIDE_SOURCE }),
+      ),
+      ...chain.ingestOtlp(apiRequest("req_t")),
+      ...chain.ingestTranscriptLine(assistantRecord("req_s", 0), "agent-a"),
+    ]);
+    expect(rows).toHaveLength(3);
+    for (const row of rows) expectNoSources(row);
+  });
+
+  it("empties the count at a compaction's start and keeps it over a resume's", () => {
+    const compacted = recorder();
+    compacted.noteInjectedContext(RECALLED, HANDED_AT);
+    compacted.ingestHook(
+      { session_id: ID, hook_event_name: "SessionStart", source: "compact" },
+      {},
+      RESTART_AT,
+    );
+    const [after] = modelCalls(compacted.ingestOtlp(apiRequest("req_c")));
+    expect(after).toBeDefined();
+    expect(contextTokens(after)).toBeUndefined();
+
+    const resumed = recorder();
+    resumed.noteInjectedContext(RECALLED, HANDED_AT);
+    resumed.ingestHook(
+      { session_id: ID, hook_event_name: "SessionStart", source: "resume" },
+      {},
+      RESTART_AT,
+    );
+    const [kept] = modelCalls(resumed.ingestOtlp(apiRequest("req_r")));
+    expect(contextTokens(kept)).toBe(RECALLED_TOKENS);
+  });
+
+  it("gives the OTel row and the proxy row of one call the same count", () => {
+    const chain = recorder();
+    chain.noteInjectedContext(RECALLED, HANDED_AT);
+    const [otel] = modelCalls(chain.ingestOtlp(apiRequest("req_p")));
+    const proxied = call(chain, { request_id: "req_p" });
+    expect(proxied.attrs[LLM_CALL_DUPLICATE_OF_ATTR]).toBe("otel_log");
+    expect(contextTokens(otel)).toBe(RECALLED_TOKENS);
+    expect(contextTokens(proxied)).toBe(RECALLED_TOKENS);
+  });
+
+  it("takes the note back with a rollback and carries it over a restart", () => {
+    const rolled = recorder();
+    const mark = rolled.markChain();
+    rolled.noteInjectedContext(RECALLED, HANDED_AT);
+    rolled.rollbackChain(mark);
+    const [none] = modelCalls(rolled.ingestOtlp(apiRequest("req_b")));
+    expect(none).toBeDefined();
+    expect(contextTokens(none)).toBeUndefined();
+
+    const before = recorder();
+    before.noteInjectedContext(RECALLED, HANDED_AT);
+    const after = new SessionRecorder({
+      context,
+      harnessSessionId: ID,
+      scope: SCOPE,
+      restore: before.state(),
+    });
+    const [row] = modelCalls(after.ingestOtlp(apiRequest("req_o")));
+    expect(contextTokens(row)).toBe(RECALLED_TOKENS);
+  });
+});

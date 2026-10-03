@@ -63,6 +63,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_memories](agent.memory.list.md) | [agent.memory.list.ts](../../packages/oxagen/src/contracts/agent.memory.list.ts) | api, mcp, agent |
 | [list_memory_citations](agent.memory_citation.list.md) | [agent.memory_citation.list.ts](../../packages/oxagen/src/contracts/agent.memory_citation.list.ts) | api, mcp, agent |
 | [list_memory_promotions](agent.memory_promotion.list.md) | [agent.memory_promotion.list.ts](../../packages/oxagen/src/contracts/agent.memory_promotion.list.ts) | api, mcp, agent |
+| [list_resolved_approvals](agent.approval.list_resolved.md) | [agent.approval.list_resolved.ts](../../packages/oxagen/src/contracts/agent.approval.list_resolved.ts) | api, mcp, agent, cli |
 | [move_agent](agent.move.md) | [agent.move.ts](../../packages/oxagen/src/contracts/agent.move.ts) | api, mcp, agent |
 | [parse_memory_import](agent.memory_import.parse.md) | [agent.memory_import.parse.ts](../../packages/oxagen/src/contracts/agent.memory_import.parse.ts) | none |
 | [promote_memory](agent.memory.promote.md) | [agent.memory.promote.ts](../../packages/oxagen/src/contracts/agent.memory.promote.ts) | api, mcp, agent |
@@ -212,6 +213,8 @@ after the registered name separately when their contract uses a dotted stem.
 | [dismiss_memories](steering.memories.dismiss.md) | [steering.memories.dismiss.ts](../../packages/oxagen/src/contracts/steering.memories.dismiss.ts) | api, mcp, cli |
 | [get_steering_pr](steering.pr.get.md) | [steering.pr.get.ts](../../packages/oxagen/src/contracts/steering.pr.get.ts) | api, mcp, agent |
 | [get_steering_pr_diff](steering.pr.diff.get.md) | [steering.pr.diff.get.ts](../../packages/oxagen/src/contracts/steering.pr.diff.get.ts) | api, mcp, agent |
+| [get_change_set](forge.changes.get.md) | [forge.changes.get.ts](../../packages/oxagen/src/contracts/forge.changes.get.ts) | api, mcp, agent |
+| [get_revision_diff](forge.revision.diff.get.md) | [forge.revision.diff.get.ts](../../packages/oxagen/src/contracts/forge.revision.diff.get.ts) | api, mcp, agent |
 | [get_record](steering.records.get.md) | [steering.records.get.ts](../../packages/oxagen/src/contracts/steering.records.get.ts) | api, mcp, agent |
 | [get_published_steering](context.steering.published.get.md) | [context.steering.published.get.ts](../../packages/oxagen/src/contracts/context.steering.published.get.ts) | api, mcp, cli |
 | [get_steering_index](context.steering.index.get.md) | [context.steering.index.get.ts](../../packages/oxagen/src/contracts/context.steering.index.get.ts) | api, cli |
@@ -471,6 +474,7 @@ after the registered name separately when their contract uses a dotted stem.
 
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
+| [adopt_steering_merges](steering_repo.adopt.md) | [steering_repo.adopt.ts](../../packages/oxagen/src/contracts/steering_repo.adopt.ts) | api, mcp, agent |
 | [attach_github_installation](repository.installation.attach.md) | [repository.installation.attach.ts](../../packages/oxagen/src/contracts/repository.installation.attach.ts) | api |
 | [attach_gitlab_project](repository.gitlab.attach.md) | [repository.gitlab.attach.ts](../../packages/oxagen/src/contracts/repository.gitlab.attach.ts) | api |
 | [get_main_repository](repository.main.get.md) | [repository.main.get.ts](../../packages/oxagen/src/contracts/repository.main.get.ts) | api, mcp, agent |

@@ -1,0 +1,464 @@
+{
+  "name": "get_change_set",
+  "domain": "run",
+  "description": "Get the pull requests a run, a work order, a work item, or an issue produced, each with its latest stored revision and files, and their change rolled up by repository. Read from Oxagen's own pull request store, never from GitHub or GitLab.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "scope": {
+        "type": "string",
+        "enum": [
+          "run",
+          "work_order",
+          "work_item",
+          "issue"
+        ]
+      },
+      "id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048
+      }
+    },
+    "required": [
+      "scope",
+      "id"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "scope": {
+        "type": "string",
+        "enum": [
+          "run",
+          "work_order",
+          "work_item",
+          "issue"
+        ]
+      },
+      "id": {
+        "type": "string"
+      },
+      "pullRequests": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "provider": {
+              "type": "string",
+              "enum": [
+                "github",
+                "gitlab"
+              ]
+            },
+            "repository": {
+              "type": "string"
+            },
+            "number": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "url": {
+              "type": "string"
+            },
+            "title": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "open",
+                "draft",
+                "merged",
+                "closed"
+              ]
+            },
+            "headSha": {
+              "type": "string"
+            },
+            "baseRef": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "headRef": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "mergedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "closedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "stateSeenAt": {
+              "type": "string"
+            },
+            "revision": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "headSha": {
+                      "type": "string"
+                    },
+                    "mergeBaseSha": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "diffStatus": {
+                      "type": "string",
+                      "enum": [
+                        "stored",
+                        "too_large",
+                        "unreadable",
+                        "unconfigured"
+                      ]
+                    },
+                    "complete": {
+                      "type": "boolean"
+                    },
+                    "limitations": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "filesChanged": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "additions": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "deletions": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "diffBytes": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "capturedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "headSha",
+                    "mergeBaseSha",
+                    "diffStatus",
+                    "complete",
+                    "limitations",
+                    "filesChanged",
+                    "additions",
+                    "deletions",
+                    "diffBytes",
+                    "capturedAt"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "previousPath": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "added",
+                      "modified",
+                      "removed",
+                      "renamed",
+                      "copied",
+                      "changed"
+                    ]
+                  },
+                  "additions": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "deletions": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "path",
+                  "status",
+                  "additions",
+                  "deletions"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 300
+            },
+            "moreFiles": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "provider",
+            "repository",
+            "number",
+            "url",
+            "title",
+            "state",
+            "headSha",
+            "baseRef",
+            "headRef",
+            "mergedAt",
+            "closedAt",
+            "stateSeenAt",
+            "revision",
+            "files",
+            "moreFiles"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 100
+      },
+      "morePullRequests": {
+        "type": "boolean"
+      },
+      "repositories": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "provider": {
+              "type": "string",
+              "enum": [
+                "github",
+                "gitlab"
+              ]
+            },
+            "repository": {
+              "type": "string"
+            },
+            "pullRequests": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "filesChanged": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "additions": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "deletions": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "pullRequestIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "additions": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "deletions": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "path",
+                  "pullRequestIds",
+                  "additions",
+                  "deletions"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 1000
+            },
+            "moreFiles": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "provider",
+            "repository",
+            "pullRequests",
+            "filesChanged",
+            "additions",
+            "deletions",
+            "files",
+            "moreFiles"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "scope",
+      "id",
+      "pullRequests",
+      "morePullRequests",
+      "repositories"
+    ],
+    "additionalProperties": false
+  }
+}

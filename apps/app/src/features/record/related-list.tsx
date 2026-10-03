@@ -90,7 +90,7 @@ function RelatedCard({ item }: { item: RelatedItem }) {
   return (
     <article
       data-kind={item.kind}
-      className={`grid grid-cols-[34px_minmax(0,1fr)] gap-3.5 border-b border-l-[3px] border-b-border px-4 py-3.5 max-sm:grid-cols-1 ${KIND_FACE[item.kind].rule}`}
+      className={`grid grid-cols-icon gap-3.5 border-b border-l-3 border-b-border px-4 py-3.5 max-sm:grid-cols-1 ${KIND_FACE[item.kind].rule}`}
     >
       <span className="max-sm:hidden">
         <KindTile kind={item.kind} size="sm" />
@@ -114,7 +114,7 @@ function RelatedCard({ item }: { item: RelatedItem }) {
           <SafeLink
             to={item.href}
             data-touch-target=""
-            className={`${buttonSecondary} ms-auto min-h-7 px-2.5 py-1 text-xs`}
+            className={`${buttonSecondary} ms-auto min-h-7 px-2.5 py-1 text-sm`}
           >
             {t("open")}
           </SafeLink>
@@ -133,7 +133,7 @@ function RelatedCard({ item }: { item: RelatedItem }) {
             {item.statement}
           </p>
         )}
-        <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-sm text-dim">
+        <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-dim">
           <b className="font-semibold text-muted-foreground">
             {term(`scopes.${item.scope}`)}
           </b>

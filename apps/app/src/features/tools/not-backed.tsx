@@ -26,7 +26,7 @@ export function NotBacked({
       data-testid={testId}
       className="flex flex-col gap-1 rounded-lg border border-dashed border-border px-3.5 py-3 text-sm"
     >
-      <span className="text-sm font-semibold uppercase tracking-[0.1em] text-dim">
+      <span className="text-xs font-semibold uppercase tracking-widest text-dim">
         {t("notBacked")}
       </span>
       <span className="max-w-prose text-muted-foreground">{children}</span>
@@ -41,7 +41,7 @@ export function NotBackedValue({ gap }: { gap: ToolsGap }) {
     <span
       data-state="not-backed"
       data-gap={gapRef(gap)}
-      className="text-xs text-muted-foreground"
+      className="text-sm text-muted-foreground"
     >
       {t("notCarried")}
     </span>

@@ -3319,6 +3319,13 @@
                       "minimum": 0,
                       "maximum": 4294967295
                     },
+                    "tool_result_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
                     "batch_size": {
                       "type": "integer",
                       "minimum": 0,
@@ -4037,6 +4044,13 @@
                       "minimum": 0,
                       "maximum": 4294967295
                     },
+                    "tool_result_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
                     "batch_size": {
                       "type": "integer",
                       "minimum": 0,
@@ -4650,6 +4664,13 @@
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 4294967295
+                    },
+                    "tool_result_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
                     },
                     "batch_size": {
                       "type": "integer",
@@ -5265,6 +5286,13 @@
                       "minimum": 0,
                       "maximum": 4294967295
                     },
+                    "tool_result_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
                     "batch_size": {
                       "type": "integer",
                       "minimum": 0,
@@ -5878,6 +5906,13 @@
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 4294967295
+                    },
+                    "tool_result_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
                     },
                     "batch_size": {
                       "type": "integer",
@@ -7267,6 +7302,13 @@
                       "minimum": 0,
                       "maximum": 4294967295
                     },
+                    "tool_result_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
                     "batch_size": {
                       "type": "integer",
                       "minimum": 0,
@@ -7985,6 +8027,13 @@
                       "minimum": 0,
                       "maximum": 4294967295
                     },
+                    "tool_result_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
                     "batch_size": {
                       "type": "integer",
                       "minimum": 0,
@@ -8702,6 +8751,13 @@
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 4294967295
+                    },
+                    "tool_result_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
                     },
                     "batch_size": {
                       "type": "integer",
@@ -9976,6 +10032,13 @@
                       "minimum": 0,
                       "maximum": 4294967295
                     },
+                    "tool_result_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
                     "batch_size": {
                       "type": "integer",
                       "minimum": 0,
@@ -10694,6 +10757,13 @@
                       "minimum": 0,
                       "maximum": 4294967295
                     },
+                    "tool_result_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
                     "batch_size": {
                       "type": "integer",
                       "minimum": 0,
@@ -11411,6 +11481,13 @@
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 4294967295
+                    },
+                    "tool_result_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
                     },
                     "batch_size": {
                       "type": "integer",

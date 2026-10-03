@@ -93,10 +93,10 @@ export function ChatHeaderDesktop({
         size="sm"
       />
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm font-medium text-foreground">
+        <span className="truncate text-base font-medium text-foreground">
           {agentName}
         </span>
-        <span className="truncate text-xs text-muted-foreground">
+        <span className="truncate text-sm text-muted-foreground">
           {subtitle}
         </span>
       </span>

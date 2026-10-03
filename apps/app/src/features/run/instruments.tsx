@@ -14,7 +14,8 @@
 // run's ratio and the 30-day one. A baseline the agent's history is too thin
 // for reads not recorded, never a guessed figure. Productive ratio's foot
 // names why the steps that did not advance the task made no progress, from
-// the causes the rollup recorded.
+// the causes the rollup recorded. Tool calls carries the tokens the tools'
+// results added to the prompt when the rollup summed any (#5295).
 import { useLocale, useTranslations } from "next-intl";
 import { Fragment, type ReactNode } from "react";
 import {
@@ -33,6 +34,7 @@ import {
   formatRatio,
   ratioWidth,
 } from "@/ui/money-format";
+import { ProviderMark } from "@/ui/provider-mark";
 import {
   cacheRebuildShare,
   type ClassPrices,
@@ -61,32 +63,32 @@ const instGrid = "grid grid-cols-1 gap-3.5 md:grid-cols-3";
  * align-content:start }`
  */
 const inst =
-  "grid min-w-0 content-start gap-2 rounded-xl border border-border bg-card px-[15px] pb-3 pt-[13px] text-card-foreground";
+  "grid min-w-0 content-start gap-2 rounded-xl border border-border bg-card px-3.75 pb-3 pt-3.25 text-card-foreground";
 /** `.inst .ih .k { font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); font-weight:600 }` */
 const instKey =
-  "m-0 text-sm font-semibold uppercase tracking-[0.1em] text-dim";
+  "m-0 text-xs font-semibold uppercase tracking-widest text-dim";
 /** `.inst .ih .basis { margin-left:auto; font-family:var(--mono); font-size:10px; color:var(--dim) }` */
-const instBasis = "ml-auto font-mono text-sm text-dim";
+const instBasis = "ml-auto font-mono text-xs text-dim";
 /** `.inst .iv { font-size:26px; font-weight:700; letter-spacing:-.02em; line-height:1.1 }` */
 const instValue =
-  "text-2xl font-bold leading-[1.1] tracking-[-0.02em] text-foreground tabular-nums";
+  "text-2xl font-bold leading-none tracking-display text-foreground tabular-nums";
 /** `.inst .iv small { font-size:12px; font-weight:500; color:var(--muted); letter-spacing:0; margin-left:6px }` */
 const instUnit =
-  "ml-1.5 text-xs font-medium tracking-normal text-muted-foreground";
+  "ml-1.5 text-sm font-medium tracking-normal text-muted-foreground";
 /** `.inst .iv .sep { color:var(--dim); font-weight:400; margin:0 5px }` */
-const instSep = "mx-[5px] font-normal text-dim";
+const instSep = "mx-1.25 font-normal text-dim";
 /** `.inst .is { font-size:11.5px; color:var(--muted); line-height:1.45 }` and `.is b { color:var(--fg); font-weight:600 }` */
 const instLine =
-  "text-sm leading-[1.45] text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground";
+  "text-xs leading-normal text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground";
 /** `.cols { display:flex; align-items:flex-end; gap:2px; height:46px; padding-top:14px; position:relative }` */
-const cols = "relative flex h-[46px] items-end gap-0.5 pt-3.5";
+const cols = "relative flex h-11.5 items-end gap-0.5 pt-3.5";
 /** `.cols .c { flex:1; max-width:24px; height:100%; flex-direction:column; justify-content:flex-end; gap:2px }` */
 const col = "relative flex h-full max-w-6 flex-1 flex-col justify-end gap-0.5";
 /** `.cols .c i { border-radius:4px 4px 0 0; min-height:2px }`; a stacked second `i` is square. */
-const colFill = "block min-h-0.5 w-full first:rounded-t";
+const colFill = "block min-h-0.5 w-full first:rounded-t-sm";
 /** `.cols .c .lab { bottom:calc(100% + 3px); font-family:var(--mono); font-size:10px; color:var(--muted) }` */
 const colLabel =
-  "absolute bottom-[calc(100%+3px)] left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-sm tabular-nums text-muted-foreground";
+  "absolute bottom-full mb-0.75 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-xs tabular-nums text-muted-foreground";
 /** `.cols .c.cur::after`: the 4px dot under the column a live run is still adding to. */
 const colCurrent =
   "after:absolute after:-bottom-1.5 after:left-1/2 after:size-1 after:-translate-x-1/2 after:rounded-full after:bg-foreground";
@@ -94,30 +96,30 @@ const colCurrent =
 const colBase = "absolute inset-x-0 bottom-0 h-px bg-border";
 /** `.ax { justify-content:space-between; font-family:var(--mono); font-size:10px; color:var(--dim); margin-top:3px }` */
 const axis =
-  "mt-[3px] flex justify-between font-mono text-sm text-dim tabular-nums";
+  "mt-0.75 flex justify-between font-mono text-xs text-dim tabular-nums";
 /** `.stk { display:flex; gap:2px; height:8px; border-radius:4px; margin-top:4px }`, its first and last `i` rounded. */
-const stack = "relative mt-1 flex h-2 gap-0.5 rounded";
-const stackPart = "block h-full min-w-0.5 first:rounded-l last:rounded-r";
+const stack = "relative mt-1 flex h-2 gap-0.5 rounded-sm";
+const stackPart = "block h-full min-w-0.5 first:rounded-l-sm last:rounded-r-sm";
 /** `.leg { gap:10px; font-size:10.5px; color:var(--muted) }`, `.leg i { 9px; border-radius:2px }`, `.leg b { color:var(--fg) }` */
 const legend =
-  "flex flex-wrap gap-x-2.5 gap-y-1 text-sm text-muted-foreground tabular-nums";
-const legendSwatch = "size-[9px] flex-none rounded-[2px]";
+  "flex flex-wrap gap-x-2.5 gap-y-1 text-xs text-muted-foreground tabular-nums";
+const legendSwatch = "size-2.25 flex-none rounded-xs";
 /** `.fams { display:grid; gap:5px }` */
-const families = "grid gap-[5px]";
+const families = "grid gap-1.25";
 /** `.frow { grid-template-columns:20px 1fr 34% auto; gap:8px; padding:2px 0; color:var(--body) }` */
 const familyRow =
-  "grid grid-cols-[20px_minmax(0,1fr)_34%_auto] items-center gap-2 py-0.5 text-foreground";
+  "grid grid-cols-meter items-center gap-2 py-0.5 text-foreground";
 /** `.frow .ti { 20px; border-radius:5px; color:var(--tc,var(--muted)); background:<that at 14%> }` */
 const familyIcon =
-  "grid size-5 place-items-center rounded-[5px] bg-muted-foreground/15 text-muted-foreground";
+  "grid size-5 place-items-center rounded-sm bg-muted-foreground/15 text-muted-foreground";
 /** `.frow .fl { font-size:11.5px; text-overflow:ellipsis }` */
-const familyLabel = "min-w-0 truncate text-sm";
+const familyLabel = "min-w-0 truncate text-xs";
 /** `.frow .fn { font-family:var(--mono); font-size:11px; color:var(--fg); min-width:18px; text-align:right }` */
 const familyCount =
-  "min-w-[18px] text-right font-mono text-sm tabular-nums text-foreground";
+  "min-w-4.5 text-right font-mono text-xs tabular-nums text-foreground";
 /** `.fb { height:7px; border-radius:4px; background:var(--hl) }` and `.fb i { background:var(--fk-model) }` */
-export const fillBar = "block h-[7px] min-w-0 overflow-hidden rounded bg-hl";
-export const fillBarFill = "block h-full rounded bg-fk-model";
+export const fillBar = "block h-1.75 min-w-0 overflow-hidden rounded-sm bg-hl";
+export const fillBarFill = "block h-full rounded-sm bg-fk-model";
 
 /** `.stk i.neu`, `.leg i.neu { background:var(--rule) }`: the part that is not the figure. */
 const NEUTRAL = "bg-rule";
@@ -130,7 +132,7 @@ const MIN_COLUMN = 0.04;
 
 /** `.inst .iv small .delta.down { font-size:11px; font-weight:600; color:var(--st-denied) }`: calls that failed. */
 const failedUnit =
-  "ml-1.5 text-sm font-semibold tracking-normal text-warning tabular-nums";
+  "ml-1.5 text-xs font-semibold tracking-normal text-warning tabular-nums";
 
 /** The agent's 30 days before the run, as `get_run_cost` answers them; null when too thin. */
 type Baseline = NonNullable<RunCost["baseline"]>;
@@ -231,7 +233,7 @@ function Stacked({ parts, label }: { parts: readonly Part[]; label: string }) {
       </div>
       <div className={legend}>
         {drawn.map((part) => (
-          <span key={part.key} className="inline-flex items-center gap-[5px]">
+          <span key={part.key} className="inline-flex items-center gap-1.25">
             <i aria-hidden="true" className={`${legendSwatch} ${part.hue}`} />
             {part.label}
             <b className="font-semibold text-foreground">{part.shown}</b>
@@ -270,14 +272,21 @@ function ProvisionalModels({ provisional }: { provisional: ProvisionalSpend }) {
   const locale = useLocale();
   const shown = provisional.byModel.slice(0, PROVISIONAL_MODELS);
   const more = provisional.byModel.length - shown.length;
-  const part = ({ model, cost, calls }: ProvisionalModel) =>
+  // Each model's name carries its maker's mark (#5297).
+  const named = (model: string, provider: string | null) => (
+    <b className="inline-flex items-center gap-1 align-bottom">
+      <ProviderMark provider={provider} model={model} />
+      {model}
+    </b>
+  );
+  const part = ({ model, provider, cost, calls }: ProvisionalModel) =>
     cost === null
       ? t.rich("provisionalModelUnpriced", {
-          model: () => <b>{model}</b>,
+          model: () => named(model, provider),
           calls,
         })
       : t.rich("provisionalModel", {
-          model: () => <b>{model}</b>,
+          model: () => named(model, provider),
           cost: () => (
             <b>{formatMoney(cost, { locale, precision: "cents" })}</b>
           ),
@@ -762,7 +771,7 @@ function ShapeTile({
             </div>
             <TurnAxis turns={ledger.rows.length} live={live} />
             <div className={`${legend} mt-2`}>
-              <span className="inline-flex items-center gap-[5px]">
+              <span className="inline-flex items-center gap-1.25">
                 <i
                   aria-hidden="true"
                   className={`${legendSwatch} bg-fk-model`}
@@ -772,7 +781,7 @@ function ShapeTile({
                   {count(ledger.modelSteps)}
                 </b>
               </span>
-              <span className="inline-flex items-center gap-[5px]">
+              <span className="inline-flex items-center gap-1.25">
                 <i
                   aria-hidden="true"
                   className={`${legendSwatch} bg-fk-tool`}
@@ -849,7 +858,14 @@ function FamilyRows({ families: rows }: { families: readonly Family[] }) {
   );
 }
 
-function CallsTile({ metrics }: { metrics: RunMetrics }) {
+function CallsTile({
+  metrics,
+  resultTokens,
+}: {
+  metrics: RunMetrics;
+  /** The tools' result tokens the rollup summed (#3892); null when no call recorded them. */
+  resultTokens: number | null;
+}) {
   const t = useTranslations("run.cost.inst");
   const locale = useLocale();
   const count = (value: number) => formatCount(value, locale);
@@ -880,6 +896,17 @@ function CallsTile({ metrics }: { metrics: RunMetrics }) {
             </small>
           )}
         </>
+      }
+      // What the tools' results added to the prompt (#5295). A run whose
+      // spans recorded no result tokens draws no line rather than a zero.
+      line={
+        resultTokens === null ? undefined : (
+          <span data-testid="inst-calls-results">
+            {t.rich("resultTokens", {
+              count: () => <b>{count(resultTokens)}</b>,
+            })}
+          </span>
+        )
       }
       chart={fams.length === 0 ? undefined : <FamilyRows families={fams} />}
       foot={
@@ -1052,6 +1079,7 @@ export function Instruments({
   retries,
   steps,
   baseline,
+  resultTokens = null,
 }: {
   run: RunRow;
   metrics: RunMetrics;
@@ -1064,6 +1092,8 @@ export function Instruments({
   steps: GradedSteps | null;
   /** The agent's 30 days before the run; null when its history is too thin. */
   baseline: Baseline | null;
+  /** The tools' result tokens summed (#5295); null when no call recorded them. */
+  resultTokens?: number | null;
 }) {
   const t = useTranslations("run.cost.inst");
   // Live is the run's status, as everywhere else on the page. A halted run
@@ -1086,7 +1116,7 @@ export function Instruments({
       <WallTile metrics={metrics} />
       <TokensTile metrics={metrics} prices={prices} />
       <ShapeTile run={run} metrics={metrics} ledger={ledger} live={live} />
-      <CallsTile metrics={metrics} />
+      <CallsTile metrics={metrics} resultTokens={resultTokens} />
       <RatioTile
         metrics={metrics}
         retries={retries}

@@ -307,7 +307,7 @@ export function NodeChip({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-card py-0.5 pl-2 pr-2.5 font-mono text-[11px] text-foreground",
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-card py-0.5 pl-2 pr-2.5 font-mono text-xs text-foreground",
         className,
       )}
     >
@@ -363,7 +363,7 @@ export function ConfidenceBar({
       </span>
       {showValue && (
         <span
-          className="font-sans text-[11px] font-semibold tabular-nums"
+          className="font-sans text-xs font-semibold tabular-nums"
           style={{ color: text }}
         >
           {Math.round(s * 100)}%

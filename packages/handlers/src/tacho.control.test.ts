@@ -28,6 +28,7 @@ vi.mock("./logger", () => ({
 }));
 
 import { verifyBundle } from "./lib/tacho-bundle-signing";
+import { CedarPoliciesUnavailableError } from "./lib/tacho-host-cedar";
 import {
   CEDAR_RUNTIME,
   cedarPort,
@@ -559,9 +560,9 @@ describe("fetch_commands", () => {
   it("records the bundle fields the daemon says it can parse", async () => {
     // The gate on a new bundle field reads this column, and it has to track
     // the code the host is *running*: `wrapper_version` and `daemon_version`
-    // both come from `host.json`, which `enroll` writes once and no upgrade
-    // rewrites, so a host that upgrades in place would otherwise never be
-    // recognised as able to parse the field.
+    // both come from `host.json`, and a daemon older than #5365 reports the
+    // version it enrolled with, so a host that upgrades in place would
+    // otherwise never be recognised as able to parse the field.
     const db: Fake = {
       hosts: [host({ bundleFeatures: [] })],
       sessions: [],
@@ -861,6 +862,48 @@ describe("control envelope etag", () => {
     const moved = (await poll(port)).control.bundle_etag;
     expect(moved).not.toBe(served.etag);
     expect((await fetchBundle()).etag).toBe(moved);
+  });
+
+  it("still answers a poll when the Cedar policies cannot be read, and fails the bundle fetch that follows", async () => {
+    const db: Fake = {
+      hosts: [
+        host({
+          bundleFeatures: ["cedar"],
+          runtimeId: "22222222-2222-4222-8222-222222222222",
+        }),
+      ],
+      sessions: [],
+      commands: [],
+      updates: [],
+      inserts: [],
+      runtimeSlug: CEDAR_RUNTIME,
+    };
+    wire(db);
+    // A fresh port, so its reader holds no earlier set to serve.
+    const down = cedarPort();
+    down.published = async () => {
+      throw new Error("the version store is down");
+    };
+    const poll = (published: TachoPublished) =>
+      createTachoCommandFetchHandler({ published })(
+        { ...FETCH, daemon: { bundle_features: ["cedar"] } },
+        MACHINE,
+      );
+
+    // The acknowledgements have landed, so the poll answers. Its etag leaves
+    // Cedar out, as the etag for a workspace with nothing published does.
+    const control = (await poll(down)).control;
+    expect(control.bundle_etag).toBe(
+      (await poll(NOTHING_PUBLISHED)).control.bundle_etag,
+    );
+    // A host holding Cedar sees a new etag and fetches the bundle. That
+    // request fails, so the host keeps the bundle it holds.
+    await expect(
+      createTachoBundleGetHandler({ published: down })(
+        { host_enrollment_id: HOST_PUBLIC },
+        MACHINE,
+      ),
+    ).rejects.toThrow(CedarPoliciesUnavailableError);
   });
 });
 

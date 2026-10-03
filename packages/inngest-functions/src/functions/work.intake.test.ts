@@ -237,6 +237,26 @@ describe("work/intake-check", () => {
     expect(runner.finishReconcile).toHaveBeenCalledTimes(1);
   });
 
+  it("records a failed read when the workspace links none of the collector's repositories", async () => {
+    // A scope with every repository dropped is skipped as scope_invalid. That
+    // skip used to record nothing, so the collector's last read stopped moving
+    // with no word why. It now finishes as a failed read that names the cause.
+    runner.reconcilePage.mockResolvedValueOnce({ kind: "skipped", reason: "scope_invalid" });
+    runner.finishReconcile.mockResolvedValueOnce({ health: "failing" });
+    const out = await job("work/intake-check").handler({ event: event(), step });
+
+    expect(stepNames).toEqual(["page-0", "finish"]);
+    expect(runner.finishReconcile).toHaveBeenCalledWith({ orgId: "org-1", workspaceId: "ws-1" }, "col-1", {
+      ok: false,
+      pages: 0,
+      handled: 0,
+      missed: 0,
+      error: intake.NO_LINKED_REPOSITORIES_ERROR,
+    });
+    expect(out).toEqual({ check: "reconcile", ok: false, pages: 0, handled: 0, missed: 0, error: intake.NO_LINKED_REPOSITORIES_ERROR, health: "failing" });
+    expect(sendEvent).not.toHaveBeenCalled();
+  });
+
   it("runs the nightly count when the event asks for it", async () => {
     runner.count.mockResolvedValueOnce({ outcome: "count_matched" }).mockResolvedValueOnce(null);
     expect(await job("work/intake-check").handler({ event: event({ check: "count" }), step })).toEqual({

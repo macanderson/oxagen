@@ -46,6 +46,7 @@ import {
   desc,
   eq,
   gt,
+  inArray,
   isNotNull,
   isNull,
   lte,
@@ -398,6 +399,76 @@ export async function readAuthority(
   mandate: MandateRecord,
   at: Date = new Date(),
 ): Promise<MandateAuthority[]> {
+  const read = await readAuthorities(tx, [mandate], at);
+  return read.get(mandate.id) ?? [];
+}
+
+/**
+ * Remaining authority for a page of mandates, keyed by mandate row id, in one
+ * round trip whatever the page holds (#3152).
+ *
+ * Every figure is counted at the one instant `at`, so two rows of one answer
+ * can never sit in two accounting periods. A list that read the clock once per
+ * row did exactly that across a UTC period boundary. At one instant there are
+ * only three period keys, one each for daily, weekly and monthly, so the query
+ * narrows to them and every (mandate, measure, key) the limits name is picked
+ * from the grouped rows. The sums are `periodSums`' own netting. A measure
+ * whose rows sit under another key, such as a period changed since, reads as
+ * nothing drawn in this window, the same answer `periodSums` gives.
+ */
+export async function readAuthorities(
+  tx: Tx,
+  mandates: readonly MandateRecord[],
+  at: Date,
+): Promise<Map<string, MandateAuthority[]>> {
+  const out = new Map<string, MandateAuthority[]>();
+  const limited = mandates.filter((m) => Object.keys(m.limits).length > 0);
+  const sums = new Map<string, { reserved: bigint; settled: bigint }>();
+  if (limited.length > 0) {
+    const keys = [
+      periodKey("daily", at),
+      periodKey("weekly", at),
+      periodKey("monthly", at),
+    ];
+    const rows = await tx
+      .select({
+        mandateId: l.mandateId,
+        measure: l.measure,
+        periodKey: l.periodKey,
+        reserved: sql<string>`coalesce(sum(case when ${l.kind} = 'reserve' then ${l.value} else -${l.value} end), 0)::text`,
+        settled: sql<string>`coalesce(sum(case when ${l.kind} = 'settle' then ${l.value} else 0 end), 0)::text`,
+      })
+      .from(l)
+      .where(
+        and(
+          inArray(l.mandateId, limited.map((m) => m.id)),
+          inArray(l.periodKey, keys),
+        ),
+      )
+      .groupBy(l.mandateId, l.measure, l.periodKey);
+    for (const row of rows) {
+      sums.set(sumKey(row.mandateId, row.measure, row.periodKey), {
+        reserved: BigInt(row.reserved),
+        settled: BigInt(row.settled),
+      });
+    }
+  }
+  for (const mandate of mandates) {
+    out.set(mandate.id, authorityOf(mandate, at, sums));
+  }
+  return out;
+}
+
+/** The lookup key of one grouped ledger sum. */
+function sumKey(mandateId: string, measure: string, key: string): string {
+  return JSON.stringify([mandateId, measure, key]);
+}
+
+function authorityOf(
+  mandate: MandateRecord,
+  at: Date,
+  sumsByKey: ReadonlyMap<string, { reserved: bigint; settled: bigint }>,
+): MandateAuthority[] {
   const out: MandateAuthority[] = [];
   // jsonb stores keys in its own order; the report is by measure name.
   const limits = Object.entries(mandate.limits).sort(([a], [b]) =>
@@ -405,7 +476,10 @@ export async function readAuthority(
   );
   for (const [measure, limit] of limits) {
     const key = periodKey(limit.period, at);
-    const sums = await periodSums(tx, mandate.id, measure, key);
+    const found = sumsByKey.get(sumKey(mandate.id, measure, key));
+    const reserved = found?.reserved ?? 0n;
+    const settled = found?.settled ?? 0n;
+    const sums = { reserved, settled, drawn: reserved + settled };
     out.push({
       measure,
       currencyOrUnit: limit.currencyOrUnit,

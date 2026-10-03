@@ -141,6 +141,8 @@ import { skillPropose } from "@oxagen/oxagen/contracts/skill.propose";
 import { steeringPrGet } from "@oxagen/oxagen/contracts/steering.pr.get";
 import { steeringPrRefresh } from "@oxagen/oxagen/contracts/steering.pr.refresh";
 import { steeringPrDiffGet } from "@oxagen/oxagen/contracts/steering.pr.diff.get";
+import { changeSetGet } from "@oxagen/oxagen/contracts/forge.changes.get";
+import { revisionDiffGet } from "@oxagen/oxagen/contracts/forge.revision.diff.get";
 import { steeringPrMerge } from "@oxagen/oxagen/contracts/steering.pr.merge";
 import { steeringPrMergeWithoutReview } from "@oxagen/oxagen/contracts/steering.pr.merge_without_review";
 import { steeringPrRestoreManagedBlock } from "@oxagen/oxagen/contracts/steering.pr.restore_managed_block";
@@ -314,6 +316,8 @@ import { skillProposeRoute } from "./skill.propose";
 import { steeringPrGetRoute } from "./steering.pr.get";
 import { steeringPrRefreshRoute } from "./steering.pr.refresh";
 import { steeringPrDiffGetRoute } from "./steering.pr.diff.get";
+import { changeSetGetRoute } from "./forge.changes.get";
+import { revisionDiffGetRoute } from "./forge.revision.diff.get";
 import { steeringPrMergeRoute } from "./steering.pr.merge";
 import { steeringPrMergeWithoutReviewRoute } from "./steering.pr.merge_without_review";
 import { steeringPrRestoreManagedBlockRoute } from "./steering.pr.restore_managed_block";
@@ -794,6 +798,24 @@ const ROUTES: ThinRoute[] = [
     capability: steeringPrDiffGet.name,
     body: { proposalId: "prp_1" },
     invalidBody: { proposalId: "nope" },
+    status: 200,
+  },
+  {
+    file: "forge.changes.get",
+    route: changeSetGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: changeSetGet.name,
+    body: { scope: "run", id: "tse_4q8r1t6v3x5z0b2d7h2k9m" },
+    invalidBody: { scope: "branch", id: "x" },
+    status: 200,
+  },
+  {
+    file: "forge.revision.diff.get",
+    route: revisionDiffGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: revisionDiffGet.name,
+    body: { revisionId: "prv_1" },
+    invalidBody: { revisionId: "nope" },
     status: 200,
   },
   {
@@ -2215,7 +2237,7 @@ const ROUTES: ThinRoute[] = [
     method: "POST",
     capability: spendStatementExport.name,
     body: { month: "2026-09" },
-    expectedInput: { month: "2026-09", format: "csv" },
+    expectedInput: { month: "2026-09", format: "csv", rows: "groups" },
     invalidBody: { month: "2026-13" },
     jsonGuard: true,
     status: 200,

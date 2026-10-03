@@ -102,13 +102,13 @@ export default function GraphNodeListCard(
     >
       <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2.5">
         <Network className="size-4 shrink-0 text-primary" aria-hidden="true" />
-        <span className="text-sm font-semibold">
+        <span className="text-base font-semibold">
           {total} node{total === 1 ? "" : "s"}
         </span>
       </div>
 
       {shown.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-muted-foreground">
+        <p className="px-4 py-3 text-base text-muted-foreground">
           No matching nodes.
         </p>
       ) : (
@@ -124,7 +124,7 @@ export default function GraphNodeListCard(
               <div className="flex items-center gap-3 px-4 py-2.5">
                 <div className="min-w-0 flex-1">
                   <p
-                    className="truncate text-sm font-medium"
+                    className="truncate text-base font-medium"
                     title={row.displayName}
                   >
                     {row.displayName}
@@ -133,13 +133,13 @@ export default function GraphNodeListCard(
                 {row.labels.slice(0, 2).map((l) => (
                   <span
                     key={l}
-                    className="shrink-0 text-xs text-muted-foreground"
+                    className="shrink-0 text-sm text-muted-foreground"
                   >
                     {l}
                   </span>
                 ))}
                 {row.score !== undefined ? (
-                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                  <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
                     {row.score.toFixed(2)}
                   </span>
                 ) : null}
@@ -166,7 +166,7 @@ export default function GraphNodeListCard(
                   inner
                 )}
                 {row.description ? (
-                  <p className="px-4 pb-2 text-xs text-muted-foreground">
+                  <p className="px-4 pb-2 text-sm text-muted-foreground">
                     <TruncatedText text={row.description} lines={1} />
                   </p>
                 ) : null}
@@ -177,7 +177,7 @@ export default function GraphNodeListCard(
       )}
 
       {rows.length > MAX_ROWS ? (
-        <p className="border-t border-border/60 px-4 py-2 text-xs text-muted-foreground">
+        <p className="border-t border-border/60 px-4 py-2 text-sm text-muted-foreground">
           Showing {MAX_ROWS} of {rows.length}.
         </p>
       ) : null}

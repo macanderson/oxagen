@@ -137,7 +137,7 @@ export function MemoryCard({
       : null;
   return (
     <div
-      className="my-1.5 rounded-xl border border-border/60 bg-card/60 p-3 text-sm text-card-foreground animate-in"
+      className="my-1.5 rounded-xl border border-border/60 bg-card/60 p-3 text-base text-card-foreground animate-in"
       data-component="memory-card"
     >
       <div className="flex items-center gap-2">
@@ -208,7 +208,7 @@ export function MemoryCard({
                   {top.map((m) => (
                     <li
                       key={m.id}
-                      className="rounded-xl bg-muted/70 p-2 text-xs"
+                      className="rounded-xl bg-muted/70 p-2 text-sm"
                     >
                       <div className="mb-1 flex flex-wrap items-center gap-2">
                         <Badge
@@ -241,7 +241,7 @@ export function MemoryCard({
                         {!m.node && m.nodeRef ? (
                           <a
                             href={`#${m.nodeRef}`}
-                            className="ml-auto truncate font-mono text-[10px] text-foreground hover:underline"
+                            className="ml-auto truncate font-mono text-xs text-foreground hover:underline"
                           >
                             {m.nodeRef}
                           </a>

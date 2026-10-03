@@ -18,14 +18,21 @@ import {
 import {
   readModelCallFrames,
   readTachoToolCallFrames,
+  readTachoWindowFrames,
   type FrameRunRef,
   type ModelCallFrameRow,
 } from "@oxagen/telemetry";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { IN_APP_AGENT_SURFACES } from "@oxagen/oxagen/contracts/run.shared";
 import {
+  createPostgresRunStore,
   MODEL_CALL_EVENT_TYPES,
+  streamedWindowComposition,
   subagentSessionsQuery,
   TOOL_CALL_EVENT_TYPES,
+  walkLedgerContextWindows,
+  windowComposition,
+  type WindowComposition,
 } from "@oxagen/run-ledger";
 import {
   and,
@@ -590,30 +597,47 @@ export function sumTokenSources(
 }
 
 /**
- * Each source's tokens on a run's model calls after its first, split by
- * whether the call read the prompt cache (#4572). The first call sent the
- * prefix first, so the calls after it re-sent it: a call that read the cache
- * re-read the prefix at the read rate, and a call that read nothing sent it
- * uncached at the input rate. A source is null when no call reported it, as
- * its sum is. Feed it the calls in the order the run made them.
+ * Each source's re-sent tokens on a run's model calls, split by whether the
+ * call read the prompt cache (#4572). A call that read the cache re-read them
+ * at the read rate, and a call that read nothing sent them uncached at the
+ * input rate.
+ *
+ * A call re-sent a source only up to what the last call that carried it had
+ * already sent: the smaller of the two counts. The rest of the call's count
+ * went out for the first time (#5339). A source that holds still, such as the
+ * tool definitions, is re-sent whole on every call after the first that
+ * carried it. A source that grows during the run, such as the context
+ * Oxagen's hooks hand a session, is re-sent only as far as an earlier call
+ * carried it, so each new part's first send is not counted as re-sent.
+ *
+ * A call that carried none of a source, null or zero, is not the last call to
+ * carry it. A side call, such as a session title, sends zero tool definitions
+ * and no steering or context, and the session's next call still re-sends what
+ * the calls before the side call sent. A source is null when no call reported
+ * it, as its sum is. Feed it the calls in the order the run made them.
  */
 export function createStandingSplit() {
-  let first = true;
   const split: RunStandingResent = {
     toolDefinitionTokens: null,
     contextFrameTokens: null,
     steeringTokens: null,
   };
+  /** What the last call that carried each source sent of it; 0 before one did. */
+  const carried: Record<(typeof SOURCE_MEMBERS)[number], number> = {
+    toolDefinitionTokens: 0,
+    contextFrameTokens: 0,
+    steeringTokens: 0,
+  };
   const add = (call: PricedModelCall): void => {
-    const sentFirst = first;
-    first = false;
     for (const member of SOURCE_MEMBERS) {
       const tokens = call.sources?.[member];
       if (tokens === null || tokens === undefined) continue;
       const into = (split[member] ??= { cached: 0, uncached: 0 });
-      if (sentFirst) continue;
-      if (call.tokens.cache_read > 0) into.cached += tokens;
-      else into.uncached += tokens;
+      if (tokens <= 0) continue;
+      const resent = Math.min(carried[member], tokens);
+      carried[member] = tokens;
+      if (call.tokens.cache_read > 0) into.cached += resent;
+      else into.uncached += resent;
     }
   };
   return { add, finish: (): RunStandingResent => split };
@@ -676,10 +700,12 @@ export interface RunRollupDeps {
    */
   loadPriceBook: (slice: PriceBookSlice) => Promise<PriceBook>;
   withPriceBookSnapshot?: typeof withPriceBookSnapshot;
-  /** The acceptance a person recorded on the row, which no rebuild computes. */
-  readCarried: (
-    runId: string,
-  ) => Promise<Pick<RunTotalsRecord, "accepted"> | null>;
+  /**
+   * What the run's stored row carries into a rebuild: the acceptance a
+   * person recorded, which no rebuild computes, and the window composition
+   * the last sealed rollup stored, which a rollup of the open run keeps.
+   */
+  readCarried: (runId: string) => Promise<CarriedRunTotals | null>;
   /** The run's witness verdict (ADR-064), aggregated from its verdict rows. */
   readVerdict: (
     scope: RollupScope,
@@ -707,7 +733,25 @@ export interface RunRollupDeps {
    * without it keeps the work order its row already has.
    */
   resolveWorkOrder?: (source: RunSource) => Promise<RunWorkOrder>;
+  /**
+   * The run's prompt composition over the request windows it recorded
+   * (#5341), or null when it has none to store. Read only for a sealed run:
+   * a rollup of an open run keeps the composition its row carries. A run
+   * read without it stores no composition, which a reader takes as not
+   * measured.
+   */
+  readWindowComposition?: (
+    source: RunSource,
+  ) => Promise<WindowComposition | null>;
 }
+
+/**
+ * The part of a stored `cost.run_totals` row a rebuild carries rather than
+ * computes. `windows` is absent when the row carries no composition key.
+ */
+export type CarriedRunTotals = Pick<RunTotalsRecord, "accepted"> & {
+  windows?: WindowComposition | null;
+};
 
 type Row = typeof totals.$inferSelect;
 
@@ -817,6 +861,8 @@ type ToolBreakdown = RunTotalsRecord["breakdown"]["tools"][number];
 type ToolBreakdownJson = Pick<ToolBreakdown, "name" | "calls"> & {
   /** Absent on a row rolled up before #3892. */
   resultTokens?: number | null;
+  /** Present only when the count is an estimate (#5339). */
+  resultTokensBasis?: "estimated";
   costMicros?: string | null;
 };
 
@@ -834,6 +880,8 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
     stepClasses?: RunTotalsRecord["breakdown"]["stepClasses"];
     /** Absent on a row rolled up before the re-sent split was kept (#4572). */
     standing?: RunTotalsRecord["breakdown"]["standing"];
+    /** Absent on a row rolled up before the window composition was kept (#5341). */
+    windows?: RunTotalsRecord["breakdown"]["windows"];
   };
   return {
     models: raw.models.map(({ keepAlive, ...m }) => ({
@@ -887,6 +935,13 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
       name: t.name,
       calls: t.calls,
       resultTokens: t.resultTokens ?? null,
+      // A row rolled up before #5339 carries no key: every count it holds
+      // was Claude Code's own, which an absent key says.
+      ...(t.resultTokensBasis === "estimated" &&
+      t.resultTokens !== undefined &&
+      t.resultTokens !== null
+        ? { resultTokensBasis: "estimated" as const }
+        : {}),
       costMicros:
         t.costMicros === undefined || t.costMicros === null
           ? null
@@ -900,6 +955,9 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
     // Likewise the re-sent split: a reader without it estimates the re-sent
     // share from the source sums.
     ...(raw.standing === undefined ? {} : { standing: raw.standing }),
+    // Likewise the window composition. A reader takes the absent key as not
+    // measured, never as zero, until the run's next rollup writes one.
+    ...(raw.windows === undefined ? {} : { windows: raw.windows }),
   };
 }
 
@@ -932,6 +990,9 @@ export function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
         name: t.name,
         calls: t.calls,
         resultTokens: t.resultTokens,
+        ...(t.resultTokensBasis === undefined
+          ? {}
+          : { resultTokensBasis: t.resultTokensBasis }),
         costMicros: t.costMicros === null ? null : t.costMicros.toString(),
       }),
     ),
@@ -942,6 +1003,7 @@ export function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
     ...(breakdown.standing === undefined
       ? {}
       : { standing: breakdown.standing }),
+    ...(breakdown.windows === undefined ? {} : { windows: breakdown.windows }),
   };
 }
 
@@ -1131,19 +1193,28 @@ export async function writeRunTotals(
     });
 }
 
-async function readCarried(runId: string) {
+async function readCarried(runId: string): Promise<CarriedRunTotals | null> {
   // tenancy: the scheduled rollup job reads outside a tenant scope, so this
   // is a global read of one row, filtered by the run's globally unique id.
   const rows = await withSystemDb((tx) =>
     tx
-      .select({ accepted: totals.accepted })
+      .select({
+        accepted: totals.accepted,
+        // The key's presence tells a row rolled up before #5341 apart from a
+        // stored null, so a carried row keeps the one it had.
+        hasWindows: sql<boolean>`jsonb_exists(${totals.breakdown}, 'windows')`,
+        windows: sql<WindowComposition | null>`${totals.breakdown} -> 'windows'`,
+      })
       .from(totals)
       .where(eq(totals.runId, runId))
       .limit(1),
   );
   const row = rows[0];
   if (!row) return null;
-  return { accepted: row.accepted };
+  return {
+    accepted: row.accepted,
+    ...(row.hasWindows ? { windows: row.windows ?? null } : {}),
+  };
 }
 
 /**
@@ -1164,6 +1235,63 @@ export function readRunToolCalls(source: RunSource): Promise<ToolCallFrame[]> {
         rootSessionUuid: source.frames.rootSessionUuid,
         sessionUuids: source.frames.sessionUuids,
       });
+}
+
+/** The most ledger events one rollup walks for a run's windows. */
+const LEDGER_WINDOW_EVENT_CAP = 100_000;
+/** Events per page of that walk. */
+const LEDGER_WINDOW_PAGE = 500;
+
+/**
+ * A run's prompt composition over the request windows it recorded (#5341),
+ * decoded the way `get_run_context` decodes them (`@oxagen/run-ledger`).
+ *
+ * A ledger run's windows are walked from its events through the run store,
+ * which reads a compacted attempt from its archive, so a rebuild after
+ * compaction stores the same composition. A wrapped run's windows are the
+ * windowed `llm_call` rows on every chain of the run, the chains its priced
+ * calls are read from.
+ *
+ * Null when no window reported a prompt total, or when the ledger walk
+ * stopped at its cap before the run's last event, so a prefix is never
+ * stored as the whole. Throws when a store cannot be read: the job retries
+ * rather than writing a row with its composition missing.
+ */
+export async function readRunWindowComposition(
+  source: RunSource,
+): Promise<WindowComposition | null> {
+  const scope = {
+    orgId: source.meta.orgId,
+    workspaceId: source.meta.workspaceId,
+  };
+  if (source.frames.kind === "ledger") {
+    const runUuid = source.frames.runUuid;
+    // Loaded with the first ledger run, as the findings job loads it, since
+    // the archive brings in the storage driver.
+    const { deferredEvidenceArchive } = await import(
+      "@oxagen/run-ledger/evidence-store"
+    );
+    const store = createPostgresRunStore({ archive: deferredEvidenceArchive });
+    // tenancy: the scheduled rollup job runs outside a tenant scope, so each
+    // page is read inside the run's own scope, where RLS admits only its
+    // organization's events.
+    const reading = await walkLedgerContextWindows(
+      (after, limit) =>
+        runInTenantScope(scope, () =>
+          store.readAttemptEventsSince(runUuid, after, limit),
+        ),
+      { cap: LEDGER_WINDOW_EVENT_CAP, page: LEDGER_WINDOW_PAGE },
+    );
+    return reading.walked ? windowComposition(reading.windows) : null;
+  }
+  const run = {
+    ...scope,
+    rootSessionUuid: source.frames.rootSessionUuid,
+    sessionUuids: source.frames.sessionUuids,
+  };
+  return streamedWindowComposition((consume) =>
+    readTachoWindowFrames(run, consume),
+  );
 }
 
 /**
@@ -1208,6 +1336,7 @@ const productionRunRollupDeps: RunRollupDeps = {
   now: () => new Date(),
   readFileChanged: readRunFileChanged,
   resolveWorkOrder: (source) => resolveRunWorkOrder(source),
+  readWindowComposition: readRunWindowComposition,
 };
 
 /**
@@ -1250,13 +1379,21 @@ export async function rebuildRunTotals(
     orgId: source.meta.orgId,
     workspaceId: source.meta.workspaceId,
   };
-  const [carried, verdict, workerId, changedFile, workOrder] = await Promise.all([
-    deps.readCarried(publicId),
-    deps.readVerdict(scope, publicId),
-    deps.readWitnessedRun(scope, publicId),
-    deps.readFileChanged?.(source) ?? false,
-    deps.resolveWorkOrder?.(source) ?? null,
-  ]);
+  // The windows are walked once, when the run has sealed. A run is rolled up
+  // on every progress batch while it records (`cost.run-progress`), and a
+  // walk of every event each time is the cost #5341 keeps off that path, so
+  // a rollup of an open run carries the composition its row already has.
+  const sealed = source.meta.sealedAt !== null;
+  const [carried, verdict, workerId, changedFile, workOrder, measured] =
+    await Promise.all([
+      deps.readCarried(publicId),
+      deps.readVerdict(scope, publicId),
+      deps.readWitnessedRun(scope, publicId),
+      deps.readFileChanged?.(source) ?? false,
+      deps.resolveWorkOrder?.(source) ?? null,
+      sealed ? deps.readWindowComposition?.(source) : undefined,
+    ]);
+  const windows = sealed ? measured : carried?.windows;
   const sources: RunTokenSources = { ...NO_RUN_TOKEN_SOURCES };
   const standing = createStandingSplit();
   // A witness run is a run of its own whose cost belongs to the worker's
@@ -1306,7 +1443,13 @@ export async function rebuildRunTotals(
   const built = accumulator.finish();
   const record: RunTotalsRecord = {
     ...built,
-    breakdown: { ...built.breakdown, standing: standing.finish() },
+    breakdown: {
+      ...built.breakdown,
+      standing: standing.finish(),
+      // The run's own windows (#5341): walked for a sealed run, carried for
+      // an open one. Neither gives no key, which reads as not measured.
+      ...(windows === undefined ? {} : { windows }),
+    },
   };
   await deps.write(record, deps.now(), sources);
   return record;

@@ -43,20 +43,20 @@ export function PageHeader({
   leading,
 }: PageHeaderProps) {
   return (
-    <header className="flex flex-col gap-3 pb-[18px] sm:flex-row sm:items-start sm:justify-between">
+    <header className="flex flex-col gap-3 pb-4.5 sm:flex-row sm:items-start sm:justify-between">
       <div className="flex min-w-0 flex-col gap-1">
         {eyebrow ? <p className={`${eyebrowStyle} mb-1`}>{eyebrow}</p> : null}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           {leading}
           <h1
-            className={`min-w-0 text-2xl font-bold leading-tight text-foreground ${mono ? "break-all font-mono tracking-normal" : "tracking-[-0.015em]"}`}
+            className={`min-w-0 text-2xl font-bold leading-tight text-foreground ${mono ? "break-all font-mono tracking-normal" : "tracking-display"}`}
           >
             {title}
           </h1>
           {figure}
         </div>
         {description ? (
-          <p className="max-w-[70ch] text-sm text-muted-foreground">
+          <p className="max-w-measure text-sm text-muted-foreground">
             {description}
           </p>
         ) : null}

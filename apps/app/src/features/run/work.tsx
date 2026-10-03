@@ -1,6 +1,7 @@
 // The side column's first panel (mockup `runSide`, pages/run.md, Side
 // column): Changes. The pull requests the run pushed to with their state,
-// the base, the checks, the diff, and one row per changed file.
+// the base, the checks, the diff, the run's change set from Oxagen's own pull
+// request store (ADR-292), and one row per changed file.
 //
 // It reads the same work read the header's checkout strip does, so the strip,
 // this panel and the Issues tab's Linked work cannot name a different pull
@@ -12,6 +13,7 @@
 // never guessed.
 import { useLocale, useTranslations } from "next-intl";
 import { use } from "react";
+import type { ChangeSet } from "@/data/contracts/changes";
 import type { RunOutputNode, RunOutputs } from "@/data/contracts/run";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
@@ -23,6 +25,7 @@ import { buttonSecondary, kvTerm, kvValue } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
 import { GitHubLink, SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
+import { RunChangeSet } from "./change-sets";
 import { Panel } from "./parts";
 import type { Place } from "./tab-props";
 
@@ -110,8 +113,8 @@ function Row({
 }) {
   return (
     <>
-      <dt className={`${kvTerm} text-sm`}>{label}</dt>
-      <dd className={`${kvValue} text-xs`}>{children}</dd>
+      <dt className={`${kvTerm} text-xs`}>{label}</dt>
+      <dd className={`${kvValue} text-sm`}>{children}</dd>
     </>
   );
 }
@@ -128,11 +131,13 @@ function Stat({ added, removed }: { added: number; removed: number }) {
 
 function ChangesBody({
   work,
+  changes,
   outputs,
   run,
   place,
 }: {
   work: Read<RunWork>;
+  changes: Read<ChangeSet>;
   outputs: Read<RunOutputs>;
   run: RunRow;
   place: Place;
@@ -158,7 +163,7 @@ function ChangesBody({
     ) : undefined;
   return (
     <Panel title={t("changes")} aside={head} testId="run-changes">
-      <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-[7px]">
+      <dl className="grid grid-cols-dl items-baseline gap-x-4 gap-y-1.75">
         <Row label={t("pullRequest")}>
           {!work.ok ? (
             <ReadFailure read={work} section={t("pullRequest")} />
@@ -296,6 +301,19 @@ function ChangesBody({
           )}
         </Row>
       </dl>
+      <div
+        data-testid="run-change-set"
+        className="mt-3 border-t border-border pt-3"
+      >
+        {changes.ok ? (
+          <RunChangeSet
+            changeSet={changes.value}
+            at={{ org: place.org, ws: place.ws }}
+          />
+        ) : (
+          <ReadFailure read={changes} section={t("changes")} />
+        )}
+      </div>
       {files.length === 0 ? null : (
         <>
           <ul
@@ -305,7 +323,7 @@ function ChangesBody({
             {files.slice(0, FILE_ROWS).map((node) => (
               <li
                 key={`${node.chainRef ?? ""}:${node.seq ?? ""}:${node.name}`}
-                className="flex min-w-0 justify-between gap-2.5 border-b border-border py-[5px] text-sm"
+                className="flex min-w-0 justify-between gap-2.5 border-b border-border py-1.25 text-xs"
               >
                 <span className="min-w-0 truncate font-mono" data-truncate={node.name}>
                   {node.name}
@@ -317,7 +335,7 @@ function ChangesBody({
               </li>
             ))}
             {files.length > FILE_ROWS ? (
-              <li className="py-[5px] text-sm text-dim">
+              <li className="py-1.25 text-xs text-dim">
                 {t("more", { count: files.length - FILE_ROWS })}
               </li>
             ) : null}
@@ -328,7 +346,7 @@ function ChangesBody({
                 tab: "transcript",
                 kinds: "tools",
               })}
-              className={`${buttonSecondary} min-h-7 px-2.5 text-xs`}
+              className={`${buttonSecondary} min-h-7 px-2.5 text-sm`}
             >
               {t("openDiff")}
             </SafeLink>
@@ -339,17 +357,23 @@ function ChangesBody({
   );
 }
 
-/** The panel, once the work read the page started has answered. */
+/**
+ * The panel, once the work read and the change set read the page started
+ * have answered.
+ */
 export function ChangesPanel({
   work,
+  changes,
   ...rest
 }: {
   work: Promise<Read<RunWork>>;
+  /** `get_change_set` for the run, from Oxagen's own pull request store. */
+  changes: Promise<Read<ChangeSet>>;
   outputs: Read<RunOutputs>;
   run: RunRow;
   place: Place;
 }) {
-  return <ChangesBody work={use(work)} {...rest} />;
+  return <ChangesBody work={use(work)} changes={use(changes)} {...rest} />;
 }
 
 export function ChangesLoading() {
@@ -359,7 +383,7 @@ export function ChangesLoading() {
       <p
         role="status"
         aria-busy="true"
-        className="text-xs text-muted-foreground"
+        className="text-sm text-muted-foreground"
       >
         {t("loading")}
       </p>

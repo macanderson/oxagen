@@ -72,7 +72,7 @@ export function InterjectionRow({
         />
       )}
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <span className="block text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           {t("interjection.kind")}
         </span>
         <b className="block text-sm font-semibold">
@@ -80,8 +80,8 @@ export function InterjectionRow({
             ? t("interjection.pausedUnknown")
             : t("interjection.paused", { agent })}
         </b>
-        <span className="block break-words text-xs">{item.question}</span>
-        <span className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+        <span className="block break-words text-sm">{item.question}</span>
+        <span className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
           <span>{wsName}</span>
           <SafeLink
             to={routes.run(org, ws, item.runId)}

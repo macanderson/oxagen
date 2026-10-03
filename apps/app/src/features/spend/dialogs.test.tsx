@@ -289,6 +289,74 @@ describe("Export report refusals", () => {
   );
 });
 
+describe("Export the run lines (#2962)", () => {
+  it("saves one line per run when that is picked", async () => {
+    const createObjectURL = vi.fn(() => "blob:runs");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", { ...URL, createObjectURL, revokeObjectURL });
+    const saved: string[] = [];
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        saved.push(this.download);
+      });
+    exportStatementAction.mockResolvedValue({
+      ok: true,
+      value: { filename: "spend-runs-2026-09.csv", content: "line,run_id\n" },
+    });
+    renderWithIntl(<ExportDialog at={at} month="2026-09" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Export report" }),
+    );
+    const dialog = screen.getByRole("dialog", {
+      name: "Export a spend report",
+    });
+    expect(
+      within(dialog)
+        .getAllByRole("radio")
+        .map((radio) => radio.getAttribute("value")),
+    ).toEqual(["workspace", "runs", "cost_center"]);
+    await userEvent.click(
+      screen.getByRole("radio", { name: /Runs in this workspace/ }),
+    );
+    await expectNoAxe(document.body);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Download the CSV" }),
+    );
+    await waitFor(() => {
+      expect(click).toHaveBeenCalledOnce();
+    });
+    expect(exportStatementAction).toHaveBeenCalledWith(at, "2026-09", "runs");
+    expect(exportCostCenterStatementAction).not.toHaveBeenCalled();
+    expect(saved).toEqual(["spend-runs-2026-09.csv"]);
+    click.mockRestore();
+  });
+
+  it("says the workspace refused when the run file is refused (negative)", async () => {
+    exportStatementAction.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "authz_denied",
+    });
+    renderWithIntl(<ExportDialog at={at} month="2026-09" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Export report" }),
+    );
+    await userEvent.click(
+      screen.getByRole("radio", { name: /Runs in this workspace/ }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Download the CSV" }),
+    );
+    expect(
+      await screen.findByText(
+        "Your roles on this organization do not let you export this workspace’s spend.",
+      ),
+    ).toBeInTheDocument();
+    await expectNoAxe(document.body);
+  });
+});
+
 describe("Export the chargeback statement", () => {
   it("saves the organization's statement by cost center when that is picked", async () => {
     const createObjectURL = vi.fn(() => "blob:chargeback");

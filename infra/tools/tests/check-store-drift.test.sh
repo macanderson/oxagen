@@ -562,6 +562,62 @@ contains "$OUT" "nothing to check" "dropped report: says there was nothing to ch
 report_dropped_columns "$WORK/no-such-dropped.txt" "$WORK/counts-gone.txt" >/dev/null 2>&1
 expect_code 2 "$?" "dropped report: an unreadable dropped list is 'unknown'"
 
+# --- report_error_events ---------------------------------------------------
+#
+# The count of error_events rows per runtime is a report (#3698). A table that
+# exists can still be empty because every insert fails, so the daily run names
+# each runtime with no row. It never returns 1, because a quiet day has no
+# unhandled error and so no row, and the exit status gates a deploy.
+
+printf 'api\t12\t2026-10-02 06:00:00.000\ninngest\t3\t2026-10-01 01:00:00.000\n' > "$WORK/errors-some.txt"
+OUT=$(report_error_events "$WORK/errors-some.txt" 2>&1); CODE=$?
+expect_code 0 "$CODE" "error_events: a count per runtime is a report, not a verdict"
+contains "$OUT" "ClickHouse error_events: 15 rows." "error_events: sums the rows of every runtime"
+contains "$OUT" "api: 12 rows, newest 2026-10-02 06:00:00.000." "error_events: gives each runtime its count and newest row"
+contains "$OUT" "inngest: 3 rows" "error_events: lists every runtime that wrote a row"
+contains "$OUT" "No rows from: app, mcp, runner." "error_events: names every runtime with no row"
+case "$OUT" in
+  *::error::*) fail "error_events: a runtime with no row must not emit an error annotation" ;;
+  *) pass ;;
+esac
+
+printf 'api\t1\tx\napp\t1\tx\ninngest\t1\tx\nmcp\t1\tx\nrunner\t1\tx\n' > "$WORK/errors-all.txt"
+OUT=$(report_error_events "$WORK/errors-all.txt" 2>&1); CODE=$?
+expect_code 0 "$CODE" "error_events: every runtime with a row is a report"
+case "$OUT" in
+  *"No rows from"*) fail "error_events: must not name a missing runtime when every runtime wrote a row" ;;
+  *) pass ;;
+esac
+
+# An empty table answers with no line at all, and that is a real answer.
+: > "$WORK/errors-none.txt"
+OUT=$(report_error_events "$WORK/errors-none.txt" 2>&1); CODE=$?
+expect_code 0 "$CODE" "error_events: an empty table is a report, not a verdict"
+contains "$OUT" "ClickHouse error_events: 0 rows." "error_events: an empty table says 0 rows"
+contains "$OUT" "No rows from: api, app, inngest, mcp, runner." "error_events: an empty table names every runtime"
+
+printf 'Code: 60. DB::Exception: Table oxagen.error_events does not exist. (UNKNOWN_TABLE)\n' > "$WORK/errors-junk.txt"
+OUT=$(report_error_events "$WORK/errors-junk.txt" 2>&1); CODE=$?
+expect_code 2 "$CODE" "error_events: an answer that is not a count per runtime is unreadable"
+contains "$OUT" "::warning::" "error_events: an unreadable answer is a warning"
+case "$OUT" in
+  *::error::*) fail "error_events: an unreadable count must not emit an error annotation" ;;
+  *) pass ;;
+esac
+report_error_events "$WORK/no-such-errors.txt" >/dev/null 2>&1
+expect_code 2 "$?" "error_events: no answer at all is unreadable"
+
+# The runtimes counted are the ones the row type allows. A runtime added to
+# ErrorEventRow and missing here would never be named when it writes nothing.
+ROW_SOURCES=$(sed -n '/^export interface ErrorEventRow/,/^}/p' "$REPO/packages/telemetry/src/clickhouse.ts" |
+  grep -E '^[[:space:]]*source:' | grep -oE '"[a-z]+"' | tr -d '"' | sort)
+LISTED_SOURCES=$(error_event_sources | sort)
+if [[ -n $ROW_SOURCES && $ROW_SOURCES == "$LISTED_SOURCES" ]]; then
+  pass
+else
+  fail "error_events: error_event_sources must list ErrorEventRow's sources. Row type: $(printf '%s' "$ROW_SOURCES" | tr '\n' ' ') Listed: $(printf '%s' "$LISTED_SOURCES" | tr '\n' ' ')"
+fi
+
 # Unknown must outrank behind. ClickHouse unreadable then Neo4j behind used to
 # exit 1 and report "a store is behind", saying nothing about the store nobody
 # could read — and the two need different responses.
@@ -690,7 +746,25 @@ esac
 bad=$(grep -oE 'ch_query "[^"]*' "$TOOLS/check-store-drift.sh" | grep -cv 'ch_query "SELECT' || true)
 expect_code 0 "$bad" "script: every ClickHouse statement it sends is a SELECT"
 sent=$(grep -cE 'ch_query "SELECT' "$TOOLS/check-store-drift.sh" || true)
-if [[ $sent -ge 3 ]]; then pass; else fail "script: expected the ledger, table and column reads, found $sent"; fi
+if [[ $sent -ge 4 ]]; then pass; else fail "script: expected the ledger, table, column and error_events reads, found $sent"; fi
+
+# The error_events count is a report. The exit status gates a deploy, so its
+# section must not move it, and a missing table, already behind, is not read.
+contains "$SCRIPT" "SELECT source, count(), max(created_at) FROM \${CLICKHOUSE_DATABASE}.error_events GROUP BY source" \
+  "script: counts error_events rows per runtime (#3698)"
+ERRORS_SECTION=$(sed -n '/^echo "== ClickHouse error_events =="/,/^# --- Neo4j/p' "$TOOLS/check-store-drift.sh")
+if [[ -z $ERRORS_SECTION ]]; then
+  fail "script: the error_events section is gone"
+else
+  case "$ERRORS_SECTION" in
+    *bump_status*) fail "script: the error_events count must not change the exit status" ;;
+    *) pass ;;
+  esac
+  contains "$ERRORS_SECTION" 'grep -qxF error_events "$WORK/ch-tables-present.txt"' \
+    "script: counts error_events only when the tables question found it"
+  contains "$ERRORS_SECTION" 'report_error_events "$WORK/ch-errors.txt"' \
+    "script: the live check reaches the error_events report"
+fi
 
 bad=$(grep -oE 'neo_cypher "[^"]*' "$TOOLS/check-store-drift.sh" | grep -cv 'neo_cypher "SHOW' || true)
 expect_code 0 "$bad" "script: every Neo4j statement it sends is a SHOW"

@@ -87,7 +87,7 @@ export function Actor({
       ) : (
         <span>{member.name ?? member.email}</span>
       )}
-      <span className="text-xs text-muted-foreground">{date(at)}</span>
+      <span className="text-sm text-muted-foreground">{date(at)}</span>
     </span>
   );
 }
@@ -187,8 +187,8 @@ function Card({
               {heading.title}
             </h3>
           </div>
-          <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="rounded border border-border px-1.5 py-0.5 text-sm font-medium">
+          <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <span className="rounded-sm border border-border px-1.5 py-0.5 text-xs font-medium">
               {t(`kinds.${kind}`)}
             </span>
             <span>{t(`reach.${kind}`)}</span>
@@ -206,7 +206,7 @@ function Card({
         ) : (
           <span
             data-state={on ? "denying" : "allowing"}
-            className={`text-xs font-medium ${on ? "text-destructive" : "text-muted-foreground"}`}
+            className={`text-sm font-medium ${on ? "text-destructive" : "text-muted-foreground"}`}
           >
             {on ? t("denying") : t("allowing")}
           </span>
@@ -294,8 +294,8 @@ function UnbackedClassCard({ which }: { which: "irreversible" | "egress" }) {
         <h3 className="text-sm font-semibold text-foreground">
           {t(`unbacked.${which}`)}
         </h3>
-        <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span className="rounded border border-border px-1.5 py-0.5 text-sm font-medium">
+        <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <span className="rounded-sm border border-border px-1.5 py-0.5 text-xs font-medium">
             {t("kinds.class")}
           </span>
           <span>{t("reach.class")}</span>
@@ -439,7 +439,7 @@ export function Switches({
       {truncated ? (
         <p
           data-state="truncated"
-          className="rounded-lg border border-destructive/45 bg-destructive/10 px-3 py-2.5 text-sm text-foreground"
+          className="rounded-lg border border-destructive/45 bg-destructive/10 px-3 py-2.5 text-base text-foreground"
         >
           {t("truncated", { limit: KILL_SWITCH_BOARD_LIMIT })}
         </p>
@@ -451,13 +451,13 @@ export function Switches({
         <div className="flex flex-wrap items-center gap-2">
           <h2
             id="tools-switches-class"
-            className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+            className="text-sm font-semibold uppercase tracking-widest text-muted-foreground"
           >
             {t("classHeading")}
           </h2>
           <span
             data-testid="tools-deny-generation"
-            className={`${mono} rounded border border-border px-1.5 py-0.5 text-sm uppercase text-muted-foreground`}
+            className={`${mono} rounded-sm border border-border px-1.5 py-0.5 text-xs uppercase text-muted-foreground`}
           >
             {t("generationBadge", { generation: denyGeneration.org })}
           </span>
@@ -486,7 +486,7 @@ export function Switches({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2
             id="tools-switches-scoped"
-            className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+            className="text-sm font-semibold uppercase tracking-widest text-muted-foreground"
           >
             {t("scopedHeading")}
           </h2>

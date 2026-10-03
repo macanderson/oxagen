@@ -28,35 +28,29 @@
  * `@theme static`, so an override on :root still shipped its amber in the
  * stylesheet, and the kit's conformance check read it as an off-palette gold.
  * A later @theme declaration of the same variable replaces the earlier one,
- * so only these values reach the output. This block holds the paper values,
- * and .dark below holds the ink values:
- *   info     approval (a request routed to a person)
- *   warning  denied
- *   error    failed, and the removed side of a diff
- *   success  allowed, and the added side of a diff
- *   idea     proven
+ * so only these values reach the output. Each reads the house state role
+ * @oxagen/ui defines, which takes its paper or ink stop with the theme, so
+ * .dark below only deepens the two diff washes:
+ *   info     --info, approval (a request routed to a person)
+ *   warning  --warning, denied
+ *   error    --error, failed, and the removed side of a diff
+ *   success  --success, allowed, and the added side of a diff
+ *   idea     --proven
  */
 @theme static {
-  --color-fd-info: var(--ox-st-approval-ink);
-  --color-fd-warning: var(--ox-st-denied-ink);
-  --color-fd-error: var(--ox-st-failed-ink);
-  --color-fd-success: var(--ox-st-allowed-ink);
-  --color-fd-idea: var(--ox-st-proven-ink);
-  --color-fd-diff-remove: color-mix(in oklab, var(--ox-st-failed-ink) 12%, transparent);
-  --color-fd-diff-remove-symbol: var(--ox-st-failed-ink);
-  --color-fd-diff-add: color-mix(in oklab, var(--ox-st-allowed-ink) 12%, transparent);
-  --color-fd-diff-add-symbol: var(--ox-st-allowed-ink);
+  --color-fd-info: var(--info);
+  --color-fd-warning: var(--warning);
+  --color-fd-error: var(--error);
+  --color-fd-success: var(--success);
+  --color-fd-idea: var(--proven);
+  --color-fd-diff-remove: color-mix(in oklab, var(--error) 12%, transparent);
+  --color-fd-diff-remove-symbol: var(--error);
+  --color-fd-diff-add: color-mix(in oklab, var(--success) 12%, transparent);
+  --color-fd-diff-add-symbol: var(--success);
 }
 .dark {
-  --color-fd-info: var(--ox-st-approval);
-  --color-fd-warning: var(--ox-st-denied);
-  --color-fd-error: var(--ox-st-failed);
-  --color-fd-success: var(--ox-st-allowed);
-  --color-fd-idea: var(--ox-st-proven);
-  --color-fd-diff-remove: color-mix(in oklab, var(--ox-st-failed) 16%, transparent);
-  --color-fd-diff-remove-symbol: var(--ox-st-failed);
-  --color-fd-diff-add: color-mix(in oklab, var(--ox-st-allowed) 16%, transparent);
-  --color-fd-diff-add-symbol: var(--ox-st-allowed);
+  --color-fd-diff-remove: color-mix(in oklab, var(--error) 16%, transparent);
+  --color-fd-diff-add: color-mix(in oklab, var(--success) 16%, transparent);
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -75,9 +69,17 @@
  *
  * `.prose` is the page body and also each item in the table of contents,
  * which Fumadocs marks `prose text-sm`.
+ *
+ * The house type rule (Mac, 2026-10-02, oxageninc/brand#83) holds here too:
+ * every size reads a kit step, and h1 to h3 are Space Grotesk, the kit's
+ * display face, because the docs are a customer site. The kit's base rule
+ * sets h1 to h3 from --font-heading, which reads the text face, Aeonik, until
+ * a site points it at --font-display, as this block does. h4 to h6 and all
+ * other text stay Aeonik, and code stays Monaspace Neon.
  * ─────────────────────────────────────────────────────────────────────────── */
 :root {
   --docs-step: calc(8 / 7);
+  --font-heading: var(--font-display);
 }
 
 .prose {
@@ -220,15 +222,15 @@ figure.shiki pre {
  *   sub    --ox-muted-ink  5.2:1 light; --ox-muted 6.3:1 dark
  * ─────────────────────────────────────────────────────────────────────────── */
 :root {
-  --ox-dg-rule: var(--ox-dim-ink);
-  --ox-dg-accent: var(--ox-gold-deep);
-  --ox-dg-label: var(--color-fd-foreground);
-  --ox-dg-sub: var(--ox-muted-ink);
-  --ox-dg-ground: var(--color-fd-background);
+  --dg-rule: var(--ox-dim-ink);
+  --dg-accent: var(--ox-gold-deep);
+  --dg-label: var(--color-fd-foreground);
+  --dg-sub: var(--ox-muted-ink);
+  --dg-ground: var(--color-fd-background);
 }
 .dark {
-  --ox-dg-accent: var(--ox-gold);
-  --ox-dg-sub: var(--ox-muted);
+  --dg-accent: var(--ox-gold);
+  --dg-sub: var(--ox-muted);
 }
 
 .ox-mermaid svg {
@@ -249,7 +251,7 @@ figure.shiki pre {
 .ox-mermaid .note,
 .ox-mermaid .labelBox {
   fill: none !important;
-  stroke: var(--ox-dg-rule) !important;
+  stroke: var(--dg-rule) !important;
   stroke-width: 1px !important;
 }
 .ox-mermaid .node rect.label-container,
@@ -261,13 +263,13 @@ figure.shiki pre {
 /* The frame label tab sits over the frame line; paint it the page ground so
    the tab reads as a notch, not as a crossed-out box. */
 .ox-mermaid .labelBox {
-  fill: var(--ox-dg-ground) !important;
+  fill: var(--dg-ground) !important;
 }
 
 .ox-mermaid .node.accent .label-container,
 .ox-mermaid .node.accent rect.basic,
 .ox-mermaid .node.accent polygon {
-  stroke: var(--ox-dg-accent) !important;
+  stroke: var(--dg-accent) !important;
   stroke-width: 1.25px !important;
 }
 
@@ -280,8 +282,8 @@ figure.shiki pre {
 .ox-mermaid .messageText,
 .ox-mermaid .noteText,
 .ox-mermaid .noteText > tspan {
-  fill: var(--ox-dg-label) !important;
-  color: var(--ox-dg-label) !important;
+  fill: var(--dg-label) !important;
+  color: var(--dg-label) !important;
   font-family: var(--font-mono) !important;
   font-weight: 500;
 }
@@ -296,10 +298,10 @@ figure.shiki pre {
 .ox-mermaid .loopText > tspan,
 .ox-mermaid .labelText,
 .ox-mermaid .labelText > tspan {
-  fill: var(--ox-dg-sub) !important;
-  color: var(--ox-dg-sub) !important;
+  fill: var(--dg-sub) !important;
+  color: var(--dg-sub) !important;
   font-family: var(--font-mono) !important;
-  font-size: 11px !important;
+  font-size: var(--ox-a-micro) !important;
 }
 /* No chip behind a wire label: only the page ground, so the wire stops short
    of the words instead of striking through them. */
@@ -308,8 +310,8 @@ figure.shiki pre {
 .ox-mermaid .edgeLabel span,
 .ox-mermaid .labelBkg,
 .ox-mermaid .edgeLabel rect {
-  background-color: var(--ox-dg-ground) !important;
-  fill: var(--ox-dg-ground) !important;
+  background-color: var(--dg-ground) !important;
+  fill: var(--dg-ground) !important;
 }
 
 /* Wires. Solid carries something; dashed (a reply, a lifeline, a frame) is an
@@ -320,7 +322,7 @@ figure.shiki pre {
 .ox-mermaid .messageLine1,
 .ox-mermaid .actor-line,
 .ox-mermaid .loopLine {
-  stroke: var(--ox-dg-rule) !important;
+  stroke: var(--dg-rule) !important;
   stroke-width: 1px !important;
   fill: none !important;
 }
@@ -331,7 +333,7 @@ figure.shiki pre {
 }
 .ox-mermaid marker path {
   fill: none !important;
-  stroke: var(--ox-dg-rule) !important;
+  stroke: var(--dg-rule) !important;
   stroke-width: 1.2px !important;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -342,16 +344,16 @@ figure.shiki pre {
    Mermaid draws the end mark as two sketched paths (ring, then dot) in a node
    whose id ends in `root_end`, not as circles. */
 .ox-mermaid .state-start {
-  fill: var(--ox-dg-label) !important;
-  stroke: var(--ox-dg-label) !important;
+  fill: var(--dg-label) !important;
+  stroke: var(--dg-label) !important;
 }
 .ox-mermaid .node[id*="root_end"] path {
   fill: none !important;
-  stroke: var(--ox-dg-label) !important;
+  stroke: var(--dg-label) !important;
   stroke-width: 1px !important;
 }
 .ox-mermaid .node[id*="root_end"] .outer-path path:last-child {
-  fill: var(--ox-dg-label) !important;
+  fill: var(--dg-label) !important;
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -380,14 +382,8 @@ figure.shiki pre {
 }
 
 .lp-grad-surface {
-  /* Literal ember stops (not var(--brand-gradient)) so the fill is guaranteed
-     to render regardless of which token scope is active. */
-  background-image: linear-gradient(
-    100deg,
-    var(--_ember-a, #8A7223) 0%,
-    var(--_ember-b, #D4AF37) 46%,
-    var(--_ember-c, #F1CE65) 100%
-  );
+  /* The kit's sheen as a button fill, from the primary button's role. */
+  background-image: var(--brand-gradient);
 }
 
 /* Faint ember edge used on section dividers + card borders on hover. */
@@ -439,12 +435,13 @@ figure.shiki pre {
 }
 
 /* Terminal window chrome. Intentionally always-dark (like a real terminal) in
-   both light and dark mode — fixed literal colours so the panel never washes
-   out on the light page. A panel at rest takes no shadow (the house rule), so
-   the window is drawn by its hairline alone. */
+   both light and dark mode: the window carries the dark class, so every token
+   inside it resolves to its value on ink and the panel never washes out on
+   the light page. A panel at rest takes no shadow (the house rule), so the
+   window is drawn by its hairline alone. */
 .lp-term {
-  border: 1px solid rgb(255 255 255 / 0.12);
-  background: color-mix(in srgb, var(--ox-panel, #18181B) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+  background: color-mix(in srgb, var(--card) 94%, transparent);
   backdrop-filter: blur(8px);
 }
 

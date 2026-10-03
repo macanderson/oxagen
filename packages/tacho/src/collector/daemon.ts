@@ -65,7 +65,10 @@ import {
   mcpEndpointFor,
   modelProxyPortFor,
   sessionScopeOf,
+  withRecordedHarnessFiles,
+  writeHostFile,
 } from "../host/host-file";
+import { claudeCodeSessionHasOxagenTools } from "../host/claude-code-mcp-writer";
 import { readModelBaseUrlState } from "../host/model-base-url";
 import {
   applyModelCredentials,
@@ -107,6 +110,7 @@ import {
 import { keepWorkOrder as keepPendingWorkOrder } from "../host/work-orders";
 import { sessionUuid as deriveSessionUuid, ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
+import { TACHO_VERSION } from "../version";
 import {
   tachoHarnessSchema,
   TACHO_ENFORCEMENT_TIER_ATTR,
@@ -190,7 +194,7 @@ import { pushCredentialBasis } from "./push-basis";
 import { forgetRecallHints } from "./recall-hints";
 import { sessionSkills } from "./session-skills";
 import { issueRunToken } from "./credential-issuer";
-import { utcDay } from "./day-spend";
+import { nextUtcDayStart, utcDay } from "./day-spend";
 import { type BeforeForward, createModelProxy } from "./model-proxy";
 import { createModelProxyListener } from "./model-proxy-listener";
 import {
@@ -690,7 +694,9 @@ async function initializeDaemon(
   // The hook path's read, when a live hook first names a pid. Where it runs
   // `ps` it answers with a promise and the registry records the start time
   // when it lands, so the hook, and every hook queued behind it, is not held
-  // while `ps` runs (#4366).
+  // while `ps` runs (#4366). `execAsync` runs in the daemon's own zone, so the
+  // reader pins UTC on the command line (`psStartCommand`), the zone the sweep
+  // reads in.
   const hookProcessStarts =
     injectedStarts ??
     ((pids: readonly number[]) =>
@@ -701,7 +707,30 @@ async function initializeDaemon(
       `no enrollment at ${paths.hostFile}; run \`oxagen agent enroll\` first`,
     );
   }
-  let host: HostFile = loaded;
+  // host.json records the version that enrolled, and an upgrade in place runs
+  // newer code against the same file (#5365). Every event, the health report
+  // and the user agent read the version from `host`, so it names the code
+  // running now, and host.json is brought up to date for `oxagen agent
+  // status` and the desktop app. Only a file that still holds this
+  // enrollment is written.
+  let host: HostFile =
+    loaded.wrapper_version === TACHO_VERSION
+      ? loaded
+      : { ...loaded, wrapper_version: TACHO_VERSION };
+  const onDisk = readHostFileLenient(paths.hostFile).host;
+  if (
+    onDisk !== undefined &&
+    onDisk.host_enrollment_id === host.host_enrollment_id &&
+    onDisk.wrapper_version !== TACHO_VERSION
+  ) {
+    log(
+      `host.json now records version ${TACHO_VERSION} (was ${onDisk.wrapper_version})`,
+    );
+    writeHostFile(paths.hostFile, {
+      ...onDisk,
+      wrapper_version: TACHO_VERSION,
+    });
+  }
   for (const dir of [paths.dir, paths.wal, paths.spool, paths.quarantine])
     ensureDir(dir);
   // The memories each live prompt recalls, asked of the control plane with
@@ -763,6 +792,35 @@ async function initializeDaemon(
           ))
             memoryUses.note({ ...file, ...run });
         };
+  // Whether a Claude Code session here can call Oxagen's `record_reflection`
+  // (#5287): the enrollment holds the key the gateway serves Oxagen's tools
+  // with, wrote its `oxagen` server before the session started, and Claude
+  // Code's user config still carries it. host.json is read again here,
+  // because enroll and `oxagen agent status` write the entry while this
+  // daemon runs. The config is read at the path enroll recorded, because the
+  // service's environment need not carry the CLAUDE_CONFIG_DIR the enrolling
+  // shell had. All of this runs only at a Stop that would otherwise ask, and
+  // any failure answers no, so the Stop hook never asks for a tool the
+  // session cannot reach.
+  const reflectionToolRegistered = (session: {
+    startedAt: string;
+  }): boolean => {
+    try {
+      const current = readHostFile(paths.hostFile) ?? host;
+      return claudeCodeSessionHasOxagenTools({
+        enrollmentId: current.host_enrollment_id,
+        hasGatewayKey: current.gateway_api_key !== undefined,
+        registeredAt: current.mcp_registered_at?.["claude-code"],
+        sessionStartedAt: session.startedAt,
+        readUserConfig: () =>
+          readJsonFileIfExists(
+            withRecordedHarnessFiles(paths, current).claudeUserConfig,
+          ),
+      });
+    } catch {
+      return false;
+    }
+  };
   // Runs the tools a lock pins on this machine. It starts at the end of
   // start-up, and `syncLocalServers` starts or stops it after each change to
   // the host's status.
@@ -1228,12 +1286,31 @@ async function initializeDaemon(
    * host holds right now: enrollment writes one, so there is always a
    * clause to read, and a body the workspace has since stopped retaining is
    * dropped here rather than shipped for the control plane to refuse.
+   *
+   * A body handed over with no event is dropped too, and logged. The shipper
+   * sends a body only with its own event, so its event was written without
+   * it, or is still in memory, and either way a body written now would never
+   * ship. It used to vanish here without a trace, which hid a caller that
+   * wrote its event alone (#5381). This does not throw. The transcript
+   * tailer drains bodies after every line it feeds, most of which seal
+   * nothing, and a throw there would count a good line as refused and seal
+   * a gap for it. A hook would fail the same way and be spooled again.
    */
   function record(
     events: readonly TachoEvent[],
     bodies: readonly FrameBody[] = [],
   ): void {
-    if (events.length === 0) return;
+    if (events.length === 0) {
+      if (bodies.length > 0) {
+        const where = bodies
+          .map((body) => `session ${body.session_uuid} seq ${body.seq}`)
+          .join(", ");
+        log(
+          `dropped ${bodies.length} frame ${bodies.length === 1 ? "body" : "bodies"} handed over without an event (${where}). A body ships only with its own event, so this content will not ship.`,
+        );
+      }
+      return;
+    }
     // Not `host.bundle.retention`: `host.json` is a file on the operator's
     // machine, and reading its clause unchecked would let an edit from
     // `digest_only` to `content_exact` write prompt bodies until the next
@@ -1497,8 +1574,8 @@ async function initializeDaemon(
       bundle_etag: host.bundle.etag,
       // What this daemon's `policyBundleSchema` names, so the control plane
       // can send a gated bundle field without breaking hosts that predate it.
-      // Reported from the running code rather than from `host.json`, which
-      // `enroll` writes once and no upgrade rewrites.
+      // Reported from the running code rather than read off `version`, which
+      // a daemon older than #5365 took from the enrollment, not the upgrade.
       bundle_features: [...TACHO_BUNDLE_FEATURES],
       // Omitted until a read succeeds: absent means nothing was said, and a
       // daemon that could not read the files has nothing to say.
@@ -2825,6 +2902,7 @@ async function initializeDaemon(
           skills,
           ...(recallMemories !== undefined ? { recallMemories } : {}),
           ...(noteMemoryReads !== undefined ? { noteMemoryReads } : {}),
+          reflectionToolRegistered,
         },
         envelope.replay,
         envelope.harness,
@@ -3798,6 +3876,53 @@ async function initializeDaemon(
   }
   await refreshUpstreams();
 
+  /**
+   * This host's observed spend on one UTC day, from the priced `llm_call`
+   * frames its WAL holds (ADR-160).
+   *
+   * Each session is read back from its tail, and the walk stops at the first
+   * event from before the day began (`Wal.eventsSince`). So the read costs
+   * that day's frames, not the week the WAL keeps, and a session whose last
+   * frame is older costs one line. It used to parse every line of every
+   * session active that day (#5381).
+   *
+   * The walk takes seq order for time order, and a recovered spool event can
+   * break that. A hook spooled before midnight and drained after it is
+   * written behind that day's live frames, with the earlier time it was
+   * recorded at. The walk stops at it, so a priced call written before it
+   * that day is not counted. Only a session whose spool drained across
+   * midnight can be undercounted, and only by the calls it made before the
+   * drain. A spend cap can carry that.
+   */
+  function walDaySpendMicros(day: string): number {
+    const start = Date.parse(`${day}T00:00:00.000Z`);
+    const end = Date.parse(nextUtcDayStart(day));
+    let total = 0;
+    for (const session of wal.sessions()) {
+      for (const event of wal.eventsSince(session, start)) {
+        if (event.kind !== "llm_call") continue;
+        if (event.attrs[TACHO_METERING_ATTR] !== TACHO_METERING_OBSERVED)
+          continue;
+        // A range test rather than `utcDay`, which throws on a `ts` that
+        // does not parse, and one bad frame zeroed the whole seed.
+        const at = Date.parse(event.ts);
+        if (!(at >= start && at < end)) continue;
+        const cost = (event.body as { cost_usd_micros?: number })
+          .cost_usd_micros;
+        if (typeof cost === "number") total += cost;
+      }
+    }
+    return total;
+  }
+
+  /**
+   * The day's spend as read at the end of startup, before the model proxy
+   * listens. The proxy asks for it once, at its first priced call or
+   * admission check, and takes it from here instead of reading the WAL while
+   * a call waits.
+   */
+  let startupDaySpend: { day: string; micros: number } | undefined;
+
   const modelProxy = createModelProxy({
     registry,
     hostRecorder: () => hostRecorder,
@@ -3811,26 +3936,14 @@ async function initializeDaemon(
       ...displacedUpstreams,
       ...options.modelUpstreams,
     }),
-    // A restart must not hand the agent's day back either (ADR-160). Only a
-    // session whose last frame is from `day` can hold a frame from it, so
-    // the rest of the week the WAL keeps is not parsed.
+    // A restart must not hand the agent's day back either (ADR-160). The day
+    // counter asks this once per process (`createDaySpend`), so the figure
+    // read at startup is used once. A first call on a later day than
+    // startup's reads the WAL for that day.
     priorDaySpendMicros: (day) => {
-      const start = Date.parse(`${day}T00:00:00.000Z`);
-      let total = 0;
-      for (const session of wal.sessions()) {
-        const last = wal.lastEvent(session);
-        if (last !== undefined && Date.parse(last.ts) < start) continue;
-        for (const event of wal.read(session)) {
-          if (event.kind !== "llm_call") continue;
-          if (event.attrs[TACHO_METERING_ATTR] !== TACHO_METERING_OBSERVED)
-            continue;
-          if (utcDay(Date.parse(event.ts)) !== day) continue;
-          const cost = (event.body as { cost_usd_micros?: number })
-            .cost_usd_micros;
-          if (typeof cost === "number") total += cost;
-        }
-      }
-      return total;
+      const seeded = startupDaySpend;
+      startupDaySpend = undefined;
+      return seeded?.day === day ? seeded.micros : walDaySpendMicros(day);
     },
     recordedDaySpend: () =>
       recordedDaySpend === undefined
@@ -4307,6 +4420,20 @@ async function initializeDaemon(
         `restart telemetry gap not recorded: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  }
+
+  // The day budget's seed, read once here, so no priced call waits on it.
+  // Nothing has been served yet: the collector server answers every request
+  // "collector is starting" until `ready` below, and the model proxy starts
+  // listening after it. A read that fails is left to the proxy's first call,
+  // which reads again and counts zero if that fails too.
+  try {
+    const day = utcDay(now());
+    startupDaySpend = { day, micros: walDaySpendMicros(day) };
+  } catch (error) {
+    log(
+      `day spend not read from the WAL at startup: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   ready(api);

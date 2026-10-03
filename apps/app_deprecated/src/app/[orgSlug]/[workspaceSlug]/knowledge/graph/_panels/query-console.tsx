@@ -101,11 +101,11 @@ function TraversalConsole({ orgSlug, workspaceSlug }: QueryConsoleProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <h3 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
         <Route className="size-3.5" aria-hidden="true" />
         Traverse from a node
       </h3>
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         Multi-hop traversal from a known node&apos;s publicId — paste one from a
         Browse or Search result.
       </p>
@@ -114,7 +114,7 @@ function TraversalConsole({ orgSlug, workspaceSlug }: QueryConsoleProps) {
         <div className="col-span-2 flex flex-col gap-1">
           <Label
             htmlFor="traverse-start-node"
-            className="text-[11px] text-muted-foreground"
+            className="text-xs text-muted-foreground"
           >
             Start node ID
           </Label>
@@ -123,13 +123,13 @@ function TraversalConsole({ orgSlug, workspaceSlug }: QueryConsoleProps) {
             value={startNodeId}
             onChange={(e) => setStartNodeId(e.target.value)}
             placeholder="publicId…"
-            className="h-8 text-xs"
+            className="h-8 text-sm"
           />
         </div>
         <div className="flex flex-col gap-1">
           <Label
             htmlFor="traverse-direction"
-            className="text-[11px] text-muted-foreground"
+            className="text-xs text-muted-foreground"
           >
             Direction
           </Label>
@@ -154,7 +154,7 @@ function TraversalConsole({ orgSlug, workspaceSlug }: QueryConsoleProps) {
         <div className="flex flex-col gap-1">
           <Label
             htmlFor="traverse-depth"
-            className="text-[11px] text-muted-foreground"
+            className="text-xs text-muted-foreground"
           >
             Max depth
           </Label>
@@ -167,7 +167,7 @@ function TraversalConsole({ orgSlug, workspaceSlug }: QueryConsoleProps) {
             onChange={(e) =>
               setMaxDepth(Math.min(5, Math.max(1, Number(e.target.value) || 1)))
             }
-            className="h-8 text-xs"
+            className="h-8 text-sm"
           />
         </div>
       </div>
@@ -175,7 +175,7 @@ function TraversalConsole({ orgSlug, workspaceSlug }: QueryConsoleProps) {
       <div className="flex flex-col gap-1">
         <Label
           htmlFor="traverse-edge-types"
-          className="text-[11px] text-muted-foreground"
+          className="text-xs text-muted-foreground"
         >
           Relationship types (comma-separated, optional)
         </Label>
@@ -184,7 +184,7 @@ function TraversalConsole({ orgSlug, workspaceSlug }: QueryConsoleProps) {
           value={edgeTypesInput}
           onChange={(e) => setEdgeTypesInput(e.target.value)}
           placeholder="OWNS, DEPENDS_ON"
-          className="h-8 text-xs"
+          className="h-8 text-sm"
         />
       </div>
 
@@ -211,7 +211,7 @@ function TraversalConsole({ orgSlug, workspaceSlug }: QueryConsoleProps) {
 
       {state === "ready" && result ? (
         result.startNode === null ? (
-          <p className="flex items-center gap-1.5 text-xs text-destructive">
+          <p className="flex items-center gap-1.5 text-sm text-destructive">
             <AlertTriangle className="size-3.5" aria-hidden="true" />
             Start node not found in this workspace.
           </p>
@@ -262,7 +262,7 @@ function TraversalResult({
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <p className="mb-1 text-[11px] font-medium text-muted-foreground">
+        <p className="mb-1 text-xs font-medium text-muted-foreground">
           {result.nodes.length} node{result.nodes.length === 1 ? "" : "s"}{" "}
           reached
           {result.truncated ? " (truncated)" : ""}
@@ -279,7 +279,7 @@ function TraversalResult({
                   { orgSlug, workspaceSlug },
                   node.nodeId,
                 )}
-                className="text-[11px] font-medium text-primary hover:underline"
+                className="text-xs font-medium text-primary hover:underline"
               >
                 Open
               </Link>
@@ -290,7 +290,7 @@ function TraversalResult({
 
       {result.edges.length > 0 ? (
         <div>
-          <p className="mb-1 text-[11px] font-medium text-muted-foreground">
+          <p className="mb-1 text-xs font-medium text-muted-foreground">
             {result.edges.length} edge{result.edges.length === 1 ? "" : "s"}{" "}
             traversed
           </p>
@@ -301,7 +301,7 @@ function TraversalResult({
               return (
                 <div
                   key={i}
-                  className="flex flex-wrap items-center gap-1.5 text-xs"
+                  className="flex flex-wrap items-center gap-1.5 text-sm"
                 >
                   <NodeRef
                     node={
@@ -310,7 +310,7 @@ function TraversalResult({
                         : unreturnedEndpoint(edge.fromNodeId)
                     }
                   />
-                  <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <span className="font-mono text-xs uppercase tracking-wide text-muted-foreground">
                     -[{edge.edgeType}]→
                   </span>
                   <NodeRef

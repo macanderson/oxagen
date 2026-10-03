@@ -94,98 +94,93 @@ describe("unseenCanaryComplaint", () => {
 });
 
 describe("syncRetryDelayMs", () => {
-  it("waits as long as Retry-After asks, in seconds", () => {
-    expect(syncRetryDelayMs("2", 1)).toBe(2_000);
+  it("waits as long as Retry-After asks on an overloaded api", () => {
+    expect(syncRetryDelayMs(503, "2")).toBe(2_000);
   });
 
-  it("backs off by attempt when no Retry-After is given", () => {
-    expect(syncRetryDelayMs(null, 3)).toBe(6_000);
+  it("keeps the wait between one and fifteen seconds", () => {
+    expect(syncRetryDelayMs(429, "0")).toBe(1_000);
+    expect(syncRetryDelayMs(503, "120")).toBe(15_000);
   });
 
-  it("caps a long Retry-After and floors a zero one", () => {
-    expect(syncRetryDelayMs("600", 1)).toBe(15_000);
-    expect(syncRetryDelayMs("0", 1)).toBe(1_000);
+  it("waits the default when Retry-After is missing or not a number", () => {
+    expect(syncRetryDelayMs(502, null)).toBe(2_000);
+    expect(syncRetryDelayMs(504, "")).toBe(2_000);
+    expect(syncRetryDelayMs(503, "Wed, 21 Oct 2026 07:28:00 GMT")).toBe(2_000);
+  });
+
+  it("treats a refusal from Inngest as final", () => {
+    expect(syncRetryDelayMs(400, "2")).toBeNull();
+    expect(syncRetryDelayMs(401, null)).toBeNull();
+    expect(syncRetryDelayMs(500, null)).toBeNull();
   });
 });
 
 describe("syncApp", () => {
-  const url = "https://api.example.test/api/inngest";
-
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  function respond(status: number, body: string, headers: Record<string, string> = {}): Response {
-    return new Response(body, { status, headers });
+  function overloaded(): Response {
+    return new Response(
+      JSON.stringify({ error: { code: "service_overloaded" } }),
+      { status: 503, headers: { "Retry-After": "2" } },
+    );
   }
 
-  function clock() {
-    let at = 0;
-    return {
-      now: () => at,
-      sleepImpl: async (ms: number) => {
-        at += ms;
-      },
-    };
-  }
-
-  it("retries a 503 from a starting API and succeeds once it answers", async () => {
+  // The deploy of 60e2da346 (#5324) failed on the first 503 while Inngest's
+  // own step calls filled the api's background lane.
+  it("retries an overloaded api and succeeds once it answers", async () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     const fetchImpl = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(
-        respond(503, '{"error":{"code":"service_overloaded"}}', { "retry-after": "2" }),
-      )
-      .mockResolvedValueOnce(respond(200, '{"ok":true}'));
-    const time = clock();
+      .mockResolvedValueOnce(overloaded())
+      .mockResolvedValueOnce(overloaded())
+      .mockResolvedValueOnce(new Response('{"message":"Successfully registered"}'));
+    const sleepImpl = vi.fn(async () => {});
 
-    await syncApp(url, { fetchImpl, ...time });
+    await syncApp("https://example.test/api/inngest", { fetchImpl, sleepImpl });
 
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
-    expect(fetchImpl).toHaveBeenCalledWith(url, { method: "PUT" });
-    expect(time.now()).toBe(2_000);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(sleepImpl).toHaveBeenCalledTimes(2);
+    expect(sleepImpl).toHaveBeenCalledWith(2_000);
   });
 
-  it("retries a connection that fails before any answer", async () => {
-    vi.spyOn(console, "log").mockImplementation(() => {});
-    const fetchImpl = vi
-      .fn<typeof fetch>()
-      .mockRejectedValueOnce(new Error("ECONNREFUSED"))
-      .mockResolvedValueOnce(respond(200, "{}"));
-
-    await syncApp(url, { fetchImpl, ...clock() });
-
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
-  });
-
-  it("fails at once on a status that waiting cannot fix", async () => {
+  it("fails at once when Inngest refuses the sync", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const exit = vi.spyOn(process, "exit").mockImplementation(() => {
-      throw new Error("verification refused");
-    });
-    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(respond(401, "bad signature"));
-
-    await expect(syncApp(url, { fetchImpl, ...clock() })).rejects.toThrow("verification refused");
-
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
-    expect(exit).toHaveBeenCalledWith(1);
-  });
-
-  it("gives up once the retry budget is spent", async () => {
-    vi.spyOn(console, "log").mockImplementation(() => {});
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(process, "exit").mockImplementation(() => {
       throw new Error("verification refused");
     });
     const fetchImpl = vi
       .fn<typeof fetch>()
-      .mockImplementation(async () => respond(503, "overloaded", { "retry-after": "15" }));
+      .mockResolvedValue(new Response("batch size too large", { status: 400 }));
+    const sleepImpl = vi.fn(async () => {});
 
-    await expect(syncApp(url, { fetchImpl, ...clock() })).rejects.toThrow("verification refused");
+    await expect(
+      syncApp("https://example.test/api/inngest", { fetchImpl, sleepImpl }),
+    ).rejects.toThrow("verification refused");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(sleepImpl).not.toHaveBeenCalled();
+  });
 
-    // 120 seconds of budget at 15 seconds a wait: the ninth answer has no room left.
-    expect(fetchImpl).toHaveBeenCalledTimes(9);
-    expect(error.mock.calls[0]?.[0]).toContain("returned 503");
+  it("fails once the retry budget is spent", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(process, "exit").mockImplementation(() => {
+      throw new Error("verification refused");
+    });
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => overloaded());
+    const sleepImpl = vi.fn(async () => {});
+
+    await expect(
+      syncApp("https://example.test/api/inngest", {
+        fetchImpl,
+        sleepImpl,
+        budgetMs: 5_000,
+      }),
+    ).rejects.toThrow("verification refused");
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("returned 503 on attempt 3"));
   });
 });
 

@@ -117,7 +117,7 @@ function WriteDialog<O>({
             onSubmit={(e) => void submit(e)}
             className="flex flex-col gap-3"
           >
-            <p className="text-sm text-muted-foreground">{copy.body}</p>
+            <p className="text-base text-muted-foreground">{copy.body}</p>
             {failure === null ? null : (
               <FormAlert testId={`${testId}-failure`}>{failure}</FormAlert>
             )}
@@ -271,7 +271,7 @@ export function RetireAgent({
           <p
             role="status"
             data-testid={`${testId}-receipt`}
-            className="text-sm text-foreground"
+            className="text-base text-foreground"
           >
             {t("done", { name })}
           </p>
@@ -279,10 +279,10 @@ export function RetireAgent({
           <form
             id={formId}
             onSubmit={(e) => void submit(e)}
-            className="flex flex-col gap-3 text-sm"
+            className="flex flex-col gap-3 text-base"
           >
             <p>{t("body")}</p>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
+            <dl className="grid grid-cols-dl gap-x-4 gap-y-1 text-sm">
               {facts.map(([term, value]) => (
                 <div key={term} className="contents">
                   <dt className="text-muted-foreground">{term}</dt>
@@ -302,7 +302,7 @@ export function RetireAgent({
               />
               <span className="flex flex-col">
                 <span>{t("understand")}</span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   {t("understandHint")}
                 </span>
               </span>
@@ -361,7 +361,7 @@ export function AgentActions({
         write={() => rotateAgentCredential(org, ws, agentId)}
         onDone={() => false}
         done={(credential) => (
-          <div role="status" className="flex flex-col gap-2 text-sm">
+          <div role="status" className="flex flex-col gap-2 text-base">
             <p>{t("rotate.done")}</p>
             <code
               data-testid="credential-secret"
@@ -369,7 +369,7 @@ export function AgentActions({
             >
               {credential.secret}
             </code>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {t("rotate.expires", {
                 at: format.dateTime(new Date(credential.expiresAt), {
                   dateStyle: "medium",

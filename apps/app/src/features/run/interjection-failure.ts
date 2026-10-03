@@ -22,7 +22,6 @@ const WORDS = {
     interjection_answer_shape: "answerShape",
     interjection_repository_unresolved: "repositoryUnresolved",
     slug_taken: "slugTaken",
-    main_repo_claimed: "mainRepoClaimed",
     github_not_connected: "githubNotConnected",
     github_not_authorized: "githubNotAuthorized",
     installation_unreachable: "installationUnreachable",

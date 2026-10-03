@@ -25,6 +25,7 @@ import {
   type CostBasis,
   type SpendGroupKind,
 } from "@oxagen/database/schema";
+import type { WindowComposition } from "@oxagen/run-ledger";
 import {
   classesToResolve,
   FRAME_TOKEN_CLASSES,
@@ -111,8 +112,17 @@ export interface ToolCallFrame {
   outputDigest: string | null;
   /** The classifier's flag; null when it said nothing. */
   isMutating: boolean | null;
-  /** The tool-result tokens the OTel tool span recorded for the call. */
+  /**
+   * The call's result tokens: the count Claude Code's OTel tool span
+   * reported, else the recorder's estimate from the size of the result the
+   * hook saw (#5339).
+   */
   resultTokens: number | null;
+  /**
+   * `estimated` when `resultTokens` is the recorder's estimate. Absent for a
+   * count Claude Code reported, the only kind of count before #5339.
+   */
+  resultTokensBasis?: "estimated";
   /**
    * When the call ran (RFC 3339) and the chain it ran on, which place it
    * under the model call that made it (F17). Absent or null when the store
@@ -221,8 +231,16 @@ export interface KeepAliveBreakdown {
 export interface ToolBreakdown {
   name: string;
   calls: number;
-  /** The tool-result tokens its calls' spans recorded, summed; null when none did. */
+  /** The tool-result tokens its calls recorded, summed; null when none did. */
   resultTokens: number | null;
+  /**
+   * `estimated` when any call's count in `resultTokens` was the recorder's
+   * estimate rather than Claude Code's report (#5339), the way an estimated
+   * part makes a cost basis `estimated` (`foldBasis`). Absent when every
+   * count was reported, which is every row rolled up before #5339, and when
+   * `resultTokens` is null.
+   */
+  resultTokensBasis?: "estimated";
   /**
    * `resultTokens` priced at the run's uncached input rate
    * ({@link runInputPrice}). It estimates input the run's own cost already
@@ -256,15 +274,30 @@ export interface RunBreakdown {
    */
   stepClasses?: StepClasses | null;
   /**
-   * Each standing context source's tokens on the run's model calls after its
-   * first, split by whether the call read the prompt cache (#4572). The store
-   * measures it on the frames beside the source sums, and it is null for a
-   * source no call reported. Absent on a row rolled up before it was kept.
+   * Each standing context source's re-sent tokens on the run's model calls,
+   * split by whether the call read the prompt cache (#4572). A call re-sent a
+   * source only up to what the last call that carried it sent (#5339;
+   * `createStandingSplit`). The store measures it on the frames beside the
+   * source sums, and it is null for a source no call reported. Absent on a
+   * row rolled up before it was kept. A row rolled up before #5339 counted
+   * every call after the run's first as re-sending its whole count.
    */
   standing?: RunStandingResent;
+  /**
+   * The run's prompt composition: each window block's tokens summed over
+   * every request window the run recorded (`windowComposition` in
+   * `@oxagen/run-ledger`, #5341). It is the only record of a run's
+   * conversation and system tokens. The store reads it from the frames when
+   * the run has sealed, and a rollup of an open run carries the one its row
+   * already has. Null when no window reported a prompt total, or
+   * when the read stopped at its cap, so a prefix is never stored as the
+   * whole. Absent on a row rolled up before it was kept. A reader takes null
+   * and absent alike as not measured, never as zero.
+   */
+  windows?: WindowComposition | null;
 }
 
-/** One standing context source's tokens on the calls after a run's first. */
+/** One standing context source's re-sent tokens over a run's model calls. */
 export interface ResentSourceTokens {
   /** On the calls that read anything from the prompt cache. */
   cached: number;
@@ -705,7 +738,7 @@ export function createRunRollup(
 
   const byTool = new Map<
     string,
-    { calls: number; resultTokens: number | null }
+    { calls: number; resultTokens: number | null; estimated: boolean }
   >();
   const addTool = (call: ToolCallFrame) => {
     toolCalls += 1;
@@ -730,12 +763,19 @@ export function createRunRollup(
     if (call.name === null) return;
     if (!byTool.has(call.name) && byTool.size >= MAX_ROLLUP_GROUPS)
       throw new RangeError("Run rollup exceeds the distinct tool limit.");
-    const tool = byTool.get(call.name) ?? { calls: 0, resultTokens: null };
+    const tool = byTool.get(call.name) ?? {
+      calls: 0,
+      resultTokens: null,
+      estimated: false,
+    };
     tool.calls += 1;
-    // A call whose span recorded nothing adds nothing, and a tool none of
-    // whose calls recorded any stays null rather than 0.
-    if (call.resultTokens !== null)
+    // A call that recorded nothing adds nothing, and a tool none of whose
+    // calls recorded any stays null rather than 0. One estimated count makes
+    // the tool's sum an estimate (#5339).
+    if (call.resultTokens !== null) {
       tool.resultTokens = (tool.resultTokens ?? 0) + call.resultTokens;
+      if (call.resultTokensBasis === "estimated") tool.estimated = true;
+    }
     byTool.set(call.name, tool);
   };
 
@@ -794,6 +834,9 @@ export function createRunRollup(
         name,
         calls: tool.calls,
         resultTokens: tool.resultTokens,
+        ...(tool.resultTokens !== null && tool.estimated
+          ? { resultTokensBasis: "estimated" as const }
+          : {}),
         costMicros:
           tool.resultTokens === null || price === null
             ? null

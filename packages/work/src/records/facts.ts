@@ -50,6 +50,7 @@ export const ORDER_FACT_KINDS = [
   "accepted",
   "merged",
   "pr_closed",
+  "reverted",
 ] as const;
 
 /** Every fact kind, in the order a tie in time is broken. */
@@ -103,6 +104,7 @@ export const FACT_SOURCES_BY_KIND: Readonly<Record<FactKind, readonly FactSource
   accepted: ["person"],
   merged: ["provider"],
   pr_closed: ["provider"],
+  reverted: ["provider"],
 };
 
 /** The kinds a person decides, which carry the caller's item version. */
@@ -238,6 +240,14 @@ export interface FactDataByKind {
    */
   merged: { merge_commit: string; merged_by?: MergedBy | null };
   pr_closed: Record<string, never>;
+  /**
+   * The send's merged pull request was reverted. The fact's repository and
+   * pull request number name the reverting pull request, `merge_commit` is its
+   * merge commit, and `reverts` is the number of the pull request it reverts,
+   * in the same repository. A revert never moves the item's state: a person
+   * reopens the item.
+   */
+  reverted: { merge_commit: string; reverts: number };
 }
 
 interface FactBase<K extends FactKind> {
@@ -395,6 +405,10 @@ function checkData(fact: WorkFact): void {
     case "criterion_claimed":
       text(fact.data.text, "The claim");
       return;
+    case "reverted":
+      if (!HEAD_SHA_PATTERN.test(fact.data.merge_commit)) throw invalid("A revert names its merge commit as 40 hex characters.");
+      if (!Number.isInteger(fact.data.reverts) || fact.data.reverts < 1) throw invalid("A revert names the pull request it reverts by number.");
+      return;
     case "accepted":
       if (!Array.isArray(fact.data.criteria) || !Array.isArray(fact.data.required_checks)) {
         throw invalid("An acceptance lists the criteria a person ticked and the checks the base branch required.");
@@ -442,6 +456,7 @@ export function checkFact(fact: WorkFact): void {
       need(fact, "runId", "the run");
       break;
     case "pr_linked":
+    case "reverted":
       need(fact, "repository", "the repository");
       need(fact, "prNumber", "the pull request number");
       break;

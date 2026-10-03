@@ -1,7 +1,7 @@
 {
   "name": "get_work_outcomes",
   "domain": "work",
-  "description": "Count the workspace's work accepted and merged, returned, and closed in a window of days, with lead time, review touches, cost coverage, and reopens.",
+  "description": "Count the workspace's work accepted and merged, returned, and closed in a window of days, with lead time, review touches, cost coverage, reopens, and reverts.",
   "mode": "sync",
   "surfaces": [
     "api"
@@ -218,6 +218,29 @@
         ],
         "additionalProperties": false
       },
+      "reverts": {
+        "type": "object",
+        "properties": {
+          "cohort": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reverted": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "waiting": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "cohort",
+          "reverted",
+          "waiting"
+        ],
+        "additionalProperties": false
+      },
       "delivery": {
         "type": "object",
         "properties": {
@@ -362,6 +385,7 @@
       "touches",
       "cost",
       "reopens",
+      "reverts",
       "delivery",
       "truncated",
       "weeks"

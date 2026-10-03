@@ -104,7 +104,7 @@ export function EditBriefDialog({
       pendingLabel={t("pending")}
       submit={submit}
     >
-      <p className="text-sm text-muted-foreground">{t("body")}</p>
+      <p className="text-base text-muted-foreground">{t("body")}</p>
       <div className="flex flex-col">
         <label htmlFor="work-brief-repository" className={fieldLabel}>
           {t("repository")}
@@ -129,7 +129,7 @@ export function EditBriefDialog({
               className="flex flex-col gap-2 border-t border-border pt-3 first:border-t-0 first:pt-0"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="font-mono text-xs text-dim">{key}</span>
+                <span className="font-mono text-sm text-dim">{key}</span>
                 <button
                   type="button"
                   className={buttonSmall}
@@ -161,7 +161,7 @@ export function EditBriefDialog({
                   className={textareaBase}
                 />
               </div>
-              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+              <div className="grid gap-2 sm:grid-cols-main-end">
                 <div className="flex flex-col">
                   <label htmlFor={id("kind")} className={fieldLabel}>
                     {t("kind")}

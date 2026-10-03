@@ -42,20 +42,20 @@ export function GateSkeleton() {
           <div
             key={i}
             data-skeleton-tile=""
-            className="skeleton h-16 rounded-[11px]"
+            className="skeleton h-16 rounded-xl"
           />
         ))}
       </div>
       <div className={panel}>
         <div className={panelHeader}>
-          <div className="skeleton h-[22px] w-[180px] max-w-full rounded-[7px]" />
+          <div className="skeleton h-5.5 w-45 max-w-full rounded-lg" />
         </div>
         <div className={`${panelBody} flex flex-col gap-2`}>
           {[0, 1, 2, 3, 4, 5, 6].map((i) => (
             <div
               key={i}
               data-skeleton-row=""
-              className="skeleton h-[38px] rounded-[9px]"
+              className="skeleton h-9.5 rounded-xl"
             />
           ))}
         </div>
@@ -121,12 +121,12 @@ export function GateDenied({
             testId="request-access"
             closeLabel={t("close")}
           >
-            <p className="text-sm text-foreground">
+            <p className="text-base text-foreground">
               {t("dialogBody", { permission })}
             </p>
             <p
               data-testid="request-access-not-backed"
-              className="mt-3 text-sm text-muted-foreground"
+              className="mt-3 text-base text-muted-foreground"
             >
               {t("dialogNotBacked")}
             </p>

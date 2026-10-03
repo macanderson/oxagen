@@ -10,12 +10,14 @@
 // the total row of Spend by token class and the stat row's Tokens are one
 // number, and the waterfall's total row is the Shape of the run instrument's.
 // Every money figure carries its basis (INV-10). A figure the record does not
-// carry (the prompt's measured parts, speculative prefetch) is drawn where the
-// mockup draws it and reads "not recorded".
+// carry (a prompt part no source measured, speculative prefetch) is drawn
+// where the mockup draws it and reads "not recorded".
 //
-// The tab makes reads of its own, in parallel. `get_run_turns` is the run's
-// per-turn ledger over every frame it recorded, counted where the frames are
-// stored. The waterfall, its table, and the Cost so far and Shape of the run
+// The tab makes reads of its own, in parallel. `get_run_context` answers the
+// run's prompt composition: each block summed over every request window
+// (#5295). Prompt composition and Spend by area draw it, and the Context tab
+// reads the same answer. `get_run_turns` is the run's per-turn ledger over
+// every frame it recorded, counted where the frames are stored. The waterfall, its table, and the Cost so far and Shape of the run
 // instruments are drawn from it. It used to add the turns up from the
 // whole-run transcript, read 200 entries at a time, which took 68 reads on a
 // 250,000-frame run and stopped at the transcript's 10,000-frame fold (#4067).
@@ -32,6 +34,7 @@
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { RunFindings, RunTurns } from "@/data/contracts/run";
+import type { RunContext } from "@/data/contracts/run-context";
 import { type Read, readOk } from "@/data/read";
 import { FindingEvidence } from "@/features/spend";
 import { routes } from "@/shared/safe-path";
@@ -42,6 +45,7 @@ import { Instruments } from "./instruments";
 import { turnFigures } from "./metrics";
 import { ModelFitPanel } from "./model-fit";
 import { NoProgressHits } from "./no-progress";
+import { resultTokensOf } from "./prompt-split";
 import { SpendByArea } from "./spend-by-area";
 import { TokenClassesAndComposition } from "./token-classes";
 import { ToolCalls } from "./tool-calls";
@@ -56,7 +60,7 @@ function CostEstimate() {
   return (
     <p
       data-testid="cost-estimate"
-      className="max-w-prose text-sm text-muted-foreground"
+      className="max-w-prose text-base text-muted-foreground"
     >
       {t("estimate")}
     </p>
@@ -72,14 +76,20 @@ export async function CostTab(props: RunTabProps): Promise<ReactNode> {
     FINDING_ID.test(view.finding)
       ? view.finding
       : null;
-  const [turns, findings, evidence] = await Promise.all([
+  const [turns, findings, context, evidence] = await Promise.all([
     source.runs.turns(ctx, run.id),
     source.runs.findings(ctx, run.id),
+    source.runs.context(ctx, run.id),
     open === null ? null : source.spend.findingEvidence(ctx, open),
   ]);
   return (
     <>
-      <CostSections {...props} turns={turns} findings={findings} />
+      <CostSections
+        {...props}
+        turns={turns}
+        findings={findings}
+        context={context}
+      />
       {evidence === null ? null : (
         <FindingEvidence
           evidence={evidence}
@@ -100,7 +110,13 @@ function CostSections({
   place,
   turns,
   findings,
-}: RunTabProps & { turns: Read<RunTurns>; findings: Read<RunFindings> }) {
+  context,
+}: RunTabProps & {
+  turns: Read<RunTurns>;
+  findings: Read<RunFindings>;
+  /** `get_run_context`: the run's prompt composition rides it (#5295). */
+  context: Read<RunContext>;
+}) {
   const summed: Read<TurnLedger> = turns.ok
     ? readOk({
         ledger: ledgerOf(turnFigures(turns.value.turns)),
@@ -118,6 +134,10 @@ function CostSections({
   // row's (`costIsEstimate`), so an open run whose row still reads final is
   // an estimate on both.
   const estimate = rollup !== null && metrics.costIsEstimate;
+  // A failed read of the windows leaves the windows' parts not read, and
+  // the panels fall back to what the rollup measured.
+  const composition = context.ok ? context.value.composition : null;
+  const tokenSources = rollup?.tokenSources ?? null;
   return (
     <div data-testid="cost-tab" className="flex flex-col gap-3.5">
       {/* A rebuilt run's figures are the price book's estimate (ADR-161). */}
@@ -141,6 +161,7 @@ function CostSections({
               }
         }
         baseline={baseline}
+        resultTokens={resultTokensOf(rollup?.byTool ?? null)}
       />
       <NoProgressHits hits={cost.ok ? (cost.value.noProgressHits ?? []) : []} />
       <SpendByArea
@@ -148,6 +169,7 @@ function CostSections({
         prices={prices}
         byTool={rollup?.byTool ?? null}
         standingContext={rollup?.standingContext ?? null}
+        composition={composition}
       />
       <ToolCalls metrics={metrics} />
       <WaterfallPanel
@@ -160,6 +182,8 @@ function CostSections({
         metrics={metrics}
         prices={prices}
         cost={cost}
+        context={context}
+        tokenSources={tokenSources}
       />
     </div>
   );

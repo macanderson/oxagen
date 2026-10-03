@@ -95,6 +95,7 @@ const VALID: WorkFact[] = [
     data: { merge_commit: "c".repeat(40), merged_by: { login: "amara", type: "User", oxagen_app: false } },
   }),
   newFact({ kind: "pr_closed", source: "provider", ...base("k28"), orderId: "o1", data: {} }),
+  newFact({ kind: "reverted", source: "provider", ...base("k29"), orderId: "o1", repository: "aintel/platform", prNumber: 640, data: { merge_commit: "d".repeat(40), reverts: 7 } }),
 ];
 
 describe("fact kinds", () => {
@@ -169,6 +170,8 @@ describe("checkFact", () => {
     ["check_observed", "headSha"],
     ["merged", "headSha"],
     ["criterion_claimed", "criterionId"],
+    ["reverted", "repository"],
+    ["reverted", "prNumber"],
     ["accepted", "headSha"],
     ["accepted", "briefDigest"],
     ["accepted", "repository"],
@@ -199,6 +202,9 @@ describe("checkFact", () => {
     refusal({ ...find("accepted"), data: { criteria: "c1" as unknown as string[], required_checks: [] } });
     refusal({ ...find("returned"), data: { reason: "Missing test.", run_ids: ["run_1"] } });
     refusal({ ...find("merged"), data: { merge_commit: "abc", merged_by: null } });
+    refusal({ ...find("reverted"), data: { merge_commit: "abc", reverts: 7 } });
+    refusal({ ...find("reverted"), data: { merge_commit: "d".repeat(40), reverts: 0 } });
+    refusal({ ...find("reverted"), data: { merge_commit: "d".repeat(40), reverts: "7" as unknown as number } });
   });
 
   it("admits a merge that names its merger or names none, and refuses one that leaves the field out or names half an account", () => {
@@ -222,6 +228,15 @@ describe("checkFact", () => {
     expect(refusal({ ...find("accepted"), data: { criteria: ["c1"], required_checks: [] } })).toContain("lists the runs");
     expect(refusal({ ...find("returned"), data: { reason: "Missing test." } })).toContain("lists the runs");
     expect(refusal({ ...find("accepted"), data: { criteria: ["c1"], required_checks: [], run_ids: ["tse_abc", 7 as unknown as string] } })).toContain("not a run id");
+  });
+
+  it("takes a revert only from the provider, on a send", () => {
+    const revert = VALID.find((fact) => fact.kind === "reverted")!;
+    expect(FACT_SOURCES_BY_KIND.reverted).toEqual(["provider"]);
+    expect(isOrderFactKind("reverted")).toBe(true);
+    expect(isDecisionFactKind("reverted")).toBe(false);
+    expect(refusal({ ...revert, source: "person" })).toContain("not person");
+    expect(refusal({ ...revert, orderId: null })).toContain("must name its work order");
   });
 });
 

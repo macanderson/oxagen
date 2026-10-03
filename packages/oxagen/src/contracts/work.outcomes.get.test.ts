@@ -11,6 +11,7 @@ const OUTPUT = {
   touches: { per_item: 2.5, brief_approvals: 4, acceptances: 4, returns: 1, triage_overrides: 0, triage_corrections: 1 },
   cost: { runs: 5, known_runs: 4, total: { micros: "12000000", currency: "USD" } },
   reopens: { cohort: 3, reopened: 1, waiting: 4 },
+  reverts: { cohort: 3, reverted: 1, waiting: 4 },
   delivery: {
     sends: 7,
     claimed: 4,
@@ -90,5 +91,14 @@ describe("get_work_outcomes contract", () => {
     expect(contract.output.safeParse({ ...OUTPUT, weeks: [unsaid] }).success).toBe(false);
     expect(contract.output.safeParse({ ...OUTPUT, weeks: [{ ...OUTPUT.weeks[0], complete: "partly" }] }).success).toBe(false);
     expect(contract.output.parse({ ...OUTPUT, weeks: [{ ...OUTPUT.weeks[0], complete: false }] }).weeks[0]?.complete).toBe(false);
+  });
+
+  // #5244: reverts over the reopen cohort, with the items that wait to count.
+  it("answers reverts beside reopens and refuses a negative count or a revert rate", () => {
+    expect(contract.output.parse(OUTPUT).reverts).toEqual({ cohort: 3, reverted: 1, waiting: 4 });
+    expect(contract.output.safeParse({ ...OUTPUT, reverts: { ...OUTPUT.reverts, reverted: -1 } }).success).toBe(false);
+    expect(contract.output.safeParse({ ...OUTPUT, reverts: { ...OUTPUT.reverts, rate: 0.33 } }).success).toBe(false);
+    const { reverts: _reverts, ...withoutReverts } = OUTPUT;
+    expect(contract.output.safeParse(withoutReverts).success).toBe(false);
   });
 });

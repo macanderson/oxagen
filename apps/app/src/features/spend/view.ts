@@ -3,7 +3,8 @@
 // the Findings tab, or the grouping on the Month tab. The tab and the drill
 // are path segments (`/spend/<tab>/<drill>`, the mockup's route).
 // The evidence is a dialog over the Findings tab and the grouping is a choice
-// within the Month tab, so both are query values. A segment the page does not
+// within the Month tab, so both are query values, as is the cursor that opens
+// a later page of the Findings list (#5303). A segment the page does not
 // know is a 404 rather than a page that guesses.
 import { type DayRange, SpendDrillKind } from "@/data/contracts/spend";
 import { firstParam } from "@/shared/safe-path";
@@ -35,10 +36,11 @@ export const SPEND_TABS = [
 export type SpendTab = (typeof SPEND_TABS)[number];
 
 /**
- * The groupings the Month tab offers, the first one the default. The design's
- * By work item is not here: no run records the work item it served (#2962).
+ * The groupings the Month tab offers, in the design's order (#2962). Work
+ * item reads each run's work order from the rollup.
  */
 export const SPEND_MONTH_BY = [
+  "work_item",
   "agent",
   "operator",
   "model",
@@ -46,11 +48,22 @@ export const SPEND_MONTH_BY = [
 ] as const;
 export type SpendMonthBy = (typeof SPEND_MONTH_BY)[number];
 
+/** The grouping a Month address with no `by` opens on: Work item, as the design opens (#2962). */
+export const SPEND_MONTH_DEFAULT_BY: SpendMonthBy = "work_item";
+
 export type SpendView =
   /** The month's spend, grouped one way. */
   | { tab: "month"; drill: null; finding: null; by: SpendMonthBy }
-  /** The Findings section, with one finding's evidence open or none. */
-  | { tab: "findings"; drill: null; finding: string | null }
+  /**
+   * The Findings section, with one finding's evidence open or none, on the
+   * first page of the list or the page a cursor names (#5303).
+   */
+  | {
+      tab: "findings";
+      drill: null;
+      finding: string | null;
+      cursor: string | null;
+    }
   | {
       tab: Exclude<SpendTab, "month" | "findings">;
       drill: null;
@@ -78,19 +91,32 @@ export type GatewayReach = { hosts: number; hostsEnforcingModels: number };
 const PRINCIPAL = /^prn_[0-9a-z]+$/;
 const KEY_MAX = 256;
 
+/**
+ * A cursor as `list_findings` writes one: base64url text within the bound
+ * the contract accepts. Anything else reads as the first page, so a mangled
+ * address still opens the list.
+ */
+const CURSOR = /^[A-Za-z0-9_-]{1,256}$/;
+
+function cursorOf(value: string | string[] | undefined): string | null {
+  const raw = firstParam(value);
+  return raw !== undefined && CURSOR.test(raw) ? raw : null;
+}
+
 function isTab(value: string | undefined): value is SpendTab {
   return SPEND_TABS.some((tab) => tab === value);
 }
 
 function monthBy(value: string | undefined): SpendMonthBy {
-  return SPEND_MONTH_BY.find((by) => by === value) ?? "agent";
+  return SPEND_MONTH_BY.find((by) => by === value) ?? SPEND_MONTH_DEFAULT_BY;
 }
 
 /**
  * The view the path segments after `/spend` name, or null for a path that
  * names none (the route answers 404). `finding` is the query value that opens
- * one finding's evidence over the Findings tab, and `by` the Month tab's
- * grouping; a grouping the tab does not offer reads as the default.
+ * one finding's evidence over the Findings tab, `by` the Month tab's
+ * grouping, and `cursor` a later page of the Findings list. A grouping the
+ * tab does not offer reads as the default.
  *
  * A drill is its kind and a key whether or not the kind is still a tab, so a
  * link to one key's drill outlives the tab it was first reached from.
@@ -99,6 +125,7 @@ export function parseSpendView(
   segments: readonly string[] | undefined,
   finding?: string | string[],
   by?: string | string[],
+  cursor?: string | string[],
 ): SpendView | null {
   const [raw, drill, ...rest] = segments ?? [];
   if (rest.length > 0) return null;
@@ -137,6 +164,7 @@ export function parseSpendView(
       tab,
       drill: null,
       finding: saved !== undefined && isFindingId(saved) ? saved : null,
+      cursor: cursorOf(cursor),
     };
   }
   return { tab, drill: null, finding: null };

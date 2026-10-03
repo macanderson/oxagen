@@ -5,7 +5,10 @@ import type { LanguageModel } from "ai";
 import type { LanguageModelV4 } from "@ai-sdk/provider";
 import { requireEnv } from "@oxagen/config/env";
 import { fetchWithoutRedirects } from "@oxagen/config/public-url";
-import { DIRECT_PROVIDER_BASE_URL } from "./direct-provider-urls";
+import {
+  DIRECT_PROVIDER_BASE_URL,
+  splitBaseUrlQuery,
+} from "./direct-provider-urls";
 import type { ModelCredentialProvider } from "@oxagen/oxagen/contracts/org.model_credential.shared";
 import type { ResolvedTierCatalog } from "./catalog";
 
@@ -557,7 +560,8 @@ function customerClient(credential: ModelCredential): LanguageProviderClient {
           "an openai_compatible credential has no baseUrl; the row is invalid",
         );
       }
-      return compatibleClient("byok", credential.baseUrl, credential.apiKey, {
+      const endpoint = customerEndpoint(credential.baseUrl);
+      return compatibleClient("byok", endpoint.baseURL, credential.apiKey, {
         // The customer's URL was checked when the row was written; a redirect
         // target is a URL nobody checked. The probe refuses redirects for the
         // same reason, and a policy enforced in one of them is bypassed by
@@ -567,6 +571,7 @@ function customerClient(credential: ModelCredential): LanguageProviderClient {
           refusing: "Refusing to call the model endpoint",
         }),
         supportsStructuredOutputs: structuredOutputsOf(credential),
+        ...(endpoint.queryParams ? { queryParams: endpoint.queryParams } : {}),
       });
     }
   }
@@ -587,12 +592,36 @@ function structuredOutputsOf(credential: ModelCredential): boolean {
     : credential.structuredOutputs === true;
 }
 
+/**
+ * A customer's endpoint the way the SDK takes it. The SDK appends each path to
+ * `baseURL` as a string, so a query left on it would swallow the path:
+ * `https://host/v1?api-version=1` would become `…?api-version=1/chat/completions`.
+ * The query goes in `queryParams` instead, which the SDK puts on every request,
+ * after the path, as the probe does (#3317).
+ */
+function customerEndpoint(baseUrl: string): {
+  baseURL: string;
+  queryParams?: Record<string, string>;
+} {
+  const { base, query } = splitBaseUrlQuery(baseUrl);
+  // A fragment is never sent, so only the part between `?` and `#` counts.
+  const search = query.startsWith("?") ? (query.split("#", 1)[0] ?? "") : "";
+  const queryParams = Object.fromEntries(new URLSearchParams(search));
+  return Object.keys(queryParams).length === 0
+    ? { baseURL: base }
+    : { baseURL: base, queryParams };
+}
+
 /** One OpenAI-compatible endpoint, on whichever key is paying. */
 function compatibleClient(
   name: string,
   baseURL: string,
   apiKey: string,
-  options: { fetch?: typeof fetch; supportsStructuredOutputs?: boolean } = {},
+  options: {
+    fetch?: typeof fetch;
+    supportsStructuredOutputs?: boolean;
+    queryParams?: Record<string, string>;
+  } = {},
 ): LanguageProviderClient {
   return createOpenAICompatible({
     name,

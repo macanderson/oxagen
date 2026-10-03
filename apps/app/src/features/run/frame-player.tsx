@@ -301,7 +301,7 @@ export function PlayerScrub({
   };
   return (
     // `.fp-scrub { flex:1; min-width:180px; display:grid; gap:3px; margin:0 6px }`
-    <div className="mx-1.5 grid min-w-[180px] flex-1 gap-[3px] max-md:basis-full">
+    <div className="mx-1.5 grid min-w-45 flex-1 gap-0.75 max-md:basis-full">
       <input
         type="range"
         min={0}
@@ -322,13 +322,13 @@ export function PlayerScrub({
         className="m-0 w-full cursor-pointer accent-foreground disabled:cursor-default"
       />
       {/* `.fp-ticks { position:relative; height:6px; margin:0 7px }` */}
-      <div aria-hidden="true" className="relative mx-[7px] h-1.5">
+      <div aria-hidden="true" className="relative mx-1.75 h-1.5">
         {marks.map((mark, i) => (
           <i
             key={`${mark.left}:${String(i)}`}
             title={mark.title}
             // `.fp-ticks i { position:absolute; top:0; width:4px; height:6px; border-radius:2px; margin-left:-2px }`
-            className={`absolute top-0 -ml-0.5 h-1.5 w-1 rounded-[2px] ${mark.hue}`}
+            className={`absolute top-0 -ml-0.5 h-1.5 w-1 rounded-xs ${mark.hue}`}
             style={{ left: mark.left }}
           />
         ))}
@@ -366,7 +366,7 @@ export function FrameListBox({
       aria-label={label}
       // A scroll box a keyboard can reach (WCAG 2.1.1): it takes focus.
       tabIndex={0}
-      className="relative max-h-[420px] overflow-y-auto p-[7px] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+      className="relative max-h-105 overflow-y-auto p-1.75 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
     >
       {children}
     </div>

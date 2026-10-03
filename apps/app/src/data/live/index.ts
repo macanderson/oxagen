@@ -5,6 +5,7 @@ import { agents } from "./agents";
 import { approvals } from "./approvals";
 import { audit } from "./audit";
 import { billing } from "./billing";
+import { changes } from "./changes";
 import { conversations } from "./conversations";
 import { interjections } from "./interjections";
 import { mandates } from "./mandates";
@@ -41,4 +42,5 @@ export const liveSource: DataSource = {
   tools,
   runtimes,
   work,
+  changes,
 };

@@ -423,6 +423,9 @@ export function spendFindings(
       calls: 22,
       ...finding,
     })),
+    truncated: false,
+    nextCursor: null,
+    offset: 0,
   });
 }
 
@@ -684,6 +687,7 @@ export function agentsSource(reads: AgentReads) {
       tree: refuse,
     },
     steeringRepo: { get: refuse },
+    changes: { changeSet: refuse, revisionDiff: refuse },
     tools: {
       versions: refuse,
       grants: refuse,
