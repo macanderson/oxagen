@@ -104,7 +104,9 @@ export interface ModelCredentialHarnessState {
    * keeps in `auth.json`, a file that is a symlink apply will not rewrite, a
    * file that does not exist and nothing to write into it, or a Claude Code
    * `env` block that sets both a key and a bearer (`two_credentials`), which
-   * custody holds one of per provider and so refuses to take either.
+   * custody holds one of per provider and so refuses to take either. On
+   * restore, `foreign_key_present` says the file already held a key of the
+   * person's own, which was kept.
    */
   reason?:
     | "subscription_login"
@@ -594,9 +596,10 @@ function restoreClaude(
     if (existsSync(backup)) unlinkSync(backup);
   };
   if (text === undefined) {
-    // The file is gone. A released key still has to land somewhere the
-    // harness reads, so it goes into a fresh settings file rather than back
-    // into a store that is about to be shredded.
+    // The file is gone, so it holds no key of the person's own to keep. A
+    // released key still has to land somewhere the harness reads, so it goes
+    // into a fresh settings file rather than back into a store that is about
+    // to be shredded.
     if (released !== undefined) {
       const member =
         released.kind === "bearer" ? CLAUDE_AUTH_TOKEN : CLAUDE_API_KEY;
@@ -621,40 +624,50 @@ function restoreClaude(
     else delete settings[HELPER_KEY];
     touched = true;
   }
+  // Apply took the key and the bearer out of `env` and put the helper in
+  // their place, so a value in either member now is one the person put there
+  // since, such as a key they rotated after enrolling. Theirs wins, as it
+  // does for Codex: Anthropic shows a key only once, so writing the older one
+  // over it could lose the only copy. The caller is told the released key
+  // went nowhere and decides what becomes of it.
+  const current = envOf(settings);
+  const foreignKey =
+    current !== undefined &&
+    (isSecret(current[CLAUDE_API_KEY]) || isSecret(current[CLAUDE_AUTH_TOKEN]));
+  const why = foreignKey ? { reason: "foreign_key_present" as const } : {};
   // A released secret goes back whether or not the receipt survived: the
   // receipt names the member it came out of, and without one the kind says
   // which member Claude Code reads that kind from. A lost receipt must not
   // lose the key, because the caller releases it from custody once this
   // returns.
   let secretRestored = false;
-  if (released !== undefined) {
+  if (released !== undefined && !foreignKey) {
     const member =
       sidecar?.taken.find((t) => t.kind === released.kind)?.member ??
       (released.kind === "bearer" ? CLAUDE_AUTH_TOKEN : CLAUDE_API_KEY);
-    const env = { ...(envOf(settings) ?? {}) };
+    const env = { ...(current ?? {}) };
     env[member] = released.secret;
     settings["env"] = env;
     touched = true;
     secretRestored = true;
   } else if (sidecar?.created_env === true) {
-    const env = envOf(settings);
-    if (env !== undefined && Object.keys(env).length === 0) {
+    if (current !== undefined && Object.keys(current).length === 0) {
       delete settings["env"];
       touched = true;
     }
   }
   if (!touched) {
     dropSidecar();
-    return { changed: false, secretRestored };
+    return { changed: false, secretRestored, ...why };
   }
   const next = serializeLike(text, settings);
   if (next === text) {
     dropSidecar();
-    return { changed: false, secretRestored };
+    return { changed: false, secretRestored, ...why };
   }
   writeAtomicPreserving(file, next);
   dropSidecar();
-  return { changed: true, secretRestored };
+  return { changed: true, secretRestored, ...why };
 }
 
 function restoreCodex(
