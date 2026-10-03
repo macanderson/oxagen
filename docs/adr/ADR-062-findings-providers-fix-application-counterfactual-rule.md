@@ -161,7 +161,7 @@ above in the change that records its field.
 | Refetching a stable list (mockup) | a read-only tool's identical result of the same input in an earlier run | the saving is the tool's execution, and the result tokens enter the new run's context either way; no recorder writes a per-call tool execution cost, or the size of a not-modified or diff response |
 | Cache misses after a stable prefix changed | a system-context digest per turn | a model call the proxy did not carry has no digest, by the amendment of 2026-10-02. A proxied call has carried one since #4505, and detector 3 (`cache_busts`, ADR-208) reads it |
 | Tool-list bloat | `cost.run_totals.tool_definition_tokens` | a model call the proxy did not carry has no tool definition count, by the amendment of 2026-10-02. A proxied call has carried one since #4505, and detector 2 (`standing_context`, ADR-208) reads it |
-| Context bloat | `cost.run_totals.context_frame_tokens` and the citation rate from `context_use_feedback` | the column stays null for Claude Code by the amendment of 2026-10-02, and no recorder writes `context_use_feedback` |
+| Context bloat | `cost.run_totals.context_frame_tokens` and the citation rate from `context_use_feedback` | for Claude Code the column counts only the context Oxagen's own hooks handed the agent, by the amendment of 2026-10-03, and no recorder writes `context_use_feedback` |
 | Retry storms | per-call provider errors with the cost of each retry | a failed provider call carries no billed tokens in either frame store, so a storm has no measured cost to save |
 | Unproductive tail | the step after which nothing was kept | `productive_ratio` and step grading are null until the grading lane writes them |
 | Wrong tier | step shapes and the tier each call took | no recorder classifies a step or records a route tier |
@@ -248,6 +248,7 @@ absent member means nothing measured it. It never means zero.
   conversation, and nothing in the request marks it apart (ADR-200), so any
   count would be a guess. The envelope, the column, and the rollup carry the
   member, so a harness that can measure it fills it with no further change.
+  The amendment of 2026-10-03 below fills it from Oxagen's own hook answers.
 - **Every count is an estimate today.** Claude Code reports none of the
   three, so each count is `budgetTokens` (UTF-8 bytes over four) with basis
   `estimated`. A count the producer sets itself keeps its own value and basis.
@@ -264,3 +265,81 @@ first reads them.
 The code is `packages/tacho/src/claude-code/system-context.ts`
 (`SystemContextTracker.measure` and `measureUnseen`) and, in `recorder.ts`,
 `SessionRecorder.withUnseenRequestSources` and `onSessionConversation`.
+
+## Amendment 2026-10-03: context frames from Oxagen's hook answers (#5339)
+
+Most wrapped Claude Code runs are recorded through hooks, OpenTelemetry
+(OTel), and the transcript alone. Before this change, the Cost tab read "not
+recorded" for their context. The request cannot say which bytes are hook
+context, but Oxagen wrote some of that context itself. The daemon knows the
+text of each hook answer as the answer leaves, with no proxy.
+
+So `context_frame_tokens` now counts the text Oxagen's hooks hand the agent
+after its start:
+
+- A later hook's `additionalContext`: a `UserPromptSubmit` answer's notice,
+  operator messages, and recalled memories, and a `PostToolUse` or
+  `PostToolUseFailure` answer's operator messages and resume continuation.
+- A `Stop` block's reason, which the model reads as what to do next.
+
+The text stays in the conversation, so every later call carries it again.
+Each call on the session's own conversation counts the running total, as
+each call counts the steering. A side call carries neither.
+
+| Path | What the counted row carries now |
+|---|---|
+| Loopback model proxy (`fidelity = 'proxy'`) | the tool definition count, the steering count, the context frame count, the system context digest, and its parts |
+| Loopback model proxy, on a request that declares no tools | the tool definition count (zero), the system context digest, and its parts |
+| OTel `api_request` record or transcript `assistant` record, on a session the proxy did not carry | the steering count and the context frame count, on a call of the session's own conversation |
+| An OTel `api_request` record of a side call, or one that names no `query_source` | nothing |
+| A subagent's OTel or transcript row | nothing |
+
+- **The start is steering's.** The `SessionStart` answer's text is the
+  steering prefix and the steers delivered beside it. The `steering.manifest`
+  frame counts both, so the context frame count leaves the start out and
+  nothing is counted twice.
+- **A count of zero is absent.** The count leaves out context a person's own
+  hooks or project files add, which Oxagen never sees. So zero from Oxagen
+  does not mean zero context, and a call that carries none of Oxagen's text
+  has no `context_frame_tokens`. The Cost tab still reads "not recorded"
+  there.
+- **The basis is `estimated`.** The count is `budgetTokens` over the text,
+  like every other count on this path. It is not the `apportioned` byte share
+  `get_run_context` uses. A share needs the request's total bytes, and a
+  session the proxy did not carry never has them.
+- **A call reads the total as of when it was made.** OTel exports in batches,
+  and the transcript is read behind the session. A call's record can arrive
+  after a later answer left. Each answer is kept with the time it left, and a
+  call takes the total at or before its own time. The tracker keeps the last
+  32 answers, which is the most a record can fall behind and still read its
+  own total.
+- **A compaction or a `/clear` empties the total.** A `SessionStart` whose
+  source is `compact` or `clear` replaces the conversation, so the text is no
+  longer sent.
+- **The context frames are a count and never a part.** They ride the
+  conversation, not the prefix the system context digest covers. A new recall
+  does not read as a changed system context, and detector 3 is unchanged.
+- **The interrupt's text is not counted.** It stands in for the refused
+  tool's result, so it is a tool result.
+- **Other harnesses.** Codex answers the same boundaries and its rollout rows
+  take the same count. Stella hands its agent text only at the start, so it
+  has no count. Cursor's model calls carry no usage record, so no row carries
+  one.
+
+Two sources stay absent on a session the proxy did not carry:
+
+- **Tool definitions.** No hook payload, OTel record, or transcript record
+  lists the tools a session declared, so nothing can count them.
+- **Tool result tokens.** The hook's `PostToolUse` row keeps the result's size
+  as `tool_output_bytes` under every retention, `digest_only` included. The
+  rollup prices a result only from the tokens Claude Code reports on its OTel
+  tool span, which needs enhanced telemetry. Turning the byte size into
+  tokens would put an estimate into `tool_result_tokens`, which has no basis
+  column, and the `unpaged_results` finding would price that estimate as if
+  Claude Code had reported it. That needs a basis column for result tokens
+  first.
+
+The code is `SystemContextTracker.noteInjectedContext` and `injectedAt` in
+`system-context.ts`, `noteHandedContext` in
+`packages/tacho/src/collector/hook-handler.ts`, and the compaction reset in
+`SessionRecorder.sealHookDraft`.
