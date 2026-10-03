@@ -861,6 +861,23 @@ describe("the breakdown jsonb (#4069)", () => {
     expect(reviveBreakdown(stored)).toEqual(kept);
   });
 
+  // #5339. An estimated count keeps its basis through jsonb, and a row with
+  // no key, every row rolled up before, reads as Claude Code's own count.
+  it("writes a tool's estimated basis and reads it back, and reads no key as reported", () => {
+    const [grep, read] = breakdown.tools;
+    const kept = {
+      ...breakdown,
+      tools: [grep!, { ...read!, resultTokensBasis: "estimated" as const }],
+    };
+    const stored = throughJsonb(serializeBreakdown(kept));
+    expect(stored.tools[1].resultTokensBasis).toBe("estimated");
+    expect("resultTokensBasis" in stored.tools[0]).toBe(false);
+    expect(reviveBreakdown(stored)).toEqual(kept);
+    expect(
+      reviveBreakdown(throughJsonb(serializeBreakdown(breakdown))).tools[1],
+    ).not.toHaveProperty("resultTokensBasis");
+  });
+
   it("reads a row rolled up before #4572 with no priced tokens and no split", () => {
     const stored = throughJsonb(serializeBreakdown(breakdown));
     expect("standing" in stored).toBe(false);

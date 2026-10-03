@@ -218,8 +218,14 @@ interface ToolCallFrameRow {
   outputDigest: string | null;
   /** The classifier's flag; null when it said nothing. */
   isMutating: boolean | null;
-  /** The tool-result tokens the OTel span of the same tool use recorded. */
+  /**
+   * The call's result tokens: the count the OTel span of the same tool use
+   * reported, else the estimate the hook row carries (#5339). Null when
+   * neither recorded one.
+   */
   resultTokens: number | null;
+  /** Set only when `resultTokens` is the hook's estimate; see {@link RESULT_TOKENS_BASIS}. */
+  resultTokensBasis?: "estimated";
   /**
    * When the hook recorded the call (RFC 3339), and the chain it ran on
    * (`session_uuid`, the root session on the root's own chain). The rollup
@@ -241,6 +247,35 @@ function toolFrameStatus(status: string): ToolCallFrameRow["status"] {
   return GRADED_TOOL_STATUSES.has(status)
     ? (status as ToolCallFrameRow["status"])
     : null;
+}
+
+/**
+ * A tool call's result tokens, for a read that joins the OTel tool span of the
+ * call as `r` onto the hook row `h` (#5339). The span's count is Claude Code's
+ * own, so it wins. A hook row carries the recorder's estimate, from the size
+ * of the result the hook saw, for a call no span counted. `join_use_nulls`
+ * makes an unmatched span read null, so the hook row fills in.
+ */
+const RESULT_TOKENS = "coalesce(r.result_tokens, h.tool_result_tokens)";
+
+/**
+ * How {@link RESULT_TOKENS} is known: `reported` for the span's count, the
+ * hook row's own basis for its count, and empty when neither recorded one. A
+ * hook row with a count and no basis reads `estimated`. Only the recorder
+ * writes a hook row's count, and a count read as reported must be one Claude
+ * Code stated, so the read never guesses `reported`.
+ */
+const RESULT_TOKENS_BASIS =
+  "multiIf(r.result_tokens IS NOT NULL, 'reported', h.tool_result_tokens IS NULL, '', h.tool_result_tokens_basis = 'reported', 'reported', 'estimated')";
+
+/** The basis member a row takes: set only for an estimate, absent for a count Claude Code reported. */
+function resultTokensBasisOf(
+  tokens: string | number | null,
+  basis: string | undefined,
+): { resultTokensBasis?: "estimated" } {
+  return tokens !== null && basis === "estimated"
+    ? { resultTokensBasis: "estimated" }
+    : {};
 }
 
 /**
@@ -1139,11 +1174,13 @@ async function readGroupFrameBatch(
  * `tool.call_completed` events in Postgres, which the rollup store reads.
  *
  * Each call comes with what the rollup grades it by (its status, its input and
- * output digests, and the classifier's mutating flag, ADR-199) and the result
- * tokens the OTel tool span of the same tool use recorded, joined on
- * `tool_use_id` the way {@link readTachoToolCallObservations} joins them.
- * `join_use_nulls` makes a call with no span read null, never 0: a zero would
- * price the call's result at nothing rather than leave it unrecorded.
+ * output digests, and the classifier's mutating flag, ADR-199) and its result
+ * tokens: the count the OTel tool span of the same tool use reported, joined
+ * on `tool_use_id` the way {@link readTachoToolCallObservations} joins them,
+ * else the hook row's own estimate (#5339). `join_use_nulls` makes a call with
+ * no span read the hook's estimate, or null where the hook saw no result,
+ * never 0: a zero would price the call's result at nothing rather than leave
+ * it unrecorded. An estimate carries `resultTokensBasis: "estimated"`.
  */
 export async function readTachoToolCallFrames(args: {
   orgId: string;
@@ -1164,11 +1201,13 @@ export async function readTachoToolCallFrames(args: {
         h.tool_is_mutating                                             AS is_mutating,
         formatDateTime(h.ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC')           AS at,
         toString(h.session_uuid)                                       AS session_uuid,
-        r.result_tokens                                                AS result_tokens
+        ${RESULT_TOKENS} AS result_tokens,
+        ${RESULT_TOKENS_BASIS} AS result_tokens_basis
         ${consume === undefined ? "" : ", h.repeated AS repeated"}
       FROM (
         SELECT ts, seq, session_uuid, tool_name, tool_status, tool_input_digest,
-               tool_output_digest, tool_is_mutating, tool_use_id
+               tool_output_digest, tool_is_mutating, tool_use_id,
+               tool_result_tokens, tool_result_tokens_basis
                ${consume === undefined ? "" : `,
                  tool_name != '' AND tool_input_digest != '' AND tool_output_digest != '' AND
                  count() OVER (
@@ -1217,6 +1256,7 @@ export async function readTachoToolCallFrames(args: {
     output_digest: string;
     is_mutating: boolean | null;
     result_tokens: string | number | null;
+    result_tokens_basis?: string;
     at?: string;
     session_uuid?: string;
   };
@@ -1228,6 +1268,7 @@ export async function readTachoToolCallFrames(args: {
     outputDigest: r.output_digest === "" ? null : r.output_digest,
     isMutating: r.is_mutating,
     resultTokens: r.result_tokens === null ? null : Number(r.result_tokens),
+    ...resultTokensBasisOf(r.result_tokens, r.result_tokens_basis),
     ...(r.at === undefined ? {} : { at: r.at }),
     ...(r.session_uuid === undefined ? {} : { sessionUuid: r.session_uuid }),
   }), consume);
@@ -1337,8 +1378,13 @@ export interface ToolCallObservationRow {
   /** Empty when the hook recorded no output. */
   outputDigest: string;
   isMutating: boolean | null;
-  /** The result tokens the OTel tool span recorded for the same tool use; null when none did. */
+  /**
+   * The result tokens the OTel tool span reported for the same tool use, else
+   * the hook row's estimate (#5339); null when neither recorded any.
+   */
   resultTokens: number | null;
+  /** Set only when `resultTokens` is the hook's estimate. */
+  resultTokensBasis?: "estimated";
   /**
    * `tool_status` when it is `ok`, `error` or `rejected`, as
    * {@link ToolCallFrameRow} reads it; null for any other value.
@@ -1384,13 +1430,15 @@ export async function readTachoToolCallObservations(args: {
         h.tool_input_digest                                            AS input_digest,
         h.tool_output_digest                                           AS output_digest,
         h.tool_is_mutating                                             AS is_mutating,
-        r.result_tokens                                                AS result_tokens,
+        ${RESULT_TOKENS} AS result_tokens,
+        ${RESULT_TOKENS_BASIS} AS result_tokens_basis,
         h.tool_status                                                  AS status,
         h.tool_error_class                                             AS error_class
       FROM (
         SELECT root_session_uuid, session_uuid, ts, seq, tool_name,
                tool_input_digest, tool_output_digest, tool_is_mutating,
-               tool_use_id, tool_status, tool_error_class
+               tool_use_id, tool_status, tool_error_class,
+               tool_result_tokens, tool_result_tokens_basis
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
@@ -1438,6 +1486,7 @@ export async function readTachoToolCallObservations(args: {
     output_digest: string;
     is_mutating: boolean | null;
     result_tokens: string | number | null;
+    result_tokens_basis?: string;
     status: string;
     error_class: string;
   };
@@ -1452,6 +1501,7 @@ export async function readTachoToolCallObservations(args: {
     outputDigest: r.output_digest,
     isMutating: r.is_mutating,
     resultTokens: r.result_tokens === null ? null : Number(r.result_tokens),
+    ...resultTokensBasisOf(r.result_tokens, r.result_tokens_basis),
     status: toolFrameStatus(r.status),
     errorClass: r.error_class === "" ? null : r.error_class,
   }));

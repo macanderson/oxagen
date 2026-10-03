@@ -374,7 +374,7 @@ These come from the published hook and monitoring references and are modelled no
 | `refusal_category`, `refusal_has_category`, `refusal_has_explanation`, `server_fallback_hop` | LC, N(Bool), N(Bool), N(Bool) | OTel `api_refusal` |
 | `permission_mode_trigger` | LC | OTel `permission_mode_changed.trigger` (`shift_tab`, `exit_plan_mode`, `auto_gate_denied`, `auto_opt_in`) |
 | `auth_action`, `auth_success`, `auth_method`, `auth_error_category`, `auth_status_code` | LC, N(Bool), LC, LC, N(UInt16) | OTel `auth` |
-| `tool_result_tokens` | N(UInt32) | span `tool.result_tokens` |
+| `tool_result_tokens`, `tool_result_tokens_basis` | N(UInt32), LC | span `tool.result_tokens` (`reported`); a `PostToolUse` hook's `tool_output_bytes` over four (`estimated`, #5339). An empty basis beside a count is a row written before the basis existed, when only the span wrote a count |
 | `skill_name`, `plugin_name`, `marketplace_name`, `plugin_id_hash` | String | OTel attribution attrs on `api_request`, `api_error`, `cost.usage`, span `tool.skill_name`, `mcp_server_connection.plugin_id_hash` |
 | `workspace_host_paths` | Array(String) | OTel `workspace.host_paths` |
 | `request_effort` | String | the reasoning effort a proxied `llm_call` request body carried, as sent (#3891); empty when Oxagen did not proxy the call or the request carried none |

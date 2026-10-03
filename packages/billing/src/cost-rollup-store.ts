@@ -834,6 +834,8 @@ type ToolBreakdown = RunTotalsRecord["breakdown"]["tools"][number];
 type ToolBreakdownJson = Pick<ToolBreakdown, "name" | "calls"> & {
   /** Absent on a row rolled up before #3892. */
   resultTokens?: number | null;
+  /** Present only when the count is an estimate (#5339). */
+  resultTokensBasis?: "estimated";
   costMicros?: string | null;
 };
 
@@ -904,6 +906,13 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
       name: t.name,
       calls: t.calls,
       resultTokens: t.resultTokens ?? null,
+      // A row rolled up before #5339 carries no key: every count it holds
+      // was Claude Code's own, which an absent key says.
+      ...(t.resultTokensBasis === "estimated" &&
+      t.resultTokens !== undefined &&
+      t.resultTokens !== null
+        ? { resultTokensBasis: "estimated" as const }
+        : {}),
       costMicros:
         t.costMicros === undefined || t.costMicros === null
           ? null
@@ -949,6 +958,9 @@ export function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
         name: t.name,
         calls: t.calls,
         resultTokens: t.resultTokens,
+        ...(t.resultTokensBasis === undefined
+          ? {}
+          : { resultTokensBasis: t.resultTokensBasis }),
         costMicros: t.costMicros === null ? null : t.costMicros.toString(),
       }),
     ),

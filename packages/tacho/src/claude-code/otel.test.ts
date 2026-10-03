@@ -384,6 +384,8 @@ describe("OpenTelemetry normalization", () => {
     expect(spans.drafts[1]?.body).toMatchObject({
       tool_target: "ls",
       tool_result_tokens: 3,
+      // Claude Code's own count (#5339).
+      tool_result_tokens_basis: "reported",
       attribution_skill: "sk",
     });
     expect(spans.drafts[1]?.span).toEqual({
