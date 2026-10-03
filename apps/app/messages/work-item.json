@@ -238,7 +238,7 @@
       "heading": "Review",
       "aPerson": "A person",
       "noPullRequest": "The run opened no pull request. oxagen accepts work only through a pull request, so return the item with what the agent should open, or close it.",
-      "noRecordedPullRequest": "The send's record names none of these pull requests yet, so Accept stays closed.",
+      "noRecordedPullRequest": "Accept waits until the send's record names one of these pull requests.",
       "pullRequest": "Pull request",
       "pullRequests": "Pull requests",
       "pullRequestRef": "{repository}#{number}",

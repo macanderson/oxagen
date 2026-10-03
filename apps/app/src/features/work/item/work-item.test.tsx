@@ -415,11 +415,11 @@ describe("WorkItemPage › states", () => {
     await expectNoAxe(document.body);
   });
 
-  it("forge pull request with no fact: lists it and says Accept stays closed", async () => {
+  it("forge pull request with no fact: lists it and says Accept waits for the record", async () => {
     await renderDetail(unrecordedPullItem());
     const review = screen.getByTestId("work-panel-review");
     expect(within(review).getAllByTestId("work-review-pull")).toHaveLength(1);
-    expect(review).toHaveTextContent("The send's record names none of these pull requests yet, so Accept stays closed.");
+    expect(review).toHaveTextContent("Accept waits until the send's record names one of these pull requests.");
     expect(review).not.toHaveTextContent("The run opened no pull request.");
     expect(within(review).queryByTestId("work-review-head")).toBeNull();
     await expectNoAxe(document.body);
