@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dailyBudgetUsdSchema } from "../workspace-budgets-schema";
 import { registerCapability } from "../registry";
 import { avatarUrlOutputSchema } from "../avatar";
 import { consequenceRolesSchema } from "../mandates/schemas";
@@ -22,6 +23,9 @@ const workspaceSettingsOutput = z.object({
   // OFF, so these are the floor for the workspace.
   steering: steeringGatePolicy,
   runEnrichmentEnabled: z.boolean().optional(),
+  // The workspace's own daily budgets for its model calls, in US dollars per
+  // UTC day, one per lane; null is no limit (#5426).
+  dailyBudgetUsd: dailyBudgetUsdSchema.optional(),
 });
 
 export const workspaceSettingsRead = registerCapability({

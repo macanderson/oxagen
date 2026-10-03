@@ -129,8 +129,12 @@ async function nameQuestion(
     const chosen = selectModelFromFunding(scope.orgId, funding, {
       tier: "fast",
     });
+    // A title is Stella chat spend, so it is held to that lane's daily
+    // budget in the workspace (#5426).
     const gate = await evaluateTurnCreditGate(scope.orgId, {
       fundedBy: chosen.fundedBy,
+      lane: "assistant",
+      workspaceId: scope.workspaceId,
     });
     return gate.ok ? chosen : null;
   });
@@ -153,6 +157,7 @@ async function nameQuestion(
           workspaceId: scope.workspaceId,
           surface: "app",
           messageId: randomUUID(),
+          capabilityName: "title_conversation",
         },
       }),
     );

@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  dailyBudgetUsdPatchSchema,
+  dailyBudgetUsdSchema,
+} from "../workspace-budgets-schema";
 import { registerCapability } from "../registry";
 import { workspaceSlug } from "../workspace-slug";
 import { avatarUrlSchema, avatarUrlOutputSchema } from "../avatar";
@@ -70,6 +74,13 @@ export const workspaceSettingsWrite = registerCapability({
       .describe(
         "Generate run names and summaries with Stella using organization credits. Does not affect recorded evidence.",
       ),
+    // The daily budgets, as a patch: a lane left out is unchanged, a lane set
+    // to null has no limit. Omitting `dailyBudgetUsd` leaves all three alone.
+    dailyBudgetUsd: dailyBudgetUsdPatchSchema
+      .optional()
+      .describe(
+        "Per-day limits in US dollars for the workspace's own model calls: runEnrichment (run names and summaries), assistant (Stella chat), and work (triage and work orders). Null removes a limit.",
+      ),
   }),
   output: z.object({
     name: z.string(),
@@ -79,6 +90,7 @@ export const workspaceSettingsWrite = registerCapability({
     consequenceRoles: consequenceRolesSchema,
     steering: steeringGatePolicy,
     runEnrichmentEnabled: z.boolean().optional(),
+    dailyBudgetUsd: dailyBudgetUsdSchema.optional(),
   }),
 });
 

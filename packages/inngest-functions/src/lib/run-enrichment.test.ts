@@ -468,6 +468,11 @@ describe("the stored failure reason", () => {
       new Error("Run enrichment unavailable: insufficient_credits"),
       "credit_refused:insufficient_credits",
     ],
+    // The workspace's own daily budget (#5426) is its own reason.
+    [
+      new Error("Run enrichment unavailable: workspace_budget_spent"),
+      "workspace_budget_spent",
+    ],
     [
       {
         name: "GatewayError",

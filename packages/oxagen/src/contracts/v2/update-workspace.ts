@@ -142,6 +142,11 @@ export const updateWorkspace = defineTool({
      */
     runEnrichmentEnabled:
       workspaceSettingsWrite.input.shape.runEnrichmentEnabled,
+    /**
+     * The workspace's own daily limits on its model calls, one per lane,
+     * carried by reference from `update_workspace_settings` (#5426).
+     */
+    dailyBudgetUsd: workspaceSettingsWrite.input.shape.dailyBudgetUsd,
 
     // ---- governance (new; Appendix A wrk.workspaces) ----------------------
     /**
@@ -233,6 +238,7 @@ export const updateWorkspace = defineTool({
 
     runEnrichmentEnabled:
       workspaceSettingsWrite.output.shape.runEnrichmentEnabled,
+    dailyBudgetUsd: workspaceSettingsWrite.output.shape.dailyBudgetUsd,
 
     governanceMode: z.enum(["solo", "team", "regulated"]),
     /** Null means "inherit the organization's" — see the input field. */

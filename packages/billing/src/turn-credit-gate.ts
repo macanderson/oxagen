@@ -58,6 +58,7 @@ import {
   type StartTurnOptions,
 } from "./metering";
 import { logger } from "./logger";
+import { WorkspaceBudgetSpentError } from "./workspace-lane-budget";
 
 /**
  * The 402 error codes surfaced to the client — match errorMiddleware's billing
@@ -67,7 +68,8 @@ import { logger } from "./logger";
 export type CreditGateDenyCode =
   | "insufficient_credits"
   | "billing_suspended"
-  | "assistant_spend_cap";
+  | "assistant_spend_cap"
+  | "workspace_budget_spent";
 
 export type CreditGateResult =
   | { ok: true }
@@ -98,6 +100,15 @@ export async function evaluateTurnCreditGate(
     }
     if (err instanceof AssistantSpendCapError) {
       return { ok: false, code: "assistant_spend_cap", message: err.message };
+    }
+    // The workspace's own daily budget on the lane (#5426): the customer's
+    // control, so it refuses an org-funded turn as well.
+    if (err instanceof WorkspaceBudgetSpentError) {
+      return {
+        ok: false,
+        code: "workspace_budget_spent",
+        message: err.message,
+      };
     }
     // Unknown / infra error: FAIL OPEN. Do not block the turn on a metering
     // blip. The turn's spend is still charged, and an unpaid remainder is

@@ -39,6 +39,7 @@ import {
   withSystemDb,
   type Tx,
 } from "@oxagen/database";
+import type { SpendLane } from "@oxagen/oxagen/workspace-budgets";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { inTransaction } from "./internal/in-transaction";
 
@@ -64,16 +65,23 @@ export async function recordSpend(
     workspaceId: string | null;
     at: Date;
     micros: bigint;
+    /**
+     * Which of the workspace's own model calls the spend belongs to
+     * (#5426), or none for spend outside the three lanes. Each lane's daily
+     * budget reads its own row; the org and workspace ceilings sum them all.
+     */
+    lane?: SpendLane | null;
   },
   transaction?: Tx,
 ): Promise<void> {
   if (args.micros <= 0n) return;
   const workspaceId = args.workspaceId === NIL_UUID ? null : args.workspaceId;
+  const lane = args.lane ?? "";
   const run = (tx: Tx) =>
     tx.execute(sql`
-      INSERT INTO ${schema.spendCounters} (org_id, workspace_id, day, spent_micros)
-      VALUES (${args.orgId}::uuid, ${workspaceId}::uuid, ${utcDay(args.at)}::date, ${args.micros.toString()}::bigint)
-      ON CONFLICT (org_id, coalesce(workspace_id, '${sql.raw(NIL_UUID)}'::uuid), day)
+      INSERT INTO ${schema.spendCounters} (org_id, workspace_id, day, lane, spent_micros)
+      VALUES (${args.orgId}::uuid, ${workspaceId}::uuid, ${utcDay(args.at)}::date, ${lane}, ${args.micros.toString()}::bigint)
+      ON CONFLICT (org_id, coalesce(workspace_id, '${sql.raw(NIL_UUID)}'::uuid), day, lane)
       DO UPDATE SET
         spent_micros = ${schema.spendCounters}.spent_micros + EXCLUDED.spent_micros,
         updated_at = now()
@@ -120,4 +128,52 @@ export async function sumSpendCounter(args: {
       ),
   );
   return BigInt(rows[0]?.micros ?? "0");
+}
+
+/**
+ * Today's spend (micro-USD) of one lane in one workspace, from the counter
+ * (#5426). The day is the UTC calendar day of `at`, the same day
+ * `recordSpend` files a call under, so a budget resets at 00:00 UTC.
+ */
+export async function sumLaneSpendForDay(args: {
+  orgId: string;
+  workspaceId: string;
+  lane: SpendLane;
+  at: Date;
+}): Promise<bigint> {
+  const rows = await withSystemDb((tx) =>
+    tx
+      .select({
+        micros: sql<string>`coalesce(sum(${schema.spendCounters.spentMicros}), 0)::text`,
+      })
+      .from(schema.spendCounters)
+      .where(
+        and(
+          eq(schema.spendCounters.orgId, args.orgId),
+          eq(schema.spendCounters.workspaceId, args.workspaceId),
+          eq(schema.spendCounters.day, utcDay(args.at)),
+          eq(schema.spendCounters.lane, args.lane),
+        ),
+      ),
+  );
+  return BigInt(rows[0]?.micros ?? "0");
+}
+
+/**
+ * The lane a priced call belongs to, from the capability its usage row
+ * names (#5426). The call sites that spend on a workspace's behalf stamp
+ * `capability_name` on their telemetry: the enrichment job writes
+ * `run_enrichment`, work intake writes `work_triage`, and the assistant
+ * writes `ask_assistant`. A row that names none of those, or none at all, is
+ * outside the lanes and counts only toward the org and workspace ceilings.
+ */
+export function spendLaneOf(row: {
+  capability_name?: string | null;
+}): SpendLane | null {
+  const capability = row.capability_name ?? "";
+  if (capability === "run_enrichment") return "run_enrichment";
+  if (capability.startsWith("work_")) return "work";
+  if (capability === "ask_assistant" || capability === "title_conversation")
+    return "assistant";
+  return null;
 }
