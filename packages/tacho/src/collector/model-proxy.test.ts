@@ -3630,6 +3630,7 @@ describe("the wire and the host file", () => {
       "skills",
       "cache_keep_alive",
       "work_orders",
+      "steering_incomplete",
     ]);
   });
 

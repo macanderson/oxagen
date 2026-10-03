@@ -215,6 +215,16 @@ export const BUNDLE_FEATURE_HOOK_FAIL_OPEN = "hook_fail_open" as const;
 export const BUNDLE_FEATURE_STEERING_MANIFEST = "steering_manifest" as const;
 
 /**
+ * The host can parse a `context.manifest` item cut for `incomplete`: a
+ * published record with no force or no statement, which steers nothing, and
+ * which may carry no `force` (#3296). Gated for the same reason
+ * `steering_manifest` is: the item schema is strict, so a host built before
+ * the reason would reject the whole mandate. A host that does not advertise
+ * it gets the manifest without those items, and `cut` still counts them.
+ */
+export const BUNDLE_FEATURE_STEERING_INCOMPLETE = "steering_incomplete" as const;
+
+/**
  * The host can parse `containment`: the mandate's statement that its agent
  * runs only under the contained launcher (ADR-152). Gated for the same reason
  * `gateway_tools` is: the bundle schema is strict, so a host built before the
@@ -316,6 +326,7 @@ export const TACHO_BUNDLE_FEATURES = [
   BUNDLE_FEATURE_SKILLS,
   BUNDLE_FEATURE_CACHE_KEEP_ALIVE,
   BUNDLE_FEATURE_WORK_ORDERS,
+  BUNDLE_FEATURE_STEERING_INCOMPLETE,
 ] as const;
 
 export type TachoBundleFeature = (typeof TACHO_BUNDLE_FEATURES)[number];
@@ -844,14 +855,23 @@ export const steeringItemKindSchema = z.enum([
   "instruction",
 ]);
 
-/** Why the assembler cut an item. */
-export const steeringCutReasonSchema = z.enum(["tier", "budget", "superseded"]);
+/**
+ * Why the assembler cut an item. The control plane signs `incomplete` only to
+ * a host that advertises `BUNDLE_FEATURE_STEERING_INCOMPLETE`.
+ */
+export const steeringCutReasonSchema = z.enum([
+  "tier",
+  "budget",
+  "superseded",
+  "incomplete",
+]);
 
 export const steeringManifestItemSchema = z
   .object({
     id: z.string().min(1).max(256),
     kind: steeringItemKindSchema,
-    force: steeringForceSchema,
+    // Absent only on an `incomplete` item whose record has no force.
+    force: steeringForceSchema.optional(),
     recorded_at: z.string().max(64),
     tokens: z.number().int().nonnegative(),
     outcome: z.enum(["included", "cut"]),

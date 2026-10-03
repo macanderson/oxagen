@@ -37,6 +37,7 @@ import {
   schema,
 } from "@oxagen/database";
 import type {
+  IncompleteSteeringItem,
   SteeringCandidate,
   SteeringForce,
 } from "@oxagen/steering-assembler";
@@ -113,7 +114,8 @@ function instant(value: Date | string | null): string {
  * `null` for a row that cannot steer. A row with no force cannot be ranked
  * and a row with no statement has nothing to say; both are what the schema
  * comment on `steering_records` warns the legacy publish path could leave,
- * and neither can be delivered.
+ * and neither can be delivered. `incompleteRecord` describes such a row for
+ * the manifest, so the run record still names it.
  *
  * The body is the line the agent reads: the statement, then the kind (with a
  * constraint's effect) and the slug, unchanged from ADR-091 so a workspace
@@ -137,6 +139,26 @@ export function recordCandidate(
     kind: "record",
     force: record.force as SteeringForce,
     body: `${record.statement} (${kind}; ${record.slug})`,
+    recordedAt: instant(record.activatedAt),
+  };
+}
+
+function isRecordForce(force: string | null): force is SteeringForce {
+  return force !== null && RECORD_FORCES.includes(force);
+}
+
+/**
+ * A record `recordCandidate` refuses, as the manifest lists it: cut for
+ * `incomplete`, with its force when it has a valid one (#3296). Before this,
+ * such a row was dropped before ranking, and the manifest never named it.
+ */
+export function incompleteRecord(
+  record: SteeringRecord,
+): IncompleteSteeringItem {
+  return {
+    id: record.slug,
+    kind: "record",
+    ...(isRecordForce(record.force) ? { force: record.force } : {}),
     recordedAt: instant(record.activatedAt),
   };
 }
