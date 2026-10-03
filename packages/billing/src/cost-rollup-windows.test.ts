@@ -208,6 +208,35 @@ describe("readRunWindowComposition — a ledger run", () => {
     });
   });
 
+  it("stores no prefix as the whole when the walk passes its 100,000-event cap (negative)", async () => {
+    const window = [
+      event(1, "model.engine_call_started", {
+        model_call_id: "prov-1-0",
+        provider: "oxagen",
+        model: "anthropic/claude-sonnet-4",
+        window: WINDOW,
+      }),
+      event(2, "model.engine_call_completed", {
+        model_call_id: "prov-1-0",
+        input_tokens: 10_000,
+      }),
+    ];
+    // Every page is full, so the run never runs out of events.
+    readAttemptEventsSince.mockImplementation(
+      async (_runId: string, after: string, limit: number) => {
+        const from = Number(after);
+        return Array.from({ length: limit }, (_, i) =>
+          from + i < 2
+            ? window[from + i]!
+            : event(from + i + 1, "tool.engine_call_completed", {}),
+        );
+      },
+    );
+    expect(await readRunWindowComposition(ledger)).toBeNull();
+    // 200 pages of 500 events reach the cap and no further.
+    expect(readAttemptEventsSince).toHaveBeenCalledTimes(200);
+  });
+
   it("answers null for a ledger run recorded before windows existed (negative)", async () => {
     readAttemptEventsSince.mockResolvedValue([
       event(1, "model.engine_call_started", { model_call_id: "prov-1-0" }),
