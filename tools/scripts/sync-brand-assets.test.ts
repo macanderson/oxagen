@@ -43,6 +43,8 @@ function put(root: string, rel: string, content: string | Buffer) {
  * A copy of the repo with just what the script imports and edits in place:
  * the script, its entrypoint helper and literal guard, apps/web's palette
  * module, and the six hand-authored pages the sync writes a <head> block into.
+ * The story and read pages link no site stylesheet, so each sets its own
+ * heading face, as the type pass requires (oxageninc/brand#83).
  */
 function fixtureRepo(root: string) {
   const copyIn = (rel: string) => {
@@ -61,10 +63,13 @@ function fixtureRepo(root: string) {
     "terms/index.html",
     "privacy/index.html",
   ]) {
+    const faces = ["story/index.html", "read/index.html"].includes(page)
+      ? "<style>h1, h2, h3 { font-family: var(--ox-font-display); }</style>\n"
+      : "";
     put(
       root,
       `apps/web/${page}`,
-      '<head>\n<link rel="manifest" href="/oxagen.webmanifest">\n</head>\n',
+      `<head>\n<link rel="manifest" href="/oxagen.webmanifest">\n${faces}</head>\n`,
     );
   }
   return join(root, "tools/scripts/sync-brand-assets.mjs");
@@ -389,6 +394,25 @@ describe("a sync and a check against a kit", () => {
     );
     expect(literal.stderr).toContain("KEEP in tools/scripts/lib/brand-literals.mjs");
     put(repo(), sheet, ":root {\n  --ui-radius: var(--ox-radius-base);\n}\n");
+    const fixed = sync("--check");
+    expect(fixed.status, fixed.stderr).toBe(0);
+  });
+
+  // oxageninc/brand#83: a customer page sets no size by hand, none under
+  // 14px, and h1 to h3 in Space Grotesk.
+  it("fails a check on a type break in a customer page, naming the line, until it reads a token", () => {
+    sync();
+    stampDesktop();
+    const page = "apps/web/story/index.html";
+    const head = readFileSync(join(repo(), page), "utf8");
+    put(repo(), page, head.replace("</head>", "<style>\n.tag { font-size: 12px; }\n</style>\n</head>"));
+    const broken = sync("--check");
+    expect(broken.status).toBe(1);
+    expect(broken.stderr).toMatch(
+      /type\s+apps\/web\/story\/index\.html \(line \d+: font-size: 12px; use .*no text on a customer site is under 14px/,
+    );
+    expect(broken.stderr).toContain("KEEP excuses no size under 14px");
+    put(repo(), page, head.replace("</head>", "<style>\n.tag { font-size: var(--ox-m-micro); }\n</style>\n</head>"));
     const fixed = sync("--check");
     expect(fixed.status, fixed.stderr).toBe(0);
   });
