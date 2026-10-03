@@ -1,12 +1,12 @@
 # link_repository
 
-Propose linking a GitHub repository to the workspace. The link follows the merge of a steering PR (ADR-212, ADR-099).
+Propose linking a GitHub repository to the workspace. The link follows the merge of a steering PR (ADR-212, ADR-293).
 
 A workspace has one steering repository, the one whose `.oxagen/` holds its steering record. It can link any number of code repositories: the ones its agents work on. The steering record's `.oxagen/workspace.toml` lists them, so this write writes no binding head. It opens a steering PR on the steering repository that adds the repository to `workspace.toml`. When that PR merges, the steering sync reads the new file and writes the `role = 'linked'` binding head. Until then the repository is not linked. In a steering repository the PR carries a `workspace` proposal ([ADR-265](../adr/ADR-265-every-steering-pr-oxagen-opens-carries-a-proposal-row.md), #5122), so a person merges it from Oxagen with [`merge_steering_pr`](steering.pr.merge.md).
 
 The repository is named by `owner/name` and nothing else. The installation is the one attached to the workspace's GitHub connection, never the caller's choice. An installation id a caller could choose would let one tenant mint tokens for another account's installation.
 
-One code repository can be linked to many workspaces, in the same organization or not. Each workspace lists it in its own `workspace.toml`, and each gets its own head.
+One repository can be linked to many workspaces, in the same organization or not. Each workspace lists it in its own `workspace.toml`, and each gets its own head. That includes a repository another workspace uses as its steering repository: the only limit is what the workspace's GitHub App installation can see ([ADR-293](../adr/ADR-293-any-workspace-may-link-any-repository-its-installation-can-see.md)). The one exclusive rule belongs to the agent. An agent is steered by one steering repository, its workspace picks it, and every run names its workspace.
 
 **Surfaces:** api, mcp, agent, cli
 
@@ -44,7 +44,7 @@ One code repository can be linked to many workspaces, in the same organization o
 ## How it works
 
 1. The handler checks the caller's role.
-2. It runs the checks the sync applies when it writes the head: the installation, the repository, another workspace's steering claim, and this workspace's heads. A steering PR that could never take effect is refused before it is opened.
+2. It runs the checks the sync applies when it writes the head: the installation, the repository, and this workspace's heads. A steering PR that could never take effect is refused before it is opened. It reads no other workspace's heads.
 3. It reads `workspace.toml` on the steering repository's production branch.
    - The file lists the repository: `status: listed`, no PR.
    - The file is missing: the steering PR creates it with this one entry.
@@ -61,18 +61,16 @@ When the steering PR merges, the push to the production branch triggers the stee
 | `forbidden` | `no_principal`, `org_role_required` | no acting user, or the caller is not an org Owner or Admin or the workspace's Owner |
 | `conflict` | `github_not_connected` | the workspace has no GitHub connection carrying an installation |
 | `not_found` | `repository_not_installed` | the installation cannot see the repository |
-| `conflict` | `main_repo_claimed` | the repository is another workspace's steering repository |
 | `conflict` | `main_repo_unbound` | this workspace has no steering repository to hold `workspace.toml` |
 | `conflict` | `main_repo` | the repository is this workspace's steering repository |
 | `conflict` | `repository_already_linked` | this workspace already links it |
-| `conflict` | `main_repo_plane_unsupported` | a dedicated Postgres plane is in use, so the cross-workspace claim cannot be checked (ADR-042) |
 | `conflict` | `workspace_toml_unreadable` | `workspace.toml` on the production branch cannot be read as `workspace/v1` |
 | `not_found` | `workspace_not_found` | the file is missing and the workspace or its organization no longer exists |
 | `conflict` | `github_refused` | GitHub refused a read, the branch, the file, or the pull request |
 
 The reason codes that name `main_repo` keep their names because the contract fixes them. They refer to the steering repository.
 
-`main_repo_claimed` is deliberate. Another workspace's steering repository holds that workspace's steering records. Linking it here would hand this workspace a door into those records. A linked code repository receives no steering PR, because every record lives in the steering repository (ADR-212). The refusal names neither the organization nor the workspace holding the claim, because the read that finds it crosses tenants. The store's trigger `repository_binding_heads_exclusive_main` checks it a second time when the sync writes the head.
+No refusal depends on another workspace. Until 2026-10-03, `main_repo_claimed` refused another workspace's steering repository, and `main_repo_plane_unsupported` refused a link on a dedicated Postgres plane, where that cross-workspace check could not run. ADR-293 removed both, and migration 20261003170000 dropped the store trigger that refused the same link a second time. Linking another workspace's steering repository gives this workspace no write to it: a linked repository receives no steering PR, because every record lives in the steering repository (ADR-212).
 
 ## What this write does not do
 

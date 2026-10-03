@@ -16,15 +16,16 @@ A workspace binds repositories in two roles. The role lives on the head,
 
 | Role | What it is | How many | Who creates the head |
 |---|---|---|---|
-| `steering` | The workspace's steering repo, which holds its steering records | One per workspace. No other workspace can bind it. | The provisioning job, when you create the workspace |
-| `linked` | A code repository the workspace's agents work in | Any number. One code repository can be linked to many workspaces. | The steering sync, after a steering PR that lists it merges |
+| `steering` | The workspace's steering repo, which holds its steering records | One per workspace. No other workspace can hold it as its steering repo, and any workspace can link it. | The provisioning job, when you create the workspace |
+| `linked` | A repository the workspace's agents work in | Any number. One repository can be linked to many workspaces, including one another workspace steers by (ADR-293). | The steering sync, after a steering PR that lists it merges |
 
 Migration 20260927185600 moved every earlier `main` head. In each workspace,
 an existing `steering` head, or else the oldest `main` head, became
 `steering`. Every other `main` head became `linked`. The role check now
-admits `steering` and `linked` only. The unique index and the trigger that
-keep `steering` exclusive kept their names, and the handlers map them to
-`main_repo_claimed`.
+admits `steering` and `linked` only. The unique index that keeps `steering`
+exclusive kept its name. Migration 20261003170000 dropped the trigger that
+also refused a link to another workspace's steering repo, and no handler
+answers `main_repo_claimed` any more (ADR-293).
 
 The public contracts keep their earlier names (ADR-212, decision 2). They
 still answer `role: "main" | "linked"` and the `main_repo_*` reason codes, and
@@ -89,9 +90,11 @@ provider `gitlab_steering`, and step 1 offers the group.
 The steering repo's credential stays with Oxagen. Oxagen reads and writes a
 provisioned steering repo server-side through an installation token of the
 Oxagen GitHub App (`mintSteeringInstallationToken`), and no agent receives
-that token. `create_github_token` refuses the steering repo with
+that token. `create_github_token` refuses a steering repo with
 `steering_repo_propose_only`, and the agent changes the steering repo through
-a steering PR (ADR-228).
+a steering PR (ADR-228). That holds when another workspace links the steering
+repo too: the handler asks every workspace whether one steers by the
+repository before it reads an installation (ADR-293).
 
 ### 2.3 Changes to the steering repo
 
@@ -296,7 +299,7 @@ nothing.
 | `set_governance_mode` | api, mcp, cli | Opens a steering PR that changes `governance.toml`. |
 | `list_working_copies` | api, mcp | The checkouts a CLI reported. |
 | `record_working_copy` | api, cli | The CLI's report of one checkout. |
-| `create_github_token` | api | Refuses the steering repo with `steering_repo_propose_only` (§2.2). |
+| `create_github_token` | api | Refuses any workspace's steering repo with `steering_repo_propose_only` (§2.2). |
 | `open_init_pr` | api, mcp, cli | Retired. It refuses with `conflict: init_pr_retired`. |
 | `attach_gitlab_project` | api | Attaches a GitLab project with a project access token (#3762). |
 | `list_code_repository_findings` | api, mcp, cli | The stored instruction-file statements that repeat or contradict a record today (§3.5, ADR-263). The CLI command is `oxagen steering findings`. |
