@@ -840,6 +840,91 @@ async function dropStampQuietly(
   }
 }
 
+export interface StrandedStampInput {
+  host: SteeringHost;
+  repo: SteeringRepository;
+  branch: string;
+  /** The head the checks passed on, which the proposal row still names. */
+  checkedHead: string;
+  /** The PR's head now. */
+  head: string;
+}
+
+/**
+ * Drop a stamp commit that a merge left on the branch when it stopped
+ * between the stamp and the host merge, and answer true (#4498).
+ *
+ * The call that pushed a stamp drops it on any failure it sees. A call that
+ * dies, or times out, does not, and its claim lapses with the stamp still the
+ * PR's head. Without this, every later merge read that head as moved and
+ * refused `head_moved`, and nothing put the branch back.
+ *
+ * The commit message proves nothing, so `head` counts as a stamp only when
+ * its one parent is `checkedHead` and it changes nothing a stamp does not:
+ * the ledger file under {@link PROMOTIONS_DIR}, which it may only extend; the
+ * `id` and `hash` lines of records the PR already changes, so each file at
+ * `head` is exactly that file at `checkedHead` stamped; and, on an import
+ * branch, the deletion of {@link IMPORT_REPLACES_PATH}. Anything else is a
+ * person's push, and the caller still refuses `head_moved`. The reset runs
+ * only while the branch is still at `head`, so a push in between stays.
+ */
+export async function dropStrandedStamp(input: StrandedStampInput): Promise<boolean> {
+  const { host, repo, branch, checkedHead, head } = input;
+  if (head === checkedHead) return false;
+  const parents = await host.commitParents(repo, head);
+  if (parents.length !== 1 || parents[0] !== checkedHead) return false;
+  const stamped = await host.changedFiles(repo, checkedHead, head);
+  if (stamped.length === 0) return false;
+  const main = await host.branchHead(repo, repo.defaultBranch);
+  const base =
+    main === null ? null : await checkBase(host, repo, checkedHead, main);
+  const own =
+    base === null
+      ? new Set<string>()
+      : new Set(
+          (await host.changedFiles(repo, base, checkedHead))
+            .filter((file) => file.status !== "removed")
+            .map((file) => file.path),
+        );
+  let ledgers = 0;
+  for (const file of stamped) {
+    if (file.path.startsWith(`${PROMOTIONS_DIR}/`)) {
+      if (file.status === "removed" || ++ledgers > 1) return false;
+      const before =
+        file.status === "added"
+          ? ""
+          : await host.readFile(repo, file.path, checkedHead);
+      const after = await host.readFile(repo, file.path, head);
+      if (before === null || after === null || !after.startsWith(before))
+        return false;
+      continue;
+    }
+    if (file.path === IMPORT_REPLACES_PATH) {
+      if (file.status !== "removed" || !isImportBranch(branch)) return false;
+      continue;
+    }
+    if (
+      file.status !== "modified" ||
+      !own.has(file.path) ||
+      !isStampedRecordPath(file.path)
+    )
+      return false;
+    const before = await host.readFile(repo, file.path, checkedHead);
+    const after = await host.readFile(repo, file.path, head);
+    if (before === null || after === null) return false;
+    const expected = stampRecordText(before);
+    if (!expected.ok || expected.text !== after) return false;
+  }
+  if (ledgers !== 1) return false;
+  const reset = await host.resetBranch(repo, branch, { from: head, to: checkedHead });
+  if (reset)
+    logger.info(
+      { repository: repo.fullName, branch, stamp: head, head: checkedHead },
+      "steering merge queue: dropped a stamp commit a stopped merge left on the branch",
+    );
+  return reset;
+}
+
 /** A push reached the branch after the stamp, so the stamp stays under it. */
 function stampedBranchMoved(branch: string, number: number): HandlerError {
   return new HandlerError({

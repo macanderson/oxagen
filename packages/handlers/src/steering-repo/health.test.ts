@@ -513,6 +513,8 @@ interface Script {
   divergence: Divergence | null;
   revert: number | (() => Promise<number>);
   prs: OpenPullRequest[] | (() => Promise<OpenPullRequest[]>);
+  /** False when the host holds more open pull requests than it listed. */
+  complete?: boolean;
   failCheck: (pr: OpenPullRequest) => Promise<void>;
 }
 
@@ -531,7 +533,10 @@ function scriptedHost(script: Script) {
     ),
     closeRevert: vi.fn(async (_number: number) => {}),
     isRevert: (pr: OpenPullRequest) => pr.head_ref.startsWith("steering/revert-to-"),
-    openPullRequests: vi.fn(() => answer(script.prs)),
+    openPullRequests: vi.fn(async () => ({
+      pulls: await answer(script.prs),
+      complete: script.complete ?? true,
+    })),
     failCheck: vi.fn((pr: OpenPullRequest, _report: unknown) => script.failCheck(pr)),
     restoreCheck: vi.fn(async (_pr: OpenPullRequest) => {}),
     upsertComment: vi.fn(
@@ -1007,6 +1012,47 @@ describe("checkRepoHealth", () => {
     expect(await r.read()).toMatchObject({ health: "healthy", previous: "drifted", restored: 2 });
     expect(r.host.restoreCheck.mock.calls.map(([pr]) => pr.number)).toEqual([11, 12]);
     expect(r.row()?.postedDigest).toBeNull();
+  });
+
+  // #4653: a host can hold more open pull requests than one read lists.
+  describe("a cut list of open pull requests", () => {
+    it("never records the report as posted everywhere", async () => {
+      const r = rig({ observation: MERGES_DELETED, complete: false });
+      expect((await r.read(RULESET_DELETED))?.posted).toBe(2);
+      expect(r.row()?.postedDigest).not.toBeNull();
+      expect(r.row()?.postedDigest).not.toMatch(/^[0-9a-f]{64}$/);
+
+      // So the next sweep posts again instead of skipping an unchanged report.
+      r.reset();
+      expect((await r.read())?.posted).toBe(2);
+    });
+
+    it("keeps the digest set after a recovery that could not reach every pull request", async () => {
+      const r = rig({ observation: MERGES_DELETED });
+      await r.read(RULESET_DELETED);
+      r.script.observation = CLEAN;
+      r.script.complete = false;
+      r.reset();
+      expect((await r.read())?.restored).toBe(2);
+      expect(r.row()?.postedDigest).not.toBeNull();
+    });
+
+    it("posts on the pull request a webhook named even when the list missed it", async () => {
+      const r = rig({ observation: MERGES_DELETED });
+      await r.read(RULESET_DELETED);
+      r.script.prs = [PR1];
+      r.script.complete = false;
+      r.reset();
+      const outcome = await r.read({
+        ...SWEEP_TRIGGER,
+        reason: "pull_request.synchronize",
+        pull_request: { number: 12, head_sha: PR2.head_sha },
+      });
+      expect(outcome?.posted).toBe(1);
+      expect(r.host.failCheck.mock.calls.map(([pr]) => [pr.number, pr.head_sha])).toEqual([
+        [12, PR2.head_sha],
+      ]);
+    });
   });
 
   it("retries a failed notification on the next read", async () => {

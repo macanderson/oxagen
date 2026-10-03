@@ -337,12 +337,13 @@ describe("githubHealthHost pull requests", () => {
 
     const open = await host.openPullRequests();
 
-    expect(open).toHaveLength(101);
-    expect(open[100]).toEqual({ number: 101, head_sha: pulls(101, 1)[0]?.head.sha, head_ref: "b101" });
+    expect(open.complete).toBe(true);
+    expect(open.pulls).toHaveLength(101);
+    expect(open.pulls[100]).toEqual({ number: 101, head_sha: pulls(101, 1)[0]?.head.sha, head_ref: "b101" });
     expect(s.calls).toHaveLength(2);
   });
 
-  it("stops after ten pages", async () => {
+  it("stops after ten pages and says the list is cut (#4653)", async () => {
     const { s, host } = scriptedGithub(
       Object.fromEntries(
         Array.from({ length: 11 }, (_, i) => [
@@ -352,7 +353,9 @@ describe("githubHealthHost pull requests", () => {
       ),
     );
 
-    expect(await host.openPullRequests()).toHaveLength(1000);
+    const open = await host.openPullRequests();
+    expect(open.pulls).toHaveLength(1000);
+    expect(open.complete).toBe(false);
     expect(s.calls).toHaveLength(10);
   });
 
@@ -464,6 +467,42 @@ describe("githubHealthHost.restoreCheck", () => {
 
     await host.restoreCheck(PR);
 
+    expect(s.writes()).toEqual([]);
+  });
+
+  /** A full page of health runs, newest first, with ids from `top` down. */
+  function healthRuns(top: number) {
+    return Array.from({ length: 100 }, (_, i) => ({
+      id: top - i,
+      status: "completed",
+      conclusion: "failure",
+      external_id: HEALTH_CHECK_EXTERNAL_ID,
+    }));
+  }
+
+  it("finds the steering checks' result on the second page (#4653)", async () => {
+    const { s, host } = scriptedGithub({
+      [RUNS]: ok({ check_runs: healthRuns(300) }),
+      [`${RUNS}&page=2`]: ok({
+        check_runs: [
+          { id: 7, status: "completed", conclusion: "success", output: { title: "Checks passed", summary: "ok" } },
+        ],
+      }),
+      [`POST ${ROOT}/check-runs`]: ok({ id: 301 }, 201),
+    });
+
+    await host.restoreCheck(PR);
+
+    expect(s.writes()[0]?.body).toMatchObject({ conclusion: "success", head_sha: SHA });
+  });
+
+  it("throws when ten full pages hold only health runs, so the run retries (#4653)", async () => {
+    const routes: Parameters<typeof server>[1] = { [RUNS]: ok({ check_runs: healthRuns(2000) }) };
+    for (let page = 2; page <= 10; page++)
+      routes[`${RUNS}&page=${page}`] = ok({ check_runs: healthRuns(2000 - (page - 1) * 100) });
+    const { s, host } = scriptedGithub(routes);
+
+    await expect(host.restoreCheck(PR)).rejects.toThrow(/more Oxagen steering results than Oxagen reads/);
     expect(s.writes()).toEqual([]);
   });
 });
@@ -682,9 +721,10 @@ describe("gitlabHealthHost merge requests", () => {
       [MRS]: ok([{ iid: 3, sha: SHA, source_branch: "feature/rules" }]),
     });
 
-    expect(await host.openPullRequests()).toEqual([
-      { number: 3, head_sha: SHA, head_ref: "feature/rules" },
-    ]);
+    expect(await host.openPullRequests()).toEqual({
+      pulls: [{ number: 3, head_sha: SHA, head_ref: "feature/rules" }],
+      complete: true,
+    });
   });
 
   it("fails the status with the report title and a link", async () => {
@@ -777,6 +817,27 @@ describe("gitlabHealthHost.restoreCheck", () => {
     await host.restoreCheck(PR);
 
     expect(s.writes()).toEqual([]);
+  });
+
+  it("finds the steering checks' status on the second page (#4653)", async () => {
+    const health = Array.from({ length: 100 }, (_, i) => ({
+      id: 300 - i,
+      status: "failed",
+      description: `${HEALTH_STATUS_PREFIX}x`,
+    }));
+    const { s, host } = scriptedGitlab({
+      [STATUSES]: ok(health),
+      [`${STATUSES}&page=2`]: ok([{ id: 7, status: "success", description: "All checks passed." }]),
+      [STATUS]: ok({ id: 301 }, 201),
+    });
+
+    await host.restoreCheck(PR);
+
+    expect(s.writes()[0]?.body).toEqual({
+      state: "success",
+      name: REQUIRED_CHECK_NAME,
+      description: "All checks passed.",
+    });
   });
 });
 
@@ -958,7 +1019,7 @@ describe("healthHostFor", () => {
     vi.stubGlobal("fetch", s.fetch);
     try {
       const host = healthHostFor(located("gitlab", GITLAB_CONNECTION), {});
-      expect(await host?.openPullRequests()).toEqual([]);
+      expect(await host?.openPullRequests()).toEqual({ pulls: [], complete: true });
       expect(s.calls).toHaveLength(1);
     } finally {
       vi.unstubAllGlobals();
