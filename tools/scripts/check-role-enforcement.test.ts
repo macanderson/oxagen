@@ -418,8 +418,21 @@ describe("the #4194 baseline and coverage", () => {
     }
   });
 
-  it("holds at most the thirteen stems it holds today; nothing may enter", () => {
-    expect(ROLE_ENFORCEMENT_BASELINE.size).toBeLessThanOrEqual(13);
+  it("is empty since #3458; nothing may enter", () => {
+    expect(ROLE_ENFORCEMENT_BASELINE.size).toBe(0);
+  });
+
+  it("exempts the six #3458 stems a credential other than a role authorizes", () => {
+    for (const stem of [
+      "org.create",
+      "tacho.bundle.get",
+      "tacho.command.fetch",
+      "tacho.events.ingest",
+      "tacho.host.enroll",
+      "telemetry.stella.ingest",
+    ]) {
+      expect(ROLE_ENFORCEMENT_EXEMPT.has(stem)).toBe(true);
+    }
   });
 
   it("gives every exemption a reason", () => {
