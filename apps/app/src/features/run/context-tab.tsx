@@ -227,7 +227,7 @@ function PromptPanel({
           </p>
           <p
             data-testid="run-context-first-prompt"
-            className="m-0 max-w-measure-narrow text-base leading-normal text-foreground [overflow-wrap:anywhere]"
+            className="m-0 max-w-measure-narrow text-base leading-normal text-foreground wrap-anywhere"
           >
             {prompt === null
               ? t("noPrompt")

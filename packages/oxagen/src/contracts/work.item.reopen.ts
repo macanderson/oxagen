@@ -18,7 +18,7 @@ export const workItemReopen = registerCapability({
     "Reopen a closed or done work item. Its history stays, and its brief goes back to a draft.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

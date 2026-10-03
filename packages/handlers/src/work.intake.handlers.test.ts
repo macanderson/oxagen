@@ -23,6 +23,7 @@ import { workTriageRevise } from "@oxagen/oxagen/contracts/work.triage.revise";
 import { effectiveTriage } from "@oxagen/work";
 import type { CollectorView } from "./lib/work-intake/collectors";
 import { CollectorSetupError } from "./lib/work-intake/collectors";
+import type { WorkEvent } from "./lib/work-intake/handler-support";
 import { createWorkCollectorSetHandler } from "./work.collector.set";
 import { createWorkCollectorSyncHandler } from "./work.collector.sync";
 import { createWorkCollectorsListHandler } from "./work.collectors.list";
@@ -79,11 +80,12 @@ describe("create_work_item", () => {
       repository: "acme/web",
       actorUserId: ACTOR,
     });
+    // The event names the revision the item was entered on, and the id stays the same.
     expect(send).toHaveBeenCalledWith([
       {
         name: "work/item.received",
         id: "work-item-wi_01-new",
-        data: { org_id: SCOPE.orgId, workspace_id: SCOPE.workspaceId, item_id: "wi_01", change: "new" },
+        data: { org_id: SCOPE.orgId, workspace_id: SCOPE.workspaceId, item_id: "wi_01", change: "new", revision: 1 },
       },
     ]);
     expect(out).toEqual({ item_id: "wi_01", number: "WI-4", state: "new", revision: 1, version: 1 });
@@ -179,27 +181,53 @@ describe("revise_work_triage", () => {
 });
 
 describe("retry_work_triage", () => {
-  it("queues a fresh triage run for an item triage may change", async () => {
+  it("queues a triage run for an item triage may change, naming the revision the person retried", async () => {
     const send = vi.fn(async () => undefined);
-    const out = await createWorkTriageRetryHandler({ state: async () => ({ state: "new" }), send, now: () => NOW })({ item_id: "wi_01" }, ctx);
+    const state = vi.fn(async () => ({ state: "new" as const, version: 3, revision: 2 }));
+    const out = await createWorkTriageRetryHandler({ state, send })({ item_id: "wi_01" }, ctx);
     expect(mocks.role).toHaveBeenCalledWith(workTriageRetry, ctx);
+    expect(state).toHaveBeenCalledWith(SCOPE, "wi_01");
+    // The revision is in the data, and the id still names only the version.
     expect(send).toHaveBeenCalledWith([
       {
         name: "work/item.received",
-        id: `work-item-wi_01-retry-${NOW.getTime()}`,
-        data: { org_id: SCOPE.orgId, workspace_id: SCOPE.workspaceId, item_id: "wi_01", change: "retry" },
+        id: "work-item-wi_01-retry-v3",
+        data: { org_id: SCOPE.orgId, workspace_id: SCOPE.workspaceId, item_id: "wi_01", change: "retry", revision: 2 },
       },
     ]);
     expect(out).toEqual({ item_id: "wi_01", state: "new", queued: true });
   });
 
+  it("sends no revision when the state read names none", async () => {
+    const send = vi.fn(async (_events: readonly WorkEvent[]) => undefined);
+    await createWorkTriageRetryHandler({ state: async () => ({ state: "triaged" as const, version: 3 }), send })({ item_id: "wi_01" }, ctx);
+    const event = send.mock.calls[0]?.[0][0];
+    expect(event?.id).toBe("work-item-wi_01-retry-v3");
+    expect(event?.data).toEqual({ org_id: SCOPE.orgId, workspace_id: SCOPE.workspaceId, item_id: "wi_01", change: "retry" });
+    expect(event?.data).not.toHaveProperty("revision");
+  });
+
+  // A double click or a client retry must not start a second model call. The
+  // event id names the item and its version, so Inngest drops the repeat.
+  it("sends the same event id for a repeated retry, and a new one once triage moved the version", async () => {
+    const send = vi.fn(async (_events: readonly WorkEvent[]) => undefined);
+    let version = 3;
+    const handler = createWorkTriageRetryHandler({ state: async () => ({ state: "triaged" as const, version }), send });
+    await handler({ item_id: "wi_01" }, ctx);
+    await handler({ item_id: "wi_01" }, ctx);
+    version = 4;
+    await handler({ item_id: "wi_01" }, ctx);
+    const ids = send.mock.calls.map(([events]) => events[0]?.id);
+    expect(ids).toEqual(["work-item-wi_01-retry-v3", "work-item-wi_01-retry-v3", "work-item-wi_01-retry-v4"]);
+  });
+
   it("refuses an item the workspace does not hold, and one past triage", async () => {
     const send = vi.fn();
     await expect(
-      createWorkTriageRetryHandler({ state: async () => null, send, now: () => NOW })({ item_id: "wi_09" }, ctx),
+      createWorkTriageRetryHandler({ state: async () => null, send })({ item_id: "wi_09" }, ctx),
     ).rejects.toMatchObject({ code: "not_found" });
     await expect(
-      createWorkTriageRetryHandler({ state: async () => ({ state: "sent" }), send, now: () => NOW })({ item_id: "wi_01" }, ctx),
+      createWorkTriageRetryHandler({ state: async () => ({ state: "sent", version: 9 }), send })({ item_id: "wi_01" }, ctx),
     ).rejects.toMatchObject({ code: "conflict", reason: "not_allowed" });
     expect(send).not.toHaveBeenCalled();
   });
@@ -208,7 +236,11 @@ describe("retry_work_triage", () => {
 describe("list_work_collectors", () => {
   it("lists the workspace's collectors after the role check", async () => {
     const list = vi.fn(async () => [VIEW]);
-    expect(await createWorkCollectorsListHandler({ list })({}, ctx)).toEqual({ collectors: [VIEW] });
+    const viewer = vi.fn(async () => ({ can_change_collectors: true }));
+    expect(await createWorkCollectorsListHandler({ list, viewer })({}, ctx)).toEqual({
+      collectors: [VIEW],
+      viewer: { can_change_collectors: true },
+    });
     expect(mocks.role).toHaveBeenCalledWith(workCollectorsList, ctx);
     expect(list).toHaveBeenCalledWith(SCOPE);
   });
@@ -261,11 +293,32 @@ describe("sync_work_collector", () => {
     expect(send).toHaveBeenCalledWith([
       {
         name: "work/collector.check.requested",
-        id: `work-check-sync-${COLLECTOR_ID}-${NOW.getTime()}`,
+        // NOW is 2026-10-02T12:00:00Z: minute 29849040 since the epoch.
+        id: `work-check-sync-${COLLECTOR_ID}-m29849040`,
         data: { org_id: SCOPE.orgId, workspace_id: SCOPE.workspaceId, collector_id: COLLECTOR_ID, check: "reconcile", force: true },
       },
     ]);
     expect(out).toEqual({ collector_id: COLLECTOR_ID, queued: true });
+  });
+
+  // A double click or a client retry must not queue a second reconcile. The
+  // event id names the collector and the minute, so Inngest drops the repeat.
+  it("sends the same event id for a repeated sync in one minute, and a new one in the next", async () => {
+    const send = vi.fn(async (_events: readonly WorkEvent[]) => undefined);
+    const find = vi.fn(async () => ({ id: COLLECTOR_ID, health: "failing" }));
+    let now = new Date("2026-10-02T12:00:05.000Z");
+    const handler = createWorkCollectorSyncHandler({ find, send, now: () => now });
+    await handler({ collector_id: COLLECTOR_ID }, ctx);
+    now = new Date("2026-10-02T12:00:55.000Z");
+    await handler({ name: "github" }, ctx);
+    now = new Date("2026-10-02T12:01:00.000Z");
+    await handler({ collector_id: COLLECTOR_ID }, ctx);
+    const ids = send.mock.calls.map(([events]) => events[0]?.id);
+    expect(ids).toEqual([
+      `work-check-sync-${COLLECTOR_ID}-m29849040`,
+      `work-check-sync-${COLLECTOR_ID}-m29849040`,
+      `work-check-sync-${COLLECTOR_ID}-m29849041`,
+    ]);
   });
 
   it("finds the collector by its name and queues the reconcile under its row id", async () => {

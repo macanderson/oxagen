@@ -1,22 +1,17 @@
 /**
  * Unit tests for the per-turn budget (packages/billing/src/turn-budget.ts).
  *
- * Pure logic — no DB, no I/O. Verifies the three enforcement modes, mode
- * parsing, and the shared guard factory (including the "prompt"-mode approval
- * that extends the ceiling and the grace cushion that eventually hard-stops).
+ * Pure logic, with no DB and no I/O. Verifies the three enforcement modes and
+ * the shared guard factory (including the "prompt"-mode approval that extends
+ * the ceiling and the grace cushion that eventually hard-stops).
  */
 import { describe, it, expect, vi } from "vitest";
 import { providerCostUsd } from "./pricing";
 import {
-  TURN_BUDGET_MODES,
   TURN_BUDGET_MODE_VALUES,
-  TURN_BUDGET_OFF,
-  DEFAULT_GRACE_OVERAGE_PCT,
-  parseTurnBudgetMode,
   evaluateTurnBudget,
   createTurnBudgetGuard,
   turnCostUsd,
-  formatBudgetUsd,
   type TurnBudgetPolicy,
 } from "./turn-budget";
 
@@ -24,38 +19,13 @@ const policy = (over: Partial<TurnBudgetPolicy> = {}): TurnBudgetPolicy => ({
   enabled: true,
   limitUsd: 1,
   mode: "enforce",
-  graceOveragePct: DEFAULT_GRACE_OVERAGE_PCT,
+  graceOveragePct: 0.25,
   ...over,
 });
 
-describe("mode metadata", () => {
-  it("has metadata for every mode value, in strictness order", () => {
+describe("mode values", () => {
+  it("lists the three modes in strictness order", () => {
     expect(TURN_BUDGET_MODE_VALUES).toEqual(["grace", "prompt", "enforce"]);
-    for (const mode of TURN_BUDGET_MODE_VALUES) {
-      expect(TURN_BUDGET_MODES[mode].mode).toBe(mode);
-      expect(TURN_BUDGET_MODES[mode].label.length).toBeGreaterThan(0);
-      expect(TURN_BUDGET_MODES[mode].description.length).toBeGreaterThan(0);
-    }
-  });
-
-  it("TURN_BUDGET_OFF is disabled", () => {
-    expect(TURN_BUDGET_OFF.enabled).toBe(false);
-  });
-});
-
-describe("parseTurnBudgetMode", () => {
-  it("resolves canonical values, aliases, and case-insensitively", () => {
-    expect(parseTurnBudgetMode("grace")).toBe("grace");
-    expect(parseTurnBudgetMode("HARD")).toBe("enforce");
-    expect(parseTurnBudgetMode("ask")).toBe("prompt");
-    expect(parseTurnBudgetMode("  approval ")).toBe("prompt");
-    expect(parseTurnBudgetMode("soft")).toBe("grace");
-    expect(parseTurnBudgetMode("stop")).toBe("enforce");
-  });
-
-  it("returns null for unknown / empty input", () => {
-    expect(parseTurnBudgetMode("nonsense")).toBeNull();
-    expect(parseTurnBudgetMode("")).toBeNull();
   });
 });
 
@@ -322,14 +292,5 @@ describe("createTurnBudgetGuard", () => {
     expect(onWithinGrace).toHaveBeenCalledOnce();
     expect(await guard({ outputTokens: 1_200_000 })).toBe("stop"); // $90 > $87.50
     expect(onStop).toHaveBeenCalledOnce();
-  });
-});
-
-describe("formatBudgetUsd", () => {
-  it("shows more precision for sub-cent amounts", () => {
-    expect(formatBudgetUsd(1.2)).toBe("$1.20");
-    expect(formatBudgetUsd(0.0034)).toBe("$0.0034");
-    expect(formatBudgetUsd(0)).toBe("$0.00");
-    expect(formatBudgetUsd(Number.POSITIVE_INFINITY)).toBe("∞");
   });
 });

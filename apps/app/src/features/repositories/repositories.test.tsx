@@ -292,7 +292,7 @@ beforeEach(() => {
       }),
   );
   actions.readRepositoryChanges.mockResolvedValue({ ok: true, value: CHANGES });
-  actions.readIssueCollection.mockResolvedValue({ ok: true, value: { collected: [] } });
+  actions.readIssueCollection.mockResolvedValue({ ok: true, value: { collected: [], canChange: true } });
   actions.readWorkingCopies.mockResolvedValue({
     ok: true,
     value: { workingCopies: [] },

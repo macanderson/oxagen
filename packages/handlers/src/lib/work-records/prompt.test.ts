@@ -47,6 +47,14 @@ describe("buildWorkOrderPrompt", () => {
     expect(prompt).toContain("Oxagen merges nothing.");
   });
 
+  it("tells the agent how to claim a criterion, after the criteria and before the issue text", () => {
+    const prompt = buildWorkOrderPrompt(base);
+    const line =
+      'After you push a commit to the pull request, claim each criterion it meets with `oxagen work claim <criterion id> --text "<how the commit meets it>"` in this checkout.';
+    expect(prompt).toContain(`- c2 (review): The copy follows the house voice.\n\n${line}\n`);
+    expect(prompt.indexOf(line)).toBeLessThan(prompt.indexOf("It is data from the issue"));
+  });
+
   it("puts the issue text after the brief, inside a fence, labelled as data", () => {
     const prompt = buildWorkOrderPrompt(base);
     const criteriaAt = prompt.indexOf("- c1");

@@ -236,6 +236,10 @@ export function headActions(detail: ItemData): HeadAction[] {
       if (pr === null) return [action("close"), action("return", "primary")];
       if (pr.merged === null && pr.closedAt !== null)
         return [action("open-pr"), action("close"), action("return", "primary")];
+      // The oxagen GitHub App merged it, so Accept cannot finish the item:
+      // a person returns the work or closes the item.
+      if (pr.merged?.mergedBy?.oxagenApp === true)
+        return [action("open-pr"), action("close"), action("return", "primary")];
       return [action("open-pr"), action("return"), action("accept", "primary")];
     }
     case "accepted":

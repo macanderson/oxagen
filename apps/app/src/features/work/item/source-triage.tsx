@@ -84,7 +84,7 @@ export function SourcePanel({ detail }: { detail: WorkItemDetail }) {
       ) : (
         <p
           data-testid="work-source-description"
-          className="mt-3 whitespace-pre-wrap text-foreground [overflow-wrap:anywhere]"
+          className="mt-3 whitespace-pre-wrap text-foreground wrap-anywhere"
         >
           {item.description}
         </p>
@@ -92,11 +92,11 @@ export function SourcePanel({ detail }: { detail: WorkItemDetail }) {
       {changed ? (
         <div data-testid="work-source-first" className="mt-3 flex flex-col gap-1">
           <p className="text-sm font-semibold text-muted-foreground">{t("firstRead")}</p>
-          <p className="whitespace-pre-wrap text-sm text-foreground [overflow-wrap:anywhere]">
+          <p className="whitespace-pre-wrap text-sm text-foreground wrap-anywhere">
             {first.subject}
           </p>
           {first.description === null ? null : (
-            <p className="whitespace-pre-wrap text-sm text-muted-foreground [overflow-wrap:anywhere]">
+            <p className="whitespace-pre-wrap text-sm text-muted-foreground wrap-anywhere">
               {first.description}
             </p>
           )}
@@ -284,7 +284,7 @@ export function TriagePanel({ detail, at }: { detail: WorkItemDetail; at: At }) 
         >
           <p className="text-sm font-semibold text-muted-foreground">{t("question")}</p>
           {questions.map((question) => (
-            <p key={question} className="whitespace-pre-wrap text-foreground [overflow-wrap:anywhere]">
+            <p key={question} className="whitespace-pre-wrap text-foreground wrap-anywhere">
               {question}
             </p>
           ))}

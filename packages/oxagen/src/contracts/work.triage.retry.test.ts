@@ -18,4 +18,12 @@ describe("retry_work_triage contract", () => {
     expect(contract.mutates).toBe(true);
     expect(contract.noBillingGate).toBe(true);
   });
+
+  // Each retry is a model call the organization pays for, so only a signed-in
+  // person asks for one (ADR-250 amended 2026-10-03). The handler refuses
+  // every key, so no MCP tool.
+  it("is on the API surface only", () => {
+    expect(contract.surfaces).toEqual(["api"]);
+    expect(contract.layers).not.toContain("mcp");
+  });
 });

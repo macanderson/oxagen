@@ -34,7 +34,7 @@ export const workCollectorSet = registerCapability({
     "Create or change a GitHub work collector by name: the linked repositories whose issues become work items. It reads through the GitHub connection they were linked through. Pause or resume it with paused.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

@@ -189,7 +189,7 @@ export function InstallerScreens({
           className="h-1.5 overflow-hidden rounded-full bg-hl"
         >
           <i
-            className="block h-full bg-accent-text transition-[width]"
+            className="block h-full bg-accent-text transition-all"
             style={{
               width: `${String(Math.round((done / STEPS.length) * 100))}%`,
             }}

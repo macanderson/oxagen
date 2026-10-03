@@ -631,6 +631,20 @@ export interface AppendFactsInput {
   actorUserId?: string | null;
 }
 
+/**
+ * The criterion ids of the approved brief an acceptance is checked against.
+ * With no approval the review gate refuses the acceptance, so the list is
+ * empty. An approval whose brief is not loaded is refused: an empty list would
+ * let an acceptance with no ticks through. Pure.
+ */
+export function approvedCriteriaOf(record: Pick<WorkItemRecord, "projection" | "briefs">): string[] {
+  const approved = record.projection.approvedBrief;
+  if (approved === null) return [];
+  const stored = record.briefs.find((entry) => entry.briefId === approved.briefId);
+  if (stored === undefined) throw new WorkRecordError("not_found", "The approved brief is missing. Read the item again.");
+  return stored.brief.criteria.map((criterion) => criterion.id);
+}
+
 function decisionOf(loaded: LoadedItem, fact: WorkFact): WorkItemDecision | null {
   switch (fact.kind) {
     case "triage_overridden":
@@ -643,18 +657,15 @@ function decisionOf(loaded: LoadedItem, fact: WorkFact): WorkItemDecision | null
       return { kind: "stop", orderId: fact.orderId as string };
     case "returned":
       return { kind: "return", orderId: fact.orderId as string };
-    case "accepted": {
-      const approved = loaded.projection.approvedBrief;
-      const stored = approved ? loaded.briefs.find((entry) => entry.briefId === approved.briefId) : undefined;
+    case "accepted":
       return {
         kind: "accept",
         orderId: fact.orderId as string,
         headSha: fact.headSha as string,
         briefDigest: fact.briefDigest as Sha256Digest,
         criteria: fact.data.criteria,
-        briefCriteria: stored ? stored.brief.criteria.map((criterion) => criterion.id) : [],
+        briefCriteria: approvedCriteriaOf(loaded),
       };
-    }
     default:
       return null;
   }
@@ -707,11 +718,27 @@ export async function appendFacts(tx: Tx, scope: WorkScope, input: AppendFactsIn
         // list the caller sent: the acceptance is evidence of what was checked.
         // Name the approved brief admitDecision matched the digest against, so
         // the fact's brief foreign key binds the acceptance to that revision.
+        // Bind it to the pull request and the runs it judged too (Data
+        // contract): admitDecision passed the gate, so the send has a pull
+        // request, and checkFact refuses an acceptance without one.
         const order = byOrder.get(fact.orderId as string);
         fact = {
           ...fact,
           briefId: loaded.projection.approvedBrief?.briefId ?? null,
-          data: { ...fact.data, required_checks: [...(order?.requiredChecks ?? [])] },
+          repository: order?.pullRequest?.repository ?? null,
+          prNumber: order?.pullRequest?.number ?? null,
+          data: { ...fact.data, required_checks: [...(order?.requiredChecks ?? [])], run_ids: [...(order?.runIds ?? [])] },
+        };
+      } else if (fact.kind === "returned") {
+        // Bind a return to what it rejected: the pull request, its head, and
+        // the runs, when the send has them.
+        const order = byOrder.get(fact.orderId as string);
+        fact = {
+          ...fact,
+          repository: order?.pullRequest?.repository ?? null,
+          prNumber: order?.pullRequest?.number ?? null,
+          headSha: order?.head ?? null,
+          data: { ...fact.data, run_ids: [...(order?.runIds ?? [])] },
         };
       }
       const occurredAt = await clock(tx);

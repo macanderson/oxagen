@@ -5887,6 +5887,7 @@ type Messages = {
         on: string;
         onReading: string;
         off: string;
+        noRole: string;
       };
     };
     dialog: {
@@ -12798,6 +12799,7 @@ type Messages = {
       no_head: string;
       pr_closed: string;
       merged_before_review: string;
+      merged_by_app: string;
       brief_out_of_date: string;
       accepted_waiting_merge: string;
       done: string;
@@ -13038,6 +13040,7 @@ type Messages = {
           openedNoPr: string;
           openedRetry: string;
           review: string;
+          noRole: string;
         };
       };
       runtimes: {
@@ -13107,6 +13110,7 @@ type Messages = {
         };
         empty: string;
         noLead: string;
+        partial: string;
       };
       touchKinds: {
         title: string;
@@ -13185,6 +13189,7 @@ type Messages = {
     gate: {
       closed: string;
       order_closed: string;
+      merged_by_app: string;
       already_accepted: string;
       run_active: string;
       pr_closed: string;
@@ -13387,6 +13392,7 @@ type Messages = {
       headMoved: string;
       merge: string;
       merged: string;
+      mergedBy: string;
       closedUnmerged: string;
       open: string;
       required: string;
@@ -13426,6 +13432,8 @@ type Messages = {
       staleAcceptance: string;
       mergedFirstTitle: string;
       mergedFirstBody: string;
+      appMergedTitle: string;
+      appMergedBody: string;
       closedTitle: string;
       closedBody: string;
       acceptance: string;

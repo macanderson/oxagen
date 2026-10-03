@@ -32,7 +32,7 @@ export const workBriefSave = registerCapability({
     "Save a new revision of a work item's acceptance brief: the repository the work changes and the criteria a reviewer checks.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

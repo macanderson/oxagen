@@ -88,7 +88,7 @@ export function CopyPath({
           aria-hidden="true"
           className="size-3 flex-none opacity-80"
         />
-        <span className="min-w-0 truncate [direction:rtl] [text-align:left]">
+        <span className="min-w-0 truncate truncate-start">
           <bdi>{text}</bdi>
         </span>
       </button>

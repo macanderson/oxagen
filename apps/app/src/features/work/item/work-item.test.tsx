@@ -3,11 +3,12 @@
 // records produce (roadmap mockups/pages/work-item.md, States): the status
 // word, the head's actions in order with the one primary last, and what each
 // panel shows in that state, each with an axe check (INV-26). The read
-// failures (404, denied, error) and the read-only viewer are here too. The
-// dialogs and the writes they make are in work-item.dialogs.test.tsx, and the
-// actions' capability input in ../actions.test.ts. The Changes panel draws
-// the item's change set from Oxagen's own pull request store, and each send
-// opens its own through the lane's action (ADR-292).
+// failures (404, denied, error), the busy skeleton, the read-only viewer, and
+// a viewer who may act and not accept are here too. The dialogs and the
+// writes they make are in work-item.dialogs.test.tsx, and the actions'
+// capability input in ../actions.test.ts. The Changes panel draws the item's
+// change set from Oxagen's own pull request store, and each send opens its
+// own through the lane's action (ADR-292).
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
@@ -30,6 +31,7 @@ import {
   draftBriefItem,
   inReviewItem,
   mergedBeforeReviewItem,
+  mergedByAppItem,
   needsInfoItem,
   noAnswerItem,
   otherPullItem,
@@ -93,6 +95,7 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { WorkItemPage } = await import("./work-item-page");
+const { WorkItemLoading } = await import("../loading");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "usr_marcusbell",
@@ -234,6 +237,7 @@ describe("WorkItemPage › states", () => {
     ["stale evidence", staleEvidenceItem, "in_review", ["open-pr", "return", "accept"]],
     ["merged before review", mergedBeforeReviewItem, "in_review", ["open-pr", "return", "accept"]],
     ["closed without merging", closedWithoutMergingItem, "in_review", ["open-pr", "close", "return"]],
+    ["merged by the oxagen GitHub App", mergedByAppItem, "in_review", ["open-pr", "close", "return"]],
     ["cost unknown", costUnknownItem, "in_review", ["open-pr", "return", "accept"]],
     ["accepted", acceptedItem, "accepted", ["open-pr"]],
     ["done", doneItem, "done", ["reopen"]],
@@ -493,6 +497,24 @@ describe("WorkItemPage › states", () => {
     expect(screen.getByTestId("work-action-accept")).toBeEnabled();
   });
 
+  it("merged by the oxagen GitHub App: names the app, says no person merged it, and offers no Accept", async () => {
+    await renderDetail(mergedByAppItem());
+    expect(screen.getByTestId("work-review-merge")).toHaveTextContent("7c1e0b4 by oxagen-connect[bot]");
+    expect(screen.getByTestId("work-merged-by-app")).toHaveTextContent(
+      "Merged by the oxagen GitHub App. An agent's push token merges as this account, so no person merged the pull request. Return the work or close the item.",
+    );
+    expect(screen.getByTestId("work-item-wait")).toHaveTextContent(
+      "The oxagen GitHub App (oxagen-connect[bot]) merged the pull request on",
+    );
+    expect(screen.getByTestId("work-item-wait")).toHaveTextContent("No person merged it. Return the work or close the item.");
+    // The merge is not waiting on a person's acceptance, and Accept cannot finish the item.
+    expect(screen.queryByTestId("work-merged-before-review")).toBeNull();
+    expect(screen.queryByTestId("work-review-consequence")).toBeNull();
+    expect(screen.queryByTestId("work-action-accept")).toBeNull();
+    expect(screen.getByTestId("work-action-return")).toBeEnabled();
+    expect(screen.getByTestId("work-action-close")).toBeEnabled();
+  });
+
   it("closed without merging: offers no Accept", async () => {
     await renderDetail(closedWithoutMergingItem());
     expect(screen.getByTestId("work-closed-unmerged")).toHaveTextContent("Closed without merging.");
@@ -530,6 +552,9 @@ describe("WorkItemPage › states", () => {
   it("done: names the accepted commit and offers Reopen the item", async () => {
     await renderDetail(doneItem());
     expect(screen.getByTestId("work-acceptance")).toHaveTextContent("3f9a2c1");
+    // The person who merged it on GitHub.
+    expect(screen.getByTestId("work-review-merge")).toHaveTextContent("7c1e0b4 by amara-okafor");
+    expect(screen.queryByTestId("work-merged-by-app")).toBeNull();
     expect(screen.getByTestId("work-action-reopen")).toHaveTextContent("Reopen the item");
   });
 
@@ -614,6 +639,40 @@ describe("WorkItemPage › a viewer whose roles read work", () => {
   });
 });
 
+describe("WorkItemPage › reading the checks again takes the accept role", () => {
+  it("disables Read the checks again with its reason for a viewer who may act and not accept", async () => {
+    await renderDetail({ ...inReviewItem(), viewer: { canControl: true, canApprove: false } });
+    const refresh = screen.getByTestId("work-action-refresh-checks");
+    expect(refresh).toBeDisabled();
+    expect(refresh).toHaveAccessibleDescription(
+      "Your role in this workspace reads work. A workspace Owner or Member approves briefs and accepts work.",
+    );
+  });
+
+  it("offers Read the checks again to a viewer who may accept and not act", async () => {
+    await renderDetail({ ...inReviewItem(), viewer: { canControl: false, canApprove: true } });
+    const refresh = screen.getByTestId("work-action-refresh-checks");
+    expect(refresh).toBeEnabled();
+    expect(refresh).not.toHaveAttribute("aria-describedby");
+  });
+});
+
+describe("WorkItemPage › loading", () => {
+  it("draws the busy skeleton while the item read runs, says so, and shows no figure", () => {
+    render(
+      <IntlProvider>
+        <WorkItemLoading />
+      </IntlProvider>,
+    );
+    const busy = screen.getByRole("status");
+    expect(busy).toHaveAttribute("aria-busy", "true");
+    expect(busy).toHaveAttribute("data-testid", "work-item-loading");
+    expect(busy.querySelectorAll("[data-skeleton-row]")).toHaveLength(7);
+    expect(busy.textContent).toBe("Loading the work item");
+    expect(document.querySelector("main")).toBeNull();
+  });
+});
+
 describe("WorkItemPage › source text stays data", () => {
   it("renders the title, description, labels and requester as text, never as markup", async () => {
     const hostile = "<script>alert('x')</script><b>bold</b>";
@@ -672,6 +731,7 @@ describe("work-item.builders", () => {
       noRequiredChecksItem,
       staleEvidenceItem,
       mergedBeforeReviewItem,
+      mergedByAppItem,
       closedWithoutMergingItem,
       costUnknownItem,
       acceptedItem,

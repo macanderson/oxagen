@@ -454,7 +454,7 @@
         "parked": "That turn is waiting on an approval before it can answer.",
         "engine": "stella’s engine could not be reached, so this question was not answered. Ask again once the engine is back.",
         "unrecorded": "stella did not answer because the turn could not be recorded as a run. Nothing ran. Ask again.",
-        "aborted": "stella stopped this turn before it answered, usually at the per-turn budget. Ask again, or raise the budget.",
+        "aborted": "stella stopped this turn before it answered. Ask again.",
         "model": "The model provider refused or failed stella’s request, so this question was not answered. An owner can check the key and model under Model funding. Ask again.",
         "unavailable": "stella could not be reached. Try again.",
         "archived": "This thread was archived or deleted, so stella could not continue it. Ask again to start a new thread."

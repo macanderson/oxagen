@@ -1,5 +1,6 @@
 // The Work pages' read handlers over fakes (P1-05, #5163): list_work_items,
-// get_work_item, list_work_targets, and get_work_outcomes.
+// get_work_item, list_work_targets, get_work_outcomes, and the viewer flag on
+// list_work_collectors (#5181).
 //
 // The role guard is a double, so each case asserts the handler asked it with
 // its own contract before it read anything, and that a refused caller reads
@@ -11,11 +12,14 @@ import { WorkRecordError } from "@oxagen/work/records";
 const mocks = vi.hoisted(() => ({ role: vi.fn() }));
 vi.mock("./lib/capability-role-guard", () => ({ assertContractRole: mocks.role }));
 
+import { workCollectorsList } from "@oxagen/oxagen/contracts/work.collectors.list";
 import { workItemGet } from "@oxagen/oxagen/contracts/work.item.get";
 import { workItemsList } from "@oxagen/oxagen/contracts/work.items.list";
 import { workOutcomesGet, type WorkOutcomesGetOutput } from "@oxagen/oxagen/contracts/work.outcomes.get";
 import { workTargetsList } from "@oxagen/oxagen/contracts/work.targets.list";
+import type { CollectorView } from "./lib/work-intake/collectors";
 import type { WorkItemDetail } from "./lib/work-read/detail";
+import { createWorkCollectorsListHandler } from "./work.collectors.list";
 import { createWorkItemGetHandler } from "./work.item.get";
 import { createWorkItemsListHandler } from "./work.items.list";
 import { createWorkOutcomesGetHandler } from "./work.outcomes.get";
@@ -141,5 +145,35 @@ describe("get_work_outcomes", () => {
     const d = deps();
     await expect(createWorkOutcomesGetHandler(d)({ days: 30 }, ctx)).rejects.toMatchObject({ code: "forbidden" });
     expect(d.read).not.toHaveBeenCalled();
+  });
+});
+
+describe("list_work_collectors", () => {
+  const COLLECTORS = [{ collector_id: "00000000-0000-4000-8000-0000000000c1", name: "github" }] as unknown as CollectorView[];
+  const deps = (canChange = false) => ({
+    list: vi.fn(async () => COLLECTORS),
+    viewer: vi.fn(async () => ({ can_change_collectors: canChange })),
+  });
+
+  it("checks the role, lists the collectors, and adds whether the caller may change them", async () => {
+    const d = deps();
+    const out = await createWorkCollectorsListHandler(d)({}, ctx);
+    expect(mocks.role).toHaveBeenCalledWith(workCollectorsList, ctx);
+    expect(d.list).toHaveBeenCalledWith(SCOPE);
+    expect(d.viewer).toHaveBeenCalledWith(ctx);
+    expect(out).toEqual({ collectors: COLLECTORS, viewer: { can_change_collectors: false } });
+  });
+
+  it("answers the flag the set_work_collector role check gave", async () => {
+    const out = await createWorkCollectorsListHandler(deps(true))({}, ctx);
+    expect(out.viewer).toEqual({ can_change_collectors: true });
+  });
+
+  it("refuses a caller with no role before it reads anything", async () => {
+    mocks.role.mockRejectedValue(refused());
+    const d = deps();
+    await expect(createWorkCollectorsListHandler(d)({}, ctx)).rejects.toMatchObject({ code: "forbidden" });
+    expect(d.list).not.toHaveBeenCalled();
+    expect(d.viewer).not.toHaveBeenCalled();
   });
 });

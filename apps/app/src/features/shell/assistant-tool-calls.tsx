@@ -71,7 +71,7 @@ export function AssistantToolCalls({
           >
             <details className="group rounded-md border border-border bg-app-raised-bg px-2 py-1 text-app-raised-fg">
               {/* A flex summary loses the native marker, so it draws its own: `▸`, `▾` when open. */}
-              <summary className="flex cursor-pointer list-none items-baseline gap-2 before:flex-none before:text-muted-foreground before:content-['▸'] group-open:before:content-['▾'] [&::-webkit-details-marker]:hidden">
+              <summary className="flex cursor-pointer list-none items-baseline gap-2 before:flex-none before:text-muted-foreground before:content-(--glyph-disclosure) group-open:before:content-(--glyph-disclosure-open) [&::-webkit-details-marker]:hidden">
                 <span className="min-w-0 flex-1 truncate">
                   {toolLabel(call.toolName)}
                 </span>

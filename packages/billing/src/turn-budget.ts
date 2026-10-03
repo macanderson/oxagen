@@ -20,56 +20,8 @@ import { providerCostUsd, type RateCard } from "./pricing";
 /** What happens when a turn's cost reaches the budget limit. Strictness ladder: soft → gated → hard. */
 export type TurnBudgetMode = "grace" | "prompt" | "enforce";
 
-export interface TurnBudgetModeMeta {
-  mode: TurnBudgetMode;
-  /** Concise UI label (segmented control / flag help / slash output). */
-  label: string;
-  /** One line: exactly what happens at the ceiling. Never ambiguous. */
-  description: string;
-  /**
-   * Case-insensitive synonyms accepted from a human (CLI flag, slash arg) and
-   * resolved to the canonical mode by {@link parseTurnBudgetMode}.
-   */
-  aliases: string[];
-}
-
-/**
- * The three enforcement modes, ordered soft → gated → hard. This table is the
- * ONLY place mode labels/copy live; the CLI flag help, the app segmented
- * control, and the docs all read from here so language never drifts.
- */
-export const TURN_BUDGET_MODES: Record<TurnBudgetMode, TurnBudgetModeMeta> = {
-  grace: {
-    mode: "grace",
-    label: "Allow overage (grace window)",
-    description:
-      "Soft cap — keep going past the limit up to a grace cushion, then stop automatically.",
-    aliases: ["grace", "soft", "overage", "allow", "flex"],
-  },
-  prompt: {
-    mode: "prompt",
-    label: "Ask to continue",
-    description:
-      "Gated cap — pause at the limit and ask for approval before spending more.",
-    aliases: ["prompt", "ask", "approve", "approval", "confirm"],
-  },
-  enforce: {
-    mode: "enforce",
-    label: "Hard stop",
-    description:
-      "Hard cap — halt the turn the instant the limit is crossed and fail with a budget-exceeded reason.",
-    aliases: ["enforce", "hard", "stop", "strict", "fail", "block"],
-  },
-};
-
-/** Canonical mode values, in strictness order — for zod enums and UI iteration. */
+/** The mode values, in strictness order, for the request schema's enum. */
 export const TURN_BUDGET_MODE_VALUES = ["grace", "prompt", "enforce"] as const;
-
-/** Default grace cushion (fraction ABOVE the limit) for `grace` mode: 25%. */
-export const DEFAULT_GRACE_OVERAGE_PCT = 0.25;
-
-/** The default enforcement mode when a user turns a budget on without naming one. */
-export const DEFAULT_TURN_BUDGET_MODE: TurnBudgetMode = "prompt";
 
 export interface TurnBudgetPolicy {
   /** When false, no ceiling is enforced — the turn runs unbounded. This is the default. */
@@ -83,28 +35,6 @@ export interface TurnBudgetPolicy {
    * hard-stops (0.25 ⇒ allow up to 25% overage). Ignored by `prompt`/`enforce`.
    */
   graceOveragePct: number;
-}
-
-/** The off state — no budget. Every surface defaults to this. */
-export const TURN_BUDGET_OFF: TurnBudgetPolicy = {
-  enabled: false,
-  limitUsd: 0,
-  mode: DEFAULT_TURN_BUDGET_MODE,
-  graceOveragePct: DEFAULT_GRACE_OVERAGE_PCT,
-};
-
-/**
- * Resolve a human-typed mode (canonical value, alias, case-insensitive) to a
- * mode, or null when it matches nothing. Powers the CLI `--budget-mode` flag and
- * the `/budget` slash argument.
- */
-export function parseTurnBudgetMode(raw: string): TurnBudgetMode | null {
-  const norm = raw.trim().toLowerCase();
-  if (!norm) return null;
-  for (const meta of Object.values(TURN_BUDGET_MODES)) {
-    if (meta.mode === norm || meta.aliases.includes(norm)) return meta.mode;
-  }
-  return null;
 }
 
 /** Position of a turn's cost relative to its budget. */
@@ -274,8 +204,7 @@ export interface TurnBudgetGuardHooks {
    * "prompt" mode only: the turn reached the limit and needs approval to spend
    * more. Resolve `true` to grant ANOTHER budget window (the ceiling is raised
    * by the original limit so the turn doesn't immediately re-pause), or `false`
-   * to stop. The CLI shows a TUI confirm here; the app emits an approval card
-   * and blocks on the existing approval resolve path.
+   * to stop. The caller decides how a person approves.
    */
   onPause?: (verdict: TurnBudgetVerdict) => Promise<boolean> | boolean;
   /** Invoked just before the guard returns "stop" (any mode) — surface the reason to the user. */
@@ -306,9 +235,8 @@ export interface TurnBudgetGuardHooks {
  * (usage → "continue" | "stop"), or `undefined` when the budget is off (so the
  * caller passes no guard and the engine runs unbounded).
  *
- * This is the SINGLE enforcement implementation every surface shares: the CLI,
- * the app chat route, and any future runner wire the SAME guard and differ only
- * in the {@link TurnBudgetGuardHooks} they supply.
+ * This is the one enforcement implementation. A caller that wires a guard
+ * supplies only its own {@link TurnBudgetGuardHooks}.
  *
  * The guard does NOT catch hook failures: a rejecting `onPause` or a throwing
  * `onTick`/`onStop`/`onWithinGrace` propagates out of the guard, and the engine
@@ -355,13 +283,4 @@ export function createTurnBudgetGuard(
         return "stop";
     }
   };
-}
-
-/** Format a USD amount for user-facing budget copy (e.g. "$1.20", "$0.0034"). */
-export function formatBudgetUsd(usd: number): string {
-  if (!Number.isFinite(usd)) return "∞";
-  if (usd === 0) return "$0.00";
-  // Sub-cent turns are common; show enough precision to be meaningful.
-  const decimals = usd < 0.1 ? 4 : 2;
-  return `$${usd.toFixed(decimals)}`;
 }

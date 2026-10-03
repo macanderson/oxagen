@@ -218,4 +218,29 @@ describe("parseWorkBrief", () => {
     refusal(() => parseWorkBrief({ ...brief, criteria: [{ ...brief.criteria[0], id: undefined }] }));
     refusal(() => parseWorkBrief({ ...brief, criteria: ["c1"] }));
   });
+
+  it("drops a verdict a stored brief or a draft carries, so a brief never claims a result", () => {
+    // ADR-244: a brief carries no verdict. The parser rebuilds each criterion
+    // from its known fields, so a verdict field is dropped, not refused, and
+    // it cannot change the digest a person approved.
+    const brief = buildBrief(input());
+    for (const verdict of ["held", "proven"]) {
+      const stored = {
+        ...brief,
+        verdict,
+        criteria: brief.criteria.map((criterion) => ({ ...criterion, verdict, met: true })),
+      };
+      const parsed = parseWorkBrief(stored);
+      expect(parsed).toEqual(brief);
+      expect("verdict" in parsed).toBe(false);
+      for (const criterion of parsed.criteria) {
+        expect("verdict" in criterion).toBe(false);
+        expect("met" in criterion).toBe(false);
+      }
+      expect(briefDigest(parsed)).toBe(briefDigest(brief));
+    }
+    const claimed = draft();
+    const built = buildBrief(input({ draft: { ...claimed, criteria: claimed.criteria.map((criterion) => ({ ...criterion, verdict: "proven" })) } }));
+    expect(built).toEqual(brief);
+  });
 });

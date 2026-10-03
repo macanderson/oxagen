@@ -124,7 +124,19 @@ const sendSchema = z
     pull_request: workPullRequestRefSchema
       .extend({
         head_at: z.string().nullable(),
-        merged: z.object({ at: z.string(), merge_commit: workHeadShaSchema }).strict().nullable(),
+        merged: z
+          .object({
+            at: z.string(),
+            merge_commit: workHeadShaSchema,
+            /**
+             * The account GitHub says merged it, or null when no merger is on
+             * record. `oxagen_app` is true when the Oxagen GitHub App merged
+             * it, which is the agent merging its own work.
+             */
+            merged_by: z.object({ login: z.string(), type: z.string(), oxagen_app: z.boolean() }).strict().nullable(),
+          })
+          .strict()
+          .nullable(),
         closed_at: z.string().nullable(),
       })
       .strict()

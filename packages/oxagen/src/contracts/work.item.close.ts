@@ -18,7 +18,7 @@ export const workItemClose = registerCapability({
     "Close a work item without finishing it, as cancelled, declined, or a duplicate. The source issue stays open.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

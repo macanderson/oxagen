@@ -7,6 +7,10 @@
 // it can close, and the line above the fence says it is data. A return reason
 // is a person's words to the agent and goes before the issue text.
 //
+// After the criteria, one line tells the agent how to claim each criterion it
+// met (`oxagen work claim`, `claim_work_criterion`). Review collects those
+// claims beside the pull request, and a person still decides (ADR-244).
+//
 // Pure, so the runtime receives the same text for the same send on every
 // claim, and a retried claim cannot change what the run was told.
 import type { WorkBrief } from "@oxagen/work/records";
@@ -56,6 +60,8 @@ export function buildWorkOrderPrompt(input: WorkOrderPromptInput): string {
     "",
     "Criteria:",
     ...brief.criteria.map(criterionLine),
+    "",
+    `After you push a commit to the pull request, claim each criterion it meets with \`oxagen work claim <criterion id> --text "<how the commit meets it>"\` in this checkout.`,
   ];
   if (input.returnedReason !== null && input.returnedReason.trim() !== "") {
     lines.push("", `A person returned the previous send with this reason: ${input.returnedReason.trim()}`);

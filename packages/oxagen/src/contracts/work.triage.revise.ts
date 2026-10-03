@@ -36,7 +36,7 @@ export const workTriageRevise = registerCapability({
     "Correct a work item's triage suggestion (priority, estimate, labels, predicted paths, acceptance criteria) or its outcome. A null value clears a correction so triage decides again.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   sensitivity: "medium",

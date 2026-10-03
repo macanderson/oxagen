@@ -61,7 +61,7 @@ export function AuthOr({ label }: { label: string }) {
   return (
     <div
       aria-hidden
-      className="flex items-center gap-3 text-xs uppercase tracking-widest text-dim before:h-px before:flex-1 before:bg-border before:content-[''] after:h-px after:flex-1 after:bg-border after:content-['']"
+      className="flex items-center gap-3 text-xs uppercase tracking-widest text-dim before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border"
     >
       {label}
     </div>

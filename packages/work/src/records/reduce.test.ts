@@ -7,8 +7,8 @@
 // seed, never Math.random or the clock, so a failure always reproduces.
 import { describe, expect, it } from "vitest";
 import { type WorkFact, newFact } from "./facts";
-import { type WorkItemProjection, reduceWorkItem, reviewGate } from "./reduce";
-import { IN_REVIEW, MERGE, READY, SHA1, SHA2, at, digest, f } from "./test-fixtures";
+import { type WorkItemProjection, appMergerOf, reduceWorkItem, reviewGate } from "./reduce";
+import { APP_MERGER, IN_REVIEW, MERGE, PERSON_MERGER, QUEUE_MERGER, READY, SHA1, SHA2, at, digest, f } from "./test-fixtures";
 
 function state(facts: WorkFact[]): WorkItemProjection["state"] {
   return reduceWorkItem(facts).state;
@@ -249,6 +249,145 @@ describe("reduceWorkItem: review and finish", () => {
   });
 });
 
+describe("reduceWorkItem: who merged", () => {
+  const accepted = [...IN_REVIEW, f.accepted("o1", SHA1, 1, 12)];
+
+  it("is done when a person merges the accepted head, and keeps who merged", () => {
+    const done = reduceWorkItem([...accepted, f.merged("o1", SHA1, 13, PERSON_MERGER)]);
+    expect(done.state).toBe("done");
+    expect(done.orders[0]).toMatchObject({ done: true, closed: true, merge: { headSha: SHA1, mergeCommit: MERGE, mergedBy: PERSON_MERGER } });
+    expect(appMergerOf(done.orders[0]!)).toBeNull();
+  });
+
+  it("is done when GitHub's merge queue merges the accepted head, which a person queued", () => {
+    const done = reduceWorkItem([...accepted, f.merged("o1", SHA1, 13, QUEUE_MERGER)]);
+    expect(done.state).toBe("done");
+    expect(done.orders[0]).toMatchObject({ done: true, closed: true, merge: { mergedBy: QUEUE_MERGER } });
+    expect(appMergerOf(done.orders[0]!)).toBeNull();
+    // A merge queue's merge before review counts once a person accepts the head.
+    expect(state([...IN_REVIEW, f.merged("o1", SHA1, 12, QUEUE_MERGER), f.accepted("o1", SHA1, 1, 13)])).toBe("done");
+  });
+
+  it("counts a merge by any bot other than the Oxagen GitHub App", () => {
+    const teamBot = { login: "acme-merge-bot[bot]", type: "Bot", oxagen_app: false };
+    expect(state([...accepted, f.merged("o1", SHA1, 13, teamBot)])).toBe("done");
+  });
+
+  it("keeps an accepted send in review when the Oxagen GitHub App merges it, and names the app", () => {
+    const item = reduceWorkItem([...accepted, f.merged("o1", SHA1, 13, APP_MERGER)]);
+    expect(item.state).toBe("review");
+    const order = item.activeOrder!;
+    expect(order).toMatchObject({
+      acceptance: { headSha: SHA1 },
+      merge: { headSha: SHA1, mergedBy: APP_MERGER },
+      done: false,
+      closed: false,
+      released: true,
+    });
+    expect(appMergerOf(order)).toEqual(APP_MERGER);
+    expect(reviewGate(item, order)).toEqual({ open: false, block: "merged_by_app", detail: "oxagen-connect[bot]" });
+  });
+
+  it("keeps a send the Oxagen GitHub App merged before review out of done after a person accepts it", () => {
+    const merged = reduceWorkItem([...IN_REVIEW, f.merged("o1", SHA1, 12, APP_MERGER)]);
+    expect(reviewGate(merged, merged.activeOrder!)).toEqual({ open: false, block: "merged_by_app", detail: "oxagen-connect[bot]" });
+    expect(state([...IN_REVIEW, f.merged("o1", SHA1, 12, APP_MERGER), f.accepted("o1", SHA1, 1, 13)])).toBe("review");
+  });
+
+  it("counts a merge with no merger on record as before, so older records do not move", () => {
+    const legacy = reduceWorkItem([...accepted, f.merged("o1", SHA1, 13)]);
+    expect(legacy.state).toBe("done");
+    expect(legacy.orders[0]?.merge?.mergedBy).toBeNull();
+    expect(state([...accepted, f.merged("o1", SHA1, 13, null)])).toBe("done");
+  });
+
+  it("keeps a person's merge of a head the acceptance does not name out of done", () => {
+    const moved = reduceWorkItem([...accepted, f.head("o1", SHA2, 13), f.merged("o1", SHA2, 14, PERSON_MERGER)]);
+    expect(moved.state).toBe("review");
+    expect(moved.activeOrder).toMatchObject({ head: SHA2, acceptance: null, staleAcceptance: { headSha: SHA1 }, done: false });
+  });
+
+  it("reduces every arrival order of the Oxagen GitHub App's merge and an acceptance to the same review", () => {
+    const facts = [f.head("o1", SHA1, 8), f.accepted("o1", SHA1, 1, 12), f.merged("o1", SHA1, 13, APP_MERGER), f.runtime("run_ended", "o1", 9)];
+    const prefix = IN_REVIEW.filter((fact) => fact.kind !== "head_observed" && fact.kind !== "run_ended");
+    const expected = reduceWorkItem([...prefix, ...facts]);
+    expect(expected).toMatchObject({ state: "review", activeOrder: { done: false, merge: { mergedBy: APP_MERGER } } });
+    for (const order of permutations(facts)) expect(reduceWorkItem([...prefix, ...order])).toEqual(expected);
+  });
+});
+
+describe("reduceWorkItem: a head that comes back", () => {
+  /** Accepted on SHA1, then the head moves to SHA2 and back to SHA1. */
+  const back = [...IN_REVIEW, f.accepted("o1", SHA1, 1, 12), f.head("o1", SHA2, 13), f.head("o1", SHA1, 14)];
+
+  it("voids an acceptance when the head moves away and comes back to the accepted commit", () => {
+    const item = reduceWorkItem(back);
+    const order = item.activeOrder!;
+    expect(order).toMatchObject({ head: SHA1, acceptance: null, staleAcceptance: { headSha: SHA1, at: at(12) } });
+    // SHA1's checks still stand for SHA1, so a person may accept it again.
+    expect(reviewGate(item, order)).toEqual({ open: true, requiredChecks: ["test"] });
+    const again = reduceWorkItem([...back, f.accepted("o1", SHA1, 1, 15)]);
+    expect(again.activeOrder).toMatchObject({ acceptance: { headSha: SHA1, at: at(15) }, staleAcceptance: { headSha: SHA1, at: at(12) } });
+  });
+
+  it("is not done when the pull request merges on the returned head without a new acceptance", () => {
+    const merged = reduceWorkItem([...back, f.merged("o1", SHA1, 15)]);
+    expect(merged.state).toBe("review");
+    expect(merged.activeOrder).toMatchObject({ head: SHA1, merge: { headSha: SHA1 }, acceptance: null, done: false });
+    expect(state([...back, f.accepted("o1", SHA1, 1, 15), f.merged("o1", SHA1, 16)])).toBe("done");
+    expect(state([...back, f.merged("o1", SHA1, 15), f.accepted("o1", SHA1, 1, 16)])).toBe("done");
+  });
+
+  it("keeps the head when a late observation of an earlier head arrives, and the acceptance made since", () => {
+    const passing = [...IN_REVIEW, f.head("o1", SHA2, 13), f.required("o1", SHA2, ["test"], 14), f.check("o1", SHA2, "test", "success", 15)];
+    expect(reduceWorkItem([...passing, f.head("o1", SHA1, 12)]).activeOrder?.head).toBe(SHA2);
+    // The late SHA1 report is older than the acceptance, so it voids nothing.
+    const accepted = reduceWorkItem([...passing, f.accepted("o1", SHA2, 1, 16), f.head("o1", SHA1, 12)]);
+    expect(accepted.activeOrder).toMatchObject({ head: SHA2, acceptance: { headSha: SHA2 } });
+  });
+
+  it("keeps an acceptance when the provider's time for its head runs ahead of the acceptance", () => {
+    // No other head came between, so the acceptance names the only head the pull request had.
+    const ahead = reduceWorkItem([
+      ...READY,
+      f.send("o1", 1, 1, 1, 4),
+      f.prLinked("o1", 5),
+      f.runtime("run_ended", "o1", 6),
+      f.required("o1", SHA1, [], 7),
+      f.accepted("o1", SHA1, 1, 8),
+      f.head("o1", SHA1, 9),
+    ]);
+    expect(ahead.activeOrder?.acceptance?.headSha).toBe(SHA1);
+  });
+
+  it("voids nothing on a head reported after the merge, so a done send stays done", () => {
+    const done = [...IN_REVIEW, f.accepted("o1", SHA1, 1, 12), f.merged("o1", SHA1, 13)];
+    const late = reduceWorkItem([...done, f.head("o1", SHA2, 14)]);
+    expect(late.state).toBe("done");
+    expect(late.orders[0]).toMatchObject({ head: SHA1, acceptance: { headSha: SHA1 }, done: true });
+  });
+
+  it("counts an acceptance only on the send's current pull request and head", () => {
+    const headless = reduceWorkItem([...READY, f.send("o1", 1, 1, 1, 4), f.accepted("o1", SHA1, 1, 5)]);
+    expect(headless.activeOrder).toMatchObject({ head: null, acceptance: null, staleAcceptance: { headSha: SHA1 } });
+    const elsewhere = newFact({
+      kind: "accepted",
+      source: "person",
+      itemRevision: 1,
+      actor: "marcus",
+      occurredAt: at(12),
+      dedupeKey: "accept:611",
+      orderId: "o1",
+      repository: "aintel/platform",
+      prNumber: 611,
+      headSha: SHA1,
+      briefDigest: digest(1),
+      data: { criteria: ["c1"], required_checks: ["test"], run_ids: ["tse_run1"] },
+    });
+    expect(reduceWorkItem([...IN_REVIEW, elsewhere]).activeOrder).toMatchObject({ head: SHA1, acceptance: null, staleAcceptance: { headSha: SHA1 } });
+  });
+});
+
 describe("reviewGate", () => {
   const gate = (facts: WorkFact[]) => {
     const item = reduceWorkItem(facts);
@@ -316,6 +455,81 @@ describe("reduceWorkItem: close and reopen", () => {
       f.send("o2", 2, 2, 2, 17),
     ]);
     expect(later.activeOrder).toMatchObject({ send: 2, closed: false });
+  });
+});
+
+describe("reduceWorkItem: each fact from each state", () => {
+  const sent = [...READY, f.send("o1", 1, 1, 1, 4)];
+
+  it("reads an item a person entered as new, with its source", () => {
+    expect(reduceWorkItem([f.entered()])).toMatchObject({ state: "new", source: { revision: 1, digest: digest(101), at: at(0) } });
+  });
+
+  it("moves nothing on Oxagen's delivery of a send, or on a stop asked before any claim", () => {
+    const delivered = reduceWorkItem([...sent, f.delivered("o1", 5)]);
+    expect(delivered).toMatchObject({ state: "sent", activeOrder: { delivery: "waiting_for_claim" } });
+    const stopAsked = reduceWorkItem([...sent, f.stopRequested("o1", 5)]);
+    expect(stopAsked).toMatchObject({ state: "sent", activeOrder: { delivery: "waiting_for_claim" } });
+  });
+
+  it("ends a send in review when the runtime confirms a stop, and leaves the item ready or changed", () => {
+    const stopped = reduceWorkItem([...IN_REVIEW, f.runtime("stopped", "o1", 12)]);
+    expect(stopped.state).toBe("ready");
+    expect(stopped.orders[0]).toMatchObject({ delivery: "stopped", closed: true });
+    expect(state([...IN_REVIEW, f.sourceChanged(2, 12), f.runtime("stopped", "o1", 13)])).toBe("changed");
+  });
+
+  it("keeps a withdrawn or rejected send ended when its run's end arrives late", () => {
+    const withdrawn = reduceWorkItem([...sent, f.withdrawn("o1", 5), f.runtime("run_ended", "o1", 6)]);
+    expect(withdrawn).toMatchObject({ state: "ready", orders: [expect.objectContaining({ delivery: "withdrawn" })] });
+    const rejected = reduceWorkItem([...sent, f.rejected("o1", 5), f.runtime("run_ended", "o1", 6)]);
+    expect(rejected).toMatchObject({ state: "ready", orders: [expect.objectContaining({ delivery: "rejected" })] });
+  });
+
+  it("keeps a send returned after its acceptance was voided out of done when the pull request merges", () => {
+    const item = reduceWorkItem([...IN_REVIEW, f.accepted("o1", SHA1, 1, 12), f.head("o1", SHA2, 13), f.returned("o1", 14), f.merged("o1", SHA2, 15)]);
+    expect(item.state).toBe("ready");
+    expect(item.orders[0]).toMatchObject({ delivery: "returned", acceptance: null, done: false });
+  });
+
+  it("keeps an item closed when its accepted send merges after the close", () => {
+    expect(state([...IN_REVIEW, f.accepted("o1", SHA1, 1, 12), f.closed(1, 13), f.merged("o1", SHA1, 14)])).toBe("closed");
+  });
+
+  it("keeps a held or needs-info item where triage put it when a brief is saved or the source changes", () => {
+    const held = [f.collected(), f.triage("duplicate")];
+    const asked = [f.collected(), f.triage("needs_info")];
+    expect(state([...held, f.saved(1, 1, 2)])).toBe("held");
+    expect(state([...asked, f.saved(1, 1, 2)])).toBe("needs_info");
+    expect(reduceWorkItem([...held, f.sourceChanged(2, 3)])).toMatchObject({ state: "held", revision: 2 });
+    expect(reduceWorkItem([...asked, f.sourceChanged(2, 3)])).toMatchObject({ state: "needs_info", revision: 2 });
+  });
+
+  it("shows a triage failure after a recorded suggestion, and keeps a saved brief triaged", () => {
+    const failed = reduceWorkItem([f.collected(), f.triage("triaged", 1), f.triageFailed(2)]);
+    expect(failed).toMatchObject({ state: "new", triage: { outcome: "failed" } });
+    expect(state([f.collected(), f.triage("triaged", 1), f.saved(1, 1, 2), f.triageFailed(3)])).toBe("triaged");
+  });
+
+  it.each<[string, WorkFact[]]>([
+    ["new", [f.collected()]],
+    ["held", [f.collected(), f.triage("duplicate")]],
+    ["needs_info", [f.collected(), f.triage("needs_info")]],
+    ["triaged", [f.collected(), f.triage("triaged")]],
+  ])("closes a %s item", (from, facts) => {
+    expect(state(facts)).toBe(from);
+    expect(state([...facts, f.closed(1, 5)])).toBe("closed");
+  });
+
+  it("reopens an item closed while held on a new revision, still held by triage", () => {
+    const reopened = reduceWorkItem([f.collected(), f.triage("duplicate"), f.closed(1, 2), f.reopened(2, 0, 3)]);
+    expect(reopened).toMatchObject({ state: "held", revision: 2, revisionCause: "reopen", triage: { outcome: "duplicate" } });
+  });
+
+  it("reads the later required list when a head's checks are read twice", () => {
+    const twice = [...IN_REVIEW, f.required("o1", SHA1, ["test", "e2e"], 12)];
+    expect(reduceWorkItem(twice).activeOrder?.requiredChecks).toEqual(["e2e", "test"]);
+    expect(reduceWorkItem([...twice, f.required("o1", SHA1, ["test"], 13)]).activeOrder?.requiredChecks).toEqual(["test"]);
   });
 });
 

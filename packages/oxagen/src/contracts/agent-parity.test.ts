@@ -31,10 +31,14 @@ import "../contracts.generated";
  * people sign in, or change how its own work is graded.
  */
 const OFF_AGENT: Readonly<Record<string, string>> = {
+  accept_work_order:
+    "A person accepts an agent's work, and the handler refuses an agent run and any API key (assertWorkActor), so an agent cannot accept its own.",
   answer_interjection:
     "An agent paused to ask a person this question, so the answer has to come from a person.",
   approve_steering_pr:
     "A steering PR approval is a person's review of a change, and the merge counts it as one (ADR-267), so an agent must not give it.",
+  approve_work_brief:
+    "A person approves the brief an agent will be sent, and the handler refuses an agent run and any API key (assertWorkActor).",
   ask_assistant:
     "It starts a Stella turn, so Stella calling it would run a turn inside its own turn.",
   attach_github_installation:
@@ -49,12 +53,18 @@ const OFF_AGENT: Readonly<Record<string, string>> = {
     "It finishes the Slack sign-in with the code Slack sent back to the person, and it is on no surface.",
   cancel_assistant_turn:
     "It is the person's stop control for a Stella turn. A turn that should stop ends by itself.",
+  cancel_work_order:
+    "A person withdraws a send, and the handler refuses an agent run and any API key (assertWorkActor).",
+  close_work_item:
+    "A person closes a work item, and the handler refuses an agent run and any API key (assertWorkActor).",
   create_enrollment_token:
     "It returns a single-use enrollment secret, which would land in Stella's transcript.",
   create_scim_token:
     "It returns the SCIM bearer token once, which would land in Stella's transcript.",
   create_sso_provider:
     "Its input carries the OIDC client secret, which would land in Stella's transcript.",
+  create_work_item:
+    "Phase 1 keeps Work off the agent surface: a person files an item by hand, and every work decision on it refuses an agent run (assertWorkActor).",
   delete_model_credential:
     "Deleting the organization's key moves Stella's own turns onto the platform key, which Stella must not do.",
   delete_slack_connection:
@@ -79,6 +89,8 @@ const OFF_AGENT: Readonly<Record<string, string>> = {
     "It returns the issue's description and every source revision as collected, and the Phase 1 plan screens inbound content before any model reads it. This read does not screen.",
   get_work_outcomes:
     "Phase 1 keeps Work off the agent surface: every work decision refuses an agent run (assertWorkActor), and the item reads carry unscreened issue text. The outcome counts move with the other Work reads.",
+  get_work_priorities:
+    "It reads the priorities record the Work and Setup pages show a person, and the write beside it, revise_work_triage, refuses an agent run. The record moves with the other Work reads.",
   get_workspace_memory:
     "Mac ruled on 2026-09-25 that the in-app agent never receives workspace memories.",
   import_workspace_steering:
@@ -89,6 +101,8 @@ const OFF_AGENT: Readonly<Record<string, string>> = {
     "It belongs to the Slack connection flow, which is on no surface.",
   list_sso_providers:
     "Stella never reads or changes how people sign in, and SSO settings decide that.",
+  list_work_collectors:
+    "It lists the Setup page's collectors, and set_work_collector and sync_work_collector refuse an agent run, so only a person's Setup page uses it.",
   list_work_items:
     "It returns titles and requesters copied from GitHub issues, and the Phase 1 plan screens inbound content before any model reads it. This read does not screen.",
   list_work_targets:
@@ -101,18 +115,32 @@ const OFF_AGENT: Readonly<Record<string, string>> = {
     "A person promotes a memory into a steering record, and Mac ruled on 2026-09-25 that the in-app agent never receives workspace memories.",
   record_reply_feedback:
     "It records the person's verdict on Stella's reply, so Stella must not write it.",
+  refresh_work_order_checks:
+    "A person asks for the pull request's checks again before accepting, and the handler refuses an agent run and any API key (assertWorkActor).",
   register_agent:
     "It returns the new agent's long-lived credential once, which would land in Stella's transcript.",
   register_mcp_server:
     "Its input can carry the server's bearer token or auth headers, which would land in Stella's transcript.",
+  reopen_work_item:
+    "A person reopens a work item, and the handler refuses an agent run and any API key (assertWorkActor).",
   resolve_approval:
     "It approves or denies a held call, so Stella could release the calls it was made to wait on.",
+  retry_work_triage:
+    "A person asks for triage again, and the handler refuses an agent run and any API key.",
+  return_work_order:
+    "A person returns an agent's work with a reason, and the handler refuses an agent run and any API key (assertWorkActor), so an agent cannot judge its own.",
+  revise_work_triage:
+    "A person corrects triage's priority or outcome, and the handler refuses an agent run, so triage cannot overrule the person.",
   revoke_scim_token:
     "Stella never changes how people sign in, and the SCIM token provisions them from the identity provider.",
   rotate_agent_credential:
     "It returns the replacement credential once, which would land in Stella's transcript.",
   rotate_scim_token:
     "It returns the new SCIM bearer token once, which would land in Stella's transcript.",
+  save_work_brief:
+    "A person writes the brief an agent will be sent, and the handler refuses an agent run and any API key (assertWorkActor).",
+  send_work_order:
+    "A person sends work to an agent, and the handler refuses an agent run and any API key (assertWorkActor), so an agent cannot send work to itself.",
   set_agent_cache_keep_alive:
     "It decides whether the gateway spends tokens to keep an agent's prompt cache warm, and the team that owns the agent makes that call, so an agent must not change it.",
   set_model_credential:
@@ -123,12 +151,18 @@ const OFF_AGENT: Readonly<Record<string, string>> = {
     "Stella never changes how people sign in, and SSO settings decide that.",
   set_sso_policy:
     "Stella never changes how people sign in, and SSO settings decide that.",
+  set_work_collector:
+    "An Owner adds or removes the collector that feeds Work, and the handler refuses an agent run and any API key (#5181).",
   start_issue_authorization:
     "It returns a sign-in URL for the person to open in a browser.",
   start_mcp_authorization:
     "It returns a sign-in URL for the person to open in a browser.",
   start_slack_connection:
     "It returns a Slack sign-in URL for the person to open in a browser, and it is on no surface.",
+  stop_work_order:
+    "A person stops a run an agent is making on a send, and the handler refuses an agent run and any API key (assertWorkActor).",
+  sync_work_collector:
+    "A person asks a collector to read its source again, and the handler refuses an agent run and any API key.",
   update_sso_provider:
     "Its input can carry the OIDC client secret, which would land in Stella's transcript.",
   upload_assistant_attachment:

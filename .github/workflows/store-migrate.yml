@@ -119,10 +119,65 @@ jobs:
           echo "instance=$INSTANCE" >> "$GITHUB_OUTPUT"
           echo "node: $INSTANCE"
 
-      # Both stores bind 127.0.0.1 on the node and neither is exposed to the
-      # VPC, so a forwarded port is the only way in. Backgrounded, then waited
-      # on: `start-session` does not return once the tunnel is up.
+      # Before the tunnels, because the ClickHouse tunnel's far end comes from
+      # CLICKHOUSE_URL.
+      - name: Read the production store config
+        run: |
+          set -euo pipefail
+          # Written to the environment file rather than echoed: these are
+          # SecureString values and a `set -x` here would print them.
+          for key in CLICKHOUSE_URL CLICKHOUSE_USERNAME CLICKHOUSE_PASSWORD CLICKHOUSE_DATABASE \
+                     NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD NEO4J_DATABASE; do
+            value=$(aws ssm get-parameter --name "/oxagen/production/$key" \
+              --with-decryption --query Parameter.Value --output text)
+            echo "::add-mask::$value"
+            echo "$key=$value" >> "$GITHUB_ENV"
+          done
+          echo "read 8 parameters"
+
+      # The node's own ClickHouse, or ClickHouse Cloud through the node: the
+      # same rule as .github/actions/open-store-tunnels, from the same script
+      # (ADR-295). The Cloud host name comes out of a SecureString, so it is
+      # masked before anything prints it. The rewritten CLICKHOUSE_URL is what
+      # the apply and every check below read, so they all reach one store.
+      - name: Decide how to reach ClickHouse
+        id: clickhouse
+        run: |
+          set -euo pipefail
+          plan="$RUNNER_TEMP/clickhouse-tunnel.txt"
+          bash infra/tools/clickhouse-tunnel.sh "$CLICKHOUSE_URL" 8123 > "$plan"
+          mode=$(sed -n 's/^mode=//p' "$plan")
+          host=$(sed -n 's/^host=//p' "$plan")
+          port=$(sed -n 's/^port=//p' "$plan")
+          url=$(sed -n 's/^url=//p' "$plan")
+          if [ "$mode" = remote ]; then
+            echo "::add-mask::$host"
+            echo "::add-mask::$url"
+            # Keep the Cloud host name for TLS certificate verification. Only
+            # this runner resolves it to the local forwarding socket; the SSM
+            # agent resolves it from inside the VPC.
+            printf '127.0.0.1 %s\n' "$host" | sudo tee -a /etc/hosts >/dev/null
+            echo "ClickHouse: ClickHouse Cloud through the node, remote port $port"
+          else
+            echo "ClickHouse: the node's own, port $port"
+          fi
+          echo "CLICKHOUSE_URL=$url" >> "$GITHUB_ENV"
+          {
+            echo "mode=$mode"
+            echo "host=$host"
+            echo "port=$port"
+          } >> "$GITHUB_OUTPUT"
+
+      # Neo4j binds 127.0.0.1 on the node and is not exposed to the VPC, so a
+      # forwarded port is the only way in, and the same holds for the node's
+      # own ClickHouse. ClickHouse Cloud admits only the node's NAT address,
+      # so its tunnel runs through the node to the Cloud host. Backgrounded,
+      # then waited on: `start-session` does not return once the tunnel is up.
       - name: Open the tunnels
+        env:
+          CH_MODE: ${{ steps.clickhouse.outputs.mode }}
+          CH_HOST: ${{ steps.clickhouse.outputs.host }}
+          CH_REMOTE_PORT: ${{ steps.clickhouse.outputs.port }}
         run: |
           set -euo pipefail
           open_tunnel() {
@@ -134,7 +189,16 @@ jobs:
               > "/tmp/tunnel-$label.log" 2>&1 &
             echo $! > "/tmp/tunnel-$label.pid"
           }
-          open_tunnel 8123 8123 clickhouse
+          if [ "$CH_MODE" = remote ]; then
+            aws ssm start-session \
+              --target "${{ steps.node.outputs.instance }}" \
+              --document-name AWS-StartPortForwardingSessionToRemoteHost \
+              --parameters "{\"host\":[\"$CH_HOST\"],\"portNumber\":[\"$CH_REMOTE_PORT\"],\"localPortNumber\":[\"8123\"]}" \
+              > /tmp/tunnel-clickhouse.log 2>&1 &
+            echo $! > /tmp/tunnel-clickhouse.pid
+          else
+            open_tunnel 8123 8123 clickhouse
+          fi
           open_tunnel 7687 7687 neo4j
 
           # Wait for the port rather than sleeping a guessed interval: SSM
@@ -151,20 +215,6 @@ jobs:
           done
           echo "--- tunnel logs ---"
           tail -3 /tmp/tunnel-*.log || true
-
-      - name: Read the production store config
-        run: |
-          set -euo pipefail
-          # Written to the environment file rather than echoed: these are
-          # SecureString values and a `set -x` here would print them.
-          for key in CLICKHOUSE_URL CLICKHOUSE_USERNAME CLICKHOUSE_PASSWORD CLICKHOUSE_DATABASE \
-                     NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD NEO4J_DATABASE; do
-            value=$(aws ssm get-parameter --name "/oxagen/production/$key" \
-              --with-decryption --query Parameter.Value --output text)
-            echo "::add-mask::$value"
-            echo "$key=$value" >> "$GITHUB_ENV"
-          done
-          echo "read 8 parameters"
 
       # The lock must use the same Aurora database as migrations on the app
       # node. Forward through that node; hosted runners cannot reach Aurora.
@@ -224,7 +274,7 @@ jobs:
           # look plausible, which is the failure worth avoiding here.
           echo "== applied, according to ClickHouse =="
           if curl -sf --max-time 15 --user "$CLICKHOUSE_USERNAME:$CLICKHOUSE_PASSWORD" \
-               "http://127.0.0.1:8123/" \
+               "$CLICKHOUSE_URL" \
                --data-binary "SELECT DISTINCT filename FROM ${CLICKHOUSE_DATABASE}._migrations ORDER BY filename" \
                > /tmp/applied.txt 2>/dev/null; then
             wc -l < /tmp/applied.txt
@@ -255,7 +305,7 @@ jobs:
           set -euo pipefail
           echo "== tables in ${CLICKHOUSE_DATABASE} =="
           curl -sf --max-time 15 --user "$CLICKHOUSE_USERNAME:$CLICKHOUSE_PASSWORD" \
-            "http://127.0.0.1:8123/" \
+            "$CLICKHOUSE_URL" \
             --data-binary "SELECT count() FROM system.tables WHERE database = '${CLICKHOUSE_DATABASE}'"
 
           # The table whose absence was the symptom. Named explicitly so a run
@@ -263,7 +313,7 @@ jobs:
           # read as green.
           echo "== error_events exists? =="
           curl -sf --max-time 15 --user "$CLICKHOUSE_USERNAME:$CLICKHOUSE_PASSWORD" \
-            "http://127.0.0.1:8123/" \
+            "$CLICKHOUSE_URL" \
             --data-binary "EXISTS TABLE ${CLICKHOUSE_DATABASE}.error_events"
 
       - name: Close the tunnels

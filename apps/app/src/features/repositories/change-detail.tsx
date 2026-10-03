@@ -406,7 +406,7 @@ function Loaded({
                     </Badge>
                   </td>
                   <td
-                    className={`${cell} text-muted-foreground [--cell-max:32rem]`}
+                    className={`${cell} text-muted-foreground cell-max-wide`}
                   >
                     {check.summary.trim() !== ""
                       ? check.summary

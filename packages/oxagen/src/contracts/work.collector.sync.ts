@@ -11,6 +11,11 @@
  * Name the collector by its row id or by its name, which is unique in the
  * workspace (P1-05, #5163: the Work setup page names it, so no row id reaches
  * a page). A call that names neither, or both, is refused as invalid input.
+ *
+ * A sync is a change to the collector, and only a signed-in person changes a
+ * collector (Mac, 2026-10-02, #5181; ADR-250, amended 2026-10-03). The
+ * handler refuses every API key and every agent run, so the capability is not
+ * an MCP tool.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -21,8 +26,8 @@ export const workCollectorSync = registerCapability({
   description:
     "Queue a reconcile of one work collector now, even when it is failing, such as after reconnecting GitHub.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  surfaces: ["api"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   sensitivity: "medium",

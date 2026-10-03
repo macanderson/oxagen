@@ -20,7 +20,7 @@ export const workOrderStop = registerCapability({
     "Ask the runtime to stop the run a send started. The send reads stopped once the runtime confirms.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

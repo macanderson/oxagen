@@ -360,6 +360,17 @@
       "consumes": []
     },
     {
+      "name": "claim_work_criterion",
+      "domain": "work",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "claim_work_order",
       "domain": "work",
       "surfaces": [
@@ -4201,8 +4212,7 @@
       "name": "retry_work_triage",
       "domain": "work",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -5149,8 +5159,7 @@
       "name": "sync_work_collector",
       "domain": "work",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "component": null,
       "produces": [],

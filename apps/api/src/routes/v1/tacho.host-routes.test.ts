@@ -21,6 +21,7 @@ const LIMITS = [
   ["/memories", 32 * 1024],
   ["/work-orders/claim", 16 * 1024],
   ["/work-orders/reject", 16 * 1024],
+  ["/work-orders/criteria/claim", 16 * 1024],
   ["/github-token", 4096],
   ["/contained-launch", 4096],
 ] as const;
