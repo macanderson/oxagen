@@ -129,6 +129,7 @@ import {
 import {
   IDLE_CLOSE_UNDONE,
   backfilledCostMicros,
+  createTachoEventsIngestHandler,
   enforcementTierOf,
   firstRootPrompts,
   foldDelta,
@@ -141,6 +142,8 @@ import {
   tachoToolCallEntries,
   usageCountedEvents,
 } from "./tacho.events.ingest";
+import { cedarPort } from "./lib/tacho-host-cedar.test-support";
+import { NOTHING_PUBLISHED, type TachoPublished } from "./tacho.published";
 
 const HOST_PUBLIC = "tch_0123456789abcdefghjkmn";
 const HOST_ID = "11111111-1111-4111-8111-111111111111";
@@ -1263,6 +1266,35 @@ describe("ingest_tacho_events", () => {
     const older = await tachoEventsIngestHandler(batch(session()), CONTEXT);
     expect(older.control.agent_day_spend).toBeUndefined();
     expect(mocks.selectAgentDaySpend).not.toHaveBeenCalled();
+  });
+
+  it("answers a Cedar host's batch when its Cedar policies cannot be read, naming the etag of a bundle without Cedar (#5381)", async () => {
+    // The batch has landed by the time the envelope is built, so a failed
+    // policy read must not fail it. The host sees an etag without Cedar and
+    // fetches the bundle, and get_tacho_bundle refuses that fetch instead.
+    const down = cedarPort();
+    down.published = async () => {
+      throw new Error("the version store is down");
+    };
+    const ingest = (published: TachoPublished) => {
+      const db = fakeDb();
+      db.hosts[0]!["bundleFeatures"] = ["cedar"];
+      wire(db);
+      return createTachoEventsIngestHandler({ published })(
+        batch(session()),
+        CONTEXT,
+      );
+    };
+
+    const output = await ingest(down);
+    expect(output.accepted).toBe(session().length);
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: CONTEXT.orgId }),
+      expect.stringMatching(/etag leaves Cedar out/),
+    );
+    expect(output.control.bundle_etag).toBe(
+      (await ingest(NOTHING_PUBLISHED)).control.bundle_etag,
+    );
   });
 
   it("accepts a verified session, rolls it up, and answers the control envelope", async () => {

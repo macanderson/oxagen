@@ -1557,4 +1557,26 @@ describe("a session's events since an instant", () => {
     const absent = "5c1f0a2e-0000-4000-8000-0000000000ff";
     expect(wal.eventsSince(absent, MIDNIGHT)).toEqual([]);
   });
+
+  it("keeps an event whose ts does not parse, and walks on past it to the real stop", () => {
+    // A walk that stopped here would leave out seq 2, a frame from the day,
+    // and the restart seed would undercount by its cost.
+    const wal = new Wal(scratchPaths().wal);
+    const session = sessionAt([
+      "2026-10-02T09:00:00.000Z",
+      "2026-10-02T23:00:00.000Z",
+      "2026-10-03T00:30:00.000Z",
+      "not a time",
+      "2026-10-03T01:00:00.000Z",
+      "2026-10-03T02:00:00.000Z",
+      "2026-10-03T03:00:00.000Z",
+      "2026-10-03T04:00:00.000Z",
+    ]);
+    const uuid = session[0]!.session_uuid;
+    wal.append(session);
+
+    const today = wal.eventsSince(uuid, MIDNIGHT);
+    expect(today.map((event) => event.seq)).toEqual([2, 3, 4, 5, 6, 7]);
+    expect(today[1]!.ts).toBe("not a time");
+  });
 });

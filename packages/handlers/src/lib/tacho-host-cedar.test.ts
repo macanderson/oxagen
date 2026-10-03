@@ -367,6 +367,47 @@ describe("hostCedarReader", () => {
     ).rejects.toThrow(CedarPoliciesUnavailableError);
   });
 
+  it("serves the newest set that compiled, not the first, when a later read fails", async () => {
+    const port = cedarPort();
+    const { read } = reader(port);
+    const first = await read.read("get_tacho_bundle", CTX, hostRow());
+    port.version = cedarVersion({ version: 2 });
+    const second = await read.read("get_tacho_bundle", CTX, hostRow());
+    expect(second).not.toBe(first);
+    expect(second?.policies).toHaveProperty(REVIEWER_NO_SHELL_ID);
+    port.published = async () => {
+      throw new Error("the version store is down");
+    };
+    await expect(
+      read.read("get_tacho_bundle", CTX, hostRow()),
+    ).resolves.toBe(second);
+  });
+
+  it("never serves one workspace the set another workspace compiled (negative)", async () => {
+    const port = cedarPort();
+    const { read } = reader(port);
+    await read.read("get_tacho_bundle", CTX, hostRow());
+    port.published = async () => {
+      throw new Error("the version store is down");
+    };
+    // Another workspace in the same organization, and the same workspace id
+    // under another organization. This reader compiled nothing for either.
+    const sibling: CapabilityContext = {
+      ...CTX,
+      workspaceId: "00000000-0000-4000-8000-000000000003",
+    };
+    const otherOrg: CapabilityContext = {
+      ...CTX,
+      orgId: "00000000-0000-4000-8000-000000000009",
+    };
+    await expect(
+      read.read("get_tacho_bundle", sibling, hostRow()),
+    ).rejects.toThrow(CedarPoliciesUnavailableError);
+    await expect(
+      read.read("get_tacho_bundle", otherOrg, hostRow()),
+    ).rejects.toThrow(CedarPoliciesUnavailableError);
+  });
+
   it("shares one reader between the routes bound to one port", () => {
     const port = cedarPort();
     expect(hostCedarReader(port)).toBe(hostCedarReader(port));
