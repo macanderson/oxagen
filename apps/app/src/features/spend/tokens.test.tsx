@@ -126,6 +126,40 @@ describe("Tokens", () => {
     ).toBeNull();
   });
 
+  // #5293. A part the run rows measured prints its tokens; with no token in
+  // the month's classes there is nothing to divide by, so no share prints.
+  it("prints a measured prompt part with no share when the month has no tokens (negative)", () => {
+    render(
+      <IntlProvider>
+        <TokensSection
+          month={{
+            ...report([]),
+            composition: {
+              toolDefinitionTokens: 400,
+              contextFrameTokens: null,
+              steeringTokens: null,
+              toolResultTokens: null,
+            },
+          }}
+          agents={readOk(report([]))}
+          at={AT}
+        />
+      </IntlProvider>,
+    );
+    const part = document.querySelector<HTMLElement>(
+      'tr[data-prompt-part="toolDefinitions"]',
+    );
+    if (part === null) throw new Error("no tool definitions row");
+    expect(part).toHaveTextContent("400");
+    expect(part.querySelectorAll('[data-recorded="false"]')).toHaveLength(1);
+    const steering = document.querySelector<HTMLElement>(
+      'tr[data-prompt-part="steering"]',
+    );
+    expect(steering?.querySelectorAll('[data-recorded="false"]')).toHaveLength(
+      2,
+    );
+  });
+
   it("says the agents read failed in its own panel (negative)", () => {
     render(
       <IntlProvider>

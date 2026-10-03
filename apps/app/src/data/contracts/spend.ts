@@ -161,6 +161,27 @@ export const SpendReport = z.object({
    * meter; null when there is none.
    */
   reported: Money.nullable().optional(),
+  /**
+   * The part of the total the gateway metered, a floor: a model with mixed
+   * or estimated frames counts as not observed. Null when no part is known
+   * to be the gateway's. Absent from a view built before get_spend answered
+   * it.
+   */
+  observed: Money.nullable().optional(),
+  /**
+   * What the period's model calls carried besides the conversation, in
+   * tokens: the standing context by source, and the tool results counted
+   * once each. A part no run recorded is null. Absent from a view built
+   * before get_spend answered it.
+   */
+  composition: z
+    .object({
+      toolDefinitionTokens: Count.nullable(),
+      contextFrameTokens: Count.nullable(),
+      steeringTokens: Count.nullable(),
+      toolResultTokens: Count.nullable(),
+    })
+    .optional(),
   /** Runs still open whose cost is in these figures as a running estimate. */
   estimatedRuns: z.number().int().nonnegative().optional(),
   /** Runs in `total.runs` whose cost `total.cost` leaves out. */
@@ -181,7 +202,32 @@ export const FleetSpend = z.object({
 });
 export type FleetSpend = z.infer<typeof FleetSpend>;
 
-/** `get_spend_drill`: one operator, agent or tool over its trailing window. */
+/**
+ * One row of a drill's cross-cut: the part of the key's figure one agent, one
+ * operator or one model holds. On a tool drill the cost, the calls and the
+ * result tokens are the tool's own in those runs.
+ */
+const DrillCutRow = z.object({
+  /** The agent key, the operator's principal public id, or the model id. */
+  key: z.string().min(1),
+  /** The model's provider on a model row; null elsewhere. */
+  provider: z.string().nullable(),
+  /** The person an operator row names; null elsewhere. */
+  operator: OperatorFacts.nullable(),
+  runs: Count,
+  calls: Count,
+  cost: Cost.nullable(),
+  tokens: SpendTokens,
+  /** The tool's result tokens on a tool drill; null elsewhere. */
+  resultTokens: Count.nullable(),
+});
+export type DrillCutRow = z.infer<typeof DrillCutRow>;
+
+/**
+ * `get_spend_drill`: one operator, agent or tool over its trailing window. A
+ * tool drill's cost is what its results cost as input to later calls, an
+ * estimate its runs already paid, so it carries the `estimated` basis.
+ */
 export const SpendDrill = z.object({
   kind: SpendDrillKind,
   key: z.string().min(1),
@@ -191,11 +237,37 @@ export const SpendDrill = z.object({
   series: z.array(SpendDay),
   perCall: Money.nullable(),
   perRun: Money.nullable(),
-  /** The key's share of the workspace's spend over the window. */
+  /** The key's share of the workspace's spend over the window; null on a tool. */
   share: Ratio.nullable(),
+  /** The key's runs' tokens by class; on a tool drill, the runs that called it. */
+  tokens: SpendTokens,
+  /** cache_read ÷ (input_uncached + cache_read) over `tokens`; null with no input. */
+  cacheHitRate: Ratio.nullable(),
+  /** The model calls the key's runs made; `total.calls` counts tool calls too. */
+  modelCalls: Count,
+  /** The part of the cost the gateway metered, a floor; null on a tool drill. */
+  observed: Money.nullable(),
+  /** The standing context the key's calls carried; null for a source nothing measured. */
+  standing: z.object({
+    toolDefinitionTokens: Count.nullable(),
+    contextFrameTokens: Count.nullable(),
+    steeringTokens: Count.nullable(),
+  }),
+  /** The tool-result tokens: the tool's own on a tool drill, every tool's otherwise. */
+  resultTokens: Count.nullable(),
   tools: z.array(
-    z.object({ name: z.string().min(1), calls: Count, runs: Count }),
+    z.object({
+      name: z.string().min(1),
+      calls: Count,
+      runs: Count,
+      resultTokens: Count.nullable(),
+      /** Those result tokens priced as input: an estimate its runs already paid. */
+      cost: Cost.nullable(),
+    }),
   ),
+  byAgent: z.array(DrillCutRow),
+  byOperator: z.array(DrillCutRow),
+  byModel: z.array(DrillCutRow),
   /** The key's runs whose cost the total leaves out; absent on a tool drill. */
   unmeteredRuns: UnmeteredRuns.optional(),
 });

@@ -155,15 +155,15 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
   );
 
   if (view.drill !== null) {
+    // Every drill names agents: an agent's own header, and the By agent
+    // table on an operator's or a tool's drill, so each reads the harnesses.
     const [drill, findings, names, harnesses] = await Promise.all([
       source.spend.drill(ctx, view.tab, view.drill),
       source.spend.findings(ctx),
       view.tab === "operator"
         ? source.spend.byGroup(ctx, "operator", period)
         : Promise.resolve(null),
-      view.tab === "agent"
-        ? readAgentHarnessIndex(ctx, source)
-        : Promise.resolve(EMPTY_HARNESS_INDEX),
+      readAgentHarnessIndex(ctx, source),
     ]);
     if (!drill.ok) return <SpendReadFailure read={drill} {...failure} />;
     const operator =
@@ -184,6 +184,7 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
               ? harnessOfKey(harnesses, drill.value.key)
               : null
           }
+          harnesses={harnesses.byKey}
           at={at}
         />
       </>

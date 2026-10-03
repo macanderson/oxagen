@@ -9617,6 +9617,12 @@ type Messages = {
         repeatCalls: string;
         retries: string;
       };
+      toolSpendNote: string;
+      toolCacheNote: string;
+      observedNote: string;
+      toolDefinitionsNote: string;
+      resultBodyNote: string;
+      toolEstimate: string;
       byDay: string;
       peak: string;
       on: string;
@@ -9631,7 +9637,19 @@ type Messages = {
         operator: string;
         model: string;
       };
-      crossMissing: string;
+      cutEmpty: {
+        agent: string;
+        operator: string;
+        model: string;
+      };
+      columns: {
+        agent: string;
+        operator: string;
+        model: string;
+        tokens: string;
+        resultTokens: string;
+        resultCost: string;
+      };
       toolsEmpty: string;
       findings: string;
       noFindings: string;
@@ -9755,9 +9773,10 @@ type Messages = {
         toolResults: string;
         reasoning: string;
         basis: string;
+        part: string;
       };
       composition: string;
-      compositionMissing: string;
+      compositionFooter: string;
       parts: {
         conversation: string;
         toolResults: string;

@@ -1,11 +1,13 @@
 // The four summary tiles over every Spend tab (spec "Summary tiles"; hidden
 // on a drill): Spend with its basis and currency, the month's tokens with the
-// share served from cache, the share of tokens the gateway observed, and the
-// wasted spend in the critical ink. Each is a rollup of the rows beneath it:
-// Spend is the model rollup's total, and says when it includes open runs'
-// running estimates; Tokens is the
-// sum of the model rows' classes, the By token class total.
+// share served from cache, the share of priced spend the gateway metered, and
+// the wasted spend in the critical ink. Each is a rollup of the rows beneath
+// it: Spend is the model rollup's total, and says when it includes open runs'
+// running estimates; Tokens is the sum of the model rows' classes, the By
+// token class total; Observed divides get_spend's gateway-metered part by
+// that total.
 import { useLocale, useTranslations } from "next-intl";
+import { ratioOfMicros } from "@/data/contracts/money";
 import type { SpendReport, SpendWaste } from "@/data/contracts/spend";
 import type { Read } from "@/data/read";
 import { statNote } from "@/ui/control-styles";
@@ -14,6 +16,7 @@ import { formatCount, formatRatio } from "@/ui/money-format";
 import {
   BasisLabel,
   NotRecordedValue,
+  RatioFigure,
   Tile,
   TileStrip,
   UnmeteredNote,
@@ -33,6 +36,13 @@ export function SummaryTiles({
   const tokens = totalOf(classes);
   const cache = cacheHitRate(classes);
   const cost = month.total.cost;
+  // The share of the month's priced spend the gateway metered: a floor, since
+  // a model with mixed or estimated frames counts as not observed. Null when
+  // no part is known to be the gateway's, or nothing was priced.
+  const observed =
+    cost === null || month.observed === undefined || month.observed === null
+      ? null
+      : ratioOfMicros(month.observed, cost);
   // Open runs whose running cost is in `cost` (#3980); final once they seal.
   const estimatedRuns = month.estimatedRuns ?? 0;
   const wasted = waste.ok ? waste.value : null;
@@ -68,8 +78,11 @@ export function SummaryTiles({
         >
           <span className="tabular-nums">{formatCount(tokens, locale)}</span>
         </Tile>
-        <Tile term={t("observed")} note={t("observedNote")}>
-          <NotRecordedValue />
+        <Tile
+          term={t("observed")}
+          note={observed === null ? undefined : t("observedNote")}
+        >
+          <RatioFigure ratio={observed} />
         </Tile>
         <Tile
           term={t("wasted")}

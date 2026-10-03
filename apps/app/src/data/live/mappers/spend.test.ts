@@ -206,6 +206,28 @@ describe("toFleetSpend", () => {
 });
 
 describe("toSpendDrill", () => {
+  /** Nothing measured: the fields a drill always carries, at their absent values. */
+  const unmeasured = {
+    tokens: { ...wireTokens, input_uncached: 0, cache_read: 0, output: 0 },
+    cacheHitRate: null,
+    modelCalls: 0,
+    observed: null,
+    standing: {
+      toolDefinitionTokens: null,
+      contextFrameTokens: null,
+      steeringTokens: null,
+    },
+    resultTokens: null,
+    byAgent: [],
+    byOperator: [],
+    byModel: [],
+  };
+  const estimated = {
+    micros: "2400",
+    currency: "USD",
+    basis: "estimated",
+  } as const;
+
   it("keeps the series, the averages and a tool drill's unpriced money as null", () => {
     const out = spendDrill.output.parse({
       kind: "tool",
@@ -218,7 +240,16 @@ describe("toSpendDrill", () => {
       ],
       averages: { perCall: null, perRun: null },
       share: null,
-      byTool: [{ name: "github__create_pull_request", calls: 3, runs: 1 }],
+      ...unmeasured,
+      byTool: [
+        {
+          name: "github__create_pull_request",
+          calls: 3,
+          runs: 1,
+          resultTokens: null,
+          cost: null,
+        },
+      ],
     });
     const view = SpendDrill.parse(toSpendDrill(out));
     expect(view).toMatchObject({
@@ -227,7 +258,23 @@ describe("toSpendDrill", () => {
       perCall: null,
       perRun: null,
       share: null,
-      tools: [{ name: "github__create_pull_request", calls: 3, runs: 1 }],
+      cacheHitRate: null,
+      observed: null,
+      resultTokens: null,
+      standing: {
+        toolDefinitionTokens: null,
+        contextFrameTokens: null,
+        steeringTokens: null,
+      },
+      tools: [
+        {
+          name: "github__create_pull_request",
+          calls: 3,
+          runs: 1,
+          resultTokens: null,
+          cost: null,
+        },
+      ],
     });
     expect(view.series.map((d) => [d.day, d.cost])).toEqual([
       ["2026-09-14", null],
@@ -235,7 +282,53 @@ describe("toSpendDrill", () => {
     ]);
   });
 
-  it("carries an operator's averages in micros", () => {
+  it("copies a tool's result tokens and their estimate with the estimated basis", () => {
+    const row = {
+      key: "acme.core.cc",
+      provider: null,
+      operator: null,
+      runs: 1,
+      calls: 3,
+      cost: estimated,
+      tokens: wireTokens,
+      resultTokens: 800,
+    };
+    const out = spendDrill.output.parse({
+      kind: "tool",
+      key: "Bash",
+      period: { from: "2026-08-17", to: "2026-09-15" },
+      total: { ...figure, cost: estimated, accepted: null },
+      series: [{ day: "2026-09-15", cost: estimated, calls: 3, runs: 1 }],
+      averages: {
+        perCall: { micros: "800", currency: "USD" },
+        perRun: { micros: "2400", currency: "USD" },
+      },
+      share: null,
+      ...unmeasured,
+      tokens: wireTokens,
+      cacheHitRate: 0.4,
+      resultTokens: 800,
+      byTool: [
+        { name: "Bash", calls: 3, runs: 1, resultTokens: 800, cost: estimated },
+      ],
+      byAgent: [row],
+    });
+    const view = SpendDrill.parse(toSpendDrill(out));
+    expect(view.total.cost).toEqual(estimated);
+    expect(view.resultTokens).toBe(800);
+    expect(view.cacheHitRate).toBe(0.4);
+    expect(view.tools[0]?.cost).toEqual(estimated);
+    expect(view.byAgent).toEqual([row]);
+  });
+
+  it("carries an operator's averages, tokens, observed part, standing context and cross-cuts", () => {
+    const marcus = {
+      id: "prn_marcusbell",
+      name: "Marcus Bell",
+      email: null,
+      avatarUrl: null,
+      role: null,
+    };
     const out = spendDrill.output.parse({
       kind: "operator",
       key: "prn_marcusbell",
@@ -247,12 +340,97 @@ describe("toSpendDrill", () => {
         perRun: { micros: "1028806", currency: "USD" },
       },
       share: 0.31,
+      tokens: wireTokens,
+      cacheHitRate: 0.4,
+      modelCalls: 18,
+      observed: { micros: "6000000", currency: "USD" },
+      standing: {
+        toolDefinitionTokens: 4000,
+        contextFrameTokens: null,
+        steeringTokens: 0,
+      },
+      resultTokens: 1500,
       byTool: [],
+      byAgent: [],
+      byOperator: [
+        {
+          key: "prn_marcusbell",
+          provider: null,
+          operator: marcus,
+          runs: 12,
+          calls: 40,
+          cost: priced,
+          tokens: wireTokens,
+          resultTokens: null,
+        },
+      ],
+      byModel: [
+        {
+          key: "claude-sonnet-5",
+          provider: "anthropic",
+          operator: null,
+          runs: 12,
+          calls: 18,
+          cost: priced,
+          tokens: wireTokens,
+          resultTokens: null,
+        },
+      ],
     });
     const view = SpendDrill.parse(toSpendDrill(out));
     expect(view.perCall).toEqual({ micros: "4200", currency: "USD" });
     expect(view.perRun).toEqual({ micros: "1028806", currency: "USD" });
     expect(view.share).toBe(0.31);
+    expect(view.tokens).toEqual(wireTokens);
+    expect(view.modelCalls).toBe(18);
+    expect(view.observed).toEqual({ micros: "6000000", currency: "USD" });
+    // A source measured at 0 stays 0; one nothing measured stays null.
+    expect(view.standing).toEqual({
+      toolDefinitionTokens: 4000,
+      contextFrameTokens: null,
+      steeringTokens: 0,
+    });
+    expect(view.byOperator[0]?.operator).toEqual(marcus);
+    expect(view.byModel.map((row) => [row.key, row.provider, row.cost])).toEqual(
+      [["claude-sonnet-5", "anthropic", priced]],
+    );
+  });
+});
+
+describe("toSpendReport observed and composition", () => {
+  it("copies the gateway's part and the prompt composition, and leaves both out when the contract did", () => {
+    const base = {
+      period: { from: "2026-09-01", to: "2026-09-15" },
+      groupBy: "model",
+      total: figure,
+      days: [],
+      reported: null,
+      rows: [],
+    };
+    const composition = {
+      toolDefinitionTokens: 4000,
+      contextFrameTokens: null,
+      steeringTokens: 0,
+      toolResultTokens: 1200,
+    };
+    const view = SpendReport.parse(
+      toSpendReport(
+        spendGet.output.parse({
+          ...base,
+          observed: { micros: "9000000", currency: "USD" },
+          composition,
+        }),
+      ),
+    );
+    expect(view.observed).toEqual({ micros: "9000000", currency: "USD" });
+    expect(view.composition).toEqual(composition);
+    // An answer built before get_spend read them carries neither, and the
+    // view does not invent them.
+    const older = SpendReport.parse(
+      toSpendReport(spendGet.output.parse(base)),
+    );
+    expect(older.observed).toBeUndefined();
+    expect(older.composition).toBeUndefined();
   });
 });
 
