@@ -250,6 +250,13 @@ export interface StreamAgentReplyArgs {
      * assistant spend by operator. Leave it off for a call no person drove.
      */
     userId?: string;
+    /**
+     * The capability the call serves, written to `token_usage.capability_name`
+     * when the ambient scope carries none (#5426): the engine's provider port
+     * and a durable job open a scope with no capability, and the spend
+     * counter's lane (`spendLaneOf`) reads this column.
+     */
+    capabilityName?: string;
   };
   /**
    * Who paid the vendor for this call (ADR-053 §3). `platform` charges the
@@ -481,6 +488,9 @@ export function streamAgentReply(
           surface: args.telemetry.surface,
           prompt_hash: promptHash,
           created_at: new Date().toISOString(),
+          ...(args.telemetry.capabilityName === undefined
+            ? {}
+            : { capability_name: args.telemetry.capabilityName }),
         },
         args.fundedBy === "platform"
           ? {

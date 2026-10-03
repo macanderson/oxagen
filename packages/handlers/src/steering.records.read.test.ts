@@ -179,7 +179,7 @@ describe("list_records", () => {
         id: "unclassified",
         publicId: "ctr_unclassified000000000000",
         slug: "ctx.unclassified",
-        // The column is NOT NULL since 20261004000000, so a record the
+        // The column is NOT NULL since 20261004001000, so a record the
         // assembler drops is one with no statement.
         statement: null,
       });

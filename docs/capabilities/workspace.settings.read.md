@@ -37,3 +37,5 @@ None (read-only). ClickHouse observes the invocation via the kernel.
 - Throws when the workspace is not found for the caller's scope.
 
 `runEnrichmentEnabled` reports whether automatic Stella run names and summaries are enabled. It is true unless the workspace explicitly saved false. Recording and deterministic output evidence do not depend on it.
+
+`dailyBudgetUsd` reports the workspace's own daily limits on its model calls, in US dollars per UTC day, one per lane: `runEnrichment` (run names and summaries), `assistant` (Stella chat in the app), and `work` (triage and work orders). A lane with no limit reads null, and so does a stored value that does not read as a number, so a malformed setting never refuses a call. Billing is pass-through, so these limits are the workspace's control; the organization's monthly cap on platform-paid assistant spend is separate. Each lane's spend is counted on its own, so a spent chat budget does not stop triage.

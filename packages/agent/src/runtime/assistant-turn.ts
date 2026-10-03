@@ -328,8 +328,14 @@ export async function prepareAssistantTurn(
   // organisation with its own key onto Oxagen's billed key for an outage.
   const funding = await inScope(() => resolveModelFundingSource(ctx.orgId));
 
+  // The workspace's own daily budget for Stella chat is checked first
+  // (#5426), whoever pays the vendor; then the organisation's credits.
   const gate = await inScope(() =>
-    evaluateTurnCreditGate(ctx.orgId, { fundedBy: funding.fundedBy }),
+    evaluateTurnCreditGate(ctx.orgId, {
+      fundedBy: funding.fundedBy,
+      lane: "assistant",
+      workspaceId: ctx.workspaceId,
+    }),
   );
   if (!gate.ok) throw new AssistantTurnRefusedError(gate.code, gate.message);
 
@@ -657,6 +663,9 @@ async function runPreparedTurn(
         // The person who asked (resolved in prepareAssistantTurn), so each
         // platform-paid debit of this turn is attributed to them.
         userId,
+        // The engine's provider port opens a scope with no capability, so
+        // the usage row names the lane here (#5426).
+        capabilityName: "ask_assistant",
       },
       model: p.turnModel,
       ...(p.tier ? { tier: p.tier } : {}),

@@ -41,6 +41,6 @@ ALTER TABLE "agent"."steering_records"
   ALTER COLUMN "force" SET NOT NULL;
 
 COMMENT ON COLUMN "agent"."steering_records"."kind" IS
-  'The kind the record''s active version declares: rule, constraint, procedure, fact, memory, or preference. Required on every write since #3302, and NOT NULL since 20261004000000.';
+  'The kind the record''s active version declares: rule, constraint, procedure, fact, memory, or preference. Required on every write since #3302, and NOT NULL since 20261004001000.';
 COMMENT ON COLUMN "agent"."steering_records"."force" IS
-  'How hard the record steers: must, should, may, or info. Required on every write since #3302, and NOT NULL since 20261004000000.';
+  'How hard the record steers: must, should, may, or info. Required on every write since #3302, and NOT NULL since 20261004001000.';

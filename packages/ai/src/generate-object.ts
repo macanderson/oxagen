@@ -129,6 +129,13 @@ export interface GenerateObjectArgs<T> {
      * null, never a free-form string like the literal "unknown".
      */
     messageId: string | null;
+    /**
+     * The capability the call serves, written to `token_usage.capability_name`
+     * when the ambient scope carries none (#5426): a durable job's call
+     * (`run_enrichment`, `work_triage`) has no capability in scope, and the
+     * spend counter's lane (`spendLaneOf`) reads this column.
+     */
+    capabilityName?: string;
   };
   /**
    * OPT-IN response cache. Omit for chat/agent-loop calls — NEVER cache those.
@@ -360,6 +367,9 @@ export async function generateObjectFor<T>(
       surface: args.telemetry.surface,
       prompt_hash: promptHash,
       created_at: new Date().toISOString(),
+      ...(args.telemetry.capabilityName === undefined
+        ? {}
+        : { capability_name: args.telemetry.capabilityName }),
     },
     args.fundedBy === "platform"
       ? {

@@ -27,7 +27,12 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...original, withSystemDb: mocks.withSystemDb };
 });
 
-import { recordSpend, sumSpendCounter } from "./spend-counter";
+import {
+  recordSpend,
+  spendLaneOf,
+  sumLaneSpendForDay,
+  sumSpendCounter,
+} from "./spend-counter";
 
 const ORG = "00000000-0000-0000-0000-00000000a111";
 const WS = "00000000-0000-0000-0000-00000000b222";
@@ -90,6 +95,53 @@ describe("recordSpend", () => {
     await recordSpend({ ...spend, micros: 0n }, tx);
     expect(execute).not.toHaveBeenCalled();
     expect(mocks.withSystemDb).not.toHaveBeenCalled();
+  });
+
+  // #5426: the lane is part of the row's key, so each lane's daily budget
+  // reads its own row and a call with no lane lands under ''.
+  it("files the spend under its lane, and under '' when the call names none", async () => {
+    const { tx, execute } = callerTx();
+    await recordSpend({ ...spend, lane: "run_enrichment" }, tx);
+    await recordSpend(spend, tx);
+    const { PgDialect } = await import("drizzle-orm/pg-core");
+    const bound = (call: number) =>
+      new PgDialect().sqlToQuery(execute.mock.calls[call]?.[0] as never);
+    expect(bound(0).sql).toContain("lane");
+    expect(bound(0).params).toContain("run_enrichment");
+    expect(bound(1).params).toContain("");
+    expect(bound(1).params).not.toContain("run_enrichment");
+  });
+});
+
+describe("spendLaneOf", () => {
+  it("maps the capability a usage row names to its lane, and nothing else to a lane", () => {
+    expect(spendLaneOf({ capability_name: "run_enrichment" })).toBe(
+      "run_enrichment",
+    );
+    expect(spendLaneOf({ capability_name: "work_triage" })).toBe("work");
+    expect(spendLaneOf({ capability_name: "work_brief_draft" })).toBe("work");
+    expect(spendLaneOf({ capability_name: "ask_assistant" })).toBe("assistant");
+    expect(spendLaneOf({ capability_name: "title_conversation" })).toBe(
+      "assistant",
+    );
+    expect(spendLaneOf({ capability_name: "recall_memory" })).toBeNull();
+    expect(spendLaneOf({ capability_name: "" })).toBeNull();
+    expect(spendLaneOf({})).toBeNull();
+  });
+});
+
+describe("sumLaneSpendForDay", () => {
+  it("reads one lane's row for the UTC day on the shared plane", async () => {
+    const where = vi.fn(async () => [{ micros: "150000" }]);
+    mocks.sharedSelect.mockReturnValue({ from: () => ({ where }) });
+    const total = await sumLaneSpendForDay({
+      orgId: ORG,
+      workspaceId: WS,
+      lane: "assistant",
+      at: AT,
+    });
+    expect(total).toBe(150_000n);
+    expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
   });
 });
 
