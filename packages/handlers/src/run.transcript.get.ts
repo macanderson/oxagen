@@ -57,6 +57,15 @@
 // subagent chain that began before the window and has moved since, or one the
 // cursor names and the window does not hold.
 //
+// A live run is often one long turn, so a read of a live run at `steps` also
+// keeps, per process, a later start inside the turn for the next read from
+// its cursor (`TailStart`, lib/transcript-tail-cache.ts, #4340): the latest
+// model step the reader was sent whose frames have settled, with what the
+// fold carries into it and the call keys the turn recorded before it. That
+// read reads from there, and reads the turn's window instead when a frame it
+// read names one of those keys, since the fold would join that frame to a
+// step that opened before the tail start (`nextTailStart`).
+//
 // Three things belong to the whole run and not to the page: the cumulative
 // cost, a prefix sum from the run's first frame (§8.4), the elapsed time,
 // measured from the run's recorded start, and the turn each entry falls in,
@@ -123,6 +132,7 @@ import {
   turnFolds,
   turnOrdinals,
   type FrameRead,
+  opensRunTurn,
   readTranscriptFrames,
   readTranscriptWindow,
   TRANSCRIPT_FRAME_CAP,
@@ -151,6 +161,11 @@ import {
   UNREADABLE,
   type WordsCache,
 } from "./lib/transcript-words-cache";
+import {
+  createTailCache,
+  type TailCache,
+  type TailStart,
+} from "./lib/transcript-tail-cache";
 import { StorageNotFoundError } from "@oxagen/storage";
 import { digestBytes } from "@oxagen/recorder";
 import { logger } from "./logger";
@@ -229,6 +244,12 @@ export type RunTranscriptGetDeps = RunReadDeps & {
    * handler a process serves from keeps one cache for every read.
    */
   words?: WordsCache;
+  /**
+   * Where the next read of a live run from each cursor can start inside its
+   * turn (`createTailCache`). Omitted, the handler keeps its own, like
+   * `words`.
+   */
+  tails?: TailCache;
   /**
    * The server's clock in milliseconds, read once per read before its frames
    * to set the cursor's receipt (`TranscriptReceipt`). Omitted, `Date.now`.
@@ -1529,11 +1550,47 @@ function windowHolds(
 }
 
 /**
+ * The call keys a frame names, each with its chain: its call id and every key
+ * of the model call it carries. The fold joins frames of one chain by these
+ * inside a turn (rules 1 to 3 and a reply's further parts in
+ * transcript-steps.ts) and drops a model call's second sighting by them
+ * (`withoutDuplicateModelCalls`), so a frame past a tail start that names a
+ * key from before it would fold differently in a read from the turn's start.
+ */
+function tailCallKeys(frame: RunFrame): string[] {
+  const chain = frame.chain?.sessionUuid ?? "";
+  const keys: string[] = [];
+  if (frame.identity.callId !== null)
+    keys.push(`${chain}\u0000${frame.identity.callId}`);
+  for (const key of frame.llmCall?.keys ?? []) keys.push(`${chain}\u0000${key}`);
+  return keys;
+}
+
+/** What one read starts from, and the window the cursor it writes carries on. */
+interface TranscriptRead {
+  read: FrameRead;
+  /** The turn's window the cursor names, or null for the whole run. */
+  from: TranscriptWindowFrom | null;
+  /** Where this read starts: `from`, or a tail start inside its turn. */
+  start: TranscriptWindowFrom | null;
+  /** `turnOrdinals`' count for a read from a tail start; undefined otherwise. */
+  byOpeners?: boolean;
+  /** The tail start this read read from, when it read from one. */
+  tail: TailStart | null;
+}
+
+/**
  * The frames a read folds, and the window they start at: from `from` when
  * the cursor names a window and the window can answer, and otherwise the
  * whole run from its first frame, with `from` null.
  *
- * The window cannot answer when a subagent chain that began before it moved
+ * Given a tail start for the cursor (`TailStart`), the read first reads from
+ * there. That read answers only when no frame it holds names a call key the
+ * turn recorded before the tail start (`tailCallKeys`), so the fold makes
+ * the same steps of it as of the turn's window. Otherwise the read reads the
+ * turn's window.
+ *
+ * A window cannot answer when a subagent chain that began before it moved
  * after the cursor's receipt, less the lead its session row can run ahead of
  * a receipt (`SESSION_MOVE_LEAD_MS`), since only a read of the whole run
  * places that chain's new frames (`readTranscriptWindow`). Nor when it does
@@ -1545,33 +1602,55 @@ async function transcriptFrames(
   run: ResolvedRun,
   after: TranscriptCursor | null,
   from: TranscriptWindowFrom | null,
-): Promise<{ read: FrameRead; from: TranscriptWindowFrom | null }> {
-  if (after !== null && from !== null) {
-    const reads = runChainWindowReads(deps, run);
+  tail: TailStart | null,
+): Promise<TranscriptRead> {
+  const reads = after === null ? null : runChainWindowReads(deps, run);
+  const windowFrom = async (
+    start: TranscriptWindowFrom,
+  ): Promise<FrameRead | null> => {
+    if (after === null || reads === null) return null;
     const received = after.received ?? null;
-    const window =
-      reads === null
-        ? null
-        : await readTranscriptWindow(
-            reads,
-            {
-              fromSeq: from.seq,
-              observed: from.observed,
-              movedAfter:
-                received === null
-                  ? null
-                  : new Date(received.after - SESSION_MOVE_LEAD_MS),
-              holds: chainsNamed(after),
-            },
-            TRANSCRIPT_FRAME_CAP,
-          );
+    const window = await readTranscriptWindow(
+      reads,
+      {
+        fromSeq: start.seq,
+        observed: start.observed,
+        movedAfter:
+          received === null
+            ? null
+            : new Date(received.after - SESSION_MOVE_LEAD_MS),
+        holds: chainsNamed(after),
+      },
+      TRANSCRIPT_FRAME_CAP,
+    );
+    return window !== null &&
+      windowHolds(window.frames, start.seq, after.through) &&
+      windowHolds(window.frames, start.seq, after.high)
+      ? window
+      : null;
+  };
+  if (tail !== null) {
+    const start: TranscriptWindowFrom = {
+      seq: tail.seq,
+      turn: tail.turn,
+      cost: tail.cost,
+      observed: tail.observed,
+    };
+    const window = await windowFrom(start);
+    const kept = tail.keys;
     if (
       window !== null &&
-      windowHolds(window.frames, from.seq, after.through) &&
-      windowHolds(window.frames, from.seq, after.high)
+      !window.frames.some((frame) =>
+        tailCallKeys(frame).some((key) => kept.has(key)),
+      )
     ) {
-      return { read: window, from };
+      const byOpeners = tail.byOpeners || window.frames.some(opensRunTurn);
+      return { read: window, from, start, byOpeners, tail };
     }
+  }
+  if (from !== null) {
+    const window = await windowFrom(from);
+    if (window !== null) return { read: window, from, start: from, tail: null };
   }
   return {
     read: await readTranscriptFrames(
@@ -1579,10 +1658,12 @@ async function transcriptFrames(
       TRANSCRIPT_FRAME_CAP,
     ),
     from: null,
+    start: null,
+    tail: null,
   };
 }
 
-/** What `nextWindow` reads off one read. */
+/** What `nextWindow` and `nextTailStart` read off one read. */
 interface WindowFacts {
   shown: readonly RunFrame[];
   /** The turn of each frame in `shown`, as the fold counted it. */
@@ -1596,11 +1677,48 @@ interface WindowFacts {
   /** The first frame of any call still waiting on a live run. */
   waitingAt: number;
   complete: boolean;
+  /** The window the cursor this read was given names. */
   from: TranscriptWindowFrom | null;
+  /** Where this read starts: `from`, or the tail start it read from. */
+  start: TranscriptWindowFrom | null;
   /** The run's turn for a turn this read counted. */
   turnOf: (turn: number | null) => number | null;
   /** The run's cumulative cost through a frame of this read. */
   costThrough: (frame: RunFrame) => number | null;
+}
+
+/**
+ * Whether each position of `shown` is a frame on the run's own chain that no
+ * entry spans: no entry opens before it and ends at or after it.
+ */
+function cleanCuts(
+  shown: readonly RunFrame[],
+  spans: readonly FoldSpan[],
+): boolean[] {
+  const edges = new Array<number>(shown.length + 1).fill(0);
+  for (const { open, end } of spans) {
+    if (end <= open) continue;
+    edges[open + 1] = (edges[open + 1] ?? 0) + 1;
+    edges[end + 1] = (edges[end + 1] ?? 0) - 1;
+  }
+  let depth = 0;
+  return shown.map((frame, q) => {
+    depth += edges[q] ?? 0;
+    return depth === 0 && frame.chain === undefined;
+  });
+}
+
+/** Whether the proxy observed a model call on the run's own chain before position `q`. */
+function observedBefore(
+  facts: Pick<WindowFacts, "shown" | "start">,
+  q: number,
+): boolean {
+  if (facts.start?.observed === true) return true;
+  for (let i = 0; i < q; i += 1) {
+    const frame = facts.shown[i] as RunFrame;
+    if (frame.chain === undefined && frame.usageObserved === true) return true;
+  }
+  return false;
 }
 
 /**
@@ -1619,19 +1737,7 @@ function nextWindow(facts: WindowFacts): TranscriptWindowFrom | null {
   const { shown, ordinals } = facts;
   const limit = Math.min(facts.limitAt, facts.leftAt);
   if (limit < 1) return facts.from;
-  // `depth` at a position counts the entries that open before it and end at
-  // or after it.
-  const edges = new Array<number>(shown.length + 1).fill(0);
-  for (const { open, end } of facts.spans) {
-    if (end <= open) continue;
-    edges[open + 1] = (edges[open + 1] ?? 0) + 1;
-    edges[end + 1] = (edges[end + 1] ?? 0) - 1;
-  }
-  let depth = 0;
-  const clean = shown.map((frame, q) => {
-    depth += edges[q] ?? 0;
-    return depth === 0 && frame.chain === undefined;
-  });
+  const clean = cleanCuts(shown, facts.spans);
   const latest = (bound: number, cut: (q: number) => boolean) => {
     for (let q = Math.min(bound, shown.length - 1); q >= 1; q -= 1) {
       if (clean[q] && cut(q)) return q;
@@ -1646,17 +1752,140 @@ function nextWindow(facts: WindowFacts): TranscriptWindowFrom | null {
       latest(limit, (at) => (shown[at] as RunFrame).turnIndex !== null);
   }
   if (q === null) return facts.from;
-  let observed = facts.from?.observed ?? false;
-  for (let i = 0; i < q && !observed; i += 1) {
-    const frame = shown[i] as RunFrame;
-    if (frame.chain === undefined && frame.usageObserved === true)
-      observed = true;
-  }
   return {
     seq: (shown[q] as RunFrame).seq,
     turn: facts.turnOf(ordinals[q] ?? null),
     cost: facts.costThrough(shown[q - 1] as RunFrame),
-    observed,
+    observed: observedBefore(facts, q),
+  };
+}
+
+/**
+ * Where the next read of a live run from the cursor this read writes can
+ * start inside its turn, or null when it cannot start past the turn's window
+ * (`next`, the window that cursor names).
+ *
+ * The tail start is the opening frame of a model step on the run's own
+ * chain, the latest that meets every rule below, so the frames a read from
+ * it holds fold into the same entries as a read of the turn's window:
+ *
+ * - It is at or before the frame that opens the last entry the reader was
+ *   sent, before any entry the page had no room for, and before any call
+ *   still waiting, which can gain its result (as for `nextWindow`).
+ * - No entry spans it.
+ * - It is the latest model step the reader was sent, or one before it, so
+ *   the words a reply is compared with (`markWords`: what was said last
+ *   before it in its turn on its chain) lie inside the read.
+ * - The server received it before this read's settle margin
+ *   (`RECEIPT_SETTLE_MS`), so its own batch had landed. No frame before it
+ *   on the run's own chain can land after it: the host ships one drain at a
+ *   time from its WAL cursor and moves the cursor only once ingest accepts a
+ *   batch (`Shipper.drain`, #3782), ingest answers only after the ClickHouse
+ *   insert, and it refuses a batch that skips past the recorded head. So a
+ *   batch is sent only after every earlier batch of its chain has landed.
+ * - It lies past every later sighting of a model call that the read shows
+ *   on the run's own chain. Such a copy stands in for a first sighting the
+ *   read hides, and took that sighting's cost. On a run whose every model
+ *   call shows as a copy, no frame qualifies and the read keeps reading the
+ *   turn's window.
+ * - On a run that counts turns by their recorded index rather than by the
+ *   frames that open them, it carries an index, so the read from it counts
+ *   from that index (`turnOrdinals`).
+ *
+ * It carries every call key the turn's window holds before it: the keys this
+ * read holds from the window's start, and when this read itself started
+ * from a tail start inside that window, the keys that start carried.
+ */
+function nextTailStart(
+  facts: WindowFacts & {
+    steps: readonly TranscriptFold[];
+    next: TranscriptWindowFrom | null;
+    settledBy: number;
+    tail: TailStart | null;
+    byOpeners: boolean;
+  },
+): TailStart | null {
+  const { shown, ordinals } = facts;
+  const bound = Math.min(facts.limitAt, facts.leftAt, facts.waitingAt);
+  // Where the next cursor's window starts in this read, -1 when it starts
+  // before this read. A cursor that names no window reads the whole run, so
+  // its window starts at the run's first frame. One that starts before this
+  // read is covered only when this read began at a tail start kept for that
+  // same window, whose keys cover the frames from there to it.
+  const { next } = facts;
+  const nextAt =
+    next === null
+      ? facts.start === null
+        ? 0
+        : -1
+      : shown.findIndex(
+          (frame) => frame.chain === undefined && frame.seq === next.seq,
+        );
+  if (
+    nextAt === -1 &&
+    (facts.tail === null || (next?.seq ?? null) !== (facts.from?.seq ?? null))
+  )
+    return null;
+  const clean = cleanCuts(shown, facts.spans);
+  // A read from a tail start can keep that start for the next read while no
+  // later model step has settled. Any other start needs a frame before it in
+  // this read, for the cost the run carried into it.
+  const keeps = (step: TranscriptFold) =>
+    nextAt === -1 &&
+    step.opening.chain === undefined &&
+    step.opening.seq === facts.start?.seq;
+  // The last later sighting of a model call on the run's own chain that this
+  // read shows (`withoutDuplicateModelCalls` kept it and hid the first, giving
+  // it the first's cost). That first sighting can lie anywhere before it, and
+  // a read from a start between them would show the copy without the cost,
+  // so the start lies past every such copy. A sighting that continues its own
+  // source's reply is a further part, not a copy.
+  let copiedAt = -1;
+  shown.forEach((frame, at) => {
+    const call = frame.llmCall;
+    if (
+      frame.chain === undefined &&
+      call !== undefined &&
+      call.duplicateOf !== null &&
+      call.duplicateOf !== call.source
+    )
+      copiedAt = at;
+  });
+  let q: number | null = null;
+  for (const step of facts.steps) {
+    const at = step.span.open;
+    if (at > bound) break;
+    if (
+      step.node === "model" &&
+      (at >= 1 || keeps(step)) &&
+      at > nextAt &&
+      at > copiedAt &&
+      clean[at] === true &&
+      (facts.byOpeners || step.opening.turnIndex !== null)
+    ) {
+      const received = step.opening.receivedAt?.getTime();
+      if (received !== undefined && received <= facts.settledBy) q = at;
+    }
+  }
+  if (q === null) return null;
+  const from = Math.max(nextAt, 0);
+  const keys = new Set<string>(nextAt === -1 ? (facts.tail?.keys ?? []) : []);
+  let byOpeners = nextAt === -1 && (facts.tail?.byOpeners ?? false);
+  for (let i = from; i < q; i += 1) {
+    const frame = shown[i] as RunFrame;
+    for (const key of tailCallKeys(frame)) keys.add(key);
+    if (opensRunTurn(frame)) byOpeners = true;
+  }
+  return {
+    seq: (shown[q] as RunFrame).seq,
+    turn: facts.turnOf(ordinals[q] ?? null),
+    cost:
+      q === 0
+        ? (facts.start?.cost ?? null)
+        : facts.costThrough(shown[q - 1] as RunFrame),
+    observed: observedBefore(facts, q),
+    byOpeners,
+    keys,
   };
 }
 
@@ -1664,6 +1893,7 @@ export function createRunTranscriptGetHandler(
   deps: RunTranscriptGetDeps,
 ): CapabilityHandler<typeof runTranscriptGet> {
   const words = deps.words ?? createWordsCache();
+  const tails = deps.tails ?? createTailCache();
   return async (input, ctx): Promise<RunTranscriptGetOutput> => {
     const after =
       input.after === undefined ? null : decodeTranscriptCursor(input.after);
@@ -1699,12 +1929,35 @@ export function createRunTranscriptGetHandler(
     // where it was spawned; late harness reports uncounted; each model call
     // once. `run.summarize` reads the same frames (`readTranscriptFrames`).
     // A read from a cursor reads the window the cursor names, and a search
-    // reads the whole run, so it reaches entries past the reader's page.
-    const { read, from } = await transcriptFrames(
+    // reads the whole run, so it reaches entries past the reader's page. A
+    // live reader's read at `steps` reads from the tail start the read before
+    // it kept for its cursor, when this process kept one (`TailStart`).
+    const followed = input.zoom === "steps" && input.query === undefined;
+    const tailKey = (cursor: string) =>
+      [
+        scope.orgId,
+        scope.workspaceId,
+        input.runId,
+        input.zoom,
+        input.kinds.join(","),
+        cursor,
+      ].join("\n");
+    const tail =
+      followed && input.after !== undefined && after !== null
+        ? tails.take(tailKey(input.after))
+        : null;
+    const {
+      read,
+      from,
+      start,
+      byOpeners,
+      tail: readTail,
+    } = await transcriptFrames(
       deps,
       run,
       after,
       input.query === undefined ? (after?.from ?? null) : null,
+      tail,
     );
     const shown = read.frames;
     // A read with no `after` cursor (from the start, from the end, or before
@@ -1717,7 +1970,7 @@ export function createRunTranscriptGetHandler(
     //
     // The `steps` fold is taken at every zoom: `turns` groups it, and a model
     // reply's `tool_use` blocks are claimed by its tool steps.
-    const steps = stepFolds(shown);
+    const steps = stepFolds(shown, byOpeners);
     const all =
       input.zoom === "steps"
         ? steps
@@ -1828,7 +2081,7 @@ export function createRunTranscriptGetHandler(
     // whenever a costly model call was hidden and a later tool entry showed.
     // A window starts from the run's cost before its first frame.
     const costThrough = new Map<RunFrame, number | null>();
-    let running: number | null = from?.cost ?? null;
+    let running: number | null = start?.cost ?? null;
     for (const frame of shown) {
       running =
         frame.costMicros === null ? running : (running ?? 0) + frame.costMicros;
@@ -1836,11 +2089,11 @@ export function createRunTranscriptGetHandler(
     }
     // The fold counts a window's turns from its first frame. The cursor
     // carries the run's turn there, so an entry carries the run's turn.
-    const ordinals = turnOrdinals(shown);
+    const ordinals = turnOrdinals(shown, byOpeners);
     const turnBase =
-      from === null || from.turn === null
+      start === null || start.turn === null
         ? null
-        : from.turn - (ordinals[0] ?? 0);
+        : start.turn - (ordinals[0] ?? 0);
     const turnOf = (turn: number | null): number | null =>
       turnBase === null ? turn : (turn ?? 0) + turnBase;
 
@@ -1911,26 +2164,31 @@ export function createRunTranscriptGetHandler(
           waitingAt = Math.min(waitingAt, step.span.open);
       }
     }
+    const facts: WindowFacts | null =
+      plan.through === -1
+        ? null
+        : {
+            shown,
+            ordinals,
+            spans:
+              all === steps
+                ? steps.map((step) => step.span)
+                : [...steps, ...all].map((fold) => fold.span),
+            limitAt: (folds[plan.through] as TranscriptFold).span.open,
+            leftAt,
+            waitingAt,
+            complete: read.complete,
+            from,
+            start,
+            turnOf,
+            costThrough: (frame) => costThrough.get(frame) ?? null,
+          };
     const nextFrom =
       input.query !== undefined
         ? null
-        : (plan.received?.sent ?? 0) > 0 || plan.through === -1
+        : (plan.received?.sent ?? 0) > 0 || facts === null
           ? from
-          : nextWindow({
-              shown,
-              ordinals,
-              spans:
-                all === steps
-                  ? steps.map((step) => step.span)
-                  : [...steps, ...all].map((fold) => fold.span),
-              limitAt: (folds[plan.through] as TranscriptFold).span.open,
-              leftAt,
-              waitingAt,
-              complete: read.complete,
-              from,
-              turnOf,
-              costThrough: (frame) => costThrough.get(frame) ?? null,
-            });
+          : nextWindow(facts);
     // The cursor names frames by key, so it survives a later read that holds
     // more frames, or hides one this read showed. The reader's place in fold
     // order moves only when the page sends a new entry: a page of grown
@@ -1960,6 +2218,32 @@ export function createRunTranscriptGetHandler(
     const onward =
       !read.complete && nextFrom !== null && nextFrom.seq !== from?.seq;
     const cursor = live || more || onward ? nextCursor() : null;
+    // Where the next read from this cursor can start inside its turn, kept
+    // for it in this process. Only a live run at `steps` keeps one, and only
+    // when the receipt stands at this read's settle line: a receipt pinned
+    // inside a batch of late entries sends entries again that may lie
+    // before any later start.
+    const settledBy = readAt - RECEIPT_SETTLE_MS;
+    if (
+      cursor !== null &&
+      facts !== null &&
+      followed &&
+      live &&
+      run.source === "tacho" &&
+      before === null &&
+      (plan.received?.sent ?? 0) === 0 &&
+      (plan.received?.after ?? Number.NEGATIVE_INFINITY) >= settledBy
+    ) {
+      const next = nextTailStart({
+        ...facts,
+        steps,
+        next: decodeTranscriptCursor(cursor)?.from ?? null,
+        settledBy,
+        tail: readTail,
+        byOpeners: byOpeners ?? shown.some(opensRunTurn),
+      });
+      if (next !== null) tails.put(tailKey(cursor), next);
+    }
     const frameCursor = frameCursorOf(read.frames);
     // Where the page ahead of a backward page opens: null once the page
     // opens at the first entry.
