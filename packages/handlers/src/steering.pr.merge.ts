@@ -151,6 +151,7 @@ import {
   inMergeQueue,
   landSteeringPr,
   mergeApproval,
+  mergedByOxagen,
   readSteeringLayout,
   recordPublishDeployment,
   type MergeApproval,
@@ -362,6 +363,7 @@ export function createMergeSteeringPrHandler(
           host: deps.github,
           repo,
           branch,
+          number: prNumber,
           checkedHead: recorded.headSha,
           head: pr.headSha,
         }))
@@ -379,6 +381,24 @@ export function createMergeSteeringPrHandler(
         });
       }
       assertProductionBase(repo, pr.baseRef, row.prUrl);
+      // In a steering repo every merge from Oxagen lands its stamp commit,
+      // and the row moves to the stamp only once the host merged it. A PR
+      // merged at the head the checks passed on was merged on the host by
+      // someone else, with no ledger line, trailers, or approval check, so it
+      // is not published as this caller's merge (#4504).
+      if (
+        pr.merged &&
+        layout.layout === "steering" &&
+        !(await mergedByOxagen({
+          host: deps.github,
+          repo,
+          branch,
+          number: prNumber,
+          head: pr.headSha,
+          mergeCommit: pr.mergeCommitSha,
+        }))
+      )
+        await refuseMergedOnHost(deps, scope, row, pr.headSha);
       // Approvals count at the head the author pushed and at each merge the
       // queue makes on top of it. landSteeringPr reads them again after each
       // update.

@@ -1066,6 +1066,45 @@ describe("landSteeringPr: when main moves", () => {
       expect(other.calls).toEqual([[other.pr.head], [other.updated]]);
     });
 
+    // #4504: a retry starts from the update an earlier merge made, and the
+    // approval sits on the head the author pushed under it.
+    describe("on a retry from an update an earlier merge made", () => {
+      async function retried(edit?: (gh: FakeGitHub, pr: OpenPr, updated: string) => void) {
+        const gh = steeringRepo();
+        const pr = await openPr(gh, "a-intel.platform.release-notes");
+        const main = gh.commit("main", "README.md", "moved\n");
+        const { headSha: updated } = await gh.updateBranch(REPO, {
+          number: pr.number,
+          branch: pr.branch,
+          expectedHead: pr.head,
+          base: main,
+        });
+        edit?.(gh, pr, updated);
+        const approve = vi.fn(async (_heads: readonly string[]) => ({
+          approvedBy: [REVIEWER],
+          withoutReview: false,
+        }));
+        await land(gh, { ...pr, head: updated }, { approve });
+        return { pr, updated, first: approve.mock.calls[0]?.[0] };
+      }
+
+      it("counts approvals of the head the author pushed under it", async () => {
+        const { pr, updated, first } = await retried();
+        expect(first).toEqual([pr.head, updated]);
+      });
+
+      it("does not walk back through a merge that also edits the PR's files", async () => {
+        // A merge written by hand, as GitHub's conflict editor writes one.
+        const { updated, first } = await retried((gh, pr, merge) => {
+          gh.files.set(
+            `${merge}:${pr.path}`,
+            record("a-intel.platform.release-notes", "Edited in the merge."),
+          );
+        });
+        expect(first).toEqual([updated]);
+      });
+    });
+
     it("keeps the heads when the update answers the head it was given", async () => {
       const { pr, updated, calls } = await approvedHeads(async (args) => ({
         headSha: args.expectedHead,
