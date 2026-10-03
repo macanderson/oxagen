@@ -2,16 +2,25 @@
 // The Changes panel's Base row (#3890): the branch each pull request merges
 // into, as GitHub records it, linked to its page on the forge. A run with no
 // pull request, or whose work read failed, says the base is not recorded
-// rather than naming the repository's default branch as a guess.
+// rather than naming the repository's default branch as a guess. The run's
+// change set from Oxagen's own pull request store sits above the recorded
+// files (ADR-292), and opening one of its files reads that file's diff
+// through the lane's action.
 import { act, cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { type ReactNode, Suspense } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ChangeSet } from "@/data/contracts/changes";
 import type { RunWork } from "@/data/contracts/run-work";
 import { type Read, readError, readOk } from "@/data/read";
+import {
+  changeSet,
+  emptyChangeSet,
+  revisionDiff,
+} from "@/test/change-views";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { runOutputs, runRow, runWork } from "./run.builders";
-import { ChangesPanel, basesOf } from "./work";
 
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
@@ -21,6 +30,12 @@ vi.mock("next/link", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
+const { readRevisionDiff } = vi.hoisted(() => ({
+  readRevisionDiff: vi.fn(),
+}));
+vi.mock("./actions", () => ({ readRevisionDiff, readChangeSet: vi.fn() }));
+
+const { ChangesPanel, basesOf } = await import("./work");
 
 afterEach(cleanup);
 
@@ -40,13 +55,17 @@ const mobile = {
   connected: true,
 };
 
-async function renderChanges(work: Read<RunWork>): Promise<HTMLElement> {
+async function renderChanges(
+  work: Read<RunWork>,
+  changes: Read<ChangeSet> = readOk(emptyChangeSet("run")),
+): Promise<HTMLElement> {
   await act(async () => {
     render(
       <IntlProvider>
         <Suspense fallback={null}>
           <ChangesPanel
             work={Promise.resolve(work)}
+            changes={Promise.resolve(changes)}
             outputs={readOk(runOutputs([]))}
             run={runRow()}
             place={{ org: "acme", ws: "core-platform", runId: "tse_7k2m9q" }}
@@ -219,5 +238,67 @@ describe("the Changes panel's Release row", () => {
       expect(screen.queryByTestId("run-release")).toBeNull();
       cleanup();
     }
+  });
+});
+
+// ADR-292: the run's change set, read from Oxagen's own pull request store.
+describe("the Changes panel's change set", () => {
+  it("draws the run's stored pull requests and their files", async () => {
+    const panel = await renderChanges(readOk(runWork()), readOk(changeSet()));
+    const set = within(within(panel).getByTestId("run-change-set"));
+    expect(
+      set.getAllByTestId("change-pull").map((row) => row.dataset.state),
+    ).toEqual(["open", "merged"]);
+    expect(set.getAllByTestId("change-file")).toHaveLength(2);
+    await expectNoAxe(panel);
+  });
+
+  it("reads an opened file's diff through the lane's action, once per pull request", async () => {
+    const user = userEvent.setup();
+    readRevisionDiff.mockImplementation(
+      (_org: string, _ws: string, revisionId: string, paths: string[]) =>
+        Promise.resolve({
+          ok: true,
+          value: revisionDiff(
+            revisionId,
+            paths[0] ?? "",
+            "@@ -1,1 +1,1 @@\n-old\n+new",
+          ),
+        }),
+    );
+    const panel = await renderChanges(readOk(runWork()), readOk(changeSet()));
+    expect(readRevisionDiff).not.toHaveBeenCalled();
+    await user.click(
+      within(panel).getByRole("button", { name: /src\/app\.ts/ }),
+    );
+    expect(readRevisionDiff.mock.calls).toEqual([
+      ["acme", "core-platform", "prv_482a", ["src/app.ts"]],
+      ["acme", "core-platform", "prv_490a", ["src/app.ts"]],
+    ]);
+    expect(await within(panel).findAllByText("+new")).toHaveLength(2);
+    await expectNoAxe(panel);
+  });
+
+  it("says no pull request is on record when the store holds none", async () => {
+    const panel = await renderChanges(readOk(runWork()));
+    expect(within(panel).getByTestId("change-set-empty")).toHaveTextContent(
+      "No pull request is on record yet.",
+    );
+  });
+
+  it("names a failed change set read in the panel, and keeps the rest (negative)", async () => {
+    const panel = await renderChanges(
+      readOk(runWork()),
+      readError("frame_store_unreachable", 502),
+    );
+    expect(
+      within(within(panel).getByTestId("run-change-set")).getByText(
+        /frame_store_unreachable/,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(panel).getByRole("link", { name: "acme/platform#482" }),
+    ).toBeTruthy();
+    await expectNoAxe(panel);
   });
 });

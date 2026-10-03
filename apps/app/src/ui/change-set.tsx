@@ -291,9 +291,13 @@ function FileRow({
       const revision = pulls.get(id)?.revision ?? null;
       if (revision === null) continue;
       setLoaded((was) => ({ ...was, [id]: "loading" }));
-      void loadDiff(revision.id, [file.path]).then(
-        (answer) => setLoaded((was) => ({ ...was, [id]: answer })),
-        () => setLoaded((was) => ({ ...was, [id]: "thrown" })),
+      loadDiff(revision.id, [file.path]).then(
+        (answer) => {
+          setLoaded((was) => ({ ...was, [id]: answer }));
+        },
+        () => {
+          setLoaded((was) => ({ ...was, [id]: "thrown" }));
+        },
       );
     }
   };
@@ -404,7 +408,9 @@ export function ChangeSet({
         {t("empty")}
       </p>
     );
-  const pulls = new Map(changeSet.pullRequests.map((pull) => [pull.id, pull]));
+  const pulls = new Map<string, Pull>(
+    changeSet.pullRequests.map((pull) => [pull.id, pull]),
+  );
   return (
     <div data-testid="change-set" className="flex min-w-0 flex-col gap-3.5">
       <p className="text-sm text-muted-foreground">{t("rule")}</p>
@@ -471,7 +477,14 @@ export function ChangeSetDisclosure({
     setOpen((was) => !was);
     if (state !== "idle") return;
     setState("loading");
-    void load().then(setState, () => setState("thrown"));
+    load().then(
+      (answer) => {
+        setState(answer);
+      },
+      () => {
+        setState("thrown");
+      },
+    );
   };
   let body: ReactNode = null;
   if (state === "loading")

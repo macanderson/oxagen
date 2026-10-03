@@ -7864,6 +7864,10 @@ type Messages = {
       };
       statusFilter: string;
       noMatch: string;
+      changes: {
+        title: string;
+        toggle: string;
+      };
       linked: {
         title: string;
         edge: {
