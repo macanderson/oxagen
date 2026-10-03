@@ -573,8 +573,8 @@
       "noLimit": "No session limit.",
       "limitLabel": "Session limit",
       "noAllowlist": "Every model is permitted.",
-      "allowlist": "Allowed models: {models}.",
-      "denylist": "Denied models: {models}.",
+      "allowlist": "Allowed models: <models></models>.",
+      "denylist": "Denied models: <models></models>.",
       "reach": {
         "unknown": "Host support has not been checked. Save the policy to check which enrolled machines support these lists.",
         "none": "Saved. No machine is enrolled in this workspace yet.",

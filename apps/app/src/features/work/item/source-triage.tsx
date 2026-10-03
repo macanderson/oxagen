@@ -15,6 +15,7 @@ import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
 import { kvList, kvTerm, kvValue, linkText, note } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
+import { ProviderMark } from "@/ui/provider-mark";
 import { PriorityCell } from "../words";
 import { RecordAnswer } from "./inline-actions";
 import { useWhen } from "./phrases";
@@ -213,6 +214,13 @@ export function TriagePanel({ detail, at }: { detail: WorkItemDetail; at: At }) 
             <>
               <dt className={kvTerm}>{t("suggestedBy")}</dt>
               <dd className={kvValue} data-testid="work-triage-model">
+                {triage.model ? (
+                  <ProviderMark
+                    model={triage.model}
+                    size={14}
+                    className="mr-1 align-middle"
+                  />
+                ) : null}
                 {triage.decidedAt === null
                   ? t("suggestedByModel", { model: triage.model ?? t("unrecordedModel") })
                   : t("suggestedByModelOn", {

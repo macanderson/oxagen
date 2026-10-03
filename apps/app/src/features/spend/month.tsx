@@ -48,6 +48,7 @@ import {
 } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { PressLink } from "@/ui/press-link";
+import { ModelLabel } from "@/ui/provider-mark";
 import { type AgentHarnesses, AgentMark, harnessIn } from "./agent-mark";
 import {
   CostFigure,
@@ -313,7 +314,11 @@ function GroupLabel({
     case "model":
       return (
         <span className="flex min-w-0 flex-col">
-          <span className={`${mono} truncate font-semibold`}>{row.key}</span>
+          <ModelLabel
+            model={row.key}
+            provider={row.provider}
+            className="font-semibold"
+          />
           {row.provider === null ? null : (
             <span className="text-xs text-muted-foreground">
               {row.provider}

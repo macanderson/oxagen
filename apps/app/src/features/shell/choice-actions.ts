@@ -533,11 +533,14 @@ export async function chooseModels(
   ]);
   if (!book.ok && !unpriced.ok) return readToActionResult<OptionPage>(book);
   const models = new Map<string, PickerOption>();
+  // Each option carries its maker's mark (#5297), read from the model and
+  // the provider its price entry or its runs recorded.
   const add = (model: string, provider: string | null) => {
     if (!models.has(model))
       models.set(model, {
         value: model,
         label: model,
+        icon: { model, provider },
         ...(provider === null ? {} : { detail: provider }),
       });
   };

@@ -176,6 +176,31 @@ export function ProviderMark({
   );
 }
 
+/**
+ * A recorded provider's text with its own mark before it, for a Provider
+ * column. It reads the provider alone, so a router such as OpenRouter keeps
+ * its own mark here even when the model's maker is another company.
+ */
+export function ProviderName({
+  provider,
+  size = 16,
+  className = "",
+}: {
+  provider: string;
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <span
+      data-provider-name={provider}
+      className={`inline-flex min-w-0 items-center gap-1.5 ${className}`}
+    >
+      <ProviderMark provider={provider} size={size} />
+      <span className="min-w-0 truncate">{provider}</span>
+    </span>
+  );
+}
+
 export interface ModelLabelProps {
   model: string;
   provider?: string | null;

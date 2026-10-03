@@ -76,6 +76,12 @@ describe("RequestWindow", () => {
     expect(panel.getByText("Model").nextSibling).toHaveTextContent(
       "claude-opus-5",
     );
+    // Both facts draw the maker's mark beside the text (#5297).
+    expect(
+      screen
+        .getByTestId("window-panel")
+        .querySelectorAll('svg[data-provider-mark="anthropic"]'),
+    ).toHaveLength(2);
     expect(panel.getByRole("link")).toHaveAttribute("href", hrefOf("5"));
     expect(screen.getAllByTestId("window-stack-row")).toHaveLength(5);
     await expectNoAxe(container);

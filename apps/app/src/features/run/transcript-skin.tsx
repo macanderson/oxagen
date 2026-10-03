@@ -5,6 +5,7 @@
  */
 import { useTranslations } from "next-intl";
 import type { RunRow } from "@/data/contracts/runs";
+import { ProviderMark } from "@/ui/provider-mark";
 
 /** Claude Code, Codex, Cursor, or stella. */
 type Skin = "cc" | "cx" | "cu" | "st";
@@ -84,7 +85,16 @@ export function SkinBanner({
             {version === null ? null : (
               <span className="tx-dim"> {version}</span>
             )}
-            {model === null ? null : <div className="tx-dim">{model}</div>}
+            {model === null ? null : (
+              <div className="tx-dim">
+                <ProviderMark
+                  model={model}
+                  size={14}
+                  className="mr-1 align-middle"
+                />
+                {model}
+              </div>
+            )}
           </div>
         </div>
       );
@@ -97,7 +107,16 @@ export function SkinBanner({
               <span className="tx-dim"> ({version})</span>
             )}
           </span>
-          {model === null ? null : <span className="tx-dim">{model}</span>}
+          {model === null ? null : (
+            <span className="tx-dim">
+              <ProviderMark
+                model={model}
+                size={14}
+                className="mr-1 align-middle"
+              />
+              {model}
+            </span>
+          )}
         </div>
       );
     case "cu":
