@@ -185,6 +185,23 @@ describe("design record: the recipes carry the mockup's rules", () => {
     expect(lightRoot()).toMatch(/--button-default-bg:\s*var\(--panel\)/);
     expect(buttonSecondary).toContain("bg-button-default-bg");
   });
+
+  it("`.dlg { background:var(--panel); border:1px solid var(--rule) }` in both themes", () => {
+    // @oxagen/ui draws a dialog on the popover, which on ink is the row wash
+    // and the hairline. The app sets both tokens in the light `:root`, the
+    // `.dark` block, and the no-JS copy, because the kit sets them in all three
+    // and its no-JS selector outranks a bare `:root`.
+    const root = lightRoot();
+    expect(root).toMatch(/--dialog-bg:\s*var\(--panel\)/);
+    expect(root).toMatch(/--dialog-border:\s*var\(--rule\)/);
+    const css = read("src/app/globals.css");
+    expect(css.match(/--dialog-bg:\s*var\(--panel\)/g)).toHaveLength(3);
+    expect(css.match(/--dialog-border:\s*var\(--rule\)/g)).toHaveLength(3);
+    expect(css).not.toMatch(/--dialog-(bg|border):\s*var\(--(popover|border)\)/);
+    const sheet = read("src/ui/sheet-dialog.tsx");
+    expect(sheet).toContain("bg-dialog-bg");
+    expect(sheet).toContain("border-dialog-border");
+  });
 });
 
 /**
