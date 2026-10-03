@@ -487,7 +487,7 @@
       "observedNote": "of priced spend",
       "toolDefinitionsNote": "Tokens across its model calls",
       "resultBodyNote": "Tokens its results carried",
-      "toolEstimate": "Its runs already paid for this input. Each result is priced at its run’s uncached input rate.",
+      "toolEstimate": "The runs already paid for this input. Each tool result is priced at its run’s uncached input rate.",
       "byDay": "Spend by day",
       "peak": "Peak",
       "on": "on {day}",

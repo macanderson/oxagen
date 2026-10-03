@@ -272,7 +272,7 @@ describe("a tool's drill (#5293)", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByTestId("spend-drill-estimate")).toHaveTextContent(
-      "Its runs already paid for this input.",
+      "The runs already paid for this input.",
     );
     // The estimate is part of its runs' cost: no share of the workspace.
     expect(document.body).not.toHaveTextContent("of the workspace");
@@ -502,6 +502,6 @@ describe("an operator's and an agent's drill (#5293)", () => {
     expect(
       rowOf(tools, "Read").querySelectorAll('[data-recorded="false"]'),
     ).toHaveLength(2);
-    expect(tools).toHaveTextContent("Its runs already paid for this input.");
+    expect(tools).toHaveTextContent("The runs already paid for this input.");
   });
 });

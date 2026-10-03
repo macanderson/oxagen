@@ -152,13 +152,17 @@ describe("get_spend_drill", () => {
   });
 
   it("prices a tool's results as input its runs already paid, with the estimated basis and no share", async () => {
+    // A gateway-metered run, so the null `observed` below comes from the
+    // tool drill's rule and not from a run nobody metered.
     const h = harness([
       pricedRun(9_000n, {
         startedAt: new Date("2026-09-14T02:00:00Z"),
+        costBasis: "gateway_observed",
         verdict: "flipped",
         accepted: true,
         breakdown: {
-          models: pricedRun(9_000n).breakdown.models,
+          models: pricedRun(9_000n, { costBasis: "gateway_observed" })
+            .breakdown.models,
           tools: [
             { name: "Read", calls: 3, resultTokens: null, costMicros: null },
             { name: "Bash", calls: 5, resultTokens: 800, costMicros: 2_400n },
