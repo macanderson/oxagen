@@ -30,6 +30,12 @@
       "match": "hidden text-muted-foreground md:block",
       "kind": "reflow",
       "equivalent": "The slash between breadcrumbs. A phone's top bar shows only the current crumb (rev1 fleet.md \"Mobile\"), so the separators and the parent crumbs reflow out; every parent page stays one tap away in the thumb bar, the More sheet and the navigation drawer."
+    },
+    {
+      "file": "apps/app/src/features/run/header.tsx",
+      "match": "max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The Run page head's model slot, subagent count and missing-facts count. On a phone the Details link stays on the second facts line and opens the Details drawer, which lists the model, every subagent and every fact not recorded."
     }
   ]
 }

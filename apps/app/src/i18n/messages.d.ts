@@ -7731,7 +7731,6 @@ type Messages = {
       };
     };
     header: {
-      chips: string;
       harnessNotRecorded: string;
       versionNotCaptured: string;
       repoNotCaptured: string;
@@ -7740,7 +7739,6 @@ type Messages = {
       workNotRead: string;
       workUnreadWhy: string;
       workUnreadRepoWhy: string;
-      noPullRequest: string;
       pullState: {
         open: string;
         draft: string;
@@ -7754,7 +7752,6 @@ type Messages = {
       subagentTypeNotRecorded: string;
       subagentNoStop: string;
       subagentRunning: string;
-      moreSubagents: string;
       started: string;
       sealed: string;
       closedIdle: string;
@@ -7815,6 +7812,37 @@ type Messages = {
         noFrameLedger: string;
         noFramePending: string;
         noFrameRecorded: string;
+      };
+      factsWho: string;
+      factsWhat: string;
+      repoNotRecorded: string;
+      pullRequests: string;
+      subagentCount: string;
+      notRecordedCount: string;
+      details: string;
+    };
+    details: {
+      title: string;
+      sections: {
+        run: string;
+        agent: string;
+        model: string;
+        checkout: string;
+        missing: string;
+      };
+      fact: {
+        harness: string;
+        harnessVersion: string;
+        effort: string;
+        machine: string;
+        path: string;
+        gap: string;
+      };
+      why: {
+        harness: string;
+        harnessVersion: string;
+        machine: string;
+        path: string;
       };
     };
     summary: {

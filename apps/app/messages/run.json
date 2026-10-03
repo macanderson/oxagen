@@ -1194,7 +1194,6 @@
       }
     },
     "header": {
-      "chips": "Run identity",
       "harnessNotRecorded": "harness not recorded",
       "versionNotCaptured": "version not captured",
       "repoNotCaptured": "repository and branch not captured",
@@ -1203,7 +1202,6 @@
       "workNotRead": "work not read",
       "workUnreadWhy": "The read of this run's work failed, so its repository, pull request states, and enrolled checkout are not shown. Reload the page to read them again.",
       "workUnreadRepoWhy": "The read of this run's work failed, so its pull request states and enrolled checkout are not shown. Reload the page to read them again.",
-      "noPullRequest": "no pull request",
       "pullState": {
         "open": "open",
         "draft": "draft",
@@ -1217,7 +1215,6 @@
       "subagentTypeNotRecorded": "type not recorded",
       "subagentNoStop": "no stop recorded",
       "subagentRunning": "running",
-      "moreSubagents": "{count} more",
       "started": "started",
       "sealed": "sealed",
       "closedIdle": "closed",
@@ -1278,6 +1275,37 @@
         "noFrameLedger": "A ledger run's pause fences evidence ingress and seals no frame.",
         "noFramePending": "The pause frame is written when the host applies the pause.",
         "noFrameRecorded": "The host recorded no frame for this pause."
+      },
+      "factsWho": "Agent and start",
+      "factsWhat": "Work and output",
+      "repoNotRecorded": "repository not recorded",
+      "pullRequests": "{count, plural, one {# pull request} other {# pull requests}}",
+      "subagentCount": "{count, plural, one {# subagent} other {# subagents}}",
+      "notRecordedCount": "{count, plural, one {# fact not recorded} other {# facts not recorded}}",
+      "details": "Details"
+    },
+    "details": {
+      "title": "Run details",
+      "sections": {
+        "run": "Run",
+        "agent": "Agent",
+        "model": "Model",
+        "checkout": "Checkout",
+        "missing": "Not recorded"
+      },
+      "fact": {
+        "harness": "Harness",
+        "harnessVersion": "Harness version",
+        "effort": "Effort",
+        "machine": "Machine",
+        "path": "Working directory",
+        "gap": "Record gap"
+      },
+      "why": {
+        "harness": "Neither the session nor the agent registry named a harness.",
+        "harnessVersion": "The harness did not report its version.",
+        "machine": "The host recorded no machine for this run.",
+        "path": "The session recorded no working directory, and the host enrolled no checkout."
       }
     },
     "summary": {

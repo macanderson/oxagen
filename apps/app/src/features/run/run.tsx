@@ -207,6 +207,7 @@ export async function Run({
   finding,
   reads,
   spine,
+  details = null,
   now,
 }: {
   ctx: WsCtx;
@@ -230,6 +231,11 @@ export async function Run({
   reads: string | null;
   /** `?spine=`, the spine groups a person opened, comma-separated. */
   spine: string | null;
+  /**
+   * `?details=`, the section the Details drawer opens at (`run`, `prs`,
+   * `subagents`, `missing`); absent leaves the drawer closed.
+   */
+  details?: string | null;
   /** Pins the instant a clock counts from. Only a test passes it. */
   now?: number;
 }) {
@@ -411,6 +417,16 @@ export async function Run({
         wsRole={ctx.wsRole}
         place={place}
         parked={parked}
+        details={details}
+        query={{
+          tab: tab ?? undefined,
+          kinds: kinds ?? undefined,
+          frames: frames ?? undefined,
+          body: body ?? undefined,
+          reads: reads ?? undefined,
+          spine: spine ?? undefined,
+          finding: finding ?? undefined,
+        }}
       />
       <div className="grid grid-cols-1 items-start gap-3.5 lg:grid-cols-main">
         <div className="flex min-w-0 flex-col">

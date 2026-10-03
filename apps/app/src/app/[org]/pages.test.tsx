@@ -974,6 +974,7 @@ describe("the Run page", () => {
       finding: "fnd_0123456789abcdefghjkmn",
       reads: "hide",
       spine: "0,3",
+      details: null,
     });
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
@@ -988,6 +989,7 @@ describe("the Run page", () => {
       finding: null,
       reads: null,
       spine: null,
+      details: null,
     });
   });
 });

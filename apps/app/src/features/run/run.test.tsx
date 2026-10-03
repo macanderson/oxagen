@@ -67,15 +67,18 @@ function byZoom(
 
 const notFound = vi.fn();
 const refresh = vi.fn();
-// jsdom has no layout, so it has no scrollIntoView; playback calls it.
-Element.prototype.scrollIntoView = vi.fn();
+const replace = vi.fn();
+// jsdom has no layout, so it has no scrollIntoView; playback calls it, and
+// so does the Details drawer when it opens at a section.
+const scrollIntoView = vi.fn();
+Element.prototype.scrollIntoView = scrollIntoView;
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
     <a {...rest}>{children}</a>
   ),
 }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }),
+  useRouter: () => ({ push: vi.fn(), replace, refresh }),
   notFound: () => {
     notFound();
     throw new Error("NEXT_NOT_FOUND");
@@ -204,6 +207,8 @@ async function renderRun(
     body?: string;
     reads?: string;
     spine?: string;
+    /** `?details=`: opens the Details drawer at a section. */
+    details?: string;
     viewer?: typeof ctx;
   } = {},
 ) {
@@ -218,6 +223,7 @@ async function renderRun(
     body: view.body ?? null,
     reads: view.reads ?? null,
     spine: view.spine ?? null,
+    details: view.details ?? null,
     now: NOW,
   });
   // Inside an async act, so the work read the header and the Changes panel
@@ -227,6 +233,8 @@ async function renderRun(
     ({ container } = render(<IntlProvider>{element}</IntlProvider>));
     await Promise.resolve();
   });
+  // The drawer's portal mounts after the first render.
+  if (view.details !== undefined) await screen.findByTestId("run-details");
   return { container, calls };
 }
 
@@ -284,14 +292,29 @@ describe("header", () => {
     const h1 = screen.getByRole("heading", { level: 1 });
     expect(h1).toHaveTextContent(/^Cut the 3.2 release branch$/);
     expect(h1.className).not.toContain("font-mono");
+    // The heading stops at two lines and holds the whole name on hover.
+    expect(h1.className).toContain("line-clamp-2");
+    expect(h1).toHaveAttribute("title", "Cut the 3.2 release branch");
+    // The id moved to Details: the head no longer draws it.
+    expect(
+      within(screen.getByTestId("run-header")).queryByTestId("run-id"),
+    ).toBeNull();
+    expect(
+      within(screen.getByTestId("run-header")).getByText("Run"),
+    ).toBeTruthy();
+    await expectNoAxe(container);
+    cleanup();
+    await renderRun(
+      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
+      { details: "run" },
+    );
     const id = screen.getByTestId("run-id");
     expect(id).toHaveTextContent(/^tse_7k2m9q$/);
     expect(id).toHaveAccessibleName("Copy tse_7k2m9q");
     expect(id.className).toContain("font-mono");
     expect(
-      within(screen.getByTestId("run-header")).getByText("Run"),
-    ).toBeTruthy();
-    await expectNoAxe(container);
+      within(screen.getByTestId("run-details-run")).getByTestId("run-id"),
+    ).toBe(id);
   });
 
   it("copies the run id and says so, and says the copy failed when the clipboard refuses (negative)", async () => {
@@ -304,7 +327,7 @@ describe("header", () => {
       await renderRun({
         detail: ok(runDetail()),
         transcript: ok(runTranscript()),
-      });
+      }, { details: "run" });
       const id = screen.getByTestId("run-id");
       const status = () => {
         const found = id.parentElement?.querySelector("[role=status]");
@@ -338,8 +361,8 @@ describe("header", () => {
     await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
-    });
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+    }, { details: "run" });
+    expect(screen.getByRole("heading", { level: 1, hidden: true })).toHaveTextContent(
       "Cut the 3.2 release branch",
     );
     expect(screen.getByTestId("run-when")).not.toHaveTextContent(
@@ -535,12 +558,14 @@ describe("header", () => {
       body: null,
       reads: null,
       spine: null,
+      details: "run",
       now: NOW,
     });
     await act(async () => {
       render(<IntlProvider timeZone="Asia/Tokyo">{element}</IntlProvider>);
       await Promise.resolve();
     });
+    await screen.findByTestId("run-details");
     // Started 08:00 and sealed 08:55 UTC, which is 17:00 and 17:55 in Tokyo.
     const when = screen.getByTestId("run-when");
     expect(when).toHaveTextContent("5:00:00 PM");
@@ -569,19 +594,21 @@ describe("header", () => {
     );
   });
 
-  it("draws the agent, status, tier and task chips, and the rig the run ran on", async () => {
+  it("draws the tier, replay grade, task and rig in Details", async () => {
     const { container } = await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
-    });
-    const chips = within(screen.getByTestId("run-chips"));
+    }, { details: "run" });
+    const chips = within(screen.getByTestId("run-details-run"));
     // The tier is its own recorded word, with the longer reading on hover.
     expect(chips.getByTestId("run-tier")).toHaveTextContent(/^harness$/);
     expect(chips.getByTestId("run-tier")).toHaveAttribute(
       "title",
       "observed at the harness",
     );
-    expect(chips.getByTestId("run-task")).toHaveTextContent(
+    expect(
+      within(screen.getByTestId("run-details-agent")).getByTestId("run-task"),
+    ).toHaveTextContent(
       "task ENG-4121 cut the 3.2 release",
     );
     expect(chips.getByText("fork replay")).toBeTruthy();
@@ -636,7 +663,7 @@ describe("header", () => {
     const { container } = await renderRun({
       detail: ok(runDetail({ run: runRow(row) })),
       transcript: ok(runTranscript()),
-    });
+    }, { details: "model" });
     const chip = screen.getByTestId("run-effort");
     expect(chip).toHaveTextContent(text);
     expect(chip).toHaveAttribute("title", title);
@@ -672,7 +699,7 @@ describe("header", () => {
         }),
       ),
       transcript: ok(runTranscript()),
-    });
+    }, { details: "model" });
     const rig = within(screen.getByTestId("run-rig"));
     expect(rig.getByTestId("run-fit-model")).toHaveTextContent(
       "Wrong model tier",
@@ -702,7 +729,7 @@ describe("header", () => {
         }),
       ),
       transcript: ok(runTranscript()),
-    });
+    }, { details: "model" });
     const rig = within(screen.getByTestId("run-rig"));
     expect(rig.getByTestId("run-fit-model")).toHaveTextContent("Model fit");
     expect(rig.getByTestId("run-fit-effort")).toHaveTextContent(
@@ -726,7 +753,7 @@ describe("header", () => {
         }),
       ),
       transcript: ok(runTranscript()),
-    });
+    }, { details: "model" });
     expect(screen.queryByTestId("run-fit-model")).toBeNull();
     expect(screen.queryByTestId("run-fit-effort")).toBeNull();
     cleanup();
@@ -743,7 +770,7 @@ describe("header", () => {
         }),
       ),
       transcript: ok(runTranscript()),
-    });
+    }, { details: "model" });
     expect(screen.getByTestId("run-fit-model")).toBeTruthy();
     expect(screen.queryByTestId("run-fit-effort")).toBeNull();
   });
@@ -769,7 +796,7 @@ describe("header", () => {
           detail: ok(runDetail({ run: runRow(row) })),
           transcript: ok(runTranscript()),
         },
-        { tab: "cost" },
+        { tab: "cost", details: "model" },
       );
       expect(screen.getByTestId("run-effort")).toHaveTextContent(rig);
       expect(screen.getByTestId("fit-effort-card")).toHaveTextContent(card);
@@ -781,11 +808,11 @@ describe("header", () => {
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
       roster: ok(runRoster()),
-    });
+    }, { details: "agent" });
     expect(
-      within(screen.getByTestId("run-chips")).getByText(/212 runs 30d/),
+      within(screen.getByTestId("run-details-agent")).getByText(/212 runs 30d/),
     ).toBeTruthy();
-    expect(screen.getByTestId("run-chips")).toHaveTextContent(
+    expect(screen.getByTestId("run-details-agent")).toHaveTextContent(
       "Claude Code · 212 runs 30d · $612.48",
     );
     cleanup();
@@ -793,8 +820,8 @@ describe("header", () => {
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
       roster: ok(runRoster({ agentKey: "acme.core.someone-else" })),
-    });
-    expect(screen.getByTestId("run-chips")).not.toHaveTextContent("runs 30d");
+    }, { details: "agent" });
+    expect(screen.getByTestId("run-details-agent")).not.toHaveTextContent("runs 30d");
   });
 
   it("prints the checkout the host enrolled: the repository, the branch, the pull request and a copyable path", async () => {
@@ -802,7 +829,7 @@ describe("header", () => {
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
       work: ok(runWork()),
-    });
+    }, { details: "prs" });
     const checkout = within(await screen.findByTestId("run-checkout"));
     expect(
       (
@@ -833,7 +860,7 @@ describe("header", () => {
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
       work: ok(runWork()),
-    });
+    }, { details: "prs" });
     const checkout = within(await screen.findByTestId("run-checkout"));
     const states = checkout.getAllByTestId("run-pull-state");
     expect(states.map((s) => s.getAttribute("data-state"))).toEqual(["open"]);
@@ -869,7 +896,7 @@ describe("header", () => {
           }),
         ]),
       ),
-    });
+    }, { details: "prs" });
     const checkout = within(await screen.findByTestId("run-checkout"));
     // #482 is listed once, from the work read, with its live state.
     expect(
@@ -923,7 +950,7 @@ describe("header", () => {
           }),
         ]),
       ),
-    });
+    }, { details: "prs" });
     const checkout = within(await screen.findByTestId("run-checkout"));
     const states = checkout.getAllByTestId("run-pull-state");
     expect(states.map((s) => s.getAttribute("data-state"))).toEqual([
@@ -973,7 +1000,7 @@ describe("header", () => {
           }),
         ]),
       ),
-    });
+    }, { details: "prs" });
     const checkout = within(await screen.findByTestId("run-checkout"));
     const states = checkout.getAllByTestId("run-pull-state");
     expect(states.map((s) => s.getAttribute("data-state"))).toEqual([
@@ -988,7 +1015,7 @@ describe("header", () => {
     await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
-    });
+    }, { details: "prs" });
     const machine = await screen.findByTestId("run-machine");
     expect(machine).toHaveTextContent("mac-studio.local");
     expect(machine).toHaveTextContent("path not captured");
@@ -997,9 +1024,13 @@ describe("header", () => {
     expect(title).toContain(
       "Enrollment hostname and facts: darwin · 15.6 · arm64 · v24.4.0",
     );
+    // A run with no pull request draws none, in Details or in the head.
     expect(
-      within(screen.getByTestId("run-checkout")).getByText("no pull request"),
-    ).toBeTruthy();
+      within(screen.getByTestId("run-checkout")).queryByTestId(
+        "run-pull-state",
+      ),
+    ).toBeNull();
+    expect(screen.queryByTestId("run-facts-prs")).toBeNull();
   });
 
   it("labels session host observations separately from enrollment facts", async () => {
@@ -1025,7 +1056,7 @@ describe("header", () => {
         }),
       ),
       transcript: ok(runTranscript()),
-    });
+    }, { details: "prs" });
     const title =
       (await screen.findByTestId("run-machine")).getAttribute("title") ?? "";
     expect(title).toContain("Recorded in this session: linux · 6.12 · x64");
@@ -1048,7 +1079,7 @@ describe("header", () => {
         }),
       ),
       transcript: ok(runTranscript()),
-    });
+    }, { details: "prs" });
     const rig = within(screen.getByTestId("run-rig"));
     expect(rig.getByText("model not recorded")).toBeTruthy();
     // No session harness and a denied agent read: the harness is not guessed.
@@ -1395,7 +1426,7 @@ describe("header", () => {
       transcript: ok(runTranscript()),
       agent: ok(agentDetail({ identity: { harness: "codex" } })),
     });
-    for (const id of ["run-chips", "run-involved"]) {
+    for (const id of ["run-facts-who", "run-involved"]) {
       expect(
         screen.getByTestId(id).querySelector("[data-harness-mark]"),
       ).toHaveAttribute("data-harness-mark", "claude-code");
@@ -1413,7 +1444,7 @@ describe("header", () => {
       ),
       transcript: ok(runTranscript()),
     });
-    for (const id of ["run-chips", "run-involved"]) {
+    for (const id of ["run-facts-who", "run-involved"]) {
       const badge = screen.getByTestId(id).querySelector("[data-harness-badge]");
       expect(badge).toHaveAttribute("data-harness-badge", "custom-runner");
       expect(badge?.querySelector("img")).toBeNull();
@@ -1425,11 +1456,11 @@ describe("header", () => {
       detail: ok(runDetail({ run: runRow({ harness: null }) })),
       transcript: ok(runTranscript()),
       agent: ok(agentDetail({ identity: { harness: "codex" } })),
-    });
+    }, { details: "model" });
     const rig = within(screen.getByTestId("run-rig"));
     expect(rig.getByText("Codex")).toBeTruthy();
     expect(rig.getByText("version not captured")).toBeTruthy();
-    for (const id of ["run-chips", "run-involved"]) {
+    for (const id of ["run-facts-who", "run-involved"]) {
       expect(
         screen.getByTestId(id).querySelector("[data-harness-mark]"),
       ).toHaveAttribute("data-harness-mark", "codex");
@@ -1445,9 +1476,12 @@ describe("header", () => {
       detail: ok(runDetail({ run: runRow({ agentKey: null }) })),
       transcript: ok(runTranscript()),
       roster: ok(runRoster()),
-    });
+    }, { details: "agent" });
     expect(calls.agent).toHaveLength(0);
-    const chips = screen.getByTestId("run-chips");
+    expect(screen.getByTestId("run-facts-agent")).toHaveTextContent(
+      /^not recorded$/,
+    );
+    const chips = screen.getByTestId("run-details-agent");
     expect(chips).toHaveTextContent("not recorded");
     expect(chips).not.toHaveTextContent("runs 30d");
     expect(screen.getByTestId("run-involved")).toHaveTextContent(
@@ -1460,15 +1494,15 @@ describe("header", () => {
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
       roster: readError("agents_unreachable", 502),
-    });
-    expect(screen.getByTestId("run-chips")).not.toHaveTextContent("runs 30d");
+    }, { details: "agent" });
+    expect(screen.getByTestId("run-details-agent")).not.toHaveTextContent("runs 30d");
     cleanup();
     await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
       roster: ok(runRoster({ spend30d: null })),
-    });
-    const chips = screen.getByTestId("run-chips");
+    }, { details: "agent" });
+    const chips = screen.getByTestId("run-details-agent");
     expect(chips).toHaveTextContent("Claude Code · 212 runs 30d");
     expect(chips).not.toHaveTextContent("$612.48");
   });
@@ -1485,7 +1519,7 @@ describe("header", () => {
           runOutputNode({ seq: null, kind: "pr", name: "acme/docs#17" }),
         ]),
       ),
-    });
+    }, { details: "prs" });
     const checkout = within(await screen.findByTestId("run-checkout"));
     const unread = checkout.getByTestId("run-work-unread");
     expect(unread).toHaveTextContent("repository not read");
@@ -1496,7 +1530,6 @@ describe("header", () => {
     expect(checkout.queryByText(/not captured/)).toBeNull();
     expect(checkout.getByText("acme/platform#482")).toBeTruthy();
     expect(checkout.getByText("acme/docs#17")).toBeTruthy();
-    expect(checkout.queryByText("no pull request")).toBeNull();
     // The row holds no directory, so no path is offered to copy.
     expect(checkout.queryByTestId("run-checkout-path")).toBeNull();
     expect(checkout.getByTestId("run-machine")).toHaveTextContent(
@@ -1518,7 +1551,7 @@ describe("header", () => {
       ),
       transcript: ok(runTranscript()),
       work: readError("clickhouse_unavailable", 503),
-    });
+    }, { details: "prs" });
     const checkout = within(await screen.findByTestId("run-checkout"));
     expect(checkout.getByTestId("run-branch")).toHaveTextContent("fix/tags");
     const path = checkout.getByTestId("run-checkout-path");
@@ -1542,17 +1575,16 @@ describe("header", () => {
       transcript: ok(runTranscript()),
       // Never answers, so the strip stays on its fallback.
       work: () => new Promise(() => {}),
-    });
+    }, { details: "prs" });
     const checkout = within(screen.getByTestId("run-checkout"));
     expect(checkout.getByTestId("run-branch")).toHaveTextContent("fix/tags");
     expect(checkout.getByTestId("run-checkout-path")).toHaveTextContent(
       "mac-studio.local:/Users/mb/src/platform",
     );
-    // Negative: neither a gap in the recording nor a failure is claimed, and
-    // no pull request is said to be missing before the read answers.
+    // Negative: neither a gap in the recording nor a failure is claimed
+    // before the read answers.
     expect(checkout.queryByText(/not captured/)).toBeNull();
     expect(checkout.queryByTestId("run-work-unread")).toBeNull();
-    expect(checkout.queryByText("no pull request")).toBeNull();
   });
 
   it("draws the session's branch and directory when the host enrolled no checkout (A-05)", async () => {
@@ -1565,7 +1597,7 @@ describe("header", () => {
         }),
       ),
       transcript: ok(runTranscript()),
-    });
+    }, { details: "prs" });
     const checkout = within(await screen.findByTestId("run-checkout"));
     // The branch is recorded, so only the repository is named as missing.
     expect(checkout.getByText("repository not captured")).toBeTruthy();
@@ -1591,7 +1623,7 @@ describe("header", () => {
       detail: ok(runDetail({ run: runRow({ place }) })),
       transcript: ok(runTranscript()),
       work: readError("clickhouse_unavailable", 503),
-    });
+    }, { details: "prs" });
     const failed = within(await screen.findByTestId("run-checkout"));
     expect(
       failed.getByRole("link", { name: "acme/platform" }).getAttribute("href"),
@@ -1611,7 +1643,7 @@ describe("header", () => {
       detail: ok(runDetail({ run: runRow({ place }) })),
       transcript: ok(runTranscript()),
       work: () => new Promise(() => {}),
-    });
+    }, { details: "prs" });
     const pending = within(screen.getByTestId("run-checkout"));
     expect(pending.getByRole("link", { name: "acme/platform" })).toBeTruthy();
     expect(pending.queryByTestId("run-work-unread")).toBeNull();
@@ -1636,7 +1668,7 @@ describe("header", () => {
         }),
       ),
       transcript: ok(runTranscript()),
-    });
+    }, { details: "prs" });
     const strip = within(await screen.findByTestId("run-checkout"));
     expect(strip.getByRole("link", { name: "acme/platform" })).toBeTruthy();
     expect(
@@ -1683,7 +1715,7 @@ describe("header", () => {
           ],
         }),
       ),
-    });
+    }, { details: "prs" });
     const strip = within(await screen.findByTestId("run-checkout"));
     expect(strip.getByTestId("run-branch")).toHaveTextContent("fix/tags");
     expect(strip.queryByRole("link", { name: "fix/tags" })).toBeNull();
@@ -1705,7 +1737,7 @@ describe("header", () => {
       ),
       transcript: ok(runTranscript()),
       work: ok(runWork({ checkouts: [{ ...checkout, branch: null }] })),
-    });
+    }, { details: "prs" });
     const strip = within(await screen.findByTestId("run-checkout"));
     // The checkout is the newer fact: it says the HEAD named no branch.
     expect(strip.queryByText("fix/tags")).toBeNull();
@@ -1722,7 +1754,7 @@ describe("header", () => {
       work: ok(
         runWork({ checkouts: [{ ...checkout, branch: "feature/fix-tags" }] }),
       ),
-    });
+    }, { details: "prs" });
     const strip = within(await screen.findByTestId("run-checkout"));
     expect(
       strip
@@ -1751,12 +1783,12 @@ describe("header", () => {
           pullRequests: [],
         }),
       ),
-    });
+    }, { details: "prs" });
     const strip = within(await screen.findByTestId("run-checkout"));
     expect(strip.getByText("acme/platform")).toBeTruthy();
     expect(strip.queryByRole("link", { name: "acme/platform" })).toBeNull();
     expect(strip.queryByRole("link", { name: "release/3.2" })).toBeNull();
-    expect(strip.getByText("no pull request")).toBeTruthy();
+    expect(strip.queryByTestId("run-pull-state")).toBeNull();
   });
 
   it("draws a branch whose repository nobody recorded as text beside the not-captured chip (negative)", async () => {
@@ -1773,7 +1805,7 @@ describe("header", () => {
           pullRequests: [],
         }),
       ),
-    });
+    }, { details: "prs" });
     const strip = within(await screen.findByTestId("run-checkout"));
     // The branch is recorded and drawn, so the chip names only the repository
     // as missing rather than contradicting the branch beside it.
@@ -1798,7 +1830,7 @@ describe("header", () => {
         detail: ok(runDetail()),
         transcript: ok(runTranscript()),
         work: ok(runWork()),
-      });
+      }, { details: "prs" });
       const strip = within(await screen.findByTestId("run-checkout"));
       const path = strip.getByTestId("run-checkout-path");
       await act(async () => {
@@ -1833,8 +1865,8 @@ describe("header", () => {
         }),
       ),
       transcript: ok(runTranscript()),
-    });
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+    }, { details: "run" });
+    expect(screen.getByRole("heading", { level: 1, hidden: true })).toHaveTextContent(
       /^Untitled session$/,
     );
     expect(screen.getByTestId("run-id")).toHaveTextContent(/^tse_7k2m9q$/);
@@ -1842,7 +1874,7 @@ describe("header", () => {
     expect(screen.queryByTestId("run-task")).toBeNull();
   });
 
-  it("lists the gaps the seal recorded, in words, under the header", async () => {
+  it("lists the gaps the seal recorded, in words, in Details", async () => {
     await renderRun({
       detail: ok(
         runDetail({
@@ -1850,7 +1882,7 @@ describe("header", () => {
         }),
       ),
       transcript: ok(runTranscript()),
-    });
+    }, { details: "run" });
     expect(screen.getByTestId("run-gaps")).toHaveTextContent(
       "The seal recorded these gaps in the record: digests kept, bodies not retained, the hash chain does not hold end to end",
     );
@@ -1858,8 +1890,386 @@ describe("header", () => {
     await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
-    });
+    }, { details: "run" });
     expect(screen.queryByTestId("run-gaps")).toBeNull();
+  });
+
+  /** A pull request on the run's repository, numbered `number`. */
+  function pullRequest(number: number) {
+    const [pr] = runWork().pullRequests;
+    if (pr === undefined) throw new Error("the builder holds a pull request");
+    return {
+      ...pr,
+      number,
+      url: `https://github.com/acme/platform/pull/${String(number)}`,
+      headRef: `topic/${String(number)}`,
+    };
+  }
+
+  /** `count` subagents, each with its own agent id. */
+  function subagents(count: number) {
+    return Array.from({ length: count }, (_, i) => ({
+      agentRef: `agent${String(i).padStart(4, "0")}xyz`,
+      type: "Explore",
+      firstSeq: String(i + 1),
+      lastSeq: String(i + 2),
+      stopped: true,
+    }));
+  }
+
+  it("draws two facts lines of at most six slots each on a busy run", async () => {
+    const { container } = await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ completenessGaps: ["chain_break", "hooks_partial"] }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      work: ok(
+        runWork({
+          pullRequests: [pullRequest(482), pullRequest(483), pullRequest(484)],
+          subagents: subagents(14),
+        }),
+      ),
+    });
+    const who = screen.getByTestId("run-facts-who");
+    const what = screen.getByTestId("run-facts-what");
+    expect(who.children.length).toBeLessThanOrEqual(6);
+    expect(what.children.length).toBeLessThanOrEqual(6);
+    // The first line: the agent, the operator, the model, and the start.
+    expect(
+      [...who.children].map((slot) => slot.getAttribute("data-testid")),
+    ).toEqual([
+      "run-facts-agent",
+      "run-facts-operator",
+      "run-facts-model",
+      "run-facts-start",
+    ]);
+    // The avatar's initials sit before the slug, so the slot ends on it.
+    expect(screen.getByTestId("run-facts-agent")).toHaveTextContent(
+      /release-bot$/,
+    );
+    expect(screen.getByTestId("run-facts-operator")).toHaveTextContent(
+      /^Marcus Bell$/,
+    );
+    // The model hides on a phone, where Details lists it.
+    expect(screen.getByTestId("run-facts-model").className).toContain(
+      "max-md:hidden",
+    );
+    expect(screen.getByTestId("run-facts-model")).toHaveTextContent(
+      "claude-sonnet-5",
+    );
+    // The harness shows once, as the avatar's mark, never as text.
+    expect(who).not.toHaveTextContent("Claude Code");
+    // The second line: the task, the checkout, three counts, and Details.
+    expect(
+      [...what.children].map((slot) => slot.getAttribute("data-testid")),
+    ).toEqual([
+      "run-facts-task",
+      "run-facts-repo",
+      "run-facts-prs",
+      "run-facts-subagents",
+      "run-facts-missing",
+      "run-facts-details",
+    ]);
+    expect(screen.getByTestId("run-facts-repo")).toHaveTextContent(
+      "acme/platformrelease/3.2",
+    );
+    expect(
+      within(screen.getByTestId("run-facts-details"))
+        .getByRole("link", { name: "Details" })
+        .getAttribute("href"),
+    ).toBe("/acme/core-platform/runs/tse_7k2m9q?details=run");
+    // The old rows are gone from the head.
+    for (const id of ["run-chips", "run-rig", "run-checkout", "run-when"])
+      expect(screen.queryByTestId(id)).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("draws no pull request slot for a run with none (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(runWork({ pullRequests: [] })),
+    });
+    expect(screen.queryByTestId("run-facts-prs")).toBeNull();
+    expect(screen.getByTestId("run-facts-what")).not.toHaveTextContent(
+      "pull request",
+    );
+  });
+
+  it("draws one pull request as its number and state", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(runWork()),
+    });
+    const slot = within(screen.getByTestId("run-facts-prs"));
+    // On the run's own repository, the number alone names it.
+    expect(
+      slot.getByRole("link", { name: "#482" }).getAttribute("href"),
+    ).toBe("https://github.com/acme/platform/pull/482");
+    expect(slot.getByTestId("run-facts-pr-state")).toHaveTextContent(
+      /^open$/,
+    );
+  });
+
+  it("names a single pull request on another repository with its repository", async () => {
+    const [pr] = runWork().pullRequests;
+    if (pr === undefined) throw new Error("the builder holds a pull request");
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(
+        runWork({
+          pullRequests: [
+            {
+              ...pr,
+              repository: {
+                ...pr.repository,
+                name: "docs",
+                url: "https://github.com/acme/docs",
+              },
+              number: 17,
+              url: "https://github.com/acme/docs/pull/17",
+              headRef: "docs/tags",
+            },
+          ],
+        }),
+      ),
+    });
+    expect(
+      within(screen.getByTestId("run-facts-prs")).getByRole("link", {
+        name: "acme/docs#17",
+      }),
+    ).toBeTruthy();
+  });
+
+  it("counts three pull requests as one link that opens Details at the pull requests", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(
+        runWork({
+          pullRequests: [pullRequest(482), pullRequest(483), pullRequest(484)],
+        }),
+      ),
+    });
+    const link = within(screen.getByTestId("run-facts-prs")).getByRole(
+      "link",
+      { name: "3 pull requests" },
+    );
+    expect(link.getAttribute("href")).toBe(
+      "/acme/core-platform/runs/tse_7k2m9q?details=prs",
+    );
+    // The head names no pull request by number and no state word.
+    expect(screen.queryByTestId("run-facts-pr-state")).toBeNull();
+    expect(screen.getByTestId("run-facts-what")).not.toHaveTextContent("#483");
+  });
+
+  it("keeps the page's tab on a link into Details", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        work: ok(
+          runWork({ pullRequests: [pullRequest(482), pullRequest(483)] }),
+        ),
+      },
+      { tab: "cost" },
+    );
+    expect(
+      within(screen.getByTestId("run-facts-prs"))
+        .getByRole("link", { name: "2 pull requests" })
+        .getAttribute("href"),
+    ).toBe("/acme/core-platform/runs/tse_7k2m9q?tab=cost&details=prs");
+  });
+
+  it("lists every pull request in Details, with no cap", async () => {
+    const numbers = Array.from({ length: 30 }, (_, i) => 500 + i);
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        work: ok(runWork({ pullRequests: numbers.map(pullRequest) })),
+      },
+      { details: "prs" },
+    );
+    expect(
+      within(screen.getByTestId("run-facts-prs")).getByRole("link", {
+        name: "30 pull requests",
+        hidden: true,
+      }),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByTestId("run-checkout")).getAllByTestId(
+        "run-pull-state",
+      ),
+    ).toHaveLength(30);
+  });
+
+  it("counts 14 subagents in the head and lists all 14 in Details", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        work: ok(runWork({ subagents: subagents(14) })),
+      },
+      { details: "subagents" },
+    );
+    const slot = screen.getByTestId("run-facts-subagents");
+    expect(slot.className).toContain("max-md:hidden");
+    expect(
+      within(slot)
+        .getByRole("link", { name: "14 subagents", hidden: true })
+        .getAttribute("href"),
+    ).toBe("/acme/core-platform/runs/tse_7k2m9q?details=subagents");
+    const section = within(screen.getByTestId("run-details-subagents"));
+    expect(section.getByRole("heading", { name: "Subagents" })).toBeTruthy();
+    expect(section.getAllByText("Explore")).toHaveLength(14);
+    // Every one is listed, so no overflow count follows them.
+    expect(section.queryByText(/more$/)).toBeNull();
+    expect(screen.getByTestId("run-subagents").children).toHaveLength(14);
+  });
+
+  it("draws no subagent count for a run that started none (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(runWork({ subagents: [] })),
+    });
+    expect(screen.queryByTestId("run-facts-subagents")).toBeNull();
+  });
+
+  it("counts the facts the run did not record and lists each with its reason in Details", async () => {
+    await renderRun(
+      {
+        detail: ok(
+          runDetail({
+            run: runRow({
+              harness: {
+                name: "claude-code",
+                version: null,
+                runtime: "node",
+              },
+              completenessGaps: ["chain_break"],
+            }),
+          }),
+        ),
+        transcript: ok(runTranscript()),
+        work: ok(runWork()),
+      },
+      { details: "missing" },
+    );
+    const count = within(screen.getByTestId("run-facts-missing")).getByRole(
+      "link",
+      { name: "3 facts not recorded", hidden: true },
+    );
+    expect(count.getAttribute("href")).toBe(
+      "/acme/core-platform/runs/tse_7k2m9q?details=missing",
+    );
+    const list = screen.getByTestId("run-missing");
+    const facts = [...list.querySelectorAll("[data-fact]")].map((row) => [
+      row.querySelector("dt")?.textContent,
+      row.querySelector("dd")?.textContent,
+    ]);
+    expect(facts).toEqual([
+      ["Harness version", "The harness did not report its version."],
+      [
+        "Effort",
+        "The model call did not go through Oxagen, so the request body was never read.",
+      ],
+      ["Record gap", "the hash chain does not hold end to end"],
+    ]);
+    expect(
+      within(screen.getByTestId("run-details-missing")).getByRole("heading", {
+        name: "Not recorded",
+      }),
+    ).toBeTruthy();
+  });
+
+  it("counts a missing machine once, not its path as well (negative)", async () => {
+    await renderRun(
+      {
+        detail: ok(
+          runDetail({
+            run: runRow({
+              machine: null,
+              effort: "high",
+              effortSource: "harness",
+            }),
+          }),
+        ),
+        transcript: ok(runTranscript()),
+        work: ok(runWork({ machine: null, checkouts: [] })),
+      },
+      { details: "missing" },
+    );
+    expect(
+      [...screen.getByTestId("run-missing").querySelectorAll("[data-fact]")].map(
+        (row) => row.getAttribute("data-fact"),
+      ),
+    ).toEqual(["machine"]);
+    expect(screen.getByTestId("run-facts-missing")).toHaveTextContent(
+      /^1 fact not recorded$/,
+    );
+  });
+
+  it("draws no missing count and no Not recorded section when the record holds every fact (negative)", async () => {
+    await renderRun(
+      {
+        detail: ok(
+          runDetail({ run: runRow({ effort: "high", effortSource: "harness" }) }),
+        ),
+        transcript: ok(runTranscript()),
+        work: ok(runWork()),
+      },
+      { details: "missing" },
+    );
+    expect(screen.queryByTestId("run-facts-missing")).toBeNull();
+    expect(screen.queryByTestId("run-missing")).toBeNull();
+  });
+
+  it("titles the drawer Run details under the run's title, and scrolls to the section asked for", async () => {
+    const scroll = scrollIntoView;
+    scroll.mockClear();
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        work: ok(runWork({ subagents: subagents(2) })),
+      },
+      { details: "subagents" },
+    );
+    const drawer = within(screen.getByTestId("run-details"));
+    expect(drawer.getByText("Run details")).toBeTruthy();
+    expect(drawer.getByText("Cut the 3.2 release branch")).toBeTruthy();
+    expect(
+      drawer
+        .getAllByRole("heading", { level: 3 })
+        .map((heading) => heading.textContent),
+    ).toEqual(["Run", "Agent", "Model", "Checkout", "Subagents", "Not recorded"]);
+    expect(scroll.mock.contexts).toContain(
+      screen.getByTestId("run-details-subagents"),
+    );
+  });
+
+  it("closes the drawer to the same page without details, keeping the tab", async () => {
+    replace.mockClear();
+    await renderRun(
+      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
+      { tab: "cost", details: "run" },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Close Run details" }));
+    expect(replace).toHaveBeenCalledWith(
+      "/acme/core-platform/runs/tse_7k2m9q?tab=cost",
+      { scroll: false },
+    );
+  });
+
+  it("leaves the drawer closed without a details value (negative)", async () => {
+    await renderRun({ detail: ok(runDetail()), transcript: ok(runTranscript()) });
+    expect(screen.queryByTestId("run-details")).toBeNull();
   });
 });
 
@@ -3536,12 +3946,12 @@ describe("the work", () => {
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
       work: ok(runWork()),
-    });
+    }, { details: "prs" });
     const strip = within(await screen.findByTestId("run-checkout"));
     const changes = within(screen.getByTestId("run-changes"));
     expect(strip.getByRole("link", { name: "acme/platform#482" })).toBeTruthy();
     expect(
-      changes.getByRole("link", { name: "acme/platform#482" }),
+      changes.getByRole("link", { name: "acme/platform#482", hidden: true }),
     ).toBeTruthy();
   });
 
@@ -3762,7 +4172,7 @@ describe("sealing a run (ADR-169)", () => {
         }),
       ),
       transcript: ok(runTranscript()),
-    });
+    }, { details: "run" });
     expect(screen.getByTestId("run-sealed-operator")).toHaveTextContent(
       "sealed by an operator",
     );
@@ -3861,7 +4271,7 @@ describe("an open run's cost and the idle close (#3980)", () => {
         }),
       ),
       transcript: ok(runTranscript()),
-    });
+    }, { details: "run" });
     expect(screen.getByTestId("run-closed-idle")).toHaveTextContent(
       "no event for 12 hours",
     );
@@ -4231,7 +4641,7 @@ describe("what the session recorded", () => {
         }),
       ),
       transcript: ok(runTranscript()),
-    });
+    }, { details: "model" });
     expect(screen.getByTestId("run-effort")).toHaveTextContent("effort medium");
     // A recorded value is titled with where it was read, and a row that names
     // no source reads as the harness's (#3891).
@@ -4249,7 +4659,7 @@ describe("what the session recorded", () => {
     await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
-    });
+    }, { details: "run" });
     expect(screen.getByTestId("run-effort")).toHaveTextContent(
       "effort not captured",
     );
@@ -4270,7 +4680,7 @@ describe("what the session recorded", () => {
         }),
       ),
       transcript: ok(runTranscript()),
-    });
+    }, { details: "run" });
     expect(screen.getByTestId("run-ended")).toHaveTextContent("ended");
     expect(screen.getByTestId("run-when")).not.toHaveTextContent("sealed");
     expect(screen.getByTestId("run-stat-wall")).toHaveTextContent("1:30");
@@ -4284,7 +4694,7 @@ describe("what the session recorded", () => {
         }),
       ),
       transcript: ok(runTranscript()),
-    });
+    }, { details: "run" });
     expect(screen.getByTestId("run-when")).toHaveTextContent(
       "ended with no seal recorded",
     );
@@ -4384,7 +4794,7 @@ describe("what the session recorded", () => {
           ],
         }),
       ),
-    });
+    }, { details: "subagents" });
     const row = within(await screen.findByTestId("run-subagents"));
     expect(row.getByText("Explore")).toBeTruthy();
     expect(row.getByText("a1b2c3d")).toBeTruthy();
@@ -4396,7 +4806,7 @@ describe("what the session recorded", () => {
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
       work: ok(runWork({ subagents: [] })),
-    });
+    }, { details: "subagents" });
     await screen.findByTestId("run-checkout");
     expect(screen.queryByTestId("run-subagents")).toBeNull();
   });
@@ -4416,7 +4826,7 @@ describe("what the session recorded", () => {
           ],
         }),
       ),
-    });
+    }, { details: "prs" });
     expect(await screen.findByTestId("run-checkout-path")).toHaveTextContent(
       "mac-studio.local:~/src/new",
     );
