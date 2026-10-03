@@ -34,10 +34,7 @@ import {
   parseNumstat,
   rowsOf,
 } from "./git-facts";
-import type { CommitTest } from "./session-changes";
-
-/** The most `HEAD` reflog entries read to date the commits. */
-const MAX_REFLOG_ENTRIES = 1_024;
+import { type CommitTest, MAX_REFLOG_ENTRIES } from "./session-changes";
 
 /**
  * One Bash tool call that ran `git commit`, as the hook handler saw it, in
@@ -168,12 +165,13 @@ function byCommit(stdout: string | undefined): Map<string, string> {
 /**
  * Each change commit's patch id, as `git patch-id --stable` gives it over
  * the commit's diff against its first parent. `ExecAsync` takes no input,
- * so the two commands are joined by a shell. A failed read gives no ids,
- * and each commit's `patch_id` is then null.
+ * so the two commands are joined by a shell, which moves into the
+ * repository first so both read its configuration. A failed read gives no
+ * ids, and each commit's `patch_id` is then null.
  */
 const PATCH_IDS = [
-  'cwd="$1"; shift;',
-  'git -C "$cwd" --no-optional-locks -c core.quotePath=false',
+  'cd "$1" && shift &&',
+  "git --no-optional-locks -c core.quotePath=false",
   "-c diff.noprefix=false -c diff.mnemonicPrefix=false",
   "log --no-walk=unsorted --ignore-missing -p --no-color --no-ext-diff",
   '--no-textconv --find-renames --format="commit %H" "$@" --',

@@ -227,6 +227,25 @@ describe("tacho_events DDL", () => {
     );
   });
 
+  it("carries the session's commits, forward as well as generated (ADR-297)", () => {
+    // 0027 for a cluster bootstrapped today, 0039 for every cluster that
+    // applied 0027 before the members existed.
+    const ddl = tachoEventsMigration();
+    expect(ddl).toContain(
+      "  observed_changes_truncated Nullable(Bool),\n  session_commits String,\n  session_commits_total Nullable(UInt32),\n  session_commits_truncated Nullable(Bool),\n",
+    );
+    const forward = readFileSync(
+      join(here, "migrations", "0039_tacho_events_session_commits.sql"),
+      "utf8",
+    );
+    for (const column of [
+      "session_commits String AFTER observed_changes_truncated",
+      "session_commits_total Nullable(UInt32) AFTER session_commits",
+      "session_commits_truncated Nullable(Bool) AFTER session_commits_total",
+    ])
+      expect(forward).toContain(`ADD COLUMN IF NOT EXISTS ${column}`);
+  });
+
   it("expires rows thirteen months after the control plane received them (#3944)", () => {
     // The hot window ADR-058 sets for a run's frame rows. The clock is
     // received_at, the server's, never ts, which the producer chooses. The
