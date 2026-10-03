@@ -35,8 +35,13 @@
 //      release back, and leaves through the kernel's catch, so the usage
 //      recorder never runs and the no-op is not a governed action (§3.9
 //      item 15).
-//   7. `approved` leaves the reservation held for the agent's retry, whose
-//      receipt settles it. The output reports the settlement.
+//   7. On a mandate row, `approved` leaves the reservation held. The agent
+//      that parked the call sends the same input again. The mandate gate
+//      finds the approved row by its input digest, proceeds on the held
+//      reservation without reserving again, and marks the approval used, and
+//      the retry's receipt settles the reservation (`decideMandate` in
+//      packages/rules/src/mandates.ts). The output reports the settlement. A
+//      row that stores the call needs no retry: step 9 runs it.
 //   8. A matched row writes the approval.resolved feed row for the person
 //      whose message parked the call, in the same transaction. An in-app
 //      row writes none, because the person who asked is the one answering.

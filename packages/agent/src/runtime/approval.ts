@@ -226,6 +226,12 @@ export async function createApprovalRequest(args: CreateApprovalArgs): Promise<{
   approvalPublicId: string;
   resolution?: string | null;
   resumeStatus?: string | null;
+  /**
+   * Why a stored call did not run, when its resume refused it
+   * (`requester_access_revoked`, `kill_switch_active`, `gau_exhausted`, …).
+   * Set only on a resumable approval this call found already standing.
+   */
+  resumeError?: string | null;
   expiresAt?: Date;
 }> {
   if (args.resumeRequesterUserId) return createResumableApproval(args);
@@ -372,6 +378,7 @@ async function createResumableApproval(args: CreateApprovalArgs) {
         approvalPublicId: existing.publicId,
         resolution: existing.resolution,
         resumeStatus: existing.resumeStatus,
+        resumeError: existing.resumeError,
         expiresAt: existing.expiresAt,
       };
     const expiresAt = new Date(Date.now() + (args.ttlMs ?? DEFAULT_TTL_MS));

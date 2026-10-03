@@ -1736,3 +1736,64 @@ describe("stored input invariant", () => {
     clearRegistryForTests();
   });
 });
+
+// The approval resume tells a refusal from an unknown outcome by whether the
+// handler started (#3127). The hook has to fire after every gate, so a gate's
+// refusal never reads as a call that ran.
+describe("handler start hook", () => {
+  afterEach(() => {
+    clearHandlersForTests();
+    clearRegistryForTests();
+    clearBillingAdmissionGate();
+    clearKernelIAMRuntime();
+  });
+
+  it("fires once, after the gates and before the handler", async () => {
+    const order: string[] = [];
+    const cap = echoCap();
+    registerHandler(cap.name, async () => async (input) => {
+      order.push("handler");
+      return input;
+    });
+    setBillingAdmissionGate(async () => {
+      order.push("billing");
+    });
+    await invoke(cap.name, { value: "ok" }, ctx, {
+      onHandlerStart: () => order.push("start"),
+    });
+    expect(order).toEqual(["billing", "start", "handler"]);
+  });
+
+  it("does not fire when the credit gate refuses (negative)", async () => {
+    const cap = echoCap();
+    const handler = vi.fn(async (input: unknown) => input);
+    registerHandler(cap.name, async () => handler);
+    setBillingAdmissionGate(async () => {
+      throw Object.assign(new Error("out of credit"), {
+        code: "gau_exhausted",
+      });
+    });
+    const onHandlerStart = vi.fn();
+    await expect(
+      invoke(cap.name, { value: "ok" }, ctx, { onHandlerStart }),
+    ).rejects.toMatchObject({ code: "gau_exhausted" });
+    expect(onHandlerStart).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("does not fire when IAM denies (negative)", async () => {
+    const cap = echoCap();
+    const handler = vi.fn(async (input: unknown) => input);
+    registerHandler(cap.name, async () => handler);
+    setKernelIAMRuntime(
+      async () => ({ outcome: "deny", principal: null }),
+      /* enforced */ true,
+    );
+    const onHandlerStart = vi.fn();
+    await expect(
+      invoke(cap.name, { value: "ok" }, ctx, { onHandlerStart }),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(onHandlerStart).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
+  });
+});
