@@ -1348,7 +1348,7 @@ describe("Spend › Findings", () => {
     expect(findings).toHaveBeenCalledExactlyOnceWith(ctx, {});
     cleanup();
     findings.mockClear();
-    await renderSpend(["waste"], undefined, ctx, undefined, "c2");
+    await renderSpend(["tokens"], undefined, ctx, undefined, "c2");
     expect(findings).toHaveBeenCalledExactlyOnceWith(ctx, {});
   });
 
@@ -1946,9 +1946,121 @@ describe("Spend › By tool", () => {
       "The leading 1 of 2. The table holds every tool.",
     );
   });
+
+  /**
+   * The workspace's first page answers the badge read. The tool findings come
+   * two to a read: `first` on the page with no cursor, `second` on the page
+   * its cursor names, which answers `last`.
+   */
+  function toolPages(
+    first: SpendFinding,
+    second: SpendFinding,
+    last: Read<SpendFindings> = readOk(
+      listing({ findings: [second], nextCursor: null, offset: 1 }),
+    ),
+  ) {
+    findings.mockImplementation((_ctx, query = {}) =>
+      Promise.resolve(
+        query.level !== "tool"
+          ? readOk(listing())
+          : query.cursor === "t2"
+            ? last
+            : readOk(listing({ findings: [first], nextCursor: "t2" })),
+      ),
+    );
+  }
+
+  it("totals a tool's savings over every page of tool findings (#5303)", async () => {
+    loaded({ tool: report([row("github__get_issue")]) });
+    toolPages(
+      found({
+        id: "fnd_a",
+        subject: "github__get_issue",
+        saving: cost("1000000"),
+      }),
+      found({
+        id: "fnd_b",
+        kind: "repeated_shell_commands",
+        subject: "github__get_issue",
+        saving: cost("2000000"),
+      }),
+    );
+    await renderSpend(["tool"]);
+    expect(findings).toHaveBeenCalledWith(ctx, { level: "tool" });
+    expect(findings).toHaveBeenCalledWith(ctx, {
+      level: "tool",
+      cursor: "t2",
+    });
+    const github = rowOf("github__get_issue");
+    if (!(github instanceof HTMLTableRowElement)) throw new Error("not a row");
+    expect(github.cells[8]).toHaveTextContent("$3.00");
+    expect(github.cells[8]).toHaveTextContent("2 findings");
+  });
+
+  it("says not recorded rather than a partial total when a later page fails (negative)", async () => {
+    loaded({ tool: report([row("github__get_issue")]) });
+    toolPages(
+      found({
+        id: "fnd_a",
+        subject: "github__get_issue",
+        saving: cost("1000000"),
+      }),
+      found({ id: "fnd_b", subject: "github__get_issue" }),
+      readError("findings_down", 503),
+    );
+    await renderSpend(["tool"]);
+    const github = rowOf("github__get_issue");
+    if (!(github instanceof HTMLTableRowElement)) throw new Error("not a row");
+    expect(github.cells[8]).toHaveTextContent("not recorded");
+    expect(github.cells[8]).not.toHaveTextContent("$1.00");
+  });
 });
 
 describe("Spend › Wasted spend", () => {
+  it("totals retry loops over every page of retry loops findings (#5303)", async () => {
+    loaded();
+    const loop = (id: string, micros: string, runs: number) =>
+      found({
+        id,
+        kind: "retry_loops",
+        level: "agent",
+        subject: `a-intel.core.${id}`,
+        saving: cost(micros),
+        runs,
+      });
+    findings.mockImplementation((_ctx, query = {}) =>
+      Promise.resolve(
+        query.kind !== "retry_loops"
+          ? readOk(listing())
+          : query.cursor === "r2"
+            ? readOk(
+                listing({
+                  findings: [loop("fnd_r2", "2000000", 4)],
+                  nextCursor: null,
+                  offset: 1,
+                }),
+              )
+            : readOk(
+                listing({
+                  findings: [loop("fnd_r1", "1000000", 3)],
+                  nextCursor: "r2",
+                }),
+              ),
+      ),
+    );
+    await renderSpend(["waste"]);
+    expect(findings).toHaveBeenCalledWith(ctx, { kind: "retry_loops" });
+    expect(findings).toHaveBeenCalledWith(ctx, {
+      kind: "retry_loops",
+      cursor: "r2",
+    });
+    const retry = document.querySelector('li[data-cause="retryLoops"]');
+    if (!(retry instanceof HTMLElement)) throw new Error("no retry loops row");
+    expect(retry).toHaveAttribute("data-recorded", "true");
+    expect(retry).toHaveTextContent("7 runs");
+    expect(retry).toHaveTextContent("$3.00");
+  });
+
   it("reads no agents, since its rows name runs and no agent (negative, #4871)", async () => {
     loaded();
     await renderSpend(["waste"]);

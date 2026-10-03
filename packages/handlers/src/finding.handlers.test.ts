@@ -636,7 +636,7 @@ describe("list_findings by page and by subject (#5303)", () => {
     expect(FINDING_KINDS.length).toBeLessThanOrEqual(FINDINGS_LIST_MAX);
   });
 
-  it("passes the level and the subject to both reads", async () => {
+  it("passes the level, the subject and the kind to both reads", async () => {
     const readFindings = vi.fn(async () => [findingRow()]);
     const readFindingTotals = vi.fn(async () => [totalOf(findingRow())]);
     const handler = createFindingListHandler({
@@ -645,13 +645,19 @@ describe("list_findings by page and by subject (#5303)", () => {
       readPricedSpend: spend,
     });
     await handler(
-      { status: "open", level: "agent", subject: "acme.core.release-bot" },
+      {
+        status: "open",
+        level: "agent",
+        subject: "acme.core.release-bot",
+        kind: "spin_loops",
+      },
       ctx(),
     );
     const filter = {
       status: "open",
       level: "agent",
       subject: "acme.core.release-bot",
+      kind: "spin_loops",
     };
     expect(readFindings).toHaveBeenCalledWith(
       { orgId: ORG, workspaceId: WS },
@@ -689,6 +695,7 @@ describe("list_findings by page and by subject (#5303)", () => {
       status: "open",
       level: "agent",
       subject: "acme.core.release-bot",
+      kind: "retry_loops",
     });
     const [open, decided, totals] = compiled;
 
@@ -712,6 +719,8 @@ describe("list_findings by page and by subject (#5303)", () => {
     );
     // The totals cover every finding the filter matches: no cursor, no limit.
     expect(totals?.sql).toMatch(/"cost"\."findings"\."subject" = \$\d+/);
+    expect(totals?.sql).toMatch(/"cost"\."findings"\."kind" = \$\d+/);
+    expect(totals?.params).toContain("retry_loops");
     expect(totals?.sql).not.toMatch(/limit/);
     expect(totals?.sql).not.toMatch(/"id" >/);
   });

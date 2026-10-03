@@ -1,11 +1,13 @@
 /**
  * `oxagen findings list [--run <id>] [--status <status>] [--level <level>]
- * [--subject <key>] [--cursor <cursor>]`: the CLI parity surface for
+ * [--subject <key>] [--kind <kind>] [--cursor <cursor>]`: the CLI parity surface for
  * `list_findings` (ADR-062, #4001). It prints the workspace's costed
  * findings, largest saving first, with the total saving and its annualised
  * figure. With `--run`, it lists only the findings that cite that run, and
  * each one names the frames it cites there. With `--level` and `--subject`,
- * it lists only the findings about one agent, operator, tool or workspace.
+ * it lists only the findings about one agent, operator, tool or workspace,
+ * and with `--kind` only the findings of one kind. The API names a kind it
+ * does not know in its refusal, so the command keeps no list of kinds.
  * The API lists at most 50 findings a page, and the count and totals cover
  * every one (#5262). When more findings follow, a line under the table says
  * which ones the page shows and gives the `--cursor` that prints the next
@@ -106,6 +108,7 @@ export async function findingsList(
     status?: string;
     level?: string;
     subject?: string;
+    kind?: string;
     cursor?: string;
     json?: boolean;
   },
@@ -148,6 +151,14 @@ export async function findingsList(
     );
     return;
   }
+  if (opts.kind !== undefined && !/^[a-z_]+$/.test(opts.kind)) {
+    process.exitCode = 2;
+    out.error(
+      `Invalid --kind "${opts.kind}". Provide a finding kind, such as retry_loops.`,
+      "usage",
+    );
+    return;
+  }
   if (
     opts.cursor !== undefined &&
     (opts.cursor.length === 0 || opts.cursor.length > CURSOR_MAX)
@@ -166,6 +177,7 @@ export async function findingsList(
       ...(opts.run === undefined ? {} : { runId: opts.run }),
       ...(opts.level === undefined ? {} : { level: opts.level }),
       ...(opts.subject === undefined ? {} : { subject: opts.subject }),
+      ...(opts.kind === undefined ? {} : { kind: opts.kind }),
       ...(opts.cursor === undefined ? {} : { cursor: opts.cursor }),
     });
   } catch (err) {
@@ -177,6 +189,7 @@ export async function findingsList(
     return;
   }
   const scope = [
+    opts.kind === undefined ? "" : ` of kind ${opts.kind}`,
     opts.run === undefined ? "" : ` citing ${opts.run}`,
     opts.subject === undefined ? "" : ` about ${opts.subject}`,
   ].join("");

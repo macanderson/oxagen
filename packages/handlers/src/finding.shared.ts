@@ -41,13 +41,15 @@ type FindingLevel = Finding["level"];
 
 /**
  * Which findings a list reads: one status, and optionally only those citing
- * one run, only those at one level, and only those about one subject (#5303).
+ * one run, only those at one level, only those about one subject, and only
+ * those of one kind (#5303).
  */
 export type FindingFilter = {
   status: FindingStatus;
   runId?: string;
   level?: FindingLevel;
   subject?: string;
+  kind?: Finding["kind"];
 };
 
 const findings = schema.findings;
@@ -190,7 +192,8 @@ export function citationOf(row: FindingRow, runId: string): FindingRunCitation {
 
 /**
  * The findings a list matches: one status, with a run only those citing it,
- * and with a level or a subject only those at that level or about that key.
+ * with a level or a subject only those at that level or about that key, and
+ * with a kind only those of that kind.
  */
 function matching(scope: FindingScope, filter: FindingFilter) {
   return and(
@@ -204,6 +207,7 @@ function matching(scope: FindingScope, filter: FindingFilter) {
     filter.subject === undefined
       ? undefined
       : eq(findings.subject, filter.subject),
+    filter.kind === undefined ? undefined : eq(findings.kind, filter.kind),
   );
 }
 

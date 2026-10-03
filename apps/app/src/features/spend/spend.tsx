@@ -21,6 +21,7 @@ import type { ReactNode } from "react";
 import type {
   SpendFinding,
   SpendFindings,
+  SpendFindingsQuery,
   SpendReport,
 } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
@@ -82,6 +83,36 @@ function isEmpty(report: SpendReport): boolean {
 
 function listed(read: Read<SpendFindings>): SpendFinding[] | null {
   return read.ok ? read.value.findings : null;
+}
+
+/** The most pages a tab reads to total its findings: 1,000 findings. */
+const FINDING_PAGES_MAX = 20;
+
+/**
+ * Every open finding a query matches, page by page, for a tab that totals
+ * findings by key or by kind (#5303). The first page alone would leave out a
+ * finding that ranks past it. Null when a page does not answer, or when more
+ * findings match than FINDING_PAGES_MAX pages hold, so a total is never drawn
+ * from part of the findings.
+ */
+async function everyFinding(
+  ctx: WsCtx,
+  source: DataSource,
+  query: SpendFindingsQuery,
+): Promise<SpendFinding[] | null> {
+  const all: SpendFinding[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < FINDING_PAGES_MAX; page += 1) {
+    const read = await source.spend.findings(
+      ctx,
+      cursor === null ? query : { ...query, cursor },
+    );
+    if (!read.ok) return null;
+    all.push(...read.value.findings);
+    if (read.value.nextCursor === null) return all;
+    cursor = read.value.nextCursor;
+  }
+  return null;
 }
 
 function Header({
@@ -363,19 +394,20 @@ async function body({
         />
       );
     }
-    case "tool":
-    case "task": {
-      const report = await source.spend.byGroup(ctx, view.tab, period);
+    case "tool": {
+      // Each tool's savings total its own findings, so the tab reads every
+      // tool finding, not the workspace's first page.
+      const [report, tools] = await Promise.all([
+        source.spend.byGroup(ctx, "tool", period),
+        everyFinding(ctx, source, { level: "tool" }),
+      ]);
       if (!report.ok) return <SpendReadFailure read={report} {...failure} />;
-      return view.tab === "tool" ? (
-        <ToolSection
-          report={report.value}
-          findings={listed(findings)}
-          at={at}
-        />
-      ) : (
-        <TaskTable report={report.value} />
-      );
+      return <ToolSection report={report.value} findings={tools} at={at} />;
+    }
+    case "task": {
+      const report = await source.spend.byGroup(ctx, "task", period);
+      if (!report.ok) return <SpendReadFailure read={report} {...failure} />;
+      return <TaskTable report={report.value} />;
     }
     case "cost_center": {
       const report = await source.spend.byGroup(ctx, "cost_center", period);
@@ -384,10 +416,12 @@ async function body({
     }
     case "waste":
       if (!waste.ok) return <SpendReadFailure read={waste} {...failure} />;
+      // The retry loops row totals every retry loops finding, however far
+      // down the workspace's list each ranks.
       return (
         <WasteSection
           waste={waste.value}
-          findings={listed(findings)}
+          findings={await everyFinding(ctx, source, { kind: "retry_loops" })}
           month={month}
           at={at}
         />

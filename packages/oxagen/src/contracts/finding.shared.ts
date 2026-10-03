@@ -13,7 +13,7 @@ import { RUN_LABEL_MAX, runPublicIdSchema } from "./run.list";
 import { costSchema, moneySchema } from "./spend.shared";
 
 /** The kinds the findings job writes (ADR-062, ADR-208). Mirrors `FINDING_KINDS` in the cost schema. */
-const findingKindSchema = z.enum([
+export const findingKindSchema = z.enum([
   "cache_writes_never_read",
   "duplicate_tool_calls",
   "repeated_shell_commands",

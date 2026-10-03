@@ -558,6 +558,7 @@ export function buildProgram(): Command {
       "--subject <key>",
       "An agent key, an operator id (prn_…), a tool name or the workspace id",
     )
+    .option("--kind <kind>", "A finding kind, such as retry_loops")
     .option("--cursor <cursor>", "The cursor the previous page printed")
     .option("--json", "Output JSON")
     .action(
@@ -566,6 +567,7 @@ export function buildProgram(): Command {
         status?: string;
         level?: string;
         subject?: string;
+        kind?: string;
         cursor?: string;
         json?: boolean;
       }) => {

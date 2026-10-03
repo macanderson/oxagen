@@ -183,6 +183,7 @@ export const spend: DataSource["spend"] = {
         status: "open",
         ...(query.level === undefined ? {} : { level: query.level }),
         ...(query.subject === undefined ? {} : { subject: query.subject }),
+        ...(query.kind === undefined ? {} : { kind: query.kind }),
         ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
       },
       page: "spend",

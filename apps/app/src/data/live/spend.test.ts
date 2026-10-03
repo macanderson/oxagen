@@ -492,6 +492,7 @@ describe("the findings the Spend page leads with", () => {
     const read = await spend.findings(ctx, {
       level: "agent",
       subject: "acme.core.release-bot",
+      kind: "spin_loops",
       cursor: "c2",
     });
     expect(read.ok && read.value.nextCursor).toBe("c3");
@@ -502,6 +503,7 @@ describe("the findings the Spend page leads with", () => {
         status: "open",
         level: "agent",
         subject: "acme.core.release-bot",
+        kind: "spin_loops",
         cursor: "c2",
       },
       page: "spend",

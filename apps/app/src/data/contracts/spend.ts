@@ -564,11 +564,13 @@ export type SpendFindings = z.infer<typeof SpendFindings>;
 /**
  * Which page of the open findings a read asks for, and which findings (#5303).
  * A level and a subject narrow the read to the findings about one agent,
- * operator or tool, and a cursor reads the page after the one that named it.
+ * operator or tool, a kind to the findings of that kind, and a cursor reads
+ * the page after the one that named it.
  */
 export type SpendFindingsQuery = {
   level?: SpendFinding["level"];
   subject?: string;
+  kind?: SpendFinding["kind"];
   cursor?: string;
 };
 

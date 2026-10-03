@@ -160,18 +160,21 @@ describe("list_findings contract", () => {
       findingList.input.parse({
         level: "agent",
         subject: "acme.core.release-bot",
+        kind: "retry_loops",
         cursor: "WyJvcGVuIl0",
       }),
     ).toEqual({
       status: "open",
       level: "agent",
       subject: "acme.core.release-bot",
+      kind: "retry_loops",
       cursor: "WyJvcGVuIl0",
     });
-    // A level the findings job never writes, an empty subject or cursor, and
-    // a cursor past the bound (negative).
+    // A level or a kind the findings job never writes, an empty subject or
+    // cursor, and a cursor past the bound (negative).
     for (const bad of [
       { level: "run" },
+      { kind: "retry_storm" },
       { subject: "" },
       { cursor: "" },
       { cursor: "x".repeat(FINDINGS_CURSOR_MAX + 1) },

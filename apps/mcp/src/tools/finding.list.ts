@@ -17,6 +17,9 @@ export const schema = {
   subject: findingList.input.shape.subject.describe(
     "an agent key, an operator's prn_… id, a tool name or the workspace id: list only the findings about it",
   ),
+  kind: findingList.input.shape.kind.describe(
+    "a finding kind, such as retry_loops: list only the findings of that kind",
+  ),
   cursor: findingList.input.shape.cursor.describe(
     "the nextCursor of the previous page; omit it for the first page",
   ),

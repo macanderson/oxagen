@@ -12,6 +12,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import {
+  findingKindSchema,
   findingLevelSchema,
   findingRunCitationSchema,
   findingSchema,
@@ -42,7 +43,7 @@ export const findingList = registerCapability({
   name: "list_findings",
   domain: "spend",
   description:
-    "List this workspace's costed findings ranked by the money at stake (open by default; applied or dismissed most recent first), each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend over the findings' window and that saving annualised. It lists at most 50 findings a page. The counts and totals cover every finding, truncated is true when more exist than the page holds, and nextCursor reads the next page. Given a run, it lists only the findings that cite that run, each with the frames it cites there. Given a level and a subject, it lists only the findings about that agent, operator, tool or workspace.",
+    "List this workspace's costed findings ranked by the money at stake (open by default; applied or dismissed most recent first), each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend over the findings' window and that saving annualised. It lists at most 50 findings a page. The counts and totals cover every finding, truncated is true when more exist than the page holds, and nextCursor reads the next page. Given a run, it lists only the findings that cite that run, each with the frames it cites there. Given a level and a subject, it lists only the findings about that agent, operator, tool or workspace, and given a kind, only the findings of that kind.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
@@ -75,6 +76,11 @@ export const findingList = registerCapability({
        * those findings.
        */
       subject: z.string().min(1).max(SUBJECT_MAX).optional(),
+      /**
+       * Lists only the findings of this kind, and the totals cover those
+       * findings (#5303). The Spend page's retry loops row reads its kind.
+       */
+      kind: findingKindSchema.optional(),
       /**
        * The `nextCursor` of the page before. Without it the read answers the
        * first page. A cursor holds its place in the list order, so a page read

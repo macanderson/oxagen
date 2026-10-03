@@ -24,7 +24,7 @@
 // next page in the list order, and the counts and totals cover every
 // matching finding on every page (#5303). Given a level and a subject, the
 // read lists only the findings about that key: an agent's page reads its own
-// findings this way.
+// findings this way. Given a kind, it lists only the findings of that kind.
 import { type CostBasis, divideHalfEven, foldBasis } from "@oxagen/billing";
 import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandler } from "@oxagen/oxagen";
@@ -129,7 +129,7 @@ export function createFindingListHandler(
 ): CapabilityHandler<typeof findingList> {
   return async (input, ctx): Promise<FindingListOutput> => {
     const scope = findingScope(ctx);
-    const { runId, level, subject } = input;
+    const { runId, level, subject, kind } = input;
     const after =
       input.cursor === undefined ? null : decodeFindingCursor(input.cursor);
     // A cursor from another status holds a key of another kind: a saving
@@ -148,6 +148,7 @@ export function createFindingListHandler(
       ...(runId === undefined ? {} : { runId }),
       ...(level === undefined ? {} : { level }),
       ...(subject === undefined ? {} : { subject }),
+      ...(kind === undefined ? {} : { kind }),
     };
     const read = await deps.readFindings(scope, filter, after);
     const rows = read.slice(0, FINDINGS_LIST_MAX);

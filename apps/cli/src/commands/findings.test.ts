@@ -192,6 +192,22 @@ describe("findings list", () => {
     );
   });
 
+  it("sends the kind and names it when none is open (#5303)", async () => {
+    apiPostOrThrow.mockResolvedValueOnce(
+      result({
+        counts: { findings: 0, high: 0, medium: 0, operators: 0 },
+        findings: [],
+      }),
+    );
+    const c = captureWriter();
+    await findingsList({ kind: "retry_loops" }, c.writer);
+    expect(apiPostOrThrow).toHaveBeenCalledWith("spend/findings", {
+      status: "open",
+      kind: "retry_loops",
+    });
+    expect(c.output()).toBe("No open findings of kind retry_loops.");
+  });
+
   it("says no more findings follow a cursor past the last page (#5303)", async () => {
     apiPostOrThrow.mockResolvedValueOnce(
       result({
@@ -236,6 +252,9 @@ describe("findings list", () => {
     expect(process.exitCode).toBe(2);
     process.exitCode = undefined;
     await findingsList({ cursor: "x".repeat(257) }, c.writer);
+    expect(process.exitCode).toBe(2);
+    process.exitCode = undefined;
+    await findingsList({ kind: "Retry Loops" }, c.writer);
     expect(process.exitCode).toBe(2);
     expect(apiPostOrThrow).not.toHaveBeenCalled();
   });
