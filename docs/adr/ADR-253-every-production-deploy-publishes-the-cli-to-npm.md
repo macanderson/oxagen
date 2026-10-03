@@ -1,6 +1,8 @@
 # ADR-253: Every production deploy publishes the CLI to npm
 
-- **Status:** Accepted. Mac decided on 2026-10-02.
+- **Status:** Accepted. Mac decided on 2026-10-02. Amended 2026-10-03
+  (#5203): `npm.yml` publishes under the `candidate` tag, and `latest` moves
+  to a version only after npx runs its tarball.
 - **Date:** 2026-10-02
 - **Owners:** cli, release
 - **Related:** issue #4489 (npm publishing failed), ADR-158 (every
@@ -97,3 +99,35 @@ move forward.
   when `RELEASE_TOKEN` is missing, now dispatches `npm.yml` on the tag
   alongside `desktop.yml`, and the job holds `actions: write` so the
   dispatch API accepts it.
+
+## Amendment, 2026-10-03 (#5203)
+
+The tarball was not served at once after all. On 2026-10-02 the run on
+`c7226a6` published `2.1.4-378` at 18:07:18Z, and its tarball URL answered 404
+until 18:12:46Z, about 5½ minutes later. The check gave up after about 100
+seconds, so the run failed although the publish worked. Every deploy dispatch
+on 2026-10-03 failed the same way. The publish had also moved `latest`
+already, so for those minutes `npm install -g @oxagen/cli` fetched a tarball
+that answered 404.
+
+- **A checked publish goes out under `candidate`.** `publish-cli-npm.ts
+  --verify`, which `npm.yml` runs, publishes under the `candidate` dist-tag.
+  `latest` moves to the version only after `npx <tarball URL> --version`
+  prints it. Decision 3 still holds: every build and release reaches
+  `latest`, a few minutes later than before. `candidate` is a staging tag,
+  not the `next` channel decision 3 turned down. Nothing tells people to
+  install it.
+- **The check waits at least 10 minutes.** It pauses 20 seconds after the
+  first try, 10 seconds longer after each try after that, and at most a
+  minute. Each try's log line says how long the check has waited.
+- **A failed check leaves `latest` alone.** The run fails with a message that
+  names the version, where `latest` stayed, and how to move it by hand once
+  the tarball works.
+- **Every move of `latest` is checked.** A run that publishes nothing still
+  moves `latest` to the newest version npm holds, as decision 3 says. In
+  `npm.yml` that version must pass the same check first. So a version whose
+  check failed stays off `latest` until a later run's check passes. Then the
+  next run, or the daily one, moves `latest` to it.
+- **`release.ts` and `release-publish.ts` are unchanged.** They run from a
+  laptop, pass no check, and still publish under `latest`.
+- **`npm.yml`'s job may run 30 minutes,** up from 20, to fit the longer wait.
