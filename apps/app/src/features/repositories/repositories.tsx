@@ -93,7 +93,10 @@ export function Repositories({
   wsName: string;
   view: RepositoryView;
   viewer: RepositoriesViewer;
-  /** The person is back from GitHub's install flow; the wizard reopens on its first step. */
+  /**
+   * The wizard opens on its first step on arrival: the person is back from
+   * GitHub's install flow, or the Create a workspace dialog sent them here.
+   */
   returning?: boolean;
   /**
    * The workspace's steering repo, which the page renders on the server

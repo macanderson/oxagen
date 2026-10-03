@@ -28,7 +28,7 @@ vi.mock("@/server/viewer", async (importOriginal) => ({
 
 const kernel =
   await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
-const { OrgCtx } = await import("@/server/viewer");
+const { OrgCtx, WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const {
   archiveWorkspace,
@@ -42,6 +42,7 @@ const {
   resendInvitation,
   revokeInvitation,
   setOrgAvatar,
+  readWorkspaceSteeringRepo,
   setRolePermissions,
   setWorkspaceAvatar,
 } = await import("./actions");
@@ -229,7 +230,13 @@ describe("createWorkspace", () => {
       await createWorkspace("acme", { name: " Research ", slug: "research" }),
     ).toEqual({
       ok: true,
-      value: { slug: "research", name: "Research", steeringRepo: "provisioning" },
+      value: {
+        publicId: "wrk_1",
+        slug: "research",
+        name: "Research",
+        steeringRepo: "provisioning",
+        costCenter: null,
+      },
     });
     // `mainRepo` is deprecated in the contract, and the action never sends it.
     expect(invoke).toHaveBeenCalledWith(
@@ -262,6 +269,149 @@ describe("createWorkspace", () => {
     expect(
       await createWorkspace("acme", { name: "Research", slug: "research" }),
     ).toEqual({ ok: false, reason: "conflict", code: "slug_taken" });
+  });
+
+  describe("readWorkspaceSteeringRepo", () => {
+    it("reads the steering repo inside the new workspace, where the creator is Owner", async () => {
+      const ws = unsafeMint(WsCtx, {
+        userId: ctx.userId,
+        orgId: ctx.orgId,
+        orgSlug: "acme",
+        orgName: "Acme Robotics",
+        orgRole: "owner",
+        workspaceId: "7b000000-0000-4000-8000-000000000001",
+        wsSlug: "research",
+        wsName: "Research",
+        wsRole: "owner",
+      });
+      requireViewer.mockResolvedValue(ws);
+      invoke.mockRejectedValue(refusal("forbidden", "workspace_role_required"));
+      expect(await readWorkspaceSteeringRepo("acme", "research")).toMatchObject({
+        ok: false,
+      });
+      expect(requireViewer).toHaveBeenCalledWith("acme", "research");
+      expect(invoke).toHaveBeenCalledWith(
+        "get_steering_repo",
+        {},
+        expect.objectContaining({ workspaceId: ws.workspaceId }),
+      );
+    });
+  });
+
+  describe("with a cost center", () => {
+    const center = {
+      id: "ccn_0a1b2c3d4e5f6g7h8j9k0m",
+      label: "research",
+      description: null,
+      agents: 0,
+      workspaces: 0,
+      createdAt: "2026-09-22T10:00:00.000Z",
+    };
+    const charged = {
+      target: "workspace",
+      id: "wrk_1",
+      costCenter: "research",
+    };
+    const names = () => invoke.mock.calls.map((call) => call[0]);
+
+    it("adds the code to the organization's list, then charges the new workspace to it", async () => {
+      invoke
+        .mockResolvedValueOnce(CREATED)
+        .mockResolvedValueOnce({ costCenter: center })
+        .mockResolvedValueOnce(charged);
+      expect(
+        await createWorkspace("acme", {
+          name: "Research",
+          slug: "research",
+          costCenter: " research ",
+        }),
+      ).toMatchObject({
+        ok: true,
+        value: { costCenter: { ok: true, code: "research" } },
+      });
+      expect(names()).toEqual([
+        "create_workspace",
+        "create_cost_center",
+        "set_cost_center",
+      ]);
+      expect(invoke.mock.calls[1]?.[1]).toEqual({ label: "research" });
+      expect(invoke.mock.calls[2]?.[1]).toEqual({
+        target: "workspace",
+        workspaceId: "wrk_1",
+        costCenter: "research",
+      });
+    });
+
+    it("charges a code the list already holds", async () => {
+      invoke
+        .mockResolvedValueOnce(CREATED)
+        .mockRejectedValueOnce(refusal("conflict", "cost_center_exists"))
+        .mockResolvedValueOnce(charged);
+      expect(
+        await createWorkspace("acme", {
+          name: "Research",
+          slug: "research",
+          costCenter: "research",
+        }),
+      ).toMatchObject({
+        ok: true,
+        value: { costCenter: { ok: true, code: "research" } },
+      });
+      expect(names()).toContain("set_cost_center");
+    });
+
+    it("keeps the workspace and says so when the charge is refused (negative)", async () => {
+      invoke
+        .mockResolvedValueOnce(CREATED)
+        .mockResolvedValueOnce({ costCenter: center })
+        .mockRejectedValueOnce(refusal("forbidden", "org_role_required"));
+      expect(
+        await createWorkspace("acme", {
+          name: "Research",
+          slug: "research",
+          costCenter: "research",
+        }),
+      ).toMatchObject({
+        ok: true,
+        value: {
+          slug: "research",
+          costCenter: { ok: false, code: "research", reason: "org_role_required" },
+        },
+      });
+    });
+
+    it("charges nothing when the list refuses the code (negative)", async () => {
+      invoke
+        .mockResolvedValueOnce(CREATED)
+        .mockRejectedValueOnce(refusal("forbidden", "org_role_required"));
+      expect(
+        await createWorkspace("acme", {
+          name: "Research",
+          slug: "research",
+          costCenter: "research",
+        }),
+      ).toMatchObject({
+        ok: true,
+        value: { costCenter: { ok: false, reason: "org_role_required" } },
+      });
+      expect(names()).not.toContain("set_cost_center");
+    });
+
+    it("refuses a code the list would refuse before anything is written (negative)", async () => {
+      expect(
+        await createWorkspace("acme", {
+          name: "Research",
+          slug: "research",
+          costCenter: "-research",
+        }),
+      ).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "invalid_input",
+        field: "costCenter",
+      });
+      expect(invoke).not.toHaveBeenCalled();
+    });
   });
 
   it("makes the slug from the name when the form sends none, as the design's form has no slug", async () => {

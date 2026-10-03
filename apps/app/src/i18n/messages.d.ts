@@ -4371,17 +4371,33 @@ type Messages = {
         title: string;
         confirm: string;
         pending: string;
+        fields: {
+          label: string;
+          name: string;
+          costCenterFromName: string;
+          costCenter: string;
+          costCenterInvalid: string;
+          slugProblems: {
+            short: string;
+            shape: string;
+            reserved: string;
+          };
+        };
+        help: {
+          open: string;
+          label: string;
+          name: string;
+          costCenter: string;
+        };
         done: {
           close: string;
           workspace: string;
-          steeringRepo: string;
-          openRepositories: string;
-          status: {
-            provisioning: string;
-            ready: string;
-            failed: string;
-            blocked: string;
-          };
+          costCenter: string;
+          costCenterFailed: string;
+          reading: string;
+          readFailed: string;
+          ready: string;
+          pickRepositories: string;
         };
       };
       editWorkspace: {
@@ -6201,7 +6217,6 @@ type Messages = {
     wizard: {
       title: string;
       titleFor: string;
-      subtitle: string;
       cancel: string;
       back: string;
       next: string;
