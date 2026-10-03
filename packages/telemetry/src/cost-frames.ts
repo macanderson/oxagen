@@ -862,15 +862,72 @@ export interface GroupFrameRun {
 const GROUP_ROOTS = "root_session_uuid IN {rootSessionUuids:Array(UUID)}";
 
 /**
+ * The sessions that carry one of a group read's roots in its workspace,
+ * named by ClickHouse itself, as {@link RUN_FAMILY_SESSIONS} does for one run.
+ */
+const GROUP_FAMILY_SESSIONS = `session_uuid IN (
+            SELECT session_uuid FROM tacho_events
+            WHERE org_id = {orgId:UUID}
+              AND workspace_id = {workspaceId:UUID}
+              AND ${GROUP_ROOTS})`;
+
+/** One query of a group read: the roots it names and their sessions. */
+interface GroupFrameBatch {
+  roots: string[];
+  sessions: string[];
+}
+
+/**
+ * A group's runs in the batches one query reads each (#5311). A batch names
+ * at most {@link ARRAY_PARAM_VALUES_MAX} roots, so the roots fit one URL
+ * field, and at most {@link ARRAY_PARAM_VALUES_MAX} x
+ * {@link ARRAY_PARAMS_MAX} sessions, so the sessions fit the split
+ * {@link sessionListFilter} makes. A run with more sessions than that is read
+ * alone, and its batch names its chains by its root instead. Every row
+ * belongs to one run, and a run sits in one batch, so the batches' answers
+ * together are the one read's. A group that fits one query is one batch.
+ */
+function groupFrameBatches(
+  families: ReadonlyMap<string, ReadonlySet<string>>,
+): GroupFrameBatch[] {
+  const sessionsMax = ARRAY_PARAM_VALUES_MAX * ARRAY_PARAMS_MAX;
+  const out: GroupFrameBatch[] = [];
+  let batch: GroupFrameBatch = { roots: [], sessions: [] };
+  let named = new Set<string>();
+  for (const [root, sessions] of families) {
+    const added = [...sessions].filter((s) => !named.has(s));
+    if (
+      batch.roots.length > 0 &&
+      (batch.roots.length >= ARRAY_PARAM_VALUES_MAX ||
+        batch.sessions.length + added.length > sessionsMax)
+    ) {
+      out.push(batch);
+      batch = { roots: [], sessions: [] };
+      named = new Set();
+    }
+    batch.roots.push(root);
+    for (const s of sessions)
+      if (!named.has(s)) {
+        named.add(s);
+        batch.sessions.push(s);
+      }
+  }
+  if (batch.roots.length > 0) out.push(batch);
+  return out;
+}
+
+/**
  * A transcript-split join for a group read, on the request id (`t`) or the
  * message id (`m`). It is the run read's join over every run of the group,
  * keyed on the call id and the run's root session, so one run's call ids
  * never meet another run's. The root key holds a subagent's sightings
- * together, as the run read's root predicate does (ADR-168).
+ * together, as the run read's root predicate does (ADR-168). `sessionsSql`
+ * names the batch's sessions.
  */
 function groupTranscriptJoin(
   key: "request_id" | "message_id",
   alias: string,
+  sessionsSql: string,
 ): string {
   return `LEFT JOIN (
         SELECT
@@ -883,7 +940,7 @@ function groupTranscriptJoin(
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND ${GROUP_ROOTS}
-          AND ${RUN_SESSIONS}
+          AND ${sessionsSql}
           AND kind = 'llm_call'
           AND ${TRANSCRIPT_SPLIT_ROW}
         GROUP BY call_key, root_session_uuid
@@ -898,6 +955,7 @@ function groupTranscriptJoin(
 function groupProxySightingJoin(
   key: "request_id" | "message_id",
   alias: string,
+  sessionsSql: string,
 ): string {
   return `LEFT JOIN (
         SELECT
@@ -913,7 +971,7 @@ function groupProxySightingJoin(
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND ${GROUP_ROOTS}
-          AND ${RUN_SESSIONS}
+          AND ${sessionsSql}
           AND kind = 'llm_call'
           AND ${PROXY_SIGHTING}
         GROUP BY call_key, root_session_uuid
@@ -944,6 +1002,11 @@ function groupProxySightingJoin(
  * Every root the caller names has an entry, empty when the run has no frame.
  * A row that names no model is left out unless `keepModelless` keeps it, as
  * in the run read. Throws on a degraded store.
+ *
+ * A group too large for one request URL is read in batches of runs
+ * ({@link groupFrameBatches}), one query each (#5311). A group of 2,500 runs
+ * named every root and every session in two array parameters, far past
+ * ClickHouse's 128 KiB field limit.
  */
 export async function readGroupModelCallFrames(args: {
   orgId: string;
@@ -967,11 +1030,39 @@ export async function readGroupModelCallFrames(args: {
     });
   }
   if (sessionsByRoot.size === 0) return out;
-  const sessionUuids = new Set<string>();
-  for (const run of args.runs)
-    for (const session of runSessions(run)) sessionUuids.add(session);
+  // Each root once, with every session the runs that name it list.
+  const families = new Map<string, Set<string>>();
+  for (const run of args.runs) {
+    const family = families.get(run.rootSessionUuid) ?? new Set<string>();
+    for (const session of runSessions(run)) family.add(session);
+    families.set(run.rootSessionUuid, family);
+  }
 
   const ch = clickhouse();
+  for (const batch of groupFrameBatches(families)) {
+    const rows = await readGroupFrameBatch(ch, args, batch);
+    for (const r of rows) {
+      const run = sessionsByRoot.get(r.run_root.toLowerCase());
+      if (run === undefined || !run.sessions.has(r.session_uuid.toLowerCase()))
+        continue;
+      out.get(run.root)!.push(toWrappedFrameRow(r));
+    }
+  }
+  return out;
+}
+
+/** One batch of a group read: the rows of its runs, each with its root. */
+async function readGroupFrameBatch(
+  ch: ReturnType<typeof clickhouse>,
+  args: { orgId: string; workspaceId: string; keepModelless?: boolean },
+  batch: GroupFrameBatch,
+): Promise<(WrappedFrameDbRow & { run_root: string })[]> {
+  // The rows a chain outside its own run's list carries are dropped above, so
+  // naming the batch's chains by their roots returns the same frames.
+  const sessions = sessionListFilter(batch.sessions) ?? {
+    sql: GROUP_FAMILY_SESSIONS,
+    params: {},
+  };
   const result = await ch.query({
     query: `
       SELECT
@@ -1012,39 +1103,30 @@ export async function readGroupModelCallFrames(args: {
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND ${GROUP_ROOTS}
-          AND ${RUN_SESSIONS}
+          AND ${sessions.sql}
           AND kind = 'llm_call'
           AND source IN {sources:Array(String)}
           AND ${NOT_A_DUPLICATE}
           ${args.keepModelless === true ? "" : "AND model != ''"}
       ) AS c
-      ${groupTranscriptJoin("request_id", "t")}
-      ${groupTranscriptJoin("message_id", "m")}
-      ${groupProxySightingJoin("request_id", "r")}
-      ${groupProxySightingJoin("message_id", "q")}
+      ${groupTranscriptJoin("request_id", "t", sessions.sql)}
+      ${groupTranscriptJoin("message_id", "m", sessions.sql)}
+      ${groupProxySightingJoin("request_id", "r", sessions.sql)}
+      ${groupProxySightingJoin("message_id", "q", sessions.sql)}
       ORDER BY c.root_session_uuid, c.ts, c.seq
     `,
     query_params: {
       orgId: args.orgId,
       workspaceId: args.workspaceId,
-      rootSessionUuids: [...out.keys()],
-      sessionUuids: [...sessionUuids],
+      rootSessionUuids: batch.roots,
+      ...sessions.params,
       sources: TACHO_TOKEN_SOURCES,
       duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
     },
     format: "JSONEachRow",
     clickhouse_settings: COST_FRAME_QUERY_SETTINGS,
   });
-  const rows = (await result.json()) as (WrappedFrameDbRow & {
-    run_root: string;
-  })[];
-  for (const r of rows) {
-    const run = sessionsByRoot.get(r.run_root.toLowerCase());
-    if (run === undefined || !run.sessions.has(r.session_uuid.toLowerCase()))
-      continue;
-    out.get(run.root)!.push(toWrappedFrameRow(r));
-  }
-  return out;
+  return (await result.json()) as (WrappedFrameDbRow & { run_root: string })[];
 }
 
 /**

@@ -329,6 +329,27 @@ describe.skipIf(!process.env["CLICKHOUSE_URL"])(
       // Run B's call shares the request id and still has no thinking.
       expect(aloneB.map((f) => [f.reasoning, f.output])).toEqual([[0, 200]]);
       expect(grouped.has(decoy)).toBe(false);
+
+      // #5311: the same group with run A's chains past one URL field, and run
+      // B's past the URL budget, reads the same frames. Run A's batch splits
+      // its sessions across parameters. Run B is read alone, by its root.
+      const idle = (n: number) => Array.from({ length: n }, () => randomUUID());
+      const large = await readGroupModelCallFrames({
+        orgId,
+        workspaceId,
+        runs: [
+          { ...runA, sessionUuids: [...runA.sessionUuids, ...idle(2_998)] },
+          {
+            ...runB,
+            sessionUuids: [
+              ...runB.sessionUuids,
+              ...idle(RUN_SESSIONS_PER_PARAM * RUN_SESSIONS_PARAMS_MAX),
+            ],
+          },
+        ],
+      });
+      expect(large.get(rootA)).toEqual(aloneA);
+      expect(large.get(rootB)).toEqual(aloneB);
     });
   },
 );

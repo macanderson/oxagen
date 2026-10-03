@@ -1209,6 +1209,98 @@ describe("readGroupModelCallFrames", () => {
       readGroupModelCallFrames({ orgId: ORG, workspaceId: WS, runs }),
     ).rejects.toThrow("clickhouse unavailable");
   });
+
+  // #5311: one query named every root and every session of the group in two
+  // array parameters, and a recurring job of 2,500 runs passes ClickHouse's
+  // 128 KiB URL field limit by far.
+  describe("a group too large for one request URL", () => {
+    /** `n` distinct uuids that start with `prefix` (8 hex digits). */
+    const ids = (prefix: string, n: number) =>
+      Array.from(
+        { length: n },
+        (_, i) => `${prefix}-0000-4000-8000-${i.toString(16).padStart(12, "0")}`,
+      );
+    const params = () => queryMock.mock.calls.map(([call]) => call.query_params);
+
+    it("reads more runs than one parameter's roots in batches and joins the answers", async () => {
+      const roots = ids("000000a1", 1_001);
+      answer([stored(roots[0]!, roots[0]!, 1)]);
+      answer([stored(roots[1_000]!, roots[1_000]!, 2)]);
+      const frames = await readGroupModelCallFrames({
+        orgId: ORG,
+        workspaceId: WS,
+        runs: roots.map((root) => ({ rootSessionUuid: root, sessionUuids: [root] })),
+      });
+      expect(params().map((p) => (p["rootSessionUuids"] as string[]).length)).toEqual([
+        1_000, 1,
+      ]);
+      expect(params()[1]).toMatchObject({
+        rootSessionUuids: [roots[1_000]],
+        sessionUuids: [roots[1_000]],
+      });
+      expect(frames.size).toBe(1_001);
+      expect(frames.get(roots[0]!)?.map((f) => f.seq)).toEqual([1]);
+      expect(frames.get(roots[1_000]!)?.map((f) => f.seq)).toEqual([2]);
+    });
+
+    it("splits one batch's sessions across parameters in every subquery", async () => {
+      const chains = ids("000000a2", 1_499);
+      answer([]);
+      await readGroupModelCallFrames({
+        orgId: ORG,
+        workspaceId: WS,
+        runs: [
+          { rootSessionUuid: RUN, sessionUuids: [RUN, ...chains] },
+          { rootSessionUuid: RUN_B, sessionUuids: [RUN_B] },
+        ],
+      });
+      expect(queryMock).toHaveBeenCalledTimes(1);
+      const { query, query_params } = lastQuery();
+      expect(query.match(/session_uuid IN \{sessionUuids1:Array\(UUID\)\}/g)).toHaveLength(5);
+      expect(query_params["sessionUuids"]).toHaveLength(1_000);
+      expect(query_params["sessionUuids1"]).toEqual([...chains.slice(999), RUN_B]);
+    });
+
+    it("starts a batch when the next run's sessions would pass the URL budget", async () => {
+      const runsOf = ["000000b1", "000000b2", "000000b3"].map((prefix) => {
+        const [root, ...rest] = ids(prefix, 4_000);
+        return { rootSessionUuid: root!, sessionUuids: [root!, ...rest] };
+      });
+      answer([]);
+      answer([]);
+      await readGroupModelCallFrames({ orgId: ORG, workspaceId: WS, runs: runsOf });
+      expect(params().map((p) => p["rootSessionUuids"])).toEqual([
+        [runsOf[0]!.rootSessionUuid, runsOf[1]!.rootSessionUuid],
+        [runsOf[2]!.rootSessionUuid],
+      ]);
+    });
+
+    it("reads a run with more sessions than the URL holds alone, by its root", async () => {
+      const [huge, ...chains] = ids("000000c1", 10_001);
+      answer([]);
+      answer([stored(huge!, chains[9_999]!, 7)]);
+      answer([]);
+      const frames = await readGroupModelCallFrames({
+        orgId: ORG,
+        workspaceId: WS,
+        runs: [
+          { rootSessionUuid: RUN, sessionUuids: [RUN] },
+          { rootSessionUuid: huge!, sessionUuids: [huge!, ...chains] },
+          { rootSessionUuid: RUN_B, sessionUuids: [RUN_B] },
+        ],
+      });
+      expect(queryMock).toHaveBeenCalledTimes(3);
+      const [, alone] = queryMock.mock.calls.map(([call]) => call);
+      expect(alone!.query.match(/SELECT session_uuid FROM tacho_events/g)).toHaveLength(5);
+      expect(alone!.query).not.toContain("{sessionUuids");
+      expect(alone!.query_params).toMatchObject({ rootSessionUuids: [huge] });
+      expect(
+        Object.keys(alone!.query_params).filter((k) => k.startsWith("sessionUuids")),
+      ).toEqual([]);
+      // The run's own chain list still picks its rows.
+      expect(frames.get(huge!)?.map((f) => f.seq)).toEqual([7]);
+    });
+  });
 });
 
 describe("readTachoToolCallFrames", () => {
