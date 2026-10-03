@@ -96,17 +96,33 @@
         "title": "Create a workspace",
         "confirm": "Create",
         "pending": "Creating",
+        "fields": {
+          "label": "Label",
+          "name": "Name",
+          "costCenterFromName": "Use name as the workspace's cost center code",
+          "costCenter": "Workspace cost center code",
+          "costCenterInvalid": "Use up to 64 letters, digits, dots, underscores or hyphens. Start with a letter or a digit.",
+          "slugProblems": {
+            "short": "Use at least 2 characters.",
+            "shape": "Use lowercase letters, digits and single hyphens. Start and end with a letter or a digit.",
+            "reserved": "An organization page already uses that name. Pick another."
+          }
+        },
+        "help": {
+          "open": "Help for {field}",
+          "label": "The name people see for this workspace everywhere in Oxagen. Spaces and capital letters are fine.",
+          "name": "Oxagen uses the name as the workspace's slug, the part of its web address after the organization. It fills in from the label as lowercase letters, digits and hyphens.",
+          "costCenter": "Spend in this workspace is charged to this code. Oxagen adds the code to the organization's cost centers if it is not there yet."
+        },
         "done": {
           "close": "Done",
           "workspace": "Workspace",
-          "steeringRepo": "Steering repo",
-          "openRepositories": "Open repositories",
-          "status": {
-            "provisioning": "Oxagen is creating the private repository now.",
-            "ready": "The private repository is created and bound to this workspace.",
-            "failed": "A step stopped before the repository was ready.",
-            "blocked": "An organization owner has to act first, such as authorizing Oxagen again."
-          }
+          "costCenter": "Cost center",
+          "costCenterFailed": "Not set to {code}. Oxagen answered {reason}. Set it on the Organization page's Cost centers tab.",
+          "reading": "Reading the steering repo setup…",
+          "readFailed": "Oxagen could not read the setup ({code}). It tries again in a few seconds.",
+          "ready": "Your workspace is ready. Next, pick the repositories it steers.",
+          "pickRepositories": "Pick repositories"
         }
       },
       "editWorkspace": {

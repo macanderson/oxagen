@@ -273,7 +273,7 @@ describe("get_repository_tree", () => {
     ).rejects.toThrow("502");
   });
 
-  it("names the bound head's connection, so a steering repository reads through its own app", async () => {
+  it("names the bound head's connection and repository, and asks for the reads the tree needs only", async () => {
     const client = vi.fn(async () => fakeGithub());
     const h = createRepositoryTreeGetHandler({
       github: { client },
@@ -285,6 +285,16 @@ describe("get_repository_tree", () => {
     expect(client).toHaveBeenCalledWith(
       { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
       "steering-conn",
+      {
+        providerRepositoryId: "42",
+        name: "widgets",
+        fullName: "acme/widgets",
+        permissions: {
+          metadata: "read",
+          contents: "read",
+          pull_requests: "read",
+        },
+      },
     );
   });
 

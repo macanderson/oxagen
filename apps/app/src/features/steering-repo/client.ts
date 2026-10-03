@@ -7,10 +7,14 @@
 //
 // The create-workspace forms on onboarding and on the Organization page draw
 // the steering repo's Organization and Repository name fields from here
-// (#5196).
+// (#5196). The Organization page's Create a workspace dialog also draws the
+// new workspace's provisioning steps from here while the job runs.
 export { SteeringRepoDestinationFields } from "./destination-fields";
 export {
   defaultRepoName,
+  defaultRepoNameForSlug,
   repoNameAccepted,
   steeringRepoDraftOf,
 } from "./destination";
+export { SteeringRepoProvisioning } from "./provisioning";
+export type { SteeringRepoView } from "./types";

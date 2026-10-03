@@ -5,35 +5,49 @@
 // makes, and this form, a second one was made through the API, MCP or CLI.
 // Each write reloads the page it changed.
 //
-// The create form asks for a name, and for where the workspace's private
-// steering repo goes and what it is called (#5196). `create_workspace` makes
-// that repository itself (lane S1, #4450), so the person picks no code
-// repository, and the slug is made from the name (`slugFromName`). The
-// Organization select loads when the dialog opens, and the Repository name
-// follows the workspace name as `oxagen-<slug>` until the person edits it.
-// The dialog stays open once the write answers, to say where the steering repo
-// stands and to link to the Repositories page, which shows each provisioning
-// step and a retry. The edit form shows the main repository and branch
-// `list_repositories` reports, read-only, because which repository is main does
-// not change from here (spec §10.1 makes that an org owner's decision).
+// The create form asks for a Label, the name people see, and a Name, the
+// workspace's slug, which fills in from the Label until the person types
+// their own. It asks for the cost-center code the workspace is charged to,
+// which is the Name unless the person unticks that and types another, and for
+// where the workspace's private steering repo goes and what it is called
+// (#5196). `create_workspace` makes that repository itself (lane S1, #4450),
+// so the person picks no code repository. The Organization select loads when
+// the dialog opens, and the Repository name follows the Name as
+// `oxagen-<slug>` until the person edits it.
+//
+// Once the write answers, the dialog shows the steering repo's provisioning
+// steps in place of the form and reads them every few seconds. When the repo
+// is ready it says so, then sends the person to the new workspace's
+// Repositories page with "Add Oxagen to a repository" open, since linking a
+// repository waits for the steering repo (`main_repo_unbound`). Closing the
+// dialog before then opens the new workspace's Fleet. The edit form shows the
+// main repository and branch `list_repositories` reports, read-only, because
+// which repository is main does not change from here (spec §10.1 makes that an
+// org owner's decision).
 import { GOVERNANCE_MODES } from "@oxagen/oxagen/contracts/context.steering.shared";
+import { costCenterLabelSchema } from "@oxagen/oxagen/contracts/cost_center.shared";
+import { CheckIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   Workspace,
   WorkspaceFacts,
   WorkspaceSpendSettings,
 } from "@/data/contracts/org";
 import {
-  defaultRepoName,
+  defaultRepoNameForSlug,
   SteeringRepoDestinationFields,
+  SteeringRepoProvisioning,
+  type SteeringRepoView,
   steeringRepoDraftOf,
 } from "@/features/steering-repo/client";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { routes } from "@/shared/safe-path";
+import { Button } from "@/ui/button";
 import { inputBase } from "@/ui/control-styles";
 import { Field } from "@/ui/field";
-import { PullRequestLink, SafeLink, useNavigate } from "@/ui/navigation";
+import { HelpTip } from "@/ui/help-tip";
+import { PullRequestLink, useNavigate } from "@/ui/navigation";
 import {
   archiveWorkspace,
   createWorkspace,
@@ -41,6 +55,7 @@ import {
   type GovernanceChanged,
   type NewWorkspaceDraft,
   readSteeringRepoDestinations,
+  readWorkspaceSteeringRepo,
   type WorkspaceCreated,
 } from "./actions";
 import { textValue, WriteDialog } from "./dialog";
@@ -51,39 +66,187 @@ import {
   type BudgetLane,
   budgetPatchOf,
 } from "./workspace-budget-form";
+import { slugDraft, slugFromName, slugProblem } from "./workspace-slug";
 
-/** The create form's draft: the name, and the steering repo's place and name. */
+/** The checkbox that charges the workspace to a cost center named for it. */
+const COST_CENTER_FROM_NAME = "costCenterFromName";
+
+/**
+ * The create form's draft. The Label is the contract's `name` and the Name is
+ * its `slug`. A Name left empty sends no slug, so the action makes it from the
+ * Label. The cost-center code is the slug while the box is ticked.
+ */
 function newDraftOf(form: FormData): NewWorkspaceDraft {
   const steeringRepo = steeringRepoDraftOf(form);
+  const name = textValue(form, "name");
+  const slug = textValue(form, "slug").trim();
+  const costCenter =
+    textValue(form, COST_CENTER_FROM_NAME) === "yes"
+      ? slug === ""
+        ? slugFromName(name)
+        : slug
+      : textValue(form, "costCenter").trim();
   return {
-    name: textValue(form, "name"),
+    name,
+    ...(slug === "" ? {} : { slug }),
+    ...(costCenter === "" ? {} : { costCenter }),
     ...(steeringRepo === undefined ? {} : { steeringRepo }),
   };
 }
 
 /**
- * The create form's fields. The name is held here so the steering repo's name
- * can follow it as the person types.
+ * Marks an input invalid with the sentence shown under it, so the browser
+ * stops the submit and points at the field, as the Repository name does.
+ */
+function useValidity(problem: string | undefined) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    ref.current?.setCustomValidity(problem ?? "");
+  }, [problem]);
+  return ref;
+}
+
+/** A field's "?" and its note. */
+function FieldHelp({
+  field,
+  text,
+  id,
+}: {
+  field: string;
+  text: string;
+  id: string;
+}) {
+  const t = useTranslations("organization.actions.createWorkspace.help");
+  return (
+    <HelpTip label={t("open", { field })} testId={`${id}-help`}>
+      {text}
+    </HelpTip>
+  );
+}
+
+/**
+ * The create form's fields. The Label and the Name are held here so the Name
+ * can follow the Label, and the steering repo's name can follow the Name, as
+ * the person types.
  */
 function NewWorkspaceFields({ org }: { org: string }) {
-  const tf = useTranslations("organization.actions.fields");
-  const [name, setName] = useState("");
+  const t = useTranslations("organization.actions.createWorkspace.fields");
+  const th = useTranslations("organization.actions.createWorkspace.help");
+  const [label, setLabel] = useState("");
+  // Null while the Name follows the Label. Once the person types in it, it
+  // keeps what they typed, and an emptied Name shows the Label's slug as its
+  // placeholder and sends none.
+  const [typed, setTyped] = useState<string | null>(null);
+  const [checked, setChecked] = useState(false);
+  const [fromName, setFromName] = useState(true);
+  const [code, setCode] = useState("");
+  const derived = slugFromName(label);
+  const slug = typed === null || typed === "" ? derived : typed;
+  const problem = slug === "" ? null : slugProblem(slug);
+  const slugError =
+    checked && problem !== null ? t(`slugProblems.${problem}`) : undefined;
+  const codeError =
+    !fromName &&
+    code.trim() !== "" &&
+    !costCenterLabelSchema.safeParse(code.trim()).success
+      ? t("costCenterInvalid")
+      : undefined;
+  const slugRef = useValidity(
+    problem === null ? undefined : t(`slugProblems.${problem}`),
+  );
+  const codeRef = useValidity(codeError);
   return (
     <>
       <Field
-        id="create-workspace-name"
+        id="create-workspace-label"
         name="name"
-        label={tf("name")}
+        label={t("label")}
+        help={
+          <FieldHelp
+            field={t("label")}
+            text={th("label")}
+            id="create-workspace-label"
+          />
+        }
         required
-        value={name}
+        autoComplete="off"
+        value={label}
         onChange={(event) => {
-          setName(event.target.value);
+          setLabel(event.target.value);
+        }}
+        onBlur={() => {
+          setChecked(true);
         }}
       />
+      <Field
+        ref={slugRef}
+        id="create-workspace-slug"
+        name="slug"
+        label={t("name")}
+        help={
+          <FieldHelp
+            field={t("name")}
+            text={th("name")}
+            id="create-workspace-slug"
+          />
+        }
+        error={slugError}
+        autoComplete="off"
+        spellCheck={false}
+        className="font-mono"
+        value={typed ?? derived}
+        placeholder={derived}
+        onChange={(event) => {
+          setTyped(slugDraft(event.target.value));
+        }}
+        onBlur={() => {
+          setChecked(true);
+        }}
+      />
+      <label
+        data-touch-target=""
+        className="flex min-h-11 items-start gap-2.5 text-base"
+      >
+        <input
+          type="checkbox"
+          className="mt-1"
+          name={COST_CENTER_FROM_NAME}
+          value="yes"
+          checked={fromName}
+          data-testid="create-workspace-cost-center-from-name"
+          onChange={(event) => {
+            setFromName(event.target.checked);
+          }}
+        />
+        <span>{t("costCenterFromName")}</span>
+      </label>
+      {fromName ? null : (
+        <Field
+          ref={codeRef}
+          id="create-workspace-cost-center"
+          name="costCenter"
+          label={t("costCenter")}
+          help={
+            <FieldHelp
+              field={t("costCenter")}
+              text={th("costCenter")}
+              id="create-workspace-cost-center"
+            />
+          }
+          error={codeError}
+          autoComplete="off"
+          spellCheck={false}
+          className="font-mono"
+          value={code}
+          onChange={(event) => {
+            setCode(event.target.value);
+          }}
+        />
+      )}
       <SteeringRepoDestinationFields
         org={org}
         load={readSteeringRepoDestinations}
-        defaultName={defaultRepoName(name)}
+        defaultName={defaultRepoNameForSlug(problem === null ? slug : "")}
         idPrefix="create-workspace"
       />
     </>
@@ -479,40 +642,165 @@ function GovernanceResult({
   );
 }
 
+/** How often the panel reads the steering repo while the job runs. */
+const SETUP_POLL_MS = 3_000;
+/** How long the panel shows that setup finished before it moves on. */
+const FORWARD_AFTER_MS = 1_500;
+
+/**
+ * The new workspace's steering repo, read every few seconds until it is ready
+ * (`get_steering_repo` in the new workspace, where the creator is the Owner).
+ * A read that fails keeps the last view and tries again. A retry inside the
+ * steps takes effect on the next read.
+ */
+function useSteeringRepoWhileProvisioning(org: string, ws: string) {
+  const [view, setView] = useState<SteeringRepoView | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const ready = view?.status === "ready";
+  useEffect(() => {
+    if (ready) return;
+    let live = true;
+    let timer: number | undefined;
+    async function read() {
+      try {
+        const answer = await readWorkspaceSteeringRepo(org, ws);
+        if (!live) return;
+        if (answer.ok) {
+          setView(answer.value);
+          setFailed(null);
+        } else {
+          setFailed("code" in answer ? answer.code : answer.reason);
+        }
+      } catch {
+        if (live) setFailed("unanswered");
+      }
+      if (live) timer = window.setTimeout(() => void read(), SETUP_POLL_MS);
+    }
+    void read();
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [org, ws, ready]);
+  return { view, failed };
+}
+
+/** The cost center the workspace was charged to, or why it was not. */
+function CostCenterResult({
+  charged,
+}: {
+  charged: NonNullable<WorkspaceCreated["costCenter"]>;
+}) {
+  const t = useTranslations("organization.actions.createWorkspace.done");
+  return charged.ok ? (
+    <dd className="font-mono" data-testid="create-workspace-cost-center">
+      {charged.code}
+    </dd>
+  ) : (
+    <dd data-testid="create-workspace-cost-center" className="text-error-ink">
+      {t("costCenterFailed", { code: charged.code, reason: charged.reason })}
+    </dd>
+  );
+}
+
 /**
  * What the create dialog shows once `create_workspace` answered: the new
- * workspace, and where its steering repo stood when the call returned. A
- * durable job makes the repository, so the usual answer is `provisioning`. The
- * Repositories page shows each step, and a retry when one stopped.
+ * workspace, its cost center, and its steering repo's provisioning steps as
+ * they happen. A durable job makes the repository, so the steps start on
+ * `provisioning`. A step that stops shows its way on here, as it does on the
+ * Repositories page. Once the repository is ready the panel says so, then
+ * sends the person to pick the repositories the workspace steers.
  */
-function WorkspaceCreatedPanel({
+function WorkspaceSetupPanel({
   org,
   created,
+  leave,
 }: {
   org: string;
   created: WorkspaceCreated;
+  leave: (then: () => void) => void;
 }) {
   const t = useTranslations("organization.actions.createWorkspace.done");
+  const tSetup = useTranslations("repositories.steeringRepo.setup");
+  const navigate = useNavigate();
+  const { view, failed } = useSteeringRepoWhileProvisioning(org, created.slug);
+  const ready = view?.status === "ready";
+  const forward = () => {
+    leave(() => {
+      navigate.replace(routes.addRepository(org, created.slug));
+    });
+  };
+  // The dialog hands a new `leave` each time it renders. The countdown calls
+  // the latest forward, so a render does not restart it.
+  const forwardRef = useRef(forward);
+  useEffect(() => {
+    forwardRef.current = forward;
+  });
+  useEffect(() => {
+    if (!ready) return;
+    const id = window.setTimeout(() => {
+      forwardRef.current();
+    }, FORWARD_AFTER_MS);
+    return () => {
+      window.clearTimeout(id);
+    };
+  }, [ready]);
   const term = "text-muted-foreground";
   return (
-    <div className="flex flex-col gap-3 text-base">
+    <div className="flex flex-col gap-4 text-base">
       <dl className="grid grid-cols-dl gap-x-4 gap-y-1.5">
         <dt className={term}>{t("workspace")}</dt>
         <dd className="font-medium" data-testid="create-workspace-done-name">
-          {created.name}
+          {created.name}{" "}
+          <span className="font-mono text-sm text-muted-foreground">
+            {created.slug}
+          </span>
         </dd>
-        <dt className={term}>{t("steeringRepo")}</dt>
-        <dd data-testid="create-workspace-steering-status">
-          {t(`status.${created.steeringRepo}`)}
-        </dd>
+        {created.costCenter === null ? null : (
+          <>
+            <dt className={term}>{t("costCenter")}</dt>
+            <CostCenterResult charged={created.costCenter} />
+          </>
+        )}
       </dl>
-      <SafeLink
-        to={routes.repositories(org, created.slug)}
-        data-testid="create-workspace-open-repositories"
-        className="font-medium underline"
-      >
-        {t("openRepositories")}
-      </SafeLink>
+      <p className="text-sm text-muted-foreground">{tSetup("intro.create")}</p>
+      {view === null ? (
+        <p
+          role="status"
+          data-testid="create-workspace-steering-reading"
+          className="text-sm text-muted-foreground"
+        >
+          {failed === null ? t("reading") : t("readFailed", { code: failed })}
+        </p>
+      ) : (
+        <SteeringRepoProvisioning
+          org={org}
+          ws={created.slug}
+          view={view}
+          canAct
+          canChangeConnection
+          returnTo={routes.steeringSetup(org, created.slug)}
+        />
+      )}
+      {ready ? (
+        <div
+          role="status"
+          data-testid="create-workspace-ready"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-success/45 bg-success/10 px-3.5 py-2.75 text-sm text-foreground"
+        >
+          <CheckIcon aria-hidden className="size-4 flex-none text-success" />
+          <p className="min-w-0 flex-1">{t("ready")}</p>
+          <Button
+            type="button"
+            variant="primary"
+            data-testid="create-workspace-pick-repositories"
+            data-touch-target=""
+            onClick={forward}
+          >
+            {t("pickRepositories")}
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -539,16 +827,18 @@ export function CreateWorkspace({
       }}
       testId="create-workspace"
       primary={primary}
+      wide
       submit={(form) => createWorkspace(org, newDraftOf(form))}
       done={{
         close: t("createWorkspace.done.close"),
-        render: (created) => (
-          <WorkspaceCreatedPanel org={org} created={created} />
+        render: (created, leave) => (
+          <WorkspaceSetupPanel org={org} created={created} leave={leave} />
         ),
       }}
       onDone={(created) => {
         // WL-62: the workspace that was just made is where the operator wants to
-        // be, so closing the panel opens it by the slug the write returned.
+        // be, so closing the panel before setup finishes opens it by the slug
+        // the write returned. A finished setup moves on by itself instead.
         navigate.replace(routes.fleet(org, created.slug));
       }}
     >

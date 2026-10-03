@@ -7,7 +7,9 @@
 // needs the same two things first: the head in THIS workspace whose current
 // binding carries that id, and a client minted from the installation attached
 // to the workspace's live GitHub connection. The caller never names an
-// installation, for the reason repository.github-connection.ts gives.
+// installation, for the reason repository.github-connection.ts gives. The
+// token reaches only the bound repository, with only the permissions the
+// caller names (#4753).
 //
 // A steering repository the provisioner created is the one exception. Its head
 // hangs from a `github_steering` connection, and only the Oxagen GitHub App
@@ -210,18 +212,69 @@ export async function readSteeringInstallationId(
   return installationId;
 }
 
+/**
+ * The one repository a call reads, and the permissions it needs (#4753). The
+ * workspace's installation token is minted for that repository alone, so a
+ * call that reads one repository holds no token for the others the
+ * installation covers.
+ */
+export interface RepositoryAccess {
+  /** The repository's GitHub id, as the binding stores it. */
+  providerRepositoryId: string;
+  /** The repository's name without its owner. */
+  name: string;
+  /** `owner/name`, for the refusal. */
+  fullName: string;
+  /** The permissions the call needs, such as `{ contents: "read" }`. */
+  permissions: Record<string, string>;
+}
+
+/**
+ * True when GitHub refused to mint a narrowed installation token. GitHub
+ * answers 422 when the installation does not include the repository named,
+ * or does not grant a permission asked for. A full-installation token met
+ * the same case later, as the repository read's 404.
+ */
+export function isInstallationTokenRefused(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    err.message.startsWith("GitHub App token mint failed (422)")
+  );
+}
+
+/**
+ * The narrowing for one repository: its id, which survives a rename, or its
+ * name when the stored id does not read as one.
+ */
+function repositoryNarrowing(
+  access: RepositoryAccess,
+): { repositoryIds: number[] } | { repositories: string[] } {
+  const id = Number(access.providerRepositoryId);
+  return /^\d+$/.test(access.providerRepositoryId) &&
+    Number.isSafeInteger(id) &&
+    id > 0
+    ? { repositoryIds: [id] }
+    : { repositories: [access.name] };
+}
+
 /** Where a handler gets its GitHub client; the tests pass a fake. */
 export interface WorkspaceGithub {
   /**
    * A client for the workspace's installation, or null when none is
-   * attached. A caller that names a head's `connectionId` gets the Oxagen
-   * Steering installation's client when that connection is `github_steering`.
+   * attached. The token reaches only the repository `access` names, with
+   * only its permissions. A caller that names a head's `connectionId` gets
+   * the Oxagen Steering installation's client when that connection is
+   * `github_steering`.
    */
-  client(scope: Scope, connectionId?: string): Promise<GitHubClient | null>;
+  client(
+    scope: Scope,
+    connectionId: string | undefined,
+    access: RepositoryAccess,
+  ): Promise<GitHubClient | null>;
 }
 
 export const workspaceGithub: WorkspaceGithub = {
-  async client(scope, connectionId) {
+  async client(scope, connectionId, access) {
     // The steering connection comes first. A workspace whose only repository
     // is its provisioned steering repository has no installation of its own,
     // and the workspace read below would answer null for it.
@@ -241,25 +294,45 @@ export const workspaceGithub: WorkspaceGithub = {
         "GitHub App is not configured: GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY unset",
       );
     }
-    const { token } = await getInstallationToken({
-      appId,
-      privateKey,
-      installationId: installation.installationId,
-    });
+    let token: string;
+    try {
+      ({ token } = await getInstallationToken({
+        appId,
+        privateKey,
+        installationId: installation.installationId,
+        ...repositoryNarrowing(access),
+        permissions: access.permissions,
+      }));
+    } catch (err) {
+      if (isInstallationTokenRefused(err))
+        throw repositoryNotInstalled(access.fullName);
+      throw err;
+    }
     return createGitHubClient({ token });
   },
 };
 
 /**
- * The client, or `conflict: github_not_connected`. Pass the bound head's
- * `connectionId` so a steering repository reads through its own app.
+ * The client for `bound`, or `conflict: github_not_connected`. The bound
+ * head's `connectionId` makes a steering repository read through its own
+ * app. Any other repository reads through a token for it alone, holding
+ * only `permissions`.
  */
 export async function requireWorkspaceGithub(
   github: WorkspaceGithub,
   scope: Scope,
-  connectionId?: string,
+  bound: Pick<
+    BoundRepository,
+    "connectionId" | "providerRepositoryId" | "name" | "fullName"
+  >,
+  permissions: Record<string, string>,
 ): Promise<GitHubClient> {
-  const client = await github.client(scope, connectionId);
+  const client = await github.client(scope, bound.connectionId, {
+    providerRepositoryId: bound.providerRepositoryId,
+    name: bound.name,
+    fullName: bound.fullName,
+    permissions,
+  });
   if (!client) {
     throw new HandlerError({
       code: "conflict",

@@ -96,10 +96,16 @@ const SHAPE: Record<AvatarSubject, AvatarShape> = {
   organization: "agent",
 };
 
+// The mockup's colours (`.seg`, `.acc-ic`, `.acc-tone`): every control sits on
+// the panel with a hairline border, the hover is a part-wash, and the picked one
+// takes the row wash. A picked tile also takes the gold border. Only the
+// preview and the text inputs sit on the ink.
 const segment =
-  "inline-flex max-w-full overflow-hidden rounded-lg border border-input-border bg-input-bg";
+  "inline-flex max-w-full overflow-hidden rounded-lg border border-border bg-card";
 const segmentButton =
-  "rounded-none border-0 border-r border-input-border last:border-r-0 aria-pressed:bg-secondary aria-pressed:font-semibold aria-pressed:text-foreground focus-visible:-outline-offset-2";
+  "rounded-none border-0 border-r border-border bg-card last:border-r-0 hover:bg-hl/60 hover:text-foreground aria-pressed:bg-hl aria-pressed:font-semibold aria-pressed:text-foreground focus-visible:-outline-offset-2";
+const pickTile =
+  "border border-border bg-card text-muted-foreground hover:bg-hl/60 hover:text-foreground aria-pressed:border-gold aria-pressed:bg-hl aria-pressed:text-foreground focus-visible:-outline-offset-2";
 
 const FONT_FACE: Record<AvatarFont, string> = {
   sans: "font-sans",
@@ -401,7 +407,7 @@ function AvatarEditor({
                       aria-label={icon}
                       title={icon}
                       data-testid={`avatar-icon-${icon}`}
-                      className="grid place-items-center rounded-lg px-0 aria-pressed:border-foreground aria-pressed:bg-secondary aria-pressed:text-foreground focus-visible:-outline-offset-2"
+                      className={`grid place-items-center rounded-lg px-0 ${pickTile}`}
                       onClick={() => {
                         edit({ icon });
                       }}
@@ -497,12 +503,10 @@ function AvatarEditor({
                     key={tone}
                     type="button"
                     variant="ghost"
-                    size="icon-lg"
                     data-testid={`avatar-tone-${tone}`}
                     aria-pressed={draft.tone === tone}
                     aria-label={t(`tones.${tone}`)}
-                    title={t(`tones.${tone}`)}
-                    className="rounded-xl aria-pressed:border-foreground focus-visible:outline-offset-1"
+                    className={`h-auto min-w-16 flex-col gap-1.5 rounded-xl px-1.5 pb-1.5 pt-2 text-xs ${pickTile}`}
                     onClick={() => {
                       edit({ tone });
                     }}
@@ -513,6 +517,7 @@ function AvatarEditor({
                       size={32}
                       shape={shape}
                     />
+                    <span>{t(`tones.${tone}`)}</span>
                   </Button>
                 ))}
               </div>

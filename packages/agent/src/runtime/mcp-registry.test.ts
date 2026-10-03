@@ -7,6 +7,7 @@ import {
   searchMcpRegistry,
   toRegistryServer,
 } from "./mcp-registry";
+import { iconOf } from "./mcp-icon";
 import { searchVerifiedServers } from "./verified-mcp-servers";
 
 const json = (body: unknown, status = 200): Response =>
@@ -64,6 +65,36 @@ const LOCAL = {
   },
 };
 
+describe("icon pick (#4327)", () => {
+  const dark = { src: "https://acme.example/dark.svg", theme: "dark" };
+  const light = { src: "https://acme.example/light.svg", theme: "light" };
+  const plain = { src: "https://acme.example/plain.png" };
+
+  it("prefers a light icon or one with no theme over a dark one listed first", () => {
+    expect(iconOf([dark, light])).toBe(light.src);
+    expect(iconOf([dark, plain])).toBe(plain.src);
+    expect(iconOf([dark, { ...plain, theme: null }])).toBe(plain.src);
+  });
+
+  it("keeps list order between a light icon and one with no theme", () => {
+    expect(iconOf([plain, light])).toBe(plain.src);
+    expect(iconOf([light, plain])).toBe(light.src);
+  });
+
+  it("falls back to a dark icon when no other https icon exists", () => {
+    const http = { src: "http://acme.example/light.png", theme: "light" };
+    expect(iconOf([http, dark])).toBe(dark.src);
+  });
+
+  it("returns null when no entry has an https src", () => {
+    expect(iconOf(undefined)).toBeNull();
+    expect(iconOf([])).toBeNull();
+    expect(
+      iconOf([{ src: "http://acme.example/i.png" }, "i.png", null, { theme: "light" }]),
+    ).toBeNull();
+  });
+});
+
 describe("registry normalization", () => {
   it("reads a reverse-DNS name as a verified domain and io.github as an account", () => {
     expect(publisherOf("app.linear/linear")).toEqual({
@@ -111,6 +142,19 @@ describe("registry normalization", () => {
       connectable: true,
       docsUrl: "https://github.com/acme/tickets",
     });
+  });
+
+  it("picks the light icon over a dark one listed first (#4327)", () => {
+    const server = toRegistryServer({
+      server: {
+        ...ACME.server,
+        icons: [
+          { src: "https://acme.example/dark.svg", theme: "dark" },
+          { src: "https://acme.example/light.svg", theme: "light" },
+        ],
+      },
+    });
+    expect(server?.iconUrl).toBe("https://acme.example/light.svg");
   });
 
   it("lists a stdio-only package as not connectable", () => {

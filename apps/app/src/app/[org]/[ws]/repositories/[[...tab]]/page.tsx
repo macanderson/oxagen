@@ -24,7 +24,9 @@ export async function generateMetadata(): Promise<Metadata> {
 // own server actions, which resolve the viewer again (§3.3).
 //
 // GitHub's install flow returns here with `?settings=repository`; the page
-// then reopens the init wizard, whose first step carries the connection.
+// then reopens the init wizard, whose first step carries the connection. The
+// Create a workspace dialog sends a new workspace here with `?add=repository`
+// (`routes.addRepository`), which opens the same wizard.
 //
 // The workspace's steering repo (#4518) sits under the page header, above the
 // tabs. It reads at render through the DataSource (`get_steering_repo`), and
@@ -74,7 +76,9 @@ export default async function RepositoriesPage({
           email: user?.email ?? "",
           role: `workspace.${ctx.wsRole}`,
         }}
-        returning={query.settings === "repository"}
+        returning={
+          query.settings === "repository" || query.add === "repository"
+        }
       />
       <Suspense fallback={null}>
         <InstructionFindings ctx={ctx} />

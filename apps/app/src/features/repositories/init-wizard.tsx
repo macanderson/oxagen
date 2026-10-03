@@ -333,7 +333,7 @@ export function InitWizard({
           ? t("title")
           : t("titleFor", { repository: repository.fullName })
       }
-      subtitle={t("subtitle")}
+      subtitle={ws}
       testId="init-wizard"
       wide
       footer={footer}
@@ -648,7 +648,7 @@ export function InitWizard({
         </div>
       )}
       <p className="mt-4 font-mono text-xs text-muted-foreground">
-        {t.rich("needs", { ws, code })}
+        {t("needs")}
       </p>
     </SheetDialog>
   );

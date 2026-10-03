@@ -365,7 +365,7 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       const statement = "Rank each item P0 to P3.\n1. A security hole is P0.\n2. A defect a customer can hit ranks P2.";
       const [record] = await tx
         .insert(schema.steeringRecords)
-        .values({ orgId, workspaceId: gate.workspaceId, slug: "p106.work.priorities", title: "Work priorities", status: "active" })
+        .values({ orgId, workspaceId: gate.workspaceId, slug: "p106.work.priorities", title: "Work priorities", status: "active", kind: "rule", force: "must" })
         .returning({ id: schema.steeringRecords.id });
       const [version] = await tx
         .insert(schema.steeringRecordVersions)

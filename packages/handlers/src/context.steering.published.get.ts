@@ -51,6 +51,15 @@ export const WORKSPACE_JSON_PATH = WORKSPACE_LINK_PATH;
 /** How many file reads one pull keeps in flight against GitHub. */
 export const FILE_READ_CONCURRENCY = 8;
 
+/**
+ * What the pull needs from the repository's token: its metadata, and its
+ * branch, tree and files (#4753).
+ */
+export const PUBLISHED_READ_PERMISSIONS = {
+  metadata: "read",
+  contents: "read",
+};
+
 export interface PublishedSteeringDeps {
   github: WorkspaceGithub;
   readBound: typeof readBoundRepository;
@@ -153,7 +162,8 @@ export function createPublishedSteeringGetHandler(
     const gh = await requireWorkspaceGithub(
       deps.github,
       scope,
-      bound.connectionId,
+      bound,
+      PUBLISHED_READ_PERMISSIONS,
     );
     // The repository GitHub holds at these coordinates must still be the one
     // the binding was made against, or a re-created repository's files would

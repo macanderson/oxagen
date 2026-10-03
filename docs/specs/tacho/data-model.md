@@ -324,6 +324,8 @@ Session machine facts are stored in nullable `machine_snapshot` jsonb. Each snap
 
 File identity uses each frame's recorded worktree root. A relative path with a known root and its absolute form share one stored row across batches. Distinct worktrees stay distinct, and an unplaced historical relative path is not reassigned by guessing a later root. A complete, untruncated reconciliation clears previous observed status and line counts for absent paths in that worktree. Attested tool counters remain. A truncated reconciliation cannot clear an omitted path.
 
+The reconciliation frame's `session_commits` list (spec §3, ADR-297) is not stored in `tacho_sessions` or `tacho_session_files`. Ingest parses it (`sessionCommitsOf` in `packages/handlers/src/lib/file-facts.ts`). ADR-297 stores it in the forge schema, in `forge.commits` and `forge.run_commits`, which are not built yet. A frame without the list says nothing about commits. A list that leaves out a commit never removes that commit's claim, because the list is cut to the newest 64.
+
 ### 3.3 `tacho_session_models`
 `session_id`, `model`, `canonical_model`, `provider`, `cost_basis`, `context_window`, `max_output_tokens`, `requests`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_creation_tokens`, `thinking_tokens`, `web_search_requests`, `cost_micros`, `api_duration_ms`. Unique `(session_id, model)`.
 

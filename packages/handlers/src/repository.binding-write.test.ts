@@ -5,12 +5,19 @@
 // so a second one would violate the index. The latest version is read across
 // the workspace's connections, so a relink through a replacement connection
 // continues the repository's one lineage (#3340).
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitHubRepoInfo } from "@oxagen/github";
 import { schema, type Tx } from "@oxagen/database";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { writeRepositoryHead } from "./repository.binding-write";
+import {
+  githubMainRepositoryDeps,
+  writeRepositoryHead,
+} from "./repository.binding-write";
+import {
+  githubTokenFetch,
+  TEST_APP_PRIVATE_KEY,
+} from "./test-utils/github-token-mint";
 
 const REPO: GitHubRepoInfo = {
   id: "9001",
@@ -256,5 +263,74 @@ describe("writeRepositoryHead", () => {
     expect(
       writes.inserts.filter((w) => w.table === schema.repositoryBindingHeads),
     ).toHaveLength(0);
+  });
+});
+
+// The link reads one repository, so its token reaches that repository alone,
+// with the metadata read the repository GET needs (#4753). The real mint runs
+// in front of a fake api.github.com that records the request body.
+describe("githubMainRepositoryDeps.repository", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  function app() {
+    vi.stubEnv("GITHUB_APP_ID", "101");
+    vi.stubEnv("GITHUB_APP_PRIVATE_KEY", TEST_APP_PRIVATE_KEY);
+  }
+
+  it("asks for a token for the named repository with metadata read only", async () => {
+    app();
+    const github = githubTokenFetch({
+      routes: {
+        "/repos/Acme/Widgets": {
+          id: 9001,
+          owner: { login: "Acme" },
+          name: "Widgets",
+          full_name: "Acme/Widgets",
+          html_url: "https://github.com/Acme/Widgets",
+          default_branch: "trunk",
+        },
+      },
+    });
+    vi.stubGlobal("fetch", github.fetch);
+    await expect(
+      githubMainRepositoryDeps.repository("47541", "Acme", "Widgets"),
+    ).resolves.toEqual(REPO);
+    expect(github.mints).toEqual([
+      {
+        installationId: "47541",
+        body: { repositories: ["Widgets"], permissions: { metadata: "read" } },
+      },
+    ]);
+  });
+
+  it("answers null, and reads nothing, when GitHub will not mint for the repository", async () => {
+    app();
+    const github = githubTokenFetch({
+      mintStatus: 422,
+      mintMessage:
+        "There is at least one repository that does not exist or is not accessible to the parent installation.",
+    });
+    vi.stubGlobal("fetch", github.fetch);
+    await expect(
+      githubMainRepositoryDeps.repository("47542", "Acme", "Widgets"),
+    ).resolves.toBeNull();
+    expect(github.requests).toEqual([
+      "POST /app/installations/47542/access_tokens",
+    ]);
+  });
+
+  it("lets any other mint failure through", async () => {
+    app();
+    vi.stubGlobal(
+      "fetch",
+      githubTokenFetch({ mintStatus: 401, mintMessage: "Bad credentials" })
+        .fetch,
+    );
+    await expect(
+      githubMainRepositoryDeps.repository("47543", "Acme", "Widgets"),
+    ).rejects.toThrow("GitHub App token mint failed (401): Bad credentials");
   });
 });

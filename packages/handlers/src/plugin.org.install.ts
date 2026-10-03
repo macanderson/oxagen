@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+import { iconOf } from "@oxagen/agent/runtime/mcp-icon";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
@@ -241,13 +242,9 @@ export async function installOne(
         .limit(1);
       return rows[0] ?? null;
     });
-    if (catalogRow?.icons) {
-      const icons = catalogRow.icons as Array<{ src?: string }>;
-      const firstIcon = icons[0]?.src;
-      if (firstIcon && /^https?:\/\//.test(firstIcon)) {
-        resolvedIconUrl = firstIcon;
-      }
-    }
+    // The same pick as a registry search result, so the installed listing
+    // shows the icon the search showed.
+    resolvedIconUrl = iconOf(catalogRow?.icons);
   } catch {
     // Non-fatal — icon lookup failure must never block install.
   }

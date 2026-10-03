@@ -29,7 +29,11 @@
  * the worktree with git, which is where `lines_added` and `lines_removed`
  * come from.
  */
-import type { ObservedChange } from "@oxagen/recorder";
+import {
+  type ObservedChange,
+  type SessionCommit,
+  sessionCommitSchema,
+} from "@oxagen/recorder";
 
 /**
  * The worktree root a batch's events agree on, or undefined.
@@ -334,6 +338,54 @@ export function observedChangesOf(body: unknown): readonly ObservedChange[] {
     });
   }
   return out;
+}
+
+/** The `session_commits` fields of one reconciliation frame's body. */
+export interface SessionCommitsFact {
+  /** The commits the session made in the frame's worktree, oldest first. */
+  commits: readonly SessionCommit[];
+  /** How many commits the session had before the list was cut. */
+  total: number;
+  /** True when the list was cut, or a malformed item was skipped. */
+  truncated: boolean;
+}
+
+/**
+ * The commits a reconciliation frame says the session made (ADR-297), or
+ * undefined for a frame that carries no list: one sealed on the `baseline`
+ * basis, one from a collector older than the field, or one whose git read
+ * failed. An empty list is a claim that the session made no commit, so
+ * the two are kept apart.
+ *
+ * Each item is parsed against the envelope's own schema. An item of the
+ * wrong shape is skipped and the fact reads as truncated, so a reader never
+ * takes a list with a gap in it for the whole list.
+ */
+export function sessionCommitsOf(
+  body: unknown,
+): SessionCommitsFact | undefined {
+  const fields = body as
+    | {
+        session_commits?: unknown;
+        session_commits_total?: unknown;
+        session_commits_truncated?: unknown;
+      }
+    | undefined;
+  if (!Array.isArray(fields?.session_commits)) return undefined;
+  const commits: SessionCommit[] = [];
+  for (const item of fields.session_commits) {
+    const parsed = sessionCommitSchema.safeParse(item);
+    if (parsed.success) commits.push(parsed.data);
+  }
+  const skipped = commits.length < fields.session_commits.length;
+  return {
+    commits,
+    total:
+      typeof fields.session_commits_total === "number"
+        ? fields.session_commits_total
+        : fields.session_commits.length,
+    truncated: fields.session_commits_truncated === true || skipped,
+  };
 }
 
 /** One file key across batches, qualified by the worktree that was recorded. */

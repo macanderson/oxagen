@@ -275,6 +275,44 @@ describe("installOne — custom mcp_server path", () => {
     // Two withTenantDb calls: (1) icon lookup, (2) the upsert insert.
     expect(mocks.withTenantDb).toHaveBeenCalledTimes(2);
   });
+
+  it("stores the catalog's light icon over a dark one listed first (#4327)", async () => {
+    // The icon lookup finds a catalog entry whose first icon is for a dark
+    // background.
+    mocks.withTenantDb.mockImplementationOnce(async () => ({
+      icons: [
+        { src: "https://example.com/dark.svg", theme: "dark" },
+        { src: "https://example.com/light.svg", theme: "light" },
+      ],
+    }));
+    const captured: { values: Record<string, unknown> | null } = { values: null };
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          insert: () => ({
+            values: (vals: Record<string, unknown>) => {
+              captured.values = vals;
+              return {
+                onConflictDoUpdate: () => ({
+                  returning: () =>
+                    Promise.resolve([{ id: "porg-mcp-icon", authKind: vals.authKind }]),
+                }),
+              };
+            },
+          }),
+        }),
+    );
+    await installOne(ctx, {
+      pluginType: "mcp_server",
+      custom: {
+        name: "my-server",
+        endpointUrl: "https://example.com/mcp",
+        transport: "sse",
+        authKind: "none",
+      },
+    });
+    expect(captured.values?.iconUrl).toBe("https://example.com/light.svg");
+  });
 });
 
 describe("installOne — OAuth detection probe", () => {

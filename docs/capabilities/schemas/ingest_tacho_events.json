@@ -23142,6 +23142,147 @@
                     },
                     "observed_changes_truncated": {
                       "type": "boolean"
+                    },
+                    "session_commits": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "sha": {
+                            "type": "string"
+                          },
+                          "parent_shas": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 16
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "change",
+                              "merge"
+                            ]
+                          },
+                          "patch_id": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "authored_at": {
+                            "type": "string",
+                            "x-server-validated": true,
+                            "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+                          },
+                          "committed_at": {
+                            "type": "string",
+                            "x-server-validated": true,
+                            "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+                          },
+                          "subject": {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          "added": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 4294967295
+                          },
+                          "removed": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 4294967295
+                          },
+                          "files_total": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 4294967295
+                          },
+                          "files": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "path": {
+                                  "type": "string",
+                                  "maxLength": 4096
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "added",
+                                    "modified",
+                                    "deleted",
+                                    "renamed"
+                                  ]
+                                },
+                                "added": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 4294967295
+                                },
+                                "removed": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 4294967295
+                                }
+                              },
+                              "required": [
+                                "path",
+                                "status",
+                                "added",
+                                "removed"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "maxItems": 16
+                          },
+                          "test": {
+                            "type": "string",
+                            "enum": [
+                              "unpushed",
+                              "email",
+                              "reflog"
+                            ]
+                          },
+                          "tool_use_id": {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          "files_outside_session": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "sha",
+                          "parent_shas",
+                          "kind",
+                          "patch_id",
+                          "authored_at",
+                          "committed_at",
+                          "subject",
+                          "added",
+                          "removed",
+                          "files_total",
+                          "files"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 64
+                    },
+                    "session_commits_total": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "session_commits_truncated": {
+                      "type": "boolean"
                     }
                   },
                   "additionalProperties": false

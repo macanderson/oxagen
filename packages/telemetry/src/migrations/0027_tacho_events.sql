@@ -404,6 +404,9 @@ CREATE TABLE IF NOT EXISTS tacho_events (
   observed_changes String,
   observed_changes_total Nullable(UInt32),
   observed_changes_truncated Nullable(Bool),
+  session_commits String,
+  session_commits_total Nullable(UInt32),
+  session_commits_truncated Nullable(Bool),
   received_at DateTime64(3, 'UTC'),
   chain_verified Bool
 )

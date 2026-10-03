@@ -21,6 +21,8 @@
 //                           the run.
 //   7. publish_version      Version 1, recorded as a deployment to `steering`.
 //   8. bind_repository      Workspace only. A binding head with role steering,
+//                           then, on GitHub, the steering installation as the
+//                           workspace's `github` connection when it has none,
 //                           then the first commit published through the
 //                           version store as version 1, so the first steering
 //                           PR publishes version 2 (#4732).
@@ -87,6 +89,10 @@ import {
   workspaceRepositoriesLock,
   writeRepositoryHead,
 } from "./repository.binding-write";
+import {
+  attachWorkspaceGithubInstallation,
+  resolveWorkspaceGithubInstallation,
+} from "./repository.github-connection";
 
 // ── Names ────────────────────────────────────────────────────────────────────
 
@@ -372,6 +378,16 @@ export interface ProvisionDeps {
    */
   startToolMigration?(
     scope: Extract<SteeringRepoScope, { kind: "workspace" }>,
+  ): Promise<void>;
+  /**
+   * Make `installationId` the workspace's code installation, the `github`
+   * connection its code repositories read, when the workspace has none yet.
+   * A workspace that has one keeps it. Unset, as in tests that do not
+   * exercise it, nothing is attached.
+   */
+  attachCodeInstallation?(
+    scope: Extract<SteeringRepoScope, { kind: "workspace" }>,
+    installationId: number,
   ): Promise<void>;
 }
 
@@ -982,14 +998,55 @@ async function publishVersion(ctx: StepContext): Promise<void> {
   ctx.state.deployment_id = out.deployment_id;
 }
 
+/**
+ * Give the workspace the steering installation as its code installation when
+ * it has none. A failure is logged and never fails the step. The workspace
+ * then stays as it was before this call, and a person can still choose an
+ * installation in the app.
+ */
+async function attachCodeInstallation(
+  ctx: StepContext,
+  scope: Extract<SteeringRepoScope, { kind: "workspace" }>,
+  installationId: number,
+): Promise<void> {
+  const attach = ctx.deps.attachCodeInstallation;
+  if (attach === undefined) return;
+  try {
+    await attach(scope, installationId);
+  } catch (err) {
+    logger.warn(
+      {
+        orgId: scope.orgId,
+        workspaceId: scope.workspaceId,
+        err: err instanceof Error ? err.message : String(err),
+      },
+      "steering_repo.provision: the steering repo is bound, but its installation was not attached as the workspace's GitHub connection; a person can choose one in the app",
+    );
+  }
+}
+
 async function bindRepository(ctx: StepContext): Promise<void> {
   if (ctx.scope.kind !== "workspace") return;
   const repository = requireRepository(ctx);
+  const connection = requireConnection(ctx);
   ctx.state.binding_id = await ctx.deps.bind(ctx.scope, {
-    connection: requireConnection(ctx),
+    connection,
     repository,
     default_branch: STEERING_DEFAULT_BRANCH,
   });
+  // The bind writes a `github_steering` connection. The workspace's code
+  // repositories read only a `github` connection
+  // (`resolveWorkspaceGithubInstallation`), so without this step a new
+  // workspace lists no repositories. create_workspace attached that
+  // connection until #4462 removed it (ADR-099 §1-2). The steering
+  // installation can differ from the code installation (lib/steering-app.ts),
+  // so this only sets a default for a workspace that has no `github`
+  // connection. add_to_installation found this installation through the
+  // owner's stored token (`/user/installations`), and the earlier steps wrote
+  // the first commit through it, so the organization reaches it. GitLab has
+  // no code installation, so it gets nothing.
+  if (connection.provider === "github")
+    await attachCodeInstallation(ctx, ctx.scope, connection.installation_id);
   // The publish resolves the repository from the binding written above, so it
   // runs after the bind. A rerun finds the head published and answers
   // `current`.
@@ -2068,6 +2125,29 @@ export function steeringRepoProvisionDeps(options: {
         },
         "steering_repo.provision: started the move of the workspace's MCP servers into its steering repo",
       );
+    },
+
+    // The same write as the app's "Use this installation" button, in the
+    // workspace's tenant scope, attributed to the person who created the
+    // workspace. The job runs its steps outside any tenant scope. The check
+    // comes first because the attach replaces the installation id on an
+    // existing `github` connection, and a rerun of this step must never
+    // replace an installation a person chose.
+    async attachCodeInstallation(scope, installationId) {
+      const workspace = { orgId: scope.orgId, workspaceId: scope.workspaceId };
+      await runInTenantScope(workspace, async () => {
+        if ((await resolveWorkspaceGithubInstallation(workspace)) !== null)
+          return;
+        const { publicId } = await attachWorkspaceGithubInstallation({
+          ...workspace,
+          installationId: String(installationId),
+          actingUserId: options.actorUserId,
+        });
+        logger.info(
+          { ...workspace, connectionId: publicId, installationId },
+          "steering_repo.provision: attached the steering installation as the workspace's GitHub connection",
+        );
+      });
     },
   };
 }

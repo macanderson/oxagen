@@ -17,6 +17,23 @@ const { navigate } = vi.hoisted(() => ({
 }));
 vi.mock("@/ui/navigation", () => ({ useNavigate: () => navigate }));
 
+// The test owns the transition's pending flag, so a case can hold a refresh
+// "still rendering" the way a slow server page does.
+const { transition } = vi.hoisted(() => ({ transition: { pending: false } }));
+vi.mock("react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react")>();
+  return {
+    ...actual,
+    useTransition: () =>
+      [
+        transition.pending,
+        (fn: () => void) => {
+          fn();
+        },
+      ] as const,
+  };
+});
+
 const { LiveRefresh } = await import("./live-refresh");
 
 // jsdom's own visibility answer depends on how the environment was built, so
@@ -25,6 +42,7 @@ let visibility: DocumentVisibilityState = "visible";
 
 beforeEach(() => {
   vi.useFakeTimers();
+  transition.pending = false;
   visibility = "visible";
   Object.defineProperty(document, "visibilityState", {
     configurable: true,
@@ -89,6 +107,23 @@ describe("LiveRefresh", () => {
     rerender(<LiveRefresh active={false} intervalMs={1_000} />);
     advance(5_000);
     expect(navigate.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips a tick while the last refresh is still rendering (negative)", () => {
+    // The router queues refreshes and server actions one at a time. A refresh
+    // sent over one still rendering would pile up behind it, and an action
+    // the page sends would wait behind both.
+    const { rerender } = render(<LiveRefresh active intervalMs={1_000} />);
+    advance(1_000);
+    expect(navigate.refresh).toHaveBeenCalledTimes(1);
+    transition.pending = true;
+    rerender(<LiveRefresh active intervalMs={1_000} />);
+    advance(3_000);
+    expect(navigate.refresh).toHaveBeenCalledTimes(1);
+    transition.pending = false;
+    rerender(<LiveRefresh active intervalMs={1_000} />);
+    advance(1_000);
+    expect(navigate.refresh).toHaveBeenCalledTimes(2);
   });
 
   it("stops after it unmounts", () => {

@@ -86,19 +86,56 @@ describe("assembleWorkspaceSteering", () => {
     const empty = assemble([]);
     expect(empty.text).toBeNull();
     expect(empty.manifest).toMatchObject({ included: 0, cut: 0, items: [] });
-    // Rows that cannot steer are not candidates; may and info are, and the
-    // manifest says they were cut for their tier.
+    // may and info are candidates, and the manifest says they were cut for
+    // their tier. Rows that cannot steer are not candidates, but the
+    // manifest still names each one, cut as incomplete (#3296).
     const quiet = assemble([
       rec({ slug: "m", force: "may" }),
       rec({ slug: "i", force: "info" }),
-      rec({ force: null }),
-      rec({ statement: null }),
-      rec({ statement: "   " }),
+      rec({ slug: "no-force", force: null }),
+      rec({ slug: "no-statement", statement: null }),
+      rec({ slug: "blank", statement: "   " }),
     ]);
     expect(quiet.text).toBeNull();
     expect(quiet.manifest.items).toEqual([
       expect.objectContaining({ id: "m", outcome: "cut", reason: "tier" }),
       expect.objectContaining({ id: "i", outcome: "cut", reason: "tier" }),
+      expect.objectContaining({
+        id: "blank",
+        force: "must",
+        outcome: "cut",
+        reason: "incomplete",
+      }),
+      expect.objectContaining({ id: "no-force", reason: "incomplete" }),
+      expect.objectContaining({
+        id: "no-statement",
+        force: "must",
+        outcome: "cut",
+        reason: "incomplete",
+      }),
+    ]);
+    expect(quiet.manifest.items[3]).toEqual({
+      id: "no-force",
+      kind: "record",
+      recorded_at: "2026-09-10T00:00:00.000Z",
+      tokens: 0,
+      outcome: "cut",
+      reason: "incomplete",
+    });
+    expect(quiet.manifest).toMatchObject({ included: 0, cut: 5 });
+  });
+
+  it("names a record with an unknown force as incomplete and keeps no force for it", () => {
+    const { manifest } = assemble([rec({ slug: "odd", force: "urgent" })]);
+    expect(manifest.items).toEqual([
+      {
+        id: "odd",
+        kind: "record",
+        recorded_at: "2026-09-10T00:00:00.000Z",
+        tokens: 0,
+        outcome: "cut",
+        reason: "incomplete",
+      },
     ]);
   });
 
@@ -218,6 +255,8 @@ describe("assembleWorkspaceSteering", () => {
         rec({ slug: "a" }),
         rec({ slug: "b", force: "may" }),
         rec({ slug: "c", statement: "z".repeat(5_000) }),
+        rec({ slug: "d", force: null }),
+        rec({ slug: "e", statement: null }),
       ],
       300,
     );
@@ -226,6 +265,8 @@ describe("assembleWorkspaceSteering", () => {
       null,
       "budget",
       "tier",
+      "incomplete",
+      "incomplete",
     ]);
   });
 });
@@ -714,5 +755,53 @@ describe("the bundle", () => {
     expect(
       policyBundleSchema.safeParse({ ...steered, signature: sig }).success,
     ).toBe(true);
+  });
+
+  // #3296: a record with no force or no statement is listed as incomplete.
+  // A host built before that reason parses the item strictly and would
+  // reject the whole mandate, so only a host that advertises it gets them.
+  describe("an incomplete record in the manifest", () => {
+    const steering = assemble([
+      rec({ slug: "a" }),
+      rec({ slug: "no-force", force: null }),
+      rec({ slug: "no-statement", statement: null }),
+    ]);
+    const bundleFor = (bundleFeatures: string[]) =>
+      unsignedBundle(
+        { ...host, bundleFeatures },
+        { org: 0, workspace: 0 },
+        retention,
+        steering,
+        noMandate,
+      );
+
+    it("reaches a host that advertises steering_incomplete, and parses there", () => {
+      const bundle = bundleFor(["steering_manifest", "steering_incomplete"]);
+      expect(bundle.context.manifest?.items.map((i) => i.id)).toEqual([
+        "a",
+        "no-force",
+        "no-statement",
+      ]);
+      expect(bundle.context.manifest).toMatchObject({ included: 1, cut: 2 });
+      const sig = { key_id: "k", alg: "ed25519" as const, sig: "s" };
+      expect(
+        policyBundleSchema.safeParse({ ...bundle, signature: sig }).success,
+      ).toBe(true);
+    });
+
+    it("is left off the list for a host that advertises only steering_manifest, and still counted", () => {
+      const bundle = bundleFor(["steering_manifest"]);
+      const items = bundle.context.manifest?.items ?? [];
+      expect(items.map((i) => i.id)).toEqual(["a"]);
+      // Every item left carries a force, which a host built before the
+      // reason requires.
+      expect(items.every((i) => i.force !== undefined)).toBe(true);
+      expect(bundle.context.manifest).toMatchObject({ included: 1, cut: 2 });
+      expect(bundle.context.system).toBe(steering.text);
+    });
+
+    it("sends no manifest to a host that advertises neither", () => {
+      expect(bundleFor([]).context.manifest).toBeUndefined();
+    });
   });
 });

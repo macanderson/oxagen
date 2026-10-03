@@ -27,6 +27,7 @@ import type {
   McpRegistryServer,
 } from "@oxagen/oxagen/contracts/agent.mcp.registry.search";
 import { probeMcpAuth } from "./mcp-auth-probe";
+import { httpsUrl, iconOf } from "./mcp-icon";
 import { createMcpOAuthFetch } from "./mcp-oauth-fetch";
 import {
   searchVerifiedServers,
@@ -93,19 +94,7 @@ function str(value: unknown): string | null {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 }
 
-/** An https URL a browser may load or link to, or null. */
-export function httpsUrl(value: unknown): string | null {
-  const raw = str(value);
-  if (raw === null) return null;
-  try {
-    const url = new URL(raw);
-    return url.protocol === "https:" && url.username === ""
-      ? url.toString()
-      : null;
-  } catch {
-    return null;
-  }
-}
+export { httpsUrl };
 
 /**
  * The publisher a registry name proves. `app.linear/linear` is the domain
@@ -274,9 +263,6 @@ export function toRegistryServer(
   );
   const endpointUrl = remote === undefined ? null : String(remote.url);
   const declared = declaredAuth(remote?.headers);
-  const icons = Array.isArray(server.icons)
-    ? (server.icons as { src?: unknown }[])
-    : [];
   const { publisher, verified } = publisherOf(name);
 
   return {
@@ -287,8 +273,7 @@ export function toRegistryServer(
     publisherVerified: verified,
     source: "registry",
     version: str(server.version),
-    iconUrl:
-      icons.map((icon) => httpsUrl(icon.src)).find((u) => u !== null) ?? null,
+    iconUrl: iconOf(server.icons),
     websiteUrl: httpsUrl(server.websiteUrl),
     // The registry names no docs page; the website or the repository is it.
     docsUrl: httpsUrl(server.websiteUrl) ?? httpsUrl(server.repository?.url),

@@ -22,7 +22,9 @@
  * rls.test.ts. It sees the grants the work migration installs. Nothing here
  * deletes from work.items, or updates or deletes work.done_verdicts or
  * work.autonomy_events, as oxagen_app. The migration withholds those grants,
- * so the statement would fail on the grant before RLS ran. The superuser
+ * so the statement would fail on the grant before RLS ran.
+ * work-append-only.test.ts proves that refusal on the two append-only
+ * tables. The superuser
  * session seeds, checks, and cleans up, with app.rls_bypass on.
  *
  * No org or workspace rows are seeded. No work table has a foreign key to
