@@ -43,7 +43,7 @@ export function WorkItemHead({
     >
       <div className="flex min-w-0 flex-col gap-1">
         <p className={`${eyebrow} mb-1`}>{t("eyebrow")}</p>
-        <h1 className="min-w-0 text-2xl font-bold leading-tight tracking-[-0.015em] text-foreground [overflow-wrap:anywhere]">
+        <h1 className="min-w-0 text-2xl font-bold leading-tight tracking-display text-foreground [overflow-wrap:anywhere]">
           {item.title}
         </h1>
         <div

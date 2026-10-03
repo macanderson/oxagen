@@ -14,8 +14,14 @@
 // coverage ratchet. Adding that config fixes both at once.
 //
 // apps/app is not listed: it runs Vitest 5 through its own `test:unit` task,
-// which this root Vitest 2.1 workspace cannot load. apps/app_deprecated is not
+// which this root Vitest 3.2 workspace cannot load. apps/app_deprecated is not
 // listed either: it is kept only for the parity gates until cutover.
+//
+// Vitest 3.2 deprecates this file in favour of `test.projects` in a root
+// vitest.config.ts, and Vitest 4 removes it. Do not move it yet. Vitest looks
+// for its config in the package's folder and then in each folder above it, so
+// a root vitest.config.ts would load in packages/mcp-config, which has no
+// config of its own. Give that package a config first.
 export default [
   "packages/*/vitest.config.ts",
   "apps/api/vitest.config.ts",

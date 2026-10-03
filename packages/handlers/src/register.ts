@@ -14,6 +14,7 @@ import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
 import { setRunPrOutcomesRunner } from "@oxagen/inngest-functions/run-pr-outcomes-runner";
 import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
 import { setForgePullRequestSyncRunner } from "@oxagen/inngest-functions/forge-pull-request-sync-runner";
+import { setForgeRevisionCertificationRunner } from "@oxagen/inngest-functions/forge-revision-certification-runner";
 import { setForgeBackfillRunner } from "@oxagen/inngest-functions/forge-pull-request-backfill-runner";
 import { setWorkOrderResultsRunner } from "@oxagen/inngest-functions/work-order-results-runner";
 import { setWorkOrderSendBackPorts } from "@oxagen/inngest-functions/work-order-send-back-ports";
@@ -226,6 +227,16 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await forgeSync()).capture(request, pullRequestId, target),
     record: async (request, pullRequestId, target, capture) =>
       (await forgeSync()).record(request, pullRequestId, target, capture),
+  });
+  // The witness's queue (ADR-294) writes forge.revision_certifications
+  // through this package, for the same reason, and is loaded on its first
+  // run.
+  const forgeCertification = async () =>
+    (await import("./lib/forge-pull-requests/certification")).forgeCertificationRunner();
+  setForgeRevisionCertificationRunner({
+    queue: async (request) => (await forgeCertification()).queue(request),
+    certify: async (request, certificationId) =>
+      (await forgeCertification()).certify(request, certificationId),
   });
   // The forge backfill (ADR-292) reads the run links and work order facts
   // that predate the forge store through this package, for the same reason,

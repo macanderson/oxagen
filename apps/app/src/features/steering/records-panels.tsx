@@ -125,7 +125,7 @@ function TreeState({ tree }: { tree: Read<OxagenTree> }) {
       </p>
       <pre
         data-tree="read"
-        className="max-h-105 overflow-auto rounded-lg border border-border bg-hl px-3.5 py-3 font-mono text-sm leading-[1.6] text-foreground"
+        className="max-h-105 overflow-auto rounded-lg border border-border bg-hl px-3.5 py-3 font-mono text-sm leading-relaxed text-foreground"
       >
         {`${value.root}/\n`}
         {lines.map((line, index) => {
@@ -207,7 +207,7 @@ export function InjectionPoints() {
               data-point={point}
               className="relative pl-5 before:absolute before:left-0 before:top-1.25 before:size-2 before:rounded-full before:bg-gold"
             >
-              <span className="flex gap-2 text-xs font-semibold uppercase tracking-[0.1em] text-dim">
+              <span className="flex gap-2 text-xs font-semibold uppercase tracking-widest text-dim">
                 <span className="font-mono">{point}</span>
                 {t(`points.${point}.head`)}
               </span>

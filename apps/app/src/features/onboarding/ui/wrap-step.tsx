@@ -375,7 +375,7 @@ export function WrapStep({
 
   const downloadColumn = (profile: boolean) => (
     <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-border p-3.5">
-      <p className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
         {t("download")}
       </p>
       <TabList
@@ -484,7 +484,7 @@ export function WrapStep({
           <Ladder observe={false} />
         </div>
         <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-border p-3.5">
-          <p className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
             {t("credential")}
           </p>
           {noAgent ?? (
@@ -576,7 +576,7 @@ export function WrapStep({
               </span>
             </span>
           )}
-          className="flex border-b border-border max-sm:flex-col [&>button]:border-border [&>button:not(:last-child)]:border-r max-sm:[&>button:not(:last-child)]:border-r-0 max-sm:[&>button:not(:last-child)]:border-b [&>button[aria-selected=true]]:bg-hl [&>button[aria-selected=true]]:shadow-[inset_0_-2px_0_var(--accent-text)]"
+          className="flex border-b border-border max-sm:flex-col [&>button]:border-border [&>button:not(:last-child)]:border-r max-sm:[&>button:not(:last-child)]:border-r-0 max-sm:[&>button:not(:last-child)]:border-b [&>button[aria-selected=true]]:bg-hl [&>button[aria-selected=true]]:shadow-tab-underline"
         />
         <section
           role="tabpanel"

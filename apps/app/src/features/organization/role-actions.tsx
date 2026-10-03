@@ -336,7 +336,7 @@ export function RoleEditor({
             <div className="grid gap-3 sm:grid-cols-2">
               {groups.map((group) => (
                 <div key={group} className="flex flex-col gap-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.09em] text-dim">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-dim">
                     {group}
                   </p>
                   {grouped

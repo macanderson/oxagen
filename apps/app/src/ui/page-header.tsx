@@ -49,7 +49,7 @@ export function PageHeader({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           {leading}
           <h1
-            className={`min-w-0 text-2xl font-bold leading-tight text-foreground ${mono ? "break-all font-mono tracking-normal" : "tracking-[-0.015em]"}`}
+            className={`min-w-0 text-2xl font-bold leading-tight text-foreground ${mono ? "break-all font-mono tracking-normal" : "tracking-display"}`}
           >
             {title}
           </h1>

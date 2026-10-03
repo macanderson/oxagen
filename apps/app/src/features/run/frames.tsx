@@ -67,7 +67,7 @@ const smallButton =
 const listItem =
   "flex w-full items-center gap-2.5 rounded-lg px-2.25 py-1.75 text-sm font-medium text-muted-foreground no-underline transition-colors hover:bg-hl hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring";
 /** The open frame: `background:var(--hl); box-shadow:inset 2px 0 0 var(--gold); color:var(--fg)`. */
-const listItemOn = "bg-hl text-foreground shadow-[inset_2px_0_0_var(--gold)]";
+const listItemOn = "bg-hl text-foreground shadow-rail";
 /** `.navitem .ct { margin-left:auto; font-family:var(--mono); font-size:10.5px; color:var(--dim); background:var(--panel); border:1px solid var(--border); border-radius:5px; padding:0 5px }` */
 const costChip =
   "ml-auto whitespace-nowrap rounded-sm border border-border bg-card px-1.25 font-mono text-xs text-dim";

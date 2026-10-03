@@ -165,7 +165,7 @@ export function StateWrap({
       <StateIcon tone={tone} glyph={glyph ?? DEFAULT_GLYPH[tone]} />
       <Heading
         id={id}
-        className="mb-1.75 text-lg font-semibold tracking-[-0.015em] text-foreground"
+        className="mb-1.75 text-lg font-semibold tracking-display text-foreground"
       >
         {title}
       </Heading>

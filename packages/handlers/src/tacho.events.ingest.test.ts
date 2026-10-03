@@ -129,6 +129,7 @@ import {
 import {
   IDLE_CLOSE_UNDONE,
   backfilledCostMicros,
+  createTachoEventsIngestHandler,
   enforcementTierOf,
   firstRootPrompts,
   foldDelta,
@@ -141,6 +142,8 @@ import {
   tachoToolCallEntries,
   usageCountedEvents,
 } from "./tacho.events.ingest";
+import { cedarPort } from "./lib/tacho-host-cedar.test-support";
+import { NOTHING_PUBLISHED, type TachoPublished } from "./tacho.published";
 
 const HOST_PUBLIC = "tch_0123456789abcdefghjkmn";
 const HOST_ID = "11111111-1111-4111-8111-111111111111";
@@ -1265,6 +1268,35 @@ describe("ingest_tacho_events", () => {
     expect(mocks.selectAgentDaySpend).not.toHaveBeenCalled();
   });
 
+  it("answers a Cedar host's batch when its Cedar policies cannot be read, naming the etag of a bundle without Cedar (#5381)", async () => {
+    // The batch has landed by the time the envelope is built, so a failed
+    // policy read must not fail it. The host sees an etag without Cedar and
+    // fetches the bundle, and get_tacho_bundle refuses that fetch instead.
+    const down = cedarPort();
+    down.published = async () => {
+      throw new Error("the version store is down");
+    };
+    const ingest = (published: TachoPublished) => {
+      const db = fakeDb();
+      db.hosts[0]!["bundleFeatures"] = ["cedar"];
+      wire(db);
+      return createTachoEventsIngestHandler({ published })(
+        batch(session()),
+        CONTEXT,
+      );
+    };
+
+    const output = await ingest(down);
+    expect(output.accepted).toBe(session().length);
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: CONTEXT.orgId }),
+      expect.stringMatching(/etag leaves Cedar out/),
+    );
+    expect(output.control.bundle_etag).toBe(
+      (await ingest(NOTHING_PUBLISHED)).control.bundle_etag,
+    );
+  });
+
   it("accepts a verified session, rolls it up, and answers the control envelope", async () => {
     const db = fakeDb();
     wire(db);
@@ -1963,6 +1995,54 @@ describe("ingest_tacho_events", () => {
       CONTEXT,
     );
     expect(mocks.unlockOnboardingGate).not.toHaveBeenCalled();
+  });
+
+  it("leaves the gate shut for the daemon's own chain, and opens it on the agent's first run (#5381)", async () => {
+    const db = fakeDb();
+    wire(db);
+    // The daemon seals `agent_start` on its own `tachod-<ulid>` chain as soon
+    // as it starts, before any agent runs, and ships it as a new root session.
+    const daemonId = "tachod-01K6A7B8C9D0E1F2G3H4J5K6M7";
+    const daemonChain = sessionUuid(HOST_PUBLIC, daemonId);
+    const genesis = sealEvent(
+      unsealed(
+        "agent_start",
+        { session_start_source: "startup" },
+        "hook",
+        CLAUDE_CODE,
+        {
+          session_id: daemonId,
+          session_uuid: daemonChain,
+          root_session_uuid: daemonChain,
+        },
+      ),
+      GENESIS_CURSOR,
+    ).event;
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: [genesis],
+      },
+      CONTEXT,
+    );
+    // The chain is recorded, but it is not the organization's first run.
+    expect(db.sessions.has(daemonChain)).toBe(true);
+    expect(mocks.unlockOnboardingGate).not.toHaveBeenCalled();
+
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: session(),
+      },
+      CONTEXT,
+    );
+    expect(mocks.unlockOnboardingGate).toHaveBeenCalledTimes(1);
+    expect(mocks.unlockOnboardingGate.mock.calls[0]?.[1]).toMatchObject({
+      orgId: CONTEXT.orgId,
+      runPublicId: "tse_fake0000000000000001",
+    });
   });
 
   it("continues a known session only from its recorded head", async () => {

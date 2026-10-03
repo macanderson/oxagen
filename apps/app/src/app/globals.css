@@ -82,6 +82,11 @@
   --spacing-ch: 1ch;
   --spacing-safe-top: env(safe-area-inset-top);
   --spacing-safe-bottom: env(safe-area-inset-bottom);
+  /* Marks drawn as an inset shadow, so they take no layout space: the gold
+     rail on the current nav or list item, and the underline on a selected
+     tab (#5283). */
+  --shadow-rail: inset 2px 0 0 var(--gold);
+  --shadow-tab-underline: inset 0 -2px 0 var(--accent-text);
   /* The corner scale is @oxagen/ui's, which reads the kit's --ox-radius-<step>
      tokens: the theme's corner base (0.45rem, shadcn's base-maia preset) times
      each step's multiplier. `rounded-4xl` is the pill a maia button and input

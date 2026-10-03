@@ -65,7 +65,7 @@ function Chip({
     <span
       data-testid={testId}
       title={title}
-      className={`inline-flex min-w-0 max-w-full items-center gap-1.25 whitespace-nowrap rounded-md border border-border bg-hl px-1.75 py-0.5 leading-normal tracking-[0.02em] text-muted-foreground ${code ? "font-mono text-xs font-medium" : "text-xs font-semibold"}`}
+      className={`inline-flex min-w-0 max-w-full items-center gap-1.25 whitespace-nowrap rounded-md border border-border bg-hl px-1.75 py-0.5 leading-normal tracking-wide text-muted-foreground ${code ? "font-mono text-xs font-medium" : "text-xs font-semibold"}`}
     >
       {children}
     </span>
@@ -721,7 +721,7 @@ function SubagentsFromWork({
       data-testid="run-subagents"
       className="mt-2 flex flex-wrap items-center gap-2.25"
     >
-      <span className="text-xs font-semibold uppercase tracking-[0.1em] text-dim">
+      <span className="text-xs font-semibold uppercase tracking-widest text-dim">
         {t("subagents")}
       </span>
       {subagents.slice(0, SUBAGENT_CHIPS).map((subagent) => (

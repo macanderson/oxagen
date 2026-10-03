@@ -22,7 +22,9 @@ import {
 } from "../host/test-support";
 import { unsignedBundle } from "../host/test-support";
 import type { Exec, ExecAsync } from "../host/service";
+import { digestBytes } from "../digest";
 import type { TachoEvent } from "../envelope";
+import type { PolicyBundle } from "../wire";
 import { type DaemonHandle, type DaemonTimers, startDaemon } from "./daemon";
 
 const SESSION = "11111111-2222-3333-4444-555555555555";
@@ -108,12 +110,16 @@ describe("the daemon's git seam", () => {
     driver?: { shipMs: number },
     existingPaths?: ReturnType<typeof scratchPaths>,
     timers?: Partial<DaemonTimers>,
+    // What the bundle lets the host keep. Left out, the bundle keeps digests
+    // only and no body reaches the WAL.
+    retention?: PolicyBundle["retention"],
   ) {
     const paths = existingPaths ?? scratchPaths();
     const signer = bundleSigner();
     const bundle = signer.sign(
       unsignedBundle({
         permissions: { allow: ["Read", "Bash(echo *)"], deny: [], ask: [] },
+        ...(retention !== undefined ? { retention } : {}),
       }),
     );
     const host = readHostFile(paths.hostFile) ?? testHostFile(signer, bundle);
@@ -291,6 +297,43 @@ describe("the daemon's git seam", () => {
         lines_removed: 0,
       },
     ]);
+  });
+
+  it("writes the worktree diff to the WAL beside its reconciliation frame", async () => {
+    // The lane used to write the frame alone and leave its body on the
+    // recorder, where the next caller to drain it dropped it or wrote it
+    // after the frame had shipped (#5381).
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { mode: "content_exact", classes: ["tool_call"] },
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("Stop"));
+    await handle.flushGitReads();
+    const recorder = handle.registry.get(SESSION)?.recorder;
+    const written = handle.wal
+      .read(recorder?.sessionUuid ?? "")
+      .filter((event) => event.kind === "oxagen:worktree_reconciled");
+    expect(written).toHaveLength(1);
+    const bodies = handle.wal.bodiesFor(written);
+    expect(bodies).toHaveLength(1);
+    const bytes = Buffer.from(bodies[0]?.bytes_base64 ?? "", "base64");
+    // The body is the one the frame's digest names: the worktree snapshot.
+    expect(written[0]?.content?.digest).toBe(
+      digestBytes(new Uint8Array(bytes)),
+    );
+    expect(JSON.parse(bytes.toString("utf8"))).toMatchObject({
+      version: 1,
+      root: CWD,
+    });
+    // And nothing is left on the recorder for a later caller to drain.
+    expect(recorder?.takeBodies()).toEqual([]);
   });
 
   it.each([true, false])(

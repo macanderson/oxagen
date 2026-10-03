@@ -52,7 +52,7 @@ export function AgentCard({
         />
       )}
       <span
-        className={`flex min-w-0 flex-col leading-snug ${layout === "list" ? "w-48 max-w-60" : layout === "compact" ? "max-w-70 leading-[1.3]" : "max-w-full"}`}
+        className={`flex min-w-0 flex-col leading-snug ${layout === "list" ? "w-48 max-w-60" : layout === "compact" ? "max-w-70 leading-tight" : "max-w-full"}`}
       >
         {agentKey === null ? (
           <span className="text-muted-foreground">{notRecorded}</span>

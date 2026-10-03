@@ -65,7 +65,7 @@ const DIFF_ROW: Record<DiffLine["kind"], string> = {
 /** A unified patch, one numbered row per line. */
 export function PatchLines({ patch }: { patch: string }) {
   return (
-    <div className="mb-2.5 max-h-90 overflow-auto rounded-xl border border-border bg-void font-mono text-xs leading-[1.6]">
+    <div className="mb-2.5 max-h-90 overflow-auto rounded-xl border border-border bg-void font-mono text-xs leading-relaxed">
       {diffLines(patch).map((line, i) => (
         <div
           // A patch's lines are positional.

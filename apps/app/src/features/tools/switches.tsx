@@ -451,7 +451,7 @@ export function Switches({
         <div className="flex flex-wrap items-center gap-2">
           <h2
             id="tools-switches-class"
-            className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+            className="text-sm font-semibold uppercase tracking-widest text-muted-foreground"
           >
             {t("classHeading")}
           </h2>
@@ -486,7 +486,7 @@ export function Switches({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2
             id="tools-switches-scoped"
-            className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+            className="text-sm font-semibold uppercase tracking-widest text-muted-foreground"
           >
             {t("scopedHeading")}
           </h2>

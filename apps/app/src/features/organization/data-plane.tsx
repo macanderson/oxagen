@@ -187,7 +187,7 @@ function useDetails(plane: DataPlane): Record<PlaneMode, ReactNode> {
             [f("nextBundle"), nr],
           ]}
         />
-        <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-[0.09em] text-dim">
+        <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-widest text-dim">
           {t("outbound.title")}
         </p>
         <Table

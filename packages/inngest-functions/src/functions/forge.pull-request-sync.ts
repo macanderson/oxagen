@@ -5,6 +5,7 @@ import { createFunction } from "../create-function";
 import {
   FORGE_PULL_REQUEST_DIFF_READY_EVENT,
   FORGE_PULL_REQUEST_OBSERVED_EVENT,
+  type ForgePullRequestDiffReadyEventData,
 } from "../events";
 import { forgePullRequestSyncRunner } from "../lib/forge-pull-request-sync-runner";
 
@@ -109,23 +110,31 @@ export const [forgePullRequestSync] = createFunction(
         captured,
       ),
     );
-    if (recorded.newlyStored)
+    // A newly stored revision always names its key and digest. The checks
+    // say so to the type the event's readers parse (ADR-294).
+    if (
+      recorded.newlyStored &&
+      captured.diffKey !== null &&
+      captured.diffSha256 !== null
+    ) {
+      const data: ForgePullRequestDiffReadyEventData = {
+        orgId: request.orgId,
+        workspaceId: request.workspaceId,
+        pullRequestId,
+        revisionId: recorded.revisionId,
+        provider: request.provider,
+        repository: request.repository,
+        number: request.number,
+        headSha: target.headSha,
+        diffKey: captured.diffKey,
+        diffSha256: captured.diffSha256,
+      };
       await step.sendEvent("diff-ready", {
         name: FORGE_PULL_REQUEST_DIFF_READY_EVENT,
         id: `forge-diff-ready:${recorded.revisionId}`,
-        data: {
-          orgId: request.orgId,
-          workspaceId: request.workspaceId,
-          pullRequestId,
-          revisionId: recorded.revisionId,
-          provider: request.provider,
-          repository: request.repository,
-          number: request.number,
-          headSha: target.headSha,
-          diffKey: captured.diffKey,
-          diffSha256: captured.diffSha256,
-        },
+        data,
       });
+    }
     return {
       upserted,
       diffStatus: recorded.diffStatus,

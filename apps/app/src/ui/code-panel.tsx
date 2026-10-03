@@ -17,7 +17,7 @@ import {
 
 /** The one type scale for code. */
 const codeText =
-  "font-mono text-sm leading-[1.55] [font-feature-settings:var(--ox-font-mono-features)]";
+  "font-mono text-sm leading-normal [font-feature-settings:var(--ox-font-mono-features)]";
 
 const TOKEN_CLASS: Readonly<Record<CodeTokenKind, string | null>> = {
   comment: "text-code-comment",

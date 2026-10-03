@@ -30,7 +30,7 @@ const TONE: Record<BadgeTone, string> = {
 };
 
 const badgeBase =
-  "inline-flex items-center gap-1.25 whitespace-nowrap rounded-md border px-1.75 py-0.5 text-xs font-semibold leading-normal tracking-[0.02em]";
+  "inline-flex items-center gap-1.25 whitespace-nowrap rounded-md border px-1.75 py-0.5 text-xs font-semibold leading-normal tracking-wide";
 
 export function Badge({
   tone,

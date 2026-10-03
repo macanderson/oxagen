@@ -54,7 +54,7 @@ export function SidebarNav({
         <div key={section.key} className="mb-3">
           <p
             id={`${labelId}-${section.key}`}
-            className="px-2 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-[0.13em] text-sidebar-nav-label-fg"
+            className="px-2 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-widest text-sidebar-nav-label-fg"
           >
             {t(`sidebar.sections.${section.key}`)}
           </p>
@@ -74,7 +74,7 @@ export function SidebarNav({
                     onClick={onNavigate}
                     className={`mb-px flex items-center gap-2.5 rounded-lg px-2.25 py-1.75 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring ${
                       current
-                        ? "bg-sidebar-nav-link-active-bg text-sidebar-nav-link-active-fg shadow-[inset_2px_0_0_var(--gold)]"
+                        ? "bg-sidebar-nav-link-active-bg text-sidebar-nav-link-active-fg shadow-rail"
                         : "text-sidebar-nav-link-fg hover:bg-sidebar-nav-link-hover-bg hover:text-sidebar-nav-link-hover-fg"
                     }`}
                   >

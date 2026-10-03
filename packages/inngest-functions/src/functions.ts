@@ -92,6 +92,7 @@ import {
 import { runEnrichScratchExpire } from "./functions/run.enrich-scratch-expire";
 import { runPullRequestBackfill } from "./functions/run.pull-request-backfill";
 import { forgePullRequestSync } from "./functions/forge.pull-request-sync";
+import { forgeRevisionCertification } from "./functions/forge.revision-certification";
 import { forgePullRequestBackfill } from "./functions/forge.pull-request-backfill";
 import { workOrderPullRequestLinked, workOrderRunEnded } from "./functions/work.order-results";
 import { agentInterjectionTimeout } from "./functions/agent.interjection-timeout";
@@ -185,6 +186,8 @@ export const functions: any[] = [
   runEnrichScratchExpire,
   runPullRequestBackfill,
   forgePullRequestSync,
+  // Queue each stored revision for the witness to certify (ADR-294).
+  forgeRevisionCertification,
   // Move links recorded before the forge store existed into it (ADR-292).
   forgePullRequestBackfill,
   workOrderRunEnded,

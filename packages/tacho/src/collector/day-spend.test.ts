@@ -34,15 +34,25 @@ describe("createDaySpend", () => {
     expect(seeded).toEqual(["2026-09-24"]);
   });
 
-  it("starts the next UTC day from that day's seed, not from yesterday's total", () => {
+  it("starts a later UTC day at zero, without yesterday's total and without reading the WAL again", () => {
+    const seeded: string[] = [];
     const spend = createDaySpend({
-      priorDaySpendMicros: (day) => (day === "2026-09-24" ? 9_000 : 250),
+      priorDaySpendMicros: (day) => {
+        seeded.push(day);
+        return day === "2026-09-24" ? 9_000 : 250;
+      },
     });
     spend.add("2026-09-24", 1_000);
     expect(spend.total("2026-09-24")).toBe(10_000);
-    expect(spend.total("2026-09-25")).toBe(250);
+    // Every priced call since the seed went through `add`, so the WAL holds
+    // nothing for the 25th that the counter has not seen. The 250 a read
+    // would answer is never asked for.
+    expect(spend.total("2026-09-25")).toBe(0);
     spend.add("2026-09-25", 50);
-    expect(spend.total("2026-09-25")).toBe(300);
+    expect(spend.total("2026-09-25")).toBe(50);
+    spend.add("2026-09-26", 7);
+    expect(spend.total("2026-09-26")).toBe(7);
+    expect(seeded).toEqual(["2026-09-24"]);
   });
 
   it("never reopens a day it has left when the clock steps back (negative)", () => {

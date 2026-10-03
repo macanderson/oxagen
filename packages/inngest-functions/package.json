@@ -21,6 +21,7 @@
     "./memory-runner": "./src/lib/memory-runner.ts",
     "./run-pull-request-backfill-runner": "./src/lib/run-pull-request-backfill-runner.ts",
     "./forge-pull-request-sync-runner": "./src/lib/forge-pull-request-sync-runner.ts",
+    "./forge-revision-certification-runner": "./src/lib/forge-revision-certification-runner.ts",
     "./forge-pull-request-backfill-runner": "./src/lib/forge-pull-request-backfill-runner.ts",
     "./run-pr-outcomes-runner": "./src/lib/run-pr-outcomes-runner.ts",
     "./interjection-timeout-runner": "./src/lib/interjection-timeout-runner.ts",
@@ -64,7 +65,7 @@
   },
   "devDependencies": {
     "typescript": "6.0.3",
-    "vitest": "2.1.9",
-    "@vitest/coverage-v8": "2.1.9"
+    "vitest": "3.2.6",
+    "@vitest/coverage-v8": "3.2.6"
   }
 }

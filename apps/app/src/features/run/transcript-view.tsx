@@ -188,7 +188,7 @@ function lineClick(open: () => void): () => void {
  * color:var(--fg) }`.
  */
 const txs =
-  "flex min-w-0 flex-col font-mono text-sm leading-[1.65] text-foreground";
+  "flex min-w-0 flex-col font-mono text-sm leading-relaxed text-foreground";
 /** `.tx-tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:0 0 10px }` */
 const txTools = "flex flex-wrap items-center gap-2 pb-2.5";
 /**
@@ -211,7 +211,7 @@ const txKinds = "flex flex-wrap gap-0.75";
 const kindShape =
   "inline-flex items-center gap-1.5 rounded-md py-0.75 pr-2 font-mono text-xs focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-9";
 const kindPressed =
-  "aria-pressed:bg-hl aria-pressed:shadow-[inset_0_0_0_1px_var(--rule)] aria-[pressed=false]:text-dim aria-[pressed=false]:[&>span:not([data-dot])]:line-through";
+  "aria-pressed:bg-hl aria-pressed:inset-ring aria-pressed:inset-ring-rule aria-[pressed=false]:text-dim aria-[pressed=false]:[&>span:not([data-dot])]:line-through";
 const txKind = `${kindShape} ${kindPressed} pl-1.5 text-muted-foreground aria-pressed:text-foreground`;
 const txKindAll = `${kindShape} pl-2 text-muted-foreground hover:text-foreground`;
 const txKindErrors = `${kindShape} ${kindPressed} pl-1.5 text-muted-foreground aria-pressed:text-error`;
@@ -225,32 +225,32 @@ const txKindCount = "text-xs tabular-nums text-dim";
  */
 const DOT: Record<FeedGroup, { on: string; off: string }> = {
   prompt: {
-    on: "bg-fk-op shadow-[0_0_0_1px_color-mix(in_srgb,var(--fk-op)_40%,transparent)]",
-    off: "shadow-[inset_0_0_0_1.5px_var(--fk-op)] opacity-70",
+    on: "bg-fk-op ring ring-fk-op/40",
+    off: "inset-ring-2 inset-ring-fk-op opacity-70",
   },
   responses: {
-    on: "bg-fk-model shadow-[0_0_0_1px_color-mix(in_srgb,var(--fk-model)_40%,transparent)]",
-    off: "shadow-[inset_0_0_0_1.5px_var(--fk-model)] opacity-70",
+    on: "bg-fk-model ring ring-fk-model/40",
+    off: "inset-ring-2 inset-ring-fk-model opacity-70",
   },
   thinking: {
-    on: "bg-fk-model shadow-[0_0_0_1px_color-mix(in_srgb,var(--fk-model)_40%,transparent)]",
-    off: "shadow-[inset_0_0_0_1.5px_var(--fk-model)] opacity-70",
+    on: "bg-fk-model ring ring-fk-model/40",
+    off: "inset-ring-2 inset-ring-fk-model opacity-70",
   },
   tools: {
-    on: "bg-fk-tool shadow-[0_0_0_1px_color-mix(in_srgb,var(--fk-tool)_40%,transparent)]",
-    off: "shadow-[inset_0_0_0_1.5px_var(--fk-tool)] opacity-70",
+    on: "bg-fk-tool ring ring-fk-tool/40",
+    off: "inset-ring-2 inset-ring-fk-tool opacity-70",
   },
   usage: {
-    on: "bg-fk-gov shadow-[0_0_0_1px_color-mix(in_srgb,var(--fk-gov)_40%,transparent)]",
-    off: "shadow-[inset_0_0_0_1.5px_var(--fk-gov)] opacity-70",
+    on: "bg-fk-gov ring ring-fk-gov/40",
+    off: "inset-ring-2 inset-ring-fk-gov opacity-70",
   },
   recall: {
-    on: "bg-fk-ctx shadow-[0_0_0_1px_color-mix(in_srgb,var(--fk-ctx)_40%,transparent)]",
-    off: "shadow-[inset_0_0_0_1.5px_var(--fk-ctx)] opacity-70",
+    on: "bg-fk-ctx ring ring-fk-ctx/40",
+    off: "inset-ring-2 inset-ring-fk-ctx opacity-70",
   },
   seal: {
-    on: "bg-fk-gov shadow-[0_0_0_1px_color-mix(in_srgb,var(--fk-gov)_40%,transparent)]",
-    off: "shadow-[inset_0_0_0_1.5px_var(--fk-gov)] opacity-70",
+    on: "bg-fk-gov ring ring-fk-gov/40",
+    off: "inset-ring-2 inset-ring-fk-gov opacity-70",
   },
 };
 /**
@@ -302,7 +302,7 @@ const txProseLine = "min-w-0 truncate";
  * no chip carries two inks.
  */
 const chipShape =
-  "whitespace-nowrap rounded-sm border bg-card px-1.5 font-mono text-xs leading-[1.6] tabular-nums";
+  "whitespace-nowrap rounded-sm border bg-card px-1.5 font-mono text-xs leading-relaxed tabular-nums";
 const CHIP = {
   plain: `${chipShape} border-border text-muted-foreground`,
   ok: `${chipShape} border-border text-success`,

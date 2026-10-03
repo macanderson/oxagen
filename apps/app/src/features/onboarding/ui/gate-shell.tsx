@@ -194,7 +194,7 @@ export function GateHeader({
   return (
     <div className="flex flex-col gap-2 pt-2">
       {eyebrow === undefined ? null : (
-        <p className="text-sm font-semibold uppercase tracking-[0.14em] text-accent-text">
+        <p className="text-sm font-semibold uppercase tracking-widest text-accent-text">
           {eyebrow}
         </p>
       )}
