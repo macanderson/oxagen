@@ -14,6 +14,7 @@ import { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
+import { workspaceSettingsRead } from "@oxagen/oxagen/contracts/workspace.settings.read";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { kernelRead, captureError } = vi.hoisted(() => ({
@@ -384,20 +385,54 @@ function agents(identities: number) {
   };
 }
 
+/** `get_workspace_settings`' answer: enrichment on, one lane capped. */
+const settings = {
+  name: "Core platform",
+  slug: "core-platform",
+  description: null,
+  avatarUrl: null,
+  consequenceRoles: {},
+  steering: { autoSync: false, blockStaleRuns: false },
+  runEnrichmentEnabled: true,
+  dailyBudgetUsd: { runEnrichment: 2.5, assistant: null, work: null },
+};
+
+/** What the Edit dialog reads off that answer. */
+const SPEND = {
+  runEnrichmentEnabled: true,
+  dailyBudgetUsd: { runEnrichment: 2.5, assistant: null, work: null },
+};
+
+/** Answers each of the three facts reads; a read left out gets its plain answer. */
+function factsReads(answers: {
+  repositories?: unknown;
+  agents?: unknown;
+  settings?: unknown;
+}) {
+  kernelRead.mockImplementation((_ctx, { contract }) => {
+    if (contract === repositoryList)
+      return Promise.resolve(
+        answers.repositories ?? readOk({ repositories: [] }),
+      );
+    if (contract === agentList)
+      return Promise.resolve(answers.agents ?? readOk(agents(1)));
+    if (contract === workspaceSettingsRead)
+      return Promise.resolve(answers.settings ?? readOk(settings));
+    return Promise.reject(new Error("not a facts read"));
+  });
+}
+
 describe("org.workspaceFacts", () => {
-  it("reads the repositories and the agent total inside the workspace and returns the row's facts", async () => {
-    kernelRead.mockImplementation((_ctx, { contract }) =>
-      Promise.resolve(
-        contract === repositoryList
-          ? readOk({
-              repositories: [
-                binding("main", "acme/platform", "main"),
-                binding("linked", "acme/billing", "trunk"),
-              ],
-            })
-          : readOk(agents(64)),
-      ),
-    );
+  it("reads the repositories, the agent total and the settings inside the workspace and returns the row's facts", async () => {
+    factsReads({
+      repositories: readOk({
+        repositories: [
+          binding("main", "acme/platform", "main"),
+          binding("linked", "acme/billing", "trunk"),
+        ],
+      }),
+      agents: readOk(agents(64)),
+    });
     expect(await org.workspaceFacts(wsCtx)).toEqual(
       readOk({
         repositories: [
@@ -406,6 +441,7 @@ describe("org.workspaceFacts", () => {
         ],
         agents: 64,
         archiveBlockers: { count: 0, more: false },
+        settings: SPEND,
       }),
     );
     expect(kernelRead).toHaveBeenCalledWith(wsCtx, {
@@ -419,25 +455,37 @@ describe("org.workspaceFacts", () => {
       input: { limit: 100 },
       page: "organization",
     });
+    expect(kernelRead).toHaveBeenCalledWith(wsCtx, {
+      contract: workspaceSettingsRead,
+      input: {},
+      page: "organization",
+    });
+  });
+
+  it("reads an answer without the spend fields as enrichment on and no limit on any lane", async () => {
+    const { runEnrichmentEnabled: _on, dailyBudgetUsd: _caps, ...bare } =
+      settings;
+    factsReads({ settings: readOk(bare) });
+    const read = await org.workspaceFacts(wsCtx);
+    expect(read.ok && read.value.settings).toEqual({
+      runEnrichmentEnabled: true,
+      dailyBudgetUsd: { runEnrichment: null, assistant: null, work: null },
+    });
   });
 
   it("counts the agents archive_workspace refuses over, leaving out the built-in and retired ones", async () => {
-    kernelRead.mockImplementation((_ctx, { contract }) =>
-      Promise.resolve(
-        contract === repositoryList
-          ? readOk({ repositories: [] })
-          : readOk({
-              ...agents(4),
-              items: [
-                { slug: "qa-chat", status: "unenrolled" },
-                { slug: "old-bot", status: "retired" },
-                { slug: "invoice-bot", status: "enrolled" },
-                { slug: "review-bot", status: "suspended" },
-              ],
-              nextCursor: "cmV2aWV3LWJvdA",
-            }),
-      ),
-    );
+    factsReads({
+      agents: readOk({
+        ...agents(4),
+        items: [
+          { slug: "qa-chat", status: "unenrolled" },
+          { slug: "old-bot", status: "retired" },
+          { slug: "invoice-bot", status: "enrolled" },
+          { slug: "review-bot", status: "suspended" },
+        ],
+        nextCursor: "cmV2aWV3LWJvdA",
+      }),
+    });
     const read = await org.workspaceFacts(wsCtx);
     expect(read.ok && read.value).toMatchObject({
       agents: 4,
@@ -446,28 +494,33 @@ describe("org.workspaceFacts", () => {
     });
   });
 
-  it("refuses the whole when either read refuses, never a row half fact and half gap (negative)", async () => {
-    const denied = {
-      ok: false,
-      reason: "denied",
-      permission: "organization.read",
-    } as const;
-    kernelRead.mockImplementation((_ctx, { contract }) =>
-      Promise.resolve(
-        contract === agentList ? denied : readOk({ repositories: [] }),
-      ),
-    );
+  const denied = {
+    ok: false,
+    reason: "denied",
+    permission: "organization.read",
+  } as const;
+
+  it("refuses the whole when the repositories or the agents refuse, never a row half fact and half gap (negative)", async () => {
+    factsReads({ agents: denied });
+    expect(await org.workspaceFacts(wsCtx)).toEqual(denied);
+    factsReads({ repositories: denied });
     expect(await org.workspaceFacts(wsCtx)).toEqual(denied);
   });
 
-  it("answers record_unmappable for a negative agent total, reported once (negative)", async () => {
-    kernelRead.mockImplementation((_ctx, { contract }) =>
-      Promise.resolve(
-        contract === repositoryList
-          ? readOk({ repositories: [] })
-          : readOk(agents(-1)),
-      ),
+  it("carries a refused settings read as null and keeps the rest, so the Edit dialog still opens", async () => {
+    factsReads({ agents: readOk(agents(3)), settings: denied });
+    expect(await org.workspaceFacts(wsCtx)).toEqual(
+      readOk({
+        repositories: [],
+        agents: 3,
+        archiveBlockers: { count: 0, more: false },
+        settings: null,
+      }),
     );
+  });
+
+  it("answers record_unmappable for a negative agent total, reported once (negative)", async () => {
+    factsReads({ agents: readOk(agents(-1)) });
     expect(await org.workspaceFacts(wsCtx)).toEqual(
       readError("record_unmappable", 502),
     );
