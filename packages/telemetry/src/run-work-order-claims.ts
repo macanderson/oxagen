@@ -2,13 +2,13 @@
  * run-work-order-claims.ts — the work orders a wrapped run's frames name
  * (F13, #4638).
  *
- * A stage Oxagen launches for a work order carries the OTLP attribute
- * `oxagen.work_order.id` (@oxagen/work WORK_OTLP_ATTRIBUTES). The tacho
- * daemon re-keys every `oxagen.*` attribute that arrives over OTLP as
- * `client_claimed.oxagen.*` before it seals the frame, because anything that
- * can submit OTLP on the host could have set it. So the value is the
- * harness's word, and the spend rollup checks it against `work.orders` before
- * it stores it on `cost.run_totals`. This read only finds the claims.
+ * A run started for a work order carries the OTLP attribute
+ * `oxagen.work_order.id` (`WORK_ORDER_RUN_ATTR` in the handlers' work record
+ * runtime). The tacho daemon re-keys every `oxagen.*` attribute that arrives
+ * over OTLP as `client_claimed.oxagen.*` before it seals the frame, because
+ * anything that can submit OTLP on the host could have set it. So the value is
+ * the harness's word, and the spend rollup checks it against `work.orders`
+ * before it stores it on `cost.run_totals`. This read only finds the claims.
  */
 import { clickhouse } from "./clickhouse";
 import { COST_FRAME_QUERY_SETTINGS } from "./cost-frames";

@@ -21,8 +21,7 @@ export default defineConfig({
         // The triage tests' shared item, priorities record, and recording model client.
         "src/triage/fixtures/**",
       ],
-      // Lane C0 ships types, constants, and stubs whose tests reach every
-      // line. The ratchet caps a threshold at 90.
+      // The ratchet caps a threshold at 90.
       thresholds: { lines: 90, branches: 90, functions: 90, statements: 90 },
     },
   },

@@ -228,8 +228,3 @@ export function correctionRows(
   }
   return rows;
 }
-
-/** True when the value is a field name a person can correct. */
-export function isTriageCorrectionField(value: unknown): value is TriageCorrectionField {
-  return (TRIAGE_CORRECTION_FIELDS as readonly unknown[]).includes(value);
-}

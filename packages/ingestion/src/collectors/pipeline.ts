@@ -505,29 +505,6 @@ export async function closeInboundEvent(
   await ports.store.markInboundEvent(inboundEventId, INBOUND_OUTCOMES.collected);
 }
 
-export type ProcessResult =
-  | Exclude<OpenResult, { kind: "ready" }>
-  | { kind: "collected"; changes: ItemChange[] };
-
-/**
- * The whole fetch and map for one stored event. The durable worker runs the
- * same three steps one by one, so a retry repeats only the ref that failed.
- */
-export async function processInboundEvent(
-  ports: CollectorPorts,
-  inboundEventId: string,
-): Promise<ProcessResult> {
-  const opened = await openInboundEvent(ports, inboundEventId);
-  if (opened.kind !== "ready") return opened;
-  const changes: ItemChange[] = [];
-  for (const ref of opened.refs) {
-    const result = await collectRef(ports, opened.collector, ref);
-    if (result?.change) changes.push(result.change);
-  }
-  await closeInboundEvent(ports, inboundEventId);
-  return { kind: "collected", changes };
-}
-
 // ── 3. Reconcile ────────────────────────────────────────────────────────────
 
 export type ReconcilePageResult =
@@ -693,49 +670,6 @@ export async function finishReconcile(
       : INBOUND_OUTCOMES.reconcileFailed,
   });
   return refreshHealth(ports, collectorId);
-}
-
-export type ReconcileResult =
-  | { kind: "skipped"; reason: string }
-  | {
-      kind: "finished";
-      summary: ReconcileSummary;
-      changes: ItemChange[];
-      health: HealthChange | null;
-    };
-
-/**
- * A whole reconcile: pages until the provider has no more, up to `maxPages`,
- * then the result row and the health. The durable worker runs each page as
- * its own step and calls finishReconcile itself.
- */
-export async function reconcileCollector(
-  ports: CollectorPorts,
-  collectorId: string,
-  options: { maxPages?: number; force?: boolean } = {},
-): Promise<ReconcileResult> {
-  const maxPages = options.maxPages ?? 20;
-  const summary: ReconcileSummary = { ok: true, pages: 0, handled: 0, missed: 0 };
-  const changes: ItemChange[] = [];
-  for (let i = 0; i < maxPages; i += 1) {
-    const page = await reconcilePage(ports, collectorId, { force: options.force });
-    if (page.kind === "skipped") {
-      if (i === 0) return { kind: "skipped", reason: page.reason };
-      break;
-    }
-    if (page.kind === "failed") {
-      summary.ok = false;
-      summary.error = page.error;
-      break;
-    }
-    summary.pages += 1;
-    summary.handled += page.handled;
-    summary.missed += page.missed;
-    changes.push(...page.changes);
-    if (!page.hasMore) break;
-  }
-  const health = await finishReconcile(ports, collectorId, summary);
-  return { kind: "finished", summary, changes, health };
 }
 
 // ── 4. Nightly count ────────────────────────────────────────────────────────
