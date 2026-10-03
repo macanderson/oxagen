@@ -13,6 +13,7 @@ import type {
   Connection,
   InboundRequest,
   ItemRef,
+  ItemVisibility,
   Page,
   ProviderItem,
   StatusCategory,
@@ -56,6 +57,8 @@ export interface FakeCollector {
   /** Items per listChangedSince page. */
   pageSize: number;
   fetchCount: number;
+  /** Who can read the fake's items, as its write-back's visibility answers. */
+  visibility: ItemVisibility;
 }
 
 const configSchema = z.object({ project: z.string().min(1) }).strict();
@@ -111,6 +114,7 @@ export function createFakeCollector(
     failWith: null,
     pageSize: 2,
     fetchCount: 0,
+    visibility: "private",
   };
 
   function authorize(conn: Connection): void {
@@ -140,6 +144,9 @@ export function createFakeCollector(
     },
     async labels(target: WriteBackTarget, labels: { priority: string; type: string }) {
       state.writeBackCalls.push({ method: "labels", providerId: target.ref.providerId, value: labels });
+    },
+    async visibility(): Promise<ItemVisibility> {
+      return state.visibility;
     },
   };
 

@@ -10,10 +10,16 @@
 // its work item, the note lists the runs that ended with nothing kept and what
 // each one cost. runWriteBack adds those lines to the note's text, because a
 // module's note takes text only.
+//
+// Anyone who can read the item can read the note, and on a public repository
+// that is everyone. So the note shows dollar figures only when the module
+// says the item is private. On any other item, and for a module that cannot
+// say, the note lists each run and why it ended, and leaves the cost to the
+// work order in Oxagen (#4775).
 import type { WriteBackSwitch, WriteBackSwitches } from "./file";
 import type { CollectorHealth } from "./health";
 import type { AnyCollectorDefinition } from "./registry";
-import type { WriteBackTarget } from "./types";
+import type { WriteBack, WriteBackTarget } from "./types";
 
 /**
  * Why a run's work did not land, as detector 8 reads its outcome:
@@ -90,12 +96,24 @@ export function formatWriteBackAmount(amount: WriteBackAmount): string {
 
 const runCount = (n: number): string => (n === 1 ? "1 run" : `${n} runs`);
 
+/** The line a send note ends with when it leaves the figures out. */
+export const SPEND_LEFT_OUT =
+  "This note leaves out what the runs cost, because Oxagen posts figures only on a private item. The work order in Oxagen shows them.";
+
 /**
- * The lines a send note adds for its spend: the total, then one line per run.
- * A run with no priced cost reads "not priced" and stays out of the total.
- * Runs priced in more than one currency get one total per currency.
+ * The lines a send note adds for its spend.
+ *
+ * With figures: the total, then one line per run with its cost. A run with no
+ * priced cost reads "not priced" and stays out of the total. Runs priced in
+ * more than one currency get one total per currency.
+ *
+ * Without figures: one line per run with why it ended, then SPEND_LEFT_OUT.
  */
-export function renderWriteBackSpend(spend: WriteBackSpend): string {
+export function renderWriteBackSpend(spend: WriteBackSpend, options: { figures: boolean }): string {
+  if (!options.figures) {
+    const lines = spend.runs.map((run) => `- ${run.runId}: ${RUN_END_TEXT[run.reason]}`);
+    return [...lines, "", SPEND_LEFT_OUT].join("\n");
+  }
   const count = spend.runs.length;
   const byCurrency = new Map<string, bigint>();
   let unpriced = 0;
@@ -125,10 +143,20 @@ export function renderWriteBackSpend(spend: WriteBackSpend): string {
   return [head, ...lines].join("\n");
 }
 
-/** The send note's text, with its spend lines after it when it carries any runs. */
-function sendNoteText(request: { text: string; spend?: WriteBackSpend }): string {
+/**
+ * The send note's text, with its spend lines after it when it carries any
+ * runs. The lines show figures only on an item the module says is private. A
+ * visibility check that fails throws, so no note is posted and the next pass
+ * tries again.
+ */
+async function sendNoteText(
+  writeBack: WriteBack,
+  target: WriteBackTarget,
+  request: { text: string; spend?: WriteBackSpend },
+): Promise<string> {
   if (request.spend === undefined || request.spend.runs.length === 0) return request.text;
-  return `${request.text}\n\n${renderWriteBackSpend(request.spend)}`;
+  const visibility = writeBack.visibility ? await writeBack.visibility(target) : "public";
+  return `${request.text}\n\n${renderWriteBackSpend(request.spend, { figures: visibility === "private" })}`;
 }
 
 /** Make one provider write if its switch is on. A module error propagates. */
@@ -147,7 +175,7 @@ export async function runWriteBack(
       await writeBack.note(target, request.text);
       break;
     case "send_note":
-      await writeBack.note(target, sendNoteText(request));
+      await writeBack.note(target, await sendNoteText(writeBack, target, request));
       break;
     case "status":
       await writeBack.status(target, request.status);

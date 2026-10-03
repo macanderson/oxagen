@@ -28323,6 +28323,12 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "write_back",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
         }
       ],
       "domain": "work",
