@@ -422,10 +422,10 @@ describe("a sync and a check against a kit", () => {
   it("names an allowlisted literal its stylesheet no longer writes", () => {
     sync();
     stampDesktop();
-    put(repo(), "apps/app/src/ui/phone.css", "input { font-size: var(--ox-a-body); }\n");
+    put(repo(), "apps/app/src/app/globals.css", ".frame { max-width: var(--ox-wrap); }\n");
     const check = sync("--check");
     expect(check.status).toBe(1);
-    expect(check.stderr).toMatch(/keep\s+apps\/app\/src\/ui\/phone\.css \(the allowlist .* keeps font-size 16px/);
+    expect(check.stderr).toMatch(/keep\s+apps\/app\/src\/app\/globals\.css \(the allowlist .* keeps width 1500px/);
   });
 
   it("fails a check when the kit changes, until the sync runs", () => {

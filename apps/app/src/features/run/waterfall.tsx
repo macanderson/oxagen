@@ -63,12 +63,11 @@ const BAR_SHARE = 0.62;
 const GRID_STEPS = 4;
 
 /**
- * `.wf-svg { width:100%; height:auto; display:block }`. The chart scales with
- * its panel, and its labels scale with it. It is never drawn narrower than its
- * own 760 units, where the mockup allowed 520px, so a label never renders
- * under its step. The panel scrolls sideways instead.
+ * `.wf-svg { width:100%; min-width:520px; height:auto; display:block }`. The
+ * chart scales with its panel, and its labels scale with it. Under 520px the
+ * panel scrolls sideways. `min-w-130` is 520px on the spacing scale.
  */
-const chartSvg = "block h-auto w-full min-w-[760px]";
+const chartSvg = "block h-auto w-full min-w-130";
 /**
  * Every label in the chart, in the chart's own units. The mockup sets them at
  * 10px to 11px, so they take the scale's smallest step.

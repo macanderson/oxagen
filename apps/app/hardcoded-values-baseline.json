@@ -860,7 +860,6 @@
   },
   "src/features/run/waterfall.tsx": {
     "gap-[5px]": 3,
-    "min-w-[760px]": 1,
     "rounded-[2px]": 1,
     "size-[7px]": 1,
     "size-[9px]": 1
