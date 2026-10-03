@@ -302,15 +302,6 @@ fi
 # port either way, so this is defence in depth rather than the only control.
 # ---------------------------------------------------------------------------
 
-# Hold the node-wide lock through replacement, health checks, and rollback.
-# A per-service CI lock cannot stop two different services from both spending
-# the same remaining RAM. Refuse before changing the current release or container.
-command -v flock >/dev/null || fail "flock is required for the node memory budget"
-exec 201>/opt/oxagen/service-deploy.lock
-flock -w 300 201 || fail "another deployment holds the node memory budget; retry this deployment"
-python3 "$(dirname "${BASH_SOURCE[0]}")/ensure-caddy-memory.py" \
-  || fail "Caddy memory limit could not be established; the current service is unchanged"
-
 # ---------------------------------------------------------------------------
 # Draining the current container (#5318).
 #
@@ -344,17 +335,6 @@ drain_seconds=$(field '.drain_seconds // 120')
 # The name the current container runs under while it finishes its requests,
 # or empty when there is none.
 draining=""
-
-# A deploy that died mid-drain leaves its old container behind. It holds
-# memory the budget below would count, and a name nothing else removes.
-remove_stale_draining() {
-  local name
-  while IFS= read -r name; do
-    [[ $name == "$CONTAINER-draining-"* ]] || continue
-    log "removing $name, left draining by an earlier deploy"
-    docker rm -f "$name" >/dev/null 2>&1 || true
-  done < <(docker ps -a --format '{{.Names}}' 2>/dev/null || true)
-}
 
 # True once nothing listens on the port: curl exits 7 when the connection is
 # refused. An HTTP answer of any status, or a timeout, means a process still
@@ -414,6 +394,26 @@ finish_draining() {
   fi
   docker rm -f "$draining" >/dev/null 2>&1 || true
   draining=""
+}
+
+# Hold the node-wide lock through replacement, health checks, and rollback.
+# A per-service CI lock cannot stop two different services from both spending
+# the same remaining RAM. Refuse before changing the current release or container.
+command -v flock >/dev/null || fail "flock is required for the node memory budget"
+exec 201>/opt/oxagen/service-deploy.lock
+flock -w 300 201 || fail "another deployment holds the node memory budget; retry this deployment"
+python3 "$(dirname "${BASH_SOURCE[0]}")/ensure-caddy-memory.py" \
+  || fail "Caddy memory limit could not be established; the current service is unchanged"
+
+# A deploy that died mid-drain leaves its old container behind. It holds
+# memory the budget below would count, and a name nothing else removes.
+remove_stale_draining() {
+  local name
+  while IFS= read -r name; do
+    [[ $name == "$CONTAINER-draining-"* ]] || continue
+    log "removing $name, left draining by an earlier deploy"
+    docker rm -f "$name" >/dev/null 2>&1 || true
+  done < <(docker ps -a --format '{{.Names}}' 2>/dev/null || true)
 }
 
 remove_stale_draining
