@@ -469,6 +469,16 @@ export interface OpenPullRequest {
   head_ref: string;
 }
 
+/**
+ * The open pull requests a host listed. `complete` is false when the host
+ * holds more than Oxagen reads in one health read, so a run that posts on
+ * the list must not record its report as posted everywhere (#4653).
+ */
+export interface OpenPullRequests {
+  pulls: OpenPullRequest[];
+  complete: boolean;
+}
+
 /** What a settings read found. */
 export type Observation =
   | {
@@ -517,7 +527,7 @@ export interface HealthHost {
   closeRevert(number: number): Promise<void>;
   /** Is this pull request the one that reverts main? */
   isRevert(pr: OpenPullRequest): boolean;
-  openPullRequests(): Promise<OpenPullRequest[]>;
+  openPullRequests(): Promise<OpenPullRequests>;
   /** Post the `Oxagen steering` check as failed on the pull request's head. */
   failCheck(pr: OpenPullRequest, report: HealthReport): Promise<void>;
   /** Put back the last `Oxagen steering` result the checks posted on the head. */
@@ -949,8 +959,9 @@ export async function checkRepoHealth(
   if (health !== "healthy") {
     const prs = await pullRequestsToPost(host, row, report, trigger, log);
     if (prs !== null) {
-      let missed = 0;
-      for (const pr of prs) {
+      // A cut list leaves pull requests the run never saw, so it counts as a miss.
+      let missed = prs.complete ? 0 : 1;
+      for (const pr of prs.pulls) {
         if (host.isRevert(pr) || pr.number === row.revertPrNumber) continue;
         if (await postOne(log, pr, () => postFailure(host, pr, report))) posted += 1;
         else missed += 1;
@@ -960,8 +971,8 @@ export async function checkRepoHealth(
   } else if (previous !== null && previous.postedDigest !== null) {
     const prs = await listOpen(host, log);
     if (prs !== null) {
-      let missed = 0;
-      for (const pr of prs) {
+      let missed = prs.complete ? 0 : 1;
+      for (const pr of prs.pulls) {
         if (await postOne(log, pr, () => postRecovery(host, pr))) restored += 1;
         else missed += 1;
       }
@@ -1101,9 +1112,15 @@ async function readHistory(
 async function listOpen(
   host: HealthHost,
   log: LogScope,
-): Promise<OpenPullRequest[] | null> {
+): Promise<OpenPullRequests | null> {
   try {
-    return await host.openPullRequests();
+    const listed = await host.openPullRequests();
+    if (!listed.complete)
+      logger.warn(
+        { ...log, listed: listed.pulls.length },
+        "steering-repo.health: the host holds more open pull requests than one read lists; the run posts on those it read and records the report as incomplete",
+      );
+    return listed;
   } catch (err) {
     if (isRateLimited(err)) throw err;
     logger.warn(
@@ -1140,12 +1157,22 @@ async function pullRequestsToPost(
   report: HealthReport,
   trigger: HealthTrigger,
   log: LogScope,
-): Promise<OpenPullRequest[] | null> {
+): Promise<OpenPullRequests | null> {
   const changed = report.digest !== row.postedDigest;
-  if (!changed && trigger.pull_request === null) return [];
+  if (!changed && trigger.pull_request === null) return { pulls: [], complete: true };
   const all = await listOpen(host, log);
   if (all === null || changed) return all;
-  return all.filter((pr) => pr.number === trigger.pull_request?.number);
+  // Only the triggering pull request needs the post, so a cut list does not
+  // undo the report the other pull requests already carry. A cut list can
+  // miss that pull request, so the trigger's own number and head stand in.
+  const wanted = trigger.pull_request;
+  if (wanted === null) return { pulls: [], complete: true };
+  const listed = all.pulls.filter((pr) => pr.number === wanted.number);
+  const pulls =
+    listed.length > 0 || all.complete
+      ? listed
+      : [{ number: wanted.number, head_sha: wanted.head_sha, head_ref: "" }];
+  return { pulls, complete: true };
 }
 
 async function postFailure(

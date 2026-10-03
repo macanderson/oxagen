@@ -109,8 +109,13 @@ export interface ToolCallObservation {
   outputDigest: string;
   /** Null when the classifier said nothing. */
   isMutating: boolean | null;
-  /** The result tokens the span recorded; null when none did. */
+  /**
+   * The result tokens Claude Code's OTel span reported, else the recorder's
+   * estimate from the result the hook saw (#5339); null when neither did.
+   */
   resultTokens: number | null;
+  /** `estimated` when `resultTokens` is the recorder's estimate; absent when reported. */
+  resultTokensBasis?: "estimated";
   /**
    * The subagent chain the call was recorded on; null when it is on the run's
    * own chain (#4001). `seq` is a position on this chain, so a cited frame

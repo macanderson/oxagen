@@ -49,6 +49,12 @@ const SHORT_SHA = 7;
 const COMPARE_PAGE = 100;
 const GITHUB_DEPLOYMENT_PAGE = 30;
 const GITLAB_DEPLOYMENT_PAGE = 20;
+/**
+ * Pages of deployments a lookup reads before it gives up. Another actor can
+ * deploy to the steering environment too, so Oxagen's newest record can sit
+ * past the first page (#4653).
+ */
+const DEPLOYMENT_PAGES = 10;
 /** Revert commits a GitLab read compares with the published content, newest first. */
 const RESTORE_PROBES = 20;
 
@@ -72,6 +78,34 @@ function short(sha: string): string {
 
 function seg(value: string | number): string {
   return encodeURIComponent(String(value));
+}
+
+/** `&page=N` for every page after the first, which keeps the first page's path as it was. */
+function pageParam(page: number): string {
+  return page === 1 ? "" : `&page=${page}`;
+}
+
+/**
+ * The first deployment `owned` accepts, newest first, read a page at a time.
+ * Null when the host runs out of deployments first. A lookup that reads
+ * DEPLOYMENT_PAGES full pages without one throws, because "none recorded"
+ * and "not read" are different answers (#4653).
+ */
+async function findDeployment<T>(
+  read: (page: number) => Promise<T[]>,
+  owned: (deployment: T) => boolean,
+  perPage: number,
+  host: string,
+): Promise<T | null> {
+  for (let page = 1; page <= DEPLOYMENT_PAGES; page++) {
+    const rows = await read(page);
+    const hit = rows.find(owned);
+    if (hit !== undefined) return hit;
+    if (rows.length < perPage) return null;
+  }
+  throw new Error(
+    `${host} lists more than ${DEPLOYMENT_PAGES * perPage} deployments to the steering environment since Oxagen's last publish, so Oxagen cannot find the commit it published.`,
+  );
 }
 
 function parseVersion(digits: string | undefined): number | null {
@@ -356,12 +390,19 @@ function deploymentVersion(deployment: GithubDeployment): number | null {
 export async function githubPublished(
   t: GithubHistoryTarget,
 ): Promise<PublishedCommit | null> {
-  const res = await t.rest.request<GithubDeployment[]>(
-    "GET",
-    `${githubRoot(t)}/deployments?environment=${seg(STEERING_ENVIRONMENT)}&per_page=${GITHUB_DEPLOYMENT_PAGE}`,
+  const hit = await findDeployment(
+    async (page) =>
+      (
+        await t.rest.request<GithubDeployment[]>(
+          "GET",
+          `${githubRoot(t)}/deployments?environment=${seg(STEERING_ENVIRONMENT)}&per_page=${GITHUB_DEPLOYMENT_PAGE}${pageParam(page)}`,
+        )
+      ).data ?? [],
+    (d) => madeByApp(d, t.app),
+    GITHUB_DEPLOYMENT_PAGE,
+    "GitHub",
   );
-  const hit = (res.data ?? []).find((d) => madeByApp(d, t.app));
-  if (hit === undefined) return null;
+  if (hit === null) return null;
   return { sha: hit.sha, version: deploymentVersion(hit) };
 }
 
@@ -579,7 +620,9 @@ export async function assertGithubSteeringCommit(
 /**
  * Find the open pull request from `branch` into main. Close every open pull
  * request from `branch` into another branch, because Repair refuses to merge
- * one and Oxagen opens a new one into main in its place.
+ * one and Oxagen opens a new one into main in its place. Each close is read
+ * back, and a pull request GitHub still shows open throws, so the caller
+ * writes nothing on `branch` (#4671).
  */
 async function githubFindPull(
   t: GithubHistoryTarget,
@@ -597,38 +640,25 @@ async function githubFindPull(
       if (found === null) found = pull.number;
       continue;
     }
-    // Close it first, so the branch never has two open pull requests.
-    await t.rest.request("PATCH", `${root}/pulls/${seg(pull.number)}`, {
-      state: "closed",
-    });
+    const path = `${root}/pulls/${seg(pull.number)}`;
+    await t.rest.request("PATCH", path, { state: "closed" });
+    const after = await t.rest.request<GithubPull>("GET", path);
+    if (after.data?.state !== "closed")
+      throw new Error(
+        `GitHub still shows pull request #${pull.number} from ${branch} into ${pull.base.ref} as open, so Oxagen wrote nothing to ${branch}.`,
+      );
   }
   return found;
 }
 
-async function githubRevertPull(
+/** Open the revert pull request from `branch` into main. Returns its number. */
+async function githubCreatePull(
   t: GithubHistoryTarget,
   branch: string,
   published: PublishedCommit,
   divergence: Divergence,
-  previous: number | null,
 ): Promise<number> {
   const root = githubRoot(t);
-  if (previous !== null) {
-    const prev = await t.rest.request<GithubPull>(
-      "GET",
-      `${root}/pulls/${seg(previous)}`,
-      undefined,
-      [404],
-    );
-    if (
-      prev.data?.state === "open" &&
-      prev.data.head.ref === branch &&
-      prev.data.base.ref === STEERING_DEFAULT_BRANCH
-    )
-      return previous;
-  }
-  const found = await githubFindPull(t, branch);
-  if (found !== null) return found;
   const made = await t.rest.request<GithubPull>(
     "POST",
     `${root}/pulls`,
@@ -669,6 +699,15 @@ async function githubHasRevertCheck(
  * close `previous` when it is a different one. Returns its number. A rerun
  * against an unchanged main writes nothing. Oxagen closes a revert pull
  * request someone retargeted away from main and opens a new one into main.
+ *
+ * The order of the writes matters (#4671). A pull request from the revert
+ * branch into another branch merges whatever the branch holds into the branch
+ * its retargeter chose. If Oxagen moved the branch first, auto-merge or a
+ * person could land the app's revert commit there before Oxagen closed the
+ * pull request. So every such pull request is closed, and read back as
+ * closed, before Oxagen writes a commit, the branch, or the check run. A
+ * close that fails throws, and the branch stays as it was. A pull request
+ * retargeted after the list is not seen until the next health read.
  */
 export async function githubOpenRevert(
   t: GithubHistoryTarget,
@@ -679,6 +718,7 @@ export async function githubOpenRevert(
   const root = githubRoot(t);
   const main = divergence.main_sha;
   const branch = revertBranch(published.sha, main);
+  const open = await githubFindPull(t, branch);
   const tree = (await githubCommit(t, published.sha)).tree.sha;
 
   // Reuse the branch when its head holds the published files on top of main.
@@ -720,13 +760,7 @@ export async function githubOpenRevert(
       });
   }
 
-  const number = await githubRevertPull(
-    t,
-    branch,
-    published,
-    divergence,
-    previous,
-  );
+  const number = open ?? (await githubCreatePull(t, branch, published, divergence));
 
   if (!reused || !(await githubHasRevertCheck(t, head)))
     await t.rest.request("POST", `${root}/check-runs`, {
@@ -864,12 +898,19 @@ function sameFiles(compare: GitlabCompare): boolean {
 export async function gitlabPublished(
   t: GitlabHistoryTarget,
 ): Promise<PublishedCommit | null> {
-  const res = await t.rest.request<GitlabDeployment[]>(
-    "GET",
-    `${gitlabRoot(t)}/deployments?environment=${seg(STEERING_ENVIRONMENT)}&status=success&order_by=id&sort=desc&per_page=${GITLAB_DEPLOYMENT_PAGE}`,
+  const hit = await findDeployment(
+    async (page) =>
+      (
+        await t.rest.request<GitlabDeployment[]>(
+          "GET",
+          `${gitlabRoot(t)}/deployments?environment=${seg(STEERING_ENVIRONMENT)}&status=success&order_by=id&sort=desc&per_page=${GITLAB_DEPLOYMENT_PAGE}${pageParam(page)}`,
+        )
+      ).data ?? [],
+    (d) => d.user?.id === t.bot.user_id,
+    GITLAB_DEPLOYMENT_PAGE,
+    "GitLab",
   );
-  const hit = (res.data ?? []).find((d) => d.user?.id === t.bot.user_id);
-  if (hit === undefined) return null;
+  if (hit === null) return null;
   const { message } = await gitlabCommit(t, hit.sha);
   const version =
     versionTrailer(message) ??
@@ -1014,7 +1055,9 @@ async function gitlabWriteRevert(
 /**
  * Find the open merge request from `branch` into main. Close every open merge
  * request from `branch` into another branch, because Repair refuses to merge
- * one and Oxagen opens a new one into main in its place.
+ * one and Oxagen opens a new one into main in its place. Each close is read
+ * back, and a merge request GitLab still shows open throws, so the caller
+ * writes nothing on `branch` (#4671).
  */
 async function gitlabFindRequest(
   t: GitlabHistoryTarget,
@@ -1032,38 +1075,25 @@ async function gitlabFindRequest(
       if (found === null) found = mr.iid;
       continue;
     }
-    // Close it first, so the branch never has two open merge requests.
-    await t.rest.request("PUT", `${root}/merge_requests/${seg(mr.iid)}`, {
-      state_event: "close",
-    });
+    const path = `${root}/merge_requests/${seg(mr.iid)}`;
+    await t.rest.request("PUT", path, { state_event: "close" });
+    const after = await t.rest.request<GitlabMergeRequest>("GET", path);
+    if (after.data?.state !== "closed")
+      throw new Error(
+        `GitLab still shows merge request !${mr.iid} from ${branch} into ${mr.target_branch} as open, so Oxagen wrote nothing to ${branch}.`,
+      );
   }
   return found;
 }
 
-async function gitlabRevertRequest(
+/** Open the revert merge request from `branch` into main. Returns its iid. */
+async function gitlabCreateRequest(
   t: GitlabHistoryTarget,
   branch: string,
   published: PublishedCommit,
   divergence: Divergence,
-  previous: number | null,
 ): Promise<number> {
   const root = gitlabRoot(t);
-  if (previous !== null) {
-    const prev = await t.rest.request<GitlabMergeRequest>(
-      "GET",
-      `${root}/merge_requests/${seg(previous)}`,
-      undefined,
-      [404],
-    );
-    if (
-      prev.data?.state === "opened" &&
-      prev.data.source_branch === branch &&
-      prev.data.target_branch === STEERING_DEFAULT_BRANCH
-    )
-      return previous;
-  }
-  const found = await gitlabFindRequest(t, branch);
-  if (found !== null) return found;
   const made = await t.rest.request<GitlabMergeRequest>(
     "POST",
     `${root}/merge_requests`,
@@ -1091,6 +1121,11 @@ async function gitlabRevertRequest(
  * close `previous` when it is a different one. Returns its iid. A rerun
  * against an unchanged main writes no commit. Oxagen closes a revert merge
  * request someone retargeted away from main and opens a new one into main.
+ *
+ * Every such merge request is closed, and read back as closed, before Oxagen
+ * writes the revert commit, which force-moves the branch, or the status, for
+ * the reason githubOpenRevert gives (#4671). A close that fails throws, and
+ * the branch stays as it was.
  */
 export async function gitlabOpenRevert(
   t: GitlabHistoryTarget,
@@ -1101,6 +1136,7 @@ export async function gitlabOpenRevert(
   const root = gitlabRoot(t);
   const main = divergence.main_sha;
   const branch = revertBranch(published.sha, main);
+  const open = await gitlabFindRequest(t, branch);
 
   // Reuse the branch when its head holds the published files on top of main.
   let head: string | null = null;
@@ -1122,13 +1158,7 @@ export async function gitlabOpenRevert(
   }
   if (head === null) head = await gitlabWriteRevert(t, published, main, branch);
 
-  const iid = await gitlabRevertRequest(
-    t,
-    branch,
-    published,
-    divergence,
-    previous,
-  );
+  const iid = open ?? (await gitlabCreateRequest(t, branch, published, divergence));
 
   // 400: the commit already carries this status.
   await t.rest.request(

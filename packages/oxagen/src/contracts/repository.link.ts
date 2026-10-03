@@ -27,15 +27,14 @@
  *     to hold the steering record.
  *   - `conflict: main_repo`: it is this workspace's steering repository.
  *   - `conflict: repository_already_linked`: it is linked already.
- *   - `conflict: main_repo_claimed`: it is another workspace's steering
- *     repository, which holds that workspace's steering records. A linked
- *     code repository receives no steering PR, because every record lives in
- *     the steering repository (ADR-212).
- *     A repository that steers no workspace may be linked by any number of
- *     workspaces.
  *   - `conflict: workspace_toml_unreadable`: the steering repository's
  *     `workspace.toml` is present but does not read as `workspace/v1`. When
  *     the file is missing, the steering PR creates it.
+ *
+ * Another workspace's heads refuse nothing (ADR-293). Any number of
+ * workspaces may link one repository, and that includes a repository another
+ * workspace steers by. The one exclusive rule belongs to the agent: it is
+ * steered by one steering repository, which its workspace picks.
  *
  * The reason codes keep their `main_repo` spelling so existing callers still
  * match them. Their messages say "steering repository".

@@ -50,7 +50,10 @@ import { logger } from "../logger";
  * worked. Now step 3 degrades to "no similarity match" and step 5 records the
  * failure, so the entity reaches the graph and downstream automations still
  * see it. What is missing in both cases is the vector, and
- * `MATCH (n:EntityNode) WHERE n.embedding IS NULL` is the backfill set.
+ * `MATCH (n:EntityNode) WHERE n.embedding IS NULL` is the backfill set. A node
+ * step 3 could not match is also marked `similarityDeferredAt`, and the
+ * `similarity/reconcile` job runs the match for it once the backfill has given
+ * it a vector.
  *
  * Filters come from `@oxagen/ingestion/filters` — the same
  * pure functions the reference `runPipeline()` uses — so there is exactly one
@@ -342,9 +345,10 @@ export const [ingestionPipeline] = createFunction(
     // Pass B was skipped because the embedding backend could not answer. The
     // entity is in the graph rather than discarded, but it was resolved without
     // similarity matching, so it may be its own principal where an alias was
-    // warranted. Reported at warn because it is a silent quality regression
-    // that only an operator can act on, and because the outage that causes it
-    // affects every record while it lasts.
+    // warranted. The node carries `similarityDeferredAt`, and the
+    // `similarity/reconcile` job runs Pass B for it once it has a vector.
+    // Reported at warn because the outage that causes it affects every record
+    // while it lasts.
     if (dedup.similarityDeferred) {
       logger.warn(
         {
@@ -353,7 +357,7 @@ export const [ingestionPipeline] = createFunction(
           orgId,
           connectionId,
         },
-        "ingestion-pipeline: embedding backend unavailable — entity written without similarity dedup; re-resolve nodes where n.similarityDeferredAt IS NOT NULL once it recovers",
+        "ingestion-pipeline: embedding backend unavailable — entity written without similarity dedup and marked similarityDeferredAt; the similarity/reconcile job links it once it has a vector",
       );
     }
 

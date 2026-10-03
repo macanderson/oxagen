@@ -303,6 +303,24 @@ function carryMeasure(
   };
 }
 
+/**
+ * A re-read of a result whose size the recorder estimated (#5339): a hook
+ * saw the result, and no OTel span reported its tokens. The measured side is
+ * then an estimate, the way one estimated part makes a cost basis
+ * `estimated` (`foldBasis`), so the finding never prices an estimate as
+ * a count Claude Code reported. A result Claude Code counted keeps the
+ * measure's own basis, and a measure no basis covers stays uncovered.
+ */
+function withResultBasis(
+  measure: Measure,
+  run: RunTotalsRecord,
+  call: ToolCallObservation,
+): Measure {
+  if (call.resultTokensBasis !== "estimated") return measure;
+  const basis = measure.basis === undefined ? run.costBasis : measure.basis;
+  return { ...measure, basis: basis === null ? null : "estimated" };
+}
+
 function detect(input: DetectInput, ctx: DetectContext): void {
   const splits = new Map<string, Split>();
   /** Add one re-read of a result on its side of the split. */
@@ -354,7 +372,11 @@ function detect(input: DetectInput, ctx: DetectContext): void {
         if (tokens <= UNPAGED_RESULT_TOKENS) continue;
         // The run's input price is its priced input cost over every input
         // token, so a run with an unpriced call reads low and is not covered.
-        const measure = resultMeasure(view.run, tokens, () => PAGE_TOKENS);
+        const measure = withResultBasis(
+          resultMeasure(view.run, tokens, () => PAGE_TOKENS),
+          view.run,
+          c.call,
+        );
         addRead(
           key,
           view.run,
@@ -376,7 +398,11 @@ function detect(input: DetectInput, ctx: DetectContext): void {
         addRead(
           key,
           view.run,
-          carryMeasure(carries[i]!, view.run.currency, tokens),
+          withResultBasis(
+            carryMeasure(carries[i]!, view.run.currency, tokens),
+            view.run,
+            c.call,
+          ),
           i === 0 ? [c.frame] : [],
           side,
           i === 0,

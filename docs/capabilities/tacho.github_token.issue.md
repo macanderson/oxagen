@@ -10,7 +10,9 @@ Mint a GitHub App installation token for one repository bound to the calling hos
 
 The deployment must turn the broker on ([`OXAGEN_TACHO_GITHUB_BROKER`](../../packages/config/src/registry.ts)). The host API key must own the named active enrollment, and its creator must still hold the organization Owner or Admin role. The handler resolves the GitHub installation from the workspace connection and narrows the token to the current binding's immutable repository ID with `contents: write` and `metadata: read`. Unbound repositories, invalid IDs, missing connections, and GitHub refusals fail without returning a broader credential.
 
-The workspace's steering repository takes changes through a steering PR. This capability refuses it with `conflict: steering_repo_propose_only` before it reads an installation. One GitHub App serves code repositories and steering repos (ADR-228), and that app is the only bypass actor on the merge ruleset, so every token it mints could merge past the steering check. Propose the change through a steering PR instead, or push a branch from a clone with a credential that can write to the repository.
+A steering repository takes changes through a steering PR. This capability refuses one with `conflict: steering_repo_propose_only` before it reads an installation. One GitHub App serves code repositories and steering repos (ADR-228), and that app is the only bypass actor on the merge ruleset, so every token it mints could merge past the steering check. Propose the change through a steering PR from the workspace the repository steers, or push a branch from a clone with a credential that can write to the repository.
+
+The refusal covers another workspace's steering repository too. Any workspace may link a repository another workspace steers by ([ADR-293](../adr/ADR-293-any-workspace-may-link-any-repository-its-installation-can-see.md)), so the handler asks every workspace, on every data plane, whether one steers by the repository.
 
 Enable a local repository with `tacho github configure --repository owner/name --harness claude-code`. Choose `codex`, `cursor`, or `stella` for another enrolled harness. The proxy requires exactly one live session in that directory. Remove the configuration with the same command plus `--remove`.
 
@@ -27,5 +29,5 @@ The credential exists only in the server response and daemon memory. The daemon 
 | `not_found` | `repository_not_governed` | no head in the host's workspace points at that repository |
 | `conflict` | `repository_id_invalid` | the binding's repository ID is not a number |
 | `conflict` | `github_not_connected` | the workspace has no GitHub App installation |
-| `conflict` | `steering_repo_propose_only` | the repository is the steering repository |
+| `conflict` | `steering_repo_propose_only` | the repository is a steering repository, this workspace's or another's |
 | `conflict` | `github_refused` | GitHub refused the mint |

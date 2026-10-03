@@ -661,7 +661,15 @@ export function normalizeHook(
         body["tool_output_digest"] = digestJcs(
           input.tool_response as JsonValue,
         );
-        body["tool_output_bytes"] = jsonByteLength(input.tool_response);
+        const bytes = jsonByteLength(input.tool_response);
+        body["tool_output_bytes"] = bytes;
+        // The tokens the result adds to the context, estimated from its size
+        // as the steering assembler budgets: UTF-8 bytes over four (#5339).
+        // Claude Code counts them only on its OTel tool span, which a session
+        // without enhanced telemetry never sends. The size is kept under every
+        // retention, so this needs no body. A reader prefers the span's count.
+        body["tool_result_tokens"] = Math.ceil(bytes / 4);
+        body["tool_result_tokens_basis"] = "estimated";
       }
       if (failed) {
         const error = input.error ?? input["error_type"];

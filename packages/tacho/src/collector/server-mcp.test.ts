@@ -16,6 +16,7 @@ import {
   type CollectorServer,
   createCollectorServer,
 } from "./server";
+import { MCP_STREAMABLE_HTTP_ACCEPT } from "../wire";
 
 const TOKEN = "local-token-0123456789abcdef";
 const ENROLLMENT = "tch_abcdefghijklmnopqrstuv";
@@ -115,6 +116,21 @@ describe("the TCP listener", () => {
   it("serves /mcp to a native client", async () => {
     const reply = await post({ port, path: "/mcp", body: RPC });
     expect(reply.status).toBe(200);
+    expect(JSON.parse(reply.body)).toHaveProperty("result");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("serves /mcp to a client that accepts both MCP media types, with JSON (#5356)", async () => {
+    // The stdio shim sends the Accept the MCP transport requires of a client.
+    // The local route answers JSON, which that Accept includes.
+    const reply = await post({
+      port,
+      path: "/mcp",
+      body: RPC,
+      headers: { Accept: MCP_STREAMABLE_HTTP_ACCEPT },
+    });
+    expect(reply.status).toBe(200);
+    expect(reply.headers["content-type"]).toBe("application/json");
     expect(JSON.parse(reply.body)).toHaveProperty("result");
     expect(calls).toHaveLength(1);
   });

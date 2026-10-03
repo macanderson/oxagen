@@ -895,6 +895,164 @@ describe("the steering a session was delivered", () => {
   });
 });
 
+/** Text an Oxagen hook answer handed the agent, such as a recall. */
+const RECALL =
+  "Memories Oxagen recalled for this prompt, most relevant first:\n" +
+  "- Use pnpm, never npm.\n- Run the gate in CI.";
+const MESSAGE = "Stop and read the brief before the next edit.";
+
+const BEFORE = "2026-10-03T09:59:00.000Z";
+const HANDED = "2026-10-03T10:00:00.000Z";
+const LATER = "2026-10-03T10:05:00.000Z";
+const AFTER = "2026-10-03T10:10:00.000Z";
+
+describe("the context Oxagen's hooks handed the session (#5339)", () => {
+  it("counts the handed text on a call it never saw, with an estimated basis", () => {
+    const on = tracker();
+    on.noteInjectedContext(RECALL, HANDED);
+    expect(on.measureUnseen(AFTER)).toEqual({
+      context_frame_tokens: budgetTokens(RECALL),
+      context_frame_tokens_basis: "estimated",
+    });
+  });
+
+  it("writes no count, never zero, when no hook handed the agent text", () => {
+    const on = tracker();
+    expect(on.measureUnseen(AFTER)).toEqual({});
+    on.noteInjectedContext("", HANDED);
+    expect(on.measureUnseen(AFTER)).toEqual({});
+    expect(on.state()).toEqual({});
+  });
+
+  it("keeps the steering count beside the context count", () => {
+    const on = tracker();
+    on.noteSteeringManifest(MANIFEST);
+    on.noteInjectedContext(RECALL, HANDED);
+    expect(on.measureUnseen(AFTER)).toEqual({
+      steering_tokens: 65,
+      steering_tokens_basis: "estimated",
+      context_frame_tokens: budgetTokens(RECALL),
+      context_frame_tokens_basis: "estimated",
+    });
+  });
+
+  it("counts every answer so far on each later call", () => {
+    const on = tracker();
+    on.noteInjectedContext(RECALL, HANDED);
+    on.noteInjectedContext(MESSAGE, LATER);
+    const total = budgetTokens(RECALL) + budgetTokens(MESSAGE);
+    expect(on.measureUnseen(AFTER).context_frame_tokens).toBe(total);
+    expect(on.measureUnseen(AFTER).context_frame_tokens).toBe(total);
+  });
+
+  it("gives a call the total as of when it was made", () => {
+    const on = tracker();
+    on.noteInjectedContext(RECALL, HANDED);
+    on.noteInjectedContext(MESSAGE, LATER);
+    // A record that arrives late for a call made before any answer.
+    expect(on.measureUnseen(BEFORE)).toEqual({});
+    // A call made at the first answer's time carries that answer alone.
+    expect(on.measureUnseen(HANDED).context_frame_tokens).toBe(
+      budgetTokens(RECALL),
+    );
+    // A call with no readable time takes the latest total.
+    expect(on.measureUnseen(undefined).context_frame_tokens).toBe(
+      budgetTokens(RECALL) + budgetTokens(MESSAGE),
+    );
+  });
+
+  it("empties the total at a compaction and keeps it for calls made before", () => {
+    const on = tracker();
+    on.noteInjectedContext(RECALL, HANDED);
+    on.clearInjectedContext(LATER);
+    expect(on.measureUnseen(AFTER)).toEqual({});
+    expect(on.measureUnseen(HANDED).context_frame_tokens).toBe(
+      budgetTokens(RECALL),
+    );
+    on.noteInjectedContext(MESSAGE, AFTER);
+    expect(on.measureUnseen(AFTER).context_frame_tokens).toBe(
+      budgetTokens(MESSAGE),
+    );
+  });
+
+  it("clears nothing on a session that was handed no text", () => {
+    const on = tracker();
+    on.clearInjectedContext(LATER);
+    expect(on.state()).toEqual({});
+  });
+
+  it("keeps the last answers and reads the total before them for an older call", () => {
+    const on = tracker();
+    const step = budgetTokens(MESSAGE);
+    for (let minute = 0; minute < 40; minute += 1)
+      on.noteInjectedContext(
+        MESSAGE,
+        new Date(Date.parse(HANDED) + minute * 60_000).toISOString(),
+      );
+    const state = on.state();
+    expect(state.injected).toHaveLength(32);
+    // Eight answers fell off the front, so the floor is the eighth total.
+    expect(state.injectedFloor).toBe(8 * step);
+    expect(on.measureUnseen(BEFORE).context_frame_tokens).toBe(8 * step);
+    // The eleventh answer left at 10:10, the same instant as the call, so
+    // the call carries eleven.
+    expect(on.measureUnseen(AFTER).context_frame_tokens).toBe(11 * step);
+    expect(
+      on.measureUnseen("2026-10-03T11:00:00.000Z").context_frame_tokens,
+    ).toBe(40 * step);
+  });
+
+  it("adds the count to a proxied main call and to one it could not read", () => {
+    const on = tracker();
+    on.noteInjectedContext(RECALL, HANDED);
+    const main = measured(on, exchange(request()), "turn:1", {});
+    expect(main.facts.context_frame_tokens).toBe(budgetTokens(RECALL));
+    expect(main.facts.context_frame_tokens_basis).toBe("estimated");
+    expect(measured(on, undefined).facts).toEqual({
+      context_frame_tokens: budgetTokens(RECALL),
+      context_frame_tokens_basis: "estimated",
+    });
+  });
+
+  it("adds no count to a proxied side call, whose request declares no tools", () => {
+    const on = tracker();
+    on.noteInjectedContext(RECALL, HANDED);
+    const { facts } = measured(on, exchange(request({ tools: [] })));
+    expect(facts).not.toHaveProperty("context_frame_tokens");
+    expect(facts).not.toHaveProperty("context_frame_tokens_basis");
+  });
+
+  it("names no part for the handed text, so the system context digest holds", () => {
+    const plain = tracker();
+    const handed = tracker();
+    handed.noteInjectedContext(RECALL, HANDED);
+    const a = measured(plain, exchange(request())).facts;
+    const b = measured(handed, exchange(request())).facts;
+    expect(b.system_context_digest).toBe(a.system_context_digest);
+    expect(b.system_context_parts).toEqual(a.system_context_parts);
+  });
+
+  it("carries the totals over a restart", () => {
+    const before = tracker();
+    before.noteInjectedContext(RECALL, HANDED);
+    before.noteInjectedContext(MESSAGE, LATER);
+    const after = new SystemContextTracker(before.state());
+    expect(after.measureUnseen(AFTER)).toEqual(before.measureUnseen(AFTER));
+    expect(after.measureUnseen(HANDED)).toEqual(before.measureUnseen(HANDED));
+  });
+
+  it("drops a malformed mark from a saved state", () => {
+    const after = new SystemContextTracker({
+      injected: [
+        { at: HANDED, tokens: 12 },
+        { at: LATER } as unknown as { at: string; tokens: number },
+        "junk" as unknown as { at: string; tokens: number },
+      ],
+    });
+    expect(after.measureUnseen(AFTER).context_frame_tokens).toBe(12);
+  });
+});
+
 describe("toolProvider", () => {
   it.each([
     ["Read", "builtin"],

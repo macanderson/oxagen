@@ -203,6 +203,16 @@ export const toolFacts = z.object({
     .optional(),
   tool_denial_kind: short.optional(),
   tool_result_tokens: u32.optional(),
+  /**
+   * How `tool_result_tokens` is known (#5339). `reported` is Claude Code's own
+   * count on its OTel tool span. `estimated` is the recorder's: the result's
+   * UTF-8 bytes over four, from the hook that saw the result. A count with no
+   * basis was written before the member existed, and only the OTel span wrote
+   * a count then, so a reader takes it as `reported`. The recorder writes the
+   * two together. The envelope does not require the pair, so a frame from a
+   * host older than the member still parses.
+   */
+  tool_result_tokens_basis: z.enum(TOKEN_SOURCE_BASES).optional(),
   batch_size: u8.optional(),
   batch_index: u8.optional(),
   attribution_skill: short.optional(),

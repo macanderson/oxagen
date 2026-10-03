@@ -3,7 +3,9 @@
 // monthly budget beside it, the spend by day, and one table grouped by work
 // item, agent, operator, model, or MCP server, each row opening to its
 // costliest runs, each run with its agent, operator, and start. One
-// get_spend read at the chosen grouping carries all of it. The design's Budget
+// get_spend read at the chosen grouping carries all of it. Grouped by agent,
+// an agent the gateway metered none of reads "Not metered" over what its
+// harness reported (mockup `notMetered`). The design's Budget
 // column is not drawn: a budget holds for the organization or the workspace,
 // never one agent or one operator (#3864). Grouped by agent, a second read
 // (get_spend_per_merged_pr, F26) adds each agent's spend per merged PR beside
@@ -396,6 +398,40 @@ function RunOperator({ run }: { run: SpendTopRun }) {
   );
 }
 
+/**
+ * Whether the gateway metered none of a cost: every priced frame behind it is
+ * the harness's own report (`client_attested`). An agent whose runtime keeps
+ * its own model key has a cost like this, and the design marks it Not metered
+ * (mockup `notMetered`). A `mixed` cost had some of it metered, so it is not.
+ */
+function isNotMetered(cost: Cost | null): cost is Cost {
+  return cost !== null && cost.basis === "client_attested";
+}
+
+/**
+ * An agent's cost the gateway metered none of: "Not metered" over the sum its
+ * harness reported, never as a figure the gateway measured. The words carry
+ * the basis, so no basis token prints beside them.
+ */
+function NotMeteredCost({ cost }: { cost: Cost }) {
+  const t = useTranslations("spend.month.notMetered");
+  const locale = useLocale();
+  return (
+    <span
+      className="flex flex-col items-end"
+      data-not-metered=""
+      data-basis={cost.basis}
+    >
+      <span className="font-semibold">{t("label")}</span>
+      <span className="text-sm text-muted-foreground">
+        {t("reported", {
+          amount: formatMoney(cost, { locale, precision: "cents" }),
+        })}
+      </span>
+    </span>
+  );
+}
+
 function Share({
   cost,
   total,
@@ -718,7 +754,12 @@ export function MonthSection({
           largest={row.key === OTHER_SPEND_KEY ? null : largest}
         />
       ),
-      cost: <CostFigure cost={row.cost} />,
+      cost:
+        by === "agent" && ownGroup && isNotMetered(row.cost) ? (
+          <NotMeteredCost cost={row.cost} />
+        ) : (
+          <CostFigure cost={row.cost} />
+        ),
       runList:
         costliest === null && behind === null ? null : (
           <div className="flex flex-col gap-2">

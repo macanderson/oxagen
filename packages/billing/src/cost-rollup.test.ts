@@ -702,6 +702,36 @@ describe("each tool's result cost (#3892, ADR-199)", () => {
     ]);
   });
 
+  // #5339. A hook-only session's result tokens are the recorder's estimate
+  // from the result's size. A tool sum with any estimated count is an
+  // estimate, the way an estimated part makes a cost basis estimated, and a
+  // tool whose counts Claude Code all reported carries no basis key.
+  it("marks a tool's result tokens estimated when any call's count was an estimate", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      modelCalls: [priced],
+      toolCalls: [
+        tool("Read", { resultTokens: 1_200, resultTokensBasis: "estimated" }),
+        tool("Read", { resultTokens: 300 }),
+        tool("Grep", { resultTokens: 50 }),
+        tool("Bash", { resultTokensBasis: "estimated" }),
+      ],
+    });
+    expect(record.breakdown.tools).toEqual([
+      // No call of Bash recorded a count, so it has no basis either.
+      { name: "Bash", calls: 1, resultTokens: null, costMicros: null },
+      { name: "Grep", calls: 1, resultTokens: 50, costMicros: 150n },
+      {
+        name: "Read",
+        calls: 2,
+        resultTokens: 1_500,
+        resultTokensBasis: "estimated",
+        costMicros: 4_500n,
+      },
+    ]);
+  });
+
   it("attributes input the run's cost already counts, never adding to it", () => {
     const without = rollupRun({
       meta,

@@ -959,19 +959,21 @@ export class SessionRecorder {
     const duplicate = sighting.attrs ?? {};
     // The call's system context and token sources, measured from the request
     // the proxy recorded (#4493). A member the producer set itself wins.
+    const ts = fields.ts ?? this.now();
     const measured =
       kind === "llm_call"
         ? this.systemContext.measure(
             fields.content,
             fields.attrs,
             this.turnOpen ? `turn:${this.turnSeq}` : `idle:${this.turnSeq}`,
+            ts,
           )
         : undefined;
     const event = this.seal(
       kind,
       measured !== undefined ? { ...measured.facts, ...body } : body,
       {
-        ts: fields.ts ?? this.now(),
+        ts,
         source: fields.source ?? "collector",
         ...(fields.hook_event_name !== undefined
           ? { hook_event_name: fields.hook_event_name }
@@ -1518,21 +1520,36 @@ export class SessionRecorder {
    * recorder knows without the call's request (#4493). Only the counted row,
    * the first sighting of its call, takes them. A stamped duplicate is never
    * summed, and the rollup joins a stamped proxy row back for the members the
-   * counted row lacks. The steering count is the one source known without
-   * the request, so the tool definitions and the system context stay absent
-   * (ADR-062, amendment of 2026-10-02). A member the producer set itself
-   * wins, as on a proxied call. Only a call on the session's own
-   * conversation comes here: an OTel record whose `query_source` says so
-   * ({@link onSessionConversation}), or a transcript `assistant` record,
-   * since Claude Code writes no side call to the transcript.
+   * counted row lacks. Two sources are known without the request: the
+   * steering count, and the context frames Oxagen's hooks handed the session
+   * before `ts`, when the call was made (#5339). The tool definitions and the
+   * system context stay absent (ADR-062, amendments of 2026-10-02 and
+   * 2026-10-03). A member the producer set itself wins, as on a proxied call.
+   * Only a call on the session's own conversation comes here: an OTel record
+   * whose `query_source` says so ({@link onSessionConversation}), or a
+   * transcript `assistant` record, since Claude Code writes no side call to
+   * the transcript.
    */
   private withUnseenRequestSources(
     body: Record<string, unknown>,
     attrs: Readonly<Record<string, string>>,
+    ts: string,
   ): Record<string, unknown> {
     if (attrs[LLM_CALL_DUPLICATE_OF_ATTR] !== undefined) return body;
-    const facts = this.systemContext.measureUnseen();
+    const facts = this.systemContext.measureUnseen(ts);
     return Object.keys(facts).length === 0 ? body : { ...facts, ...body };
+  }
+
+  /**
+   * Note text an Oxagen hook answer handed this session's agent after its
+   * start, at `at`, when the answer left (#5339). Every model call on the
+   * session's own conversation from then on carries the running total as
+   * `context_frame_tokens`. The hook handler calls this only for a live
+   * answer, since a replay's answer reaches no harness. A rollback of the
+   * chain takes the note back with everything else the hook changed.
+   */
+  noteInjectedContext(text: string, at: string): void {
+    this.systemContext.noteInjectedContext(text, at);
   }
 
   /**
@@ -1716,6 +1733,12 @@ export class SessionRecorder {
       // A resume starts a stopped chain again, and what it seals is live.
       this.stopped = false;
       body = { ...body, env_snapshot: this.envSnapshot };
+      // A compaction swaps the conversation for a summary, and a `/clear`
+      // empties it, so the text Oxagen's hooks handed the agent is gone from
+      // every call after this start (#5339).
+      const source = body["session_start_source"];
+      if (source === "compact" || source === "clear")
+        this.systemContext.clearInjectedContext(ts);
     }
     if (draft.kind === "turn_start") {
       if (this.turnOpen) {
@@ -2065,7 +2088,7 @@ export class SessionRecorder {
       draft.kind === "llm_call" &&
         draft.source === "otel_log" &&
         onSessionConversation(draft.standard.context.query_source)
-        ? this.withUnseenRequestSources(draft.body, duplicate)
+        ? this.withUnseenRequestSources(draft.body, duplicate, draft.ts)
         : draft.body,
       {
         ts: draft.ts,
@@ -2192,7 +2215,7 @@ export class SessionRecorder {
         duplicate = { [LLM_CALL_DUPLICATE_OF_ATTR]: "transcript" };
       }
       if (draft.kind === "llm_call")
-        body = this.withUnseenRequestSources(body, duplicate);
+        body = this.withUnseenRequestSources(body, duplicate, draft.ts);
       let content = draft.content;
       if (this.isSealedPrompt(draft.kind, body)) {
         // The turn's `turn_start` holds this text already. The record's own

@@ -8,14 +8,19 @@
 // it never names the installation, for the reason
 // repository.github-connection.ts gives (ADR-027).
 //
-// The workspace's steering repository takes changes through a steering PR,
-// and this handler never mints a token for it. It refuses with
+// A steering repository takes changes through a steering PR, and this
+// handler never mints a token for one. It refuses with
 // `conflict: steering_repo_propose_only` before it reads an installation.
 // Steering and code repositories share one GitHub App (ADR-228), and that app
 // holds the only bypass on the "Oxagen merges" ruleset. A ruleset bypass
 // follows the app, not the token's permissions, so any token this handler
-// minted for the steering repository could merge without Oxagen's queue,
+// minted for a steering repository could merge without Oxagen's queue,
 // stamp, and publish.
+//
+// That covers another workspace's steering repository too. Any workspace may
+// link a repository another workspace steers by (ADR-293), so a linked head
+// alone does not prove the repository steers nobody. The handler asks every
+// workspace, on every plane, before it reads an installation.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { HandlerError } from "@oxagen/oxagen";
@@ -29,6 +34,7 @@ import {
   type InstallationTokenResult,
 } from "@oxagen/github";
 import { and, eq, sql } from "drizzle-orm";
+import { steeringAnywhere } from "./lib/repository-heads-anywhere";
 import { resolveEnrolledHost } from "./lib/tacho-host";
 import { logger } from "./logger";
 import {
@@ -104,19 +110,24 @@ export async function selectGovernedRepository(
   };
 }
 
-/** The refusal for the steering repository, which takes changes only through a steering PR. */
+/** The refusal for a steering repository, which takes changes only through a steering PR. */
 function steeringRepoProposeOnly(): HandlerError {
   return new HandlerError({
     code: "conflict",
     reason: "steering_repo_propose_only",
     message:
-      "The steering repository takes changes through a steering PR. Call propose_steering, or push a branch from a clone with a credential that can write to it.",
+      "A steering repository takes changes through a steering PR from the workspace it steers. Propose the change there, or push a branch from a clone with a credential that can write to it.",
   });
 }
 
 export interface GithubTokenIssueDeps {
   enabled(): boolean;
   governedRepository: typeof selectGovernedRepository;
+  /**
+   * True when any workspace, on any Postgres plane, holds this GitHub
+   * repository id as its steering repository.
+   */
+  steersAnyWorkspace(repositoryId: string): Promise<boolean>;
   installation(scope: Scope): Promise<{ installationId: string } | null>;
   mint(args: {
     installationId: string;
@@ -127,6 +138,8 @@ export interface GithubTokenIssueDeps {
 export const githubTokenIssueDeps: GithubTokenIssueDeps = {
   enabled: () => process.env[GITHUB_BROKER_ENV] === "1",
   governedRepository: selectGovernedRepository,
+  steersAnyWorkspace: (repositoryId) =>
+    steeringAnywhere(GITHUB_PROVIDER, repositoryId),
   installation: resolveWorkspaceGithubInstallation,
   async mint({ installationId, repositoryId }) {
     const appId = process.env["GITHUB_APP_ID"];
@@ -205,6 +218,15 @@ export function createTachoGithubTokenIssueHandler(
       logger.info(
         { ...scope, repository: repo.fullName },
         "tacho.github_token.issue: refused a token for the steering repository",
+      );
+      throw steeringRepoProposeOnly();
+    }
+    // A linked head may name a repository another workspace steers by
+    // (ADR-293). Its token would carry the same bypass.
+    if (await deps.steersAnyWorkspace(repo.providerRepositoryId)) {
+      logger.info(
+        { ...scope, repository: repo.fullName },
+        "tacho.github_token.issue: refused a token for a repository another workspace steers by",
       );
       throw steeringRepoProposeOnly();
     }

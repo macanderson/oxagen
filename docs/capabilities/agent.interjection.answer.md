@@ -92,9 +92,9 @@ non-enterprise organization, so the handler's check is the enforcement.
    transaction, because both call GitHub. `link` runs `link_repository` on the
    repository. `create` runs `create_workspace` with it as the main
    repository. An enterprise organization's policies and each capability's
-   own audit row apply to them, and their refusals (`main_repo_claimed`,
-   `slug_taken`, `github_not_connected` and the rest) reach the caller as
-   they are. A link retried after it bound the repository takes the existing
+   own audit row apply to them, and their refusals
+   (`repository_already_linked`, `slug_taken`, `github_not_connected` and the
+   rest) reach the caller as they are. A link retried after it bound the repository takes the existing
    binding as its own.
 4. One transaction then locks the question and checks it again. One update
    records `answered_at`, `answer`, `answered_by_user_id`, `path` and

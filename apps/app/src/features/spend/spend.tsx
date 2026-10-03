@@ -56,7 +56,12 @@ import { SummaryTiles } from "./summary";
 import { BudgetsTable, TaskTable, ToolSection } from "./tables";
 import { SPEND_PANEL, SpendTabs } from "./tabs";
 import { TokensSection } from "./tokens";
-import { monthToDate, type SpendAt, type SpendView } from "./view";
+import {
+  monthToDate,
+  SPEND_MONTH_DEFAULT_BY,
+  type SpendAt,
+  type SpendView,
+} from "./view";
 import { WasteSection } from "./waste";
 
 type SpendProps = {
@@ -167,7 +172,7 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
       at.ws,
       view.drill !== null
         ? { tab: view.tab, drill: view.drill }
-        : view.tab === "month" && view.by !== "agent"
+        : view.tab === "month" && view.by !== SPEND_MONTH_DEFAULT_BY
           ? { tab: view.tab, by: view.by }
           : { tab: view.tab },
     ),

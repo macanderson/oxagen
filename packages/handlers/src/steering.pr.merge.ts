@@ -38,8 +38,10 @@
 // on a production branch that has since moved past it, is refused
 // `version_superseded` before the registry changes: publish() would answer
 // stale, and the repository sync publishes the production branch instead.
-// The deployment is recorded only for a version publish() made live. In a
-// legacy repository the version is the ledger length plus one.
+// The deployment is recorded only for a version publish() made live. A
+// resumed merge records it only while the published pointer still names its
+// commit, so a later version's deployment stays active (#4576). In a legacy
+// repository the version is the ledger length plus one.
 // The head branch is deleted before the publication so the next proposal on
 // the lineage branches from the production branch.
 //
@@ -50,8 +52,11 @@
 // of those would otherwise read a moved head and strand a proposal the host
 // has merged (#4504). The publication clears the claim. A landing that fails
 // before the host merged releases it. A landing that fails after the host
-// merged keeps it, and a retry resumes the merge. A claim a crash left behind
-// lapses after MERGE_CLAIM_SECONDS.
+// merged keeps it, and a retry resumes the merge once it lapses. A claim a
+// crash left behind lapses after MERGE_CLAIM_SECONDS. The claim's instant is
+// its owner (#4567): a call releases a claim only while the row still holds
+// the instant it wrote, and a call never rides a claim it did not write, even
+// after the host merged.
 //
 // A governance proposal (#4795, ADR-232) is the review-route PR
 // set_governance_mode opens on steering/governance. It lands through the same
@@ -73,6 +78,12 @@
 // publish() makes them the next steering version. A merged revert retires
 // each registry record whose file it deleted. A PR merged on the host without
 // a claim is refused `merged_outside_oxagen`, as a governance PR is.
+//
+// A call that stops between the stamp and the host merge leaves the stamp as
+// the PR's head. Once its claim lapses, the next call drops that stamp, after
+// it proves the commit changes nothing a stamp does not, and merges from the
+// checked head (dropStrandedStamp, #4498). A person's push still refuses
+// `head_moved`.
 //
 // One window stays open: a crash or a timeout after the stamp merged and
 // before the row moved to the stamp commit leaves the row at the checked
@@ -136,6 +147,7 @@ import {
 import {
   assertHealthy,
   checkBase,
+  dropStrandedStamp,
   inMergeQueue,
   landSteeringPr,
   mergeApproval,
@@ -327,15 +339,34 @@ export function createMergeSteeringPrHandler(
       }
 
       // The commit the checks ran on is the only one that merges.
-      const pr = await deps.github.getPullRequest(repo, prNumber);
+      let pr = await deps.github.getPullRequest(repo, prNumber);
       // Another call is landing this PR. Its stamp commit is the PR's head
       // until the host merges it, and the row moves to that commit only once
-      // it has, so the head check below would misread either.
-      if (
-        mergeClaimed(recorded, deps.now()) &&
-        (!pr.merged || pr.headSha !== recorded.headSha)
-      ) {
+      // it has, so the head check below would misread either. A claim this
+      // call did not write refuses even after the host merged: the call that
+      // landed the PR may be publishing it now, and a second publish would
+      // take its merger and its approval (#4567). Only a lapsed claim lets a
+      // retry resume the merge.
+      if (mergeClaimed(recorded, deps.now())) {
         throw mergeInProgress(recorded.publicId, recorded.mergeClaimedAt);
+      }
+      // A merge that stopped between its stamp and the host merge left the
+      // stamp as the PR's head, and its claim has lapsed. Drop the stamp and
+      // merge from the checked head (#4498). A person's push still refuses.
+      if (
+        !pr.merged &&
+        pr.headSha !== null &&
+        pr.headSha !== recorded.headSha &&
+        layout.layout === "steering" &&
+        (await dropStrandedStamp({
+          host: deps.github,
+          repo,
+          branch,
+          checkedHead: recorded.headSha,
+          head: pr.headSha,
+        }))
+      ) {
+        pr = { ...pr, headSha: recorded.headSha };
       }
       if (pr.headSha !== recorded.headSha) {
         // Merged on the host after the head moved: running the checks again
@@ -527,13 +558,20 @@ export function createMergeSteeringPrHandler(
           !held ||
           steering?.published === true ||
           (await publishSteering(held, repo, commitSha, version));
-        return { commitSha, attempts, version, result, live };
+        return {
+          commitSha,
+          attempts,
+          version,
+          result,
+          live,
+          deploy: deploysVersion(live, steering),
+        };
       });
-      const { commitSha, attempts, version, result, live } = outcome;
+      const { commitSha, attempts, version, result, live, deploy } = outcome;
       // The steering version this merge made live. A legacy repository has
       // no version store, so its merge publishes no steering version.
       const publishedVersion = publisher !== null && live ? version : null;
-      const deploymentUrl = live
+      const deploymentUrl = deploy
         ? await recordPublishDeployment(deps.github, repo, {
             sha: commitSha,
             version,
@@ -1168,11 +1206,18 @@ async function mergeSteeringPrProposal(
       !held ||
       steering?.published === true ||
       (await publishSteering(held, repo, commitSha, version));
-    return { commitSha, attempts, version, result, live };
+    return {
+      commitSha,
+      attempts,
+      version,
+      result,
+      live,
+      deploy: deploysVersion(live, steering),
+    };
   });
-  const { commitSha, attempts, version, result, live } = outcome;
+  const { commitSha, attempts, version, result, live, deploy } = outcome;
   const publishedVersion = publisher !== null && live ? version : null;
-  const deploymentUrl = live
+  const deploymentUrl = deploy
     ? await recordPublishDeployment(deps.github, repo, {
         sha: commitSha,
         version,
@@ -1251,6 +1296,12 @@ async function readBody(
  * trailer never goes live, and a later merge may already hold that number.
  * The refusal comes before the registry changes, and the repository sync
  * publishes the production branch, which holds this merge, instead.
+ *
+ * `current` says whether the store's published pointer still names this
+ * merge's commit at that version. `versionAt` answers `published` for any
+ * version that was ever live, so a resumed merge whose version a later one
+ * replaced still reads as published. Its deployment would then mark the
+ * later version's deployment inactive on the host (#4576).
  */
 async function steeringVersion(
   publisher: SteeringPublisher,
@@ -1259,18 +1310,24 @@ async function steeringVersion(
   repo: SteeringRepository,
   row: Pick<ProposalRow, "id" | "publicId" | "prUrl" | "mergeClaimedAt">,
   mergedAs: string | null,
-): Promise<{ version: number; published: boolean }> {
+): Promise<{ version: number; published: boolean; current: boolean }> {
   const repository = publisher.repository(repo);
   if (mergedAs) {
     const stored = await publisher.store.versionAt(repository, mergedAs);
     if (stored?.published) {
-      return { version: stored.version, published: true };
+      const pointer = await publisher.store.current(repository);
+      return {
+        version: stored.version,
+        published: true,
+        current:
+          pointer?.commit === mergedAs && pointer.version === stored.version,
+      };
     }
     const head = await deps.github.branchHead(repo, repo.defaultBranch);
     if (head !== mergedAs) {
       // The sync links this merge, so an earlier call's claim must not hold
       // it off.
-      if (row.mergeClaimedAt !== null) await releaseClaim(deps, row);
+      await releaseClaim(deps, row);
       await requestSync(deps, scope, row);
       throw new HandlerError({
         code: "conflict",
@@ -1289,7 +1346,7 @@ async function steeringVersion(
     }
   }
   const highest = await publisher.store.highestVersion(repository);
-  return { version: highest + 1, published: false };
+  return { version: highest + 1, published: false, current: false };
 }
 
 /** The statuses a claimed proposal can hold before it merges. */
@@ -1301,18 +1358,25 @@ const CLAIMABLE = [
 ] as const;
 
 /**
- * Clear a proposal's merge claim. A failure is logged and not thrown, so the
- * error that led here reaches the caller. The claim then lapses after
+ * Clear a proposal's merge claim, but only the claim `row` names. A call
+ * that outlived its claim must not clear the claim a newer merge wrote after
+ * this one lapsed (#4567), so the write is guarded by the claim's instant. A
+ * failure, that refusal included, is logged and not thrown, so the error
+ * that led here reaches the caller. A claim left standing lapses after
  * MERGE_CLAIM_SECONDS.
  */
 async function releaseClaim(
   deps: SteeringDeps,
-  row: Pick<ProposalRow, "id" | "publicId">,
+  row: Pick<ProposalRow, "id" | "publicId" | "mergeClaimedAt">,
 ): Promise<void> {
+  if (row.mergeClaimedAt === null) return;
   try {
-    await deps.store.updateProposal(row.id, { mergeClaimedAt: null }, [
-      ...CLAIMABLE,
-    ]);
+    await deps.store.updateProposal(
+      row.id,
+      { mergeClaimedAt: null },
+      [...CLAIMABLE],
+      { claimedAt: row.mergeClaimedAt },
+    );
   } catch (err) {
     logger.warn(
       { err, proposal: row.publicId },
@@ -1331,7 +1395,7 @@ async function releaseUnmergedClaim(
   deps: SteeringDeps,
   repo: SteeringRepository,
   prNumber: number,
-  row: Pick<ProposalRow, "id" | "publicId">,
+  row: Pick<ProposalRow, "id" | "publicId" | "mergeClaimedAt">,
 ): Promise<void> {
   let merged: boolean;
   try {
@@ -1401,6 +1465,21 @@ async function underPublishLock<T>(
     }
     throw err;
   }
+}
+
+/**
+ * Whether a merge records its deployment. Only a version that went live gets
+ * one. A resumed merge whose version S5 published on an earlier call gets one
+ * only while the published pointer still names it (#4576). Once a later
+ * version replaced it, its result still names its own version, and the host
+ * keeps the later version's deployment active.
+ */
+function deploysVersion(
+  live: boolean,
+  steering: { published: boolean; current: boolean } | null,
+): boolean {
+  if (!live) return false;
+  return steering?.published !== true || steering.current;
 }
 
 /**

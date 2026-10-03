@@ -49,6 +49,8 @@ A recursive execution node (the root of the tree):
 | `updatedAt`        | `string` (ISO)            | —                                                           |
 | `steps`            | `Step[]`                  | Ordered by `stepNumber`.                                    |
 | `children`         | `ExecutionNode[]`         | Child executions (recursive; bounded).                      |
+| `turnMetrics`      | `TurnMetric[]` (optional) | One entry per step. Root node only.                         |
+| `metricsInRange`   | `boolean` (optional)      | Every step's token total is non-negative. Nothing is replayed. Root node only. Named `replayDeterministic` before #2974. |
 
 Each **Step** carries `stepId`, `stepNumber`, `stepType`, `status`,
 `failureReason`, `startedAt`, `completedAt`, `latencyMs`, `inputTokens`,

@@ -321,9 +321,11 @@ type StandingRun = {
  * Each source's tokens on the run's model calls after its first, split by
  * whether the call read the cache; null for a source no call reported.
  *
- * The rollup measures the split on the frames (#4572): the first call's own
- * count, whatever it was, is left out, and each later call's tokens fall on
- * the side of its own cache use. A row rolled up before that holds only each
+ * The rollup measures the split on the frames (#4572): a call re-sent a
+ * source only up to what the last call that carried it sent (#5339), and
+ * those tokens fall on the side of the call's own cache use. A source that
+ * grows during the run, such as context frames, does not count a new part's
+ * first send as re-sent. A row rolled up before that holds only each
  * source's sum, so the split is estimated from it with `resentTokens`, and
  * every token falls on one side: read from the cache when the run read the
  * cache at all, else sent uncached.
