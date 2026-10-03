@@ -55,7 +55,7 @@ function PersonCell({ member }: { member: Member }) {
         <div className="font-semibold text-foreground md:truncate">
           {member.name ?? member.email}
         </div>
-        <div className={`${mono} text-xs text-dim md:truncate`}>
+        <div className={`${mono} text-xs text-muted-foreground md:truncate`}>
           {member.email}
         </div>
       </div>
@@ -75,7 +75,7 @@ function MemberFacts({ member }: { member: Member }) {
   const tRole = useTranslations("organization.roles");
   const term = "text-muted-foreground";
   const sectionTitle =
-    "mt-4 mb-1.5 text-xs font-semibold uppercase tracking-widest text-dim";
+    "mt-4 mb-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground";
   return (
     <div data-issue="3932">
       <dl className="grid grid-cols-dl gap-x-4 gap-y-2 text-base">
@@ -298,14 +298,14 @@ function RolesInUse({
             <tr key={role} data-role-in-use={role}>
               <td className={`${cell} ${mono} text-xs`}>{tRole(role)}</td>
               <td className={numericCell}>{count}</td>
-              <td className={`${cell} text-xs text-dim`}>
+              <td className={`${cell} text-xs text-muted-foreground`}>
                 {describe(role) ?? t("noDescription")}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <p className={`${panelBody} text-xs text-dim`}>
+      <p className={`${panelBody} text-xs text-muted-foreground`}>
         {t("footer", { agents: agentRoles })}
       </p>
     </section>

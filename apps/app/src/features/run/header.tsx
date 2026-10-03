@@ -164,7 +164,7 @@ function Rig({
     >
       <Chip>
         {harness === null ? (
-          <span className="font-normal text-dim">
+          <span className="font-normal text-muted-foreground">
             {t("harnessNotRecorded")}
           </span>
         ) : (
@@ -172,11 +172,11 @@ function Rig({
             <HarnessIcon harness={harness.key} size={16} />
             {harness.name}
             {harness.version === null ? (
-              <span className="font-normal text-dim">
+              <span className="font-normal text-muted-foreground">
                 {t("versionNotCaptured")}
               </span>
             ) : (
-              <span className="font-mono font-normal text-dim">
+              <span className="font-mono font-normal text-muted-foreground">
                 {harness.version}
               </span>
             )}
@@ -216,7 +216,7 @@ function Rig({
       ) : (
         <Chip testId="run-effort" title={t(`effortWhy.${effort.why}`)}>
           {t("effort")}{" "}
-          <span className="font-normal text-dim">{t("notCaptured")}</span>
+          <span className="font-normal text-muted-foreground">{t("notCaptured")}</span>
         </Chip>
       )}
       {run.thinking == null ? null : (
@@ -288,7 +288,7 @@ function MachineChip({
   if (machine === null)
     return (
       <Chip testId="run-machine" title={facts}>
-        <span className="text-dim">{t("noMachine")}</span>
+        <span className="text-muted-foreground">{t("noMachine")}</span>
       </Chip>
     );
   return (
@@ -307,7 +307,7 @@ function MachineChip({
       <FolderIcon aria-hidden="true" className="size-3 flex-none" />
       {machine}
       {enrolled ? (
-        <span className="text-dim">{t("pathNotCaptured")}</span>
+        <span className="text-muted-foreground">{t("pathNotCaptured")}</span>
       ) : null}
     </Chip>
   );
@@ -376,7 +376,7 @@ function WhereFromRow({
           testId="run-work-unread"
           title={t(repository === null ? "workUnreadWhy" : "workUnreadRepoWhy")}
         >
-          <span className="text-dim">
+          <span className="text-muted-foreground">
             {t(repository === null ? "repoNotRead" : "workNotRead")}
           </span>
         </Chip>
@@ -515,7 +515,7 @@ function PullChip({
       <span
         data-testid={stateTestId}
         data-state={state ?? "unknown"}
-        className="whitespace-nowrap text-xs text-dim"
+        className="whitespace-nowrap text-xs text-muted-foreground"
       >
         {state === null ? t("pullState.unknown") : t(`pullState.${state}`)}
       </span>
@@ -684,15 +684,15 @@ function SubagentChip({
   return (
     <Chip code title={subagent.agentRef}>
       {subagent.type ?? (
-        <span className="font-normal text-dim">
+        <span className="font-normal text-muted-foreground">
           {t("subagentTypeNotRecorded")}
         </span>
       )}
-      <span className="font-normal text-dim">
+      <span className="font-normal text-muted-foreground">
         {subagent.agentRef.slice(0, 7)}
       </span>
       {subagent.stopped ? null : (
-        <span className="font-normal text-dim">
+        <span className="font-normal text-muted-foreground">
           {live ? t("subagentRunning") : t("subagentNoStop")}
         </span>
       )}

@@ -61,7 +61,7 @@ export function RelatedList({ items }: { items: RelatedItem[] }) {
         sorts={sorts}
       />
       {list.shown.length === 0 ? (
-        <p className="px-4 py-3.5 text-sm text-dim">{t("nothing")}</p>
+        <p className="px-4 py-3.5 text-sm text-muted-foreground">{t("nothing")}</p>
       ) : (
         <ul data-testid="record-related-list">
           {list.shown.map((item) => (
@@ -133,7 +133,7 @@ function RelatedCard({ item }: { item: RelatedItem }) {
             {item.statement}
           </p>
         )}
-        <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-dim">
+        <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
           <b className="font-semibold text-muted-foreground">
             {term(`scopes.${item.scope}`)}
           </b>

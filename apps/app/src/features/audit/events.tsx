@@ -149,7 +149,7 @@ function Outcome({ outcome }: { outcome: AuditEvent["outcome"] }) {
 function When({ iso }: { iso: string }) {
   const format = useFormatter();
   return (
-    <time dateTime={iso} className={`${mono} whitespace-nowrap text-dim`}>
+    <time dateTime={iso} className={`${mono} whitespace-nowrap text-muted-foreground`}>
       {format.dateTime(new Date(iso), {
         dateStyle: "medium",
         timeStyle: "medium",
@@ -407,7 +407,7 @@ function EventsTable({
           <td className={cell}>
             <NotRecordedValue />
           </td>
-          <td className={`${cell} ${mono} text-dim`}>
+          <td className={`${cell} ${mono} text-muted-foreground`}>
             {event.request ?? <NotRecordedValue />}
           </td>
         </tr>

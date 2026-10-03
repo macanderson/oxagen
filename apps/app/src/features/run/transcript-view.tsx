@@ -198,7 +198,7 @@ const txTools = "flex flex-wrap items-center gap-2 pb-2.5";
  * phone gets the 16px input the house sheets use.
  */
 const txSearch =
-  "w-55 max-w-full max-md:w-full rounded-lg border border-border bg-void px-2.5 py-1.5 font-mono text-sm text-foreground placeholder:text-dim focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ring max-md:text-input-touch";
+  "w-55 max-w-full max-md:w-full rounded-lg border border-border bg-void px-2.5 py-1.5 font-mono text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ring max-md:text-input-touch";
 /** `.tx-kinds { display:flex; flex-wrap:wrap; gap:3px }` */
 const txKinds = "flex flex-wrap gap-0.75";
 /**
@@ -213,12 +213,12 @@ const txKinds = "flex flex-wrap gap-0.75";
  */
 const kindShape = "gap-1.5 pr-2 font-mono text-xs max-md:min-h-9";
 const kindPressed =
-  "aria-pressed:bg-hl aria-pressed:inset-ring aria-pressed:inset-ring-rule aria-[pressed=false]:text-dim aria-[pressed=false]:[&>span:not([data-dot])]:line-through";
+  "aria-pressed:bg-hl aria-pressed:inset-ring aria-pressed:inset-ring-rule aria-[pressed=false]:text-muted-foreground aria-[pressed=false]:[&>span:not([data-dot])]:line-through";
 const txKind = `${kindShape} ${kindPressed} pl-1.5 aria-pressed:text-foreground`;
 const txKindAll = `${kindShape} pl-2`;
 const txKindErrors = `${kindShape} ${kindPressed} pl-1.5 aria-pressed:text-error`;
 /** `.tx-kind .n { font-size:10px; color:var(--dim) }` */
-const txKindCount = "text-xs tabular-nums text-dim";
+const txKindCount = "text-xs tabular-nums text-muted-foreground";
 /**
  * `.tx-kind .d { width:8px; height:8px; border-radius:2px; background:var(--c);
  * box-shadow:0 0 0 1px <c 40%> }`, and released `{ background:transparent;
@@ -275,7 +275,7 @@ const txPlayButton = "min-w-18.5 font-mono text-xs max-md:min-h-9";
 const txSeg =
   "ml-1 inline-flex gap-0.5 rounded-lg border border-border bg-void p-0.5";
 /** `.tx-play .cnt { font-size:10.5px; color:var(--dim); margin-left:4px }` */
-const txCount = "ml-1 whitespace-nowrap text-xs tabular-nums text-dim";
+const txCount = "ml-1 whitespace-nowrap text-xs tabular-nums text-muted-foreground";
 /**
  * `.tx-burn { display:flex; gap:8px; font-size:10.5px; color:var(--muted) }`,
  * `.bar { width:120px; height:4px; border-radius:2px; background:var(--hl) }`,
@@ -307,12 +307,12 @@ const CHIP = {
   warn: `${chipShape} border-border text-info`,
   err: `${chipShape} border-border text-error`,
   cost: `${chipShape} border-rule text-foreground`,
-  burn: `${chipShape} border-border text-dim`,
+  burn: `${chipShape} border-border text-muted-foreground`,
   gov: `${chipShape} border-info/40 text-info hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring`,
   link: `${chipShape} border-border text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring`,
 } as const;
 /** `.tx-empty { padding:18px 16px; color:var(--dim) }`, inside the line column. */
-const txEmpty = "py-3 text-dim";
+const txEmpty = "py-3 text-muted-foreground";
 /** The control over a live view's first row that reads the page ahead. */
 const txOlder = "flex justify-center pt-1 pb-2";
 /** `.txs mark { background:var(--gold); color:var(--on-gold); border-radius:2px }` */
@@ -440,7 +440,7 @@ const foldInLine =
   "text-(--t-dim) hover:text-(--t-fg) aria-expanded:text-(--t-dim) aria-expanded:hover:text-(--t-fg)";
 /** `.tm .tx-fold { color:var(--dim) }`, `:hover { color:var(--fg) }`: a fold in the margin takes the house's. */
 const foldInMargin =
-  "text-dim hover:text-foreground aria-expanded:text-dim aria-expanded:hover:text-foreground";
+  "text-muted-foreground hover:text-foreground aria-expanded:text-muted-foreground aria-expanded:hover:text-foreground";
 
 /**
  * The control that opens and closes one row. A prose row leads with it
@@ -2304,7 +2304,7 @@ export function TranscriptView({
         {wanted === "" ? null : (
           <span
             data-testid="tx-matches"
-            className="font-mono text-xs text-dim"
+            className="font-mono text-xs text-muted-foreground"
           >
             {searchFailed
               ? t("searchFailed")
@@ -2321,7 +2321,7 @@ export function TranscriptView({
         {searching && (found.search?.unsearched ?? 0) > 0 ? (
           <span
             data-testid="tx-unsearched"
-            className="font-mono text-xs text-dim"
+            className="font-mono text-xs text-muted-foreground"
           >
             {t("unsearched", {
               count: found.search?.unsearched ?? 0,

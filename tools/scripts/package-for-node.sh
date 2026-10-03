@@ -237,6 +237,12 @@ case $SERVICE in
     # app-dir.mjs exists only while the rebuild is on the tree; without it
     # apps/app is the one app there is (tools/scripts/lib/app-dir.sh).
     . tools/scripts/lib/app-dir.sh
+    # Without a fixed key, next build makes a random one, every server action
+    # id changes at the deploy, and every page left open fails its next action
+    # until it is reloaded (#5318). build-env.ts reads the key from Parameter
+    # Store with the app's other build values.
+    [[ -n ${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-} ]] \
+      || fail "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY is not set; the app build needs it to keep server action ids stable across deploys (#5318)"
     app_dir=$(resolve_app_dir)
     app_pkg=$(node -p "require('./$app_dir/package.json').name")
     log "building $app_pkg from $app_dir (APP_DIR)"
@@ -289,6 +295,9 @@ case $SERVICE in
     pnpm --filter @oxagen/mcp build
     [[ -f apps/mcp/dist/http.js ]] || fail "xmcp build produced no dist/http.js"
     cp -R apps/mcp/dist "$OUT/dist"
+    # xmcp's server handles no signal. The preload closes its port on SIGTERM
+    # and lets the requests in progress finish when a deploy replaces it (#5318).
+    cp apps/mcp/drain-on-signal.cjs apps/mcp/drain-preload.cjs "$OUT/"
 
     # xmcp's bundler externalises the same heavy and native packages the app
     # does, for the same reason and with the same consequence: they have to be
@@ -306,7 +315,7 @@ case $SERVICE in
     # the heap out and then failed on every tool's schema, while /health still
     # answered (#4829).
     WRITE_MANIFEST_SMOKE="$MCP_SMOKE_REQUEST" \
-      write_manifest "$(port_for mcp)" 1024m "/health" "$PARAMETER_PREFIX" node --max-old-space-size=640 dist/http.js
+      write_manifest "$(port_for mcp)" 1024m "/health" "$PARAMETER_PREFIX" node --max-old-space-size=640 --require ./drain-preload.cjs dist/http.js
     tmp=$(mktemp)
     jq --arg p "$(port_for mcp)" '.env.MCP_PORT = $p' "$OUT/oxagen-run.json" > "$tmp"
     mv "$tmp" "$OUT/oxagen-run.json"

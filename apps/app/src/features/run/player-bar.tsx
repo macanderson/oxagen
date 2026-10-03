@@ -80,7 +80,7 @@ export function StepLink({
 
 /** `.fp-cnt { font-family:var(--mono); font-size:11px; color:var(--dim); white-space:nowrap }`, `b { color:var(--fg); font-weight:600 }` */
 const count =
-  "whitespace-nowrap font-mono text-xs tabular-nums text-dim [&_b]:font-semibold [&_b]:text-foreground";
+  "whitespace-nowrap font-mono text-xs tabular-nums text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground";
 
 function Spent({ spent, total }: { spent: Cost | null; total: Cost | null }) {
   const t = useTranslations("run.player.bar");
@@ -232,7 +232,7 @@ export function PlayerBar({
       <Spent spent={spent} total={total} />
       <PlaySpeed />
       {/* `.fp-keys { display:inline-flex; gap:6px; font-size:11px; color:var(--dim); margin-left:auto }`, `kbd { font-family:var(--mono); font-size:10px; border:1px solid var(--border); border-radius:4px; padding:0 4px; color:var(--muted); background:var(--void) }` */}
-      <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-dim max-md:hidden">
+      <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-muted-foreground max-md:hidden">
         {t.rich("keys", {
           k: (chunks) => (
             <kbd className="rounded-sm border border-border bg-void px-1 font-mono text-xs text-muted-foreground">

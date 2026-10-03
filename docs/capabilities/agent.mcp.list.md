@@ -22,7 +22,7 @@ Empty object — workspace scope comes from the request envelope.
 
 | Field     | Type                                                                       | Notes                       |
 | --------- | -------------------------------------------------------------------------- | --------------------------- |
-| `servers` | `Array<{ publicId, name, transportType, endpointUrl, healthStatus, lastHealthcheckAt, toolCount, authKind, iconUrl, authorization, contextTokens, weeklyPrice, steeringName }>` | Server inventory. |
+| `servers` | `Array<{ publicId, name, transportType, endpointUrl, healthStatus, lastHealthcheckAt, toolCount, authKind, iconUrl, description, authorization, contextTokens, weeklyPrice, steeringName }>` | Server inventory. |
 
 `contextTokens` is the tokens the server's tool definitions add to a model
 call (#4537). It comes from the newest system context the recorder listed in
@@ -42,6 +42,11 @@ calls. The Providers table shows it as the server's weekly price.
 unless `authKind` is `oauth`, and then holds `state` (`connected`,
 `needs_reauth`, `revoked` or `not_connected`), `expiresAt`, `refreshable` and
 `lastRefreshedAt`. No token or secret column is read.
+
+`iconUrl` and `description` come from the server's listing: the registry
+entry it was added from, or the catalog entry it was installed from. A server
+added with `register_mcp_server` has no listing, so both are null. `iconUrl`
+is an https address or null.
 
 `steeringName` is the server's folder under `tools/servers/` in the steering
 repo, for a server a steering repo defines. It is null for a server added any

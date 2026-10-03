@@ -133,7 +133,7 @@ function Connection({
         <dt className={term}>{t("facts.channel")}</dt>
         <dd data-testid="slack-channel">
           {channel === null ? (
-            <span className="text-dim">{t("noChannel")}</span>
+            <span className="text-muted-foreground">{t("noChannel")}</span>
           ) : (
             t(channel.isPrivate ? "channelNamePrivate" : "channelName", {
               name: channel.name,

@@ -499,7 +499,7 @@ export function FindingEvidence({
                     </SafeLink>
                     <span
                       data-testid="run-id"
-                      className={`${mono} block truncate text-xs text-dim`}
+                      className={`${mono} block truncate text-xs text-muted-foreground`}
                     >
                       {run.runId}
                     </span>

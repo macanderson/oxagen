@@ -77,6 +77,12 @@ export const agentMcpList = registerCapability({
         authKind: mcpServerAuthKind.default("none"),
         /** The provider's https icon, from the registry entry it was added from. */
         iconUrl: z.string().nullable().default(null),
+        /**
+         * The description from the provider's listing, the registry or
+         * catalog entry it was added from. Null for a provider with no
+         * listing, such as one added with `register_mcp_server` (#4132).
+         */
+        description: z.string().nullable().default(null),
         /** Null for a provider that does not use OAuth. */
         authorization: mcpServerAuthorization.nullable().default(null),
         /**

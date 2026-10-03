@@ -206,7 +206,7 @@ export function GovernanceChip({
                   <span className="font-semibold text-foreground">
                     {mode}
                     {mode === now ? (
-                      <span className="font-normal text-dim"> {t("now")}</span>
+                      <span className="font-normal text-muted-foreground"> {t("now")}</span>
                     ) : null}
                   </span>
                   <span className="text-muted-foreground">

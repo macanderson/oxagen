@@ -59,7 +59,7 @@ export function FundingPicker({
         <p
           data-testid="funding-preview"
           data-issue="4005"
-          className="text-sm text-dim"
+          className="text-sm text-muted-foreground"
         >
           {current === null
             ? t("unknownPreview", { source: chosen })

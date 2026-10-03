@@ -66,9 +66,9 @@ const inst =
   "grid min-w-0 content-start gap-2 rounded-xl border border-border bg-card px-3.75 pb-3 pt-3.25 text-card-foreground";
 /** `.inst .ih .k { font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); font-weight:600 }` */
 const instKey =
-  "m-0 text-xs font-semibold uppercase tracking-widest text-dim";
+  "m-0 text-xs font-semibold uppercase tracking-widest text-muted-foreground";
 /** `.inst .ih .basis { margin-left:auto; font-family:var(--mono); font-size:10px; color:var(--dim) }` */
-const instBasis = "ml-auto font-mono text-xs text-dim";
+const instBasis = "ml-auto font-mono text-xs text-muted-foreground";
 /** `.inst .iv { font-size:26px; font-weight:700; letter-spacing:-.02em; line-height:1.1 }` */
 const instValue =
   "text-2xl font-bold leading-none tracking-display text-foreground tabular-nums";
@@ -76,7 +76,7 @@ const instValue =
 const instUnit =
   "ml-1.5 text-sm font-medium tracking-normal text-muted-foreground";
 /** `.inst .iv .sep { color:var(--dim); font-weight:400; margin:0 5px }` */
-const instSep = "mx-1.25 font-normal text-dim";
+const instSep = "mx-1.25 font-normal text-muted-foreground";
 /** `.inst .is { font-size:11.5px; color:var(--muted); line-height:1.45 }` and `.is b { color:var(--fg); font-weight:600 }` */
 const instLine =
   "text-xs leading-normal text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground";
@@ -96,7 +96,7 @@ const colCurrent =
 const colBase = "absolute inset-x-0 bottom-0 h-px bg-border";
 /** `.ax { justify-content:space-between; font-family:var(--mono); font-size:10px; color:var(--dim); margin-top:3px }` */
 const axis =
-  "mt-0.75 flex justify-between font-mono text-xs text-dim tabular-nums";
+  "mt-0.75 flex justify-between font-mono text-xs text-muted-foreground tabular-nums";
 /** `.stk { display:flex; gap:2px; height:8px; border-radius:4px; margin-top:4px }`, its first and last `i` rounded. */
 const stack = "relative mt-1 flex h-2 gap-0.5 rounded-sm";
 const stackPart = "block h-full min-w-0.5 first:rounded-l-sm last:rounded-r-sm";
@@ -842,7 +842,7 @@ function FamilyRows({ families: rows }: { families: readonly Family[] }) {
         </div>
       ))}
       {rest === 0 ? null : (
-        <div className={`${familyRow} text-dim`}>
+        <div className={`${familyRow} text-muted-foreground`}>
           <span />
           <span className={familyLabel}>{t("inst.other")}</span>
           <span className={fillBar}>

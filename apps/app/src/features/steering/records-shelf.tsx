@@ -206,7 +206,7 @@ function KindChips({
         className={chip}
       >
         {t("all")}
-        <span className="font-mono text-xs text-dim">
+        <span className="font-mono text-xs text-muted-foreground">
           {formatCount(all, locale)}
         </span>
       </PressLink>
@@ -220,7 +220,7 @@ function KindChips({
         >
           <KindIcon kind={k} className={`size-3.5 ${KIND_FACE[k].ink}`} />
           {record(`kinds.${k}`)}
-          <span className="font-mono text-xs text-dim">
+          <span className="font-mono text-xs text-muted-foreground">
             {formatCount(counts[k], locale)}
           </span>
         </PressLink>

@@ -244,7 +244,7 @@ export function WasteSection({
                     </span>
                     <span
                       data-testid="run-id"
-                      className={`${mono} truncate text-xs text-dim`}
+                      className={`${mono} truncate text-xs text-muted-foreground`}
                     >
                       {run.runId}
                     </span>

@@ -156,7 +156,7 @@ const toolRow =
   "flex min-w-0 justify-between gap-2.5 border-b border-border py-1.25 text-xs last:border-b-0";
 
 /** `.meter .lab b .dim { font-weight:500 }`: the token count beside an area's money. */
-const areaTokens = "font-medium text-dim";
+const areaTokens = "font-medium text-muted-foreground";
 
 export function SpendByArea({
   metrics,
@@ -365,7 +365,7 @@ export function SpendByArea({
       flush
       aside={
         cost === null ? undefined : (
-          <span className="font-mono text-xs text-dim">
+          <span className="font-mono text-xs text-muted-foreground">
             <Money value={cost} /> · {cost.basis ?? tCost("basisNotRecorded")}
             {/* An open run's figure grows as it records calls (#3980). */}
             {metrics.costIsEstimate ? (
@@ -434,7 +434,7 @@ export function SpendByArea({
                   >
                     {tool.name ?? t("unnamedTool")}
                   </span>
-                  <span className="whitespace-nowrap font-mono text-dim">
+                  <span className="whitespace-nowrap font-mono text-muted-foreground">
                     {t("calls", { count: tool.calls })} ·{" "}
                     {tool.cost === null ? (
                       <NoValue />

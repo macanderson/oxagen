@@ -83,7 +83,7 @@ function factCells(
       <span
         key={key}
         data-facts-withheld={facts.reason}
-        className="text-xs text-dim"
+        className="text-xs text-muted-foreground"
       >
         {facts.label}
       </span>
@@ -104,7 +104,7 @@ function factCells(
       <span
         key={key}
         data-facts-unread={reason}
-        className="text-xs text-dim"
+        className="text-xs text-muted-foreground"
       >
         {unread}
       </span>
@@ -126,7 +126,7 @@ function factCells(
   return {
     cells: [
       main === undefined ? (
-        <span key="main" className="text-xs text-dim">
+        <span key="main" className="text-xs text-muted-foreground">
           {none}
         </span>
       ) : (
@@ -135,7 +135,7 @@ function factCells(
         </span>
       ),
       main === undefined ? (
-        <span key="branch" className="text-xs text-dim">
+        <span key="branch" className="text-xs text-muted-foreground">
           {none}
         </span>
       ) : (
@@ -144,7 +144,7 @@ function factCells(
         </span>
       ),
       linked.length === 0 ? (
-        <span key="linked" className="text-xs text-dim">
+        <span key="linked" className="text-xs text-muted-foreground">
           {none}
         </span>
       ) : (
@@ -176,7 +176,7 @@ function WorkspaceCell({ workspace }: { workspace: Workspace }) {
         <div className="font-semibold text-foreground md:truncate">
           {workspace.name}
         </div>
-        <div className={`${mono} text-xs text-dim md:truncate`}>
+        <div className={`${mono} text-xs text-muted-foreground md:truncate`}>
           {workspace.slug}
         </div>
         {workspace.archivedAt === null ? null : (
@@ -207,10 +207,10 @@ function GovernanceCell({ workspace }: { workspace: Workspace }) {
       >
         {t("governanceNotRecorded")}
       </Badge>
-      <div className="text-xs text-dim md:truncate" data-issue="3933">
+      <div className="text-xs text-muted-foreground md:truncate" data-issue="3933">
         {t("retentionNotRecorded")}
       </div>
-      <div className={`${mono} text-xs text-dim md:truncate`}>
+      <div className={`${mono} text-xs text-muted-foreground md:truncate`}>
         {t("namespace", { namespace: workspace.namespace })}
       </div>
     </>
@@ -322,7 +322,7 @@ export function WorkspacesTab({
           <h2 id="org-workspaces" className={panelTitle}>
             {t("title")}
           </h2>
-          <div className="flex min-w-0 items-center gap-1.5 text-xs text-dim">
+          <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
             <span>{t("orgId")}</span>
             <CopyId value={workspaces.orgId} label={t("copyOrgId")} />
           </div>

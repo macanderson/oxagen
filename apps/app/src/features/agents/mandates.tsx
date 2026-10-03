@@ -126,7 +126,7 @@ function DenialChain({ agentKey }: { agentKey: string | null }) {
             {index + 1}
           </span>
           <span className="flex min-w-0 flex-col">
-            <span className="text-xs font-semibold uppercase tracking-widest text-dim">
+            <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               {t(step.key)}
             </span>
             <span className="text-sm">

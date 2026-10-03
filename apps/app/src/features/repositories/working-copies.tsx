@@ -130,7 +130,7 @@ export function WorkingCopies({
             <dl className="grid grid-cols-dl-clip gap-x-4 gap-y-2.5 text-sm leading-relaxed max-sm:grid-cols-1">
               {SYNC.map(({ key, command }) => (
                 <div key={key} className="contents" data-command={command}>
-                  <dt className={`${mono} text-dim`}>{command}</dt>
+                  <dt className={`${mono} text-muted-foreground`}>{command}</dt>
                   <dd className="text-foreground">
                     {t.rich(`sync.${key}`, { code })}
                   </dd>
@@ -244,7 +244,7 @@ function CopiesBody({
       {rows.length >= WORKING_COPY_LIMIT ? (
         <p
           data-testid="working-copies-truncated"
-          className="px-4 pb-3 pt-2 text-sm text-dim"
+          className="px-4 pb-3 pt-2 text-sm text-muted-foreground"
         >
           {t("truncated", { limit: WORKING_COPY_LIMIT })}
         </p>
@@ -272,19 +272,19 @@ function CopyRow({ row, readAt }: { row: WorkingCopy; readAt: Date | null }) {
       </td>
       <td className={cell}>
         {row.repository === null ? (
-          <span className="text-dim">{t("noRemote")}</span>
+          <span className="text-muted-foreground">{t("noRemote")}</span>
         ) : (
           <span className={mono}>{row.repository}</span>
         )}
       </td>
       <td className={cell}>
         {row.branch === null ? (
-          <span className="text-dim">{t("detached")}</span>
+          <span className="text-muted-foreground">{t("detached")}</span>
         ) : (
           <span className={mono}>{row.branch}</span>
         )}
         {row.headCommit === null ? null : (
-          <span className={`${mono} block text-xs text-dim md:truncate`}>
+          <span className={`${mono} block text-xs text-muted-foreground md:truncate`}>
             {t("head", { commit: short(row.headCommit) })}
           </span>
         )}
@@ -317,7 +317,7 @@ function CopyRow({ row, readAt }: { row: WorkingCopy; readAt: Date | null }) {
       </td>
       <td className={cell}>
         {row.pulledCommit === null ? (
-          <span className="text-dim" data-pulled="never">
+          <span className="text-muted-foreground" data-pulled="never">
             {t("neverPulled")}
           </span>
         ) : (
@@ -342,7 +342,7 @@ function CopyRow({ row, readAt }: { row: WorkingCopy; readAt: Date | null }) {
             ? format.dateTime(seen, { dateStyle: "medium", timeStyle: "short" })
             : format.relativeTime(seen, readAt)}
         </time>
-        <span className="block text-xs text-dim">
+        <span className="block text-xs text-muted-foreground">
           {row.reportedBy === null
             ? t("reportedByKey")
             : row.reportedBy.name === null

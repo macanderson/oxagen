@@ -189,7 +189,7 @@ export function PrioritiesTab({
                   data-rule={String(rule.number)}
                   className="flex gap-3"
                 >
-                  <span className={`${mono} flex-none text-dim`}>
+                  <span className={`${mono} flex-none text-muted-foreground`}>
                     {t("priorities.rule", { number: String(rule.number) })}
                   </span>
                   <span className="min-w-0 wrap-anywhere">

@@ -168,7 +168,7 @@ function ChangesBody({
           {!work.ok ? (
             <ReadFailure read={work} section={t("pullRequest")} />
           ) : pulls.length === 0 ? (
-            <span className="text-dim">
+            <span className="text-muted-foreground">
               {run.status === "live"
                 ? t("noPullRequestLive")
                 : t("noPullRequest")}
@@ -206,7 +206,7 @@ function ChangesBody({
         <Row label={t("base")}>
           {bases.length === 0 ? (
             // A failed read is named once, on the pull request row above.
-            <span className="text-dim">{t("baseNotRecorded")}</span>
+            <span className="text-muted-foreground">{t("baseNotRecorded")}</span>
           ) : (
             <span className="flex flex-wrap items-center gap-1.5">
               {bases.map((base) =>
@@ -251,7 +251,7 @@ function ChangesBody({
                     {release.state === null ? (
                       // GitHub had no release with the tag, or could not be
                       // read: the state is not guessed.
-                      <span className="text-dim">
+                      <span className="text-muted-foreground">
                         {t("releaseStateUnread")}
                       </span>
                     ) : (
@@ -267,11 +267,11 @@ function ChangesBody({
         )}
         <Row label={t("checks")}>
           {ci === null ? (
-            <span className="text-dim">{t("noChecks")}</span>
+            <span className="text-muted-foreground">{t("noChecks")}</span>
           ) : (
             <span className="flex flex-wrap items-center gap-1.5">
               <Badge tone={CI_TONE[ci]}>{t(`ci.${ci}`)}</Badge>
-              <span className="text-dim">
+              <span className="text-muted-foreground">
                 {pulls
                   .flatMap((pr) => pr.ci?.runs ?? [])
                   .map((check) =>
@@ -289,11 +289,11 @@ function ChangesBody({
           {!outputs.ok ? (
             <ReadFailure read={outputs} section={t("diff")} />
           ) : files.length === 0 ? (
-            <span className="text-dim">{t("noDiff")}</span>
+            <span className="text-muted-foreground">{t("noDiff")}</span>
           ) : (
             <span>
               <Stat added={added} removed={removed} />{" "}
-              <span className="text-dim">
+              <span className="text-muted-foreground">
                 {t("inFiles", { count: files.length })}
                 {outputs.value.complete ? "" : "+"}
               </span>
@@ -335,7 +335,7 @@ function ChangesBody({
               </li>
             ))}
             {files.length > FILE_ROWS ? (
-              <li className="py-1.25 text-xs text-dim">
+              <li className="py-1.25 text-xs text-muted-foreground">
                 {t("more", { count: files.length - FILE_ROWS })}
               </li>
             ) : null}

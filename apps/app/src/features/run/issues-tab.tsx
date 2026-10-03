@@ -69,7 +69,7 @@ function ViewLink({ issue }: { issue: Issue }) {
   const t = useTranslations("run.issues");
   const target = parseGitHubUrl(issue.url);
   if (target === null)
-    return <span className="text-xs text-dim">{t("noLink")}</span>;
+    return <span className="text-xs text-muted-foreground">{t("noLink")}</span>;
   return (
     <GitHubLink
       to={target}

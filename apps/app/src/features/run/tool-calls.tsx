@@ -126,7 +126,7 @@ function FamilyTable({ families }: { families: readonly Family[] }) {
               </td>
               <td className={numericCell}>
                 {family.failed === 0 ? (
-                  <span className="text-dim">{formatCount(0, locale)}</span>
+                  <span className="text-muted-foreground">{formatCount(0, locale)}</span>
                 ) : (
                   <Badge tone="denied">
                     {formatCount(family.failed, locale)}
@@ -235,7 +235,7 @@ export function ToolCalls({ metrics }: { metrics: RunMetrics }) {
       flush
       aside={
         toolCalls === null || families === null ? undefined : (
-          <span className="font-mono text-xs text-dim">
+          <span className="font-mono text-xs text-muted-foreground">
             {t("tally", {
               calls: toolCalls.count,
               // `batches` is null only for a run with no tool call, which ran

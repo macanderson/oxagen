@@ -144,7 +144,7 @@ export function RunTimeline({
         </h3>
         <span
           data-testid="timeline-shown"
-          className={`${mono} text-xs text-dim`}
+          className={`${mono} text-xs text-muted-foreground`}
         >
           {t("shown", {
             shown: formatCount(frames.length, locale),
@@ -227,7 +227,7 @@ export function RunTimeline({
             // `.rt-axis { position:absolute; left:0; right:0; bottom:0; height:14px; border-top:1px solid var(--border); display:flex; justify-content:space-between; font-family:var(--mono); font-size:10px; color:var(--dim); padding-top:2px }`
             <div
               data-testid="timeline-axis"
-              className="absolute inset-x-0 bottom-0 flex h-3.5 justify-between border-t border-border pt-0.5 font-mono text-xs text-dim"
+              className="absolute inset-x-0 bottom-0 flex h-3.5 justify-between border-t border-border pt-0.5 font-mono text-xs text-muted-foreground"
             >
               <span>{clock(first.observedAt)}</span>
               <span>
@@ -264,7 +264,7 @@ export function RunTimeline({
           ))}
         </div>
         {/* `.rt-foot { display:flex; gap:12px; flex-wrap:wrap; font-size:11px; color:var(--dim); margin-top:8px }` */}
-        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-dim">
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           <span className="min-w-0 flex-1">{t("foot")}</span>
           {bands.length === 0 ? null : (
             <span data-testid="timeline-turns">

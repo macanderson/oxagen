@@ -1,0 +1,30 @@
+# A slow request across a real container swap (#5318).
+#
+# infra/tools/tests/node-swap.test.py runs the swap functions from
+# deploy-service.sh against real Docker, so it needs a runner with Docker and
+# no job container. It has its own workflow rather than a step in infra.yml:
+# any change to infra.yml plans and applies every stack on merge.
+name: node swap
+
+on:
+  pull_request:
+    paths: ["infra/tools/node/**", "infra/tools/tests/node-swap.test.py", ".github/workflows/node-swap.yml"]
+  push:
+    branches: [main]
+    paths: ["infra/tools/node/**", "infra/tools/tests/node-swap.test.py", ".github/workflows/node-swap.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: node-swap-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swap a container under a slow request
+        run: python3 infra/tools/tests/node-swap.test.py

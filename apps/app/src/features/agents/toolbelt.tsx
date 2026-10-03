@@ -36,7 +36,7 @@ function WireNode({
       className={`flex min-w-0 flex-col rounded-lg border px-3 py-2 text-sm ${belt ? "border-gold/50 bg-gold/10" : "border-border bg-hl"}`}
     >
       <span>{label}</span>
-      <span className="text-sm text-dim">{value}</span>
+      <span className="text-sm text-muted-foreground">{value}</span>
     </li>
   );
 }

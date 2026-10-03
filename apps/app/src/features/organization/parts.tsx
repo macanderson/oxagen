@@ -34,7 +34,7 @@ export function DateCell({ iso }: { iso: string }) {
 export function NotRecordedValue() {
   const t = useTranslations("organization");
   return (
-    <span data-not-recorded="" className="text-xs text-dim">
+    <span data-not-recorded="" className="text-xs text-muted-foreground">
       {t("notRecorded")}
     </span>
   );
