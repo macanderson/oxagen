@@ -94,13 +94,14 @@ export interface TraceExecutionNode {
   steps: z.infer<typeof stepNode>[];
   children: TraceExecutionNode[];
   /**
-   * Per-step metrics + a determinism sanity-check, populated ONLY on the root
+   * Per-step metrics + a range check on them (`metricsInRange`: every step's
+   * token total is non-negative; nothing is replayed), populated ONLY on the root
    * node (children omit them -- recomputing per descendant isn't worth the
    * cost for a read the UI only ever renders once per trace). See
    * packages/agent/src/handlers/agent.trace.get.ts's deriveTurnMetrics.
    */
   turnMetrics?: z.infer<typeof turnMetric>[];
-  replayDeterministic?: boolean;
+  metricsInRange?: boolean;
 }
 
 const executionNode: z.ZodType<TraceExecutionNode> = z.lazy(() =>
@@ -122,7 +123,7 @@ const executionNode: z.ZodType<TraceExecutionNode> = z.lazy(() =>
     steps: z.array(stepNode),
     children: z.array(executionNode),
     turnMetrics: z.array(turnMetric).optional(),
-    replayDeterministic: z.boolean().optional(),
+    metricsInRange: z.boolean().optional(),
   }),
 );
 

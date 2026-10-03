@@ -12,6 +12,7 @@ Find design intent here before changing a capability, data boundary, or product 
 | Steering | [Steering design](steering/README.md) |
 | Governed-action billing | [Metering spec](governed-action-metering.md) |
 | Organization data isolation | [Tenancy and RLS](tenancy-rls/spec.md) |
+| Ingestion dedup and outage recovery | [Ingestion dedup](ingestion-dedup/spec.md) |
 | Repository binding | [Repository binding](repository-binding/README.md) |
 | Agent work Phase 1 release gates | [Release gates](work/release-gates.md) |
 | Capability naming migration | [Historical name ledger](adr025-naming-mapping.md) |
