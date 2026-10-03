@@ -62,7 +62,7 @@ describe("Panel", () => {
     const inset = renderToStaticMarkup(<Panel inset>table</Panel>);
     const padded = renderToStaticMarkup(<Panel>table</Panel>);
     expect(inset).toContain("p-0");
-    expect(padded).toContain("p-[18px]");
+    expect(padded).toContain("p-4.5");
   });
 
   it("accepts the back-compat brand treatments without emitting any class", () => {

@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "./button";
 import * as React from "react";
 import { Search, X } from "lucide-react";
 import { cn } from "../lib/utils";
@@ -39,14 +40,16 @@ const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
           {...props}
         />
         {showClear && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-sm"
             aria-label="Clear search"
             onClick={onClear}
-            className="absolute right-1.5 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors duration-[var(--motion-micro)] hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="absolute right-1.5 top-1/2 size-5 -translate-y-1/2 rounded-sm text-muted-foreground hover:text-foreground"
           >
             <X aria-hidden="true" className="size-3.5" />
-          </button>
+          </Button>
         )}
       </div>
     );

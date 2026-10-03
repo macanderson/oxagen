@@ -41,7 +41,7 @@ const KeyValueList = React.forwardRef<HTMLDListElement, KeyValueListProps>(
         stacked
           ? cn("grid-cols-1", dense ? "gap-y-2" : "gap-y-3")
           : cn(
-              "grid-cols-[minmax(6rem,auto)_1fr] gap-x-4",
+              "grid-cols-kv gap-x-4",
               dense ? "gap-y-1" : "gap-y-1.5",
             ),
         className,

@@ -68,10 +68,10 @@ const Panel = React.forwardRef<HTMLElement, PanelProps>(
         {...props}
       >
         {hasHeader && (
-          <header className="flex items-center gap-3 border-b border-border px-[18px] py-[15px]">
+          <header className="flex items-center gap-3 border-b border-border px-4.5 py-3.75">
             <div className="min-w-0 flex-1">
               {eyebrow && (
-                <div className="mb-[3px] text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                <div className="mb-0.75 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                   {eyebrow}
                 </div>
               )}
@@ -86,11 +86,11 @@ const Panel = React.forwardRef<HTMLElement, PanelProps>(
             )}
           </header>
         )}
-        <div className={cn("min-h-0 flex-1", inset ? "p-0" : "p-[18px]")}>
+        <div className={cn("min-h-0 flex-1", inset ? "p-0" : "p-4.5")}>
           {children}
         </div>
         {footer && (
-          <footer className="flex items-center gap-2 border-t border-border bg-muted/30 px-[18px] py-[13px]">
+          <footer className="flex items-center gap-2 border-t border-border bg-muted/30 px-4.5 py-3.25">
             {footer}
           </footer>
         )}

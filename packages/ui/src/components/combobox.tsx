@@ -177,10 +177,10 @@ function ComboboxPopup({
       <ComboboxPrimitive.Positioner sideOffset={sideOffset} className="z-50">
         <ComboboxPrimitive.Popup
           className={cn(
-            "relative z-50 w-[var(--anchor-width)] min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md",
-            "origin-[var(--transform-origin)] transition-[opacity,transform,translate,scale] duration-[var(--motion-overlay)] ease-[var(--ease-entry)]",
-            "data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:-translate-y-1",
-            "data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:-translate-y-1",
+            "relative z-50 w-(--anchor-width) min-w-32 overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md",
+            "origin-(--transform-origin) transition duration-(--motion-overlay) ease-(--ease-entry)",
+            "data-[starting-style]:opacity-0 data-[starting-style]:scale-98 data-[starting-style]:-translate-y-1",
+            "data-[ending-style]:opacity-0 data-[ending-style]:scale-98 data-[ending-style]:-translate-y-1",
             className,
           )}
         >
@@ -197,7 +197,7 @@ function ComboboxPopup({
           </div>
 
           {/* Scrollable option list — capped at ~280px before scrolling */}
-          <ComboboxPrimitive.List className="max-h-[280px] overflow-y-auto overflow-x-hidden p-1">
+          <ComboboxPrimitive.List className="max-h-70 overflow-y-auto overflow-x-hidden p-1">
             {filteredChildren}
             <ComboboxPrimitive.Empty className="py-6 text-center text-base text-muted-foreground">
               No results found.

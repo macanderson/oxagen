@@ -8,6 +8,9 @@
 // value reaches the page through a Tailwind scale step, a theme utility, a
 // kit component, or a token.
 //
+// The rule covers apps/app and packages/ui. apps/app_deprecated is archived
+// and publishes no page, so it is out of scope (#5283).
+//
 // This module holds the scan and the baseline comparison.
 // hardcoded-values.test.ts runs them over src/, and
 // scripts/hardcoded-values-baseline.ts writes apps/app/hardcoded-values-baseline.json
@@ -33,7 +36,8 @@
 //   holds no literal and does not count. A style object built outside the
 //   attribute (`style={side}`) is not read.
 // - A raw `<button>` element. Every button is the kit's `Button`
-//   (src/ui/button.tsx) with one of its variants.
+//   (src/ui/button.tsx in the app, components/button.tsx in packages/ui)
+//   with one of its variants.
 // - A named colour, such as `fill="white"` or `color: "red"`, in a JSX
 //   attribute or a style value. Hex, colour functions, and Tailwind palette
 //   classes are INV-32's scan (design-record.test.ts), so this one does not
@@ -84,8 +88,14 @@ export type BaselineDiff = {
 /** The token a raw `<button>` element reports. */
 export const RAW_BUTTON = "<button>";
 
-/** The kit's button, the one module that may render a button element itself. */
-const BUTTON_MODULE = "src/ui/button.tsx";
+/** packages/ui's source, relative to apps/app, as every path here is. */
+export const UI_SRC = "../../packages/ui/src/";
+
+/** The kit's buttons, the modules that may render a button element themselves. */
+const BUTTON_MODULES: ReadonlySet<string> = new Set([
+  "src/ui/button.tsx",
+  `${UI_SRC}components/button.tsx`,
+]);
 
 /** `<utility>-[<value>]`, with an optional `/<modifier>`: `gap-[10px]`, `bg-[var(--x)]/50`. */
 const ARBITRARY_VALUE =
@@ -384,7 +394,7 @@ export function scanModule(file: string, text: string): Finding[] {
       (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
       ts.isIdentifier(node.tagName) &&
       node.tagName.text === "button" &&
-      file !== BUTTON_MODULE
+      !BUTTON_MODULES.has(file)
     ) {
       found.push({
         file,
@@ -492,11 +502,28 @@ function byPosition(found: Finding[]): Finding[] {
   );
 }
 
-/** The files the rule covers: every module and stylesheet under src/ but tests, test helpers and probes. */
+/**
+ * The packages/ui files the rule does not read: its tests and stories, and
+ * the files the brand sync writes from the kit (the `house-*` stylesheets,
+ * the fonts, and the generated marks), which change only in the kit.
+ */
+const UI_SKIPPED =
+  /\.(test|stories)\.tsx?$|\.d\.ts$|^styles\/(house-[\w-]+\.css|fonts\/)|brand-marks\.generated\.ts$/;
+
+/**
+ * The files the rule covers: every module and stylesheet under apps/app's
+ * src/ but tests, test helpers and probes, and every one under packages/ui's
+ * src/ but its tests, stories and synced kit files.
+ */
 export function scannedFiles(): string[] {
-  return listFiles("src").filter(
+  const app = listFiles("src").filter(
     (file) => /\.(tsx?|css)$/.test(file) && !isTestOnly(file),
   );
+  const ui = listFiles(UI_SRC).filter((file) => {
+    const inUi = file.slice(UI_SRC.length);
+    return /\.(tsx?|css)$/.test(file) && !UI_SKIPPED.test(inUi);
+  });
+  return [...app, ...ui];
 }
 
 /** Every hard-coded value in one file under the rule. */

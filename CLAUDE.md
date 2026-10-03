@@ -163,7 +163,7 @@ Mac set this on 2026-10-03 (#5283). Every value in the app reads a token: a Tail
 
 - Do not write a Tailwind arbitrary value (`gap-[10px]`, `rounded-[8px]`, `shadow-[…]`), a bare `rounded` (write `rounded-sm` or another step), a `duration-<n>` step, a literal number or length in `style={{…}}`, a raw `<button>`, or a named colour. A value computed from data, such as `${pct}%`, may stay in a style.
 - In a stylesheet, a custom property definition may hold a raw value, because that is where a value becomes a token. A rule's radius, shadow, spacing, size, and motion read tokens.
-- `apps/app/src/test/arch/hardcoded-values.test.ts` (INV-37) fails on a new value. Values written before the rule wait in `apps/app/hardcoded-values-baseline.json`, which only shrinks. After you replace values, run `pnpm --filter @oxagen/app gen:hardcoded-values` and commit the smaller baseline.
+- `apps/app/src/test/arch/hardcoded-values.test.ts` (INV-37) fails on a new value in `apps/app` or `packages/ui`. Values written before the rule wait in `apps/app/hardcoded-values-baseline.json`, which only shrinks. After you replace values, run `pnpm --filter @oxagen/app gen:hardcoded-values` and commit the smaller baseline.
 
 ## Tokens on the customer sites
 

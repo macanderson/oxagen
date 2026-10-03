@@ -86,7 +86,7 @@ const SegmentedControlItem = React.forwardRef<
       "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1 text-base font-medium",
       // Fallback matches --motion-base's own value, for the (unexpected) case
       // where @oxagen/ui's globals.css is not loaded.
-      "ring-offset-background transition-all duration-[var(--motion-base,220ms)]",
+      "ring-offset-background transition-all duration-(--motion-base)",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
       "disabled:pointer-events-none disabled:opacity-50",
       // Selected state

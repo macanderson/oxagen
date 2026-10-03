@@ -30,7 +30,7 @@ const Checkbox = React.forwardRef<
     className={cn(
       // Unchecked: transparent fill, foreground-coloured outline (flips with theme).
       "peer inline-flex size-4 shrink-0 items-center justify-center rounded-sm border border-foreground bg-transparent",
-      "transition-colors duration-[var(--motion-base)]",
+      "transition-colors duration-(--motion-base)",
       // Checked / indeterminate: primary fill, outline folds into the fill.
       "data-[checked]:border-control-track-bg-checked data-[checked]:bg-control-track-bg-checked",
       "data-[indeterminate]:border-control-track-bg-checked data-[indeterminate]:bg-control-track-bg-checked",

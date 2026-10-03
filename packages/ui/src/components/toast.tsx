@@ -63,7 +63,7 @@ function ToastList() {
         className={cn(
           "group pointer-events-auto relative flex w-full items-start gap-3 overflow-hidden rounded-md border p-4 pr-8 shadow-lg",
           (toast.type && TOAST_VARIANTS[toast.type]) ?? TOAST_DEFAULT_VARIANT,
-          "transition-[opacity,transform,translate,scale] duration-[var(--motion-base)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:translate-x-full data-[ending-style]:opacity-0",
+          "transition duration-(--motion-base) ease-(--ease-entry) data-[starting-style]:opacity-0 data-[starting-style]:translate-x-full data-[ending-style]:opacity-0",
         )}
       >
         {Icon && <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />}
@@ -102,7 +102,7 @@ function ToastViewport({ className }: { className?: string }) {
           // mobile) does not sit over and swallow taps on whatever is beneath it
           // — e.g. the fixed bottom navigation bar. Individual toasts re-enable
           // pointer-events-auto so they stay interactive (see Toast above).
-          "pointer-events-none fixed bottom-0 right-0 z-[100] flex max-h-screen w-full flex-col-reverse gap-2 p-4 sm:max-w-[420px]",
+          "pointer-events-none fixed bottom-0 right-0 z-100 flex max-h-screen w-full flex-col-reverse gap-2 p-4 sm:max-w-105",
           className,
         )}
       >

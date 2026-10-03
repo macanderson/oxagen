@@ -493,6 +493,18 @@
     --motion-base: 220ms;
     --motion-overlay: 200ms;
     --motion-entry: 320ms;
+    /* Ambient loops (#5283): the hero glow, the hex field's float and
+       breath, and a slow status ping. --motion-none is the reduced-motion
+       kill switch: near zero, so a transition still fires its end event. */
+    --motion-ping: 1.6s;
+    --motion-breathe: 6s;
+    --motion-drift: 9s;
+    --motion-float: 14s;
+    --motion-none: 0.01ms;
+    --ease-pulse: ease-in-out;
+    /* A floating dialog keeps air around it on a phone. */
+    --dialog-w: calc(100% - var(--spacing) * 8);
+    --dialog-max-h: calc(100dvh - var(--spacing) * 8);
     /* Hover feedback comes from the color-mix hover bg; no grow — crisp, not playful. */
     --button-hover-scale: 1;
   }
@@ -990,6 +1002,12 @@
      or toast. Each theme block sets --ui-shadow-pop, so a dark theme from the
      system setting gets it too, where a `dark:` class would not. */
   --shadow-pop: var(--ui-shadow-pop);
+  /* A glow in the element's own colour (currentColor), for a status dot or a
+     track drawn in a data hue (#5283). */
+  --shadow-glow: 0 0 calc(var(--spacing) * 1.5) currentColor;
+  --shadow-glow-lg: 0 0 calc(var(--spacing) * 2) currentColor;
+  /* A key-value list: the term column at least 6rem, then the value. */
+  --grid-template-columns-kv: minmax(calc(var(--spacing) * 24), auto) 1fr;
 }
 
 /*
@@ -1093,7 +1111,7 @@
     /* Baseline vertical rhythm so even bare tables (header cells with only
        padding-bottom) keep a balanced header row. Tables that set their own
        py-* utility win (longhand > this shorthand's matching side). */
-    padding-block: 0.5rem;
+    padding-block: calc(var(--spacing) * 2);
   }
 
   /*
@@ -1133,10 +1151,11 @@
   /* .hover-glow — a subtle ring on hover in the accent (--ring) colour: flat, no
    * blur, transition retained. */
   .hover-glow {
-    transition: box-shadow 0.2s ease;
+    transition: box-shadow var(--motion-overlay) var(--ease-hover);
   }
   .hover-glow:hover {
-    box-shadow: 0 0 0 2px color-mix(in oklch, var(--ring) 25%, transparent);
+    box-shadow: 0 0 0 calc(var(--spacing) * 0.5)
+      color-mix(in oklch, var(--ring) 25%, transparent);
   }
 
   /* Keyframed entrance used across surfaces. */
@@ -1309,17 +1328,17 @@
       transparent 70%
     );
     filter: blur(36px);
-    animation: ox-glow 9s ease-in-out infinite;
+    animation: ox-glow var(--motion-drift) var(--ease-pulse) infinite;
   }
 
   /* Slow bob/rotate for the HexField layer. */
   .ox-hex-float {
-    animation: ox-float 14s ease-in-out infinite;
+    animation: ox-float var(--motion-float) var(--ease-pulse) infinite;
   }
 
   /* Lit hexagons breathe slowly, out of phase (per-cell animation-delay). */
   .ox-hex-lit {
-    animation: ox-hexpulse 6s ease-in-out infinite;
+    animation: ox-hexpulse var(--motion-breathe) var(--ease-pulse) infinite;
     transform-box: fill-box;
     transform-origin: center;
   }
@@ -1381,7 +1400,27 @@
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+    animation-duration: var(--motion-none) !important;
+    transition-duration: var(--motion-none) !important;
   }
+}
+
+/* A table's padding knobs, by density (#5283). Every cell and header reads
+   --table-pad-x and --table-pad-y. */
+table[data-density="default"] {
+  --table-pad-x: calc(var(--spacing) * 3);
+  --table-pad-y: calc(var(--spacing) * 2.5);
+}
+table[data-density="compact"] {
+  --table-pad-x: calc(var(--spacing) * 2.5);
+  --table-pad-y: calc(var(--spacing) * 1.5);
+}
+
+/* Utilities for values a stock utility cannot set (#5283). */
+@utility max-h-select {
+  /* Base UI sets --available-height on the popup, so this reads it there. */
+  max-height: min(var(--available-height), calc(var(--spacing) * 80));
+}
+@utility animate-slow {
+  animation-duration: var(--motion-ping);
 }

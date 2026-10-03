@@ -39,7 +39,7 @@ describe("KeyValueList", () => {
   it("two-column grid by default", () => {
     const { container } = render(<KeyValueList items={items} />);
     expect((container.firstChild as HTMLElement).className).toContain(
-      "grid-cols-[minmax(6rem,auto)_1fr]",
+      "grid-cols-kv",
     );
   });
 

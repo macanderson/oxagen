@@ -10,9 +10,9 @@ const textareaVariants = cva(
     // (e.g. `lg`) for visual consistency.
     variants: {
       size: {
-        sm: "min-h-[52px]",
-        default: "min-h-[60px]",
-        lg: "min-h-[72px]",
+        sm: "min-h-13",
+        default: "min-h-15",
+        lg: "min-h-18",
       },
     },
     defaultVariants: { size: "default" },

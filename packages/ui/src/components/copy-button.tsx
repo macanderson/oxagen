@@ -112,14 +112,14 @@ const CopyButton = React.forwardRef<HTMLButtonElement, CopyButtonProps>(
             <Copy
               aria-hidden="true"
               className={cn(
-                "absolute size-3.5 transition-[opacity,transform,translate,scale] duration-[var(--motion-micro)] ease-[var(--ease-hover)]",
+                "absolute size-3.5 transition duration-(--motion-micro) ease-(--ease-hover)",
                 copied ? "scale-50 opacity-0" : "scale-100 opacity-100",
               )}
             />
             <Check
               aria-hidden="true"
               className={cn(
-                "absolute size-3.5 text-success transition-[opacity,transform,translate,scale] duration-[var(--motion-micro)] ease-[var(--ease-hover)]",
+                "absolute size-3.5 text-success transition duration-(--motion-micro) ease-(--ease-hover)",
                 copied ? "scale-100 opacity-100" : "scale-50 opacity-0",
               )}
             />

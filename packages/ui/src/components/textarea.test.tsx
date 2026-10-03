@@ -18,14 +18,14 @@ describe("textareaVariants — class map", () => {
   it("includes rounded-md base class", () => {
     expect(textareaVariants({})).toContain("rounded-md");
   });
-  it("sm size includes min-h-[52px]", () => {
-    expect(textareaVariants({ size: "sm" })).toContain("min-h-[52px]");
+  it("sm size includes min-h-13", () => {
+    expect(textareaVariants({ size: "sm" })).toContain("min-h-13");
   });
-  it("default size includes min-h-[60px]", () => {
-    expect(textareaVariants({ size: "default" })).toContain("min-h-[60px]");
+  it("default size includes min-h-15", () => {
+    expect(textareaVariants({ size: "default" })).toContain("min-h-15");
   });
-  it("lg size includes min-h-[72px]", () => {
-    expect(textareaVariants({ size: "lg" })).toContain("min-h-[72px]");
+  it("lg size includes min-h-18", () => {
+    expect(textareaVariants({ size: "lg" })).toContain("min-h-18");
   });
 });
 
@@ -52,7 +52,7 @@ describe("Textarea — render", () => {
   it("applies size class", () => {
     const { container } = render(<Textarea size="lg" />);
     expect(container.querySelector("textarea")?.className).toContain(
-      "min-h-[72px]",
+      "min-h-18",
     );
   });
 

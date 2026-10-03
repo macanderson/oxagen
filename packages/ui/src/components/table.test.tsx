@@ -57,16 +57,12 @@ describe("Table", () => {
 
   it("applies the default density padding vars", () => {
     renderTable();
-    expect(screen.getByRole("table").className).toContain(
-      "[--table-pad-y:0.625rem]",
-    );
+    expect(screen.getByRole("table")).toHaveAttribute("data-density", "default");
   });
 
   it("compact density tightens the vertical padding var", () => {
     renderTable({ density: "compact" });
-    expect(screen.getByRole("table").className).toContain(
-      "[--table-pad-y:0.375rem]",
-    );
+    expect(screen.getByRole("table")).toHaveAttribute("data-density", "compact");
   });
 
   it("merges containerClassName onto the scroll wrapper", () => {
@@ -92,8 +88,8 @@ describe("Table", () => {
   it("cells read the density padding vars", () => {
     renderTable();
     const td = screen.getByText("ontology.query");
-    expect(td.className).toContain("px-[var(--table-pad-x)]");
-    expect(td.className).toContain("py-[var(--table-pad-y)]");
+    expect(td.className).toContain("px-(--table-pad-x)");
+    expect(td.className).toContain("py-(--table-pad-y)");
   });
 
   it("rows get a hover treatment and can opt into pointer affordance", () => {
