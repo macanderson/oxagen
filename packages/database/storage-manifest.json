@@ -11355,13 +11355,13 @@
         },
         {
           "name": "kind",
-          "nullable": true,
+          "nullable": false,
           "primaryKey": false,
           "type": "text"
         },
         {
           "name": "force",
-          "nullable": true,
+          "nullable": false,
           "primaryKey": false,
           "type": "text"
         },
