@@ -12,7 +12,6 @@ import {
 import {
   capturedDiffOf,
   checkoutOf,
-  type ConnectedRunRepository,
   connectedRunRepositories,
   foldProvisionalContexts,
   prLinkOf,
@@ -27,6 +26,7 @@ import {
   WORK_SUBAGENT_CAP,
 } from "./lib/run-work";
 import { readRunCommandRefFrames } from "./lib/run-command-refs";
+import { unlinkedRepositoryResolver } from "./lib/run-pr-link-repository";
 import { githubConnectionFor } from "./lib/run-pull-request-backfill";
 import {
   readLedgerPrReceipts,
@@ -34,7 +34,6 @@ import {
   type RecordedRunPr,
 } from "./lib/run-work-prs";
 import { readWorkReleases } from "./lib/run-work-releases";
-import { logger } from "./logger";
 import { runScope } from "./run.list";
 
 export type RunWorkDeps = RunReadDeps & {
@@ -117,32 +116,15 @@ export function createRunWorkGetHandler(
     // the same PR merges into it rather than listing it twice.
     const receipts: RecordedRunPr[] = [];
     const linkWarnings = new Set<string>();
-    // A run's record can name a PR in a repository the workspace does not
-    // link, when the agent worked in a repository another workspace links.
-    // The link is still certain, so that PR is read through the workspace's
-    // own GitHub connection for its owner, the one the ADR-192 backfill reads
-    // its state with. Before #5296 every such link was dropped, and the
-    // section said "No pull request" for a run that opened several. Each
-    // owner is looked up once, and each repository is built once.
-    const owners = new Map<string, Promise<string | null | undefined>>();
-    const unlinked = new Map<string, ConnectedRunRepository>();
-    const connectionFor = (owner: string) => {
-      let found = owners.get(owner);
-      if (found === undefined) {
-        // Undefined means the lookup failed, which is a failed read and not
-        // a repository no connection reaches.
-        found = deps.githubConnection(scope, owner).catch((err: unknown) => {
-          logger.warn(
-            { err, orgId: scope.orgId, workspaceId: scope.workspaceId },
-            "get_run_work: the GitHub connection for a recorded pull request could not be read",
-          );
-          linkWarnings.add("pull_request_read_failed");
-          return undefined;
-        });
-        owners.set(owner, found);
-      }
-      return found;
-    };
+    // A PR in a repository the workspace does not link is read through the
+    // workspace's own GitHub connection for its owner. Before #5296 every
+    // such link was dropped, and the section said "No pull request" for a
+    // run that opened several.
+    const unlinkedRepository = unlinkedRepositoryResolver(
+      scope,
+      deps.githubConnection,
+      "get_run_work",
+    );
     for (const row of links.slice(0, WORK_PR_LINK_CAP)) {
       const link = prLinkOf(row);
       if (link === null) {
@@ -162,34 +144,17 @@ export function createRunWorkGetHandler(
         });
         continue;
       }
-      // Only a github.com link goes to a GitHub connection. A GitLab owner
-      // can share a GitHub owner's name.
-      if (repo === undefined && new URL(link.url).hostname === "github.com") {
-        const connectionId = await connectionFor(link.owner.toLowerCase());
-        if (connectionId === undefined) continue;
-        if (connectionId !== null) {
-          const key = `${link.owner}/${link.name}`.toLowerCase();
-          let other = unlinked.get(key);
-          if (other === undefined) {
-            other = {
-              connectionId,
-              host: "github.com",
-              owner: link.owner,
-              name: link.name,
-              url: `https://github.com/${link.owner}/${link.name}`,
-              connected: false,
-            };
-            unlinked.set(key, other);
-          }
-          receipts.push({
-            repository: other,
-            number: link.number,
-            headSha: null,
-          });
-          continue;
-        }
+      const other =
+        repo === undefined ? await unlinkedRepository(link) : "not_connected";
+      if (other === "lookup_failed") {
+        linkWarnings.add("pull_request_read_failed");
+        continue;
       }
-      linkWarnings.add("recorded_repository_not_connected");
+      if (other === "not_connected") {
+        linkWarnings.add("recorded_repository_not_connected");
+        continue;
+      }
+      receipts.push({ repository: other, number: link.number, headSha: null });
     }
     // The pull requests and the releases are separate GitHub reads, so they
     // run side by side.
