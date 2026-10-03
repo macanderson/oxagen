@@ -183,6 +183,9 @@ const ASSISTANT_SERVICE_CODES: Readonly<Record<string, number>> = {
   // The model provider refused or failed a call the engine asked for
   // (`@oxagen/agent` governed-turn.ts, `ModelCallFailedError`).
   model_call_failed: 502,
+  // Oxagen's own provider account is out of balance on the shared key
+  // (`@oxagen/ai` platform-provider-balance.ts, #5408).
+  platform_provider_balance: 503,
 };
 
 const isExhaustedCode = (code: string): code is ExhaustedCode =>

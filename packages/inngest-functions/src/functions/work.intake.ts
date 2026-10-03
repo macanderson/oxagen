@@ -16,7 +16,9 @@
 //   the rest wait in the queue. When the retries run out, the on-failure
 //   companion records the failure on the item, so it stays visible. The
 //   event carries the item revision it is about, so a late failure does not
-//   land on a newer revision or after a result.
+//   land on a newer revision or after a result. When Oxagen's own provider
+//   balance is out, the run records that once and tries again every hour for
+//   a day (#5408).
 // - work/intake-prune: once a day, delete stored deliveries and result rows
 //   past the retention window.
 //
@@ -29,6 +31,7 @@ import {
   type WorkIntakeScope,
   type WorkReconcileSummary,
   type WorkTriageFailedRun,
+  type WorkTriageOutcome,
   workIntakeRunner,
 } from "../lib/work-intake-runner";
 
@@ -37,6 +40,21 @@ export const RECONCILE_MAX_PAGES = 20;
 
 /** The most triage runs that start per workspace per minute. Matches TRIAGE_DECISIONS_PER_MINUTE in @oxagen/work. */
 export const TRIAGE_RUNS_PER_MINUTE = 60;
+
+/**
+ * How long a triage run waits before it tries again while Oxagen's own
+ * provider balance is out (#5408), and how many times. The balance comes back
+ * when Oxagen tops up the account, which the hourly alert asks for. A day of
+ * hourly tries covers that without a person pressing Retry on each item, and
+ * a try that finds the balance still out costs one refused call and records
+ * nothing new.
+ */
+export const PROVIDER_BALANCE_WAIT = "1h";
+export const PROVIDER_BALANCE_TRIES = 24;
+
+/** What a work item says when the balance stayed out through every try. */
+export const PROVIDER_BALANCE_GAVE_UP_REASON =
+  "Triage could not run: Oxagen's account with its model provider stayed out of balance for a day, so triage stopped trying. This is Oxagen's to fix, and your organization's credits are not affected. Retry triage later, or set the priority yourself.";
 
 /**
  * The result a check records when the workspace links none of the collector's
@@ -255,9 +273,32 @@ export const [workIntakeTriage, workIntakeTriageOnFailure] = createFunction(
     const scope = scopeOf(event.data, job);
     const item = text(event.data, "item_id", job);
     const retry = event.data.change === "retry";
-    return step.run("triage", () => workIntakeRunner().triage(scope, item, retry));
+    let outcome = await step.run("triage", () => workIntakeRunner().triage(scope, item, retry));
+    // Oxagen's provider balance is out (#5408). A sleeping run holds no
+    // concurrency slot. A later try is not a person's retry: the failure the
+    // first try recorded does not count as triage having run, and a result
+    // recorded meanwhile, by a person's retry or a newer revision's run,
+    // makes the try skip.
+    for (let attempt = 1; isRetryable(outcome) && attempt <= PROVIDER_BALANCE_TRIES; attempt += 1) {
+      await step.sleep(`provider-balance-wait-${attempt}`, PROVIDER_BALANCE_WAIT);
+      outcome = await step.run(`triage-after-wait-${attempt}`, () => workIntakeRunner().triage(scope, item, false));
+    }
+    if (isRetryable(outcome)) {
+      await step.run("record-gave-up", () =>
+        workIntakeRunner().recordTriageFailure(scope, item, PROVIDER_BALANCE_GAVE_UP_REASON, {
+          ...(isRevision(event.data.revision) ? { revision: event.data.revision } : {}),
+          retry: false,
+        }),
+      );
+    }
+    return outcome;
   },
 );
+
+/** True when triage could not run for a cause that passes on its own. */
+function isRetryable(outcome: WorkTriageOutcome): boolean {
+  return outcome.kind === "failed" && outcome.retryable === true;
+}
 
 export const [workIntakePrune] = createFunction(
   { id: "work/intake-prune", retries: 1, concurrency: { limit: 1 } },

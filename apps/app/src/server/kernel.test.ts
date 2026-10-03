@@ -518,6 +518,13 @@ describe("kernelWrite", () => {
       { ok: false, reason: "unavailable", code: "model_call_failed" },
       1,
     ],
+    // #5408: Oxagen's own provider balance ran out on the shared key.
+    [
+      "platform_provider_balance",
+      new Coded("platform_provider_balance"),
+      { ok: false, reason: "unavailable", code: "platform_provider_balance" },
+      1,
+    ],
     [
       "assistant_model_key_limit",
       new Coded("assistant_model_key_limit"),

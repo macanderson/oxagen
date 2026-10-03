@@ -19,7 +19,20 @@
 // A model or store error throws, so the durable step retries. When its retries
 // run out, the job's on-failure companion calls recordTriageFailure with the
 // revision the event was about. A failure that lands late records nothing.
-import { CREDIT_REASONS, generateObjectFor, modelIdOf, selectModelForOrg } from "@oxagen/ai";
+//
+// One model error does not throw: Oxagen's own provider account running out
+// of balance (#5408). The run records it once, in words that say whose
+// balance it is, and answers `retryable`, so the job waits and runs triage
+// again. That failure does not count as triage having run on the revision.
+import {
+  CREDIT_REASONS,
+  PLATFORM_PROVIDER_BALANCE_CODE,
+  generateObjectFor,
+  isPlatformProviderBalanceError,
+  isSpendRefusal,
+  modelIdOf,
+  selectModelForOrg,
+} from "@oxagen/ai";
 import { assertUnderWorkspaceLaneBudget } from "@oxagen/billing";
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import {
@@ -34,7 +47,7 @@ import {
   triagePromptDigest,
   triageRequest,
 } from "@oxagen/work";
-import { type WorkItemState, reduceWorkItem } from "@oxagen/work/records";
+import { type WorkFact, type WorkItemState, reduceWorkItem } from "@oxagen/work/records";
 import { and, desc, eq, isNull, ne, notInArray } from "drizzle-orm";
 import { z } from "zod";
 import { isOutputParseError } from "../model-output-errors";
@@ -54,6 +67,32 @@ export const TRIAGE_OPEN_WORK_LIMIT = 100;
 
 /** The longest failure reason a fact stores. */
 const MAX_REASON = 1900;
+
+/**
+ * What a work item says while Oxagen's own provider balance is out (#5408).
+ * The item's job runs triage again on its own, so the person need do nothing.
+ */
+export const PROVIDER_BALANCE_REASON =
+  "Triage could not run: Oxagen's account with its model provider is out of balance. This is Oxagen's to fix, and your organization's credits are not affected. Triage runs again on its own every hour for a day, or you can set the priority yourself.";
+
+/**
+ * The provider's words when the organization's own key has no balance left.
+ * The key is the organization's, so the text names it and keeps what the
+ * provider said, which tells the person where to add credit.
+ */
+export function orgKeyBalanceMessage(providerText: string): string {
+  const said = providerText.trim().slice(0, 300).replace(/[\s.]+$/, "");
+  return `The model provider refused your organization's own model key for lack of balance. Add credit to the provider account behind that key. The provider said: ${said || "nothing"}`;
+}
+
+/** The provider's spend refusal on an error, or on the last attempt the AI SDK wrapped. */
+function spendRefusalOf(error: unknown) {
+  if (isSpendRefusal(error)) return error;
+  if (typeof error === "object" && error !== null && "lastError" in error && isSpendRefusal(error.lastError)) {
+    return error.lastError;
+  }
+  return null;
+}
 
 /** The structured output the model is asked for. Loose on purpose: checkTriageSchema names each real problem. */
 export const triageOutputSchema = z.object({
@@ -112,6 +151,11 @@ export function aiTriageModelClient(scope: WorkScope): TriageModelClient {
         return { output: object, model, costUsd: null };
       } catch (error) {
         if (isOutputParseError(error)) return { output: null, model, costUsd: null };
+        // A 402 on the organization's own key is the organization's account
+        // (#5408). Oxagen's shared key reaches here already named, as
+        // PlatformProviderBalanceError (@oxagen/ai).
+        const refusal = selection.fundedBy === "org" ? spendRefusalOf(error) : null;
+        if (refusal !== null) throw new Error(orgKeyBalanceMessage(refusal.message), { cause: error });
         throw error;
       }
     },
@@ -128,7 +172,8 @@ export interface TriageRunDeps {
 
 export type TriageRunResult =
   | { kind: "recorded"; decision: string; outcome: string }
-  | { kind: "failed"; reason: string }
+  /** `retryable` when the cause is Oxagen's and passes on its own, so the job runs triage again later. */
+  | { kind: "failed"; reason: string; retryable?: true }
   | { kind: "skipped"; reason: string };
 
 interface TriageRead {
@@ -140,6 +185,8 @@ interface TriageRead {
   priorities: PrioritiesRecord | null;
   problem: string | null;
   openWork: TriageOpenItem[];
+  /** True when the revision's latest triage fact already says Oxagen's provider balance is out. */
+  waitingOnBalance: boolean;
 }
 
 async function readItemRow(tx: Tx, scope: WorkScope, publicId: string) {
@@ -206,13 +253,36 @@ async function openWork(tx: Tx, scope: WorkScope, itemId: string): Promise<Triag
   }));
 }
 
-/** True when triage already ran on this revision: a triage fact names it. */
-function triagedAt(facts: readonly { kind: string; itemRevision: number }[], revision: number): boolean {
-  return facts.some((fact) => (fact.kind === "triage_recorded" || fact.kind === "triage_failed") && fact.itemRevision === revision);
+/** The latest triage result or failure on this revision. */
+function latestTriage(facts: readonly WorkFact[], revision: number): WorkFact | undefined {
+  return facts.filter((fact) => (fact.kind === "triage_recorded" || fact.kind === "triage_failed") && fact.itemRevision === revision).at(-1);
+}
+
+/** True for a failure that says Oxagen's own provider balance was out (#5408). */
+function isBalanceFailure(fact: WorkFact | undefined): boolean {
+  return fact?.kind === "triage_failed" && fact.data.code === PLATFORM_PROVIDER_BALANCE_CODE;
+}
+
+/**
+ * True when triage already ran on this revision: its latest triage fact is a
+ * result or a failure. A failure because Oxagen's provider balance was out
+ * does not count, so the run that waits for the balance triages the item.
+ */
+function triagedAt(facts: readonly WorkFact[], revision: number): boolean {
+  const latest = latestTriage(facts, revision);
+  return latest !== undefined && !isBalanceFailure(latest);
 }
 
 /** Append a triage_failed fact on the item's current revision. */
-async function appendFailure(tx: Tx, scope: WorkScope, itemId: string, revision: number, reason: string, at: string): Promise<void> {
+async function appendFailure(
+  tx: Tx,
+  scope: WorkScope,
+  itemId: string,
+  revision: number,
+  reason: string,
+  at: string,
+  code?: string,
+): Promise<void> {
   await appendFacts(tx, scope, {
     itemId,
     facts: [
@@ -223,7 +293,7 @@ async function appendFailure(tx: Tx, scope: WorkScope, itemId: string, revision:
         actor: "triage",
         occurredAt: at,
         dedupeKey: `triage_failed:${at}`,
-        data: { reason: reason.slice(0, MAX_REASON) },
+        data: { reason: reason.slice(0, MAX_REASON), ...(code === undefined ? {} : { code }) },
       },
     ],
   });
@@ -269,6 +339,7 @@ export async function runTriage(deps: TriageRunDeps, scope: WorkScope, itemPubli
       priorities: priorities.kind === "found" ? priorities.record : null,
       problem: priorities.kind === "found" ? null : prioritiesProblem(priorities),
       openWork: await openWork(tx, scope, row.id),
+      waitingOnBalance: isBalanceFailure(latestTriage(record.facts, revision)),
     };
   });
   if ("kind" in read) return read;
@@ -296,6 +367,18 @@ export async function runTriage(deps: TriageRunDeps, scope: WorkScope, itemPubli
   try {
     decision = await triageItem({ ...input, model: recordingClient });
   } catch (error) {
+    if (isPlatformProviderBalanceError(error)) {
+      // Oxagen's provider account is out (#5408). Say so once per revision,
+      // and let the job run triage again: a retry inside the durable step
+      // would fail the same way, and a terminal failure would leave the item
+      // waiting on a person for something Oxagen fixes.
+      if (!read.waitingOnBalance) {
+        await withTenantDb((tx) =>
+          appendFailure(tx, scope, read.itemId, read.revision, PROVIDER_BALANCE_REASON, deps.now().toISOString(), PLATFORM_PROVIDER_BALANCE_CODE),
+        );
+      }
+      return { kind: "failed", reason: PROVIDER_BALANCE_REASON, retryable: true };
+    }
     if (!(error instanceof TriageOutputError)) throw error;
     const reason = `Triage returned no valid suggestion after ${error.attempts.length} tries. ${error.attempts
       .map((problems, index) => `Try ${index + 1}: ${problems.slice(0, 3).join("; ") || "no detail"}.`)

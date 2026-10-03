@@ -28,6 +28,7 @@
  */
 import { wrapLanguageModel, type LanguageModel } from "ai";
 import { mintedKeyLimitMiddleware } from "./assistant-model-key-limit";
+import { platformKeyBalanceMiddleware } from "./platform-provider-balance";
 import {
   resolveModelFundingSource,
   type ModelFundingSource,
@@ -52,8 +53,11 @@ export interface OrgModelSelection {
  *
  * A model built on a minted key (platform-funded, with a key) is wrapped so
  * the vendor's spend refusal reaches the caller as
- * `AssistantModelKeyLimitError` rather than a bare 402. A key the customer
- * brought is not wrapped: its refusal is the customer's own account to read.
+ * `AssistantModelKeyLimitError` rather than a bare 402. A model built on the
+ * shared key (platform-funded, no key) is wrapped so the same refusal reaches
+ * the caller as `PlatformProviderBalanceError` and alerts Oxagen (#5408). A
+ * key the customer brought is not wrapped: its refusal is the customer's own
+ * account to read.
  */
 export async function selectModelForOrg(
   orgId: string,
@@ -76,18 +80,16 @@ export function selectModelFromFunding(
     ...selector,
     ...(funding.modelKey ? { credential: funding.modelKey } : {}),
   });
-  const minted = funding.fundedBy === "platform" && funding.modelKey;
+  if (funding.fundedBy === "org" || typeof model === "string") {
+    return { model, fundedBy: funding.fundedBy };
+  }
   return {
-    model:
-      minted && typeof model !== "string"
-        ? wrapLanguageModel({
-            model,
-            middleware: mintedKeyLimitMiddleware({
-              orgId,
-              keyHint: funding.keyHint,
-            }),
-          })
-        : model,
+    model: wrapLanguageModel({
+      model,
+      middleware: funding.modelKey
+        ? mintedKeyLimitMiddleware({ orgId, keyHint: funding.keyHint })
+        : platformKeyBalanceMiddleware({ orgId }),
+    }),
     fundedBy: funding.fundedBy,
   };
 }

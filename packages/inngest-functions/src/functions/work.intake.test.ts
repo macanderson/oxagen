@@ -13,6 +13,7 @@ vi.mock("../create-function", () => ({ createFunction: mocks.createFunction }));
 type Step = {
   run: (name: string, fn: () => Promise<unknown>) => Promise<unknown>;
   sendEvent: (name: string, events: unknown) => Promise<unknown>;
+  sleep: (name: string, duration: string) => Promise<unknown>;
 };
 type Handler = (ctx: { event: { data: Record<string, unknown> }; step: Step }) => Promise<unknown>;
 type Registered = {
@@ -44,12 +45,14 @@ const job = (id: string): Registered => {
 const SCOPE = { org_id: "org-1", workspace_id: "ws-1" };
 const stepNames: string[] = [];
 const sendEvent = vi.fn(async (_name: string, _events: unknown) => undefined);
+const sleep = vi.fn(async (_name: string, _duration: string) => undefined);
 const step: Step = {
   run: (name, fn) => {
     stepNames.push(name);
     return fn();
   },
   sendEvent,
+  sleep,
 };
 
 function fakeRunner(): { [K in keyof WorkIntakeRunner]: ReturnType<typeof vi.fn> } {
@@ -74,6 +77,7 @@ beforeEach(() => {
   setWorkIntakeRunner(runner as unknown as WorkIntakeRunner);
   stepNames.length = 0;
   sendEvent.mockClear();
+  sleep.mockClear();
 });
 
 describe("the runner seam", () => {
@@ -349,6 +353,53 @@ describe("work/intake-triage", () => {
     );
     expect(await onFailure({ event: { data: { event: { data: { org_id: "org-1" } } } }, step })).toEqual({ recorded: false });
     expect(await onFailure({ event: { data: {} }, step })).toEqual({ recorded: false });
+  });
+});
+
+// #5408: Oxagen's own provider balance ran out, and each item's triage failed
+// for good after the durable retries. The run now waits an hour and tries
+// again, for a day, so the items triage on their own once the balance is back.
+describe("work/intake-triage while Oxagen's provider balance is out", () => {
+  const waiting = { kind: "failed", reason: "Oxagen's balance is out.", retryable: true };
+  const triaged = { kind: "recorded", decision: "tri_1", outcome: "triaged" };
+
+  it("waits an hour and triages again once the balance is back, with no person's retry", async () => {
+    runner.triage.mockResolvedValueOnce(waiting).mockResolvedValueOnce(waiting).mockResolvedValueOnce(triaged);
+    const handler = job("work/intake-triage").handler;
+    expect(await handler({ event: { data: { ...SCOPE, item_id: "wi_a", change: "retry", revision: 2 } }, step })).toEqual(triaged);
+    expect(sleep.mock.calls).toEqual([
+      ["provider-balance-wait-1", intake.PROVIDER_BALANCE_WAIT],
+      ["provider-balance-wait-2", intake.PROVIDER_BALANCE_WAIT],
+    ]);
+    expect(intake.PROVIDER_BALANCE_WAIT).toBe("1h");
+    expect(runner.triage.mock.calls.map((call) => call[2])).toEqual([true, false, false]);
+    expect(stepNames).toEqual(["triage", "triage-after-wait-1", "triage-after-wait-2"]);
+    expect(runner.recordTriageFailure).not.toHaveBeenCalled();
+  });
+
+  it("stops trying after a day and says so on the item", async () => {
+    runner.triage.mockResolvedValue(waiting);
+    const handler = job("work/intake-triage").handler;
+    expect(await handler({ event: { data: { ...SCOPE, item_id: "wi_a", change: "new", revision: 2 } }, step })).toEqual(waiting);
+    expect(intake.PROVIDER_BALANCE_TRIES).toBe(24);
+    expect(sleep).toHaveBeenCalledTimes(intake.PROVIDER_BALANCE_TRIES);
+    expect(runner.triage).toHaveBeenCalledTimes(intake.PROVIDER_BALANCE_TRIES + 1);
+    expect(runner.recordTriageFailure).toHaveBeenCalledWith(
+      { orgId: "org-1", workspaceId: "ws-1" },
+      "wi_a",
+      intake.PROVIDER_BALANCE_GAVE_UP_REASON,
+      { revision: 2, retry: false },
+    );
+    expect(intake.PROVIDER_BALANCE_GAVE_UP_REASON).toContain("your organization's credits are not affected");
+  });
+
+  it("does not wait on a failure a person must fix", async () => {
+    runner.triage.mockResolvedValue({ kind: "failed", reason: "This workspace has no priorities record." });
+    const handler = job("work/intake-triage").handler;
+    await handler({ event: { data: { ...SCOPE, item_id: "wi_a", change: "new" } }, step });
+    expect(sleep).not.toHaveBeenCalled();
+    expect(runner.triage).toHaveBeenCalledTimes(1);
+    expect(runner.recordTriageFailure).not.toHaveBeenCalled();
   });
 });
 
