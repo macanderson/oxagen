@@ -93,6 +93,7 @@ const HEADLINE: UnproductiveSpend = {
     { detector: 5, saving: { micros: "984600000", currency: "USD" }, findings: 1 },
   ],
   estimate: { saving: { micros: "300000", currency: "USD" }, findings: 1 },
+  findingsOutsidePeriod: 0,
 };
 
 const cost = (micros: string, basis: Cost["basis"] = "gateway_observed") => ({
@@ -403,6 +404,7 @@ const wasteRead: SpendWaste = {
   share: 0.2,
   runsWithWaste: 2,
   largestCause: "cache_write_never_read",
+  findingsOutsidePeriod: 0,
   causes: [
     {
       cause: "cache_write_never_read",
@@ -610,13 +612,40 @@ describe("Spend › header, tiles and tabs", () => {
     const tokens = tile("Tokens");
     expect(tokens).toHaveTextContent("1,000");
     expect(tokens).toHaveTextContent("50% served from cache");
+    // The month's read carried no gateway-metered part, so the share is not
+    // recorded and the tile names no denominator for it.
     const observed = tile("Observed by the gateway");
     expect(observed).toHaveTextContent("not recorded");
-    expect(observed).toHaveTextContent("of tokens counted by the proxy");
+    expect(observed).not.toHaveTextContent("of priced spend");
     const wasted = tile("Wasted");
     expect(wasted).toHaveTextContent("$2.47");
     expect(wasted).toHaveTextContent("20% of spend");
     expect(wasted.querySelector('[data-tone="critical"]')).not.toBeNull();
+    // Every money figure carries its basis, the wasted one too (#5294).
+    expect(wasted.querySelector('[data-basis="client_attested"]')).not.toBeNull();
+  });
+
+  // #5293. get_spend answers the part of the total the gateway metered, and
+  // the tile divides it by the month's priced spend.
+  it("prints the share of the month's priced spend the gateway metered", async () => {
+    loaded();
+    const month = monthByModel();
+    if (!month.ok) throw new Error("monthByModel must answer");
+    byGroup.mockImplementation((_ctx, groupBy) =>
+      Promise.resolve(
+        groupBy === "model"
+          ? readOk({
+              ...month.value,
+              observed: { micros: "9000000", currency: "USD" },
+            })
+          : report([]),
+      ),
+    );
+    await renderSpend(["findings"]);
+    // 9,000,000 of 12,345,678 micros.
+    const observed = tile("Observed by the gateway");
+    expect(observed).toHaveTextContent("72.9%");
+    expect(observed).toHaveTextContent("of priced spend");
   });
 
   it("lists Month, then the earlier design's five tabs it keeps, in order, with live counts, as path links", async () => {
@@ -1296,7 +1325,11 @@ describe("Spend › Findings", () => {
     expect(within(hero).getByTestId("spend-headline-share")).toHaveTextContent(
       "25%",
     );
-    expect(hero).toHaveTextContent("of $20.00 spent this month.");
+    expect(hero).toHaveTextContent("of $20.00 spent on calls in this window.");
+    // The hero names the days it counts: the month to date (#5294).
+    expect(within(hero).getByTestId("spend-headline-window")).toHaveTextContent(
+      "Counts the calls that ran from Sep 1, 2026 to Sep 15, 2026.",
+    );
     // The listed findings' savings summed across kinds is not the headline.
     expect(hero).not.toHaveTextContent("$1,670.80");
     expect(hero).not.toHaveTextContent("a year at this run rate");
@@ -1525,21 +1558,79 @@ describe("Spend › Tokens", () => {
     expect(
       screen.getByText("Written to cache").nextElementSibling,
     ).toHaveTextContent("6.7%");
-    for (const heading of ["Prompt composition", "By harness"]) {
-      const panel = screen
-        .getByRole("heading", { name: heading })
-        .closest("section");
-      if (panel === null) throw new Error(`no panel ${heading}`);
-      expect(within(panel).getByTestId("spend-not-backed")).toHaveAttribute(
-        "data-issue",
-        "2962",
+    const harness = screen
+      .getByRole("heading", { name: "By harness" })
+      .closest("section");
+    if (harness === null) throw new Error("no panel By harness");
+    expect(within(harness).getByTestId("spend-not-backed")).toHaveAttribute(
+      "data-issue",
+      "2962",
+    );
+    // The month's read carried no composition, so every part but output and
+    // reasoning, which the classes hold, reads as not recorded.
+    const composition = screen.getByRole("table", {
+      name: "Prompt composition",
+    });
+    expect(headers(composition)).toEqual(["Part", "Tokens", "Share"]);
+    const part = (name: string) => {
+      const hit = composition.querySelector<HTMLElement>(
+        `tr[data-prompt-part="${name}"]`,
       );
-    }
+      if (hit === null) throw new Error(`no part ${name}`);
+      return hit;
+    };
+    expect(part("toolDefinitions")).toHaveTextContent("not recorded");
+    expect(part("conversation")).toHaveTextContent("not recorded");
+    expect(part("output")).toHaveTextContent("200");
+    expect(part("output")).toHaveTextContent("20%");
+  });
+
+  // #5293. get_spend answers the standing context and the tool results over
+  // the month, and the panel prints each as a share of the month's tokens.
+  it("prints each prompt part the month recorded as a share of its tokens", async () => {
+    loaded({ agent: report([]) });
+    const month = monthByModel();
+    if (!month.ok) throw new Error("monthByModel must answer");
+    byGroup.mockImplementation((_ctx, groupBy) =>
+      Promise.resolve(
+        groupBy === "model"
+          ? readOk({
+              ...month.value,
+              composition: {
+                toolDefinitionTokens: 400,
+                contextFrameTokens: 0,
+                steeringTokens: null,
+                toolResultTokens: 150,
+              },
+            })
+          : report([]),
+      ),
+    );
+    await renderSpend(["tokens"]);
+    const composition = screen.getByRole("table", {
+      name: "Prompt composition",
+    });
+    const part = (name: string) => {
+      const hit = composition.querySelector<HTMLElement>(
+        `tr[data-prompt-part="${name}"]`,
+      );
+      if (hit === null) throw new Error(`no part ${name}`);
+      return hit;
+    };
+    // 400 of the month's 1,000 tokens.
+    expect(part("toolDefinitions")).toHaveTextContent("400");
+    expect(part("toolDefinitions")).toHaveTextContent("40%");
+    expect(part("toolResults")).toHaveTextContent("150");
+    expect(part("toolResults")).toHaveTextContent("15%");
+    // A part measured at zero reads zero; a part nothing measured does not.
+    expect(part("contextFrames")).toHaveTextContent("0%");
+    expect(part("steering")).toHaveTextContent("not recorded");
+    expect(part("system")).toHaveTextContent("not recorded");
     expect(
       screen
         .getByRole("heading", { name: "Prompt composition" })
         .closest("section"),
-    ).toHaveTextContent("Tool definitions");
+    ).toHaveTextContent("Each tool result counts once, when it was recorded.");
   });
 
   it("lists the twelve agents with the most tokens, with the design's columns, each opening its agent page", async () => {
@@ -1912,7 +2003,7 @@ describe("Spend › Wasted spend", () => {
     expect(agentsList).not.toHaveBeenCalled();
   });
 
-  it("prints the four tiles, the recorded cause, retry loops from the findings, the five other design causes as not recorded, and a card per run with its two links", async () => {
+  it("prints the four tiles, the recorded cause, the six design causes as not recorded, and a card per run with its two links", async () => {
     loaded();
     await renderSpend(["waste"]);
     const wasted = screen.getAllByText("Wasted", { selector: "dt" });
@@ -1936,15 +2027,18 @@ describe("Spend › Wasted spend", () => {
     ]) {
       expect(causes).toHaveTextContent(cause);
     }
+    // No finding claims a call in the period, so retry loops and halted
+    // early read not recorded beside the four no detector meters (#5294).
     expect(causes.querySelectorAll('li[data-recorded="false"]')).toHaveLength(
-      5,
+      6,
     );
-    // Retry loops come from the open findings, which answered.
     expect(
       causes
         .querySelector('li[data-cause="retryLoops"]')
         ?.getAttribute("data-recorded"),
-    ).toBe("true");
+    ).toBe("false");
+    // The page reads the waste answer alone: the findings list adds no cause.
+    expect(screen.queryByTestId("waste-outside")).toBeNull();
     const named = document.querySelector('[data-run="arun_01k5rn8f3j"]');
     if (!(named instanceof HTMLElement)) throw new Error("no named run card");
     expect(named).toHaveTextContent("Repair the login redirect");
@@ -2016,7 +2110,36 @@ describe("Spend › drill", () => {
       perCall: { micros: "24193", currency: "USD" },
       perRun: { micros: "2500000", currency: "USD" },
       share: 0.1,
-      tools: [{ name: "github__get_issue", calls: 5, runs: 2 }],
+      tokens: {
+        input_uncached: 0,
+        cache_read: 0,
+        cache_write_5m: 0,
+        cache_write_1h: 0,
+        output: 0,
+        reasoning: 0,
+        server_tool_request: 0,
+      },
+      cacheHitRate: null,
+      modelCalls: 0,
+      observed: null,
+      standing: {
+        toolDefinitionTokens: null,
+        contextFrameTokens: null,
+        steeringTokens: null,
+      },
+      resultTokens: null,
+      tools: [
+        {
+          name: "github__get_issue",
+          calls: 5,
+          runs: 2,
+          resultTokens: null,
+          cost: null,
+        },
+      ],
+      byAgent: [],
+      byOperator: [],
+      byModel: [],
       ...over,
     };
   }
@@ -2075,14 +2198,56 @@ describe("Spend › drill", () => {
     ).not.toBeNull();
   });
 
-  it("reads no agents and draws no agent avatar on a tool's drill (negative)", async () => {
+  // #5293. A tool's drill splits its figure by agent, so it reads the
+  // agents too, and each row's avatar carries the harness its agent
+  // registered. An agent the registry does not hold is drawn unbadged.
+  it("badges each agent in a tool's By agent table with the harness it registered", async () => {
+    const part = {
+      provider: null,
+      operator: null,
+      runs: 1,
+      calls: 2,
+      cost: null,
+      tokens: {
+        input_uncached: 0,
+        cache_read: 0,
+        cache_write_5m: 0,
+        cache_write_1h: 0,
+        output: 0,
+        reasoning: 0,
+        server_tool_request: 0,
+      },
+      resultTokens: null,
+    };
     drill.mockResolvedValue(
-      readOk(drillOf({ kind: "tool", key: "github__get_issue" })),
+      readOk(
+        drillOf({
+          kind: "tool",
+          key: "github__get_issue",
+          byAgent: [
+            { ...part, key: "acme.core.triage" },
+            { ...part, key: "acme.core.review" },
+          ],
+        }),
+      ),
     );
     findings.mockResolvedValue(readOk(listing()));
     await renderSpend(["tool", "github__get_issue"]);
-    expect(agentsList).not.toHaveBeenCalled();
-    expect(document.querySelector("[data-agent-avatar]")).toBeNull();
+    expect(agentsList).toHaveBeenCalled();
+    expect(
+      rowOf("acme.core.triage").querySelector(
+        '[data-harness-badge="claude-code"]',
+      ),
+    ).not.toBeNull();
+    expect(
+      rowOf("acme.core.review").querySelector("[data-harness-badge]"),
+    ).toBeNull();
+    // The tool's own header draws no agent avatar.
+    const heading = screen.getByRole("heading", {
+      level: 2,
+      name: "github__get_issue",
+    });
+    expect(heading.parentElement?.querySelector("[data-agent-avatar]")).toBeNull();
   });
 
   it("says what Export this view would do and that nothing was built", async () => {
@@ -2394,7 +2559,28 @@ describe("Spend › a tab's own read failing", () => {
         perCall: null,
         perRun: null,
         share: null,
+        tokens: {
+          input_uncached: 0,
+          cache_read: 0,
+          cache_write_5m: 0,
+          cache_write_1h: 0,
+          output: 0,
+          reasoning: 0,
+          server_tool_request: 0,
+        },
+        cacheHitRate: null,
+        modelCalls: 0,
+        observed: null,
+        standing: {
+          toolDefinitionTokens: null,
+          contextFrameTokens: null,
+          steeringTokens: null,
+        },
+        resultTokens: null,
         tools: [],
+        byAgent: [],
+        byOperator: [],
+        byModel: [],
       }),
     );
     findings.mockResolvedValue(readOk(listing()));
@@ -2504,6 +2690,7 @@ describe("Spend › what a read did not record", () => {
         runsWithWaste: 0,
         largestCause: null,
         causes: [],
+        findingsOutsidePeriod: 0,
       }),
     );
     await renderSpend(["waste"]);
