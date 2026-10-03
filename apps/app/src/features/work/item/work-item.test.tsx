@@ -571,7 +571,7 @@ describe("WorkItemPage › states", () => {
     const entries = screen.getAllByTestId("work-history-entry");
     expect(entries.map((entry) => entry.getAttribute("data-kind"))).toEqual(["collected", "reverted"]);
     expect(entries[1]).toHaveTextContent(
-      "Pull request acme/platform#650 reverted send 1 as 4d5e6f7. The item stays done until a person reopens it.",
+      "Pull request acme/platform#650 reverted send 1 as 4d5e6f7.",
     );
     expect(screen.getByTestId("work-acceptance")).toHaveTextContent("3f9a2c1");
     expect(screen.getByTestId("work-action-reopen")).toHaveTextContent("Reopen the item");

@@ -7,9 +7,11 @@
 //     the same delivery again records none
 //   - the item stays done: the stored state is done, it equals the reduction
 //     of the stored facts, and only a person's reopen moves it
-//   - a revert that has not merged, one made by hand without the line, one
-//     that names a pull request in another repository, and one of a send that
-//     never merged each record nothing
+//   - one revert that names two sends' pull requests records one fact on each
+//   - a revert that has not merged, an edit of a merged pull request's body,
+//     one made by hand without the line, one that names a pull request in
+//     another repository, and one of a send that never merged each record
+//     nothing
 //   - get_work_outcomes reads the stored revert, and an item done in the last
 //     30 days waits to count
 //
@@ -48,9 +50,13 @@ const MERGE = "9".repeat(40);
 const REVERT_HEAD = "5".repeat(40);
 const REVERT_MERGE = "4".repeat(40);
 
-/** Minutes after 09:00 UTC on 2026-10-03. */
+/**
+ * Minutes after 09:00 UTC on 2026-10-02. The day is in the past, so the
+ * provider's merge time is always before the acceptance, which takes the
+ * database clock, and the item's done time is never in the future.
+ */
 function at(minute: number): string {
-  return new Date(Date.UTC(2026, 9, 3, 9, minute)).toISOString();
+  return new Date(Date.UTC(2026, 9, 2, 9, minute)).toISOString();
 }
 
 const DRAFT: BriefDraft = {
@@ -63,6 +69,7 @@ const DRAFT: BriefDraft = {
 
 /** A `pull_request` webhook body, read by workPullRequestDeliveryOf as the route reads it. */
 function webhook(input: {
+  action?: string;
   repository?: string;
   number: number;
   head: string;
@@ -72,7 +79,7 @@ function webhook(input: {
 }) {
   const merge = input.merge ?? null;
   const delivery = workPullRequestDeliveryOf({
-    action: merge === null ? "synchronize" : "closed",
+    action: input.action ?? (merge === null ? "synchronize" : "closed"),
     repository: { full_name: input.repository ?? REPOSITORY },
     pull_request: {
       number: input.number,
@@ -260,16 +267,18 @@ describe.skipIf(!enabled)("a revert of a Work pull request against Postgres", { 
       repository: REPOSITORY,
       prNumber: 7102,
       occurredAt: at(40),
-      data: { merge_commit: REVERT_MERGE },
+      data: { merge_commit: REVERT_MERGE, reverts: 7101 },
     });
     const order = after.projection.orders.find((entry) => entry.orderId === orderId);
     expect(order).toMatchObject({ done: true, pullRequest: { repository: REPOSITORY, number: 7101 } });
     expect(order?.revert).toEqual({ repository: REPOSITORY, number: 7102, mergeCommit: REVERT_MERGE, at: at(40) });
     await expectConsistent(itemId);
 
-    // GitHub redelivers, and later sends an edit of the merged revert.
+    // GitHub redelivers the merge, with the body as it stands now, and later
+    // sends an edit of the merged revert.
     expect(await deliver(revertOf(7101, 7102))).toBe(0);
     expect(await deliver(revertOf(7101, 7102, `Broke sign-in.\n\nReverts ${REPOSITORY}#7101`))).toBe(0);
+    expect(await deliver(webhook({ action: "edited", number: 7102, head: REVERT_HEAD, body: `Reverts ${REPOSITORY}#7101`, merge: { commit: REVERT_MERGE, at: at(40) }, updatedAt: at(45) }))).toBe(0);
     const again = await read(itemId);
     expect(again.facts.filter((fact) => fact.kind === "reverted")).toHaveLength(1);
     expect(again.version).toBe(after.version);
@@ -295,6 +304,13 @@ describe.skipIf(!enabled)("a revert of a Work pull request against Postgres", { 
     const before = await read(itemId);
     // The revert is open, not merged.
     expect(await deliver(webhook({ number: 7302, head: REVERT_HEAD, body: `Reverts ${REPOSITORY}#7301`, updatedAt: at(40) }))).toBe(0);
+    // A pull request merged long ago, whose body someone edits to name the
+    // send's pull request. Only the merge delivery counts.
+    expect(
+      await deliver(
+        webhook({ action: "edited", number: 7306, head: REVERT_HEAD, body: `Reverts ${REPOSITORY}#7301`, merge: { commit: REVERT_MERGE, at: at(30) }, updatedAt: at(50) }),
+      ),
+    ).toBe(0);
     // A revert made by hand: `git revert` writes the commit, not the line.
     expect(await deliver(revertOf(7301, 7303, `This reverts commit ${MERGE}.`))).toBe(0);
     expect(await deliver(revertOf(7301, 7304, "Reverts #7301"))).toBe(0);
@@ -309,6 +325,23 @@ describe.skipIf(!enabled)("a revert of a Work pull request against Postgres", { 
     expect(await deliver(revertOf(7401, 7402))).toBe(0);
     expect((await read(open.itemId)).facts.filter((fact) => fact.kind === "reverted")).toHaveLength(0);
     await expectConsistent(open.itemId);
+  });
+
+  it("records one revert on each send whose pull request one revert names", async () => {
+    const first = await sentItem(7601, true);
+    const second = await sentItem(7602, true);
+    expect(await deliver(revertOf(7601, 7603, `Reverts ${REPOSITORY}#7601\nReverts ${REPOSITORY}#7602`))).toBe(2);
+    for (const [item, reverts] of [
+      [first.itemId, 7601],
+      [second.itemId, 7602],
+    ] as const) {
+      const record = await read(item);
+      expect(record.projection.state).toBe("done");
+      expect(record.facts.filter((fact) => fact.kind === "reverted").map((fact) => [fact.prNumber, fact.data])).toEqual([
+        [7603, { merge_commit: REVERT_MERGE, reverts }],
+      ]);
+      await expectConsistent(item);
+    }
   });
 
   it("reads the stored revert in get_work_outcomes, where a newly done item waits for its 30 days", async () => {

@@ -89,8 +89,8 @@ revert.
   lane's CI proof does not stand in for them.
 - An operator can read the pilot measures through the API. The Outcomes page
   does not draw `delivery` or the weekly intake yet.
-- A revert is invisible until Work records one (#5244). The pilot reads
-  reopens alone until then. The amendment of 2026-10-03 below records them.
+- Until the amendment of 2026-10-03 below, a revert was invisible and the
+  pilot read reopens alone (#5244). Work now records a revert GitHub links.
 - `truncated` keeps its meaning, more items than one read counts.
   `delivery.truncated` says the same for sends, at 2,000.
 
@@ -118,19 +118,26 @@ with the immature counts. Work now records a revert, so the pilot reads both.
 
 1. **A revert is a provider fact on the send.** `reverted` is a new order fact
    kind, from the `provider` source only (ADR-244). It names the reverting
-   pull request in its repository and pull request number, and that pull
-   request's merge commit in its data. Migration
+   pull request in its repository and pull request number. Its data names
+   that pull request's merge commit and the number of the pull request it
+   reverts, so the record says which merge it undid. Migration
    `20261003153000_item_facts_reverted.sql` widens `item_facts_kind_check` and
    `item_facts_order_check`.
 2. **Work counts the revert GitHub links.** The `pull_request` webhook records
-   `reverted` when a merged pull request's description has a line that starts
+   `reverted` when a pull request merges with a description line that starts
    `Reverts <owner>/<repo>#<n>`, the line GitHub's Revert button writes, and
-   `#<n>` is the pull request a send follows and has merged. The named
-   repository must be the one the revert merged in, and a pull request never
-   reverts itself. A revert made by hand without that line, such as
-   `git revert` pushed to the branch, is not recorded and is not counted. A
-   bare `Reverts #<n>` is not counted either. The dedupe key names the send
-   and the reverting pull request, so a redelivery records nothing.
+   `#<n>` is the pull request a send follows and has merged. Only the `closed`
+   delivery of the merge counts, so editing an old pull request's description
+   records nothing. The named repository must be the one the revert merged
+   in, and a pull request never reverts itself. A revert made by hand without
+   that line, such as `git revert` pushed to the branch, is not recorded and
+   is not counted. A bare `Reverts #<n>` is not counted either. Oxagen does
+   not check which branch the revert merged into, as the Spend outcome rows
+   do (`revertTargetsOf` in `@oxagen/billing`). GitHub's Revert button
+   targets the original base branch. The dedupe key names the send and the
+   reverting pull request, so a redelivery records nothing. The revert writes
+   in a transaction of its own, after the delivery's own facts, so a failure
+   there cannot take those back.
 3. **A revert never moves the item.** `reduceWorkItem` shows the first revert
    on the send (`OrderProjection.revert`) and changes no state: a done item
    stays done. A person reads the revert in the history and decides whether to

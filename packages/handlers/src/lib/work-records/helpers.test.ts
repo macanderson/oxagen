@@ -26,7 +26,7 @@ import {
   newFact,
 } from "@oxagen/work/records";
 import { asCapabilityRefusal } from "./errors";
-import { MAX_REVERT_TARGETS, parsePullRequestUrl, revertedPullRequestsOf, workPullRequestDeliveryOf } from "./results";
+import { MAX_PULL_REQUEST_NUMBER, MAX_REVERT_TARGETS, parsePullRequestUrl, revertedPullRequestsOf, workPullRequestDeliveryOf } from "./results";
 import { returnedReasonBefore, sourceAt, workOrderNamedBy } from "./runtime";
 import { forecastRuntimeTier } from "./target";
 
@@ -69,7 +69,14 @@ describe("parsePullRequestUrl", () => {
   });
 
   it("refuses anything else", () => {
-    for (const url of ["https://gitlab.com/a/b/-/merge_requests/1", "https://github.com/a/b/issues/3", "http://github.com/a/b/pull/1", "https://github.com/a/b/pull/0"]) {
+    for (const url of [
+      "https://gitlab.com/a/b/-/merge_requests/1",
+      "https://github.com/a/b/issues/3",
+      "http://github.com/a/b/pull/1",
+      "https://github.com/a/b/pull/0",
+      // Larger than the pull request number column holds.
+      "https://github.com/a/b/pull/2147483648",
+    ]) {
       expect(parsePullRequestUrl(url), url).toBeNull();
     }
   });
@@ -134,6 +141,8 @@ describe("revertedPullRequestsOf", () => {
       // The pull request itself.
       "Reverts aintel/platform#640",
       "Reverts aintel/platform#612abc",
+      // Larger than any pull request number a fact can carry.
+      `Reverts aintel/platform#${MAX_PULL_REQUEST_NUMBER + 1}`,
     ];
     for (const body of none) expect(revertedPullRequestsOf(body, "aintel/platform", 640), String(body)).toEqual([]);
   });
@@ -144,14 +153,19 @@ describe("revertedPullRequestsOf", () => {
     expect(revertedPullRequestsOf(many, "aintel/platform", 640)).toHaveLength(MAX_REVERT_TARGETS);
   });
 
-  it("reaches the delivery from the pull request's body", () => {
-    const delivery = workPullRequestDeliveryOf({
+  it("reaches the delivery only from the merge of the reverting pull request", () => {
+    const merged = {
       action: "closed",
       repository: { full_name: "aintel/platform" },
       pull_request: { number: 640, body: "Reverts aintel/platform#612", state: "closed", merged: true, head: { sha: "1".repeat(40) } },
-    });
-    expect(delivery?.reverts).toEqual([612]);
-    expect(workPullRequestDeliveryOf({ repository: { full_name: "aintel/platform" }, pull_request: { number: 640, body: 7 } })?.reverts).toEqual([]);
+    };
+    expect(workPullRequestDeliveryOf(merged)?.reverts).toEqual([612]);
+    expect(revertedPullRequestsOf(`Reverts aintel/platform#${MAX_PULL_REQUEST_NUMBER}`, "aintel/platform", 640)).toEqual([MAX_PULL_REQUEST_NUMBER]);
+    // An edit after the merge, a close without merging, and an open pull request name nothing.
+    expect(workPullRequestDeliveryOf({ ...merged, action: "edited" })?.reverts).toEqual([]);
+    expect(workPullRequestDeliveryOf({ ...merged, pull_request: { ...merged.pull_request, merged: false } })?.reverts).toEqual([]);
+    expect(workPullRequestDeliveryOf({ ...merged, action: "opened", pull_request: { ...merged.pull_request, state: "open", merged: false } })?.reverts).toEqual([]);
+    expect(workPullRequestDeliveryOf({ ...merged, pull_request: { ...merged.pull_request, body: 7 } })?.reverts).toEqual([]);
   });
 });
 

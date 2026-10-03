@@ -172,7 +172,7 @@ describe("Outcomes › the last 30 days", () => {
       "9 newer items wait for their 30 days before counting here.",
     );
     expect(reopens).toHaveTextContent(
-      "A revert counts when GitHub merges a pull request with the line Reverts owner/repo#123, where 123 is the pull request that finished the item.",
+      "A revert counts when it merges with the line Reverts owner/repo#123 that GitHub's Revert button writes.",
     );
     expect(reopens).toHaveTextContent(
       "A revert made by hand without that line is not counted.",

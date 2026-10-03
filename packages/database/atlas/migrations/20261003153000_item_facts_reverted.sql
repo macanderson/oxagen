@@ -3,9 +3,10 @@
 -- A `reverted` fact is a provider fact on a work order. GitHub merged a pull
 -- request whose body names the send's merged pull request as
 -- `Reverts <owner>/<repo>#<n>`, the line GitHub's Revert button writes. The
--- fact names the reverting pull request and its merge commit. It never moves
--- the item out of done: a person reopens the item. It only feeds the revert
--- count in get_work_outcomes (ADR-286, amended 2026-10-03).
+-- fact names the reverting pull request, its merge commit, and the pull
+-- request it reverts. It never moves the item out of done: a person reopens
+-- the item. It only feeds the revert count in get_work_outcomes (ADR-286,
+-- amended 2026-10-03).
 --
 -- `reverted` belongs to a work order, so both constraints that list the kinds
 -- change: item_facts_kind_check names every kind, and item_facts_order_check

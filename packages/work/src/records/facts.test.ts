@@ -77,7 +77,7 @@ const VALID: WorkFact[] = [
   newFact({ kind: "accepted", source: "person", ...base("k26"), orderId: "o1", headSha: SHA, briefDigest: DIGEST, data: { criteria: ["c1"], required_checks: [] } }),
   newFact({ kind: "merged", source: "provider", ...base("k27"), orderId: "o1", headSha: SHA, data: { merge_commit: "c".repeat(40) } }),
   newFact({ kind: "pr_closed", source: "provider", ...base("k28"), orderId: "o1", data: {} }),
-  newFact({ kind: "reverted", source: "provider", ...base("k29"), orderId: "o1", repository: "aintel/platform", prNumber: 640, data: { merge_commit: "d".repeat(40) } }),
+  newFact({ kind: "reverted", source: "provider", ...base("k29"), orderId: "o1", repository: "aintel/platform", prNumber: 640, data: { merge_commit: "d".repeat(40), reverts: 7 } }),
 ];
 
 describe("fact kinds", () => {
@@ -181,7 +181,9 @@ describe("checkFact", () => {
     refusal({ ...find("criterion_claimed"), data: { text: "" } });
     refusal({ ...find("accepted"), data: { criteria: "c1" as unknown as string[], required_checks: [] } });
     refusal({ ...find("merged"), data: { merge_commit: "abc" } });
-    refusal({ ...find("reverted"), data: { merge_commit: "abc" } });
+    refusal({ ...find("reverted"), data: { merge_commit: "abc", reverts: 7 } });
+    refusal({ ...find("reverted"), data: { merge_commit: "d".repeat(40), reverts: 0 } });
+    refusal({ ...find("reverted"), data: { merge_commit: "d".repeat(40), reverts: "7" as unknown as number } });
   });
 
   it("takes a revert only from the provider, on a send", () => {

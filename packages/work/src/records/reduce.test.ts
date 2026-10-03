@@ -422,8 +422,8 @@ describe("reduceWorkItem: order independence", () => {
 // Reverts (#5244)
 // ---------------------------------------------------------------------------
 
-/** GitHub merged pull request #640 in the same repository, which reverts the send's pull request. */
-function reverted(order: string, minute: number, number = 640) {
+/** GitHub merged pull request `number` in the same repository, which reverts pull request `reverts` (the send's, #612). */
+function reverted(order: string, minute: number, number = 640, reverts = 612) {
   return newFact({
     kind: "reverted",
     source: "provider",
@@ -434,7 +434,7 @@ function reverted(order: string, minute: number, number = 640) {
     orderId: order,
     repository: "aintel/platform",
     prNumber: number,
-    data: { merge_commit: "4".repeat(40) },
+    data: { merge_commit: "4".repeat(40), reverts },
   });
 }
 
@@ -453,6 +453,8 @@ describe("reduceWorkItem: a revert of the merged pull request", () => {
   it("keeps the first revert, and shows none on a send that never merged", () => {
     const twice = reduceWorkItem([...DONE, reverted("o1", 20), reverted("o1", 25, 641)]);
     expect(twice.orders[0]?.revert).toMatchObject({ number: 640 });
+    // A revert of another pull request is not this send's.
+    expect(reduceWorkItem([...DONE, reverted("o1", 20, 640, 611)]).orders[0]?.revert).toBeNull();
     const open = reduceWorkItem([...IN_REVIEW, reverted("o1", 20)]);
     expect(open.state).toBe("review");
     expect(open.orders[0]?.revert).toBeNull();

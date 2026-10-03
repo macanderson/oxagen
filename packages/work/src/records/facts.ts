@@ -210,11 +210,12 @@ export interface FactDataByKind {
   pr_closed: Record<string, never>;
   /**
    * The send's merged pull request was reverted. The fact's repository and
-   * pull request number name the reverting pull request, and `merge_commit`
-   * is its merge commit. A revert never moves the item's state: a person
+   * pull request number name the reverting pull request, `merge_commit` is its
+   * merge commit, and `reverts` is the number of the pull request it reverts,
+   * in the same repository. A revert never moves the item's state: a person
    * reopens the item.
    */
-  reverted: { merge_commit: string };
+  reverted: { merge_commit: string; reverts: number };
 }
 
 interface FactBase<K extends FactKind> {
@@ -350,6 +351,7 @@ function checkData(fact: WorkFact): void {
       return;
     case "reverted":
       if (!HEAD_SHA_PATTERN.test(fact.data.merge_commit)) throw invalid("A revert names its merge commit as 40 hex characters.");
+      if (!Number.isInteger(fact.data.reverts) || fact.data.reverts < 1) throw invalid("A revert names the pull request it reverts by number.");
       return;
     case "accepted":
       if (!Array.isArray(fact.data.criteria) || !Array.isArray(fact.data.required_checks)) {
