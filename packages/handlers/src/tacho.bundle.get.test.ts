@@ -18,6 +18,7 @@ import {
 } from "vitest";
 import { BUNDLE_FEATURE_CEDAR, policyBundleSchema } from "@oxagen/recorder";
 import { bundleSignerFromPem, verifyBundle } from "./lib/tacho-bundle-signing";
+import { CedarPoliciesUnavailableError } from "./lib/tacho-host-cedar";
 import {
   BROKEN_POLICY,
   CEDAR_RUNTIME,
@@ -509,5 +510,46 @@ describe("get_tacho_bundle Cedar", () => {
     expect(answer.bundle).not.toHaveProperty("cedar");
     expect(answer.bundle?.permissions).toEqual({ allow: [], deny: [], ask: [] });
     expect(answer.etag).toBe(base);
+  });
+
+  it("keeps the etag the host holds when the published policies cannot be read", async () => {
+    const port = cedarPort();
+    const handler = createTachoBundleGetHandler({ published: port });
+    mocks.host.mockReturnValue(hostRow(CEDAR_HOST));
+    const first = await handler({ host_enrollment_id: HOST_PUBLIC }, MACHINE);
+    expect(first.bundle?.cedar?.policies).toHaveProperty(NO_SHELL_ID);
+
+    // The version store goes down. The process serves the set it compiled,
+    // so the host's poll with its etag is not_modified and its policies stay.
+    port.published = async () => {
+      throw new Error("the version store is down");
+    };
+    mocks.host.mockReturnValue(
+      hostRow({ ...CEDAR_HOST, bundleEtagServed: first.etag }),
+    );
+    const same = await handler(
+      { host_enrollment_id: HOST_PUBLIC, etag: first.etag },
+      MACHINE,
+    );
+    expect(same).toEqual({ not_modified: true, etag: first.etag, bundle: null });
+  });
+
+  it("fails the request when the published policies cannot be read and none have compiled", async () => {
+    // A fresh port, so its reader holds no earlier set. A bundle signed
+    // without Cedar would let the host allow every call the policies forbid,
+    // so the request fails and the host keeps the bundle it holds (#5381).
+    const port = cedarPort();
+    port.published = async () => {
+      throw new Error("the version store is down");
+    };
+    mocks.host.mockReturnValue(hostRow(CEDAR_HOST));
+    await expect(
+      createTachoBundleGetHandler({ published: port })(
+        { host_enrollment_id: HOST_PUBLIC },
+        MACHINE,
+      ),
+    ).rejects.toThrow(CedarPoliciesUnavailableError);
+    // Nothing was served, so the host row records no new etag.
+    expect(writes).toEqual([]);
   });
 });

@@ -144,6 +144,7 @@ import {
 import {
   type HostCedarReader,
   hostCedarReader,
+  readCedarForEnvelope,
 } from "./lib/tacho-host-cedar";
 import {
   type HostSkillsReader,
@@ -3197,10 +3198,12 @@ const ingestBatch = async (
   // The envelope's etag covers the host's published skills and Cedar
   // policies, as the bundle's does, so they are read first, outside any
   // tenant transaction (./lib/tacho-host-skills.ts says why). Both at once,
-  // so the production port answers them with one read.
+  // so the production port answers them with one read. The batch has landed,
+  // so Cedar policies the reader cannot give leave Cedar out of the etag
+  // rather than fail the batch (`readCedarForEnvelope`).
   const [skills, policy] = await Promise.all([
     skillsReader.read(capability, ctx, result.seen),
-    cedarReader.read(capability, ctx, result.seen),
+    readCedarForEnvelope(cedarReader, capability, ctx, result.seen),
   ]);
   const control = await withTenantDb((tx) =>
     controlEnvelope(tx as never, ctx, result.seen, new Date(), skills, policy),

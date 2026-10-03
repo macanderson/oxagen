@@ -1965,6 +1965,54 @@ describe("ingest_tacho_events", () => {
     expect(mocks.unlockOnboardingGate).not.toHaveBeenCalled();
   });
 
+  it("leaves the gate shut for the daemon's own chain, and opens it on the agent's first run (#5381)", async () => {
+    const db = fakeDb();
+    wire(db);
+    // The daemon seals `agent_start` on its own `tachod-<ulid>` chain as soon
+    // as it starts, before any agent runs, and ships it as a new root session.
+    const daemonId = "tachod-01K6A7B8C9D0E1F2G3H4J5K6M7";
+    const daemonChain = sessionUuid(HOST_PUBLIC, daemonId);
+    const genesis = sealEvent(
+      unsealed(
+        "agent_start",
+        { session_start_source: "startup" },
+        "hook",
+        CLAUDE_CODE,
+        {
+          session_id: daemonId,
+          session_uuid: daemonChain,
+          root_session_uuid: daemonChain,
+        },
+      ),
+      GENESIS_CURSOR,
+    ).event;
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: [genesis],
+      },
+      CONTEXT,
+    );
+    // The chain is recorded, but it is not the organization's first run.
+    expect(db.sessions.has(daemonChain)).toBe(true);
+    expect(mocks.unlockOnboardingGate).not.toHaveBeenCalled();
+
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: session(),
+      },
+      CONTEXT,
+    );
+    expect(mocks.unlockOnboardingGate).toHaveBeenCalledTimes(1);
+    expect(mocks.unlockOnboardingGate.mock.calls[0]?.[1]).toMatchObject({
+      orgId: CONTEXT.orgId,
+      runPublicId: "tse_fake0000000000000001",
+    });
+  });
+
   it("continues a known session only from its recorded head", async () => {
     const db = fakeDb();
     const events = session();

@@ -61,6 +61,37 @@ describe("loadCedarRuntime", () => {
     const { loadCedarRuntime } = await import("./runtime");
     expect(await loadCedarRuntime()).toBeNull();
   });
+
+  it("tries again once the retry wait has passed after a load that found no evaluator", async () => {
+    // A failed load was kept for the life of the process, so the API signed
+    // host bundles with no Cedar policies until it restarted (#5381).
+    let attempts = 0;
+    vi.doMock(SPECIFIER, () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("no such module");
+      // At the top level: the proxy vitest puts around a mocked module
+      // throws on any name the factory did not return.
+      return { isAuthorized: () => undefined };
+    });
+    const { CEDAR_RETRY_AFTER_MS, loadCedarRuntime } = await import(
+      "./runtime"
+    );
+    let clock = 1_000;
+    const now = () => clock;
+    expect(await loadCedarRuntime(now)).toBeNull();
+    // Inside the wait the failure stands, so a hook does not load again.
+    clock += CEDAR_RETRY_AFTER_MS - 1;
+    expect(await loadCedarRuntime(now)).toBeNull();
+    expect(attempts).toBe(1);
+    clock += 1;
+    const loaded = await loadCedarRuntime(now);
+    expect(typeof loaded?.isAuthorized).toBe("function");
+    expect(attempts).toBe(2);
+    // A load that worked is kept.
+    clock += CEDAR_RETRY_AFTER_MS * 10;
+    expect(await loadCedarRuntime(now)).toBe(loaded);
+    expect(attempts).toBe(2);
+  });
 });
 
 describe("loadCedarRuntimeFrom", () => {
