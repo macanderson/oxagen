@@ -405,12 +405,15 @@ export async function findSimilarityMatch(
   orgId: string,
   options: SimilaritySearchOptions = {},
 ): Promise<SimilaritySearch> {
-  const filters = ["n.orgId = $orgId", "n.entityType = $entityType"];
+  // The tenant anchor stays in the static text, where the scoped-session
+  // guard's corpus test reads it. Only the reconcile job's narrowing is
+  // interpolated, and ingestion's query has none.
+  let narrowing = "";
   if (options.excludeNodeId !== undefined) {
-    filters.push("n.publicId <> $excludeNodeId");
+    narrowing += " AND n.publicId <> $excludeNodeId";
   }
   if (options.principalsOnly) {
-    filters.push("NOT (n)-[:ALIAS_OF]->(:EntityNode)");
+    narrowing += " AND NOT (n)-[:ALIAS_OF]->(:EntityNode)";
   }
 
   const searchSession = scopedSession();
@@ -425,7 +428,7 @@ export async function findSimilarityMatch(
     const result = await searchSession.run(
       `CALL db.index.vector.queryNodes('entity_node_embedding_index', $k, $vector)
        YIELD node AS n, score
-       WHERE ${filters.join(" AND ")}
+       WHERE n.orgId = $orgId AND n.entityType = $entityType${narrowing}
        WITH n, score
        ORDER BY score DESC
        LIMIT $limit
