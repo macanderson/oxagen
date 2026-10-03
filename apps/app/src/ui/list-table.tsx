@@ -339,7 +339,7 @@ export function ListTable({
             setPage(1);
           }}
           data-touch-target=""
-          className="min-w-35 flex-[1_1_200px] rounded-lg border border-input-border bg-input-bg px-2.5 py-1.5 text-sm text-input-fg placeholder:text-dim focus-visible:border-input-border-focus focus-visible:outline-none max-md:basis-full max-md:text-input-touch"
+          className="min-w-35 grow basis-50 rounded-lg border border-input-border bg-input-bg px-2.5 py-1.5 text-sm text-input-fg placeholder:text-dim focus-visible:border-input-border-focus focus-visible:outline-none max-md:basis-full max-md:text-input-touch"
         />
         {filters}
         {facets.map(({ column, values }) => {
@@ -403,7 +403,7 @@ export function ListTable({
                         toggle(i);
                       }}
                       data-sort={state}
-                      className="inline-flex cursor-pointer select-none items-center uppercase tracking-[inherit] hover:text-muted-foreground data-[sort=ascending]:text-foreground data-[sort=descending]:text-foreground after:ml-1.25 after:text-xs after:text-rule after:content-['↕'] data-[sort=ascending]:after:text-accent-text data-[sort=ascending]:after:content-['↑'] data-[sort=descending]:after:text-accent-text data-[sort=descending]:after:content-['↓']"
+                      className="inline-flex cursor-pointer select-none items-center uppercase tracking-[inherit] hover:text-muted-foreground data-[sort=ascending]:text-foreground data-[sort=descending]:text-foreground after:ml-1.25 after:text-xs after:text-rule after:content-(--glyph-sort) data-[sort=ascending]:after:text-accent-text data-[sort=ascending]:after:content-(--glyph-sort-asc) data-[sort=descending]:after:text-accent-text data-[sort=descending]:after:content-(--glyph-sort-desc)"
                     >
                       {column.label}
                     </button>

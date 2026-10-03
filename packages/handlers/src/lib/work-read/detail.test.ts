@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { workItemGet } from "@oxagen/oxagen/contracts/work.item.get";
 import type { TriageCorrection } from "@oxagen/work";
-import { type WorkBrief, type WorkFact, reduceWorkItem } from "@oxagen/work/records";
+import { type MergedBy, type WorkBrief, type WorkFact, reduceWorkItem } from "@oxagen/work/records";
 import {
   type DetailBrief,
   type DetailInput,
@@ -19,10 +19,13 @@ import {
 } from "./detail";
 import {
   AMARA,
+  APP_MERGER,
   IN_REVIEW,
   ITEM,
   MARCUS,
   O1,
+  PERSON_MERGER,
+  QUEUE_MERGER,
   READY,
   REPOSITORY,
   SENT,
@@ -192,9 +195,20 @@ describe("sendDetailOf", () => {
     expect(sendDetailOf(item(merged), reduceWorkItem(merged).orders[0]!, lookups()).pull_request?.merged).toEqual({
       at: at(12),
       merge_commit: "9".repeat(40),
+      merged_by: null,
     });
     const closed = [...IN_REVIEW, f.prClosed(O1, 12)];
     expect(sendDetailOf(item(closed), reduceWorkItem(closed).orders[0]!, lookups()).pull_request?.closed_at).toBe(at(12));
+  });
+
+  it("names who merged, and whether it was the Oxagen GitHub App", () => {
+    const mergedBy = (merger: MergedBy) => {
+      const facts = [...IN_REVIEW, f.accepted(O1, SHA1, 12), f.merged(O1, SHA1, 13, merger)];
+      return sendDetailOf(item(facts), reduceWorkItem(facts).orders[0]!, lookups()).pull_request?.merged?.merged_by;
+    };
+    expect(mergedBy(PERSON_MERGER)).toEqual({ login: "amara", type: "User", oxagen_app: false });
+    expect(mergedBy(QUEUE_MERGER)).toEqual({ login: "github-merge-queue[bot]", type: "Bot", oxagen_app: false });
+    expect(mergedBy(APP_MERGER)).toEqual({ login: "oxagen-connect[bot]", type: "Bot", oxagen_app: true });
   });
 
   it("lists the send's pull requests from the forge store and links the facts' one through it", () => {
@@ -310,6 +324,15 @@ describe("detailOf", () => {
     expect(parsed.sends[0]?.pull_requests.map((pull) => pull.id)).toEqual(["fpr_612"]);
     expect(parsed.item.send?.pull_requests.map((pull) => pull.id)).toEqual(["fpr_612"]);
     expect(parsed.triage.view.criteria.value).toEqual(decision().done_record?.criteria);
+  });
+
+  it("answers a send the Oxagen GitHub App merged in the contract's shape, with the app's login", () => {
+    const facts = [...IN_REVIEW, f.accepted(O1, SHA1, 12), f.merged(O1, SHA1, 13, APP_MERGER)];
+    const detail = detailOf(input(facts, { briefs: [brief(1, 1)] }), lookups());
+    const parsed = workItemGet.output.parse({ ...detail, viewer: { can_control: true, can_approve: true } });
+    expect(parsed.item).toMatchObject({ state: "review", status: "in_review", wait: { kind: "merged_by_app", login: "oxagen-connect[bot]", at: at(13) } });
+    expect(parsed.sends[0]?.gate).toEqual({ open: false, block: "merged_by_app", detail: "oxagen-connect[bot]" });
+    expect(parsed.sends[0]?.pull_request?.merged).toEqual({ at: at(13), merge_commit: "9".repeat(40), merged_by: APP_MERGER });
   });
 
   it("answers a new item with triage's draft and no sends", () => {

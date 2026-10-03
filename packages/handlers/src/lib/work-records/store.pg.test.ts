@@ -239,7 +239,7 @@ describe.skipIf(!enabled)("the work record store against Postgres", () => {
       provider("run_ended", orderId, 9, { runId: `tse_${tag}a`, data: { outcome: "stopped" } }),
       provider("checks_required", orderId, 10, { headSha: SHA1, data: { names: ["test"] } }),
       provider("check_observed", orderId, 11, { headSha: SHA1, data: { name: "test", conclusion: "success" } }),
-      provider("merged", orderId, 12, { headSha: SHA1, data: { merge_commit: MERGE } }),
+      provider("merged", orderId, 12, { headSha: SHA1, data: { merge_commit: MERGE, merged_by: null } }),
     ];
   }
 
@@ -551,6 +551,37 @@ describe.skipIf(!enabled)("the work record store against Postgres", () => {
       await expect(inScope((tx) => openWorkOrder(tx, scope, before))).rejects.toMatchObject({ code: "stale_revision" });
       // On the current revision, nothing is approved yet.
       await expect(inScope((tx) => openWorkOrder(tx, scope, { ...before, itemRevision: 2 }))).rejects.toMatchObject({ code: "not_allowed" });
+      await expectConsistent(itemId);
+    });
+
+    it("refuses a retried save or reopen on the old version, and writes no second brief or reopen", async () => {
+      const itemId = await newItem();
+      const collected = await collect(itemId);
+      const save = () =>
+        inScope((tx) =>
+          saveBrief(tx, scope, { itemId, expectedVersion: collected.version, itemRevision: 1, draft: DRAFT, actor: AMARA, source: "person", actorUserId: AMARA }),
+        );
+      const saved = await save();
+      await expect(save()).rejects.toMatchObject({ code: "stale_version" });
+      const briefRows = await inScope((tx) => tx.select({ id: schema.workBriefs.id }).from(schema.workBriefs).where(eq(schema.workBriefs.itemId, itemId)));
+      expect(briefRows).toHaveLength(1);
+
+      const closed = await inScope((tx) =>
+        appendFacts(tx, scope, {
+          itemId,
+          expectedVersion: saved.version,
+          actorUserId: MARCUS,
+          facts: [{ kind: "closed", source: "person", itemRevision: 1, actor: MARCUS, occurredAt: at(0), dedupeKey: "c", data: { resolution: "declined", reason: "Not now." } } as FactInput<FactKind>],
+        }),
+      );
+      const reopen = () => inScope((tx) => reopenWorkItem(tx, scope, { itemId, expectedVersion: closed.version, reason: "It came back.", actorUserId: AMARA }));
+      expect(await reopen()).toMatchObject({ repeat: false, projection: { revision: 2 } });
+      await expect(reopen()).rejects.toMatchObject({ code: "stale_version" });
+
+      const record = await inScope((tx) => readWorkItem(tx, scope, itemId));
+      expect(record.facts.filter((fact) => fact.kind === "brief_saved")).toHaveLength(1);
+      expect(record.facts.filter((fact) => fact.kind === "reopened")).toHaveLength(1);
+      expect(record.projection.revision).toBe(2);
       await expectConsistent(itemId);
     });
   });

@@ -7,7 +7,7 @@
 //
 // Each action names the permission bundle from the role editor's catalogue it
 // belongs to (packages/oxagen/src/iam/permission-catalog.ts): reading takes
-// run.read, approving a brief and accepting work take work.approve, and every
+// work.read, approving a brief and accepting work take work.approve, and every
 // other action takes work.control (oxagen-roadmap mockups/pages/work-item.md,
 // Permissions, which proposed run.approve and run.control). The Work actions
 // have bundles of their own because a bundle reads as held only when every
@@ -37,12 +37,12 @@ export const WORK_ITEM_ACTIONS = [
 export type WorkItemAction = (typeof WORK_ITEM_ACTIONS)[number];
 
 /** The role editor's permission bundles the Work actions belong to. */
-export const WORK_PERMISSIONS = ["run.read", "work.approve", "work.control"] as const;
+export const WORK_PERMISSIONS = ["work.read", "work.approve", "work.control"] as const;
 export type WorkPermission = (typeof WORK_PERMISSIONS)[number];
 
 /** The permission each action takes. */
 export const WORK_ACTION_PERMISSION: Readonly<Record<WorkItemAction, WorkPermission>> = {
-  read: "run.read",
+  read: "work.read",
   enter: "work.control",
   correct_triage: "work.control",
   save_brief: "work.control",
@@ -66,7 +66,7 @@ const ORG_ADMINS = ["Owner", "Admin"] as const;
 
 /** The roles each permission admits by default. A workspace Viewer reads and does nothing else. */
 export const WORK_PERMISSION_ROLES: Readonly<Record<WorkPermission, WorkRoleRequirement>> = {
-  "run.read": { org: ORG_ADMINS, workspace: ["Owner", "Member", "Viewer"] },
+  "work.read": { org: ORG_ADMINS, workspace: ["Owner", "Member", "Viewer"] },
   "work.approve": { org: ORG_ADMINS, workspace: ["Owner", "Member"] },
   "work.control": { org: ORG_ADMINS, workspace: ["Owner", "Member"] },
 };

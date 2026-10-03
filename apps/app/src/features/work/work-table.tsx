@@ -119,12 +119,12 @@ function ItemCell({
       <SafeLink
         to={routes.workItem(org, ws, item.number)}
         data-touch-target=""
-        className="inline-flex max-w-full items-baseline gap-2 rounded-sm font-medium text-foreground after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring"
+        className="inline-flex max-w-full items-baseline gap-2 rounded-sm font-medium text-foreground after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-ring"
       >
         <span className={`${mono} flex-none text-muted-foreground`}>
           {item.number}
         </span>{" "}
-        <span className="min-w-0 [overflow-wrap:anywhere]">{item.title}</span>
+        <span className="min-w-0 wrap-anywhere">{item.title}</span>
       </SafeLink>
       <WaitLine wait={item.wait} />
       {labels && item.labels.length > 0 ? (

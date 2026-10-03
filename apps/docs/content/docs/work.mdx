@@ -43,6 +43,8 @@ oxagen work start <work order>
 
 `oxagen work list` shows each work order waiting on the machine. Run `oxagen work start` in a checkout of the brief's repository. It claims the work order, then starts the agent's harness with the brief as its first prompt. The item reads **Running** once the run links to the send. When Oxagen refuses the claim, nothing starts, and the message says why. See [oxagen work](/docs/cli/commands#oxagen-work-work-orders-on-this-machine).
 
+Inside the run, the agent can claim each criterion it met. The first prompt tells it how: after it pushes a commit to the pull request, it runs `oxagen work claim <criterion> --text "<how the commit meets it>"`. The work item shows each claim beside its criterion, with the commit it names. A claim is the agent's word. You still check every criterion and decide.
+
 ## Stop and withdraw
 
 - **Cancel the send** ends a send that no runtime has claimed. It ends at once.

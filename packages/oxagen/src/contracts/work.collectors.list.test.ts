@@ -31,10 +31,21 @@ describe("list_work_collectors contract", () => {
     expect(contract.input.safeParse({ name: "github" }).success).toBe(false);
   });
 
+  const viewer = { can_change_collectors: false };
+
   it("answers each collector's health, last good read, and failed streak", () => {
-    expect(contract.output.safeParse({ collectors: [collector] }).success).toBe(true);
-    expect(contract.output.safeParse({ collectors: [{ ...collector, health: "broken" }] }).success).toBe(false);
-    expect(contract.output.safeParse({ collectors: [{ ...collector, type: "jira" }] }).success).toBe(false);
+    expect(contract.output.safeParse({ collectors: [collector], viewer }).success).toBe(true);
+    expect(contract.output.safeParse({ collectors: [{ ...collector, health: "broken" }], viewer }).success).toBe(false);
+    expect(contract.output.safeParse({ collectors: [{ ...collector, type: "jira" }], viewer }).success).toBe(false);
+  });
+
+  it("answers whether the caller may change a collector, and nothing more", () => {
+    expect(contract.output.parse({ collectors: [], viewer: { can_change_collectors: true } }).viewer).toEqual({
+      can_change_collectors: true,
+    });
+    expect(contract.output.safeParse({ collectors: [] }).success).toBe(false);
+    expect(contract.output.safeParse({ collectors: [], viewer: { can_change_collectors: "yes" } }).success).toBe(false);
+    expect(contract.output.safeParse({ collectors: [], viewer: { ...viewer, can_sync: true } }).success).toBe(false);
   });
 
   it("reads only, and lets a workspace viewer read", () => {

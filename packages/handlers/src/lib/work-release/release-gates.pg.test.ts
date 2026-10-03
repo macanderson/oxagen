@@ -8,20 +8,25 @@
 //   1. A signed `issues.opened` delivery from the GitHub App becomes one work
 //      item. The same delivery again changes nothing.
 //   2. Triage cites the priorities record, and a person corrects its priority.
+//      A later triage run that answers another priority leaves the person's.
 //   3. A reviewer writes and approves the brief. The operator sends it to an
 //      agent he operates, and a retried send returns the same send.
 //   4. The agent's host takes the command and claims the send. A lost answer
 //      gets the same claim back, and another host is refused.
-//   5. One run links to the send, a second run that names it is stopped, and
-//      the run's end moves the item to review.
+//   5. One run links to the send, and a second run that names it is stopped.
+//      The host seals the run, and its `cost/run.sealed` event, recorded by
+//      the same function the Inngest step calls, moves the item to review.
 //   6. The run's pull request links, and a failing required check blocks Accept.
-//   7. Accept records an acceptance on the head and merges nothing. A new head
-//      voids it, and an acceptance that names the old head is refused.
+//   7. Accept records an acceptance on the head and merges nothing. A new head,
+//      delivered through the GitHub App route's own entry, voids it, and an
+//      acceptance that names the old head is refused.
 //   8. A required check that has not reported on the new head blocks Accept.
 //      Once it passes, Accept records the acceptance on the new head.
-//   9. The human merge marks the item done. The same merge again, a late head,
-//      a late run end, and a late claim change nothing.
-//  10. Another workspace finds the item nowhere and can act on none of it.
+//   9. The human merge, delivered through the route's entry, marks the item
+//      done and records who merged. The same merge again, a late head, a late
+//      run end, and a late claim change nothing.
+//  10. Another workspace and another organization find the item nowhere and
+//      can act on none of it, and their reads count none of it.
 //  11. Outcomes counts the item, its send, its week's intake, and the full flow.
 //  12. A reopen keeps the history, and a retry of the old send starts nothing.
 //
@@ -29,11 +34,15 @@
 //   - two sends at the same moment: one item to one agent, one item to two
 //     agents, and two items to one agent
 //   - a runtime that goes silent in the middle of a run
+//   - a runtime that never comes back, so the 12-hour idle close seals its run
 //   - a source change while the work runs
 //   - a merge of a new head while the only acceptance names the old head
-// Each case ends with at most one open send per item, one command per send,
-// one linked run per send, and no done state without an acceptance of the
-// merged head.
+//   - a merge of the accepted head by the Oxagen GitHub App, whose
+//     installation token is the push token Oxagen issues an agent
+// Every case, in both groups, ends on expectGateInvariants: at most one open
+// send per item, one stored row and one command per send, one linked run per
+// send, and no done state without an acceptance of the merged head and a
+// merge the Oxagen GitHub App did not make.
 //
 // Every provider time comes from one clock that only moves forward and stays
 // in the past. The reducer orders a work item's facts by time, and Outcomes
@@ -52,12 +61,14 @@ import { createHash } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { closeDatabase, schema, type Tx, withSystemDb, withTenantDb } from "@oxagen/database";
 import type { GitHubCheckRun, RequiredChecksRead } from "@oxagen/github";
+import { closeIdleSession, idleCutoff, listIdleSessions } from "@oxagen/inngest-functions/tacho-idle-close";
 import { BUNDLE_FEATURE_WORK_ORDERS } from "@oxagen/recorder";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { TriageModelClient } from "@oxagen/work";
 import {
   type BriefDraft,
   type FactKind,
+  type MergedBy,
   type OrderProjection,
   isWorkRecordError,
   reviewGate,
@@ -76,17 +87,20 @@ vi.mock("@oxagen/github/workspace-token", () => ({
 }));
 
 const { approveBrief, readWorkItem, recordSource, saveBrief } = await import("../work-records/store");
-const { approveWorkBrief, reopenWork, resolveItemId, saveWorkBrief, sendWork, stopWork } = await import("../work-records/actions");
+const { approveWorkBrief, cancelWork, closeWork, reopenWork, resolveItemId, returnWork, saveWorkBrief, sendWork, stopWork } = await import(
+  "../work-records/actions"
+);
 const { acceptWork, refreshWorkChecks } = await import("../work-records/accept");
-const { recordRunPullRequest, recordWorkPullRequestDelivery, workPullRequestDeliveryOf } = await import("../work-records/results");
-const { claimWorkOrder, endWorkOrderRuns, linkWorkOrderRun, recordWorkOrderAcks } = await import("../work-records/runtime");
+const { recordRunEnded, recordRunPullRequest, recordWorkPullRequestDelivery, workPullRequestDeliveryOf } = await import("../work-records/results");
+const { claimWorkOrder, linkWorkOrderRun, recordWorkOrderAcks, rejectWorkOrder } = await import("../work-records/runtime");
 const { stopCommandKey } = await import("../work-records/delivery");
+const { recordWorkOrderPullRequest } = await import("../../work.pull-request.webhook");
 const { readTriageStanding, reviseTriage } = await import("../work-intake/actions");
 const { setCollector } = await import("../work-intake/collectors");
 const { defaultWorkDeliveryDeps, routeGithubWorkDelivery } = await import("../work-intake/delivery");
 const { createWorkIntakeRunner } = await import("../work-intake/runner");
 const { runTriage } = await import("../work-intake/triage-run");
-const { readWorkOutcomes } = await import("../work-read/read");
+const { readWorkItemDetail, readWorkOutcomes, readWorkTargets } = await import("../work-read/read");
 const recorded = await import("../work-intake/github-recorded.test-support");
 
 const enabled = Boolean(process.env.DATABASE_URL);
@@ -99,6 +113,12 @@ const REPOSITORY = recorded.RECORDED_REPO;
 const SHA1 = "1".repeat(40);
 const SHA2 = "2".repeat(40);
 const MERGE = "9".repeat(40);
+/** The Oxagen GitHub App's login on this test deployment. webhook() passes it to workPullRequestDeliveryOf. */
+const OXAGEN_APP = "oxagen-connect[bot]";
+/** A person who merges on GitHub. */
+const PERSON_MERGER: MergedBy = { login: "amara-okafor", type: "User", oxagen_app: false };
+/** The Oxagen GitHub App, merging with the installation token Oxagen issues an agent. */
+const APP_MERGER: MergedBy = { login: OXAGEN_APP, type: "Bot", oxagen_app: true };
 
 /** GitHub writes its times to the second. */
 function githubTime(ms: number): string {
@@ -148,9 +168,19 @@ function prUrl(prNumber: number): string {
   return `https://github.com/${REPOSITORY}/pull/${prNumber}`;
 }
 
-/** A `pull_request` webhook body for one pull request, read by workPullRequestDeliveryOf. */
-function webhook(prNumber: number, head: string, updatedAt: string, merge: { commit: string; at: string } | null = null) {
-  const delivery = workPullRequestDeliveryOf({
+/**
+ * A `pull_request` webhook body for one pull request, as GitHub sends it. A
+ * merge with no `by` names no merger. GitHub sends the merger's login and
+ * type, and the delivery mapper decides whether it is the Oxagen GitHub App.
+ */
+function pullRequestBody(
+  prNumber: number,
+  head: string,
+  updatedAt: string,
+  merge: { commit: string; at: string; by?: MergedBy } | null = null,
+): Record<string, unknown> {
+  const by = merge?.by;
+  return {
     action: merge === null ? "synchronize" : "closed",
     repository: { full_name: REPOSITORY },
     pull_request: {
@@ -161,12 +191,34 @@ function webhook(prNumber: number, head: string, updatedAt: string, merge: { com
       merged: merge !== null,
       merge_commit_sha: merge?.commit ?? null,
       merged_at: merge?.at ?? null,
+      merged_by: by === undefined ? null : { login: by.login, type: by.type },
       updated_at: updatedAt,
     },
-  });
+  };
+}
+
+/** The same webhook body, read by workPullRequestDeliveryOf with OXAGEN_APP as the app's login. */
+function webhook(prNumber: number, head: string, updatedAt: string, merge: { commit: string; at: string; by?: MergedBy } | null = null) {
+  const delivery = workPullRequestDeliveryOf(pullRequestBody(prNumber, head, updatedAt, merge), OXAGEN_APP);
   if (delivery === null) throw new Error("The webhook body did not parse.");
   return delivery;
 }
+
+/**
+ * A GitHub that reads nothing. A run's end reads GitHub only for a pull
+ * request stored on its session, and no run in this file stores one there.
+ */
+const NO_GITHUB: EvidenceReader = {
+  async readPullRequest() {
+    return null;
+  },
+  async readRequiredChecks() {
+    return { ok: false, reason: "not read" };
+  },
+  async readChecks() {
+    return null;
+  },
+};
 
 /** The refusal's work record code. Fails the case when the call succeeds or throws anything else. */
 async function refusal(promise: Promise<unknown>): Promise<string> {
@@ -206,6 +258,10 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
   const gate: WorkScope = { orgId, workspaceId: crypto.randomUUID() };
   /** The workspace the failure-recovery cases run in. */
   const recovery: WorkScope = { orgId, workspaceId: crypto.randomUUID() };
+  /** A workspace in the same organization that holds nothing. */
+  const fresh: WorkScope = { orgId, workspaceId: crypto.randomUUID() };
+  /** A workspace in another organization. */
+  const foreign: WorkScope = { orgId: crypto.randomUUID(), workspaceId: crypto.randomUUID() };
   const NAMESPACE = new Map([
     [gate.workspaceId, "gate"],
     [recovery.workspaceId, "recov"],
@@ -248,17 +304,15 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
         { id: MARCUS, email: `marcus-${tag}@release.test`, status: "active" },
         { id: AMARA, email: `amara-${tag}@release.test`, status: "active" },
       ]);
-      await tx.insert(schema.organizations).values({
-        id: orgId,
-        name: `P106 ${tag}`,
-        slug: `p106-${tag}`,
-        namespace: orgNamespace,
-        planType: "free",
-        status: "active",
-      });
+      await tx.insert(schema.organizations).values([
+        { id: orgId, name: `P106 ${tag}`, slug: `p106-${tag}`, namespace: orgNamespace, planType: "free", status: "active" },
+        { id: foreign.orgId, name: `P106 other ${tag}`, slug: `p106-other-${tag}`, namespace: `f${tag.slice(0, 5)}`, planType: "free", status: "active" },
+      ]);
       await tx.insert(schema.workspaces).values([
         { id: gate.workspaceId, orgId, name: "Gate", slug: "gate", namespace: "gate" },
         { id: recovery.workspaceId, orgId, name: "Recovery", slug: "recovery", namespace: "recov" },
+        { id: fresh.workspaceId, orgId, name: "Fresh", slug: "fresh", namespace: "fresh" },
+        { id: foreign.workspaceId, orgId: foreign.orgId, name: "Elsewhere", slug: "elsewhere", namespace: "else" },
       ]);
     });
     await db(gate)(async (tx) => {
@@ -356,8 +410,8 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       await tx.delete(s.agents).where(eq(s.agents.orgId, orgId));
       await tx.delete(s.runtimes).where(eq(s.runtimes.orgId, orgId));
       await tx.delete(s.principals).where(eq(s.principals.orgId, orgId));
-      await tx.delete(s.workspaces).where(inArray(s.workspaces.id, [gate.workspaceId, recovery.workspaceId]));
-      await tx.delete(s.organizations).where(eq(s.organizations.id, orgId));
+      await tx.delete(s.workspaces).where(inArray(s.workspaces.id, [gate.workspaceId, recovery.workspaceId, fresh.workspaceId, foreign.workspaceId]));
+      await tx.delete(s.organizations).where(inArray(s.organizations.id, [orgId, foreign.orgId]));
       await tx.delete(s.users).where(inArray(s.users.id, [MARCUS, AMARA]));
     });
     await closeDatabase();
@@ -574,7 +628,24 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
     db(scope)((tx) => claimWorkOrder(tx, scope, host, orderPublicId, new Date()));
   const link = (scope: WorkScope, host: ClaimingHost, orderPublicId: string, runId: string) =>
     db(scope)((tx) => linkWorkOrderRun(tx, scope, { host, runId, workOrder: orderPublicId, at: new Date() }));
-  const endRun = (scope: WorkScope, runId: string) => db(scope)((tx) => endWorkOrderRuns(tx, scope, runId, "completed", new Date()));
+  /** The host's `agent_stop`: ingest seals the run, and the run completed. */
+  const sealRun = (runId: string) =>
+    withSystemDb((tx) =>
+      tx
+        .update(schema.tachoSessions)
+        .set({ outcome: "completed", sealSource: "agent_stop", sealedAt: new Date(), endedAt: new Date() })
+        .where(and(eq(schema.tachoSessions.orgId, orgId), eq(schema.tachoSessions.publicId, runId))),
+    );
+  /**
+   * A sealed run's `cost/run.sealed` event, recorded by the function the
+   * Inngest step calls for both seals, the host's and the idle close's.
+   */
+  const runEnded = (scope: WorkScope, runId: string) => recordRunEnded(scope, runId, { reader: NO_GITHUB, now: () => new Date() });
+  /** A run that ends on its host: sealed, then recorded on its send. */
+  async function endRun(scope: WorkScope, runId: string): Promise<number> {
+    await sealRun(runId);
+    return runEnded(scope, runId);
+  }
   const acks = (scope: WorkScope, host: ClaimingHost, acked: AckedCommand[]) =>
     db(scope)((tx) => recordWorkOrderAcks(tx, scope, host, acked, new Date()));
 
@@ -657,6 +728,52 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
         .where(and(eq(schema.tachoControlCommands.workspaceId, scope.workspaceId), eq(schema.tachoControlCommands.idempotencyKey, key))),
     );
 
+  /** Every control command in both organizations this file writes, in id order. */
+  const allCommands = () =>
+    withSystemDb((tx) =>
+      tx
+        .select({ id: schema.tachoControlCommands.id, outcome: schema.tachoControlCommands.outcome })
+        .from(schema.tachoControlCommands)
+        .where(inArray(schema.tachoControlCommands.orgId, [orgId, foreign.orgId]))
+        .orderBy(schema.tachoControlCommands.id),
+    );
+
+  /**
+   * Deliver a `pull_request` webhook the way the GitHub App route does: to
+   * every workspace connected to the delivering installation.
+   */
+  const deliverPullRequest = (body: Record<string, unknown>, installationId = INSTALLATION) =>
+    recordWorkOrderPullRequest({ body, installationId });
+
+  /**
+   * The invariants every case ends on. At most one send of the item is open.
+   * Each send has one stored row, one `work_order` command for its key, and
+   * at most one linked run. The item is done only when a send's acceptance
+   * names the merged head and the Oxagen GitHub App did not make the merge.
+   */
+  async function expectGateInvariants(scope: WorkScope, itemId: string): Promise<void> {
+    const record = await read(scope, itemId);
+    const { orders, state } = record.projection;
+    expect(orders.filter((order) => !order.closed).length, "open sends").toBeLessThanOrEqual(1);
+    const rows = await ordersOfItem(scope, itemId);
+    expect(rows.map((row) => row.id).sort(), "stored sends").toEqual(orders.map((order) => order.orderId).sort());
+    for (const order of orders) {
+      const commands = (await commandsByKey(scope, order.key)).filter((command) => command.command === "work_order");
+      expect(commands, `work_order commands for send ${order.send}`).toHaveLength(1);
+      const linked = factsOf(record, "run_linked").filter((fact) => fact.orderId === order.orderId);
+      expect(linked.length, `linked runs of send ${order.send}`).toBeLessThanOrEqual(1);
+      if (order.done) {
+        expect(order.merge, `merge of done send ${order.send}`).not.toBeNull();
+        expect(order.acceptance?.headSha, `accepted head of done send ${order.send}`).toBe(order.merge?.headSha);
+        expect(order.merge?.mergedBy?.oxagen_app ?? false, `Oxagen GitHub App merged done send ${order.send}`).toBe(false);
+      }
+    }
+    if (state === "done") {
+      const finished = orders.filter((order) => order.done && order.merge !== null && order.acceptance?.headSha === order.merge.headSha);
+      expect(finished.length, "sends that finish the done item").toBeGreaterThanOrEqual(1);
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Technical release
   // -------------------------------------------------------------------------
@@ -725,36 +842,48 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       const record = await readItem();
       expect(record.facts.map((fact) => fact.kind)).toEqual(["collected"]);
       expect(record.projection).toMatchObject({ state: "new", revision: 1 });
+      await expectGateInvariants(gate, itemId);
     });
 
-    it("2. records a triage suggestion that cites the priorities record, and keeps a person's correction", async () => {
-      const suggestion = {
-        schema: "triage/v1",
-        item: itemPublicId,
-        state: "triaged",
-        priority: { label: "P2", reason: "A defect a customer can hit.", cites: ["p106.work.priorities#2"] },
-        labels: ["Bug"],
-        estimate_minutes: 60,
-        claims: ["src/invites/**"],
-        duplicates: [],
-        related: [],
-        workflow: null,
-        done_record: { criteria: ["An expired invite shows the expiry message."] },
-        questions: [],
-        conflicts: [],
-      };
-      const model = (): TriageModelClient => ({
-        complete: async () => ({ output: suggestion, model: "recorded-triage-model", costUsd: null }),
-      });
-      const triageDeps = {
-        model,
+    it("2. records a triage suggestion that cites the priorities record, and keeps a person's correction through a later run", async () => {
+      /** A recorded triage answer that ranks the item `priority`. */
+      const answering = (priority: { label: string; reason: string; cites: string[] }) => ({
+        model: (): TriageModelClient => ({
+          complete: async () => ({
+            output: {
+              schema: "triage/v1",
+              item: itemPublicId,
+              state: "triaged",
+              priority,
+              labels: ["Bug"],
+              estimate_minutes: 60,
+              claims: ["src/invites/**"],
+              duplicates: [],
+              related: [],
+              workflow: null,
+              done_record: { criteria: ["An expired invite shows the expiry message."] },
+              questions: [],
+              conflicts: [],
+            },
+            model: "recorded-triage-model",
+            costUsd: null,
+          }),
+        }),
         fileTrees: async () => [{ repo: REPOSITORY, paths: ["src/invites/expire.ts"] }],
         now: () => new Date(),
-      };
-      const result = await runInTenantScope(gate, () => runTriage(triageDeps, gate, itemPublicId, false));
+      });
+      const P2 = { label: "P2", reason: "A defect a customer can hit.", cites: ["p106.work.priorities#2"] };
+      const result = await runInTenantScope(gate, () => runTriage(answering(P2), gate, itemPublicId, false));
       expect(result).toMatchObject({ kind: "recorded", outcome: "triaged" });
 
+      // The suggestion is Oxagen's, with the reason and the rule it cites.
       const standing = await runInTenantScope(gate, () => readTriageStanding(gate, itemPublicId));
+      expect(standing!.view).toMatchObject({
+        priority: { value: "P2", by: "oxagen", actor: null },
+        priorityReason: "A defect a customer can hit.",
+        cites: ["p106.work.priorities#2"],
+      });
+
       const revised = await runInTenantScope(gate, () =>
         reviseTriage(gate, {
           itemPublicId,
@@ -765,7 +894,16 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
         }),
       );
       expect(revised.view.priority).toMatchObject({ value: "P1", by: "person", actor: AMARA });
+
+      // A person asks triage to run again, and the model now answers P3. The person's P1 stands.
+      const P3 = { label: "P3", reason: "Only the copy is wrong.", cites: [] };
+      const again = await runInTenantScope(gate, () => runTriage(answering(P3), gate, itemPublicId, true));
+      expect(again).toMatchObject({ kind: "recorded", outcome: "triaged" });
+      const after = await runInTenantScope(gate, () => readTriageStanding(gate, itemPublicId));
+      expect(after!.view.decision).not.toBe(standing!.view.decision);
+      expect(after!.view).toMatchObject({ priority: { value: "P1", by: "person", actor: AMARA }, priorityReason: null, cites: [] });
       expect((await readItem()).projection).toMatchObject({ state: "triaged", revision: 1, triage: { outcome: "triaged" } });
+      await expectGateInvariants(gate, itemId);
     });
 
     it("3. approves the reviewer's brief and opens one send to the operator's agent, however often Send is pressed", async () => {
@@ -809,6 +947,7 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       expect(await commandsByKey(gate, sent.key)).toEqual([
         expect.objectContaining({ command: "work_order", outcome: "queued", hostId: operatorRig.hostA.id }),
       ]);
+      await expectGateInvariants(gate, itemId);
     });
 
     it("4. lets the agent's host claim the send once, answers a lost answer with the same claim, and refuses another host", async () => {
@@ -835,9 +974,10 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       expect(record.projection.state).toBe("running");
       expect(factsOf(record, "claimed")).toHaveLength(1);
       expect(factsOf(record, "send_delivered")).toHaveLength(1);
+      await expectGateInvariants(gate, itemId);
     });
 
-    it("5. links one run to the send, stops a second run that names it, and moves the item to review when the run ends", async () => {
+    it("5. links one run to the send, stops a second run that names it, and moves the item to review when the sealed run's event arrives", async () => {
       run = await openRun(gate, operatorRig);
       expect(await link(gate, operatorRig.hostA, sent.orderPublicId, run.runId)).toBe("linked");
       const second = await openRun(gate, operatorRig);
@@ -846,9 +986,16 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
         expect.objectContaining({ command: "cancel", targetId: second.runId }),
       ]);
 
-      expect(await endRun(gate, run.runId)).toBe(1);
+      // The host seals the run, and `cost/run.sealed` reaches the send.
+      await sealRun(run.runId);
+      expect(await runEnded(gate, run.runId)).toBe(1);
       const record = await readItem();
       expect(record.projection).toMatchObject({ state: "review", activeOrder: { delivery: "run_ended", runIds: [run.runId] } });
+      expect(factsOf(record, "run_ended")).toEqual([expect.objectContaining({ runId: run.runId, data: { outcome: "completed" } })]);
+      // Inngest delivers the event again.
+      expect(await runEnded(gate, run.runId)).toBe(0);
+      expect((await readItem()).facts).toHaveLength(record.facts.length);
+      await expectGateInvariants(gate, itemId);
     });
 
     it("6. links the run's pull request and keeps Accept blocked while a required check fails", async () => {
@@ -865,6 +1012,7 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       expect(reviewGate(record.projection, orderOf(record))).toMatchObject({ open: false, block: "check_failed" });
       expect(await refusal(acceptWork(review.deps, gate, marcus, acceptance(record, sent.orderPublicId, SHA1)))).toBe("not_allowed");
       expect(factsOf(await readItem(), "accepted")).toEqual([]);
+      await expectGateInvariants(gate, itemId);
     });
 
     it("7. records an acceptance that merges nothing, voids it on a new head, and refuses an acceptance naming the old head", async () => {
@@ -880,17 +1028,24 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       expect(orderOf(accepted)).toMatchObject({ acceptance: { headSha: SHA1 }, merge: null, done: false });
       expect(factsOf(accepted, "merged")).toEqual([]);
 
-      // The agent pushes again, and GitHub's webhook reports the new head.
+      // The agent pushes again, and GitHub's webhook reports the new head. The
+      // same delivery from an installation no workspace connects records
+      // nothing. From this file's installation, it reaches the gate workspace.
       const pushedAt = tick();
-      expect(await recordWorkPullRequestDelivery(gate, webhook(PR_NUMBER, SHA2, pushedAt), new Date())).toBe(1);
+      const pushed = pullRequestBody(PR_NUMBER, SHA2, pushedAt);
+      expect(await deliverPullRequest(pushed, "90310699")).toBe(0);
+      expect(await deliverPullRequest(pushed)).toBe(1);
       const moved = await readItem();
       expect(moved.projection.state).toBe("review");
       expect(orderOf(moved)).toMatchObject({ head: SHA2, acceptance: null, staleAcceptance: { headSha: SHA1 } });
+      // GitHub delivers the same webhook again.
+      expect(await deliverPullRequest(pushed)).toBe(0);
 
-      // CI has not reported on the new head yet.
+      // CI has not reported on the new head yet, and GitHub reads the new head at the press.
       Object.assign(review.state, { head: SHA2, updatedAt: pushedAt, checks: {} });
       expect(await refusal(acceptWork(review.deps, gate, marcus, acceptance(moved, sent.orderPublicId, SHA1)))).toBe("stale_head");
       expect(factsOf(await readItem(), "accepted")).toHaveLength(1);
+      await expectGateInvariants(gate, itemId);
     });
 
     it("8. keeps Accept blocked while a required check has not reported on the new head, and accepts the new head once it passes", async () => {
@@ -918,24 +1073,30 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
         done: false,
       });
       expect(factsOf(accepted, "merged")).toEqual([]);
+      await expectGateInvariants(gate, itemId);
     });
 
     it("9. marks the item done when a person merges, and changes nothing on the same merge again or a late head, run end, or claim", async () => {
       const mergedAt = tick();
-      const merge = webhook(PR_NUMBER, SHA2, mergedAt, { commit: MERGE, at: mergedAt });
-      expect(await recordWorkPullRequestDelivery(gate, merge, new Date())).toBe(1);
+      const merge = pullRequestBody(PR_NUMBER, SHA2, mergedAt, { commit: MERGE, at: mergedAt, by: PERSON_MERGER });
+      expect(await deliverPullRequest(merge)).toBe(1);
       const done = await readItem();
       expect(done.projection.state).toBe("done");
       expect(orderOf(done)).toMatchObject({
-        merge: { headSha: SHA2, mergeCommit: MERGE },
+        merge: { headSha: SHA2, mergeCommit: MERGE, mergedBy: PERSON_MERGER },
         acceptance: { headSha: SHA2 },
         done: true,
         closed: true,
       });
+      // The merge records the person GitHub says merged it.
+      expect(factsOf(done, "merged")).toEqual([
+        expect.objectContaining({ source: "provider", actor: "github", headSha: SHA2, data: { merge_commit: MERGE, merged_by: PERSON_MERGER } }),
+      ]);
 
-      expect(await recordWorkPullRequestDelivery(gate, merge, new Date())).toBe(0);
-      expect(await recordWorkPullRequestDelivery(gate, webhook(PR_NUMBER, SHA1, firstHeadAt), new Date())).toBe(0);
-      expect(await endRun(gate, run.runId)).toBe(0);
+      expect(await deliverPullRequest(merge)).toBe(0);
+      // A late webhook carries the first head, with the time GitHub first reported it.
+      expect(await deliverPullRequest(pullRequestBody(PR_NUMBER, SHA1, firstHeadAt))).toBe(0);
+      expect(await runEnded(gate, run.runId)).toBe(0);
       expect(await refusal(claim(gate, operatorRig.hostA, sent.orderPublicId))).toBe("not_allowed");
 
       const after = await readItem();
@@ -943,17 +1104,94 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       expect(after.facts).toHaveLength(done.facts.length);
       expect(factsOf(after, "run_linked")).toHaveLength(1);
       expect(await ordersOfItem(gate, itemId)).toHaveLength(1);
+      await expectGateInvariants(gate, itemId);
     });
 
-    it("10. keeps the item out of another workspace: no read, no send, no claim, and no Accept", async () => {
+    it("10. keeps the item out of another workspace and another organization: no read, no action, and no count", async () => {
       const elsewhere = await rig(recovery);
-      expect(await refusal(db(recovery)((tx) => resolveItemId(tx, recovery, itemPublicId)))).toBe("not_found");
-      expect(await refusal(sendNow(recovery, { ...firstSend, agent_id: elsewhere.agentPublicId }))).toBe("not_found");
-      expect(await refusal(claim(recovery, elsewhere.hostA, sent.orderPublicId))).toBe("not_found");
+      const before = await readItem();
+      const ordersBefore = await ordersOfItem(gate, itemId);
+      const commandsBefore = await allCommands();
+      const brief = before.projection.latestBrief!;
+      const item = { item_id: itemPublicId, version: before.version };
+      const order = { ...item, work_order_id: sent.orderPublicId, reason: "Pressed from another workspace." };
+      const there = db(recovery);
       const fromThere = fakeGitHub(recovery, { head: SHA2 });
-      const record = await readItem();
-      expect(await refusal(acceptWork(fromThere.deps, recovery, marcus, acceptance(record, sent.orderPublicId, SHA2)))).toBe("not_found");
-      expect((await readItem()).facts).toHaveLength(record.facts.length);
+
+      // Every action a person, a host, or a run can take, from the recovery
+      // workspace in the same organization. Each one is refused as not found.
+      const attempts: Record<string, () => Promise<unknown>> = {
+        read: () => there((tx) => resolveItemId(tx, recovery, itemPublicId)),
+        "correct triage": () =>
+          runInTenantScope(recovery, () =>
+            reviseTriage(recovery, { itemPublicId, expectedVersion: before.version, reason: "From elsewhere.", fields: { priority: "P0" }, actorUserId: AMARA }),
+          ),
+        "save the brief": () =>
+          there((tx) =>
+            saveWorkBrief(tx, recovery, amara, {
+              ...item,
+              item_revision: before.projection.revision,
+              repository: REPOSITORY,
+              criteria: [{ text: "Anything at all.", tag: "code", intent: "check", provenance: "person" }],
+            }),
+          ),
+        "approve the brief": () =>
+          there((tx) =>
+            approveWorkBrief(tx, recovery, amara, { ...item, item_revision: before.projection.revision, brief_revision: brief.revision, brief_digest: brief.digest }),
+          ),
+        send: () => sendNow(recovery, { ...firstSend, agent_id: elsewhere.agentPublicId }),
+        claim: () => claim(recovery, elsewhere.hostA, sent.orderPublicId),
+        "claim from the send's own host": () => claim(recovery, operatorRig.hostA, sent.orderPublicId),
+        reject: () => there((tx) => rejectWorkOrder(tx, recovery, elsewhere.hostA, sent.orderPublicId, "Not this host's.", new Date())),
+        link: () => link(recovery, elsewhere.hostA, sent.orderPublicId, run.runId),
+        stop: () => there((tx) => stopWork(tx, recovery, marcus, order)),
+        withdraw: () => there((tx) => cancelWork(tx, recovery, marcus, order)),
+        return: () => there((tx) => returnWork(tx, recovery, marcus, { ...order, resend: true }, null)),
+        "read checks": () => refreshWorkChecks(fromThere.deps, recovery, { item_id: itemPublicId, work_order_id: sent.orderPublicId }),
+        accept: () => acceptWork(fromThere.deps, recovery, marcus, acceptance(before, sent.orderPublicId, SHA2)),
+        close: () => there((tx) => closeWork(tx, recovery, amara, { ...item, resolution: "cancelled", reason: "From elsewhere." })),
+        reopen: () => there((tx) => reopenWork(tx, recovery, amara, { ...item, reason: "From elsewhere." })),
+      };
+      const codes: Record<string, string> = {};
+      for (const [action, attempt] of Object.entries(attempts)) codes[action] = await refusal(attempt());
+      expect(codes).toEqual(Object.fromEntries(Object.keys(attempts).map((action) => [action, "not_found"])));
+
+      // The provider and runtime paths find nothing of the item there.
+      expect(await recordWorkPullRequestDelivery(recovery, webhook(PR_NUMBER, SHA1, tick()), new Date())).toBe(0);
+      expect(await recordRunPullRequest(recovery, run.sessionUuid, prUrl(PR_NUMBER), fromThere.deps)).toBe(0);
+      expect(await runEnded(recovery, run.runId)).toBe(0);
+      expect(await runInTenantScope(recovery, () => readWorkItemDetail(recovery, itemPublicId))).toBeNull();
+
+      // Another organization: the item is not found, even by the send's own host.
+      expect(await refusal(db(foreign)((tx) => resolveItemId(tx, foreign, itemPublicId)))).toBe("not_found");
+      expect(await refusal(claim(foreign, operatorRig.hostA, sent.orderPublicId))).toBe("not_found");
+      expect(await runInTenantScope(foreign, () => readWorkItemDetail(foreign, itemPublicId))).toBeNull();
+
+      // An empty workspace, in this organization and in the other one, counts none of the item and offers none of its agents.
+      for (const scope of [fresh, foreign]) {
+        const outcomes = await runInTenantScope(scope, () => readWorkOutcomes(scope, 30, new Date()));
+        expect(outcomes).toMatchObject({
+          accepted_merged: 0,
+          returned: 0,
+          lead_time: { sample: 0 },
+          touches: { brief_approvals: 0, acceptances: 0, triage_corrections: 0 },
+          reopens: { cohort: 0, reopened: 0, waiting: 0 },
+          delivery: { sends: 0 },
+        });
+        expect(outcomes.weeks.filter((week) => week.entered + week.sent + week.accepted_merged > 0)).toEqual([]);
+        expect(await runInTenantScope(scope, () => readWorkTargets(scope, MARCUS, new Date()))).toEqual([]);
+      }
+      const targets = await runInTenantScope(recovery, () => readWorkTargets(recovery, MARCUS, new Date()));
+      expect(targets.map((target) => target.id)).toContain(elsewhere.agentPublicId);
+      expect(targets.map((target) => target.id)).not.toContain(operatorRig.agentPublicId);
+
+      // Nothing about the item moved.
+      const after = await readItem();
+      expect(after.version).toBe(before.version);
+      expect(after.facts).toEqual(before.facts);
+      expect(await ordersOfItem(gate, itemId)).toEqual(ordersBefore);
+      expect(await allCommands()).toEqual(commandsBefore);
+      await expectGateInvariants(gate, itemId);
     });
 
     it("11. counts the finished item in Outcomes: its send, its week's intake, and the full flow", async () => {
@@ -976,6 +1214,7 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       const fullFlow = outcomes.weeks.filter((week) => week.full_flow);
       expect(fullFlow).toHaveLength(1);
       expect(fullFlow[0]!.accepted_merged).toBe(1);
+      await expectGateInvariants(gate, itemId);
     });
 
     it("12. reopens the done item on a new revision with its history, and a retry of the old send starts nothing", async () => {
@@ -996,6 +1235,7 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       const after = await readItem();
       expect(after.projection.state).not.toBe("done");
       expect(orderOf(after)).toMatchObject({ done: true, closed: true });
+      await expectGateInvariants(gate, itemId);
     });
   });
 
@@ -1016,6 +1256,7 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       expect(sends.filter((result) => result.write.repeat)).toHaveLength(1);
       expect(await ordersOfItem(recovery, item.itemId)).toHaveLength(1);
       expect(await commandsByKey(recovery, input.key)).toHaveLength(1);
+      await expectGateInvariants(recovery, item.itemId);
     });
 
     it("opens one send when two people send one item to two agents at the same moment", async () => {
@@ -1032,6 +1273,7 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       expect(await commandsByKey(recovery, toOne.key)).toHaveLength(1);
       const record = await read(recovery, item.itemId);
       expect(record.projection).toMatchObject({ state: "sent", activeOrder: { orderId: sends[0]!.write.orderId } });
+      await expectGateInvariants(recovery, item.itemId);
     });
 
     it("gives a busy agent one send when two items are sent to it at the same moment", async () => {
@@ -1049,6 +1291,8 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       expect(commands).toHaveLength(1);
       const states = [(await read(recovery, first.itemId)).projection.state, (await read(recovery, second.itemId)).projection.state].sort();
       expect(states).toEqual(["ready", "sent"]);
+      await expectGateInvariants(recovery, first.itemId);
+      await expectGateInvariants(recovery, second.itemId);
     });
 
     it("keeps a send whose runtime went silent mid-run from being accepted, finished, or run twice, and sends it again once the stop lands", async () => {
@@ -1101,6 +1345,49 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       expect(again.key).toBe(workOrderKey(item.publicId, 1, 2));
       expect(await ordersOfItem(recovery, item.itemId)).toHaveLength(2);
       expect((await read(recovery, item.itemId)).projection).toMatchObject({ state: "sent", activeOrder: { orderId: again.orderId } });
+      await expectGateInvariants(recovery, item.itemId);
+    });
+
+    it("moves a send to review, unaccepted, when its runtime never comes back and the 12-hour idle close seals its run", async () => {
+      const r = await rig(recovery);
+      const item = await readyItem(recovery);
+      const sent = await send(recovery, item, r);
+      await claim(recovery, r.hostA, sent.orderPublicId);
+      const run = await openRun(recovery, r);
+      expect(await link(recovery, r.hostA, sent.orderPublicId, run.runId)).toBe("linked");
+
+      // The machine goes away mid-run, and nothing reports for thirteen hours.
+      // The clock cannot move forward here, so the run's times move back.
+      const now = new Date();
+      const lastEvent = new Date(now.getTime() - 13 * 60 * 60_000);
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.tachoSessions)
+          .set({ startedAt: new Date(lastEvent.getTime() - 60_000), lastEventAt: lastEvent })
+          .where(and(eq(schema.tachoSessions.orgId, orgId), eq(schema.tachoSessions.publicId, run.runId))),
+      );
+      // The scheduled close finds the run and seals it as the control plane's.
+      const cutoff = idleCutoff(now);
+      const idle = (await listIdleSessions({ cutoff, limit: 10_000 })).find((session) => session.publicId === run.runId);
+      expect(idle).toBeDefined();
+      expect(await closeIdleSession(idle!, cutoff, now)).toMatchObject({ publicId: run.runId, isRoot: true });
+      const [sealed] = await withSystemDb((tx) =>
+        tx
+          .select({ outcome: schema.tachoSessions.outcome, sealSource: schema.tachoSessions.sealSource })
+          .from(schema.tachoSessions)
+          .where(and(eq(schema.tachoSessions.orgId, orgId), eq(schema.tachoSessions.publicId, run.runId))),
+      );
+      expect(sealed).toEqual({ outcome: "unknown", sealSource: "idle_timeout" });
+
+      // The close's `cost/run.sealed` event reaches the send, and again on a redelivery.
+      expect(await runEnded(recovery, run.runId)).toBe(1);
+      expect(await runEnded(recovery, run.runId)).toBe(0);
+      const record = await read(recovery, item.itemId);
+      expect(record.projection).toMatchObject({ state: "review", activeOrder: { orderId: sent.orderId, delivery: "run_ended", runIds: [run.runId] } });
+      expect(orderIn(record, sent.orderId)).toMatchObject({ acceptance: null, merge: null, done: false });
+      expect(factsOf(record, "run_ended")).toEqual([expect.objectContaining({ runId: run.runId, data: { outcome: "unknown" } })]);
+      expect(factsOf(record, "run_linked")).toHaveLength(1);
+      await expectGateInvariants(recovery, item.itemId);
     });
 
     it("keeps the brief a running send went out with when its source changes, and accepts only against a newly approved brief", async () => {
@@ -1171,6 +1458,7 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       const done = await read(recovery, item.itemId);
       expect(orderIn(done, sent.orderId)).toMatchObject({ acceptance: { headSha: SHA1, briefDigest: approved.projection.approvedBrief!.digest }, done: true });
       expect(factsOf(done, "run_linked")).toHaveLength(1);
+      await expectGateInvariants(recovery, item.itemId);
     });
 
     it("keeps a merge of a new head from finishing work whose only acceptance names the old head", async () => {
@@ -1209,6 +1497,61 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       const reread = await read(recovery, item.itemId);
       expect(await acceptWork(review.deps, recovery, marcus, acceptance(reread, sent.orderPublicId, SHA2))).toMatchObject({ item: { state: "done" } });
       expect(orderIn(await read(recovery, item.itemId), sent.orderId)).toMatchObject({ acceptance: { headSha: SHA2 }, done: true });
+      await expectGateInvariants(recovery, item.itemId);
+    });
+
+    it("keeps an item out of done when the Oxagen GitHub App merges the accepted head", async () => {
+      const PR_NUMBER = 705;
+      const r = await rig(recovery);
+      const item = await readyItem(recovery);
+      const sent = await send(recovery, item, r);
+      await claim(recovery, r.hostA, sent.orderPublicId);
+      const run = await openRun(recovery, r);
+      await link(recovery, r.hostA, sent.orderPublicId, run.runId);
+      await endRun(recovery, run.runId);
+      const review = fakeGitHub(recovery);
+      await recordRunPullRequest(recovery, run.sessionUuid, prUrl(PR_NUMBER), review.deps);
+      const before = await read(recovery, item.itemId);
+      expect(await acceptWork(review.deps, recovery, marcus, acceptance(before, sent.orderPublicId, SHA1))).toMatchObject({ item: { state: "review" } });
+
+      // The agent merges its own pull request with the push token Oxagen
+      // issued it, which is the Oxagen GitHub App's installation token.
+      const mergedAt = tick();
+      expect(
+        await recordWorkPullRequestDelivery(recovery, webhook(PR_NUMBER, SHA1, mergedAt, { commit: MERGE, at: mergedAt, by: APP_MERGER }), new Date()),
+      ).toBe(1);
+      const merged = await read(recovery, item.itemId);
+      expect(merged.projection.state).toBe("review");
+      expect(orderIn(merged, sent.orderId)).toMatchObject({
+        acceptance: { headSha: SHA1 },
+        merge: { headSha: SHA1, mergeCommit: MERGE, mergedBy: APP_MERGER },
+        done: false,
+        closed: false,
+      });
+      expect(factsOf(merged, "merged")).toEqual([expect.objectContaining({ source: "provider", data: { merge_commit: MERGE, merged_by: APP_MERGER } })]);
+      expect(reviewGate(merged.projection, orderIn(merged, sent.orderId))).toEqual({ open: false, block: "merged_by_app", detail: APP_MERGER.login });
+
+      // GitHub delivers the merge again naming a person. A pull request merges once, so the app's merge stands.
+      expect(
+        await recordWorkPullRequestDelivery(recovery, webhook(PR_NUMBER, SHA1, mergedAt, { commit: MERGE, at: mergedAt, by: PERSON_MERGER }), new Date()),
+      ).toBe(0);
+      expect(orderIn(await read(recovery, item.itemId), sent.orderId).merge?.mergedBy).toEqual(APP_MERGER);
+
+      // A person returns the work. The send ends unfinished, and the item can go out again.
+      const returned = await db(recovery)((tx) =>
+        returnWork(
+          tx,
+          recovery,
+          marcus,
+          { item_id: item.publicId, version: merged.version, work_order_id: sent.orderPublicId, reason: "The agent merged its own pull request.", resend: false },
+          null,
+        ),
+      );
+      expect(returned).toMatchObject({ repeat: false, item: { state: "ready" }, order: { delivery: "returned" } });
+      const after = await read(recovery, item.itemId);
+      expect(after.projection.state).toBe("ready");
+      expect(orderIn(after, sent.orderId)).toMatchObject({ done: false, closed: true, merge: { mergedBy: APP_MERGER } });
+      await expectGateInvariants(recovery, item.itemId);
     });
   });
 });

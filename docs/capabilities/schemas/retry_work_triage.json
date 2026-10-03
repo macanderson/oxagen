@@ -4,8 +4,7 @@
   "description": "Queue triage to run again on a work item, after a failure or a change to the priorities record. A person's corrections stay in force.",
   "mode": "sync",
   "surfaces": [
-    "api",
-    "mcp"
+    "api"
   ],
   "sensitivity": "medium",
   "agent": null,

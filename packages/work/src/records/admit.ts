@@ -146,6 +146,7 @@ function admitAccept(item: WorkItemProjection, action: Extract<WorkItemDecision,
     const detail = gate.detail === null ? "" : ` (${gate.detail})`;
     const messages: Record<typeof gate.block, string> = {
       order_closed: "This send is over. Accept the current send.",
+      merged_by_app: "The Oxagen GitHub App merged this pull request, so no person merged it. Return the work or close the item.",
       already_accepted: "This send is already accepted on another head.",
       run_active: "The run has not ended. Wait for it, or stop it.",
       pr_closed: "The pull request closed without merging. Return the work or close the item.",
@@ -213,6 +214,17 @@ export function admitDecision(item: WorkItemProjection, action: WorkItemDecision
       const order = findOrder(item, action.orderId);
       if (order.delivery === "returned") return REPEAT;
       if (order.closed) refuse("not_allowed", "This send is over.");
+      // A person accepts or returns the work, not both. An acceptance holds
+      // until a new head voids it, so a return waits for that head. An
+      // accepted send that merged is done, and so over, above, unless the
+      // Oxagen GitHub App merged it. That send stays open and nothing will
+      // move its head, so it may be returned.
+      if (order.acceptance !== null && order.merge === null) {
+        refuse(
+          "not_allowed",
+          `This send is accepted on ${order.acceptance.headSha.slice(0, 7)}. Push a new head to void the acceptance before you return the work.`,
+        );
+      }
       if (order.delivery !== "run_ended" && order.merge === null && !order.prClosed) {
         refuse("not_allowed", "The run has not ended. Stop it before you return the work.");
       }

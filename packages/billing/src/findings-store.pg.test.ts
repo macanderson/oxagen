@@ -33,6 +33,9 @@ import {
 } from "./findings-store";
 
 const enabled = Boolean(process.env.DATABASE_URL);
+// On CI a missing DATABASE_URL fails the file, so a green run means these
+// cases ran instead of skipping.
+if (process.env.CI && !enabled) throw new Error("The findings store test needs DATABASE_URL on CI.");
 const findings = schema.findings;
 
 describe.skipIf(!enabled)("writeFindings against Postgres", () => {

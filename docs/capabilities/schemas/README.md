@@ -613,6 +613,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - accept_work_order
 - approve_work_brief
 - cancel_work_order
+- claim_work_criterion
 - claim_work_order
 - close_work_item
 - create_work_item

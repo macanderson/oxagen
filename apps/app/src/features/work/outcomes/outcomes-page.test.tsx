@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 // Outcomes over a fake DataSource: the six tiles and the four panels for the
-// last 30 days, the first run with nothing finished, a cost no run reported,
-// a lead time with no sample, and a failed read. Each state runs the axe
-// check (INV-26).
+// last 30 days, a week the window covers only in part, a read that stopped at
+// its cap, the first run with nothing finished, a cost no run reported, a lead
+// time with no sample, and a failed read. Each state runs the axe check
+// (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -131,6 +132,39 @@ describe("Outcomes › the last 30 days", () => {
       ["Sep 14", "8", "1", "18.5 h"],
       ["Sep 21", "10", "3", "none"],
     ]);
+    expect(table.querySelector("[data-week-partial]")).toBeNull();
+  });
+
+  it("marks a week the window covers only in part, and no whole week", async () => {
+    await renderOutcomes(
+      outcomes({
+        weeks: [
+          { week: "2026-08-31", acceptedMerged: 1, returned: 0, medianLeadHours: 4, complete: false },
+          { week: "2026-09-07", acceptedMerged: 5, returned: 2, medianLeadHours: 22, complete: true },
+          { week: "2026-09-28", acceptedMerged: 0, returned: 1, medianLeadHours: null, complete: false },
+        ],
+      }),
+    );
+    const table = within(screen.getByTestId("work-outcomes-weeks")).getByRole("table", { name: "Weekly trend" });
+    const row = (week: string) => table.querySelector(`tr[data-week="${week}"]`);
+    expect(row("2026-08-31")).toHaveAttribute("data-complete", "false");
+    expect(row("2026-08-31")?.querySelector("[data-week-partial]")).toHaveTextContent("Partial week");
+    expect(row("2026-09-07")).toHaveAttribute("data-complete", "true");
+    expect(row("2026-09-07")?.querySelector("[data-week-partial]")).toBeNull();
+    expect(row("2026-09-28")?.querySelector("[data-week-partial]")).toHaveTextContent("Partial week");
+  });
+
+  it("says the read stopped at its cap", async () => {
+    await renderOutcomes(outcomes({ truncated: true }));
+    expect(screen.getByTestId("work-outcomes-truncated")).toHaveTextContent(
+      "More work finished than one read counts. These figures cover the newest 2,000 items.",
+    );
+    expect(tile("accepted")).toHaveTextContent("23");
+  });
+
+  it("says nothing about a cap when the read counted every item", async () => {
+    await renderOutcomes(outcomes());
+    expect(screen.queryByTestId("work-outcomes-truncated")).toBeNull();
   });
 
   it("counts the touches by kind", async () => {

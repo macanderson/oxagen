@@ -17,7 +17,9 @@ vi.mock("@oxagen/iam/org-role", () => ({ assertOrgRole: vi.fn(), resolveActingUs
 
 import type { CollectorView } from "./lib/work-intake/collectors";
 import { createWorkCollectorSetHandler } from "./work.collector.set";
+import { createWorkCollectorSyncHandler } from "./work.collector.sync";
 import { createWorkItemCreateHandler } from "./work.item.create";
+import { createWorkTriageRetryHandler } from "./work.triage.retry";
 import { createWorkTriageReviseHandler } from "./work.triage.revise";
 
 const USER = "00000000-0000-4000-8000-000000000003";
@@ -79,6 +81,27 @@ function collectorDeps() {
     now: () => new Date("2026-10-02T12:00:00.000Z"),
   };
 }
+
+function syncDeps() {
+  return {
+    find: vi.fn(async () => ({ id: VIEW.collector_id, health: "failing" })),
+    send: vi.fn(async () => undefined),
+    now: () => new Date("2026-10-02T12:00:00.000Z"),
+  };
+}
+
+function retryDeps() {
+  return {
+    state: vi.fn(async () => ({ state: "triaged" as const, version: 4 })),
+    send: vi.fn(async () => undefined),
+  };
+}
+
+/** Every API key, including one that resolves to a person. */
+const KEYS: Array<[string, CapabilityContext]> = [
+  ["a key that names no user", apiKey],
+  ["a login key that resolves to a person", loginKey],
+];
 
 beforeEach(() => {
   mocks.role.mockReset();
@@ -226,5 +249,98 @@ describe("set_work_collector takes only a signed-in person", () => {
       { name: "github", connectionId: "con_01", repos: ["acme/web"], actorUserId: USER },
     );
     expect(out).toEqual({ collector: VIEW, created: true, reconcile_queued: false });
+  });
+});
+
+// ADR-250, amended 2026-10-03: a sync forces a collector's reconcile and can
+// move a failing collector back to its schedule, so it is a collector change.
+// It takes a signed-in person, as set_work_collector does (#5181).
+describe("sync_work_collector takes only a signed-in person", () => {
+  const input = { name: "github" };
+
+  it.each(KEYS)("refuses an API key, %s, before it reads", async (_name, ctx) => {
+    const deps = syncDeps();
+    await expect(createWorkCollectorSyncHandler(deps)(input, ctx)).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "person_required",
+    });
+    expect(mocks.role).not.toHaveBeenCalled();
+    expect(deps.find).not.toHaveBeenCalled();
+    expect(deps.send).not.toHaveBeenCalled();
+  });
+
+  it("refuses an agent run, even one that carries an API key, before it reads", async () => {
+    for (const caller of [person, apiKey]) {
+      const deps = syncDeps();
+      const agentRun = { ...caller, agentRun: { runId: "arun_01" } } as unknown as CapabilityContext;
+      await expect(createWorkCollectorSyncHandler(deps)(input, agentRun)).rejects.toMatchObject({
+        code: "forbidden",
+        reason: "agent_run",
+      });
+      expect(deps.find).not.toHaveBeenCalled();
+      expect(deps.send).not.toHaveBeenCalled();
+    }
+    expect(mocks.role).not.toHaveBeenCalled();
+  });
+
+  it("refuses a call that names no person, before it reads", async () => {
+    const deps = syncDeps();
+    await expect(createWorkCollectorSyncHandler(deps)(input, nobody)).rejects.toMatchObject({ reason: "person_required" });
+    expect(deps.find).not.toHaveBeenCalled();
+  });
+
+  it("lets a signed-in person sync a collector", async () => {
+    const deps = syncDeps();
+    const out = await createWorkCollectorSyncHandler(deps)(input, person);
+    expect(mocks.role).toHaveBeenCalledTimes(1);
+    expect(deps.find).toHaveBeenCalledWith({ orgId: person.orgId, workspaceId: person.workspaceId }, { name: "github" });
+    expect(deps.send).toHaveBeenCalledTimes(1);
+    expect(out).toEqual({ collector_id: VIEW.collector_id, queued: true });
+  });
+});
+
+// ADR-250, amended 2026-10-03: triage reruns only when a person asks, because
+// each retry is a model call the organization pays for.
+describe("retry_work_triage takes only a signed-in person", () => {
+  const input = { item_id: "wi_01" };
+
+  it.each(KEYS)("refuses an API key, %s, before it reads", async (_name, ctx) => {
+    const deps = retryDeps();
+    await expect(createWorkTriageRetryHandler(deps)(input, ctx)).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "person_required",
+    });
+    expect(mocks.role).not.toHaveBeenCalled();
+    expect(deps.state).not.toHaveBeenCalled();
+    expect(deps.send).not.toHaveBeenCalled();
+  });
+
+  it("refuses an agent run, even one that carries an API key, before it reads", async () => {
+    for (const caller of [person, apiKey]) {
+      const deps = retryDeps();
+      const agentRun = { ...caller, agentRun: { runId: "arun_01" } } as unknown as CapabilityContext;
+      await expect(createWorkTriageRetryHandler(deps)(input, agentRun)).rejects.toMatchObject({
+        code: "forbidden",
+        reason: "agent_run",
+      });
+      expect(deps.state).not.toHaveBeenCalled();
+      expect(deps.send).not.toHaveBeenCalled();
+    }
+    expect(mocks.role).not.toHaveBeenCalled();
+  });
+
+  it("refuses a call that names no person, before it reads", async () => {
+    const deps = retryDeps();
+    await expect(createWorkTriageRetryHandler(deps)(input, nobody)).rejects.toMatchObject({ reason: "person_required" });
+    expect(deps.state).not.toHaveBeenCalled();
+  });
+
+  it("lets a signed-in person retry triage", async () => {
+    const deps = retryDeps();
+    const out = await createWorkTriageRetryHandler(deps)(input, person);
+    expect(mocks.role).toHaveBeenCalledTimes(1);
+    expect(deps.state).toHaveBeenCalledWith({ orgId: person.orgId, workspaceId: person.workspaceId }, "wi_01");
+    expect(deps.send).toHaveBeenCalledTimes(1);
+    expect(out).toEqual({ item_id: "wi_01", state: "triaged", queued: true });
   });
 });

@@ -168,7 +168,7 @@ export const note =
 export const kvList =
   "grid grid-cols-dl items-baseline gap-x-4 gap-y-1.75 text-sm";
 export const kvTerm = "whitespace-nowrap text-dim";
-export const kvValue = "m-0 min-w-0 text-foreground [overflow-wrap:anywhere]";
+export const kvValue = "m-0 min-w-0 text-foreground wrap-anywhere";
 
 /**
  * `.b.b-q.lk` (the Run header's checkout strip): a quiet pill that is a link

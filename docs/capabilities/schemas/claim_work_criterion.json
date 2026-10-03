@@ -1,0 +1,160 @@
+{
+  "name": "claim_work_criterion",
+  "domain": "work",
+  "description": "Claim, as the agent working a send, that one criterion of the brief is met on the pull request's head commit. A person still decides.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "item_id": {
+        "type": "string"
+      },
+      "work_order_id": {
+        "type": "string"
+      },
+      "criterion_id": {
+        "type": "string"
+      },
+      "head_sha": {
+        "type": "string"
+      },
+      "text": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      }
+    },
+    "required": [
+      "item_id",
+      "work_order_id",
+      "criterion_id",
+      "head_sha",
+      "text"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "item": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "held",
+              "triaged",
+              "needs_info",
+              "changed",
+              "ready",
+              "sent",
+              "running",
+              "review",
+              "done",
+              "closed"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "revision",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "repeat": {
+        "type": "boolean"
+      },
+      "order": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "send": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "key": {
+            "type": "string"
+          },
+          "delivery": {
+            "type": "string",
+            "enum": [
+              "waiting_for_claim",
+              "claimed",
+              "running",
+              "stopping",
+              "run_ended",
+              "stopped",
+              "returned",
+              "withdrawn",
+              "rejected"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "send",
+          "key",
+          "delivery"
+        ],
+        "additionalProperties": false
+      },
+      "claim": {
+        "type": "object",
+        "properties": {
+          "criterion_id": {
+            "type": "string"
+          },
+          "head_sha": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "criterion_id",
+          "head_sha",
+          "run_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "item",
+      "repeat",
+      "order",
+      "claim"
+    ],
+    "additionalProperties": false
+  }
+}

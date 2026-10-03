@@ -6,6 +6,11 @@
  * The run is queued with the workspace's other triage runs, at most 60 a
  * minute. It runs only while the item is new, held, triaged, needs_info, or
  * changed, and a person's corrections stay in force whatever it suggests.
+ *
+ * Triage reruns only when a person asks, because each retry is a model call
+ * the organization pays for (ADR-250, amended 2026-10-03). The handler
+ * refuses every API key and every agent run, so the capability is not an MCP
+ * tool.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -17,8 +22,8 @@ export const workTriageRetry = registerCapability({
   description:
     "Queue triage to run again on a work item, after a failure or a change to the priorities record. A person's corrections stay in force.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  surfaces: ["api"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   sensitivity: "medium",

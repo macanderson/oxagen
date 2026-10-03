@@ -46,7 +46,7 @@ const PER_PAGE = [5, 10, 25, 50, 0] as const;
 const control =
   "min-h-8 max-md:min-h-11 rounded-4xl border border-input-border bg-input-bg py-1.5 text-base max-md:text-input-touch text-input-fg " +
   "hover:border-input-border-hover focus-visible:border-input-border-focus focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-input-ring";
-const search = `${control} min-w-0 flex-[1_1_14rem] px-3 placeholder:text-input-placeholder`;
+const search = `${control} min-w-0 grow basis-56 px-3 placeholder:text-input-placeholder`;
 const filter = "shrink-0 max-md:min-h-11 max-md:text-input-touch";
 
 type Sort = { key: string; dir: 1 | -1 } | null;
@@ -222,7 +222,7 @@ export function ListTable({
                       onClick={() => {
                         toggle(column.key);
                       }}
-                      className={`inline-flex items-center gap-1 uppercase tracking-[inherit] hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring after:font-normal after:opacity-70 ${dir === 1 ? "after:content-['↑']" : dir === -1 ? "after:content-['↓']" : "after:content-['↕']"}`}
+                      className={`inline-flex items-center gap-1 uppercase tracking-[inherit] hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring after:font-normal after:opacity-70 ${dir === 1 ? "after:content-(--glyph-sort-asc)" : dir === -1 ? "after:content-(--glyph-sort-desc)" : "after:content-(--glyph-sort)"}`}
                     >
                       {column.label}
                     </button>

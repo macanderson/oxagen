@@ -10,7 +10,8 @@
 // An item write stores the source columns (items.ts) and records the material
 // fields with the P1-02 store's recordSource in one transaction, so a new
 // issue is a `collected` fact and a changed subject, description, or label set
-// is a `source_changed` fact on the next item revision (ADR-244).
+// is a `source_changed` fact on the next item revision (ADR-244). The write
+// returns the revision it left the item on, and work/item.received carries it.
 import { schema, withTenantDb } from "@oxagen/database";
 import type {
   CollectorCloudEvent,
@@ -147,7 +148,7 @@ export function postgresCollectorStore(scope: WorkScope, now: () => Date = () =>
         if (written.stale) return { item: written.after, created: false };
         const material = { subject: input.subject, description: input.description, labels: input.labels };
         const occurredAt = input.sourceUpdatedAt ?? now().toISOString();
-        await recordSource(tx, scope, {
+        const recorded = await recordSource(tx, scope, {
           itemId: written.after.id,
           material,
           source: "provider",
@@ -155,7 +156,7 @@ export function postgresCollectorStore(scope: WorkScope, now: () => Date = () =>
           occurredAt,
           dedupeKey: sourceDedupeKey(material, occurredAt),
         });
-        return { item: written.after, created: written.created };
+        return { item: written.after, created: written.created, revision: recorded.projection.revision };
       });
     },
 

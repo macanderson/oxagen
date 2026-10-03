@@ -9,8 +9,7 @@
     ".": "./src/index.ts",
     "./workspace-token": "./src/workspace-token.ts",
     "./provision": "./src/provision/index.ts",
-    "./provision/testing": "./src/provision/testing/fake-github.ts",
-    "./done-check": "./src/done-check.ts"
+    "./provision/testing": "./src/provision/testing/fake-github.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

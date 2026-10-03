@@ -8,8 +8,9 @@
 // estimated:
 //
 //   - An item counts as accepted and merged when the later of its acceptance
-//     and its merge (its done time) falls in the window. An item done twice in
-//     the window, around a reopen, counts once, at its latest done time.
+//     and its merge (its done time) falls in the window. The count is of
+//     distinct items, never sends: an item done twice in the window, around a
+//     reopen, counts once, at its latest done time, and so in one week only.
 //   - Returned counts the sends a person returned in the window. Closed counts
 //     the closes in the window, by resolution. The three counts never add up
 //     into one rate.
@@ -32,7 +33,10 @@
 //   - The reopen cohort is the items whose done time falls 30 to 30 + days
 //     days ago. One reopened when a reopen fact follows that done time. Items
 //     done in the last 30 days wait to count.
-//   - Weeks are UTC weeks from Monday that overlap the window.
+//   - Weeks are UTC weeks from Monday that overlap the window. A week is
+//     complete when the window covers all of it. The oldest week the window
+//     cuts and the week still running are not, so a reader who wants whole
+//     weeks reads only the complete rows.
 //   - Delivery puts each send read.ts loaded for the window in one bucket, in
 //     this order: rejected when it has a send_rejected fact, claimed when a
 //     runtime claimed it, withdrawn when a person withdrew it, and waiting
@@ -277,8 +281,9 @@ export function computeOutcomes(input: OutcomesInput): Omit<WorkOutcomesGetOutpu
 
   const intakeOf = new Map(input.intake.map((row) => [row.week, row]));
   const weeks = weeksBetween(new Date(start), input.now).map((week) => {
+    const weekEnd = week.getTime() + 7 * DAY_MS - 1;
     const from = Math.max(week.getTime(), start);
-    const to = Math.min(week.getTime() + 7 * DAY_MS - 1, end);
+    const to = Math.min(weekEnd, end);
     const inWeek = accepted.filter((entry) => within(entry.doneAt, from, to));
     const weekLeads = inWeek.flatMap((entry) => (entry.leadHours === null ? [] : [entry.leadHours])).sort((a, b) => a - b);
     const day = isoDay(week);
@@ -291,6 +296,7 @@ export function computeOutcomes(input: OutcomesInput): Omit<WorkOutcomesGetOutpu
       entered: intake?.entered ?? 0,
       sent: intake?.sent ?? 0,
       full_flow: inWeek.length > 0,
+      complete: from === week.getTime() && to === weekEnd,
     };
   });
 

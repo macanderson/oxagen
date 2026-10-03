@@ -26,7 +26,7 @@ import { OpenApprovalsButton } from "./frame-player";
  * parked call.
  */
 const warn =
-  "m-0 rounded-xl border border-critical/45 bg-critical/[0.09] px-3.5 py-2.75 text-sm text-foreground [&_b]:font-semibold [&_b]:text-critical";
+  "m-0 rounded-xl border border-critical/45 bg-critical/9 px-3.5 py-2.75 text-sm text-foreground [&_b]:font-semibold [&_b]:text-critical";
 
 type Cards = {
   mandates: ReadonlyMap<string, MandateRow>;

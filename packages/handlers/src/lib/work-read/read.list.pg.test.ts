@@ -428,7 +428,7 @@ describe.skipIf(!enabled)("the Work list against Postgres", { timeout: 120_000 }
         ...headFacts(sent.orderId, SHA1, ["test"], [["test", "failure"]]),
         ...headFacts(sent.orderId, SHA2, ["test"], [["test", "pending"], ["test", "success"]]),
         runtimeFact(sent.orderId, a5.hostPublicId, "run_ended", run("e")),
-        providerFact(sent.orderId, "merged", "merged", { merge_commit: MERGE }, SHA2),
+        providerFact(sent.orderId, "merged", "merged", { merge_commit: MERGE, merged_by: null }, SHA2),
       ]);
       await appendFacts(tx, scope, {
         itemId: sent.itemId,

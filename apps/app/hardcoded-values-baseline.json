@@ -2,14 +2,6 @@
   "src/app/global-error.tsx": {
     "<button>": 1
   },
-  "src/app/globals.css": {
-    "css:animation": 5,
-    "css:animation-delay": 4,
-    "css:box-shadow": 1,
-    "css:inset": 1,
-    "css:max-width": 1,
-    "css:padding": 5
-  },
   "src/features/agents/agent-actions.tsx": {
     "<button>": 3
   },
@@ -70,10 +62,6 @@
   "src/features/auth/two-factor-form.tsx": {
     "<button>": 1
   },
-  "src/features/auth/ui/auth-card.tsx": {
-    "after:content-['']": 1,
-    "before:content-['']": 1
-  },
   "src/features/auth/ui/invite-hint.tsx": {
     "<button>": 1
   },
@@ -123,8 +111,7 @@
     "<button>": 1
   },
   "src/features/fleet/list-bar.tsx": {
-    "<button>": 1,
-    "flex-[1_1_200px]": 1
+    "<button>": 1
   },
   "src/features/fleet/state-actions.tsx": {
     "<button>": 5
@@ -145,11 +132,7 @@
     "<button>": 2
   },
   "src/features/mcp-studio/changes-tab.tsx": {
-    "<button>": 3,
-    "[overflow-wrap:anywhere]": 2
-  },
-  "src/features/mcp-studio/connection-tab.tsx": {
-    "[overflow-wrap:anywhere]": 1
+    "<button>": 3
   },
   "src/features/mcp-studio/credential-form.tsx": {
     "<button>": 1
@@ -185,8 +168,7 @@
     "<button>": 1
   },
   "src/features/onboarding/ui/installer.tsx": {
-    "<button>": 2,
-    "transition-[width]": 1
+    "<button>": 2
   },
   "src/features/onboarding/ui/register-form.tsx": {
     "<button>": 1
@@ -260,21 +242,14 @@
   "src/features/record/propose-dialog.tsx": {
     "<button>": 1
   },
-  "src/features/record/statement-editor.tsx": {
-    "[font-feature-settings:var(--ox-font-mono-features)]": 1,
-    "[overflow-wrap:break-word]": 1,
-    "[tab-size:2]": 1
-  },
   "src/features/repositories/change-detail.tsx": {
-    "<button>": 4,
-    "[--cell-max:32rem]": 1
+    "<button>": 4
   },
   "src/features/repositories/configuration.tsx": {
     "<button>": 1
   },
   "src/features/repositories/init-wizard.tsx": {
-    "<button>": 3,
-    "[--cell-max:32rem]": 1
+    "<button>": 3
   },
   "src/features/repositories/instruction-drift.tsx": {
     "<button>": 1
@@ -301,13 +276,10 @@
     "<button>": 2
   },
   "src/features/run/context-tab.tsx": {
-    "<button>": 1,
-    "[overflow-wrap:anywhere]": 1
+    "<button>": 1
   },
   "src/features/run/copy-text.tsx": {
-    "<button>": 2,
-    "[direction:rtl]": 1,
-    "[text-align:left]": 1
+    "<button>": 2
   },
   "src/features/run/delivery-report.tsx": {
     "<button>": 1
@@ -318,23 +290,8 @@
   "src/features/run/interjection-answer.tsx": {
     "<button>": 2
   },
-  "src/features/run/interjection.tsx": {
-    "[overflow-wrap:anywhere]": 5
-  },
-  "src/features/run/linked-work.tsx": {
-    "[overflow-wrap:anywhere]": 1,
-    "before:content-['▸']": 1,
-    "group-open:before:content-['▾']": 1
-  },
   "src/features/run/model-fit.tsx": {
     "<button>": 1
-  },
-  "src/features/run/outputs.tsx": {
-    "[overflow-wrap:anywhere]": 2,
-    "before:content-['']": 1
-  },
-  "src/features/run/parked-calls.tsx": {
-    "bg-critical/[0.09]": 1
   },
   "src/features/run/player-bar.tsx": {
     "<button>": 1
@@ -351,30 +308,14 @@
   "src/features/run/seal-run.tsx": {
     "<button>": 3
   },
-  "src/features/run/timeline.tsx": {
-    "before:content-['']": 1
-  },
   "src/features/run/transcript-view.tsx": {
-    "<button>": 14,
-    "[overflow-wrap:anywhere]": 1,
-    "duration-200": 1,
-    "style:width": 2,
-    "transition-[width]": 1
+    "<button>": 14
   },
   "src/features/runtimes/controls.tsx": {
     "<button>": 6
   },
-  "src/features/runtimes/runtime.tsx": {
-    "after:content-['']": 1
-  },
-  "src/features/runtimes/runtimes.tsx": {
-    "after:content-['']": 1
-  },
   "src/features/shell/account-dialog.tsx": {
     "<button>": 9
-  },
-  "src/features/shell/account-styles.ts": {
-    "[overflow-wrap:anywhere]": 1
   },
   "src/features/shell/approvals-drawer.tsx": {
     "<button>": 4
@@ -386,14 +327,7 @@
     "<button>": 1
   },
   "src/features/shell/assistant-flyout.tsx": {
-    "<button>": 4,
-    "before:content-['']": 1,
-    "duration-200": 3,
-    "duration-300": 1,
-    "ease-[cubic-bezier(.32,.72,0,1)]": 1,
-    "motion-reduce:duration-100": 1,
-    "transition-[translate,opacity,visibility]": 4,
-    "transition-[translate,opacity]": 1
+    "<button>": 4
   },
   "src/features/shell/assistant-launcher.tsx": {
     "<button>": 1
@@ -415,10 +349,6 @@
   },
   "src/features/shell/assistant-suggestions.tsx": {
     "<button>": 1
-  },
-  "src/features/shell/assistant-tool-calls.tsx": {
-    "before:content-['▸']": 1,
-    "group-open:before:content-['▾']": 1
   },
   "src/features/shell/mobile-nav.tsx": {
     "<button>": 2
@@ -489,9 +419,6 @@
   "src/features/steering/import/import-markdown.tsx": {
     "<button>": 4
   },
-  "src/features/steering/library-all.tsx": {
-    "[--cell-max:32rem]": 1
-  },
   "src/features/steering/memories/dismiss-dialog.tsx": {
     "<button>": 1
   },
@@ -505,11 +432,7 @@
     "<button>": 1
   },
   "src/features/steering/memory-shelf.tsx": {
-    "<button>": 4,
-    "[--cell-max:32rem]": 1
-  },
-  "src/features/steering/proposal-list.tsx": {
-    "after:content-['']": 1
+    "<button>": 4
   },
   "src/features/steering/steering-pr-controls.tsx": {
     "<button>": 4
@@ -568,29 +491,14 @@
   "src/features/work/item/brief-dialog.tsx": {
     "<button>": 2
   },
-  "src/features/work/item/brief-panel.tsx": {
-    "[overflow-wrap:anywhere]": 4
-  },
   "src/features/work/item/copy-value.tsx": {
     "<button>": 1
-  },
-  "src/features/work/item/cost-history.tsx": {
-    "[overflow-wrap:anywhere]": 1
-  },
-  "src/features/work/item/delivery-panel.tsx": {
-    "[overflow-wrap:anywhere]": 1
-  },
-  "src/features/work/item/head.tsx": {
-    "[overflow-wrap:anywhere]": 1
   },
   "src/features/work/item/inline-actions.tsx": {
     "<button>": 2
   },
   "src/features/work/item/item-actions.tsx": {
     "<button>": 1
-  },
-  "src/features/work/item/source-triage.tsx": {
-    "[overflow-wrap:anywhere]": 4
   },
   "src/features/work/item/triage-dialogs.tsx": {
     "<button>": 1
@@ -599,17 +507,10 @@
     "<button>": 1
   },
   "src/features/work/setup/add-collector.tsx": {
-    "<button>": 1,
-    "[overflow-wrap:anywhere]": 1
-  },
-  "src/features/work/setup/collectors.tsx": {
-    "[overflow-wrap:anywhere]": 2
+    "<button>": 1
   },
   "src/features/work/setup/priorities-editor.tsx": {
     "<button>": 4
-  },
-  "src/features/work/setup/priorities.tsx": {
-    "[overflow-wrap:anywhere]": 2
   },
   "src/features/work/setup/reconnect.tsx": {
     "<button>": 1
@@ -617,24 +518,11 @@
   "src/features/work/work-page.tsx": {
     "<button>": 1
   },
-  "src/features/work/work-table.tsx": {
-    "[overflow-wrap:anywhere]": 1,
-    "after:content-['']": 1
-  },
   "src/ui/attachment.tsx": {
     "<button>": 1
   },
-  "src/ui/auth-shell.tsx": {
-    "[background:repeating-linear-gradient(0deg,transparent_0_47px,var(--border)_47px_48px),repeating-linear-gradient(90deg,transparent_0_47px,var(--border)_47px_48px)]": 1,
-    "[mask-image:linear-gradient(180deg,#000_0%,transparent_78%)]": 1
-  },
   "src/ui/avatar-editor.tsx": {
     "<button>": 6
-  },
-  "src/ui/avatar.tsx": {
-    "style:height": 1,
-    "style:letterSpacing": 1,
-    "style:width": 1
   },
   "src/ui/choice-group.tsx": {
     "<button>": 1
@@ -642,24 +530,11 @@
   "src/ui/clone-button.tsx": {
     "<button>": 1
   },
-  "src/ui/code-panel.tsx": {
-    "[font-feature-settings:var(--ox-font-mono-features)]": 1
-  },
-  "src/ui/control-styles.ts": {
-    "[overflow-wrap:anywhere]": 1
-  },
   "src/ui/create-button.tsx": {
     "<button>": 1
   },
-  "src/ui/diff-view.tsx": {
-    "[overflow-wrap:anywhere]": 1
-  },
   "src/ui/faceted-list-table.tsx": {
-    "<button>": 1,
-    "after:content-['↑']": 1,
-    "after:content-['↓']": 1,
-    "after:content-['↕']": 1,
-    "flex-[1_1_14rem]": 1
+    "<button>": 1
   },
   "src/ui/field.tsx": {
     "<button>": 1
@@ -667,93 +542,16 @@
   "src/ui/form-feedback.tsx": {
     "<button>": 1
   },
-  "src/ui/hover-card.tsx": {
-    "duration-100": 1
-  },
   "src/ui/list-table.tsx": {
-    "<button>": 1,
-    "after:content-['↕']": 1,
-    "data-[sort=ascending]:after:content-['↑']": 1,
-    "data-[sort=descending]:after:content-['↓']": 1,
-    "flex-[1_1_200px]": 1
-  },
-  "src/ui/message-scroller.tsx": {
-    "[contain-intrinsic-size:auto_10rem]": 1,
-    "[content-visibility:auto]": 1,
-    "data-[active=false]:duration-400": 1,
-    "data-[active=false]:ease-[cubic-bezier(0.7,0,0.84,0)]": 1,
-    "data-[active=true]:ease-[cubic-bezier(0.23,1,0.32,1)]": 1,
-    "duration-200": 1,
-    "transition-[translate,scale,opacity]": 1
+    "<button>": 1
   },
   "src/ui/page-states.tsx": {
     "<button>": 3
   },
-  "src/ui/phone.css": {
-    "css:gap": 2,
-    "css:max-height": 1,
-    "css:max-width": 1,
-    "css:min-height": 2,
-    "css:min-width": 1,
-    "css:padding": 2,
-    "css:padding-bottom": 1,
-    "css:padding-top": 1
-  },
   "src/ui/record-picker.tsx": {
     "<button>": 1
   },
-  "src/ui/select.tsx": {
-    "duration-100": 1
-  },
   "src/ui/source-filename.tsx": {
     "<button>": 1
-  },
-  "src/ui/toast.tsx": {
-    "[&[data-ending-style]:not([data-limited]):not([data-swipe-direction])]:[transform:translateY(150%)]": 1,
-    "[--gap:0.75rem]": 1,
-    "[--height:var(--toast-frontmost-height,var(--toast-height))]": 1,
-    "[--offset-y:calc(var(--toast-offset-y)*-1+calc(var(--toast-index)*var(--gap)*-1)+var(--toast-swipe-movement-y))]": 1,
-    "[--peek:0.75rem]": 1,
-    "[--scale:calc(max(0,1-(var(--toast-index)*0.1)))]": 1,
-    "[--shrink:calc(1-var(--scale))]": 1,
-    "[transform:translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--peek))-(var(--shrink)*var(--height))))_scale(var(--scale))]": 1,
-    "[transition:transform_500ms_cubic-bezier(0.22,1,0.36,1),opacity_500ms,height_150ms]": 1,
-    "after:content-['']": 2,
-    "after:h-[calc(var(--gap)+1px)]": 1,
-    "data-ending-style:data-[swipe-direction=down]:[transform:translateY(calc(var(--toast-swipe-movement-y)+150%))]": 1,
-    "data-ending-style:data-[swipe-direction=left]:[transform:translateX(calc(var(--toast-swipe-movement-x)-150%))_translateY(var(--offset-y))]": 1,
-    "data-ending-style:data-[swipe-direction=right]:[transform:translateX(calc(var(--toast-swipe-movement-x)+150%))_translateY(var(--offset-y))]": 1,
-    "data-ending-style:data-[swipe-direction=up]:[transform:translateY(calc(var(--toast-swipe-movement-y)-150%))]": 1,
-    "data-expanded:[transform:translateX(var(--toast-swipe-movement-x))_translateY(var(--offset-y))]": 1,
-    "data-expanded:data-ending-style:data-[swipe-direction=down]:[transform:translateY(calc(var(--toast-swipe-movement-y)+150%))]": 1,
-    "data-expanded:data-ending-style:data-[swipe-direction=left]:[transform:translateX(calc(var(--toast-swipe-movement-x)-150%))_translateY(var(--offset-y))]": 1,
-    "data-expanded:data-ending-style:data-[swipe-direction=right]:[transform:translateX(calc(var(--toast-swipe-movement-x)+150%))_translateY(var(--offset-y))]": 1,
-    "data-expanded:data-ending-style:data-[swipe-direction=up]:[transform:translateY(calc(var(--toast-swipe-movement-y)-150%))]": 1,
-    "data-starting-style:[transform:translateY(150%)]": 1,
-    "duration-250": 1,
-    "ease-[cubic-bezier(0.22,1,0.36,1)]": 1,
-    "z-[calc(1000-var(--toast-index))]": 1
-  },
-  "src/ui/transcript-skins.css": {
-    "css:animation": 4,
-    "css:border-radius": 12,
-    "css:box-shadow": 1,
-    "css:gap": 11,
-    "css:height": 10,
-    "css:left": 4,
-    "css:margin": 3,
-    "css:margin-bottom": 2,
-    "css:margin-left": 1,
-    "css:margin-right": 2,
-    "css:margin-top": 5,
-    "css:max-height": 4,
-    "css:min-width": 3,
-    "css:padding": 14,
-    "css:padding-bottom": 2,
-    "css:padding-inline": 1,
-    "css:padding-left": 3,
-    "css:padding-top": 2,
-    "css:top": 6,
-    "css:width": 6
   }
 }

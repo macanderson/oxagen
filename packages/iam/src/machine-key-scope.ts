@@ -134,6 +134,10 @@ export const MACHINE_KEY_CAPABILITIES: Readonly<
     // went to this host's runtime and agent.
     "claim_work_order",
     "reject_work_order",
+    // ADR-251 (amended 2026-10-03): the agent working a send claims a
+    // criterion through the host key. The handler checks that this host
+    // claimed the send and files the claim as the send's linked run.
+    "claim_work_criterion",
     // ADR-161: before a backfill seals a session, which of them the control
     // plane already holds for this host. Read-only, and it answers only the
     // calling host's own sessions.

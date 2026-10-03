@@ -11,7 +11,7 @@ Refuse a work order the calling enrolled host cannot start, with the reason, suc
 - Authentication: The enrolled host's API key, for the enrollment the call names.
 - Roles: the key's creator must still be an org Owner or Admin
 - Body: at most 16 KiB, sent as `application/json`
-- Rate limit: 30 calls a minute per host, shared by the claim and the rejection
+- Rate limit: 30 calls a minute per host, shared by the claim, the rejection, and the criterion claim
 - Billing: `noBillingGate: true`
 
 ## Input

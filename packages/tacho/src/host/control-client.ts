@@ -2,7 +2,8 @@
  * The host's HTTPS client to the control plane (spec section 3.1 steps 3
  * and 4; section 7.4). Machine-to-machine calls, each authenticated by the
  * host API key and validated against the wire schemas: ingest, bundle, and
- * the command poll, plus the claim and refusal of a work order (ADR-251).
+ * the command poll, plus the claim and refusal of a work order and the
+ * agent's claim on a criterion of its brief (ADR-251).
  * `fetch` is injected so tests run against a fake control plane.
  */
 import {
@@ -17,6 +18,10 @@ import {
   TACHO_BATCH_SCHEMA,
   TACHO_COMMANDS_SCHEMA,
   type TachoBatch,
+  WORK_CRITERION_CLAIM_PATH,
+  type WorkCriterionClaimRequest,
+  type WorkCriterionClaimResponse,
+  workCriterionClaimResponseSchema,
   WORK_ORDER_CLAIM_PATH,
   WORK_ORDER_REJECT_PATH,
   type WorkOrderClaimResponse,
@@ -148,11 +153,13 @@ export class ControlUnreachable extends Error {
 export function workOrderEndpointsFor(apiUrl: string): {
   workOrderClaim: string;
   workOrderReject: string;
+  workCriterionClaim: string;
 } {
   const base = apiUrl.replace(/\/+$/, "");
   return {
     workOrderClaim: `${base}${WORK_ORDER_CLAIM_PATH}`,
     workOrderReject: `${base}${WORK_ORDER_REJECT_PATH}`,
+    workCriterionClaim: `${base}${WORK_CRITERION_CLAIM_PATH}`,
   };
 }
 
@@ -165,6 +172,8 @@ export interface ControlClientOptions {
     workOrderClaim?: string;
     /** `reject_work_order`. Absent, `rejectWorkOrder` throws. */
     workOrderReject?: string;
+    /** `claim_work_criterion`. Absent, `claimWorkCriterion` throws. */
+    workCriterionClaim?: string;
   };
   apiKey: string;
   hostEnrollmentId: string;
@@ -217,6 +226,15 @@ export interface ControlClient {
     workOrderId: string,
     reason: string,
   ) => Promise<WorkOrderRejectResponse>;
+  /**
+   * Claim, for the agent working a send, that one criterion of its brief is
+   * met on the pull request's head commit (ADR-251). The server files the
+   * claim as the run linked to the send, and only when this host claimed the
+   * send. A refused claim throws `ControlError`.
+   */
+  claimWorkCriterion: (
+    claim: WorkCriterionClaimRequest,
+  ) => Promise<WorkCriterionClaimResponse>;
 }
 
 export function createControlClient(
@@ -338,6 +356,21 @@ export function createControlClient(
           },
         ),
       ),
+    // The body names exactly the contract's fields. It carries no enrollment
+    // id: the server reads the host from the key.
+    claimWorkCriterion: async (claim) =>
+      workCriterionClaimResponseSchema.parse(
+        await post(
+          endpoint(options.endpoints.workCriterionClaim, "criterion claim"),
+          {
+            item_id: claim.item_id,
+            work_order_id: claim.work_order_id,
+            criterion_id: claim.criterion_id,
+            head_sha: claim.head_sha,
+            text: claim.text,
+          },
+        ),
+      ),
   };
 }
 
@@ -362,4 +395,25 @@ export function controlErrorMessage(error: ControlError): string {
     // Not JSON: fall through to the status.
   }
   return `Oxagen answered ${error.status}.`;
+}
+
+/**
+ * The `reason` of a control plane refusal, such as `stale_head`, or
+ * undefined when the body names none. The API sends a handler's refusal as
+ * `{ error: { code, reason, message } }`.
+ */
+export function controlErrorReason(error: ControlError): string | undefined {
+  try {
+    const body: unknown = JSON.parse(error.body);
+    if (typeof body === "object" && body !== null) {
+      const inner = (body as Record<string, unknown>)["error"];
+      if (typeof inner === "object" && inner !== null) {
+        const reason = (inner as Record<string, unknown>)["reason"];
+        if (typeof reason === "string" && reason.length > 0) return reason;
+      }
+    }
+  } catch {
+    // Not JSON: the body names no reason.
+  }
+  return undefined;
 }

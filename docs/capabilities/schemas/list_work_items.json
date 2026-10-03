@@ -865,6 +865,26 @@
                   "type": "object",
                   "properties": {
                     "kind": {
+                      "const": "merged_by_app"
+                    },
+                    "login": {
+                      "type": "string"
+                    },
+                    "at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "login",
+                    "at"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
                       "const": "brief_out_of_date"
                     }
                   },
@@ -1220,6 +1240,7 @@
                               "type": "string",
                               "enum": [
                                 "order_closed",
+                                "merged_by_app",
                                 "already_accepted",
                                 "run_active",
                                 "pr_closed",

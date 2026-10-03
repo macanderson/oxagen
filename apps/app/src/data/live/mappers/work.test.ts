@@ -1,21 +1,30 @@
 // The Work mappers over real contract output: each sample is parsed by its
 // contract's own output schema first, so it is what the handler can return,
 // then mapped and parsed by the view model. A cost the record does not hold
-// stays null, a run's unknown basis is null, and every wait kind keeps its
-// facts under the view's names.
+// stays null, a run's unknown basis is null, every wait kind keeps its facts
+// under the view's names, a week keeps whether it is whole, and the
+// collectors keep whether the viewer may change them.
+import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
+import { workCollectorsList } from "@oxagen/oxagen/contracts/work.collectors.list";
 import { workItemGet } from "@oxagen/oxagen/contracts/work.item.get";
 import { workItemsList } from "@oxagen/oxagen/contracts/work.items.list";
 import { workOutcomesGet } from "@oxagen/oxagen/contracts/work.outcomes.get";
 import { workTargetsList } from "@oxagen/oxagen/contracts/work.targets.list";
 import { describe, expect, it } from "vitest";
 import {
+  WorkCollectorList,
   WorkItemDetail,
   WorkItemList,
   WorkOutcomes,
   WorkTargetList,
 } from "@/data/contracts/work";
 import { toWorkItemDetail } from "./work-item";
-import { toWorkItemList, toWorkOutcomes, toWorkTargetList } from "./work-list";
+import {
+  toWorkCollectorList,
+  toWorkItemList,
+  toWorkOutcomes,
+  toWorkTargetList,
+} from "./work-list";
 
 const HEAD = "3f9a2c1d4e5f60718293a4b5c6d7e8f901234567";
 const EARLIER = "2d4f6a80123456789abcdef0123456789abcdef0";
@@ -107,6 +116,25 @@ describe("toWorkItemList", () => {
       cost: { runs: 2, knownRuns: 1, total: { micros: "1250000", currency: "USD" } },
     });
     expect(view.viewer).toEqual({ canControl: true, canApprove: false });
+  });
+
+  it("keeps the login and merge time of a pull request the Oxagen GitHub App merged", () => {
+    const merged = WorkItemList.parse(
+      toWorkItemList(
+        workItemsList.output.parse({
+          items: [
+            row({
+              wait: { kind: "merged_by_app", login: "oxagen-connect[bot]", at: AT },
+              send: { ...row().send, gate: { open: false, block: "merged_by_app", detail: "oxagen-connect[bot]" }, accepted: true },
+            }),
+          ],
+          truncated: false,
+          viewer: { can_control: true, can_approve: true },
+        }),
+      ),
+    );
+    expect(merged.items[0]?.wait).toEqual({ kind: "merged_by_app", login: "oxagen-connect[bot]", at: AT });
+    expect(merged.items[0]?.send?.gate).toEqual({ open: false, block: "merged_by_app", detail: "oxagen-connect[bot]" });
   });
 
   it("copies every pull request the forge store holds for the send", () => {
@@ -279,6 +307,37 @@ describe("toWorkItemDetail", () => {
     expect(send?.cost).toEqual({ runs: 3, knownRuns: 2, total: { micros: "1250010", currency: "USD" } });
   });
 
+  it("keeps who merged the pull request and whether the Oxagen GitHub App did", () => {
+    const [send] = out.sends;
+    if (send === undefined || send.pull_request === null) throw new Error("The sample has a send with a pull request.");
+    const pullRequest = send.pull_request;
+    const mergedAs = (mergedBy: { login: string; type: string; oxagen_app: boolean } | null) => {
+      const parsed = workItemGet.output.parse({
+        ...out,
+        sends: [{ ...send, pull_request: { ...pullRequest, merged: { at: AT, merge_commit: HEAD, merged_by: mergedBy } } }],
+      });
+      return WorkItemDetail.parse(toWorkItemDetail(parsed)).sends[0]?.pullRequest?.merged;
+    };
+    expect(mergedAs({ login: "amara", type: "User", oxagen_app: false })).toEqual({
+      at: AT,
+      mergeCommit: HEAD,
+      mergedBy: { login: "amara", type: "User", oxagenApp: false },
+    });
+    expect(mergedAs({ login: "oxagen-connect[bot]", type: "Bot", oxagen_app: true })?.mergedBy).toEqual({
+      login: "oxagen-connect[bot]",
+      type: "Bot",
+      oxagenApp: true,
+    });
+    expect(mergedAs(null)).toEqual({ at: AT, mergeCommit: HEAD, mergedBy: null });
+    // A merge that leaves out whether the Oxagen GitHub App made it is not what the handler returns.
+    expect(
+      workItemGet.output.safeParse({
+        ...out,
+        sends: [{ ...send, pull_request: { ...pullRequest, merged: { at: AT, merge_commit: HEAD, merged_by: { login: "amara", type: "User" } } } }],
+      }).success,
+    ).toBe(false);
+  });
+
   it("keeps each pull request's forge state beside the facts' pull request", () => {
     const [send] = view.sends;
     expect(send?.pullRequests.map((pull) => [pull.id, pull.number, pull.state, pull.title])).toEqual([
@@ -352,12 +411,74 @@ describe("toWorkTargetList and toWorkOutcomes", () => {
         truncated: false,
       },
       truncated: false,
-      weeks: [{ week: "2026-09-28", accepted_merged: 0, returned: 1, median_lead_hours: null, entered: 2, sent: 2, full_flow: false }],
+      weeks: [
+        { week: "2026-09-21", accepted_merged: 0, returned: 0, median_lead_hours: null, entered: 0, sent: 0, full_flow: false, complete: true },
+        { week: "2026-09-28", accepted_merged: 0, returned: 1, median_lead_hours: null, entered: 2, sent: 2, full_flow: false, complete: false },
+      ],
     });
     const view = WorkOutcomes.parse(toWorkOutcomes(out));
     expect(view.leadTime).toEqual({ medianHours: null, p90Hours: null, sample: 0 });
     expect(view.cost).toEqual({ runs: 1, knownRuns: 0, total: null });
     expect(view.closed).toEqual({ cancelled: 0, declined: 1, duplicate: 2 });
     expect(view.reverts).toEqual({ cohort: 3, reverted: 1, waiting: 2 });
+    expect(view.weeks.map(({ week, complete }) => ({ week, complete }))).toEqual([
+      { week: "2026-09-21", complete: true },
+      { week: "2026-09-28", complete: false },
+    ]);
+  });
+});
+
+describe("toWorkCollectorList", () => {
+  const out = workCollectorsList.output.parse({
+    collectors: [
+      {
+        collector_id: "00000000-0000-4000-8000-0000000000c1",
+        name: "github",
+        type: "github",
+        connection_id: "con_01k6github",
+        repos: ["acme/platform"],
+        health: "healthy",
+        cursor: null,
+        last_reconcile: null,
+        last_success_at: null,
+        failed_streak: 0,
+        next_check_at: AT,
+        last_event_at: null,
+        created_at: AT,
+      },
+    ],
+    viewer: { can_change_collectors: false },
+  });
+  const repositories = repositoryList.output.parse({
+    repositories: [
+      {
+        bindingId: "rpb_0a1b2c3d",
+        role: "linked",
+        provider: "github",
+        owner: "acme",
+        name: "platform",
+        fullName: "acme/platform",
+        defaultRef: "main",
+        htmlUrl: "https://github.com/acme/platform",
+        boundAt: AT,
+        connectionLive: true,
+        events: "installed",
+      },
+    ],
+  });
+
+  it("keeps whether the viewer may change collectors, and the linked GitHub repositories", () => {
+    const view = WorkCollectorList.parse(toWorkCollectorList(out, repositories));
+    expect(view.viewer).toEqual({ canChangeCollectors: false });
+    expect(view.linked).toEqual(["acme/platform"]);
+    expect(view.collectors[0]).toMatchObject({ name: "github", connectionId: "con_01k6github", repos: ["acme/platform"] });
+  });
+
+  it("leaves the linked repositories null when they could not be read", () => {
+    const view = WorkCollectorList.parse(
+      toWorkCollectorList({ ...out, viewer: { can_change_collectors: true } }, null),
+    );
+    expect(view.linked).toBeNull();
+    expect(view.viewer).toEqual({ canChangeCollectors: true });
   });
 });

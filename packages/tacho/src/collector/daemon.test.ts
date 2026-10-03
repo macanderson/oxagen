@@ -26,6 +26,7 @@ import type { FetchLike } from "../host/control-client";
 import { writeSensitiveFileAtomic } from "../host/fs";
 import { readHostFile, writeHostFile } from "../host/host-file";
 import { mergeTachoSettings } from "../host/settings-writer";
+import { readWorkOrder } from "../host/work-orders";
 import {
   bundleSigner,
   scratchPaths,
@@ -1115,6 +1116,39 @@ describe("tachod", () => {
         connectTimeoutMs: DAEMON_CONNECT_MS,
       });
       expect(JSON.parse(refused.stdout)).toMatchObject({ continue: false });
+    },
+    DAEMON_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "keeps a work order and logs the command that starts it",
+    async () => {
+      const plane = fakeControlPlane("etag-3");
+      const { handle, paths, log } = await boot(plane);
+      plane.queue({
+        id: "cmd_work_order",
+        command: "work_order",
+        session_uuid: null,
+        payload: {
+          work_order: "wo_01j9k2m3n4",
+          key: "wi_7f3a:r2:s1",
+          item: "wi_7f3a",
+        },
+        issued_at: "2026-10-02T10:00:00.000Z",
+        expires_at: null,
+      });
+      await handle.tick();
+      expect(readWorkOrder(paths, "wo_01j9k2m3n4")?.item).toBe("wi_7f3a");
+      // The person at the machine reads the log to learn what to run.
+      expect(log).toContain(
+        "work order wo_01j9k2m3n4 for wi_7f3a is waiting (command cmd_work_order). Run `oxagen work start wo_01j9k2m3n4` to claim it and start the agent.",
+      );
+      await handle.tick();
+      expect(
+        (plane.acks as Array<{ command_id: string; status: string }>).map(
+          (a) => `${a.command_id}:${a.status}`,
+        ),
+      ).toContain("cmd_work_order:received");
     },
     DAEMON_TEST_TIMEOUT_MS,
   );

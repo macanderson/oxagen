@@ -14,7 +14,9 @@
 // could not be read it says so and saves nothing.
 //
 // The button stays on the page for a person whose role cannot change
-// collectors. It is disabled and says why, and the server refuses the write
+// collectors: anyone but a workspace Owner or Admin, or an org Owner or
+// Admin, as list_work_collectors' viewer flag reports from
+// set_work_collector's role check. It is disabled and says why, and the server refuses the write
 // either way.
 import { PlusIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
@@ -88,14 +90,14 @@ function readsOf(
 export function AddCollector({
   org,
   ws,
-  canControl,
+  canChange,
   collectors,
   linked,
 }: {
   org: string;
   ws: string;
-  /** Whether the viewer may change collectors; unknown reads as allowed and the server decides. */
-  canControl: boolean;
+  /** Whether the viewer may change collectors (set_work_collector), from list_work_collectors' viewer flag. */
+  canChange: boolean;
   /** The workspace's collectors, by name, with the repositories each reads. */
   collectors: readonly ExistingCollector[];
   /** The GitHub repositories linked to the workspace, or null when they could not be read. */
@@ -187,9 +189,9 @@ export function AddCollector({
       <button
         type="button"
         data-testid="work-add-collector"
-        disabled={!canControl}
-        aria-describedby={canControl ? undefined : reasonId}
-        title={canControl ? undefined : c("noRole")}
+        disabled={!canChange}
+        aria-describedby={canChange ? undefined : reasonId}
+        title={canChange ? undefined : c("noRole")}
         className={buttonPrimary}
         onClick={() => {
           setName(suggested);
@@ -202,7 +204,7 @@ export function AddCollector({
         <PlusIcon aria-hidden="true" />
         {c("add")}
       </button>
-      {canControl ? null : (
+      {canChange ? null : (
         <span id={reasonId} className="sr-only">
           {c("noRole")}
         </span>
@@ -264,7 +266,7 @@ export function AddCollector({
                     toggle(repo, event.currentTarget.checked);
                   }}
                 />
-                <span className={`${mono} [overflow-wrap:anywhere]`}>{repo}</span>
+                <span className={`${mono} wrap-anywhere`}>{repo}</span>
               </label>
             ))}
             <p id="work-collector-repos-hint" className={fieldHint}>

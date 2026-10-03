@@ -289,7 +289,7 @@ const txBurn =
  * A prose line: every line as it was written once the row opens, and one
  * line cut with an ellipsis while it is closed. The ink is the skin's.
  */
-const txProse = "min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]";
+const txProse = "min-w-0 whitespace-pre-wrap wrap-anywhere";
 const txProseLine = "min-w-0 truncate";
 /**
  * `.tx-chip { font-size:10.5px; color:var(--muted); background:var(--panel);
@@ -1419,8 +1419,8 @@ function Burn({ spent, total }: { spent: Cost | null; total: Cost | null }) {
       <span className="h-1 w-30 overflow-hidden rounded-xs bg-hl">
         <i
           aria-hidden="true"
-          className="block h-full bg-info transition-[width] duration-200"
-          style={{ width: share === null ? "0%" : ratioWidth(share) }}
+          className="block h-full bg-info transition-all duration-(--motion-base)"
+          style={{ width: ratioWidth(share ?? 0) }}
         />
       </span>
       <b className="font-semibold text-foreground">
@@ -2384,7 +2384,7 @@ export function TranscriptView({
               <div className="rp-rail" aria-hidden="true">
                 <div
                   className="rp-fill"
-                  style={{ width: total === 0 ? "0%" : ratioWidth(at / total) }}
+                  style={{ width: ratioWidth(total === 0 ? 0 : at / total) }}
                 />
               </div>
               <div className="rp-marks" aria-hidden="true">

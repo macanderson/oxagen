@@ -57,7 +57,15 @@ export function createWorkItemCreateHandler(deps: WorkItemCreateDeps): Capabilit
       {
         name: "work/item.received",
         id: `work-item-${item.publicId}-new`,
-        data: { org_id: scope.orgId, workspace_id: scope.workspaceId, item_id: item.publicId, change: "new" },
+        // The revision the item was entered on, so a triage failure that
+        // lands after the item moved on records nothing.
+        data: {
+          org_id: scope.orgId,
+          workspace_id: scope.workspaceId,
+          item_id: item.publicId,
+          change: "new",
+          revision: item.revision,
+        },
       },
     ]);
     return {

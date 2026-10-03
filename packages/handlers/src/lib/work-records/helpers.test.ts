@@ -1,9 +1,9 @@
 // The small pure pieces of the work dispatch path (ADR-251): how a refusal
 // reaches a surface, the runtime tier a send forecasts, a pull request URL and
 // a `pull_request` delivery, the work order a run names, the source text and
-// the return reason a claim's prompt reads, and the contract's copies of the
-// work record value lists.
-import { describe, expect, it } from "vitest";
+// the return reason a claim's prompt reads, the criteria an acceptance is
+// checked against, and the contract's copies of the work record value lists.
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {
@@ -23,11 +23,14 @@ import {
   type OrderProjection,
   WORK_ITEM_STATES,
   WorkRecordError,
+  buildBrief,
   newFact,
+  reduceWorkItem,
 } from "@oxagen/work/records";
 import { asCapabilityRefusal } from "./errors";
 import { MAX_PULL_REQUEST_NUMBER, MAX_REVERT_TARGETS, parsePullRequestUrl, revertedPullRequestsOf, workPullRequestDeliveryOf } from "./results";
 import { returnedReasonBefore, sourceAt, workOrderNamedBy } from "./runtime";
+import { type StoredBrief, approvedCriteriaOf } from "./store";
 import { forecastRuntimeTier } from "./target";
 
 describe("asCapabilityRefusal", () => {
@@ -92,14 +95,21 @@ describe("workPullRequestDeliveryOf", () => {
       merged: true,
       merge_commit_sha: "9".repeat(40),
       merged_at: "2026-10-02T10:00:00Z",
+      merged_by: { login: "amara", id: 7, type: "User" },
       updated_at: "2026-10-02T10:00:01Z",
       head: { sha: "1".repeat(40) },
       base: { ref: "main" },
     },
   };
 
+  const APP = "oxagen-connect[bot]";
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("reads the pull request a delivery describes", () => {
-    expect(workPullRequestDeliveryOf(body)).toEqual({
+    expect(workPullRequestDeliveryOf(body, APP)).toEqual({
       repository: "aintel/platform",
       number: 612,
       reverts: [],
@@ -110,9 +120,31 @@ describe("workPullRequestDeliveryOf", () => {
         merged: true,
         mergeCommitSha: "9".repeat(40),
         mergedAt: "2026-10-02T10:00:00Z",
+        mergedBy: { login: "amara", type: "User", oxagen_app: false },
         updatedAt: "2026-10-02T10:00:01Z",
       },
     });
+  });
+
+  it("marks the Oxagen GitHub App's merge, and no merger when the delivery names none or half of one", () => {
+    const merger = (mergedBy: unknown) => workPullRequestDeliveryOf({ ...body, pull_request: { ...body.pull_request, merged_by: mergedBy } }, APP)?.pull.mergedBy;
+    expect(merger({ login: "oxagen-connect[bot]", type: "Bot" })).toEqual({ login: "oxagen-connect[bot]", type: "Bot", oxagen_app: true });
+    // GitHub's merge queue merges a pull request a person queued, so it is not the app.
+    expect(merger({ login: "github-merge-queue[bot]", type: "Bot" })).toEqual({ login: "github-merge-queue[bot]", type: "Bot", oxagen_app: false });
+    expect(merger(null)).toBeNull();
+    expect(merger(undefined)).toBeNull();
+    expect(merger({ login: "amara" })).toBeNull();
+    expect(merger({ login: "", type: "User" })).toBeNull();
+    expect(merger("amara")).toBeNull();
+  });
+
+  it("reads the Oxagen GitHub App's login from GITHUB_APP_SLUG when the caller passes none", () => {
+    const appMerge = { ...body, pull_request: { ...body.pull_request, merged_by: { login: "oxagen-connect[bot]", type: "Bot" } } };
+    vi.stubEnv("GITHUB_APP_SLUG", "oxagen-connect");
+    expect(workPullRequestDeliveryOf(appMerge)?.pull.mergedBy?.oxagen_app).toBe(true);
+    // A deployment with no slug names no app, so no merge reads as the app's.
+    vi.stubEnv("GITHUB_APP_SLUG", "");
+    expect(workPullRequestDeliveryOf(appMerge)?.pull.mergedBy?.oxagen_app).toBe(false);
   });
 
   it("drops a head that is not a commit id, and a delivery with no pull request", () => {
@@ -210,6 +242,66 @@ describe("returnedReasonBefore", () => {
     expect(returnedReasonBefore(orders, 3, 0)).toBe("Add the test.");
     expect(returnedReasonBefore(orders, 2, 0)).toBe("Old reason");
     expect(returnedReasonBefore(orders, 3, 2)).toBeNull();
+  });
+});
+
+describe("approvedCriteriaOf", () => {
+  const DIGEST = `sha256:${"1".repeat(64)}` as const;
+  const AT = "2026-10-02T09:00:00.000Z";
+  const saved = newFact({
+    kind: "brief_saved",
+    source: "person",
+    itemRevision: 1,
+    actor: "amara",
+    occurredAt: AT,
+    dedupeKey: "brief_saved:1",
+    briefId: "brief-1",
+    briefDigest: DIGEST,
+    data: { revision: 1, revises: false },
+  });
+  const approved = newFact({
+    kind: "brief_approved",
+    source: "person",
+    itemRevision: 1,
+    actor: "marcus",
+    occurredAt: AT,
+    dedupeKey: "brief_approved:1",
+    briefId: "brief-1",
+    briefDigest: DIGEST,
+    data: { revision: 1 },
+  });
+  const brief = buildBrief({
+    item: "wi_abc",
+    itemRevision: 1,
+    source: { url: null, digest: null },
+    draft: {
+      repository: "aintel/platform",
+      criteria: [
+        { text: "An expired invite shows the expiry message.", tag: "code", intent: "check", provenance: "source" },
+        { text: "The copy follows the house voice.", tag: "review", intent: "review", provenance: "person" },
+      ],
+    },
+    issuedIds: [],
+  });
+  const stored: StoredBrief = { briefId: "brief-1", publicId: "wbr_1", revision: 1, itemRevision: 1, digest: DIGEST, brief, author: "amara" };
+
+  it("lists the approved brief's criterion ids", () => {
+    expect(approvedCriteriaOf({ projection: reduceWorkItem([saved, approved]), briefs: [stored] })).toEqual(["c1", "c2"]);
+  });
+
+  it("is empty with no approval, so the review gate refuses the acceptance on its own", () => {
+    expect(approvedCriteriaOf({ projection: reduceWorkItem([saved]), briefs: [stored] })).toEqual([]);
+  });
+
+  it("refuses an approval whose brief did not load, rather than check the ticks against no criteria", () => {
+    let caught: unknown = null;
+    try {
+      approvedCriteriaOf({ projection: reduceWorkItem([saved, approved]), briefs: [] });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(WorkRecordError);
+    expect(caught).toMatchObject({ code: "not_found" });
   });
 });
 

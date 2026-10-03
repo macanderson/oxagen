@@ -6,8 +6,13 @@
 //
 //   - head_observed: the pull request's head commit. A new head voids an
 //     earlier acceptance and every earlier check result (ADR-244).
-//   - merged and pr_closed: a human merge, with its merge commit, or a close
-//     without merging. Oxagen merges nothing.
+//   - merged and pr_closed: a merge, with its merge commit and the account
+//     GitHub says merged it, or a close without merging. Oxagen merges
+//     nothing. The push token Oxagen issues an agent is the Oxagen GitHub
+//     App's installation token, so a merge GitHub names as
+//     `<GITHUB_APP_SLUG>[bot]` is an agent merging its own work. The merge
+//     records that as `oxagen_app`, and the reducer keeps such a send out of
+//     done. Any other merger counts, a merge queue's bot included.
 //   - checks_required: the checks the base branch requires, from branch
 //     protection and rulesets together. Recorded only when both reads
 //     succeeded (`getRequiredStatusChecks` answers `ok: false` otherwise), so
@@ -21,12 +26,16 @@
 // Dedupe keys make a repeated read a repeat and a real change a new fact: a
 // check's key names its conclusion and the provider's time for it, so a
 // re-run that flips back to success is recorded again, and a required list
-// is appended only when it differs from the one recorded for the head.
+// is appended only when it differs from the one recorded for the head. A
+// head's key names the pull request's update time, so a head that moves away
+// and comes back to an earlier commit is recorded again, while a redelivery
+// of the same event is a repeat. A head is recorded only when it differs from
+// the head on record, and never after the merge, which fixes the head.
 import { createHash } from "node:crypto";
 import { schema, type Tx } from "@oxagen/database";
-import { createGitHubClient, GitHubApiError, type GitHubCiChecks, type RequiredChecksRead } from "@oxagen/github";
+import { createGitHubClient, GitHubApiError, type GitHubCiChecks, type GitHubMergedBy, type RequiredChecksRead } from "@oxagen/github";
 import { resolveGitHubToken } from "@oxagen/github/workspace-token";
-import type { CheckConclusion, FactInput, FactKind, OrderProjection } from "@oxagen/work/records";
+import type { CheckConclusion, FactInput, FactKind, MergedBy, OrderProjection } from "@oxagen/work/records";
 import { and, eq } from "drizzle-orm";
 import { githubConnectionFor } from "../run-pull-request-backfill";
 import type { WorkScope } from "./store";
@@ -34,6 +43,28 @@ import type { WorkScope } from "./store";
 /** A short digest of a list of check names, for a dedupe key. Pure. */
 function namesDigest(names: readonly string[]): string {
   return createHash("sha256").update(JSON.stringify(names)).digest("hex").slice(0, 16);
+}
+
+/**
+ * The login GitHub gives the Oxagen GitHub App when it acts with its
+ * installation token: the app's slug with `[bot]` after it. Null when the
+ * deployment sets no GITHUB_APP_SLUG, and then no merge reads as the app's.
+ * Tests pass their own env.
+ */
+export function oxagenAppBotLogin(env: Readonly<Record<string, string | undefined>> = process.env): string | null {
+  const slug = env["GITHUB_APP_SLUG"]?.trim();
+  return slug ? `${slug}[bot]` : null;
+}
+
+/**
+ * The merger a fact records for the account GitHub names, with whether it is
+ * the Oxagen GitHub App: its login matches `appLogin`, ignoring case. Null
+ * when GitHub named no account. Pure.
+ */
+export function mergerOf(account: GitHubMergedBy | null | undefined, appLogin: string | null): MergedBy | null {
+  if (account === null || account === undefined) return null;
+  const oxagenApp = appLogin !== null && account.login.toLowerCase() === appLogin.toLowerCase();
+  return { login: account.login, type: account.type, oxagen_app: oxagenApp };
 }
 
 /** A pull request as GitHub reports it now. */
@@ -44,6 +75,11 @@ export interface PullRequestRead {
   merged: boolean;
   mergeCommitSha: string | null;
   mergedAt: string | null;
+  /**
+   * The account GitHub says merged it, with whether it is the Oxagen GitHub
+   * App (mergerOf). Null, or left out, when GitHub named none.
+   */
+  mergedBy?: MergedBy | null;
   updatedAt: string;
 }
 
@@ -141,7 +177,7 @@ function sameList(a: readonly string[] | null, b: readonly string[]): boolean {
  * facts, and facts the order holds come back with keys it already has.
  */
 export function evidenceFacts(
-  order: Pick<OrderProjection, "orderId" | "pullRequest" | "head" | "requiredChecks">,
+  order: Pick<OrderProjection, "orderId" | "pullRequest" | "head" | "requiredChecks" | "merge">,
   read: EvidenceRead,
   now: string,
 ): { facts: FactInput<FactKind>[]; summary: EvidenceSummary } {
@@ -155,8 +191,17 @@ export function evidenceFacts(
   // to another, and each one's head, merge, and close are its own.
   const prKey = `${order.orderId}:${pr.repository.toLowerCase()}#${pr.number}`;
   const head = read.pull.headSha;
-  if (head !== null && head !== order.head) {
-    facts.push({ ...base, kind: "head_observed", headSha: head, occurredAt: read.pull.updatedAt, dedupeKey: `head_observed:${prKey}:${head}`, data: {} });
+  // A merged pull request keeps its merged head, so a later delivery that
+  // names another head (a late one for an older commit) records nothing.
+  if (head !== null && head !== order.head && order.merge === null) {
+    facts.push({
+      ...base,
+      kind: "head_observed",
+      headSha: head,
+      occurredAt: read.pull.updatedAt,
+      dedupeKey: `head_observed:${prKey}:${head}:${read.pull.updatedAt}`,
+      data: {},
+    });
   }
   if (read.pull.merged && read.pull.mergeCommitSha !== null && head !== null) {
     facts.push({
@@ -164,8 +209,11 @@ export function evidenceFacts(
       kind: "merged",
       headSha: head,
       occurredAt: read.pull.mergedAt ?? read.pull.updatedAt,
+      // The key names no merger: a pull request merges once, so the first
+      // merge recorded stands, and a later read cannot change who merged.
+      // The reader decided `oxagen_app`, so this stays pure.
       dedupeKey: `merged:${prKey}`,
-      data: { merge_commit: read.pull.mergeCommitSha },
+      data: { merge_commit: read.pull.mergeCommitSha, merged_by: read.pull.mergedBy ?? null },
     });
   } else if (read.pull.state === "closed" && !read.pull.merged) {
     facts.push({ ...base, kind: "pr_closed", occurredAt: read.pull.updatedAt, dedupeKey: `pr_closed:${prKey}`, data: {} });
@@ -253,7 +301,10 @@ async function clientFor(scope: WorkScope, repository: string) {
   return { client, owner, repo };
 }
 
-/** The reader that asks GitHub through the workspace's own connection. */
+/**
+ * The reader that asks GitHub through the workspace's own connection. It
+ * reads GITHUB_APP_SLUG at each read to mark a merge by the Oxagen GitHub App.
+ */
 export const githubEvidenceReader: EvidenceReader = {
   async readPullRequest(scope, repository, number) {
     const target = await clientFor(scope, repository);
@@ -267,6 +318,7 @@ export const githubEvidenceReader: EvidenceReader = {
         merged: pr.merged,
         mergeCommitSha: pr.mergeCommitSha,
         mergedAt: pr.mergedAt,
+        mergedBy: mergerOf(pr.mergedBy, oxagenAppBotLogin()),
         updatedAt: pr.updatedAt,
       };
     } catch (error) {
