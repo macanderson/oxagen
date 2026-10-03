@@ -274,7 +274,7 @@ function UploadStep({ api }: StepProps<SkillDraft>) {
         ) : (
           <dl
             data-testid="bundle-summary"
-            className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1.5 rounded-lg border border-border bg-muted/30 px-3.5 py-3"
+            className="grid grid-cols-rail-xs gap-x-3 gap-y-1.5 rounded-lg border border-border bg-muted/30 px-3.5 py-3"
           >
             <dt className="text-muted-foreground">{t("file")}</dt>
             <dd className={`${mono} break-all`}>

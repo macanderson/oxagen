@@ -242,7 +242,7 @@ function WorkspaceFactList({ agents }: { agents: number | null }) {
   const tOrg = useTranslations("organization");
   const term = "text-muted-foreground";
   return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-base">
+    <dl className="grid grid-cols-dl gap-x-4 gap-y-1.5 text-base">
       <dt className={term}>{t("toolbelt")}</dt>
       <dd className="text-dim">{tOrg("notRecorded")}</dd>
       <dt className={term}>{t("budget")}</dt>
@@ -369,7 +369,7 @@ function WorkspaceCreatedPanel({
   const term = "text-muted-foreground";
   return (
     <div className="flex flex-col gap-3 text-base">
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+      <dl className="grid grid-cols-dl gap-x-4 gap-y-1.5">
         <dt className={term}>{t("workspace")}</dt>
         <dd className="font-medium" data-testid="create-workspace-done-name">
           {created.name}

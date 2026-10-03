@@ -43,7 +43,7 @@ const familyTools =
   "whitespace-nowrap font-mono text-xs text-muted-foreground md:truncate";
 /** `.hrow { grid-template-columns:8ch 1fr auto; gap:9px; font-size:11.5px; color:var(--muted) }` */
 const histRow =
-  "grid grid-cols-[8ch_minmax(0,1fr)_auto] items-center gap-2.25 text-xs text-muted-foreground";
+  "grid grid-cols-count-row items-center gap-2.25 text-xs text-muted-foreground";
 /** `.hrow .hk`, `.hrow .hv { font-family:var(--mono); font-size:11px }`; the value in the ink. */
 const histKey = "font-mono text-xs";
 const histValue = "font-mono text-xs tabular-nums text-foreground";

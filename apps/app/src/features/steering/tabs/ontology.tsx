@@ -84,7 +84,7 @@ export function OntologyShelf({ repository }: { repository: string | null }) {
           </h3>
         </div>
         <dl
-          className={`${panelBody} grid grid-cols-[auto_1fr] gap-x-5 gap-y-2.5 text-sm`}
+          className={`${panelBody} grid grid-cols-dl gap-x-5 gap-y-2.5 text-sm`}
         >
           {INDEX.map((row) => (
             <div key={row} data-index={row} className="contents">

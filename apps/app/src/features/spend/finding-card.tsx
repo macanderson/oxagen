@@ -396,7 +396,7 @@ export function FindingCard({
       data-kind={finding.kind}
       data-confidence={finding.confidence}
       data-level={finding.level}
-      className={`${panel} grid gap-4 p-4 md:grid-cols-[2rem_minmax(0,1fr)_auto]`}
+      className={`${panel} grid gap-4 p-4 md:grid-cols-icon-end`}
     >
       <span className={`${mono} text-sm text-muted-foreground`}>
         {formatCount(rank, locale)}

@@ -108,7 +108,7 @@ const legendSwatch = "size-2.25 flex-none rounded-xs";
 const families = "grid gap-1.25";
 /** `.frow { grid-template-columns:20px 1fr 34% auto; gap:8px; padding:2px 0; color:var(--body) }` */
 const familyRow =
-  "grid grid-cols-[20px_minmax(0,1fr)_34%_auto] items-center gap-2 py-0.5 text-foreground";
+  "grid grid-cols-meter items-center gap-2 py-0.5 text-foreground";
 /** `.frow .ti { 20px; border-radius:5px; color:var(--tc,var(--muted)); background:<that at 14%> }` */
 const familyIcon =
   "grid size-5 place-items-center rounded-sm bg-muted-foreground/15 text-muted-foreground";

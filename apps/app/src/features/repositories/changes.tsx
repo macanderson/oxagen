@@ -143,7 +143,7 @@ export function Changes({
       </Panel>
       <Panel id="changes-auto" testId="changes-auto" title={t("autoTitle")}>
         <PanelBody>
-          <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-5 gap-y-2.5 text-sm leading-relaxed max-sm:grid-cols-1">
+          <dl className="grid grid-cols-dl-clip gap-x-5 gap-y-2.5 text-sm leading-relaxed max-sm:grid-cols-1">
             {(["promoter", "reconciler", "person"] as const).map((who) => (
               <div key={who} className="contents" data-opener={who}>
                 <dt className="text-dim">{t(`auto.${who}.name`)}</dt>

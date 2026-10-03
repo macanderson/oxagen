@@ -34,7 +34,7 @@ export const buttonSmall =
 
 /** `.kv`: a two-column definition list. */
 export const kv =
-  "grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm [&>dd]:min-w-0 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:text-muted-foreground";
+  "grid grid-cols-dl-clip gap-x-4 gap-y-2 text-sm [&>dd]:min-w-0 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:text-muted-foreground";
 
 export const code = (chunks: ReactNode) => (
   <span className={mono}>{chunks}</span>
@@ -95,7 +95,7 @@ export function CheckRows({
         <li
           key={row.key}
           data-row={row.key}
-          className="grid gap-x-3 gap-y-0.5 border-b border-border px-3.5 py-2.5 last:border-b-0 sm:grid-cols-[140px_minmax(0,1fr)]"
+          className="grid gap-x-3 gap-y-0.5 border-b border-border px-3.5 py-2.5 last:border-b-0 sm:grid-cols-rail-sm"
         >
           <b className="font-semibold text-foreground">{row.name}</b>
           <span className="text-muted-foreground">{row.what}</span>

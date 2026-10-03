@@ -444,7 +444,7 @@ function Definitions({ hidden }: { hidden: boolean }) {
     <div className="flex flex-col gap-2">
       {hidden ? <p>{t("hiddenNote")}</p> : null}
       <h3 className="font-medium text-foreground">{t("definitionsTitle")}</h3>
-      <dl className="grid gap-1.5 sm:grid-cols-[max-content_1fr] sm:gap-x-4">
+      <dl className="grid gap-1.5 sm:grid-cols-dl-max sm:gap-x-4">
         <dt className="font-medium text-foreground">
           {t("columns.unproductive")}
         </dt>

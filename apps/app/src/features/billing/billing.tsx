@@ -297,7 +297,7 @@ export async function Billing({
         statement={statement}
         periodEnd={bucket.value.period.end}
       />
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
+      <div className="grid items-start gap-4 lg:grid-cols-aside">
         <div className="flex min-w-0 flex-col gap-4">
           <ThisPeriod statement={statement} retention={retention.value} />
           <Meters bucket={bucket.value} retention={retention.value} />

@@ -120,7 +120,7 @@ function WhereAVersionLives() {
         </div>
       </div>
       <dl
-        className={`${panelBody} grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]`}
+        className={`${panelBody} grid gap-x-6 gap-y-2 text-sm sm:grid-cols-rail-sm`}
       >
         {WHERE.map((key) => (
           <div key={key} data-fact={key} className="contents">

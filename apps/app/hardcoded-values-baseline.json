@@ -11,14 +11,10 @@
     "css:padding": 5
   },
   "src/features/agents/agent-actions.tsx": {
-    "<button>": 3,
-    "grid-cols-[auto_1fr]": 1
+    "<button>": 3
   },
   "src/features/agents/agents-table.tsx": {
     "<button>": 2
-  },
-  "src/features/agents/agents.tsx": {
-    "grid-cols-[auto_1fr]": 1
   },
   "src/features/agents/binding-controls.tsx": {
     "<button>": 2
@@ -38,9 +34,6 @@
   "src/features/agents/mandate-request.tsx": {
     "<button>": 1
   },
-  "src/features/agents/parts.tsx": {
-    "sm:grid-cols-[minmax(9rem,auto)_1fr]": 1
-  },
   "src/features/agents/role-controls.tsx": {
     "<button>": 2
   },
@@ -54,20 +47,16 @@
     "<button>": 1
   },
   "src/features/agents/toolbelt-views.tsx": {
-    "<button>": 7,
-    "grid-cols-[auto_1fr]": 1
+    "<button>": 7
   },
   "src/features/audit/dialogs.tsx": {
-    "<button>": 2,
-    "grid-cols-[auto_1fr]": 1
+    "<button>": 2
   },
   "src/features/audit/events.tsx": {
     "<button>": 2
   },
   "src/features/audit/sections.tsx": {
-    "<button>": 4,
-    "grid-cols-[auto_1fr]": 1,
-    "md:grid-cols-[14rem_1fr]": 1
+    "<button>": 4
   },
   "src/features/auth/cli-consent-form.tsx": {
     "<button>": 2
@@ -76,8 +65,7 @@
     "<button>": 2
   },
   "src/features/auth/invite-view.tsx": {
-    "<button>": 2,
-    "sm:grid-cols-[minmax(0,8.5rem)_minmax(0,1fr)]": 1
+    "<button>": 2
   },
   "src/features/auth/two-factor-form.tsx": {
     "<button>": 1
@@ -98,14 +86,8 @@
   "src/features/auth/verify-panel.tsx": {
     "<button>": 1
   },
-  "src/features/billing/billing.tsx": {
-    "lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]": 1
-  },
   "src/features/billing/change-plan.tsx": {
     "<button>": 1
-  },
-  "src/features/billing/section.tsx": {
-    "sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]": 1
   },
   "src/features/billing/state-dialogs.tsx": {
     "<button>": 1
@@ -123,27 +105,19 @@
     "<button>": 5
   },
   "src/features/create/parts.tsx": {
-    "<button>": 2,
-    "sm:grid-cols-[8rem_1fr]": 1
+    "<button>": 2
   },
   "src/features/create/record-wizard.tsx": {
-    "<button>": 1,
-    "sm:grid-cols-[12rem_1fr]": 1,
-    "sm:grid-cols-[14rem_6rem_1fr]": 1
+    "<button>": 1
   },
   "src/features/create/skill-wizard.tsx": {
-    "<button>": 1,
-    "grid-cols-[6rem_1fr]": 1
+    "<button>": 1
   },
   "src/features/fleet/approval-decision.tsx": {
     "<button>": 3
   },
-  "src/features/fleet/approvals-panel.tsx": {
-    "grid-cols-[auto_1fr]": 1
-  },
   "src/features/fleet/board.tsx": {
-    "<button>": 9,
-    "grid-cols-[auto_1fr]": 1
+    "<button>": 9
   },
   "src/features/fleet/header-actions.tsx": {
     "<button>": 1
@@ -195,9 +169,6 @@
   "src/features/onboarding/rail.tsx": {
     "<button>": 1
   },
-  "src/features/onboarding/register.tsx": {
-    "grid-cols-[auto_1fr]": 1
-  },
   "src/features/onboarding/ui/cancel-registration.tsx": {
     "<button>": 1
   },
@@ -215,12 +186,10 @@
   },
   "src/features/onboarding/ui/installer.tsx": {
     "<button>": 2,
-    "grid-cols-[max-content_1fr]": 1,
     "transition-[width]": 1
   },
   "src/features/onboarding/ui/register-form.tsx": {
-    "<button>": 1,
-    "grid-cols-[auto_1fr]": 1
+    "<button>": 1
   },
   "src/features/onboarding/ui/request-access.tsx": {
     "<button>": 1
@@ -246,10 +215,6 @@
   "src/features/organization/data-plane-modes.tsx": {
     "<button>": 1
   },
-  "src/features/organization/data-plane.tsx": {
-    "grid-cols-[minmax(8rem,auto)_1fr]": 1,
-    "lg:grid-cols-[3fr_2fr]": 1
-  },
   "src/features/organization/dialog.tsx": {
     "<button>": 1
   },
@@ -265,17 +230,8 @@
   "src/features/organization/model-funding-form.tsx": {
     "<button>": 3
   },
-  "src/features/organization/model-funding.tsx": {
-    "grid-cols-[minmax(8rem,auto)_1fr]": 1
-  },
   "src/features/organization/notifications-controls.tsx": {
     "<button>": 6
-  },
-  "src/features/organization/notifications.tsx": {
-    "grid-cols-[minmax(8rem,auto)_1fr]": 1
-  },
-  "src/features/organization/people.tsx": {
-    "grid-cols-[auto_1fr]": 2
   },
   "src/features/organization/role-actions.tsx": {
     "<button>": 4
@@ -292,56 +248,29 @@
   "src/features/organization/stub-dialog.tsx": {
     "<button>": 1
   },
-  "src/features/organization/workspace-actions.tsx": {
-    "grid-cols-[auto_1fr]": 2
-  },
   "src/features/record/archive-dialog.tsx": {
     "<button>": 1
   },
   "src/features/record/header.tsx": {
     "<button>": 3
   },
-  "src/features/record/kind-panel.tsx": {
-    "grid-cols-[max-content_minmax(0,1fr)]": 1
-  },
-  "src/features/record/lineage-panel.tsx": {
-    "grid-cols-[max-content_minmax(0,1fr)]": 1
-  },
   "src/features/record/page-failure.tsx": {
-    "<button>": 2,
-    "grid-cols-[max-content_minmax(0,1fr)]": 1
+    "<button>": 2
   },
   "src/features/record/propose-dialog.tsx": {
-    "<button>": 1,
-    "grid-cols-[2.5rem_2.5rem_1rem_minmax(0,1fr)]": 1,
-    "sm:grid-cols-[180px_minmax(0,1fr)]": 1
-  },
-  "src/features/record/record.tsx": {
-    "[grid-template-columns:repeat(auto-fit,minmax(175px,1fr))]": 1
-  },
-  "src/features/record/related-list.tsx": {
-    "grid-cols-[34px_minmax(0,1fr)]": 1
+    "<button>": 1
   },
   "src/features/record/statement-editor.tsx": {
     "[font-feature-settings:var(--ox-font-mono-features)]": 1,
     "[overflow-wrap:break-word]": 1,
-    "[tab-size:2]": 1,
-    "grid-cols-[max-content_minmax(0,1fr)]": 1
-  },
-  "src/features/record/workbench.tsx": {
-    "lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,1fr)]": 1
+    "[tab-size:2]": 1
   },
   "src/features/repositories/change-detail.tsx": {
     "<button>": 4,
-    "[--cell-max:32rem]": 1,
-    "grid-cols-[2rem_minmax(0,1fr)]": 1
-  },
-  "src/features/repositories/changes.tsx": {
-    "grid-cols-[max-content_minmax(0,1fr)]": 1
+    "[--cell-max:32rem]": 1
   },
   "src/features/repositories/configuration.tsx": {
-    "<button>": 1,
-    "grid-cols-[max-content_minmax(0,1fr)]": 1
+    "<button>": 1
   },
   "src/features/repositories/init-wizard.tsx": {
     "<button>": 3,
@@ -349,10 +278,6 @@
   },
   "src/features/repositories/instruction-drift.tsx": {
     "<button>": 1
-  },
-  "src/features/repositories/parts.tsx": {
-    "grid-cols-[max-content_minmax(0,1fr)]": 1,
-    "sm:grid-cols-[140px_minmax(0,1fr)]": 1
   },
   "src/features/repositories/repositories-tab.tsx": {
     "<button>": 5
@@ -364,31 +289,20 @@
     "<button>": 5
   },
   "src/features/repositories/states.tsx": {
-    "<button>": 4,
-    "[grid-template-columns:repeat(auto-fit,minmax(175px,1fr))]": 1,
-    "grid-cols-[max-content_minmax(0,1fr)]": 1
+    "<button>": 4
   },
   "src/features/repositories/unlink-dialog.tsx": {
     "<button>": 1
   },
   "src/features/repositories/working-copies.tsx": {
-    "<button>": 3,
-    "grid-cols-[max-content_minmax(0,1fr)]": 1
+    "<button>": 3
   },
   "src/features/run-outcomes/connections.tsx": {
     "<button>": 2
   },
-  "src/features/run/actions-tab.tsx": {
-    "min-[67.5rem]:grid-cols-[minmax(0,1fr)_340px]": 1
-  },
-  "src/features/run/chain.tsx": {
-    "[grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))]": 1
-  },
   "src/features/run/context-tab.tsx": {
     "<button>": 1,
-    "[overflow-wrap:anywhere]": 1,
-    "grid-cols-[minmax(0,22ch)_1fr_auto]": 1,
-    "min-[67.5rem]:grid-cols-[minmax(0,1fr)_340px]": 1
+    "[overflow-wrap:anywhere]": 1
   },
   "src/features/run/copy-text.tsx": {
     "<button>": 2,
@@ -401,18 +315,13 @@
   "src/features/run/frame-player.tsx": {
     "<button>": 3
   },
-  "src/features/run/instruments.tsx": {
-    "grid-cols-[20px_minmax(0,1fr)_34%_auto]": 1
-  },
   "src/features/run/interjection-answer.tsx": {
     "<button>": 2
   },
   "src/features/run/interjection.tsx": {
-    "[overflow-wrap:anywhere]": 5,
-    "min-[67.5rem]:grid-cols-3": 1
+    "[overflow-wrap:anywhere]": 5
   },
   "src/features/run/linked-work.tsx": {
-    "[grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]": 1,
     "[overflow-wrap:anywhere]": 1,
     "before:content-['▸']": 1,
     "group-open:before:content-['▾']": 1
@@ -431,30 +340,19 @@
     "<button>": 1
   },
   "src/features/run/record-actions.tsx": {
-    "<button>": 6,
-    "grid-cols-[auto_1fr]": 1
+    "<button>": 6
   },
   "src/features/run/replay-actions.tsx": {
-    "<button>": 3,
-    "grid-cols-[auto_1fr]": 1
+    "<button>": 3
   },
   "src/features/run/run-controls.tsx": {
     "<button>": 6
-  },
-  "src/features/run/run.tsx": {
-    "min-[67.5rem]:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]": 1
   },
   "src/features/run/seal-run.tsx": {
     "<button>": 3
   },
   "src/features/run/timeline.tsx": {
     "before:content-['']": 1
-  },
-  "src/features/run/token-classes.tsx": {
-    "[grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]": 1
-  },
-  "src/features/run/tool-calls.tsx": {
-    "grid-cols-[8ch_minmax(0,1fr)_auto]": 1
   },
   "src/features/run/transcript-view.tsx": {
     "<button>": 14,
@@ -463,14 +361,8 @@
     "style:width": 2,
     "transition-[width]": 1
   },
-  "src/features/run/work.tsx": {
-    "grid-cols-[auto_1fr]": 1
-  },
   "src/features/runtimes/controls.tsx": {
     "<button>": 6
-  },
-  "src/features/runtimes/parts.tsx": {
-    "sm:grid-cols-[minmax(8rem,auto)_1fr]": 1
   },
   "src/features/runtimes/runtime.tsx": {
     "after:content-['']": 1
@@ -482,12 +374,10 @@
     "<button>": 9
   },
   "src/features/shell/account-styles.ts": {
-    "[overflow-wrap:anywhere]": 1,
-    "grid-cols-[auto_1fr]": 1
+    "[overflow-wrap:anywhere]": 1
   },
   "src/features/shell/approvals-drawer.tsx": {
-    "<button>": 4,
-    "grid-cols-[auto_1fr]": 1
+    "<button>": 4
   },
   "src/features/shell/assistant-attachments.tsx": {
     "<button>": 1
@@ -528,7 +418,6 @@
   },
   "src/features/shell/assistant-tool-calls.tsx": {
     "before:content-['▸']": 1,
-    "grid-cols-[auto_minmax(0,1fr)]": 1,
     "group-open:before:content-['▾']": 1
   },
   "src/features/shell/mobile-nav.tsx": {
@@ -539,10 +428,6 @@
   },
   "src/features/shell/pause-workspace-dialog.tsx": {
     "<button>": 2
-  },
-  "src/features/shell/shell-frame.tsx": {
-    "md:grid-cols-[var(--sidebar-width)_minmax(0,1fr)]": 1,
-    "md:grid-rows-[auto_1fr]": 1
   },
   "src/features/shell/sign-out-button.tsx": {
     "<button>": 1
@@ -565,28 +450,14 @@
   "src/features/spend/export-dialog.tsx": {
     "<button>": 1
   },
-  "src/features/spend/finding-card.tsx": {
-    "md:grid-cols-[2rem_minmax(0,1fr)_auto]": 1
-  },
-  "src/features/spend/findings.tsx": {
-    "grid-cols-[max-content_1fr]": 1,
-    "grid-cols-[minmax(0,1fr)_max-content_max-content]": 1,
-    "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]": 1
-  },
   "src/features/spend/fix-dialog.tsx": {
     "<button>": 4
   },
   "src/features/spend/month-table.tsx": {
     "<button>": 2
   },
-  "src/features/spend/month.tsx": {
-    "md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]": 1
-  },
   "src/features/spend/operator-ranking-pseudonyms.tsx": {
     "<button>": 1
-  },
-  "src/features/spend/operator-ranking.tsx": {
-    "sm:grid-cols-[max-content_1fr]": 1
   },
   "src/features/spend/price-dialog.tsx": {
     "<button>": 2
@@ -596,9 +467,6 @@
   },
   "src/features/spend/stub-dialog.tsx": {
     "<button>": 1
-  },
-  "src/features/spend/tokens.tsx": {
-    "grid-cols-[max-content_1fr]": 1
   },
   "src/features/spend/tool-chart.tsx": {
     "<button>": 1
@@ -638,26 +506,16 @@
   },
   "src/features/steering/memory-shelf.tsx": {
     "<button>": 4,
-    "[--cell-max:32rem]": 1,
-    "grid-cols-[auto_1fr]": 1
-  },
-  "src/features/steering/page-state.tsx": {
-    "grid-cols-[auto_1fr]": 1
+    "[--cell-max:32rem]": 1
   },
   "src/features/steering/proposal-list.tsx": {
     "after:content-['']": 1
-  },
-  "src/features/steering/section.tsx": {
-    "sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]": 1
   },
   "src/features/steering/steering-pr-controls.tsx": {
     "<button>": 4
   },
   "src/features/steering/stub-action.tsx": {
     "<button>": 1
-  },
-  "src/features/steering/tabs/ontology.tsx": {
-    "grid-cols-[auto_1fr]": 1
   },
   "src/features/steering/write-controls.tsx": {
     "<button>": 4
@@ -683,15 +541,8 @@
   "src/features/tools/import-provider.tsx": {
     "<button>": 13
   },
-  "src/features/tools/parts.tsx": {
-    "sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)]": 1
-  },
-  "src/features/tools/policy.tsx": {
-    "sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]": 1
-  },
   "src/features/tools/provider-dialog.tsx": {
-    "<button>": 4,
-    "sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]": 1
+    "<button>": 4
   },
   "src/features/tools/provider-row.tsx": {
     "<button>": 2
@@ -702,15 +553,11 @@
   "src/features/tools/registry-browser.tsx": {
     "<button>": 3
   },
-  "src/features/tools/registry.tsx": {
-    "sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]": 1
-  },
   "src/features/tools/stub-action.tsx": {
     "<button>": 2
   },
   "src/features/tools/switch-controls.tsx": {
-    "<button>": 2,
-    "sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]": 1
+    "<button>": 2
   },
   "src/features/tools/toggle-link.tsx": {
     "<button>": 1
@@ -719,8 +566,7 @@
     "<button>": 4
   },
   "src/features/work/item/brief-dialog.tsx": {
-    "<button>": 2,
-    "sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]": 1
+    "<button>": 2
   },
   "src/features/work/item/brief-panel.tsx": {
     "[overflow-wrap:anywhere]": 4
@@ -749,14 +595,8 @@
   "src/features/work/item/triage-dialogs.tsx": {
     "<button>": 1
   },
-  "src/features/work/item/work-item-page.tsx": {
-    "md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]": 1
-  },
   "src/features/work/new-item.tsx": {
     "<button>": 1
-  },
-  "src/features/work/outcomes/outcomes-page.tsx": {
-    "lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]": 1
   },
   "src/features/work/setup/add-collector.tsx": {
     "<button>": 1,
@@ -769,8 +609,7 @@
     "<button>": 4
   },
   "src/features/work/setup/priorities.tsx": {
-    "[overflow-wrap:anywhere]": 2,
-    "lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]": 1
+    "[overflow-wrap:anywhere]": 2
   },
   "src/features/work/setup/reconnect.tsx": {
     "<button>": 1
@@ -790,9 +629,7 @@
     "[mask-image:linear-gradient(180deg,#000_0%,transparent_78%)]": 1
   },
   "src/ui/avatar-editor.tsx": {
-    "<button>": 6,
-    "grid-cols-[repeat(auto-fill,minmax(36px,1fr))]": 1,
-    "md:grid-cols-[150px_1fr]": 1
+    "<button>": 6
   },
   "src/ui/avatar.tsx": {
     "style:height": 1,
@@ -809,20 +646,13 @@
     "[font-feature-settings:var(--ox-font-mono-features)]": 1
   },
   "src/ui/control-styles.ts": {
-    "[overflow-wrap:anywhere]": 1,
-    "grid-cols-[auto_1fr]": 1,
-    "md:[grid-template-columns:repeat(auto-fit,minmax(175px,1fr))]": 1,
-    "min-[86.25rem]:grid-cols-6": 1
+    "[overflow-wrap:anywhere]": 1
   },
   "src/ui/create-button.tsx": {
     "<button>": 1
   },
-  "src/ui/desktop-downloads.tsx": {
-    "grid-cols-[auto_1fr]": 1
-  },
   "src/ui/diff-view.tsx": {
-    "[overflow-wrap:anywhere]": 1,
-    "grid-cols-[34px_34px_minmax(0,1fr)]": 1
+    "[overflow-wrap:anywhere]": 1
   },
   "src/ui/faceted-list-table.tsx": {
     "<button>": 1,
@@ -855,9 +685,6 @@
     "data-[active=true]:ease-[cubic-bezier(0.23,1,0.32,1)]": 1,
     "duration-200": 1,
     "transition-[translate,scale,opacity]": 1
-  },
-  "src/ui/operator.tsx": {
-    "grid-cols-[auto_1fr]": 1
   },
   "src/ui/page-states.tsx": {
     "<button>": 3

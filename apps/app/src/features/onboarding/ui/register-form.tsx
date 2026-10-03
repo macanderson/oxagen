@@ -101,7 +101,7 @@ function Reserved({ reserved }: { reserved: ReservedAgent }) {
   return (
     <dl
       data-testid="register-reserved"
-      className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 text-sm"
+      className="grid grid-cols-dl gap-x-5 gap-y-1.5 text-sm"
     >
       <dt className={kvTerm}>{t("name")}</dt>
       <dd className={`${kvValue} flex items-center gap-1.5`}>

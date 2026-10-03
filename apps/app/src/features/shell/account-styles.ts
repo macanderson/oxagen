@@ -11,7 +11,7 @@ export {
 
 /** A `dl` of label → value pairs, the mockup's `.kv`. */
 export const kv =
-  "grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1.5 text-sm";
+  "grid grid-cols-dl items-baseline gap-x-4 gap-y-1.5 text-sm";
 export const kvTerm = "whitespace-nowrap text-muted-foreground";
 export const kvValue = "m-0 min-w-0 font-mono text-sm [overflow-wrap:anywhere]";
 

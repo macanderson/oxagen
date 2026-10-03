@@ -315,7 +315,7 @@ function BundleCard({
         </span>
       </header>
       <div className={`${panelBody} flex flex-col gap-3`}>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+        <dl className="grid grid-cols-dl gap-x-4 gap-y-1 text-sm">
           <Fact term={t("exportId")}>
             <span className={mono}>{bundle.exportRef}</span>
           </Fact>
@@ -409,7 +409,7 @@ function PolicyField({
 }) {
   const t = useTranslations("audit");
   return (
-    <div className="grid gap-x-4 gap-y-0.5 py-1.5 md:grid-cols-[14rem_1fr]">
+    <div className="grid gap-x-4 gap-y-0.5 py-1.5 md:grid-cols-rail-lg">
       <dt className="text-sm font-medium">{term}</dt>
       <dd className="text-sm text-muted-foreground">
         {children ?? <span data-recorded="false">{t("notRecorded")}</span>}

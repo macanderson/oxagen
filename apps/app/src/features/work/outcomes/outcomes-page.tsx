@@ -413,7 +413,7 @@ function OutcomesView({
             </p>
           ) : null}
           <Tiles outcomes={read.value} />
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          <div className="grid gap-4 lg:grid-cols-split">
             <WeeklyTrend weeks={read.value.weeks} />
             <TouchKinds touches={read.value.touches} />
           </div>

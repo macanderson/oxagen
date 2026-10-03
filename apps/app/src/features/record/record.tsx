@@ -72,7 +72,7 @@ export function RecordLoading() {
       aria-label={t("loading")}
       className="flex flex-col gap-4"
     >
-      <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(175px,1fr))]">
+      <div className="grid gap-3.5 grid-cols-tiles">
         {[0, 1, 2, 3].map((tile) => (
           <div key={tile} className="skeleton h-16 rounded-xl" />
         ))}

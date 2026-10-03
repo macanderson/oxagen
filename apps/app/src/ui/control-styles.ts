@@ -166,7 +166,7 @@ export const note =
  * left in the dim ink and value right.
  */
 export const kvList =
-  "grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1.75 text-sm";
+  "grid grid-cols-dl items-baseline gap-x-4 gap-y-1.75 text-sm";
 export const kvTerm = "whitespace-nowrap text-dim";
 export const kvValue = "m-0 min-w-0 text-foreground [overflow-wrap:anywhere]";
 
@@ -220,7 +220,7 @@ export const statNote = "mt-0.75 text-xs text-muted-foreground";
  * a phone.
  */
 export const runStatStrip =
-  "grid grid-cols-2 gap-2 sm:grid-cols-3 min-[86.25rem]:grid-cols-6";
+  "grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6";
 export const runStatTile =
   "flex min-w-0 flex-col rounded-2xl border border-border bg-card px-2.75 py-2.25 text-card-foreground";
 export const runStatTerm =
@@ -229,4 +229,4 @@ export const runStatValue =
   "text-lg font-bold leading-tight tracking-display tabular-nums";
 export const runStatNote = "mt-0.75 text-xs text-muted-foreground";
 export const statStrip =
-  "grid grid-cols-2 gap-3.5 md:[grid-template-columns:repeat(auto-fit,minmax(175px,1fr))]";
+  "grid grid-cols-2 gap-3.5 md:grid-cols-tiles";

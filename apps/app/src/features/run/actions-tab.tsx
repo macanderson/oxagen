@@ -366,7 +366,7 @@ function GovernedActions({
         at={open.frame?.observedAt ?? entry?.at ?? null}
       />
       {/* `.split { grid-template-columns:minmax(0,1fr) 340px; gap:14px; align-items:start }`, one column under 1080px */}
-      <div className="grid grid-cols-1 items-start gap-3.5 min-[67.5rem]:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid grid-cols-1 items-start gap-3.5 lg:grid-cols-aside">
         <div className="flex min-w-0 flex-col gap-3.5">
           {parkedElsewhere}
           <FramePanel

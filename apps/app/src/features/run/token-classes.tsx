@@ -41,7 +41,7 @@ import { type PromptPart, promptSplit, shareOf } from "./prompt-split";
  * minmax(320px,1fr)) }`: the two panels side by side, stacked when narrow.
  */
 const pair =
-  "grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]";
+  "grid gap-3.5 grid-cols-cards";
 /** `table.narrow { min-width:0 }`: a table that fits a half-width panel. */
 const narrowTable = "w-full min-w-0 border-collapse text-sm";
 

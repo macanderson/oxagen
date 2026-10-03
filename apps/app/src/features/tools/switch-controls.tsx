@@ -403,7 +403,7 @@ export function FlipControls({
               className={textareaBase}
             />
           </div>
-          <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]">
+          <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-rail-sm">
             <dt className="text-muted-foreground">{t("takesEffect")}</dt>
             <dd className="text-foreground">
               {/* A card knows the state of the switch it flips, so the counter
