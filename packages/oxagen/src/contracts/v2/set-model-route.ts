@@ -72,7 +72,9 @@ export const setModelRoute = defineTool({
     "Set the model routes for a scope: the provider route and fallback route per tier (§4.5), the workspace's default text tier and model, and the verified-outcome market-router policy (mode, success threshold, minimum samples, window, tier escalation). With dryRun, returns the decision the submitted policy would produce for a sample prompt and writes nothing.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  // No "app" layer: no contract it absorbs declares one, so no rev1 page
+  // carries it until cutover (tools/scripts/check_ui_parity.mjs).
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
 
   absorbs: [

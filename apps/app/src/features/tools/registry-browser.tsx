@@ -17,7 +17,8 @@ import { useTranslations } from "next-intl";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { RegistryServer } from "@/data/contracts/tools";
 import { RegistryOfferChip } from "@/features/mcp-studio/client";
-import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
+import { inputBase, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { parseProviderUrl } from "@/shared/provider-url";
 import { FormAlert } from "@/ui/form-feedback";
 import { ProviderLink } from "@/ui/navigation";
@@ -145,30 +146,30 @@ function ResultCard({
       {server.connectable || pickPackage !== null ? (
         <div className="flex flex-col items-stretch gap-1.5 self-center">
           {server.connectable ? (
-            <button
+            <Button
               type="button"
               data-testid={`${TESTID}-pick-${server.registryRef}`}
               aria-label={t("pickNamed", { name: server.name })}
-              className={buttonSecondary}
+              variant="outline"
               onClick={() => {
                 onPick(server);
               }}
             >
               {t("pick")}
-            </button>
+            </Button>
           ) : null}
           {pickPackage === null ? null : (
-            <button
+            <Button
               type="button"
               data-testid={`${TESTID}-package-${server.registryRef}`}
               aria-label={tOffer("pickPackageNamed", { name: server.name })}
-              className={buttonSecondary}
+              variant="outline"
               onClick={() => {
                 pickPackage(server);
               }}
             >
               {tOffer("pickPackage")}
-            </button>
+            </Button>
           )}
         </div>
       ) : null}
@@ -301,11 +302,11 @@ export function RegistryBrowser({
         </ul>
       )}
       {results?.nextCursor ? (
-        <button
+        <Button
           type="button"
           data-testid={`${TESTID}-more`}
           aria-disabled={loading || undefined}
-          className={`${buttonSecondary} self-start`}
+          variant="outline" className="self-start"
           onClick={() => {
             if (!loading && results.nextCursor !== null) {
               void run(query, results.nextCursor);
@@ -313,7 +314,7 @@ export function RegistryBrowser({
           }}
         >
           {loading ? t("searching") : t("more")}
-        </button>
+        </Button>
       ) : null}
     </div>
   );

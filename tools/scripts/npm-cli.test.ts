@@ -146,14 +146,19 @@ describe("manifestProblem", () => {
   });
 });
 
-type State = { versions: string[]; latest: string | null };
+type State = {
+  versions: string[];
+  latest: string | null;
+  candidate?: string;
+};
 
 /**
  * A registry the publish talks to through `npm view`, `npm publish` and
- * `npm dist-tag add`. `beforePublish` and `afterPublish` run inside the
- * publish call, where a test stands in for a second run. `lagViews(n)`
- * makes the next n reads answer the registry as it was at the start, the
- * way a read can trail a publish by a few seconds.
+ * `npm dist-tag add`. `npm publish` adds the version under the tag it names.
+ * `beforePublish` and `afterPublish` run inside the publish call, where a
+ * test stands in for a second run. `lagViews(n)` makes the next n reads
+ * answer the registry as it was at the start, the way a read can trail a
+ * publish by a few seconds.
  */
 function fakeRegistry(
   initial: State,
@@ -170,7 +175,10 @@ function fakeRegistry(
   const view = (s: State) =>
     JSON.stringify({
       versions: s.versions,
-      "dist-tags": s.latest ? { latest: s.latest } : {},
+      "dist-tags": {
+        ...(s.latest ? { latest: s.latest } : {}),
+        ...(s.candidate ? { candidate: s.candidate } : {}),
+      },
     });
   const npm: NpmRunner = (args, opts) => {
     calls.push({ args, env: opts.env });
@@ -185,7 +193,9 @@ function fakeRegistry(
         if (hooks.refusePublish) throw hooks.refusePublish(state);
         hooks.beforePublish?.(state);
         state.versions.push(version);
-        state.latest = version;
+        if (args[args.indexOf("--tag") + 1] === "candidate")
+          state.candidate = version;
+        else state.latest = version;
         hooks.afterPublish?.(state);
         return "";
       }
@@ -435,5 +445,110 @@ describe("publishCliToNpm", () => {
     );
     expect(err?.message).not.toContain("NPM_TOKEN");
     expect(reg.calls.some((c) => c.args[0] === "publish")).toBe(false);
+  });
+  describe("with a check", () => {
+    it("publishes under candidate and moves latest only after the check passes", async () => {
+      const reg = fakeRegistry(
+        { versions: ["2.1.3"], latest: "2.1.3" },
+        "2.1.4-1",
+      );
+      const check = vi.fn(async () => {
+        expect(reg.state.latest).toBe("2.1.3");
+        return true;
+      });
+      await expect(
+        publishCliToNpm("2.1.4-1", { ...deps(reg.npm, "2.1.4-1"), check }),
+      ).resolves.toBe("published");
+      const call = reg.calls.find((c) => c.args[0] === "publish");
+      expect(call?.args.slice(0, 3)).toEqual(["publish", "--tag", "candidate"]);
+      expect(check).toHaveBeenCalledOnce();
+      expect(check).toHaveBeenCalledWith("2.1.4-1");
+      expect(reg.tags()).toEqual(["@oxagen/cli@2.1.4-1"]);
+      expect(reg.state.latest).toBe("2.1.4-1");
+    });
+
+    it("leaves latest where it was when the check fails", async () => {
+      const reg = fakeRegistry(
+        { versions: ["2.1.3"], latest: "2.1.3" },
+        "2.1.4-1",
+      );
+      const err = await publishCliToNpm("2.1.4-1", {
+        ...deps(reg.npm, "2.1.4-1"),
+        check: async () => false,
+      }).then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+      expect(err?.message).toMatch(
+        /^@oxagen\/cli@2\.1\.4-1 is on npm, but it failed the check, so latest still names 2\.1\.3/,
+      );
+      expect(reg.tags()).toEqual([]);
+      expect(reg.state.latest).toBe("2.1.3");
+      expect(reg.state.candidate).toBe("2.1.4-1");
+    });
+
+    it("checks a version an earlier run left unchecked before latest moves to it", async () => {
+      const reg = fakeRegistry(
+        {
+          versions: ["2.1.3", "2.1.4-1"],
+          latest: "2.1.3",
+          candidate: "2.1.4-1",
+        },
+        "2.1.4-1",
+      );
+      const d = deps(reg.npm, "2.1.4-1");
+      const check = vi.fn(async () => true);
+      await expect(publishCliToNpm("2.1.4-1", { ...d, check })).resolves.toBe(
+        "skipped",
+      );
+      expect(d.build).not.toHaveBeenCalled();
+      expect(check).toHaveBeenCalledOnce();
+      expect(check).toHaveBeenCalledWith("2.1.4-1");
+      expect(reg.state.latest).toBe("2.1.4-1");
+    });
+
+    it("keeps latest off a version an earlier run left unchecked when it still fails", async () => {
+      const reg = fakeRegistry(
+        { versions: ["2.1.3", "2.1.4-1"], latest: "2.1.3" },
+        "2.1.4-1",
+      );
+      await expect(
+        publishCliToNpm("2.1.4-1", {
+          ...deps(reg.npm, "2.1.4-1"),
+          check: async () => false,
+        }),
+      ).rejects.toThrow(/latest still names 2\.1\.3/);
+      expect(reg.tags()).toEqual([]);
+      expect(reg.state.latest).toBe("2.1.3");
+    });
+
+    it("checks nothing when latest already names the newest version", async () => {
+      const reg = fakeRegistry(
+        { versions: ["2.1.4-1"], latest: "2.1.4-1" },
+        "2.1.4-1",
+      );
+      const check = vi.fn(async () => true);
+      await expect(
+        publishCliToNpm("2.1.4-1", { ...deps(reg.npm, "2.1.4-1"), check }),
+      ).resolves.toBe("skipped");
+      expect(check).not.toHaveBeenCalled();
+    });
+
+    it("leaves latest alone when another run moves it past this version during the check", async () => {
+      const reg = fakeRegistry(
+        { versions: ["2.1.3"], latest: "2.1.3" },
+        "2.1.4-1",
+      );
+      const check = vi.fn(async () => {
+        reg.state.versions.push("2.1.4-2");
+        reg.state.latest = "2.1.4-2";
+        return true;
+      });
+      await expect(
+        publishCliToNpm("2.1.4-1", { ...deps(reg.npm, "2.1.4-1"), check }),
+      ).resolves.toBe("published");
+      expect(reg.tags()).toEqual([]);
+      expect(reg.state.latest).toBe("2.1.4-2");
+    });
   });
 });

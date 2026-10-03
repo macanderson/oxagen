@@ -189,6 +189,22 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
             sql`CASE WHEN jsonb_typeof(${schema.workspaces.settings}) = 'object' THEN ${schema.workspaces.settings} ELSE '{}'::jsonb END`;
           updates.settings = sql`${bag} || ${JSON.stringify({ runEnrichmentEnabled: input.runEnrichmentEnabled })}::jsonb`;
         }
+        // The budgets are a patch over the stored bag, like `steering`: a
+        // lane left out keeps its value, so two editors on two lanes do not
+        // race. A malformed stored bag is replaced, as a malformed `steering`
+        // block is (#5426).
+        if (input.dailyBudgetUsd !== undefined && Object.keys(input.dailyBudgetUsd).length > 0) {
+          const bag =
+            updates.settings ??
+            sql`CASE WHEN jsonb_typeof(${schema.workspaces.settings}) = 'object' THEN ${schema.workspaces.settings} ELSE '{}'::jsonb END`;
+          const block = sql`CASE WHEN jsonb_typeof(${schema.workspaces.settings} -> 'dailyBudgetUsd') = 'object' THEN ${schema.workspaces.settings} -> 'dailyBudgetUsd' ELSE '{}'::jsonb END`;
+          updates.settings = sql`
+            ${bag}
+            || jsonb_build_object(
+                 'dailyBudgetUsd',
+                 ${block} || ${JSON.stringify(input.dailyBudgetUsd)}::jsonb
+               )`;
+        }
         if (Object.keys(updates).length === 0) {
           return existing;
         }

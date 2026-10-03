@@ -92,20 +92,13 @@ export function githubConfigure(
   if (!helperBase)
     throw new Error("This installation has no credential helper command");
   const helper = `!${helperBase.replace(/credential issue --harness claude-code$/, "github credential")} --harness ${shellQuote(options.harness, deps.platform)} --cwd ${shellQuote(cwd, deps.platform)}`;
-  const existing = git(
-    deps,
-    cwd,
-    ["config", "--local", "--get-all", helperKey],
-    true,
-  );
-  if (existing && existing !== helper)
-    throw new Error(
-      "This repository already has a different GitHub proxy helper",
-    );
   const receipts = host.github_repositories ?? [];
   const previous = receipts.find(
     (entry) => entry.cwd === cwd && entry.repository === repository,
   );
+  // A removal checks the helper against the receipt's, in
+  // `restoreGithubRepositories`. The helper this command would write names
+  // this executable, which may have moved since the receipt was written.
   if (options.remove) {
     const failures = restoreGithubRepositories(
       { ...host, github_repositories: previous ? [previous] : [] },
@@ -119,6 +112,20 @@ export function githubConfigure(
     deps.out(`GitHub proxy removed for ${repository}`);
     return;
   }
+  const existing = git(
+    deps,
+    cwd,
+    ["config", "--local", "--get-all", helperKey],
+    true,
+  );
+  // The helper names the executable that wrote it, and that path changes
+  // when the executable moves: off the `tacho` name, to a new versioned
+  // copy, or to another Homebrew path. So the helper the receipt recorded is
+  // ours too, and configuring again replaces it.
+  if (existing && existing !== helper && existing !== previous?.helper)
+    throw new Error(
+      "This repository already has a different GitHub proxy helper",
+    );
   requireSingleWorktree(deps, cwd);
   const accepted = new Set([
     `https://github.com/${repository}`,

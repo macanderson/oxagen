@@ -1078,9 +1078,18 @@ export function stepKind(frame: RunFrame): "model_call" | "tool_call" | null {
  * turn index on every frame it records inside a turn, so it has no lead-in to
  * carry, and the per-turn count ClickHouse keeps for a wrapped run
  * (`selectTachoTurnFacts`) opens each turn where its index first appears.
+ *
+ * `byOpeners` says which of the two counts applies. It defaults to whether
+ * any of `frames` opens a turn, which is right for a read of the whole run.
+ * A read that starts inside a turn passes whether the run opened a turn
+ * before its first frame, so a window with no `turn_start` counts as the run
+ * does (#4340).
  */
-export function turnOrdinals(frames: readonly RunFrame[]): (number | null)[] {
-  if (frames.some(opensRunTurn)) {
+export function turnOrdinals(
+  frames: readonly RunFrame[],
+  byOpeners: boolean = frames.some(opensRunTurn),
+): (number | null)[] {
+  if (byOpeners) {
     let turn = 0;
     return frames.map((frame) => {
       if (opensRunTurn(frame)) turn += 1;

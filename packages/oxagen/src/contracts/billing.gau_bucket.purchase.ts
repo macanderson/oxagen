@@ -15,7 +15,10 @@ import { registerCapability } from "../registry";
  * The Checkout also saves the card it collects for off-session use, so a
  * prepaid org's next exhaustion takes the auto top-up path. That is the rev1
  * card-saving path of the Free-tier rule (spec §4.2, ADR-055 §6): a Free org
- * with no saved card is offered this purchase, never refused it.
+ * with no saved card is offered this purchase while its signup grant runs.
+ * Once the grant has ended and the org has no subscription, the handler
+ * refuses with `subscription_required` before any Stripe call, because the
+ * gate would never count the units (`requiresSubscription`, #4886).
  *
  * `noBillingGate: true` (INV-27): buying more is never refused for lack of
  * GAUs. Roles are Owner and Billing, checked in the handler with

@@ -14,6 +14,33 @@ import { containedConfiguration } from "./configuration";
 import { startContainedBridge } from "./bridge";
 import { containedGitHubSchema } from "./github";
 import { launchContainedAgent, type ContainedRunResult } from "./launcher";
+import type { ContainedHarness } from "./profile";
+
+/**
+ * The end reason of a contained session whose launch failed after its start
+ * hook and before its agent ran. Claude Code never sends it, so the session
+ * seals as aborted.
+ */
+const LAUNCH_FAILED_REASON = "contained_launch_failed";
+
+/**
+ * The hook env of a contained run: the folder the harness inside reads its
+ * skills from, as a host path. The container mounts the workspace at
+ * `/workspace` with `HOME=/workspace/.oxagen-contained/home`
+ * (`containerArguments`), so Claude Code reads `$HOME/.claude/skills`, and
+ * `container/entry.mjs` sets Codex's `CODEX_HOME` to `$HOME/.codex`. With
+ * no env, the daemon would write the skills to this user's own folder, which
+ * the container never mounts.
+ */
+function containedHookEnv(
+  harness: ContainedHarness,
+  workspace: string,
+): Record<string, string> {
+  const home = join(workspace, ".oxagen-contained", "home");
+  return harness === "codex"
+    ? { CODEX_HOME: join(home, ".codex") }
+    : { CLAUDE_CONFIG_DIR: join(home, ".claude") };
+}
 
 export const containedRunRequestSchema = z
   .object({
@@ -108,6 +135,11 @@ export function createContainedRunner(options: ContainedRunnerOptions) {
       if (signal?.aborted) abort();
       let sessionUuid: string | undefined;
       let launchedSessionId: string | undefined;
+      let env: Record<string, string> | undefined;
+      // Whether the start hook recorded the session, and whether an end was
+      // sent for it. A launch that fails between the two still ends it.
+      let opened = false;
+      let ended = false;
       const session = (id: string) => {
         const found = options.registry.get(id);
         if (!found) throw new Error("Contained session was not recorded");
@@ -127,8 +159,13 @@ export function createContainedRunner(options: ContainedRunnerOptions) {
             launchedSessionId = sessionId;
             if (repository !== undefined)
               repositories.set(sessionId, repository);
-            await options.hook({
+            env = containedHookEnv(input.harness, workspace);
+            // The bridge hands this answer to the harness's own first
+            // start, so the context this start seals is what the harness
+            // reads.
+            const opening = await options.hook({
               harness: input.harness,
+              env,
               payload: {
                 hook_event_name: "SessionStart",
                 session_id: sessionId,
@@ -137,6 +174,7 @@ export function createContainedRunner(options: ContainedRunnerOptions) {
               },
             });
             const started = session(sessionId);
+            opened = true;
             sessionUuid = started.recorder.sessionUuid;
             active.set(sessionUuid, controller);
             const gateway = createMcpGateway({
@@ -189,6 +227,8 @@ export function createContainedRunner(options: ContainedRunnerOptions) {
               model: (request, response) =>
                 options.model.handle(request, response),
               hook: options.hook,
+              opening,
+              env,
               mcp: (body) =>
                 gateway.handle(body, {
                   sessionId,
@@ -282,8 +322,10 @@ export function createContainedRunner(options: ContainedRunnerOptions) {
             ]);
           },
           sealed: async (sessionId, exitCode) => {
+            ended = true;
             await options.hook({
               harness: input.harness,
+              env,
               payload: {
                 hook_event_name: "SessionEnd",
                 session_id: sessionId,
@@ -296,6 +338,27 @@ export function createContainedRunner(options: ContainedRunnerOptions) {
         });
       } finally {
         signal?.removeEventListener("abort", abort);
+        // Sent before the launched mark is cleared, as `sealed` is. Left
+        // open, the session would be swept as crashed. A failure here is
+        // logged, so the caller still sees why the launch failed.
+        if (opened && !ended && launchedSessionId !== undefined) {
+          try {
+            await options.hook({
+              harness: input.harness,
+              env,
+              payload: {
+                hook_event_name: "SessionEnd",
+                session_id: launchedSessionId,
+                cwd: input.workspace,
+                reason: LAUNCH_FAILED_REASON,
+              },
+            });
+          } catch (error) {
+            options.log(
+              `contained: session ${launchedSessionId} stays open after its launch failed, because ending it failed: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        }
         if (sessionUuid) active.delete(sessionUuid);
         if (launchedSessionId) {
           launched.delete(launchedSessionId);

@@ -18,12 +18,8 @@ import { InviteDecision } from "./invite-decision";
 import { routes } from "@/shared/safe-path";
 import { SafeLink } from "@/ui/navigation";
 import { OutcomePanel } from "@/ui/form-feedback";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  linkText,
-  mono,
-} from "@/ui/control-styles";
+import { buttonPrimary, buttonSecondary, linkText, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { AuthFooter } from "@/ui/auth-shell";
 import { AuthAlert, AuthPanel } from "./ui/auth-card";
 
@@ -186,22 +182,22 @@ export async function InvitationBody({
             // The design keeps the rest of the card when the invitation is
             // closed; the two actions stay in place and cannot be pressed.
             <div className="flex flex-wrap items-center gap-2 max-md:flex-col max-md:items-stretch">
-              <button
+              <Button
                 type="button"
                 disabled
                 data-touch-target=""
-                className={`${buttonPrimary} max-md:w-full disabled:cursor-not-allowed disabled:opacity-50`}
+                variant="primary" className="max-md:w-full disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("accept")}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 disabled
                 data-touch-target=""
-                className={`${buttonSecondary} max-md:w-full disabled:cursor-not-allowed disabled:opacity-50`}
+                variant="outline" className="max-md:w-full disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("decline")}
-              </button>
+              </Button>
             </div>
           ) : (
             // decision.kind === "sign-in", the one kind left.

@@ -90,6 +90,9 @@ export function AuthTags({
   );
 }
 
-/** `.ob-link`: a button that reads as a link, for an action that stays on the page. */
-export const authLinkButton =
-  "rounded-sm bg-transparent p-0 font-medium text-link underline-offset-4 hover:text-link-hover hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+/**
+ * `.ob-link`: a button that reads as a link, for an action that stays on the
+ * page. It is the kit Button's `link` variant; these are the layout classes the
+ * variant does not set.
+ */
+export const authLinkButton = "rounded-sm p-0";

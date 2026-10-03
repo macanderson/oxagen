@@ -22,13 +22,8 @@
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useId, useState } from "react";
 import type { InterjectionItem } from "@/data/contracts/interjections";
-import {
-  buttonPrimary,
-  fieldHint,
-  fieldLabel,
-  inputBase,
-  mono,
-} from "@/ui/control-styles";
+import { fieldHint, fieldLabel, inputBase, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { PullRequestLink, useNavigate } from "@/ui/navigation";
@@ -96,15 +91,16 @@ function PickCard({
     <div
       className={`flex flex-col rounded-lg border ${picked ? "border-gold bg-gold/10" : "border-border bg-app-panel-bg"}`}
     >
-      <button
+      <Button
         type="button"
+        variant="ghost"
         aria-pressed={picked}
         aria-describedby={linesId}
         disabled={locked || undefined}
         data-testid={`interjection-pick-${path}`}
         data-touch-target=""
         onClick={onPick}
-        className="flex min-h-11 w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left text-base font-semibold text-foreground enabled:hover:bg-gold/5 disabled:cursor-not-allowed"
+        className="h-auto min-h-11 w-full items-start justify-start gap-3 rounded-lg px-3 py-2.5 text-left font-semibold whitespace-normal text-foreground enabled:hover:bg-gold/5"
       >
         <span
           aria-hidden="true"
@@ -118,7 +114,7 @@ function PickCard({
             {description}
           </span>
         </span>
-      </button>
+      </Button>
       <Consequences id={linesId} lines={lines} />
     </div>
   );
@@ -384,7 +380,7 @@ export function InterjectionAnswer({
         </div>
       ) : null}
       <div className="flex flex-wrap items-center gap-2 pt-1">
-        <button
+        <Button
           type="submit"
           data-testid="interjection-send"
           data-touch-target=""
@@ -392,10 +388,10 @@ export function InterjectionAnswer({
           aria-disabled={pending || undefined}
           aria-describedby={hintId}
           title={canAnswer ? undefined : t("roleReason")}
-          className={buttonPrimary}
+          variant="primary"
         >
           {pending ? t("sending") : t("send")}
-        </button>
+        </Button>
         <span
           id={hintId}
           data-testid="interjection-send-hint"

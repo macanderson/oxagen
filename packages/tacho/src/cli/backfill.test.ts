@@ -99,6 +99,7 @@ interface Harness {
 function harness(
   daemonStream: CliDeps["daemonStream"],
   enrolled = true,
+  harnesses: string[] = ["claude-code"],
 ): Harness {
   const home = mkdtempSync(join(tmpdir(), "tacho-backfill-home-"));
   const env = { HOME: home, TACHO_HOME: join(home, "tacho") };
@@ -109,7 +110,10 @@ function harness(
   if (enrolled) {
     mkdirSync(paths.dir, { recursive: true });
     const signer = bundleSigner();
-    writeHostFile(paths.hostFile, testHostFile(signer, signer.sign(unsignedBundle())));
+    writeHostFile(
+      paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle()), { harnesses }),
+    );
   }
   const deps = defaultCliDeps({
     paths,
@@ -189,6 +193,15 @@ describe("oxagen agent backfill", () => {
     const { deps, sent } = harness(streamOf({}), false);
     expect(await backfillCommand({}, deps)).toBe(BACKFILL_EXIT.notEnrolled);
     expect(sent).toEqual([]);
+  });
+
+  it("exits 4 when no agent hooks Claude Code, and asks no daemon (#5390, negative)", async () => {
+    // The only agent hooks Codex. Sent to it, every earlier Claude Code
+    // session would be sealed and shipped as the Codex agent's.
+    const { deps, err, sent } = harness(streamOf({}), true, ["codex"]);
+    expect(await backfillCommand({}, deps)).toBe(BACKFILL_EXIT.notEnrolled);
+    expect(sent).toEqual([]);
+    expect(err.join("\n")).toMatch(/No agent on this machine hooks Claude Code/);
   });
 
   it("exits 3 when no daemon answers", async () => {

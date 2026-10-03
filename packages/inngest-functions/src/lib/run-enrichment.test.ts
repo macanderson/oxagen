@@ -44,6 +44,79 @@ function frame(seq: number, text: string) {
     turnSeq: seq,
   });
 }
+// #5415: a run that already has an account is read from where the last pass
+// stopped, so a live run's half-hourly pass covers half an hour of frames.
+describe("a read from where the last pass stopped", () => {
+  const at = (seq: number, ts: string, text: string) => {
+    const digest = digestBytes(new TextEncoder().encode(text));
+    return tachoFrame({
+      seq,
+      ts,
+      kind: "user_prompt",
+      hash: digest,
+      contentDigest: digest,
+      bytesRef: `body-${seq}`,
+      redactions: "",
+      toolName: "",
+      toolStatus: "",
+      toolUseId: "",
+      model: "",
+      provider: "",
+      policyDecision: "",
+      costUsdMicros: null,
+      turnSeq: seq,
+    });
+  };
+  it("leaves out every frame observed at or before the cut, text and fingerprint alike", async () => {
+    const get = vi.fn(async (_scope: unknown, ref: string) => ({
+      bytes: new TextEncoder().encode(ref === "body-1" ? "before" : "after"),
+    }));
+    const frames = [
+      at(1, "2026-09-22 00:00:00.000", "before"),
+      at(2, "2026-09-22 01:00:00.000", "after"),
+    ];
+    const whole = await collectRunText(scope, frames, get);
+    const cut = await collectRunText(
+      scope,
+      frames,
+      get,
+      undefined,
+      true,
+      new Date("2026-09-22T00:30:00.000Z"),
+    );
+    expect(cut.chunks.join("")).toContain("after");
+    expect(cut.chunks.join("")).not.toContain("before");
+    expect(cut).toMatchObject({ frames: 1, retained: 1, missing: 0 });
+    expect(cut.digest).not.toBe(whole.digest);
+    // A frame at exactly the cut was covered by the pass that set it.
+    const edge = await collectRunText(
+      scope,
+      frames,
+      get,
+      undefined,
+      true,
+      new Date("2026-09-22T01:00:00.000Z"),
+    );
+    expect(edge).toMatchObject({ frames: 0, retained: 0 });
+    expect(edge.chunks).toEqual([]);
+  });
+  it("reads every frame when there is no cut (negative)", async () => {
+    const got = await collectRunText(
+      scope,
+      [
+        at(1, "2026-09-22 00:00:00.000", "before"),
+        at(2, "2026-09-22 01:00:00.000", "after"),
+      ],
+      async (_scope, ref) => ({
+        bytes: new TextEncoder().encode(ref === "body-1" ? "before" : "after"),
+      }),
+      undefined,
+      true,
+      null,
+    );
+    expect(got).toMatchObject({ frames: 2, retained: 2 });
+  });
+});
 describe("the full recorded input", () => {
   it("includes later turns beyond the old sixty-step limit and the end of long bodies", async () => {
     const bodies = Array.from(
@@ -467,6 +540,11 @@ describe("the stored failure reason", () => {
     [
       new Error("Run enrichment unavailable: insufficient_credits"),
       "credit_refused:insufficient_credits",
+    ],
+    // The workspace's own daily budget (#5426) is its own reason.
+    [
+      new Error("Run enrichment unavailable: workspace_budget_spent"),
+      "workspace_budget_spent",
     ],
     [
       {

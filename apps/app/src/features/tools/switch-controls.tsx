@@ -24,12 +24,12 @@ import {
 import { chooseSwitchTargets } from "@/features/shell/client";
 import { routes, type SafePath } from "@/shared/safe-path";
 import { inputBase, mono, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { type PickerOption, RecordPicker } from "@/ui/record-picker";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
-import { buttonDanger } from "./buttons";
 import { flipKillSwitch } from "./actions";
 import {
   SELF_TARGETED_KINDS,
@@ -189,29 +189,31 @@ export function FlipControls({
   return (
     <>
       {fromHeader ? (
-        <button
+        <Button
           type="button"
           data-testid="tools-flip-open"
-          className={buttonDanger}
+          variant="destructive-outline"
           onClick={() => {
             setOpen(true);
           }}
         >
           {t("openHeader")}
-        </button>
+        </Button>
       ) : (
         // The card's toggle: its checked state is the record's (denying is
         // on), and pressing it opens the confirmation rather than flipping,
         // because the blast radius is stated before anything changes.
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="xs"
           role="switch"
           aria-checked={!turningOn}
           aria-label={t(turningOn ? "toggleDeny" : "toggleAllow", {
             name: label ?? kinds(kind),
           })}
           data-testid={`tools-flip-${existing?.id ?? `${kind}-${fixed?.ref ?? "self"}`}`}
-          className="group inline-flex min-h-8 items-center gap-2 rounded-md px-1 text-sm font-medium text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11"
+          className="group h-auto min-h-8 gap-2 px-1 max-md:min-h-11"
           onClick={() => {
             setOpen(true);
           }}
@@ -235,7 +237,7 @@ export function FlipControls({
           <span className={turningOn ? "" : "text-destructive"}>
             {turningOn ? t("allowing") : t("denying")}
           </span>
-        </button>
+        </Button>
       )}
       <SheetDialog
         open={open}

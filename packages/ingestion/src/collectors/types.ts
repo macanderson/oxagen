@@ -160,6 +160,13 @@ export interface WriteBackTarget {
 }
 
 /**
+ * Who can read an item at the provider. private: only the people the
+ * provider lets in, such as a private GitHub repository's collaborators.
+ * public: anyone else, which on a public GitHub repository is everyone.
+ */
+export type ItemVisibility = "public" | "private";
+
+/**
  * The provider writes a collector may make, each behind its switch in the
  * collector file's [write_back] table. Oxagen never edits a subject or a
  * description, never deletes an item, never assigns anyone, and never replies
@@ -174,6 +181,11 @@ export interface WriteBack {
   close(target: WriteBackTarget): Promise<void>;
   /** Set the Priority and Type labels triage chose. Off by default. */
   labels(target: WriteBackTarget, labels: { priority: string; type: string }): Promise<void>;
+  /**
+   * Who can read the item. A send note shows what its runs cost only when
+   * this answers private. A module without it gets no figures in any note.
+   */
+  visibility?(target: WriteBackTarget): Promise<ItemVisibility>;
 }
 
 /**

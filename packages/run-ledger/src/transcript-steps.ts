@@ -1007,9 +1007,15 @@ export function replyPartsOf(
   );
 }
 
-/** The `steps` zoom: one entry per step, by the rules at the top of this file. */
-export function stepFolds(frames: readonly RunFrame[]): TranscriptFold[] {
-  const turns = turnOrdinals(frames);
+/**
+ * The `steps` zoom: one entry per step, by the rules at the top of this file.
+ * `byOpeners` is `turnOrdinals`' count, for a read that starts inside a turn.
+ */
+export function stepFolds(
+  frames: readonly RunFrame[],
+  byOpeners?: boolean,
+): TranscriptFold[] {
+  const turns = turnOrdinals(frames, byOpeners);
   return withRelations(
     groupSteps(frames, turns).map((group) => stepFold(frames, group, turns)),
   );

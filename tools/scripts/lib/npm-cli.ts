@@ -10,11 +10,16 @@
  * apps/cli/scripts/bundle.mjs and prepare-standalone-publish.mjs for the why.
  *
  * `latest` only moves forward (ADR-253). A release `X.Y.Z` and a build of main
- * `X.Y.(Z+1)-N` both publish under `latest`, the same rule the downloads host
- * follows for its `latest/` links. A version older than the newest one on npm
- * is not published, and after each publish `latest` is checked again, because
- * two runs can publish at once and the slower one would otherwise leave
- * `latest` on the older version.
+ * `X.Y.(Z+1)-N` both reach `latest`, the same rule the downloads host follows
+ * for its `latest/` links. A version older than the newest one on npm is not
+ * published, and after each publish `latest` is checked again, because two
+ * runs can publish at once and the slower one would otherwise leave `latest`
+ * on the older version.
+ *
+ * A caller that passes a `check` publishes under the `candidate` tag instead,
+ * and `latest` moves to a version only after the check passes for it. npm can
+ * take minutes to serve a new tarball, and until then `npm i -g @oxagen/cli`
+ * would fetch a file that answers 404 (#5203).
  */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -29,6 +34,19 @@ const ROOT = resolve(import.meta.dirname, "../../..");
 const DIST_DIR = join(ROOT, "apps/cli/dist-standalone");
 
 export const CLI_PACKAGE = "@oxagen/cli";
+
+/**
+ * The dist-tag a checked publish goes out under, before `latest` moves to it.
+ * Two runs can each move it, which does no harm, because the check reads the
+ * version's own tarball URL and never this tag.
+ */
+export const CANDIDATE_TAG = "candidate";
+
+/**
+ * Answers whether npm serves `version` and the CLI in it runs. It may take
+ * minutes, because npm can take that long to serve a new tarball.
+ */
+export type CliCheck = (version: string) => Promise<boolean>;
 
 /** Where npm serves the CLI's tarball for `version`. */
 export function tarballUrl(version: string): string {
@@ -218,6 +236,12 @@ export interface PublishDeps {
   build: () => void;
   readManifest: () => PublishManifest;
   log: (line: string) => void;
+  /**
+   * When set, the publish goes out under CANDIDATE_TAG, and `latest` moves to
+   * a version only once this answers true for it. When unset, the publish
+   * goes out under `latest`.
+   */
+  check?: CliCheck;
 }
 
 const defaultDeps: PublishDeps = {
@@ -252,16 +276,21 @@ export function movesLatestForward(
 }
 
 /**
- * Publish `version` under `latest` unless npm already holds it or a newer
- * version, then make sure `latest` names the newest version npm holds.
+ * Publish `version` unless npm already holds it or a newer version, then
+ * make sure `latest` names the newest version npm holds. With `check` set,
+ * `latest` moves only to a version that passes the check, and a version that
+ * fails it throws with `latest` left where it was.
  */
 export async function publishCliToNpm(
   version: string,
-  deps: PublishDeps = defaultDeps,
+  overrides: Partial<PublishDeps> = {},
 ): Promise<PublishOutcome> {
   const cfg = npmCfg();
   if (!cfg) return "no-token";
-  const { npm, log } = deps;
+  const { npm, log, build, readManifest, check } = {
+    ...defaultDeps,
+    ...overrides,
+  };
 
   // A user config that reads the token from the environment, so the token
   // itself is never written to disk. It lives outside the package directory,
@@ -273,31 +302,52 @@ export async function publishCliToNpm(
   const auth = ["--userconfig", userconfig];
 
   /**
+   * Point `latest` at `target` when that moves it forward. `latest` is read
+   * right before the write, because a check can take minutes and another run
+   * may have moved `latest` past `target` in that time.
+   */
+  const moveLatestTo = (target: string): void => {
+    const current = readRegistryState(npm).latest;
+    if (!movesLatestForward(current, target)) return;
+    try {
+      npm(["dist-tag", "add", `${CLI_PACKAGE}@${target}`, "latest", ...auth], {
+        cwd: ROOT,
+        ...authed,
+      });
+    } catch (err) {
+      throw new Error(
+        `npm dist-tag add ${CLI_PACKAGE}@${target} latest failed: ${formatError(err)}. ${TOKEN_HINT}`,
+      );
+    }
+    log(kleur.yellow(`    latest named ${current}; moved it to ${target}`));
+  };
+
+  /**
    * Point `latest` at the newest version npm holds, counting `known` in
    * case the registry has not listed it yet. A read can lag a publish by a
-   * few seconds and show an older `latest`, so `latest` is read once more
-   * right before the write, and the write only ever moves it forward.
+   * few seconds and show an older `latest`, so `moveLatestTo` reads it again
+   * and only ever moves it forward. With `check` set, the newest version
+   * must pass the check first.
    */
-  const repairLatest = (known: string[]): void => {
+  const repairLatest = async (known: string[]): Promise<void> => {
     const seen = readRegistryState(npm);
     const fix = latestCorrection({
       versions: [...new Set([...seen.versions, ...known])],
       latest: seen.latest,
     });
     if (fix === null) return;
-    const current = readRegistryState(npm).latest;
-    if (!movesLatestForward(current, fix)) return;
-    try {
-      npm(["dist-tag", "add", `${CLI_PACKAGE}@${fix}`, "latest", ...auth], {
-        cwd: ROOT,
-        ...authed,
-      });
-    } catch (err) {
-      throw new Error(
-        `npm dist-tag add ${CLI_PACKAGE}@${fix} latest failed: ${formatError(err)}. ${TOKEN_HINT}`,
+    if (check) {
+      log(
+        kleur.dim(`    checking ${CLI_PACKAGE}@${fix} before latest moves to it`),
       );
+      if (!(await check(fix))) {
+        const stays = seen.latest ?? "no version";
+        throw new Error(
+          `${CLI_PACKAGE}@${fix} is on npm, but it failed the check, so latest still names ${stays} and \`npm install -g ${CLI_PACKAGE}\` installs ${stays}. Run npm.yml again to check ${fix} once more. To move latest by hand, first make sure \`npx ${tarballUrl(fix)} --version\` prints ${fix}, then run \`npm dist-tag add ${CLI_PACKAGE}@${fix} latest\`.`,
+        );
+      }
     }
-    log(kleur.yellow(`    latest named ${current}; moved it to ${fix}`));
+    moveLatestTo(fix);
   };
 
   try {
@@ -306,21 +356,22 @@ export async function publishCliToNpm(
     if (!plan.publish) {
       log(kleur.dim(`    ${plan.reason}; nothing to publish`));
       // A run that publishes nothing still repairs a `latest` an earlier
-      // race left behind, so the daily run can fix it.
-      repairLatest([]);
+      // race or a failed check left behind, so the daily run can fix it.
+      await repairLatest([]);
       return "skipped";
     }
 
-    deps.build();
+    build();
     log(kleur.green("    ✓ standalone CLI bundle built"));
-    const problem = manifestProblem(deps.readManifest(), version);
+    const problem = manifestProblem(readManifest(), version);
     if (problem) throw new Error(problem);
 
     // access:public lives in the manifest's publishConfig. npm 11 refuses a
     // prerelease such as a build of main without an explicit tag.
-    log(kleur.dim("    publishing to npm registry..."));
+    const tag = check ? CANDIDATE_TAG : "latest";
+    log(kleur.dim(`    publishing to npm registry under ${tag}...`));
     try {
-      npm(["publish", "--tag", "latest", ...auth], {
+      npm(["publish", "--tag", tag, ...auth], {
         cwd: DIST_DIR,
         ...authed,
       });
@@ -328,13 +379,15 @@ export async function publishCliToNpm(
       // Another run may have published this version since the check above.
       if (isAlreadyPublished(err) || npmVersionExists(version, npm)) {
         log(kleur.dim(`    another run published ${version} first`));
-        repairLatest([version]);
+        await repairLatest([version]);
         return "skipped";
       }
       throw new Error(`npm publish failed: ${formatError(err)}. ${TOKEN_HINT}`);
     }
-    log(kleur.green(`    ✓ ${CLI_PACKAGE}@${version} published to npm`));
-    repairLatest([version]);
+    log(
+      kleur.green(`    ✓ ${CLI_PACKAGE}@${version} published to npm under ${tag}`),
+    );
+    await repairLatest([version]);
     return "published";
   } finally {
     rmSync(configDir, { recursive: true, force: true });

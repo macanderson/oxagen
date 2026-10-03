@@ -10,7 +10,8 @@
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useRef, useState } from "react";
 import type { SsoGroupRole, SsoMappableRole } from "@/data/contracts/org";
-import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
+import { inputBase, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { cell, Table } from "@/ui/table";
@@ -180,16 +181,16 @@ export function SsoGroupRoles({
               </td>
               {canEdit ? (
                 <td className={cell}>
-                  <button
+                  <Button
                     type="button"
-                    className={buttonSecondary}
+                    variant="outline"
                     aria-label={t("removeLabel", { row: n })}
                     onClick={() => {
                       removeRow(row.key);
                     }}
                   >
                     {t("remove")}
-                  </button>
+                  </Button>
                 </td>
               ) : null}
             </tr>
@@ -217,9 +218,9 @@ export function SsoGroupRoles({
         </p>
       ) : null}
       <div className="flex flex-wrap gap-3">
-        <button type="button" className={buttonSecondary} onClick={addRow}>
+        <Button type="button" variant="outline" onClick={addRow}>
           {t("add")}
-        </button>
+        </Button>
         <SubmitButton
           pending={pending}
           label={t("save")}

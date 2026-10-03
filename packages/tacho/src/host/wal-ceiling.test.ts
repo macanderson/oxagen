@@ -163,6 +163,43 @@ describe("the WAL ceiling", () => {
     expect(existsSync(bodies)).toBe(false);
   });
 
+  // A laptop that sleeps through the grace wakes with every waiting session
+  // past it. The shipper has not run since, so the first check must not
+  // drop what it would send as soon as the network is back.
+  it("does not count time the daemon did not run toward a stall", () => {
+    const dir = scratchPaths().wal;
+    const wal = new Wal(dir);
+    seed(wal, OLDER, "2026-10-02T09:00:00.000Z");
+    const ceiling = new WalCeiling(
+      wal,
+      dir,
+      policy({ sleepGapMs: 5 * MINUTE }),
+      WEEK,
+      ignore,
+    );
+    const bodies = join(dir, `${OLDER}.bodies.jsonl`);
+
+    // Two minutes awake, then the lid closes for two hours.
+    expect(ceiling.check(T0, ignore)).toEqual([]);
+    expect(ceiling.check(T0 + MINUTE, ignore)).toEqual([]);
+    expect(ceiling.check(T0 + 2 * MINUTE, ignore)).toEqual([]);
+    const wake = T0 + 122 * MINUTE;
+    // The two hours count as one minute: three minutes stalled so far.
+    expect(ceiling.check(wake, ignore)).toEqual([]);
+    expect(existsSync(bodies)).toBe(true);
+    // A gap of five minutes is not sleep, and counts in full: eight.
+    expect(ceiling.check(wake + 5 * MINUTE, ignore)).toEqual([]);
+    // Ten minutes awake is the grace.
+    expect(ceiling.check(wake + 7 * MINUTE, ignore)).toMatchObject([
+      {
+        session_uuid: OLDER,
+        stalled_since: new Date(T0 + 119 * MINUTE).toISOString(),
+        dropped_at: new Date(wake + 7 * MINUTE).toISOString(),
+      },
+    ]);
+    expect(existsSync(bodies)).toBe(false);
+  });
+
   it("keeps half the space the disk would have free, when that is less than the fixed figure", () => {
     const dir = scratchPaths().wal;
     const wal = new Wal(dir);

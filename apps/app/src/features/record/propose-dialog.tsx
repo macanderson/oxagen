@@ -16,7 +16,8 @@ import { type ReactNode, useMemo, useState } from "react";
 import type { ConstraintEffect } from "@/data/contracts/steering";
 import { diffLines, diffStat } from "@/shared/line-diff";
 import { Badge } from "@/ui/badge";
-import { buttonPrimary, mono } from "@/ui/control-styles";
+import { mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { LEGACY_RECORD_SCHEMA } from "@oxagen/oxagen/steering-repo/paths";
@@ -151,17 +152,17 @@ export function ProposeDialog({
       closeLabel={opened === null ? t("cancel") : undefined}
       footer={
         opened === null ? (
-          <button
+          <Button
             type="button"
             data-testid="record-propose-submit"
             disabled={!changed || blocked || pending}
             onClick={() => {
               void submit();
             }}
-            className={`${buttonPrimary} max-md:w-full`}
+            variant="primary" className="max-md:w-full"
           >
             {pending ? t("pending") : t("submit")}
-          </button>
+          </Button>
         ) : null
       }
     >

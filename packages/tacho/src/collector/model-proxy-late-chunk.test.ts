@@ -106,6 +106,10 @@ describe("a response chunk after its call settled", () => {
 
   async function start(
     headers: Record<string, string> = { "content-type": "text/event-stream" },
+    options: {
+      /** Refuse the WAL write of these frames, the way a full disk does. */
+      refuse?: (sealed: readonly TachoEvent[]) => boolean;
+    } = {},
   ) {
     const registry = new SessionRegistry({
       scope: TEST_ENROLLMENT,
@@ -135,7 +139,11 @@ describe("a response chunk after its call settled", () => {
     const proxy: ModelProxy = createModelProxy({
       registry,
       hostRecorder: () => host.recorder,
-      record: (sealed) => events.push(...sealed),
+      record: (sealed) => {
+        if (options.refuse?.(sealed) === true)
+          throw new Error("ENOSPC: no space left on device");
+        events.push(...sealed);
+      },
       policy: () => ({ bundle, hostStatus: "active" }),
       upstreams: () => ({
         anthropic: `http://${FAKE_HOST}`,
@@ -302,6 +310,37 @@ describe("a response chunk after its call settled", () => {
       });
       await settle(messages(6), 4);
       expect(frames()[3]!.attrs["oxagen.request_prior_digest"]).toBeUndefined();
+    });
+
+    it("takes back the host's chain, the one it sealed on, when the frame cannot be written", async () => {
+      let full = true;
+      const { upstream, hostFrames, registry, session, host, log, call } =
+        await start(undefined, {
+          refuse: (sealed) =>
+            full && sealed.some((event) => event.kind === "llm_call"),
+        });
+      upstream.emit("data", EARLY);
+      registry.seal(session);
+      const hostBefore = { ...host.recorder.chainCursor };
+      const sessionBefore = { ...session.recorder.chainCursor };
+      upstream.end();
+      await until(() =>
+        log.some((line) => line.includes("sealing the call's frame failed")),
+      );
+      // The mark was taken on the session's chain and the frame sealed on the
+      // host's, so the host's stood one seq past a WAL tail that never held
+      // the frame, and its next frame sealed a gap.
+      expect(host.recorder.chainCursor).toEqual(hostBefore);
+      expect(session.recorder.chainCursor).toEqual(sessionBefore);
+      full = false;
+      const next = await call();
+      next.upstream.emit("data", EARLY);
+      next.upstream.end();
+      await until(() => hostFrames().length === 1);
+      expect(hostFrames()[0]).toMatchObject({
+        seq: hostBefore.seq,
+        prev_hash: hostBefore.prevHash,
+      });
     });
 
     it("is filed on the host's chain while the session's terminal waits for the WAL", async () => {

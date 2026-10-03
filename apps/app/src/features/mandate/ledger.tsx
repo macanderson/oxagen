@@ -22,6 +22,7 @@ import {
   type MandateDetail,
   type MandateMovement,
 } from "@/data/contracts/mandates";
+import { Button } from "@/ui/button";
 import { linkText, mono, panel } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { LinkPager } from "@/ui/link-pager";
@@ -113,9 +114,9 @@ function Filters({ at, view }: { at: MandateAt; view: MandateView }) {
           className="w-full data-[size=default]:h-10 max-md:text-input-touch"
         />
       </span>
-      <button type="submit" className={`${control} font-medium`}>
+      <Button type="submit" variant="outline" size="lg">
         {t("apply")}
-      </button>
+      </Button>
       {view.search === null && view.state === null ? null : (
         <SafeLink
           to={mandateLink(at, { rows: view.rows })}

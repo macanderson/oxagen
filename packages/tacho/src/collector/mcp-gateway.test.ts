@@ -20,6 +20,7 @@ import {
   RPC_INVALID_REQUEST,
   RPC_REFUSED,
   toolCountOf,
+  toolErrorTextOf,
   tooManyToolsMessage,
   toolUseIdOf,
 } from "./mcp-gateway";
@@ -709,6 +710,157 @@ describe("evidence", () => {
     const { gw, records } = gateway({ fetch });
     await gw.handle(CALL, CTX);
     expect(records[0]?.status).toBe("error");
+  });
+
+  it("records a tool result that reports a failure as an error, not as a call that worked", async () => {
+    // The hosted server's tools throw, and the MCP SDK answers HTTP 200 with
+    // an `isError` result. There is no JSON-RPC error to read, so this used to
+    // be sealed as a `tool_call` whose status was ok.
+    const result = {
+      content: [
+        {
+          type: "text",
+          text: 'Output validation failed for "query_ontology": expected an array',
+        },
+      ],
+      isError: true,
+    };
+    const { fetch } = remote(result);
+    const { gw, records } = gateway({ fetch });
+    const response = await gw.handle(CALL, CTX);
+    // The client gets the hosted server's answer as it was.
+    expect((response.body as { result: unknown }).result).toEqual(result);
+    expect(records[0]?.status).toBe("error");
+    expect(records[0]?.refusedReason).toBe(
+      'Output validation failed for "query_ontology": expected an array',
+    );
+    expect(records[0]?.outputDigest).toBe(digestJcs(result));
+  });
+
+  it("records the kernel's IAM refusal in a failed tool result as rejected, with its message", async () => {
+    // How a gateway key's `machineKeyDenial` reaches the gateway: the
+    // kernel's IAM deny message, carrying the denial's own text
+    // (`packages/iam/src/machine-key-scope.ts`), as the result's text.
+    const message =
+      "IAM denied \"query_ontology\" for principal: Forbidden: query_ontology is outside this agent's mandate. A connected app may call read-only, non-sensitive workspace tools through the Oxagen gateway; changing that is a mandate change, made in Oxagen.";
+    const { fetch } = remote({
+      content: [{ type: "text", text: message }],
+      isError: true,
+    });
+    const { gw, records } = gateway({ fetch });
+    await gw.handle(CALL, CTX);
+    expect(records[0]?.status).toBe("rejected");
+    expect(records[0]?.refusedReason).toBe(message);
+    // The message names no rule, so the record names none.
+    expect(records[0]).not.toHaveProperty("ruleIds");
+    // The arguments are still the evidence of what was attempted.
+    expect(records[0]?.inputDigest).toBe(digestJcs({ q: "x" }));
+  });
+
+  it("reads a failed tool result as an error, unless its text is the kernel's IAM refusal", () => {
+    const failed = (content: unknown) => ({
+      jsonrpc: "2.0" as const,
+      id: 1,
+      result: { content, isError: true },
+    });
+    const text = (value: string) => [{ type: "text", text: value }];
+    expect(outcomeOf(200, failed(text("handler threw")))).toBe("error");
+    expect(
+      outcomeOf(
+        200,
+        failed(text('IAM denied "query_ontology" for principal: deny')),
+      ),
+    ).toBe("rejected");
+    expect(
+      outcomeOf(
+        200,
+        failed(
+          text(
+            'IAM requires approval for "query_ontology" — the action is denied pending approval.',
+          ),
+        ),
+      ),
+    ).toBe("rejected");
+    // The kernel's words anywhere but the start are a tool quoting them.
+    expect(
+      outcomeOf(200, failed(text('the upstream said: IAM denied "x"'))),
+    ).toBe("error");
+    // A failure with no text, or no content at all, is still a failure.
+    expect(outcomeOf(200, failed([]))).toBe("error");
+    expect(outcomeOf(200, failed(undefined))).toBe("error");
+    // Only `isError: true` marks a failure.
+    expect(
+      outcomeOf(200, {
+        jsonrpc: "2.0",
+        id: 1,
+        result: { content: text('IAM denied "x"'), isError: false },
+      }),
+    ).toBe("ok");
+    expect(
+      outcomeOf(200, { jsonrpc: "2.0", id: 1, result: { content: [] } }),
+    ).toBe("ok");
+  });
+
+  it("reads the text of a failed tool result, and nothing from any other result", () => {
+    expect(
+      toolErrorTextOf({
+        content: [
+          { type: "text", text: "first" },
+          { type: "image", data: "aGk=", mimeType: "image/png" },
+          { type: "text", text: "second" },
+        ],
+        isError: true,
+      }),
+    ).toBe("first\nsecond");
+    expect(toolErrorTextOf({ content: "nope", isError: true })).toBe("");
+    expect(toolErrorTextOf({ content: [] })).toBeUndefined();
+    expect(toolErrorTextOf(null)).toBeUndefined();
+    expect(toolErrorTextOf(undefined)).toBeUndefined();
+  });
+
+  it("records a call whose arguments hold a number JSON has no form for, minus the arguments", async () => {
+    // `JSON.parse` reads 1e400 as Infinity, and `jcs` writes Infinity as
+    // null. The digest would then name `{"size":null}`, a call the client
+    // never made.
+    const { fetch } = remote({ content: [] });
+    const { gw, records, logs } = gateway({ fetch });
+    await gw.handle(
+      {
+        ...CALL,
+        params: {
+          name: "t",
+          arguments: JSON.parse('{"size":1e400}') as Record<string, unknown>,
+        },
+      },
+      CTX,
+    );
+    expect(records).toHaveLength(1);
+    expect(records[0]?.inputDigest).toBeUndefined();
+    expect(records[0]?.inputBytes).toBeUndefined();
+    expect(records[0]?.outputDigest).toBe(digestJcs({ content: [] }));
+    expect(logs.join(" ")).toContain("without its arguments");
+  });
+
+  it("records a call whose result holds a number JSON has no form for, minus the result", async () => {
+    // Written as raw text, because a fixture passed through `JSON.stringify`
+    // would turn the Infinity into null before the gateway read it.
+    const fetch: GatewayFetch = async () => ({
+      ok: true,
+      status: 200,
+      text: async () =>
+        '{"jsonrpc":"2.0","id":7,"result":{"content":[],"n":-1e400}}',
+    });
+    const { gw, records, logs } = gateway({ fetch });
+    await gw.handle(CALL, CTX);
+    expect(records).toHaveLength(1);
+    expect(records[0]?.status).toBe("ok");
+    expect(records[0]?.inputDigest).toBe(digestJcs({ q: "x" }));
+    expect(records[0]?.outputDigest).toBeUndefined();
+    expect(records[0]?.outputBytes).toBeUndefined();
+    expect(
+      JSON.parse(Buffer.from(records[0]!.content!.bytes).toString("utf8")),
+    ).toEqual({ input: { q: "x" } });
+    expect(logs.join(" ")).toContain("without its result");
   });
 
   it("classifies an outcome from the status and the rpc error together", () => {

@@ -16,6 +16,7 @@
 import { CheckIcon, CopyIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
+import { Button } from "@/ui/button";
 import { mono } from "@/ui/control-styles";
 
 /** @internal How long "Copied" stays beside an id, in milliseconds; the test advances its timers by it. */
@@ -70,15 +71,17 @@ export function CopyId({
       <code className={`${mono} min-w-0 select-all truncate`} data-truncate={value}>
         {value}
       </code>
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="icon-xs"
         onClick={() => void copy()}
         aria-label={label}
         title={label}
-        className="-my-1 inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-dim hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+        className="-my-1"
       >
         <Icon aria-hidden="true" className="size-3" />
-      </button>
+      </Button>
       <span role="status">
         {state === "copied"
           ? t("copied")

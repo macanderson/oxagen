@@ -185,6 +185,25 @@ export function resolveWriteBack(
   return { ...WRITE_BACK_DEFAULTS, ...(table ?? {}) };
 }
 
+/**
+ * The switches a work.collectors row stores in its write_back column. Only a
+ * switch stored as true is on. A missing or malformed value reads off, never
+ * as the file's default, so a row that lost its switches writes nothing to
+ * the provider (#4775).
+ */
+export function readStoredWriteBack(
+  type: CollectorType,
+  stored: unknown,
+): WriteBackSwitches {
+  const switches: WriteBackSwitches = { ...WRITE_BACK_OFF };
+  if (COLLECTOR_TYPES_WITHOUT_WRITE_BACK.includes(type)) return switches;
+  if (stored === null || typeof stored !== "object" || Array.isArray(stored))
+    return switches;
+  for (const name of WRITE_BACK_SWITCHES)
+    switches[name] = name in stored && Reflect.get(stored, name) === true;
+  return switches;
+}
+
 function issuesOf(error: z.ZodError, prefix: string[] = []): string[] {
   return error.issues.map((issue) => {
     const path = [...prefix, ...issue.path];

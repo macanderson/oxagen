@@ -27,7 +27,8 @@ import {
   useState,
 } from "react";
 import { REPLY_FEEDBACK_NOTE_MAX_CHARS } from "@oxagen/oxagen/contracts/assistant.reply_feedback.record";
-import { inputBase, linkText } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
+import { inputBase } from "@/ui/control-styles";
 import {
   recordReplyFeedback,
   type ReplyVerdict,
@@ -43,10 +44,12 @@ export type AssistantReplyFeedbackProps = {
   runId: string;
 };
 
+/**
+ * The verdict buttons' phone touch target and pressed state, over the kit's
+ * outline.
+ */
 const VERDICT_BUTTON =
-  "inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-sm text-muted-foreground transition-colors max-md:min-h-11 max-md:px-3 " +
-  "hover:bg-secondary hover:text-secondary-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring " +
-  "aria-pressed:border-rule aria-pressed:bg-secondary aria-pressed:text-foreground disabled:cursor-not-allowed disabled:opacity-60";
+  "max-md:min-h-11 max-md:px-3 aria-pressed:border-rule aria-pressed:bg-secondary aria-pressed:text-foreground disabled:opacity-60";
 
 export function AssistantReplyFeedback({
   org,
@@ -139,8 +142,10 @@ export function AssistantReplyFeedback({
   return (
     <div className="mt-1.5" data-testid="assistant-feedback">
       <div role="group" aria-label={t("label")} className="flex gap-1.5">
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="xs"
           aria-pressed={recorded === "useful"}
           disabled={sending}
           data-testid="assistant-feedback-useful"
@@ -156,10 +161,12 @@ export function AssistantReplyFeedback({
         >
           <ThumbsUpIcon aria-hidden="true" className="size-3.5" />
           {t("useful")}
-        </button>
-        <button
+        </Button>
+        <Button
           ref={wrongRef}
           type="button"
+          variant="outline"
+          size="xs"
           aria-pressed={recorded === "wrong"}
           disabled={sending}
           data-testid="assistant-feedback-wrong"
@@ -171,7 +178,7 @@ export function AssistantReplyFeedback({
         >
           <ThumbsDownIcon aria-hidden="true" className="size-3.5" />
           {t("wrong")}
-        </button>
+        </Button>
       </div>
 
       {noting ? (
@@ -203,23 +210,27 @@ export function AssistantReplyFeedback({
             {t("noteHint", { max: REPLY_FEEDBACK_NOTE_MAX_CHARS })}
           </p>
           <div className="flex items-center gap-3">
-            <button
+            <Button
               type="submit"
+              variant="outline"
+              size="xs"
               disabled={sending}
               data-testid="assistant-feedback-send"
               className={VERDICT_BUTTON}
             >
               {t("send")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="link"
+              size="xs"
               disabled={sending}
               data-testid="assistant-feedback-cancel"
               onClick={closeNote}
-              className={`text-sm ${linkText} disabled:opacity-60`}
+              className="h-auto px-0 disabled:opacity-60"
             >
               {t("cancel")}
-            </button>
+            </Button>
           </div>
         </form>
       ) : null}

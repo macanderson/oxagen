@@ -4,8 +4,9 @@
 // A collector row holds the fields of one `collector/v1` document and the
 // SHA-256 of that document's text (collectorFileHash). The document is the
 // file a steering repo will carry once steering checks read work/ files
-// (ADR-250), so the row already matches what that file will say. Phase 1
-// renders every write-back switch off.
+// (ADR-250), so the row already matches what that file will say. A new
+// collector's document turns every write-back switch off. A change keeps the
+// switches the row stores in write_back, so the document and the row agree.
 //
 // Health comes from the collector's result rows in work.inbound_events: the
 // latest reconcile, the last one that finished, the failed reconciles since,
@@ -16,7 +17,9 @@ import {
   INBOUND_OUTCOMES,
   RECONCILE_KEY_PREFIX,
   readCollectorFile,
+  readStoredWriteBack,
   registerCollectorModules,
+  type WriteBackSwitches,
 } from "@oxagen/ingestion/collectors";
 import { RECONCILE_INTERVAL_MINUTES } from "@oxagen/work";
 import { and, asc, desc, eq, inArray, isNull, like, notLike, sql } from "drizzle-orm";
@@ -51,8 +54,17 @@ export interface CollectorView {
   created_at: string;
 }
 
-/** The collector/v1 document a GitHub collector's row mirrors, with every write-back switch off. */
-export function renderGithubCollectorFile(input: { name: string; connection: string; repos: readonly string[] }): string {
+/**
+ * The collector/v1 document a GitHub collector's row mirrors. Every
+ * write-back switch the input leaves out is off.
+ */
+export function renderGithubCollectorFile(input: {
+  name: string;
+  connection: string;
+  repos: readonly string[];
+  writeBack?: WriteBackSwitches;
+}): string {
+  const writeBack = input.writeBack ?? readStoredWriteBack("github", null);
   return stringify({
     schema: "collector/v1",
     name: input.name,
@@ -60,7 +72,13 @@ export function renderGithubCollectorFile(input: { name: string; connection: str
     type: "github",
     connection: input.connection,
     scope: { repos: [...input.repos] },
-    write_back: { certify_note: false, send_note: false, status: false, close: false, labels: false },
+    write_back: {
+      certify_note: writeBack.certify_note,
+      send_note: writeBack.send_note,
+      status: writeBack.status,
+      close: writeBack.close,
+      labels: writeBack.labels,
+    },
   });
 }
 
@@ -291,7 +309,9 @@ export async function setCollector(tx: Tx, scope: WorkScope, input: SetCollector
   }
 
   const repos = [...new Set(input.repos ?? reposOf(existing?.scope ?? {}))];
-  const text = renderGithubCollectorFile({ name: input.name, connection: connection.publicId, repos });
+  // A change keeps the row's switches. set_work_collector sets none of them.
+  const writeBack = readStoredWriteBack("github", existing?.writeBack ?? null);
+  const text = renderGithubCollectorFile({ name: input.name, connection: connection.publicId, repos, writeBack });
   const file = readCollectorFile(`${COLLECTOR_DIR}/${input.name}.toml`, text);
   if (!file.ok) throw new CollectorSetupError("invalid_input", file.errors.join("; "));
 
@@ -315,6 +335,7 @@ export async function setCollector(tx: Tx, scope: WorkScope, input: SetCollector
         scope: file.file.scope,
         health,
         fileHash: file.file.fileHash,
+        writeBack: file.file.writeBack,
         ...(readFromStart ? { cursor: null } : {}),
         updatedAt: sql`now()`,
         updatedById: input.actorUserId,
@@ -338,6 +359,7 @@ export async function setCollector(tx: Tx, scope: WorkScope, input: SetCollector
       scope: file.file.scope,
       health,
       fileHash: file.file.fileHash,
+      writeBack: file.file.writeBack,
     })
     .returning({ id: collectors.id });
   return { collectorId: row!.id, created: true, reconcile: !paused };

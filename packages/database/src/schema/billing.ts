@@ -860,6 +860,12 @@ export const spendCounters = billingSchema.table(
       .references(() => organizations.id, { onDelete: "cascade" }),
     workspaceId: uuid("workspace_id"),
     day: date("day", { mode: "string" }).notNull(),
+    // Which of the workspace's own model calls the spend belongs to (#5426):
+    // `run_enrichment`, `assistant`, `work`, or '' for spend outside those
+    // lanes (a wrapped run's own harness cost, an unlaned call). The org and
+    // workspace ceilings sum every lane; a lane's daily budget reads its own
+    // row.
+    lane: text("lane").notNull().default(""),
     // `sql\`0\``: drizzle-kit export cannot serialize a BigInt literal default.
     spentMicros: bigint("spent_micros", { mode: "bigint" })
       .notNull()
@@ -873,8 +879,13 @@ export const spendCounters = billingSchema.table(
       t.orgId,
       sql`coalesce(${t.workspaceId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
       t.day,
+      t.lane,
     ),
     spentCheck: check("spend_counters_spent_check", sql`${t.spentMicros} >= 0`),
+    laneCheck: check(
+      "spend_counters_lane_check",
+      sql`${t.lane} IN ('', 'run_enrichment', 'assistant', 'work')`,
+    ),
   }),
 );
 

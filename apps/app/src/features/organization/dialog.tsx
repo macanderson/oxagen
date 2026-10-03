@@ -7,11 +7,7 @@
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import type { ActionResult } from "@/server/kernel";
-import {
-  buttonDanger,
-  buttonPrimary,
-  buttonSecondary,
-} from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
@@ -138,17 +134,17 @@ export function WriteDialog<O>({
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={
-          primary ? buttonPrimary : danger ? buttonDanger : buttonSecondary
+        variant={
+          primary ? "primary" : danger ? "destructive-outline" : "outline"
         }
         onClick={() => {
           setOpen(true);
         }}
       >
         {copy.open}
-      </button>
+      </Button>
       {/* The design's footer reads Cancel then the confirm, with the header's
           x beside the title. Once a write left something to read, the form
           gives way to it and the one footer button is its close. */}

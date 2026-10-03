@@ -36,7 +36,8 @@
  * `~/.claude.json`, or of `.claude.json` inside `CLAUDE_CONFIG_DIR`
  * (`claudeUserConfigFor`). `claude mcp add --scope user` writes the same
  * place. In a project whose `.mcp.json`, or whose local-scope servers, name
- * another `oxagen` server, that server wins there.
+ * another `oxagen` server, that server wins there, and
+ * `claudeCodeSessionHasOxagenTools` answers no for a session in it.
  *
  * The file holds Claude Code's whole state for the user, not just its MCP
  * servers. The merge changes `mcpServers.oxagen` and nothing else, and the
@@ -46,14 +47,18 @@
  * Claude Code reads its MCP servers when a session starts. A session that
  * was already running gets the tools in the next session it starts.
  */
+import { dirname, join, resolve } from "node:path";
+import { readJsonFileIfExists } from "./fs";
 import {
   type GatewayInstallConfig,
+  isOxagenServerEntry,
   type McpMergeResult,
   type McpServerEntry,
   type McpServerPresence,
   type McpStripResult,
   mcpConfigShapeProblem,
   mergeOxagenMcpServer,
+  OXAGEN_MCP_SERVER_KEY,
   oxagenMcpPresence,
   stripOxagenMcpServer,
 } from "./mcp-config-writer";
@@ -95,14 +100,25 @@ export interface OxagenToolsCheck {
   sessionStartedAt: string;
   /** Claude Code's user config, read only when every other test passes. */
   readUserConfig: () => unknown;
+  /**
+   * The directory the session runs in. Absent, only the user scope is read,
+   * and a project server named `oxagen` goes unseen.
+   */
+  cwd?: string;
+  /**
+   * Reads a project's `.mcp.json`, undefined when there is none. Defaults to
+   * reading the file from disk.
+   */
+  readProjectConfig?: (file: string) => unknown;
 }
 
 /**
  * Whether a Claude Code session can call Oxagen's tools: the enrollment
  * holds the gateway key, wrote the `oxagen` entry before the session
- * started, and the entry is still in the user config. Claude Code loads MCP
- * servers when a session starts, so a session already running when the entry
- * was written does not have the tools.
+ * started, the entry is still in the user config, and no local-scope or
+ * project-scope `oxagen` server wins over it where the session runs. Claude
+ * Code loads MCP servers when a session starts, so a session already running
+ * when the entry was written does not have the tools.
  */
 export function claudeCodeSessionHasOxagenTools(
   check: OxagenToolsCheck,
@@ -112,7 +128,72 @@ export function claudeCodeSessionHasOxagenTools(
   const started = Date.parse(check.sessionStartedAt);
   if (!Number.isFinite(registered) || !Number.isFinite(started)) return false;
   if (started < registered) return false;
-  return oxagenMcpPresence(check.readUserConfig(), check.enrollmentId).present;
+  const userConfig = check.readUserConfig();
+  if (!oxagenMcpPresence(userConfig, check.enrollmentId).present) return false;
+  return (
+    check.cwd === undefined ||
+    !shadowedInProject(
+      userConfig,
+      check.cwd,
+      check.enrollmentId,
+      check.readProjectConfig ?? readProjectFile,
+    )
+  );
+}
+
+/**
+ * Whether an `oxagen` server that is not this enrollment's wins over ours
+ * for a session in `cwd`. Claude Code 2.1.288 ranks local scope over
+ * project scope over user scope. It reads local-scope servers from
+ * `projects[<dir>].mcpServers` in the user config, keyed by the
+ * repository root or else the working directory, and project-scope ones
+ * from `.mcp.json` in the working directory and in every directory above
+ * it. Checking both for each directory from `cwd` up covers the
+ * repository root without asking git.
+ *
+ * A project server Claude Code has not approved does not win. This does not
+ * check approval, so it counts that server as winning too. That costs one
+ * reflection, where asking for a tool the hosted server refuses
+ * (`no_watched_run`) would block the stop for nothing.
+ */
+function shadowedInProject(
+  userConfig: unknown,
+  cwd: string,
+  enrollmentId: string,
+  readProjectConfig: (file: string) => unknown,
+): boolean {
+  const projects = member(userConfig, "projects");
+  for (let dir = resolve(cwd); ; dir = dirname(dir)) {
+    if (shadows(member(projects, dir), enrollmentId)) return true;
+    if (shadows(readProjectConfig(join(dir, ".mcp.json")), enrollmentId))
+      return true;
+    if (dirname(dir) === dir) return false;
+  }
+}
+
+/** Whether `config` names an `oxagen` server that is not this enrollment's. */
+function shadows(config: unknown, enrollmentId: string): boolean {
+  const entry = member(member(config, "mcpServers"), OXAGEN_MCP_SERVER_KEY);
+  return entry !== undefined && !isOxagenServerEntry(entry, enrollmentId);
+}
+
+/** `value[key]` when `value` is a JSON object. */
+function member(value: unknown, key: string): unknown {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)[key]
+    : undefined;
+}
+
+/**
+ * A `.mcp.json` from disk. One that does not parse is read as none, since
+ * Claude Code reports it and loads nothing from it.
+ */
+function readProjectFile(file: string): unknown {
+  try {
+    return readJsonFileIfExists(file);
+  } catch {
+    return undefined;
+  }
 }
 
 /** Why the user config cannot be merged into, or undefined when it can. */

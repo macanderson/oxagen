@@ -23,12 +23,8 @@ import { useTranslations } from "next-intl";
 import { type ReactNode, useMemo, useState, useTransition } from "react";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { routes } from "@/shared/safe-path";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  linkText,
-  mono,
-} from "@/ui/control-styles";
+import { linkText, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { PullRequestLink, SafeLink } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import {
@@ -422,10 +418,10 @@ function ImportDialog({
     );
     footer = (
       <>
-        <button
+        <Button
           type="button"
           data-touch-target=""
-          className={buttonSecondary}
+          variant="outline"
           disabled={committing}
           onClick={() => {
             setFailed(null);
@@ -433,12 +429,12 @@ function ImportDialog({
           }}
         >
           {t("back")}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           data-touch-target=""
           data-testid="import-commit"
-          className={buttonPrimary}
+          variant="primary"
           disabled={
             committing ||
             counts.open > 0 ||
@@ -454,7 +450,7 @@ function ImportDialog({
             : storesOnly
               ? t("store")
               : t("commit")}
-        </button>
+        </Button>
       </>
     );
   } else {
@@ -523,18 +519,18 @@ function ImportDialog({
         </span>
       );
     footer = (
-      <button
+      <Button
         type="button"
         data-touch-target=""
         data-testid="import-review"
-        className={buttonPrimary}
+        variant="primary"
         disabled={busy || documents.length === 0}
         onClick={() => {
           void review();
         }}
       >
         {progress === null ? t("review") : t("reviewPending")}
-      </button>
+      </Button>
     );
   }
 
@@ -563,10 +559,10 @@ export function ImportMarkdown({ org, ws }: { org: string; ws: string }) {
   const [opening, setOpening] = useState(0);
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid="import-markdown"
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpening((n) => n + 1);
           setOpen(true);
@@ -574,7 +570,7 @@ export function ImportMarkdown({ org, ws }: { org: string; ws: string }) {
       >
         <UploadSimpleIcon aria-hidden="true" className="size-3.5" />
         {t("button")}
-      </button>
+      </Button>
       <ImportDialog
         key={opening}
         org={org}

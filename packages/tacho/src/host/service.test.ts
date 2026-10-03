@@ -198,6 +198,17 @@ describe("service managers", () => {
     );
   });
 
+  // The daemon answers hooks the agent waits on. launchd limits a
+  // `Background` job and throttles the CPU and I/O of a `Standard` one or
+  // one with no class, so a busy Mac slowed every answer.
+  it("runs the daemon in launchd's Interactive class, which is not throttled", () => {
+    const plist = renderLaunchdPlist(SPEC);
+    expect(plist).toMatch(
+      /<key>ProcessType<\/key>\n\s*<string>Interactive<\/string>/,
+    );
+    expect(plist).not.toContain("<string>Background</string>");
+  });
+
   it("renders a launchd exit timeout so a hung stop cannot outlast the bootout wait", () => {
     expect(renderLaunchdPlist(SPEC)).toMatch(
       /<key>ExitTimeOut<\/key>\n\s*<integer>\d+<\/integer>/,

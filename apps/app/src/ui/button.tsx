@@ -1,61 +1,28 @@
-// shadcn's button in the base-maia style (ADR-221), written from
-// `ui.shadcn.com/r/styles/base-maia/button.json` over Base UI's button. The
-// maia shape stays: a pill, 36px tall by default, 14px text, a 16px glyph.
-// The colours are the house's button tokens rather than shadcn's `primary`,
-// which `design-record.test.ts` keeps out of component files (INV-32), and
-// focus draws the house outline every other control draws.
-//
-// `default` is the gold action. A screen carries at most one, so a pager, a
-// close glyph or a toolbar reaches for `ghost` or `outline`.
+// The kit's button: shadcn's button in the base-maia style (ADR-221), over
+// Base UI's button. Its classes live in button-variants.ts, so a link styled as
+// a button reads the same ones. Every button in the app is this component with
+// one of its variants (INV-37).
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
-import { cva, type VariantProps } from "class-variance-authority";
+import type { VariantProps } from "class-variance-authority";
+import { buttonVariants } from "./button-variants";
 import { cn } from "./cn";
 
-export const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-4xl border border-transparent bg-clip-padding text-base font-medium whitespace-nowrap transition-all select-none " +
-    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring " +
-    "active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 " +
-    "aria-invalid:border-input-invalid-border [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-  {
-    variants: {
-      variant: {
-        default:
-          "border-button-primary-border bg-button-primary-bg font-semibold text-button-primary-fg hover:bg-button-primary-hover-bg active:bg-button-primary-active-bg",
-        outline:
-          "border-button-default-border bg-button-default-bg text-button-default-fg hover:bg-button-default-hover-bg hover:text-foreground aria-expanded:bg-button-default-hover-bg aria-expanded:text-foreground",
-        secondary:
-          "bg-muted text-foreground hover:bg-hl aria-expanded:bg-hl",
-        ghost:
-          "text-muted-foreground hover:bg-hl hover:text-foreground aria-expanded:bg-hl aria-expanded:text-foreground",
-        destructive:
-          "bg-error/10 text-error-ink hover:bg-error/20 focus-visible:outline-error",
-        link: "text-link underline-offset-4 hover:text-link-hover hover:underline",
-      },
-      size: {
-        default:
-          "h-9 gap-1.5 px-3 has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5",
-        xs: "h-6 gap-1 px-2.5 text-sm has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-8 gap-1 px-3 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        lg: "h-10 gap-1.5 px-4 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
-        icon: "size-9",
-        "icon-xs": "size-6 [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm": "size-8",
-        "icon-lg": "size-10",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
-    },
-  },
-);
+type Variants = VariantProps<typeof buttonVariants>;
 
-type ButtonProps = ButtonPrimitive.Props &
-  VariantProps<typeof buttonVariants>;
+/**
+ * A button names its variant: `primary` for the one gold action on a screen,
+ * and `secondary`, `outline`, `ghost`, `destructive`, `destructive-outline`
+ * or `link` for every other. The type requires it, so no button turns gold by
+ * leaving it out.
+ */
+type ButtonProps = ButtonPrimitive.Props & {
+  variant: NonNullable<Variants["variant"]>;
+  size?: Variants["size"];
+};
 
 export function Button({
   className,
-  variant = "default",
+  variant,
   size = "default",
   ...props
 }: ButtonProps) {

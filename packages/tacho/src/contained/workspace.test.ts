@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
-import { validateContainedWorkspace } from "./workspace";
+import { validateContainedWorkspace, within } from "./workspace";
 
 const roots: string[] = [];
 function fixture() {
@@ -105,5 +105,30 @@ describe("contained workspace inspection", () => {
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
+  });
+  // `relative` gives `..cache` for a child named `..cache`, which starts
+  // with two dots and is still inside the checkout.
+  it("treats a child whose name starts with two dots as inside the checkout", () => {
+    const { workspace, session } = fixture();
+    mkdirSync(join(workspace, "..cache"));
+    writeFileSync(join(workspace, "..cache", "data"), "cached");
+    symlinkSync(join(workspace, "..cache", "data"), join(workspace, "linked"));
+    expect(() =>
+      validateContainedWorkspace(workspace, session, ""),
+    ).not.toThrow();
+    expect(() =>
+      validateContainedWorkspace(
+        workspace,
+        session,
+        `1 0 0:1 / ${workspace}/..cache rw - tmpfs tmpfs rw`,
+      ),
+    ).toThrow("nested mount");
+  });
+  it("counts only a `..` segment as climbing out of the root", () => {
+    const root = join(tmpdir(), "repo");
+    expect(within(root, root)).toBe(true);
+    expect(within(root, join(root, "..cache"))).toBe(true);
+    expect(within(root, join(root, "..", "sibling"))).toBe(false);
+    expect(within(root, tmpdir())).toBe(false);
   });
 });

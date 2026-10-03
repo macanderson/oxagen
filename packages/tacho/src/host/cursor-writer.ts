@@ -156,8 +156,15 @@ export function cursorHooksShapeProblem(document: unknown): string | undefined {
 export function absoluteHookCommandProblem(
   hookCommand: string,
 ): string | undefined {
-  for (const raw of hookCommand.match(/'[^']*'|"[^"]*"|\S+/g) ?? []) {
-    const token = raw.replace(/^'(.*)'$/, "$1").replace(/^"(.*)"$/, "$1");
+  // A word runs on across single-quoted spans and the `\'` between them,
+  // which is how `shellQuote` writes an apostrophe (`'Bob'\''s'`). Any other
+  // backslash stays as written, because it separates a Windows path.
+  for (const raw of hookCommand.match(
+    /(?:'[^']*'|\\'|[^\s'"])+|"[^"]*"/g,
+  ) ?? []) {
+    const token = raw.startsWith('"')
+      ? raw.slice(1, -1)
+      : raw.replace(/'([^']*)'|\\'/g, (_, quoted?: string) => quoted ?? "'");
     if (token.startsWith("-")) continue;
     const separated = token.includes("/") || token.includes("\\");
     if (!separated) continue;

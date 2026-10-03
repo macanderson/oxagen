@@ -9,16 +9,17 @@
 //   and the newest run of its streak. sendBackWorkOrders adds a row only when
 //   the note was written, so a switch that is off, a paused collector, or a
 //   module with no write-back records nothing, and the next pass tries again.
-// - resolve: a work item's collector, its connection, and its item at the
-//   provider, read through the work intake stores (collector-store.ts,
-//   ports.ts). A work item with no collector, such as one a person entered,
-//   resolves to null.
+// - resolve: a work item's collector, its connection, its item at the
+//   provider, and the Oxagen page that shows the work order, read through the
+//   work intake stores (collector-store.ts, ports.ts). A work item with no
+//   collector, such as one a person entered, resolves to null.
 //
-// Phase 1 keeps provider write-back off (ADR-250). A collector row stores no
-// switches: it mirrors a collector/v1 document with every write-back switch
-// off, so every switch reads off here and no note reaches a provider yet.
-// Turning write-back on is #4775's Phase 2: it gives a collector its switches
-// and a module its writeBack, and passes them in through SendBackOptions.
+// The switches come from the collector row's write_back column (#4775). A
+// switch the row does not store as true reads off. Every row starts with
+// every switch off, so no note reaches a provider until a person turns the
+// collector's send_note switch on. Once it is on, the note goes through the
+// GitHub module's write-back as an issue comment, and shows what the runs
+// cost only on a private repository.
 //
 // Every port opens its own tenant transaction, so the caller runs inside
 // runInTenantScope for the same org and workspace.
@@ -29,8 +30,8 @@ import {
   type CollectorType,
   type Connection,
   getCollector,
+  readStoredWriteBack,
   registerCollectorModules,
-  resolveWriteBack,
   type SendBackPorts,
   type SendBackRecord,
   type SendBackTarget,
@@ -44,27 +45,43 @@ import { collectorConnection } from "./ports";
 
 const sendBacks = schema.workSendBacks;
 const items = schema.workItems;
+const collectors = schema.workCollectors;
 
-/** The [write_back] table of every Phase 1 collector row: each switch off (ADR-250). */
-const PHASE_ONE_WRITE_BACK: Readonly<WriteBackSwitches> = Object.freeze({
-  certify_note: false,
-  send_note: false,
-  status: false,
-  close: false,
-  labels: false,
-});
+/** Where the app lives when APP_URL is unset, as the other handlers fall back. */
+const DEFAULT_APP_URL = "https://app.oxagen.sh";
 
-/** Where a collector's switches and module come from. Production reads the Phase 1 defaults. */
+/** Where a collector's switches and module come from. Production reads the collector row. */
 export interface SendBackOptions {
-  /** The switches in force for a collector. */
-  switches?: (collector: CollectorRecord) => WriteBackSwitches;
+  /** The switches in force for a collector. `stored` is the row's write_back column. */
+  switches?: (collector: CollectorRecord, stored: unknown) => WriteBackSwitches;
   /** The module for a collector type, or undefined when none is registered. */
   definition?: (type: CollectorType) => AnyCollectorDefinition | undefined;
+  /** The app's origin. Defaults to APP_URL. */
+  appUrl?: string;
 }
 
-/** The switches a Phase 1 collector row mirrors: every one off. */
-function phaseOneSwitches(collector: CollectorRecord): WriteBackSwitches {
-  return resolveWriteBack(collector.type, PHASE_ONE_WRITE_BACK);
+/** The switches the collector row stores. */
+function storedSwitches(collector: CollectorRecord, stored: unknown): WriteBackSwitches {
+  return readStoredWriteBack(collector.type, stored);
+}
+
+/**
+ * The work item page that shows the work order, such as
+ * `https://app.oxagen.sh/acme/core/work/WI-12`. A work order has no page of its
+ * own. Null when the organization or workspace row is missing.
+ */
+async function orderPageUrl(scope: WorkScope, itemNumber: string, appUrl: string): Promise<string | null> {
+  const [row] = await withTenantDb((tx) =>
+    tx
+      .select({ org: schema.organizations.slug, workspace: schema.workspaces.slug })
+      .from(schema.workspaces)
+      .innerJoin(schema.organizations, eq(schema.organizations.id, schema.workspaces.orgId))
+      .where(and(eq(schema.workspaces.id, scope.workspaceId), eq(schema.workspaces.orgId, scope.orgId)))
+      .limit(1),
+  );
+  if (!row) return null;
+  const base = appUrl.replace(/\/+$/, "");
+  return `${base}/${encodeURIComponent(row.org)}/${encodeURIComponent(row.workspace)}/work/${encodeURIComponent(itemNumber)}`;
 }
 
 function registeredModule(type: CollectorType): AnyCollectorDefinition | undefined {
@@ -111,10 +128,10 @@ function postgresSendBackRecord(scope: WorkScope): SendBackRecord {
 }
 
 /**
- * The collector a work item came from and the provider item to write on.
- * Null when the work item names no collector or no provider id, as a work
- * item a person entered does, when its collector row is gone, or when no
- * module is registered for the collector's type.
+ * The collector a work item came from, the provider item to write on, and the
+ * page that shows the work order. Null when the work item names no collector
+ * or no provider id, as a work item a person entered does, when its collector
+ * row is gone, or when no module is registered for the collector's type.
  *
  * Oxagen mints a credential only when the note can be written: the send_note
  * switch is on, the collector is not paused, and its module has write-back.
@@ -129,8 +146,12 @@ async function resolveSendBackTarget(
 ): Promise<SendBackTarget | null> {
   const [item] = await withTenantDb((tx) =>
     tx
-      .select({ collectorId: items.collectorId, providerId: items.providerId })
+      .select({ collectorId: items.collectorId, providerId: items.providerId, number: items.number, writeBack: collectors.writeBack })
       .from(items)
+      .leftJoin(
+        collectors,
+        and(eq(collectors.id, items.collectorId), eq(collectors.orgId, scope.orgId), eq(collectors.workspaceId, scope.workspaceId)),
+      )
       .where(and(eq(items.id, itemId), eq(items.orgId, scope.orgId), eq(items.workspaceId, scope.workspaceId)))
       .limit(1),
   );
@@ -141,15 +162,16 @@ async function resolveSendBackTarget(
   if (definition === undefined) return null;
   const collector: WriteBackCollector = {
     definition,
-    switches: (options.switches ?? phaseOneSwitches)(record),
+    switches: (options.switches ?? storedSwitches)(record, item.writeBack),
     health: record.health,
   };
   const conn: Connection = canSendNote(collector)
     ? await collectorConnection(scope, record)
     : { id: record.connectionId ?? "", auth: { scheme: "public" } };
+  const orderUrl = await orderPageUrl(scope, item.number, options.appUrl ?? (process.env.APP_URL?.trim() || DEFAULT_APP_URL));
   // The row keeps no item kind. A GitHub collector has one kind, its issues,
   // and its module reads the provider id alone.
-  return { collector, target: { ref: { providerId: item.providerId }, conn } };
+  return { collector, target: { ref: { providerId: item.providerId }, conn }, orderUrl };
 }
 
 /** The ports sendBackWorkOrders takes for one org and workspace. */

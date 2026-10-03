@@ -23,6 +23,7 @@ import {
   takePendingNext,
 } from "./auth-client";
 import { routes, type SafePath, sanitizeNext } from "@/shared/safe-path";
+import { Button } from "@/ui/button";
 import { useNavigate } from "@/ui/navigation";
 import { type AuthErrorKey, TwoFactorSchema, fieldErrors } from "./schemas";
 import { Field } from "@/ui/field";
@@ -192,9 +193,11 @@ export function TwoFactorForm({
             pendingLabel={t("twoFactor.pending")}
           />
           <div className="flex items-center justify-between gap-3 text-sm">
-            <button
+            <Button
               type="button"
-              className={authLinkButton}
+              variant="link"
+              size="xs"
+              className={`${authLinkButton} h-auto`}
               onClick={() => {
                 setError(null);
                 setOutcome(null);
@@ -204,7 +207,7 @@ export function TwoFactorForm({
               {method === "totp"
                 ? t("twoFactor.useBackup")
                 : t("twoFactor.useTotp")}
-            </button>
+            </Button>
             {method === "totp" ? <ExpiryClock /> : null}
           </div>
         </form>

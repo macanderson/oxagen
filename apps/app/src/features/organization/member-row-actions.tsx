@@ -11,12 +11,8 @@ import { type ReactNode, type SyntheticEvent, useState } from "react";
 import { GrantableOrgRole, type MemberList } from "@/data/contracts/org";
 import type { ActionResult } from "@/server/kernel";
 import type { SafePath } from "@/shared/safe-path";
-import {
-  buttonDanger,
-  buttonSecondary,
-  inputBase,
-  mono,
-} from "@/ui/control-styles";
+import { inputBase, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -156,15 +152,15 @@ function WriteDialog({
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={danger ? buttonDanger : buttonSecondary}
+        variant={danger ? "destructive-outline" : "outline"}
         onClick={() => {
           setOpen(true);
         }}
       >
         {openLabel}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={openChange}
@@ -329,15 +325,15 @@ function MemberDialog({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {openLabel}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}
@@ -346,17 +342,17 @@ function MemberDialog({
         headerClose
         footer={
           changeRole === null ? undefined : (
-            <button
+            <Button
               type="button"
               data-touch-target=""
-              className={buttonSecondary}
+              variant="outline"
               onClick={() => {
                 setOpen(false);
                 onChangeRole();
               }}
             >
               {changeRole}
-            </button>
+            </Button>
           )
         }
         testId={`member-${member.id}`}

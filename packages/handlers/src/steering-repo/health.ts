@@ -7,7 +7,7 @@
 //   healthy       every prescribed setting matches
 //   drifted       a setting differs, and Oxagen can still write settings
 //   disconnected  Oxagen lost access to the repository
-//   diverged      main holds a commit Oxagen did not merge
+//   diverged      main holds a commit that no pull request merged
 //
 // While a repo is not healthy, Oxagen merges nothing and publishes nothing
 // (`readRepoHealth` is the read S3's merge and S5's publish refuse on), every
@@ -305,7 +305,7 @@ export const HEALTH_CHECK_EXTERNAL_ID = "oxagen-steering-health";
 export const HEALTH_TITLES: Readonly<Record<Exclude<RepoHealth, "healthy">, string>> = {
   drifted: "Repository settings changed",
   disconnected: "Oxagen lost access to the repository",
-  diverged: "main holds a commit Oxagen did not merge",
+  diverged: "main holds a commit that no pull request merged",
 };
 
 const HEALTHY_AGAIN =
@@ -407,7 +407,7 @@ export function renderHealthReport(state: HealthState): HealthReport {
     );
   } else {
     lines.push(
-      "main holds a commit Oxagen did not merge. Oxagen will not merge or publish until main matches the published version.",
+      "main holds a commit that no pull request merged. Oxagen will not merge or publish until main matches the published version.",
       "",
       `✗ ${state.reason ?? "main no longer matches the published version."}`,
       ...state.differences.map((d) => `✗ ${describeDifference(d)}${attribution(d)}`),
@@ -495,9 +495,9 @@ export interface PublishedCommit {
   version: number | null;
 }
 
-/** main holds commits Oxagen did not merge. */
+/** main holds commits that no pull request merged. */
 export interface Divergence {
-  /** One sentence, such as `main holds 2 commits Oxagen did not merge, starting with 1a2b3c4`. */
+  /** One sentence, such as `main holds 2 commits that no pull request merged, starting with 1a2b3c4`. */
   reason: string;
   /** Where main points now. */
   main_sha: string;
@@ -512,7 +512,7 @@ export interface HealthHost {
   observe(): Promise<Observation>;
   /** The last commit Oxagen published on main, or null when none is recorded. */
   published(): Promise<PublishedCommit | null>;
-  /** Whether main holds commits Oxagen did not merge since `published`. */
+  /** Whether main holds commits that no pull request merged since `published`. */
   diverged(published: PublishedCommit): Promise<Divergence | null>;
   /**
    * Open, or find, the pull request that puts main back at `published`, and
