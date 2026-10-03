@@ -83,18 +83,6 @@ export const GUARDED = [
  * @type {Readonly<Record<string, readonly { prop: string, values: readonly string[], why: string }[]>>}
  */
 export const KEEP = {
-  "apps/app/src/app/globals.css": [
-    {
-      prop: "width",
-      values: ["1500px"],
-      why: "the app's workspace frame, wider than the website's --ox-wrap on purpose",
-    },
-    {
-      prop: "box-shadow",
-      values: ["0 0 14px 1px color-mix(in oklab, var(--gold) 45%, transparent)"],
-      why: "the launcher's unread glow, an animated cue and not elevation",
-    },
-  ],
   "apps/docs/src/app/global.css": [
     {
       prop: "box-shadow",

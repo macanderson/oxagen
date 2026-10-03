@@ -44,8 +44,9 @@
 // 6px`, `box-shadow: 0 0 0 1px var(--gold)`, `padding: 6px 8px`, `animation:
 // x 1.2s linear`), and a named colour in a colour declaration. A custom
 // property definition (`--side-w: 236px`) is the token-mapping layer, where
-// raw values become tokens, so the scan does not read it. Zero, `100%` for a
-// size, and `50%` or `9999px` for a round corner are not values to tokenise.
+// raw values become tokens, so the scan does not read it. Zero, `9999px` for
+// a round corner, and a share of a box or the viewport (`50%`, `68vh`, `1fr`)
+// are not values to tokenise.
 // A unitless number, such as the `2` in `calc(var(--ox-space) * 2)`, scales a
 // token and passes.
 //
@@ -116,6 +117,23 @@ const LITERAL_NUMBER = /(?<![\w-])-?(?:\d+\.?\d*|\.\d+)/;
 
 /** A number with a unit in a CSS value: `6px`, `1.2s`, `-50%`. */
 const CSS_QUANTITY = /(?<![\w#-])-?(?:\d+\.?\d*|\.\d+)(%|[a-z]+)/gi;
+
+/** Units that state a share of a box or the viewport, not a size: `38%`, `68vh`, `1fr`. */
+const PROPORTION_UNITS = new Set([
+  "%",
+  "fr",
+  "vw",
+  "vh",
+  "dvh",
+  "svh",
+  "lvh",
+  "vmin",
+  "vmax",
+  "cqw",
+  "cqh",
+  "cqi",
+  "cqb",
+]);
 
 /** The text that stands in for a `${…}` substitution in a template. */
 const SUBSTITUTION = "${}";
@@ -430,7 +448,11 @@ function cssValueHardcoded(property: string, value: string): boolean {
   const plain = withoutVars(value).replace(/!important/g, "");
   const quantity = [...plain.matchAll(CSS_QUANTITY)].some((m) => {
     const written = m[0].replace(/^-/, "").toLowerCase();
-    return Number.parseFloat(written) !== 0 && !rule.allowed.has(written);
+    return (
+      Number.parseFloat(written) !== 0 &&
+      !PROPORTION_UNITS.has((m[1] ?? "").toLowerCase()) &&
+      !rule.allowed.has(written)
+    );
   });
   return (
     quantity ||

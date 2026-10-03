@@ -2,14 +2,6 @@
   "src/app/global-error.tsx": {
     "<button>": 1
   },
-  "src/app/globals.css": {
-    "css:animation": 5,
-    "css:animation-delay": 4,
-    "css:box-shadow": 1,
-    "css:inset": 1,
-    "css:max-width": 1,
-    "css:padding": 5
-  },
   "src/features/agents/agent-actions.tsx": {
     "<button>": 3
   },
@@ -556,42 +548,10 @@
   "src/ui/page-states.tsx": {
     "<button>": 3
   },
-  "src/ui/phone.css": {
-    "css:gap": 2,
-    "css:max-height": 1,
-    "css:max-width": 1,
-    "css:min-height": 2,
-    "css:min-width": 1,
-    "css:padding": 2,
-    "css:padding-bottom": 1,
-    "css:padding-top": 1
-  },
   "src/ui/record-picker.tsx": {
     "<button>": 1
   },
   "src/ui/source-filename.tsx": {
     "<button>": 1
-  },
-  "src/ui/transcript-skins.css": {
-    "css:animation": 4,
-    "css:border-radius": 12,
-    "css:box-shadow": 1,
-    "css:gap": 11,
-    "css:height": 10,
-    "css:left": 4,
-    "css:margin": 3,
-    "css:margin-bottom": 2,
-    "css:margin-left": 1,
-    "css:margin-right": 2,
-    "css:margin-top": 5,
-    "css:max-height": 4,
-    "css:min-width": 3,
-    "css:padding": 14,
-    "css:padding-bottom": 2,
-    "css:padding-inline": 1,
-    "css:padding-left": 3,
-    "css:padding-top": 2,
-    "css:top": 6,
-    "css:width": 6
   }
 }
