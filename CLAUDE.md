@@ -156,6 +156,14 @@ Mac set this on 2026-10-02, replacing the rule of 2026-09-29. Aeonik is the hous
 - docs.oxagen.sh reads the app scale one step up (`--docs-step`, 8/7), so its body is 16px.
 - In the app, no text is smaller than 14px, and no class sets a size of its own (Mac, 2026-10-02). Size text with `text-sm` (14px), `text-base` and up, or `var(--ox-a-*)` in a stylesheet. `text-xs` renders at 14px too. Do not write `text-[13px]`, `text-a-micro`, or a `font-size` under 14px. `apps/app/src/test/arch/type-scale.test.ts` (INV-36) fails on each of them.
 
+## Tokens
+
+Mac set this on 2026-10-03 (#5283). Every value in the app reads a token: a Tailwind scale step (`gap-2.5`, `max-w-180`, `rounded-2xl`), a theme utility, the kit's `Button` with one of its variants, or `var(--…)` in a stylesheet.
+
+- Do not write a Tailwind arbitrary value (`gap-[10px]`, `rounded-[8px]`, `shadow-[…]`), a `duration-<n>` step, a literal number or length in `style={{…}}`, a raw `<button>`, or a named colour. A value computed from data, such as `${pct}%`, may stay in a style.
+- In a stylesheet, a custom property definition may hold a raw value, because that is where a value becomes a token. A rule's radius, shadow, spacing, size, and motion read tokens.
+- `apps/app/src/test/arch/hardcoded-values.test.ts` (INV-37) fails on a new value. Values written before the rule wait in `apps/app/hardcoded-values-baseline.json`, which only shrinks. After you replace values, run `pnpm --filter @oxagen/app gen:hardcoded-values` and commit the smaller baseline.
+
 ## Runtime checks that matter
 
 - Register handlers before calling `invoke()`. A missing handler throws `CapabilityError` with code `no_handler`. Handler registration does not install IAM, billing, or entitlement gates. Bootstrap those at the surface entry point.
