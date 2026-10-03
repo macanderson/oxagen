@@ -80,7 +80,13 @@ export function createRequestAdmission<L extends string>(
 export const API_ADMISSION_LANES = {
   control: { concurrency: 8, reserveBytes: 32 * MiB },
   ingest: { concurrency: 4, reserveBytes: 32 * MiB },
-  background: { concurrency: 2, reserveBytes: 64 * MiB },
+  // Inngest runs each step of every durable job as its own POST to
+  // /api/inngest, so a triage burst or a sweep's fan-out holds several in
+  // flight at once. Two slots refused about a third of those calls in
+  // production on 2026-10-03, and Inngest counts a 503 as a failed attempt:
+  // the 15-minute intake sweep failed outright and 51 triage runs recorded
+  // "HTTP 503" on their items. Memory pressure still guards the heap.
+  background: { concurrency: 8, reserveBytes: 32 * MiB },
   interactive: { concurrency: 16, reserveBytes: 32 * MiB },
   upload: { concurrency: 1, reserveBytes: 256 * MiB },
 } as const;
