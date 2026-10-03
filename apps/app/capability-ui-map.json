@@ -174,10 +174,10 @@
     "create_workspace": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
-      "entry": "/[org] \u2014 Organization \u203a Workspaces \u203a \u201cCreate a workspace\u201d: the name, and the steering repo's Organization and Repository name (steeringRepo), then the steering repo status create_workspace returns and a link to Repositories (features/organization/workspace-actions.tsx, features/organization/actions.ts, features/steering-repo/destination-fields.tsx)",
+      "entry": "/[org] \u2014 Organization \u203a Workspaces \u203a \u201cCreate a workspace\u201d: the Label (name), the Name (slug), the cost-center code, and the steering repo's Organization and Repository name (steeringRepo), then the steering repo's provisioning steps in the same dialog until it is ready, then Repositories with \u201cAdd Oxagen to a repository\u201d open (features/organization/workspace-actions.tsx, features/organization/actions.ts, features/steering-repo/destination-fields.tsx, features/steering-repo/provisioning.tsx)",
       "proof": "apps/app/src/features/organization/workspace-actions.test.tsx",
-      "verifiedAt": "2026-10-02",
-      "verifiedBy": "steering-repo-destination-pick"
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "workspace-create-dialog-flow"
     },
     "decline_member_invite": {
       "route": "/invite/[token]",

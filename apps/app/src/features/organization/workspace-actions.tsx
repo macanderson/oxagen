@@ -39,7 +39,8 @@ import {
 } from "@/features/steering-repo/client";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { routes } from "@/shared/safe-path";
-import { buttonPrimary, inputBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
+import { inputBase } from "@/ui/control-styles";
 import { Field } from "@/ui/field";
 import { HelpTip } from "@/ui/help-tip";
 import { PullRequestLink, useNavigate } from "@/ui/navigation";
@@ -662,15 +663,14 @@ function WorkspaceSetupPanel({
         >
           <CheckIcon aria-hidden className="size-4 flex-none text-success" />
           <p className="min-w-0 flex-1">{t("ready")}</p>
-          <button
+          <Button
             type="button"
             data-testid="create-workspace-pick-repositories"
             data-touch-target=""
-            className={buttonPrimary}
             onClick={forward}
           >
             {t("pickRepositories")}
-          </button>
+          </Button>
         </div>
       ) : null}
     </div>
