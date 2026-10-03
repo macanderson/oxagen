@@ -5761,9 +5761,7 @@ type Messages = {
       installationUnreachable: string;
       mainRepo: string;
       repositoryAlreadyLinked: string;
-      mainRepoClaimed: string;
       mainRepoUnbound: string;
-      repositoryLinkedElsewhere: string;
       mainRepoUnlinkRefused: string;
       repositoryNotLinked: string;
       workspaceTomlUnreadable: string;
@@ -7413,7 +7411,6 @@ type Messages = {
         answerShape: string;
         repositoryUnresolved: string;
         slugTaken: string;
-        mainRepoClaimed: string;
         githubNotConnected: string;
         githubNotAuthorized: string;
         installationUnreachable: string;

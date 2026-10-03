@@ -1,7 +1,10 @@
 # ADR-099: A workspace is born with its main repository, and a repository is main for at most one workspace
 
 - **Status:** Accepted. Superseded in part by ADR-212: the `main` role became
-  `steering`, and a repository is linked through a steering PR.
+  `steering`, and a repository is linked through a steering PR. Superseded in
+  part by ADR-293 on 2026-10-03: any workspace may link another workspace's
+  steering repository, so §4's refusal and the trigger's refusals that involve
+  a linked head are gone.
 - **Date:** 2026-09-18
 - **Owners:** platform, app, cli
 - **Related:** Mission Control spec §10.1 (one main repo, any number of
@@ -165,6 +168,14 @@ Amended 2026-10-01 (#3340): a linked code repository receives no Context PRs.
 Mac decided it that day, because ADR-212 moved every record into the
 steering repository. The refusal stands for its second reason alone: another
 workspace's steering repository holds that workspace's records.
+
+Superseded 2026-10-03 by ADR-293 (#5355): the refusal is gone, and so are
+`main_repo_plane_unsupported` and the trigger described in §3. Any workspace
+may link a repository its GitHub App installation can see, including another
+workspace's steering repository. A repository still steers one workspace,
+held by `repository_binding_heads_main_repository_uq`, and
+`create_github_token` refuses a token for any workspace's steering
+repository.
 
 ### 5. Unlink deletes the head; binding versions are evidence
 

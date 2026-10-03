@@ -895,7 +895,6 @@
         "answerShape": "Oxagen refused this answer for this kind of question. Re-read the run and try again.",
         "repositoryUnresolved": "Oxagen could not tell which repository this run started in, so it cannot link or create for it.",
         "slugTaken": "A workspace in this organization already uses that slug. Choose another.",
-        "mainRepoClaimed": "Another workspace already holds this repository as its main repository.",
         "githubNotConnected": "This workspace has no GitHub connection, so Oxagen cannot reach the repository. Connect GitHub first.",
         "githubNotAuthorized": "This organization has no usable GitHub authorization. Connect GitHub from an existing workspace's settings first.",
         "installationUnreachable": "The GitHub App is not installed on the repository's owner, or Oxagen cannot reach that installation.",

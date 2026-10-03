@@ -8,37 +8,27 @@
 //      shared resolver. Nobody names an installation.
 //   2. The repository, read through that installation's token. One it cannot
 //      see is `not_found: repository_not_installed`.
-//   3. Is it another workspace's steering repository? Refused as
-//      `main_repo_claimed`. Another workspace's steering repository holds
-//      that workspace's steering records, and linking it here would give
-//      this workspace a way into them. The heads table is tenant-scoped, so the
-//      read crosses through `withSystemDb`. When a dedicated data plane makes
-//      the answer unknowable, the write is refused rather than guessed.
-//   4. This workspace's heads decide `main_repo_unbound` (no steering
+//   3. This workspace's heads decide `main_repo_unbound` (no steering
 //      repository to hold workspace.toml), `main_repo` (it is the steering
 //      repository here), and `repository_already_linked`.
-//   5. The head, written under the workspace's repository lock, after an
-//      uncached re-read of the organization's data plane
-//      (`assertPlaneStillShared`): a plane that moved since step 3 would put
-//      the head where the trigger cannot see it. The trigger
-//      `repository_binding_heads_exclusive_main` serialises it against a
-//      concurrent steering claim elsewhere, and a lost race maps back to
-//      `main_repo_claimed`. A connection still at `pending_setup` moves to
-//      `connected` in the same transaction.
+//   4. The head, written under the workspace's repository lock. A connection
+//      still at `pending_setup` moves to `connected` in the same transaction.
 //
-// `link_repository` runs steps 1 to 4 before it opens the steering PR, so a
+// Other workspaces' heads decide nothing here (ADR-293). Any workspace may
+// link a repository its installation can see, however many workspaces link
+// it and whichever workspace steers by it. The one exclusive rule belongs to
+// the agent: it is steered by one steering repository, which its workspace
+// picks. So a link reads no other tenant's rows.
+//
+// `link_repository` runs steps 1 to 3 before it opens the steering PR, so a
 // PR that could never take effect is refused up front. The sync runs all
-// five when the merged workspace.toml lists the repository.
+// four when the merged workspace.toml lists the repository.
 import type { GitHubRepoInfo } from "@oxagen/github";
 import { HandlerError } from "@oxagen/oxagen";
-import { schema, type Tx, withSystemDb, withTenantDb } from "@oxagen/database";
-import { and, eq, inArray, ne, or } from "drizzle-orm";
-import { logger } from "./logger";
+import { schema, type Tx, withTenantDb } from "@oxagen/database";
+import { and, eq, inArray, or } from "drizzle-orm";
 import {
-  assertGlobalClaimIsKnowable,
-  assertPlaneStillShared,
   type MainRepositoryDeps,
-  repositoryHeadConflict,
   type WrittenRepositoryHead,
   workspaceRepositoriesLock,
   writeRepositoryHead,
@@ -57,21 +47,8 @@ export interface LinkTarget {
 }
 
 /**
- * The refusal for another workspace's steering repository. It names neither
- * the organization nor the workspace holding the claim, because the read that
- * finds it crosses tenants.
- */
-function mainRepoClaimed(fullName: string): HandlerError {
-  return new HandlerError({
-    code: "conflict",
-    reason: "main_repo_claimed",
-    message: `${fullName} is the steering repository of another workspace. Its steering record governs that workspace, so it cannot be linked here.`,
-  });
-}
-
-/**
- * Steps 1 to 3: the installation, the repository, and the cross-workspace
- * steering claim. Writes nothing.
+ * Steps 1 and 2: the installation and the repository it sees. Writes nothing
+ * and reads no other workspace's heads.
  */
 export async function resolveLinkTarget(
   scope: Scope,
@@ -98,35 +75,6 @@ export async function resolveLinkTarget(
     });
   }
 
-  await assertGlobalClaimIsKnowable(scope.orgId);
-  // tenancy: a global cross-tenant read, filtered to this provider
-  // repository id and the steering roles in other workspaces. It returns
-  // only whether such a head exists, never another tenant's row.
-  const steeringElsewhere = await withSystemDb((tx) =>
-    tx
-      .select({ id: schema.repositoryBindingHeads.id })
-      .from(schema.repositoryBindingHeads)
-      .where(
-        and(
-          eq(schema.repositoryBindingHeads.provider, GITHUB_PROVIDER),
-          eq(schema.repositoryBindingHeads.providerRepositoryId, repo.id),
-          inArray(
-            schema.repositoryBindingHeads.role,
-            schema.STEERING_HEAD_ROLES,
-          ),
-          ne(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
-        ),
-      )
-      .limit(1),
-  );
-  if (steeringElsewhere.length > 0) {
-    logger.warn(
-      { ...scope, repository: repo.fullName },
-      "repository.link: refused. The repository is another workspace's steering repository.",
-    );
-    throw mainRepoClaimed(repo.fullName);
-  }
-
   return {
     connection: { id: connection.id, publicId: connection.publicId },
     repo,
@@ -134,9 +82,9 @@ export async function resolveLinkTarget(
 }
 
 /**
- * Step 4: refuse unless this workspace may gain a linked head for `repo`.
- * The caller supplies the transaction, and holds the workspace lock when it
- * goes on to write.
+ * Step 3: refuse unless this workspace may gain a linked head for `repo`.
+ * Only this workspace's own heads decide it. The caller supplies the
+ * transaction, and holds the workspace lock when it goes on to write.
  */
 export async function assertLinkAllowed(
   tx: Tx,
@@ -223,50 +171,38 @@ async function promotePendingConnection(
 }
 
 /**
- * Step 5: write the linked head under the workspace lock. `userId` is null
+ * Step 4: write the linked head under the workspace lock. `userId` is null
  * when the steering sync writes it: the person who merged the steering PR is
  * the host's fact, not an Oxagen user.
+ *
+ * No cross-workspace constraint covers a linked head, so a failed insert is
+ * passed through as it came. The unique violation a linked head can still
+ * meet, `repository_binding_heads_repository_uq`, means this connection
+ * already holds a head for the repository, which `assertLinkAllowed` refuses
+ * first.
  */
 export async function writeLinkedHead(
   scope: Scope,
   target: LinkTarget,
   args: { userId: string | null; now: Date },
 ): Promise<WrittenRepositoryHead> {
-  try {
-    return await withTenantDb(async (tx) => {
-      await tx.execute(workspaceRepositoriesLock(scope.workspaceId));
-      // The plane the pre-check read may have moved since. Ask again,
-      // uncached, before the head is written (#3340 finding 1).
-      await assertPlaneStillShared(scope);
-      await assertLinkAllowed(tx, scope, target.repo);
-      const written = await writeRepositoryHead(tx, {
-        scope,
-        connectionId: target.connection.id,
-        repo: target.repo,
-        role: "linked",
-        userId: args.userId,
-        now: args.now,
-      });
-      await promotePendingConnection(tx, target.connection.id, args.now);
-      return written;
+  return withTenantDb(async (tx) => {
+    await tx.execute(workspaceRepositoriesLock(scope.workspaceId));
+    await assertLinkAllowed(tx, scope, target.repo);
+    const written = await writeRepositoryHead(tx, {
+      scope,
+      connectionId: target.connection.id,
+      repo: target.repo,
+      role: "linked",
+      userId: args.userId,
+      now: args.now,
     });
-  } catch (err) {
-    // The window the pre-check cannot close: a steering claim on this
-    // repository that committed elsewhere after the read. The trigger's
-    // repository-keyed lock serialised the two writes and refused this one
-    // by constraint name.
-    if (repositoryHeadConflict(err) === "main_elsewhere") {
-      logger.warn(
-        { ...scope, repository: target.repo.fullName },
-        "repository.link: lost the race to a steering repository claim elsewhere",
-      );
-      throw mainRepoClaimed(target.repo.fullName);
-    }
-    throw err;
-  }
+    await promotePendingConnection(tx, target.connection.id, args.now);
+    return written;
+  });
 }
 
-/** Steps 1 to 5 for one repository: what the steering sync runs per listed entry. */
+/** Steps 1 to 4 for one repository: what the steering sync runs per listed entry. */
 export async function linkRepositoryHead(
   scope: Scope,
   repository: { owner: string; name: string },
