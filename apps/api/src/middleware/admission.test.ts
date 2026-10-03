@@ -203,6 +203,19 @@ describe("API admission", () => {
     expect(gate.snapshot().reservedBytes).toBe(0);
   });
 
+  it("admits several Inngest step calls at once, and refuses the one past the lane", () => {
+    // Inngest posts one call per step and treats a 503 as a failed attempt,
+    // so a lane of two refused a third of its calls in production.
+    const { gate } = fixture();
+    const held = Array.from({ length: API_ADMISSION_LANES.background.concurrency }, () => gate.acquire("background"));
+    expect(held.every((release) => release !== null)).toBe(true);
+    expect(gate.acquire("background")).toBeNull();
+    expect(gate.snapshot().active.background).toBe(API_ADMISSION_LANES.background.concurrency);
+    expect(API_ADMISSION_LANES.background.concurrency).toBeGreaterThanOrEqual(8);
+    for (const release of held) release?.();
+    expect(gate.snapshot().reservedBytes).toBe(0);
+  });
+
   it("separates expensive jobs from machine control and ingestion", () => {
     expect(apiAdmissionLane("/api/inngest")).toBe("background");
     expect(apiAdmissionLane("/v1/tacho/events")).toBe("ingest");
