@@ -138,6 +138,9 @@ validation subscribes to, and any number of functions can fan out from it. A
 Redis stream, if one is added later, is a second consumer of that event, not
 a replacement for the queue.
 
+ADR-294 adds the first subscriber: `forge/revision-certification` queues
+each stored revision for the witness in `forge.revision_certifications`.
+
 ## Alternatives considered
 
 - **Extend `tacho.run_pull_requests`.** It is keyed on a session and a URL, so

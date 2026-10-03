@@ -5281,7 +5281,8 @@
         "postgres:forge.pull_request_revisions",
         "postgres:forge.pull_request_runs",
         "postgres:forge.pull_request_work_orders",
-        "postgres:forge.pull_requests"
+        "postgres:forge.pull_requests",
+        "postgres:forge.revision_certifications"
       ]
     },
     {
@@ -18447,6 +18448,78 @@
       "domain": "forge",
       "id": "postgres:forge.pull_requests",
       "name": "pull_requests",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "pull_request_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:forge.pull_requests",
+          "type": "uuid"
+        },
+        {
+          "name": "revision_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:forge.pull_request_revisions",
+          "type": "uuid"
+        },
+        {
+          "name": "state",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "requested_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "decided_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "verdict",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        }
+      ],
+      "domain": "forge",
+      "id": "postgres:forge.revision_certifications",
+      "name": "revision_certifications",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
