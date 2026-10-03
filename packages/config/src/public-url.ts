@@ -57,6 +57,85 @@ export function redactUrlCredentials(text: string): string {
   );
 }
 
+/**
+ * Query names that usually carry a secret, lowercased with every character
+ * but a letter or digit removed, so `api_key`, `Api-Key` and `apikey` match
+ * alike. The same list `redactExchange` in mcp-studio's `tool.try.ts` uses.
+ */
+const SECRET_QUERY_NAMES: ReadonlySet<string> = new Set([
+  "apikey",
+  "accesstoken",
+  "refreshtoken",
+  "idtoken",
+  "token",
+  "secret",
+  "clientsecret",
+  "password",
+  "passwd",
+  "signature",
+  "sig",
+  "key",
+  "auth",
+  "authorization",
+  "sessionid",
+  "session",
+]);
+const SECRET_QUERY_SUFFIXES = [
+  "token",
+  "secret",
+  "password",
+  "apikey",
+  "signature",
+] as const;
+
+function secretQueryName(raw: string): boolean {
+  let name = raw;
+  try {
+    name = decodeURIComponent(raw.replace(/\+/g, " "));
+  } catch {
+    // A malformed escape: judge the name as written.
+  }
+  const bare = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return (
+    SECRET_QUERY_NAMES.has(bare) ||
+    SECRET_QUERY_SUFFIXES.some((suffix) => bare.endsWith(suffix))
+  );
+}
+
+/**
+ * A stored address with every credential it carries replaced by `***`: the
+ * userinfo, as `redactUrlCredentials` does, and the value of each query
+ * parameter whose name usually holds a secret, such as `?api_key=…` or
+ * `?token=…`. Use it wherever a stored address is returned or shown (#3720).
+ *
+ * The register guard refuses userinfo but not a query, and some hosted MCP
+ * servers take their key as a query parameter, so a stored address can hold
+ * a key with nobody having done anything wrong. The connection still reads
+ * the stored column. Only what a person or a client is shown is redacted.
+ *
+ * String work, like its neighbour, so an address that does not parse is still
+ * cleaned rather than thrown on. Names and order are kept, so the address
+ * still says which parameters it sends.
+ */
+export function redactUrlSecrets(url: string): string {
+  const clean = redactUrlCredentials(url);
+  const start = clean.indexOf("?");
+  if (start === -1) return clean;
+  const hash = clean.indexOf("#", start);
+  const end = hash === -1 ? clean.length : hash;
+  const query = clean
+    .slice(start + 1, end)
+    .split("&")
+    .map((pair) => {
+      const eq = pair.indexOf("=");
+      if (eq === -1) return pair;
+      const name = pair.slice(0, eq);
+      return secretQueryName(name) ? `${name}=***` : pair;
+    })
+    .join("&");
+  return `${clean.slice(0, start + 1)}${query}${clean.slice(end)}`;
+}
+
 export interface AssertPublicHttpUrlOptions {
   /**
    * Prefixed to every refusal so the message names the thing being refused —
