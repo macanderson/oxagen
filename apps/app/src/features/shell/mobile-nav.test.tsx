@@ -195,8 +195,9 @@ describe("thumb bar", () => {
       expectTouchTarget(style(slot).minHeight);
       expectTouchTarget(style(slot).minWidth);
     }
+    // Six px of air over the home indicator, on the spacing scale (#5283).
     expect(style(bar).paddingBottom).toBe(
-      "calc(6px + env(safe-area-inset-bottom))",
+      "calc(var(--spacing) * 1.5 + env(safe-area-inset-bottom))",
     );
   });
 
