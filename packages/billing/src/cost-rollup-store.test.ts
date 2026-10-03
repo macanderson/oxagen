@@ -413,6 +413,73 @@ describe("the token sources a rollup writes (#4493)", () => {
     expect(written[0]?.breakdown).not.toHaveProperty("windows");
   });
 
+  it("makes no window read for an open run and keeps the composition its row carries (#5341)", async () => {
+    const stored = {
+      requests: 1,
+      requestsWithoutTokens: 0,
+      promptTokens: 2_000,
+      blocks: {
+        system: 500,
+        steering: null,
+        tools: null,
+        context: null,
+        conversation: 1_500,
+      },
+      initialConversationTokens: 1_500,
+    };
+    const open = { ...meta(WORKER, "prn_worker_operator"), sealedAt: null };
+    const { d, written } = deps({ runs: { [WORKER]: open } });
+    const readWindowComposition = vi.fn(async () => null);
+    d.readWindowComposition = readWindowComposition;
+    d.readCarried = async () => ({ accepted: null, windows: stored });
+    await rebuildRunTotals(WORKER, d);
+    expect(readWindowComposition).not.toHaveBeenCalled();
+    expect(written[0]?.breakdown.windows).toEqual(stored);
+  });
+
+  it("keeps an open run's row without a composition when it carries none (negative)", async () => {
+    const open = { ...meta(WORKER, "prn_worker_operator"), sealedAt: null };
+    const { d, written } = deps({ runs: { [WORKER]: open } });
+    const readWindowComposition = vi.fn(async () => null);
+    d.readWindowComposition = readWindowComposition;
+    await rebuildRunTotals(WORKER, d);
+    expect(readWindowComposition).not.toHaveBeenCalled();
+    expect(written[0]?.breakdown).not.toHaveProperty("windows");
+
+    // A stored null stays null: the sealed run measured nothing.
+    d.readCarried = async () => ({ accepted: null, windows: null });
+    await rebuildRunTotals(WORKER, d);
+    expect(written[1]?.breakdown.windows).toBeNull();
+    expect(readWindowComposition).not.toHaveBeenCalled();
+  });
+
+  it("walks the windows again at the seal rather than carrying the open run's (#5341)", async () => {
+    const { d, written } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+    });
+    const readWindowComposition = vi.fn(async () => null);
+    d.readWindowComposition = readWindowComposition;
+    d.readCarried = async () => ({
+      accepted: null,
+      windows: {
+        requests: 1,
+        requestsWithoutTokens: 0,
+        promptTokens: 10,
+        blocks: {
+          system: null,
+          steering: null,
+          tools: null,
+          context: null,
+          conversation: 10,
+        },
+        initialConversationTokens: 10,
+      },
+    });
+    await rebuildRunTotals(WORKER, d);
+    expect(readWindowComposition).toHaveBeenCalledTimes(1);
+    expect(written[0]?.breakdown.windows).toBeNull();
+  });
+
   it("writes nothing when the windows cannot be read, so the job retries", async () => {
     const { d, written } = deps({
       runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },

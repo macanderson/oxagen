@@ -26,10 +26,9 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { IN_APP_AGENT_SURFACES } from "@oxagen/oxagen/contracts/run.shared";
 import {
   createPostgresRunStore,
-  createWindowComposition,
   MODEL_CALL_EVENT_TYPES,
+  streamedWindowComposition,
   subagentSessionsQuery,
-  tachoContextWindow,
   TOOL_CALL_EVENT_TYPES,
   walkLedgerContextWindows,
   windowComposition,
@@ -684,10 +683,12 @@ export interface RunRollupDeps {
    */
   loadPriceBook: (slice: PriceBookSlice) => Promise<PriceBook>;
   withPriceBookSnapshot?: typeof withPriceBookSnapshot;
-  /** The acceptance a person recorded on the row, which no rebuild computes. */
-  readCarried: (
-    runId: string,
-  ) => Promise<Pick<RunTotalsRecord, "accepted"> | null>;
+  /**
+   * What the run's stored row carries into a rebuild: the acceptance a
+   * person recorded, which no rebuild computes, and the window composition
+   * the last sealed rollup stored, which a rollup of the open run keeps.
+   */
+  readCarried: (runId: string) => Promise<CarriedRunTotals | null>;
   /** The run's witness verdict (ADR-064), aggregated from its verdict rows. */
   readVerdict: (
     scope: RollupScope,
@@ -717,13 +718,23 @@ export interface RunRollupDeps {
   resolveWorkOrder?: (source: RunSource) => Promise<RunWorkOrder>;
   /**
    * The run's prompt composition over the request windows it recorded
-   * (#5341), or null when it has none to store. A run read without it stores
-   * no composition, which a reader takes as not measured.
+   * (#5341), or null when it has none to store. Read only for a sealed run:
+   * a rollup of an open run keeps the composition its row carries. A run
+   * read without it stores no composition, which a reader takes as not
+   * measured.
    */
   readWindowComposition?: (
     source: RunSource,
   ) => Promise<WindowComposition | null>;
 }
+
+/**
+ * The part of a stored `cost.run_totals` row a rebuild carries rather than
+ * computes. `windows` is absent when the row carries no composition key.
+ */
+export type CarriedRunTotals = Pick<RunTotalsRecord, "accepted"> & {
+  windows?: WindowComposition | null;
+};
 
 type Row = typeof totals.$inferSelect;
 
@@ -1153,19 +1164,28 @@ export async function writeRunTotals(
     });
 }
 
-async function readCarried(runId: string) {
+async function readCarried(runId: string): Promise<CarriedRunTotals | null> {
   // tenancy: the scheduled rollup job reads outside a tenant scope, so this
   // is a global read of one row, filtered by the run's globally unique id.
   const rows = await withSystemDb((tx) =>
     tx
-      .select({ accepted: totals.accepted })
+      .select({
+        accepted: totals.accepted,
+        // The key's presence tells a row rolled up before #5341 apart from a
+        // stored null, so a carried row keeps the one it had.
+        hasWindows: sql<boolean>`jsonb_exists(${totals.breakdown}, 'windows')`,
+        windows: sql<WindowComposition | null>`${totals.breakdown} -> 'windows'`,
+      })
       .from(totals)
       .where(eq(totals.runId, runId))
       .limit(1),
   );
   const row = rows[0];
   if (!row) return null;
-  return { accepted: row.accepted };
+  return {
+    accepted: row.accepted,
+    ...(row.hasWindows ? { windows: row.windows ?? null } : {}),
+  };
 }
 
 /**
@@ -1235,21 +1255,14 @@ export async function readRunWindowComposition(
     );
     return reading.walked ? windowComposition(reading.windows) : null;
   }
-  const composition = createWindowComposition();
-  await readTachoWindowFrames(
-    {
-      ...scope,
-      rootSessionUuid: source.frames.rootSessionUuid,
-      sessionUuids: source.frames.sessionUuids,
-    },
-    async (rows) => {
-      for (const row of rows) {
-        const window = tachoContextWindow(row);
-        if (window !== null) composition.add(window);
-      }
-    },
+  const run = {
+    ...scope,
+    rootSessionUuid: source.frames.rootSessionUuid,
+    sessionUuids: source.frames.sessionUuids,
+  };
+  return streamedWindowComposition((consume) =>
+    readTachoWindowFrames(run, consume),
   );
-  return composition.finish();
 }
 
 /**
@@ -1337,15 +1350,21 @@ export async function rebuildRunTotals(
     orgId: source.meta.orgId,
     workspaceId: source.meta.workspaceId,
   };
-  const [carried, verdict, workerId, changedFile, workOrder, windows] =
+  // The windows are walked once, when the run has sealed. A run is rolled up
+  // on every progress batch while it records (`cost.run-progress`), and a
+  // walk of every event each time is the cost #5341 keeps off that path, so
+  // a rollup of an open run carries the composition its row already has.
+  const sealed = source.meta.sealedAt !== null;
+  const [carried, verdict, workerId, changedFile, workOrder, measured] =
     await Promise.all([
       deps.readCarried(publicId),
       deps.readVerdict(scope, publicId),
       deps.readWitnessedRun(scope, publicId),
       deps.readFileChanged?.(source) ?? false,
       deps.resolveWorkOrder?.(source) ?? null,
-      deps.readWindowComposition?.(source),
+      sealed ? deps.readWindowComposition?.(source) : undefined,
     ]);
+  const windows = sealed ? measured : carried?.windows;
   const sources: RunTokenSources = { ...NO_RUN_TOKEN_SOURCES };
   const standing = createStandingSplit();
   // A witness run is a run of its own whose cost belongs to the worker's
@@ -1398,8 +1417,8 @@ export async function rebuildRunTotals(
     breakdown: {
       ...built.breakdown,
       standing: standing.finish(),
-      // The run's own windows, read beside its frames (#5341). A read without
-      // the dependency stores no key, which reads as not measured.
+      // The run's own windows (#5341): walked for a sealed run, carried for
+      // an open one. Neither gives no key, which reads as not measured.
       ...(windows === undefined ? {} : { windows }),
     },
   };
