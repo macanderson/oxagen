@@ -79,8 +79,9 @@ function categoryCounts(
     .sort((a, b) => (a.tag < b.tag ? -1 : 1));
 }
 
+/** A chip is the kit's outline button, small, with its pressed state. */
 const chip =
-  "inline-flex min-h-8 max-md:min-h-11 items-center gap-2 rounded-md border border-border px-3 text-sm text-muted-foreground hover:text-foreground aria-pressed:border-foreground aria-pressed:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+  "min-h-8 max-md:min-h-11 gap-2 rounded-md px-3 text-sm aria-pressed:border-foreground aria-pressed:text-foreground";
 
 function CategoryChips({
   at,
@@ -114,6 +115,7 @@ function CategoryChips({
         to={toolsLink(at, { tab: "tools", names, provider, rows })}
         pressed={category === null}
         data-category="all"
+        variant="outline"
         className={chip}
       >
         {filtered || complete ? t("allCategories") : t("allOnPage")}
@@ -139,6 +141,7 @@ function CategoryChips({
           }
           pressed={category === tag}
           data-category={tag}
+          variant="outline"
           className={chip}
         >
           <span className={mono}>{tag}</span>
@@ -189,6 +192,7 @@ function ProviderChips({
         to={toolsLink(at, { tab: "tools", names, category, rows })}
         pressed={provider === null}
         data-provider="all"
+        variant="outline"
         className={chip}
       >
         {t("allProviders")}
@@ -205,6 +209,7 @@ function ProviderChips({
           })}
           pressed={provider === server.id}
           data-provider={server.id}
+          variant="outline"
           className={chip}
         >
           <ProviderIcon name={server.name} iconUrl={server.iconUrl} size={16} />

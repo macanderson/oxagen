@@ -13,9 +13,11 @@
  * because a laptop may have no token, but in CI a missing token means the
  * secret is gone and npm has stopped following main.
  *
- * `--verify` runs the published tarball with npx and checks that
- * `oxagen --version` prints it. It tries again before it fails, in case the
- * tarball takes a moment to reach npm's servers.
+ * `--verify` publishes under the `candidate` tag, runs the published tarball
+ * with npx until `oxagen --version` prints the version, and only then moves
+ * `latest` to it. npm can take minutes to serve a new tarball, so the check
+ * keeps trying for at least 10 minutes. If it never passes, `latest` stays
+ * where it was and the run fails (#5203).
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -25,22 +27,70 @@ import { argv, exit } from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 import {
+  type CliCheck,
   type PublishOutcome,
   publishCliToNpm,
   tarballUrl,
 } from "./lib/npm-cli";
 
 const ROOT = resolve(import.meta.dirname, "../..");
-export const VERIFY_TRIES = 6;
-const VERIFY_WAIT_MS = 20_000;
+
+/**
+ * The check keeps trying for at least this long. On 2026-10-02 npm answered
+ * 404 for a new tarball for about 5½ minutes after the publish (#5203).
+ */
+export const VERIFY_WINDOW_MS = 10 * 60_000;
+
+/** One npx run may take this long before it counts as a failed try. */
+const NPX_TIMEOUT_MS = 2 * 60_000;
+
+/**
+ * The pause after try `attempt`: 20 seconds, then 10 seconds longer after each
+ * try, up to a minute.
+ */
+export function verifyPause(attempt: number): number {
+  return Math.min(20_000 + (attempt - 1) * 10_000, 60_000);
+}
+
+/** A wait as `45s` or `5m 40s`. */
+export function formatWait(ms: number): string {
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
+
+/**
+ * The line of a failed npx run that says why, such as npm's
+ * `npm error 404 Not Found - GET <url>`. The error's first line only repeats
+ * the command, so the reason comes from what npx wrote to stderr.
+ */
+export function npxFailure(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const stderr = (err as { stderr?: unknown }).stderr;
+  const text =
+    typeof stderr === "string"
+      ? stderr
+      : err.message.split("\n").slice(1).join("\n");
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+  const reason = lines.find((line) =>
+    /^npm (?:error|ERR!) (?!code\b)(?!A complete log)/.test(line),
+  );
+  return reason ?? lines.at(-1) ?? err.message.split("\n")[0] ?? "";
+}
 
 /** What `main` needs from the outside world. The tests replace each one. */
 export interface PublishCliDeps {
   /** The version apps/cli/package.json carries. */
   cliVersion: () => string;
-  publish: (version: string) => Promise<PublishOutcome>;
+  /** Publishes `version`. With `check`, `latest` waits for the check. */
+  publish: (version: string, check?: CliCheck) => Promise<PublishOutcome>;
   /** What `npx <spec> --version` prints. Throws when npx fails. */
   npxVersion: (spec: string) => string;
+  /** The time in milliseconds. */
+  now: () => number;
   sleep: (ms: number) => Promise<unknown>;
   log: (line: string) => void;
   error: (line: string) => void;
@@ -53,7 +103,7 @@ const defaultDeps: PublishCliDeps = {
         readFileSync(resolve(ROOT, "apps/cli/package.json"), "utf8"),
       ) as { version: string }
     ).version,
-  publish: (version) => publishCliToNpm(version),
+  publish: (version, check) => publishCliToNpm(version, check ? { check } : {}),
   // From outside the checkout, so npx fetches the published package rather
   // than finding the workspace's own @oxagen/cli.
   npxVersion: (spec) =>
@@ -61,11 +111,57 @@ const defaultDeps: PublishCliDeps = {
       cwd: tmpdir(),
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
+      timeout: NPX_TIMEOUT_MS,
     }).trim(),
+  now: () => Date.now(),
   sleep: (ms) => sleep(ms),
   log: (line) => console.log(line),
   error: (line) => console.error(line),
 };
+
+/**
+ * Runs the published tarball with npx until `oxagen --version` prints
+ * `version`, and answers whether it ever did. It keeps trying for at least
+ * VERIFY_WINDOW_MS, with a longer pause after each try, and logs how long it
+ * waited.
+ *
+ * It runs the tarball URL, not `@oxagen/cli@<version>`, because npx finds a
+ * version through npm's package list, and that list can trail a publish by
+ * several minutes. The tarball URL can trail it too: on 2026-10-02 it
+ * answered 404 for about 5½ minutes (#5203).
+ */
+export async function checkCli(
+  version: string,
+  deps: PublishCliDeps,
+): Promise<boolean> {
+  const spec = tarballUrl(version);
+  const start = deps.now();
+  for (let attempt = 1; ; attempt++) {
+    let printed: string;
+    try {
+      printed = deps.npxVersion(spec);
+    } catch (err) {
+      printed = npxFailure(err);
+    }
+    const waited = deps.now() - start;
+    if (printed === version) {
+      deps.log(
+        `npx ${spec} --version printed ${version} after ${formatWait(waited)} (try ${attempt})`,
+      );
+      return true;
+    }
+    deps.log(
+      `npx ${spec} --version printed "${printed}" after ${formatWait(waited)} (try ${attempt})`,
+    );
+    if (waited >= VERIFY_WINDOW_MS) {
+      deps.log(
+        `npx ${spec} --version never printed ${version}. It waited ${formatWait(waited)} over ${attempt} tries.`,
+      );
+      return false;
+    }
+    await deps.sleep(Math.min(verifyPause(attempt), VERIFY_WINDOW_MS - waited));
+  }
+}
 
 /** Runs the publish and answers the process exit code. */
 export async function main(
@@ -87,9 +183,13 @@ export async function main(
     return 1;
   }
 
+  // With --verify, `latest` moves only once the published CLI runs.
+  const check: CliCheck | undefined = verify
+    ? (v) => checkCli(v, deps)
+    : undefined;
   let outcome: PublishOutcome;
   try {
-    outcome = await deps.publish(version);
+    outcome = await deps.publish(version, check);
   } catch (err) {
     deps.error(`::error::${err instanceof Error ? err.message : String(err)}`);
     return 1;
@@ -100,31 +200,7 @@ export async function main(
     );
     return 1;
   }
-  if (outcome === "skipped" || !verify) return 0;
-
-  // The tarball URL, not `@oxagen/cli@<version>`: npm serves a new tarball at
-  // once, but its package list can trail a publish by several minutes, and
-  // npx resolves a version through that list. The first publish on
-  // 2026-10-02 waited four minutes for it.
-  const spec = tarballUrl(version);
-  for (let attempt = 1; attempt <= VERIFY_TRIES; attempt++) {
-    let printed = "";
-    try {
-      printed = deps.npxVersion(spec);
-    } catch (err) {
-      printed = err instanceof Error ? (err.message.split("\n")[0] ?? "") : "";
-    }
-    if (printed === version) {
-      deps.log(`npx ${spec} --version prints ${version}`);
-      return 0;
-    }
-    deps.log(
-      `npx ${spec} --version printed "${printed}" (try ${attempt} of ${VERIFY_TRIES})`,
-    );
-    if (attempt < VERIFY_TRIES) await deps.sleep(VERIFY_WAIT_MS);
-  }
-  deps.error(`::error::npx ${spec} --version never printed ${version}`);
-  return 1;
+  return 0;
 }
 
 if (isEntrypoint(import.meta.url)) exit(await main(argv.slice(2)));

@@ -26,7 +26,8 @@ import { useState, useTransition } from "react";
 import type { SteeringHub } from "@/data/contracts/steering";
 import type { ActionResult } from "@/server/kernel";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
-import { buttonPrimary, buttonSecondary, linkText } from "@/ui/control-styles";
+import { linkText } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { PullRequestLink, SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { type GovernanceChanged, setGovernanceMode } from "./actions";
@@ -142,16 +143,16 @@ export function GovernanceChip({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid="governance-chip"
         data-mode={shown}
         title={title}
         onClick={openDialog}
-        className={buttonSecondary}
+        variant="outline"
       >
         {t("chip")} <span className="font-mono text-sm">{shown}</span>
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}
@@ -162,10 +163,10 @@ export function GovernanceChip({
         testId="governance-dialog"
         footer={
           outcome?.ok ? null : (
-            <button
+            <Button
               type="button"
               data-touch-target=""
-              className={buttonPrimary}
+              variant="primary"
               disabled={pending}
               onClick={confirm}
             >
@@ -176,7 +177,7 @@ export function GovernanceChip({
                 : pending
                   ? t("pending")
                   : t("submit")}
-            </button>
+            </Button>
           )
         }
       >
@@ -190,16 +191,17 @@ export function GovernanceChip({
               className="flex flex-col gap-2"
             >
               {MODES.map((mode) => (
-                <button
+                <Button
                   key={mode}
                   type="button"
+                  variant="outline"
                   role="radio"
                   aria-checked={picked === mode}
                   data-mode={mode}
                   onClick={() => {
                     setPicked(mode);
                   }}
-                  className="flex min-h-11 flex-col items-start gap-0.5 rounded-lg border border-border bg-card px-3.5 py-3 text-left text-sm hover:bg-hl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-checked:border-gold aria-checked:bg-hl"
+                  className="h-auto min-h-11 flex-col items-start gap-0.5 rounded-lg px-3.5 py-3 text-left text-sm whitespace-normal aria-checked:border-gold aria-checked:bg-hl"
                 >
                   <span className="font-semibold text-foreground">
                     {mode}
@@ -210,7 +212,7 @@ export function GovernanceChip({
                   <span className="text-muted-foreground">
                     {t(`modes.${mode}.summary`)} {t(`modes.${mode}.hint`)}
                   </span>
-                </button>
+                </Button>
               ))}
             </div>
             <pre

@@ -15,11 +15,8 @@ import {
   useState,
 } from "react";
 import type { SsoProtocol, SsoProvider } from "@/data/contracts/org";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  textareaBase,
-} from "@/ui/control-styles";
+import { textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { Field, PasswordField } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -198,16 +195,16 @@ export function SsoProviderDialog({
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={editing ? buttonSecondary : buttonPrimary}
+        variant={editing ? "outline" : "primary"}
         onClick={() => {
           openChange(true);
         }}
         data-testid={`${idBase}-open`}
       >
         {editing ? t("edit") : t("add")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={openChange}

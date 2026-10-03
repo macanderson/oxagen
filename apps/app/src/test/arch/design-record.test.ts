@@ -185,6 +185,23 @@ describe("design record: the recipes carry the mockup's rules", () => {
     expect(lightRoot()).toMatch(/--button-default-bg:\s*var\(--panel\)/);
     expect(buttonSecondary).toContain("bg-button-default-bg");
   });
+
+  it("`.dlg { background:var(--panel); border:1px solid var(--rule) }` in both themes", () => {
+    // @oxagen/ui draws a dialog on the popover, which on ink is the row wash
+    // and the hairline. The app sets both tokens in the light `:root`, the
+    // `.dark` block, and the no-JS copy, because the kit sets them in all three
+    // and its no-JS selector outranks a bare `:root`.
+    const root = lightRoot();
+    expect(root).toMatch(/--dialog-bg:\s*var\(--panel\)/);
+    expect(root).toMatch(/--dialog-border:\s*var\(--rule\)/);
+    const css = read("src/app/globals.css");
+    expect(css.match(/--dialog-bg:\s*var\(--panel\)/g)).toHaveLength(3);
+    expect(css.match(/--dialog-border:\s*var\(--rule\)/g)).toHaveLength(3);
+    expect(css).not.toMatch(/--dialog-(bg|border):\s*var\(--(popover|border)\)/);
+    const sheet = read("src/ui/sheet-dialog.tsx");
+    expect(sheet).toContain("bg-dialog-bg");
+    expect(sheet).toContain("border-dialog-border");
+  });
 });
 
 /**
@@ -344,18 +361,19 @@ function scanned(): string[] {
 
 /**
  * A reference to Space Grotesk: the kit's display token, the wordmark token,
- * or the family by name. Mac set the rule on 2026-10-02 (oxageninc/brand#83):
- * every heading and every line of text in the app is Aeonik. Space Grotesk
+ * or the family by name. Mac set the rule on 2026-10-02 (oxageninc/brand#83),
+ * and set Geist back as the house sans on 2026-10-03: every heading and every
+ * line of text in the app is Geist. Space Grotesk
  * sets the wordmark here, and h1 to h3 only on the marketing and customer
  * sites.
  */
 const SPACE_GROTESK = /--ox-font-display|--font-wordmark|Space Grotesk/;
 
 describe("design record: one face for every heading and every line", () => {
-  it("app headings read the heading token, which is Aeonik, and Space Grotesk is the display face", () => {
+  it("app headings read the heading token, which is Geist, and Space Grotesk is the display face", () => {
     const styles = path.join(APP_DIR, "../../packages/ui/src/styles");
     const kit = readFileSync(path.join(styles, "house-tailwind.css"), "utf8");
-    expect(kit).toMatch(/--font-sans:\s*var\(--font-aeonik, "Aeonik"\)/);
+    expect(kit).toMatch(/--font-sans:\s*var\(--font-geist, "Geist"\)/);
     expect(kit).toMatch(/--font-heading:\s*var\(--font-sans\);/);
     expect(kit).toMatch(
       /--font-display:\s*var\(--font-space-grotesk, "Space Grotesk"\)/,
@@ -368,7 +386,7 @@ describe("design record: one face for every heading and every line", () => {
     const shared = readFileSync(path.join(styles, "globals.css"), "utf8");
     expect(shared).not.toMatch(/^\s*--font-(display|heading|sans|wordmark|mono):/m);
     // The shared base sets h1 to h3 from the heading token, never from the
-    // display face, so the app's headings stay Aeonik.
+    // display face, so the app's headings stay Geist.
     expect(shared).toMatch(/h3\s*\{\s*font-family:\s*var\(--font-heading\);/);
     expect(shared).not.toMatch(/font-family:\s*var\(--font-display\)/);
   });

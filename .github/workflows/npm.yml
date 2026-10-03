@@ -16,9 +16,14 @@ name: npm
 #   npm is behind it. That covers a deploy whose dispatch was replaced by a
 #   newer one, a failed run, and the first day after NPM_TOKEN is replaced.
 #
-# Every version publishes under `latest`, and `latest` only moves forward:
+# Every version publishes under the `candidate` tag first. `latest` moves to
+# it once npx runs the published tarball and `oxagen --version` prints the
+# version. npm can take minutes to serve a new tarball, so the check keeps
+# trying for at least 10 minutes. If it never passes, `latest` stays where it
+# was and the run fails (#5203). `latest` only moves forward:
 # tools/scripts/lib/npm-cli.ts skips a version older than the newest one on
-# npm. So `npm i -g @oxagen/cli` installs what production runs.
+# npm. So `npm i -g @oxagen/cli` installs what production runs, and never a
+# version whose tarball npm does not serve yet.
 #
 # NPM_TOKEN is a granular npm token that can write @oxagen/cli. npm lets such
 # a token live 90 days at most, and packages/config/src/ci-registry.ts says how
@@ -46,7 +51,8 @@ permissions:
 # merges ends with the tip published (the #2730 lesson). A release tag, the
 # schedule and a dispatch by hand each get a group of their own, so a deploy
 # can never evict a release. Two runs that publish at once are safe: the
-# script moves `latest` back to the newest version after each publish.
+# script reads `latest` again right before it moves it, and only moves it
+# forward.
 concurrency:
   group: >-
     npm-${{
@@ -59,7 +65,9 @@ jobs:
   publish:
     name: Publish @oxagen/cli
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The check after a publish can wait more than 10 minutes for npm to
+    # serve the new tarball (#5203), on top of the install and the bundle.
+    timeout-minutes: 30
     permissions:
       contents: read
       # The schedule reads which commit production's API runs.

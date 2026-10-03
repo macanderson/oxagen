@@ -126,6 +126,21 @@ describe("the hooks the writer emits", () => {
       '"bin/tacho-hook.mjs"',
     );
   });
+
+  it("reads the quoting shellQuote writes for a path with an apostrophe", () => {
+    // `shellQuote("/Users/x/Bob's tools/tacho")` on macOS and Linux.
+    expect(
+      absoluteHookCommandProblem("'/Users/x/Bob'\\''s tools/tacho' hook"),
+    ).toBeUndefined();
+    expect(
+      absoluteHookCommandProblem(
+        "/usr/bin/node '/Users/x/Bob'\\''s tools/tacho.mjs' hook",
+      ),
+    ).toBeUndefined();
+    expect(
+      absoluteHookCommandProblem("'bin/Bob'\\''s/tacho' hook"),
+    ).toContain(`"bin/Bob's/tacho"`);
+  });
 });
 
 describe("merging into an existing hooks.json", () => {

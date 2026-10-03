@@ -11,13 +11,8 @@ import {
 import type { CliAuthorizeParams } from "./cli-authorize";
 import type { ConsentOrg } from "./cli-consent";
 import { FormAlert } from "@/ui/form-feedback";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  inputBase,
-  mono,
-  panel,
-} from "@/ui/control-styles";
+import { inputBase, mono, panel } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { SafeForm } from "@/ui/navigation";
 
 function Hidden({ params }: { params: CliAuthorizeParams }) {
@@ -144,23 +139,23 @@ export function CliConsentForm({
             <li>{t("grantActs")}</li>
           </ul>
         </div>
-        <button
+        <Button
           type="submit"
-          className={buttonPrimary}
+          variant="primary"
           disabled={busy || !orgSlug || !wsSlug}
         >
           {approving ? t("approving") : t("approve")}
-        </button>
+        </Button>
       </SafeForm>
       <SafeForm action={cancel}>
         <Hidden params={params} />
-        <button
+        <Button
           type="submit"
-          className={`${buttonSecondary} w-full`}
+          variant="outline" className="w-full"
           disabled={busy}
         >
           {cancelling ? t("cancelling") : t("cancel")}
-        </button>
+        </Button>
       </SafeForm>
     </div>
   );

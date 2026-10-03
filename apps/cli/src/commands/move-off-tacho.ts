@@ -23,6 +23,10 @@ export async function moveOffTacho(writer: CommandWriter): Promise<void> {
     writer.writeErr(
       agent.ok
         ? `Moved ${agent.agentKey}'s hooks and service from ${agent.from} to the oxagen CLI.`
-        : `Could not move ${agent.agentKey}'s hooks and service off ${agent.from}; they keep working. Run \`oxagen agent enroll\` to try again.`,
+        : agent.skipped === "harness_files_elsewhere"
+          ? // The recorder already said which shell to run it from. Running
+            // enroll again from this one would leave the agent again.
+            `Left ${agent.agentKey}'s hooks and service on ${agent.from}; they keep working. The line above says how to move them.`
+          : `Could not move ${agent.agentKey}'s hooks and service off ${agent.from}; they keep working. Run \`oxagen agent enroll\` to try again.`,
     );
 }

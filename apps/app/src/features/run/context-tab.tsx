@@ -27,6 +27,7 @@ import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
+import { Button } from "@/ui/button";
 import { buttonSecondary, eyebrowQuiet, mono } from "@/ui/control-styles";
 import { type ListRow, ListTable } from "@/ui/list-table";
 import { formatCount, formatRatio } from "@/ui/money-format";
@@ -384,20 +385,23 @@ function ManifestSpine({
         )}
         {/*
           `.ro-link`. Steering has no Preview tab yet, so the button says so
-          on itself rather than opening a page that is not there.
+          on itself rather than opening a page that is not there. It keeps
+          its pointer events while disabled, so its title still shows.
         */}
         <span id="run-manifest-preview-why" className="sr-only">
           {t("previewMissing")}
         </span>
-        <button
+        <Button
           type="button"
+          variant="link"
+          size="xs"
           disabled
           title={t("previewMissing")}
           aria-describedby="run-manifest-preview-why"
-          className={`${tally === null ? "ml-auto" : ""} cursor-not-allowed text-xs text-muted-foreground underline decoration-rule underline-offset-2 opacity-70`}
+          className={`${tally === null ? "ml-auto" : ""} h-auto px-0 text-xs disabled:pointer-events-auto disabled:cursor-not-allowed`}
         >
           {t("preview")}
-        </button>
+        </Button>
       </div>
       {manifest !== null && run.enforcementTier === "observe" ? (
         <p

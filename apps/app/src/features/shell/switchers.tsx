@@ -25,6 +25,7 @@ import type { ShellData } from "./shell-data";
 import type { Read } from "@/data/read";
 import { routes, type SafePath } from "@/shared/safe-path";
 import { Avatar } from "@/ui/avatar";
+import { Button } from "@/ui/button";
 import { buttonSecondary } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -46,8 +47,9 @@ function matchesChoice(choice: Choice, query: string): boolean {
   return terms.every((term) => hay.includes(term));
 }
 
+/** The sidebar's switcher tile: a card-cornered row over the kit's outline. */
 const tileClass =
-  "mb-1.75 flex w-full items-center gap-2.25 rounded-xl border border-border bg-card px-2.5 py-2 text-left text-card-foreground transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-ring";
+  "mb-1.75 h-auto w-full justify-start gap-2.25 rounded-xl px-2.5 py-2 text-left font-normal";
 
 /** An organization's or a workspace's avatar, or its letter tile when none is set. */
 function ChoiceAvatar({
@@ -241,8 +243,9 @@ function Switcher({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
+      <Button
         type="button"
+        variant="outline"
         data-testid={testId}
         data-touch-target=""
         aria-haspopup="dialog"
@@ -257,7 +260,7 @@ function Switcher({
           aria-hidden="true"
           className="size-3.5 flex-none text-muted-foreground"
         />
-      </button>
+      </Button>
       <SwitcherDialog
         title={title}
         testId={testId}

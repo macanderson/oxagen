@@ -7,16 +7,16 @@
 // that sentence, so nobody is told a change happened when none did.
 import { useTranslations } from "next-intl";
 import { type ReactNode, useId, useState } from "react";
-import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { SheetDialog } from "@/ui/sheet-dialog";
-import { buttonDanger, buttonGhost } from "./buttons";
 import { gapRef, type ToolsGap } from "./gaps";
 
+/** Each tone's kit Button variant: `primary` only for the screen's one main action. */
 const TRIGGER = {
-  primary: buttonPrimary,
-  secondary: buttonSecondary,
-  danger: buttonDanger,
-  ghost: buttonGhost,
+  primary: "primary",
+  secondary: "outline",
+  danger: "destructive-outline",
+  ghost: "ghost",
 } as const;
 
 export function StubAction({
@@ -51,16 +51,16 @@ export function StubAction({
   const noteId = useId();
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={`${testId}-open`}
-        className={TRIGGER[tone]}
+        variant={TRIGGER[tone]}
         onClick={() => {
           setOpen(true);
         }}
       >
         {label}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}
@@ -69,15 +69,15 @@ export function StubAction({
         wide={wide}
         testId={testId}
         footer={
-          <button
+          <Button
             type="button"
             disabled
             aria-describedby={noteId}
             data-testid={`${testId}-confirm`}
-            className={buttonPrimary}
+            variant="primary"
           >
             {confirm}
-          </button>
+          </Button>
         }
       >
         <div className="flex flex-col gap-3">

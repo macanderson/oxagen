@@ -10,7 +10,6 @@
  * refusal here tells the person what to run instead.
  */
 import type { SessionRecorder } from "../claude-code/recorder";
-import type { TachoEvent } from "../envelope";
 import type { CredentialStore } from "../host/credential-store";
 import { HARNESS_PROVIDER } from "../host/model-credential";
 import {
@@ -29,6 +28,7 @@ import {
   TACHO_RUN_TOKEN_ATTR,
   isBrokerableHarness,
 } from "../wire";
+import { type RecordSink, recordOnChain } from "./chain-write";
 
 export interface IssueRunTokenRequest {
   harness?: unknown;
@@ -58,7 +58,7 @@ export interface CredentialIssuerDeps {
     expires_at: string;
   };
   hostRecorder: () => SessionRecorder;
-  record: (events: readonly TachoEvent[]) => void;
+  record: RecordSink;
   now: () => number;
   log: (line: string) => void;
 }
@@ -160,31 +160,38 @@ export function issueRunToken(
   });
   const expiresAt = toProtocolTimestamp(minted.claims.exp);
   try {
-    deps.record([
-      deps.hostRecorder().sealCollectorEvent(
-        "token_issued",
-        {
-          token_id: minted.claims.tid,
-          token_expires_at: expiresAt,
-          policy_source: "bundle",
-        },
-        {
-          attrs: {
-            [TACHO_ENFORCEMENT_TIER_ATTR]: TACHO_GATEWAY_TIER,
-            [TACHO_CREDENTIAL_BASIS_ATTR]: TACHO_CREDENTIAL_GATEWAY_BROKERED,
-            [TACHO_RUN_TOKEN_ATTR]: minted.claims.tid,
-            // Which signing key minted it, so a rotation reads on the record.
-            "oxagen.run_token_key": key.id,
-            "oxagen.provider": provider,
-            "oxagen.harness": harness,
-            "oxagen.run_token_placement": placement,
+    recordOnChain(
+      deps.hostRecorder(),
+      (chain) => [
+        chain.sealCollectorEvent(
+          "token_issued",
+          {
+            token_id: minted.claims.tid,
+            token_expires_at: expiresAt,
+            policy_source: "bundle",
           },
-        },
-      ),
-    ]);
+          {
+            attrs: {
+              [TACHO_ENFORCEMENT_TIER_ATTR]: TACHO_GATEWAY_TIER,
+              [TACHO_CREDENTIAL_BASIS_ATTR]: TACHO_CREDENTIAL_GATEWAY_BROKERED,
+              [TACHO_RUN_TOKEN_ATTR]: minted.claims.tid,
+              // Which signing key minted it, so a rotation reads on the record.
+              "oxagen.run_token_key": key.id,
+              "oxagen.provider": provider,
+              "oxagen.harness": harness,
+              "oxagen.run_token_placement": placement,
+            },
+          },
+        ),
+      ],
+      deps.record,
+    );
   } catch (error) {
     // The mint stands: a frame that failed to seal is a gap in the record,
     // and a harness left without a credential over it would be a worse one.
+    // The daemon's chain is back where the seal found it, so its next frame
+    // takes this seq. Left one seq ahead, that frame sealed past an event the
+    // WAL never held, and the control plane refused the chain from there on.
     deps.log(
       `credential issuer: token minted but not recorded: ${error instanceof Error ? error.message : String(error)}`,
     );

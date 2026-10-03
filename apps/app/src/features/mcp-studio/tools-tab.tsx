@@ -26,6 +26,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, useId, useState } from "react";
 import type { ToolRiskGrade, ToolSideEffect } from "@/data/contracts/tools";
 import { Badge, type BadgeTone } from "@/ui/badge";
+import { Button } from "@/ui/button";
 import { panel, panelBody, panelHeader, panelTitle } from "@/ui/control-styles";
 import {
   ListBar,
@@ -609,15 +610,17 @@ export function ToolsTab({
                           </td>
                         ) : null}
                         <td className={cell}>
-                          <button
+                          <Button
                             type="button"
-                            className="text-left font-mono text-sm text-foreground underline-offset-2 hover:underline"
+                            variant="link"
+                            size="xs"
+                            className="h-auto p-0 text-left font-mono"
                             onClick={() => {
                               setOpenTool(tool.name);
                             }}
                           >
                             {tool.name}
-                          </button>
+                          </Button>
                         </td>
                         <td className={cell}>
                           <Badge tone={STATE_TONE[state]}>

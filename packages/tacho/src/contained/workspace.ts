@@ -1,9 +1,16 @@
 import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
-function within(root: string, path: string): boolean {
+/**
+ * Whether `path` is `root` or lies under it. Only a `..` segment climbs out:
+ * a child named `..cache` starts with two dots and is still inside.
+ */
+export function within(root: string, path: string): boolean {
   const rel = relative(root, path);
-  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+  return (
+    rel === "" ||
+    (!isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${sep}`))
+  );
 }
 
 const CREDENTIAL_PATHS = new Set([

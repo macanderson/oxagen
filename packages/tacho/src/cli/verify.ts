@@ -210,7 +210,9 @@ export async function verify(
   const before = new Set(
     (priorListing?.sessions ?? []).map((session) => session.session_uuid),
   );
-  deps.out(
+  // Progress goes to stderr. Stdout carries only the result the caller
+  // prints, so `oxagen agent verify --json` prints one JSON object there.
+  deps.err(
     `Running ${name} ${turn.args[0]} (one headless turn) with hooks installed...`,
   );
   const run = deps.execLong(facts.path, turn.args);
@@ -272,7 +274,7 @@ export async function verify(
       detail: found.ending === true ? ENDING_DETAIL : UNSEALED_DETAIL[harness],
     };
   }
-  deps.out(
+  deps.err(
     `Session ${found.session_id} chained as ${found.session_uuid}: ${found.seq} events, sealed.`,
   );
   return {

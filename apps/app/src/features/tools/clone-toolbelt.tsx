@@ -11,7 +11,8 @@ import { TOOLBELT_SLUG_MAX } from "@oxagen/oxagen/contracts/toolbelt.shared";
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import { unanswered } from "@/ui/action-failure";
-import { buttonPrimary, buttonSecondary, mono } from "@/ui/control-styles";
+import { mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { Field } from "@/ui/field";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -118,19 +119,19 @@ export function CloneToolbelt({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={testId}
         data-touch-target=""
         aria-haspopup="dialog"
         aria-label={isNew ? undefined : t("openLabel", { name: source.name })}
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {label}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
@@ -197,15 +198,15 @@ export function CloneToolbelt({
               setDescription(event.target.value);
             }}
           />
-          <button
+          <Button
             type="submit"
             data-testid={`${testId}-submit`}
             data-touch-target=""
             aria-disabled={pending || undefined}
-            className={`${buttonPrimary} w-full`}
+            variant="primary" className="w-full"
           >
             {pending ? t("pending") : t("submit")}
-          </button>
+          </Button>
         </form>
       </SheetDialog>
     </>

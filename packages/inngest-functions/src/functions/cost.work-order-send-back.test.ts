@@ -7,11 +7,14 @@
 //     note
 //   - a pass with send_note off records nothing, and the next pass with it on
 //     posts the note
+//   - on a public item the note links to the work order and shows no dollar
+//     figure, and on a private one it shows the figures (#4775)
 //   - one workspace's failed pass does not stop the sweep
 import type { WorkOrderSendBack } from "@oxagen/billing";
 import {
   type AnyCollectorDefinition,
   type CollectorHealth,
+  type ItemVisibility,
   type SendBackPorts,
   WRITE_BACK_DEFAULTS,
   type WriteBackSwitches,
@@ -97,16 +100,17 @@ function streak(...runIds: string[]): WorkOrderSendBack {
 
 /**
  * A provider whose collector supports write-back, an in-memory record, and
- * the ports the job reads. Tests flip the switches and the health between
- * passes.
+ * the ports the job reads. Tests flip the switches, the health, and whether
+ * the item is private between passes.
  */
 function provider() {
   const notes: Array<{ providerId: string; text: string }> = [];
   const recorded = new Set<string>();
   const portScopes: unknown[] = [];
-  const state: { switches: WriteBackSwitches; health: CollectorHealth } = {
+  const state: { switches: WriteBackSwitches; health: CollectorHealth; visibility: ItemVisibility } = {
     switches: { ...WRITE_BACK_DEFAULTS },
     health: "healthy",
+    visibility: "private",
   };
   const refuse = async () => {
     throw new Error("A send-back writes a note and nothing else.");
@@ -120,6 +124,7 @@ function provider() {
       status: refuse,
       close: refuse,
       labels: refuse,
+      visibility: async () => state.visibility,
     },
   } as unknown as AnyCollectorDefinition;
   const ports: SendBackPorts = {
@@ -131,6 +136,7 @@ function provider() {
           ref: { providerId: `issue:node:${itemId}` },
           conn: { id: "conn-1", auth: { scheme: "public" } },
         },
+        orderUrl: `https://app.oxagen.test/acme/core/work/${itemId}`,
       };
     },
     record: {
@@ -231,6 +237,17 @@ describe("cost.work-order-send-back-hourly", () => {
     p.state.switches = { ...WRITE_BACK_DEFAULTS };
     expect(await pass(streak("tse_c", "tse_b", "tse_a"))).toMatchObject({ written: 1 });
     expect(p.notes).toHaveLength(1);
+    expect([...p.recorded]).toEqual([`${ORDER}:tse_c`]);
+  });
+
+  it("on a public item, posts the runs and their outcome with a link to the work order and no dollar figure", async () => {
+    const p = provider();
+    p.state.visibility = "public";
+    expect(await pass(streak("tse_c", "tse_b", "tse_a"))).toMatchObject({ written: 1 });
+    const note = p.notes[0]!.text;
+    expect(note).toContain(`https://app.oxagen.test/acme/core/work/${ITEM}`);
+    for (const runId of ["tse_c", "tse_b", "tse_a"]) expect(note).toContain(`- ${runId}: pull request closed unmerged`);
+    expect(note).not.toContain("$");
     expect([...p.recorded]).toEqual([`${ORDER}:tse_c`]);
   });
 

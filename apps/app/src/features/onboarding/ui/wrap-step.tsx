@@ -26,12 +26,8 @@ import {
 } from "react";
 import type { SafePath } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  mono,
-  panel,
-} from "@/ui/control-styles";
+import { buttonSecondary, mono, panel } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { DesktopDownloads } from "@/ui/desktop-downloads";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { HarnessIcon } from "@/ui/harness-icon";
@@ -119,9 +115,10 @@ function TabList<T extends string>({
   return (
     <div role="tablist" aria-label={label} className={className}>
       {items.map((item) => (
-        <button
+        <Button
           key={item}
           type="button"
+          variant="ghost"
           role="tab"
           id={`${id}-${item}`}
           aria-selected={value === item}
@@ -138,10 +135,10 @@ function TabList<T extends string>({
             const next = items[(at + step + items.length) % items.length];
             if (next !== undefined) onChange(next);
           }}
-          className="min-h-11 min-w-0 flex-1 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+          className="h-auto min-h-11 min-w-0 flex-1 whitespace-normal rounded-none border-0 p-0 text-sm font-normal focus-visible:-outline-offset-2"
         >
           {render(item)}
-        </button>
+        </Button>
       ))}
     </div>
   );
@@ -227,13 +224,13 @@ function TokenBox({
       {failure === null ? null : (
         <span className="mt-2 flex flex-col gap-2 font-sans">
           <FormAlert testId="wrap-token-failure">{failure}</FormAlert>
-          <button
+          <Button
             type="button"
             onClick={onRetry}
-            className={`${buttonSecondary} self-start`}
+            variant="outline" className="self-start"
           >
             {t("tokenAgain")}
-          </button>
+          </Button>
         </span>
       )}
     </div>
@@ -387,16 +384,16 @@ export function WrapStep({
         render={(o) => t(`os.${o}`)}
         className={segmented}
       />
-      <button
+      <Button
         type="button"
         data-testid="wrap-download"
-        className={`${buttonPrimary} w-full`}
+        variant="primary" className="w-full"
         onClick={() => {
           setStatus(t("downloadNotBacked", { os: t(`os.${os}`) }));
         }}
       >
         {t("downloadFor", { os: t(`os.${os}`) })}
-      </button>
+      </Button>
       <p
         data-testid="wrap-package-not-backed"
         className="font-mono text-xs leading-relaxed text-muted-foreground"
@@ -524,13 +521,13 @@ export function WrapStep({
               render={(l) => t(`lang.${l}`)}
               className={`${segmented} max-w-75 flex-1`}
             />
-            <button
+            <Button
               type="button"
-              className={`${buttonSecondary} md:ml-auto`}
+              variant="outline" className="md:ml-auto"
               onClick={() => void copy(lines)}
             >
               {t("copy")}
-            </button>
+            </Button>
           </div>
           <pre
             data-testid="wrap-five-lines"
@@ -560,7 +557,7 @@ export function WrapStep({
           value={tab}
           onChange={setTab}
           render={(item) => (
-            <span className="flex flex-col items-start gap-0.5 px-3.5 py-3 text-left">
+            <span className="flex w-full flex-col items-start gap-0.5 px-3.5 py-3 text-left">
               <span className="flex items-center gap-2 text-base font-semibold text-foreground">
                 {/* The SDK tab wraps an agent of your own, not a harness. */}
                 {item === "sdk" ? null : (

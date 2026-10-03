@@ -7,7 +7,11 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { agentPaths, type TachoPaths } from "../host/paths";
-import { writeHostFile } from "../host/host-file";
+import {
+  type HarnessFilesRecord,
+  harnessFilesRecord,
+  writeHostFile,
+} from "../host/host-file";
 import {
   bundleSigner,
   scratchPaths,
@@ -40,6 +44,22 @@ describe("namesTachoExecutable", () => {
       ["C:\\Program Files\\Oxagen\\tacho.exe", "daemon"],
     ],
     ["tacho-hook", ["tachod"]],
+    // Scoop installs the executable under its release asset's name.
+    [
+      '"C:\\Users\\dev\\scoop\\apps\\oxagen\\current\\tacho-x86_64-pc-windows-msvc.exe" hook',
+      [
+        "C:\\Users\\dev\\scoop\\apps\\oxagen\\current\\tacho-x86_64-pc-windows-msvc.exe",
+        "daemon",
+      ],
+    ],
+    [
+      "'/opt/oxagen/tacho-aarch64-apple-darwin' hook",
+      ["/opt/oxagen/oxagen", "daemon"],
+    ],
+    [
+      "/opt/oxagen/oxagen hook",
+      ["/opt/oxagen/tacho-x86_64-unknown-linux-gnu", "daemon"],
+    ],
     // Either half alone is enough: the two move together.
     ["/opt/oxagen/oxagen hook", ["node", "/opt/tacho/tachod.mjs"]],
     ["node /opt/tacho/tacho-hook.mjs", ["/opt/oxagen/oxagen", "daemon"]],
@@ -57,6 +77,18 @@ describe("namesTachoExecutable", () => {
     ],
     // A directory named tacho is not the executable.
     ["/home/dev/tacho/oxagen hook", ["/home/dev/tacho/oxagen", "daemon"]],
+    // Nor is one named after the asset, and the oxagen asset is not tacho.
+    [
+      '"C:\\Users\\dev\\scoop\\apps\\oxagen\\current\\oxagen-x86_64-pc-windows-msvc.exe" hook',
+      [
+        "C:\\Users\\dev\\scoop\\apps\\oxagen\\current\\oxagen-x86_64-pc-windows-msvc.exe",
+        "daemon",
+      ],
+    ],
+    [
+      "/home/dev/tacho-x86_64-unknown-linux-gnu/oxagen hook",
+      ["/home/dev/tacho-x86_64-unknown-linux-gnu/oxagen", "daemon"],
+    ],
   ])("leaves %s alone (negative)", (hook, daemon) => {
     expect(
       namesTachoExecutable({ hook_command: hook, daemon_command: daemon }),
@@ -72,6 +104,11 @@ function machine(
     daemon: string[];
     harnesses: string[];
     revoked?: boolean;
+    /**
+     * Recorded as `harness_files`, over the files this machine's own paths
+     * name. Absent: the host records none.
+     */
+    harnessFiles?: Partial<HarnessFilesRecord>;
   }>,
 ) {
   const base = scratchPaths();
@@ -89,16 +126,28 @@ function machine(
         harnesses: agent.harnesses as never,
         enrolled_at: `2026-09-1${index}T00:00:00.000Z`,
         revoked_at: agent.revoked === true ? "2026-09-20T00:00:00.000Z" : null,
+        ...(agent.harnessFiles !== undefined
+          ? {
+              harness_files: {
+                ...harnessFilesRecord(paths),
+                ...agent.harnessFiles,
+              },
+            }
+          : {}),
       }),
     );
   }
   const runs: EnrollOptions[] = [];
+  // The deps each re-apply was handed.
+  const seen: CliDeps[] = [];
   const run = vi.fn(
-    async (options: EnrollOptions): Promise<EnrollResult> => {
+    async (options: EnrollOptions, own: CliDeps): Promise<EnrollResult> => {
       runs.push(options);
+      seen.push(own);
       return { ok: true, warnings: [] };
     },
   );
+  const errors: string[] = [];
   let installed = true;
   const deps = {
     paths: base,
@@ -112,12 +161,16 @@ function machine(
       status: () => ({ installed, running: installed }),
     },
     out: () => undefined,
-    err: () => undefined,
+    err: (line: string) => {
+      errors.push(line);
+    },
   } as unknown as CliDeps;
   return {
     deps,
     run,
     runs,
+    seen,
+    errors,
     uninstall: () => {
       installed = false;
     },
@@ -263,6 +316,58 @@ describe("moveOffTachoNames", () => {
         from: "node /opt/tacho/tacho-hook.mjs",
         ok: false,
       },
+    ]);
+  });
+
+  it("re-applies an agent in its own directory, with the harness files it recorded", async () => {
+    const m = machine([
+      {
+        id: "aaaaaaaa",
+        hook: "node /opt/tacho/tacho-hook.mjs",
+        daemon: ["node", "/opt/tacho/tachod.mjs"],
+        harnesses: ["claude-code"],
+        harnessFiles: {},
+      },
+    ]);
+    expect(await moveOffTachoNames(m.deps, m.run)).toEqual([
+      {
+        agentKey: "acme.core.aaaaaaaa",
+        from: "node /opt/tacho/tacho-hook.mjs",
+        ok: true,
+      },
+    ]);
+    expect(m.errors).toEqual([]);
+    const [own] = m.seen;
+    expect(own?.paths.dir).toBe(agentPaths(m.deps.paths, "aaaaaaaa").dir);
+    expect(own?.paths.claudeSettings).toBe(m.deps.paths.claudeSettings);
+  });
+
+  it("leaves an agent whose harness files this process finds elsewhere, and says why (negative)", async () => {
+    const m = machine([
+      {
+        id: "aaaaaaaa",
+        hook: "node /opt/tacho/tacho-hook.mjs",
+        daemon: ["node", "/opt/tacho/tachod.mjs"],
+        harnesses: ["claude-code"],
+        // Enrolled from a shell whose CLAUDE_CONFIG_DIR was ~/work/.claude.
+        harnessFiles: {
+          claude_settings: "/home/dev/work/.claude/settings.json",
+        },
+      },
+    ]);
+    expect(await moveOffTachoNames(m.deps, m.run)).toEqual([
+      {
+        agentKey: "acme.core.aaaaaaaa",
+        from: "node /opt/tacho/tacho-hook.mjs",
+        ok: false,
+        skipped: "harness_files_elsewhere",
+      },
+    ]);
+    // A re-apply from here would write hooks Claude Code does not read and
+    // record those files in place of the real ones.
+    expect(m.run).not.toHaveBeenCalled();
+    expect(m.errors).toEqual([
+      `acme.core.aaaaaaaa was enrolled with its harness files at /home/dev/work/.claude/settings.json, and this command finds them at ${m.deps.paths.claudeSettings}, so its hooks stay where they are. Run \`oxagen agent enroll\` from a shell that sets the harness homes it was enrolled with, such as CLAUDE_CONFIG_DIR.`,
     ]);
   });
 });

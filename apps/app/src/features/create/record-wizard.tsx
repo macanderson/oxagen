@@ -31,12 +31,8 @@ import {
 import type { ActionResult } from "@/server/kernel";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { routes } from "@/shared/safe-path";
-import {
-  buttonSecondary,
-  inputBase,
-  linkText,
-  mono,
-} from "@/ui/control-styles";
+import { inputBase, linkText, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { PullRequestLink, SafeLink, useNavigate } from "@/ui/navigation";
 import { RecordCard } from "@/ui/record-card";
@@ -368,16 +364,16 @@ function StatementStep({ api, ctx }: StepProps<RecordDraft>) {
             >
               {t("tokens", { tokens: record.tokens })}
             </span>
-            <button
+            <Button
               type="button"
-              className={`${buttonSecondary} min-h-8 px-3 py-1 text-sm`}
+              variant="outline" className="min-h-8 px-3 py-1 text-sm"
               disabled={!record.edited}
               onClick={() => {
                 api.update({ statement: null });
               }}
             >
               {t("revert")}
-            </button>
+            </Button>
           </>
         }
       />

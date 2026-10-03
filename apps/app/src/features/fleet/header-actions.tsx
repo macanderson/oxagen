@@ -8,6 +8,7 @@ import { useState } from "react";
 import type { RunRow } from "@/data/contracts/runs";
 import { routes } from "@/shared/safe-path";
 import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { SafeLink } from "@/ui/navigation";
 import type { FleetAgent } from "./board";
 import { SteerFleetDialog } from "./steer-fleet";
@@ -44,16 +45,16 @@ export function FleetHeaderActions({
   const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-wrap gap-2">
-      <button
+      <Button
         type="button"
         data-testid="fleet-steer"
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("steer")}
-      </button>
+      </Button>
       <SafeLink
         to={routes.register(org, ws, "name")}
         data-testid="fleet-register"

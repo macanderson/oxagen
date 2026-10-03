@@ -24,6 +24,8 @@ export interface AgentEnrollOptions {
   /** `brokered` (the default) or `passthrough` (ADR-143). */
   credentials?: string;
   validityDays?: number;
+  /** Enroll even when running as root (`--allow-root`). */
+  allowRoot?: boolean;
 }
 
 export async function handleAgentEnroll(
@@ -37,11 +39,16 @@ export async function handleAgentEnroll(
     parseCredentialMode,
     parseHarnesses,
   } = await import("@oxagen/recorder/cli");
-  const deps = defaultCliDeps({
-    out: (line) => writer.write(line),
-    err: (line) => writer.writeErr(line),
-    runtime: oxagenRuntimeCommands(),
-  });
+  // `getuid` lets the recorder's root guard refuse `sudo`, which on macOS
+  // keeps the user's HOME and would write root-owned files there.
+  const deps = {
+    ...defaultCliDeps({
+      out: (line) => writer.write(line),
+      err: (line) => writer.writeErr(line),
+      runtime: oxagenRuntimeCommands(),
+    }),
+    getuid: (): number | undefined => process.getuid?.(),
+  };
   const result = await enroll(
     {
       enrollmentToken: opts.token,
@@ -58,11 +65,14 @@ export async function handleAgentEnroll(
       ...(opts.validityDays !== undefined
         ? { validityDays: opts.validityDays }
         : {}),
+      ...(opts.allowRoot !== undefined ? { allowRoot: opts.allowRoot } : {}),
     },
     deps,
   );
   if (!result.ok) return false;
   // The other agents on this machine move to the new names too.
   await moveOffTacho(writer);
-  return true;
+  // Every hook can be written while the new daemon never reaches Oxagen, and
+  // then nothing ships. The exit status says so.
+  return result.shipping?.healthy !== false;
 }

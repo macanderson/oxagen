@@ -26,7 +26,8 @@
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
-import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
+import { inputBase, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -165,15 +166,15 @@ export function InviteDialog({
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           openChange(true);
         }}
       >
         {t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={openChange}

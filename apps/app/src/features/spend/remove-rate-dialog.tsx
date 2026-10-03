@@ -23,7 +23,7 @@ import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { PriceTokenClass } from "@/data/contracts/spend";
 import { routes } from "@/shared/safe-path";
-import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -126,7 +126,7 @@ export function RemoveRateDialog({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-touch-target=""
         data-testid="spend-remove-rate-open"
@@ -134,13 +134,13 @@ export function RemoveRateDialog({
           model: entry.model,
           class: tokenClass,
         })}
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("remove.open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
@@ -165,14 +165,14 @@ export function RemoveRateDialog({
             <FormAlert testId="spend-remove-rate-unpriced">
               {t("remove.unpriced", { model: entry.model, class: tokenClass })}
             </FormAlert>
-            <button
+            <Button
               type="button"
               data-testid="spend-remove-rate-unpriced-close"
-              className={buttonSecondary}
+              variant="outline"
               onClick={finish}
             >
               {t("remove.unpricedClose")}
-            </button>
+            </Button>
           </div>
         ) : needsConfirm ? (
           <form
@@ -197,16 +197,16 @@ export function RemoveRateDialog({
                 label={t("remove.confirmUnpricedSubmit")}
                 pendingLabel={t("remove.pending")}
               />
-              <button
+              <Button
                 type="button"
                 data-testid="spend-remove-rate-confirm-unpriced-cancel"
-                className={buttonSecondary}
+                variant="outline"
                 onClick={() => {
                   setNeedsConfirm(false);
                 }}
               >
                 {t("remove.confirmUnpricedCancel")}
-              </button>
+              </Button>
             </div>
           </form>
         ) : (

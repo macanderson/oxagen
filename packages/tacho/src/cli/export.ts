@@ -4,6 +4,7 @@
  */
 import { writeFileSync } from "node:fs";
 import { exportSession, type ExportFormat } from "../collector/exporters";
+import { listAgents } from "../host/agents";
 import { Wal } from "../host/wal";
 import type { CliDeps } from "./deps";
 
@@ -26,29 +27,55 @@ export function resolveSessionUuid(wal: Wal, key: string): string | undefined {
   return undefined;
 }
 
+/**
+ * The WAL directory of every agent on this machine (ADR-203), oldest first,
+ * then the one `deps.paths` names when it is not among them, as on a machine
+ * with no agent. Each agent records into its own WAL, so a session the
+ * second agent recorded is only in the second one.
+ */
+function walDirs(deps: CliDeps): string[] {
+  const dirs = listAgents(deps.paths).map((agent) => agent.paths.wal);
+  if (!dirs.includes(deps.paths.wal)) dirs.push(deps.paths.wal);
+  return dirs;
+}
+
 export async function exportCommand(
   options: ExportOptions,
   deps: CliDeps,
 ): Promise<boolean> {
-  const wal = new Wal(deps.paths.wal);
+  const dirs = walDirs(deps);
+  const wals = dirs.map((dir) => new Wal(dir));
   if (options.list === true || options.session === undefined) {
-    const rows = wal.sessions().map((uuid) => {
-      const events = wal.read(uuid);
-      const first = events[0];
-      const last = events[events.length - 1];
-      return `${uuid}  ${first?.session_id ?? "?"}  ${events.length} events  ${first?.ts ?? ""} .. ${last?.ts ?? ""}${last?.kind === "agent_stop" ? "  sealed" : ""}`;
-    });
+    const rows = wals.flatMap((wal) =>
+      wal.sessions().map((uuid) => {
+        const events = wal.read(uuid);
+        const first = events[0];
+        const last = events[events.length - 1];
+        return `${uuid}  ${first?.session_id ?? "?"}  ${events.length} events  ${first?.ts ?? ""} .. ${last?.ts ?? ""}${last?.kind === "agent_stop" ? "  sealed" : ""}`;
+      }),
+    );
     deps.out(
-      rows.length > 0 ? rows.join("\n") : `no sessions in ${deps.paths.wal}`,
+      rows.length > 0 ? rows.join("\n") : `no sessions in ${dirs.join(" or ")}`,
     );
     return true;
   }
-  const uuid = resolveSessionUuid(wal, options.session);
-  if (uuid === undefined) {
-    deps.err(`no session ${options.session} in ${deps.paths.wal}`);
+  const session = options.session;
+  let found: { wal: Wal; uuid: string } | undefined;
+  for (const wal of wals) {
+    const uuid = resolveSessionUuid(wal, session);
+    if (uuid !== undefined) {
+      found = { wal, uuid };
+      break;
+    }
+  }
+  if (found === undefined) {
+    deps.err(`no session ${session} in ${dirs.join(" or ")}`);
     return false;
   }
-  const text = exportSession(wal.read(uuid), options.format ?? "tacho");
+  const text = exportSession(
+    found.wal.read(found.uuid),
+    options.format ?? "tacho",
+  );
   if (options.out !== undefined) {
     // An export carries the run's prompts, tool input and output: private
     // to its owner, like the WAL it came from.

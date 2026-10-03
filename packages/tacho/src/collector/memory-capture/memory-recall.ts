@@ -9,6 +9,10 @@
  * scoped to them. A memory that waits for review is never in the answer
  * (ADR-238).
  *
+ * The prompt's text goes through the recorder's credential redaction before
+ * it is sent, as a frame body does before it leaves the host. A secret pasted
+ * into a prompt is cut from the chain, so it is cut from this ask too.
+ *
  * The prompt waits for the answer, so the ask gets at most 500 ms
  * (`MEMORY_RECALL_TIMEOUT_MS`). A timeout, an unreachable control plane, an
  * error status, or an answer this collector cannot read each recall nothing,
@@ -19,6 +23,7 @@
  */
 import { z } from "zod";
 import { isSha256Digest } from "../../digest";
+import { redactText } from "../../evidence/redaction";
 import type { FetchLike } from "../../host/control-client";
 
 export const MEMORY_RECALL_PATH = "/v1/tacho/memories/recall";
@@ -79,7 +84,11 @@ export interface MemoryRecallRequest {
    * past `MEMORY_RECALL_PATH_MAX_CHARS`.
    */
   paths: string[];
-  /** The prompt's text. Past `MEMORY_RECALL_TEXT_MAX_CHARS` it is cut. */
+  /**
+   * The prompt's text. The ask replaces each credential the recorder's
+   * redaction recognises with its marker, then cuts what is left past
+   * `MEMORY_RECALL_TEXT_MAX_CHARS`.
+   */
   text: string;
 }
 
@@ -197,7 +206,10 @@ export function createMemoryRecall(deps: MemoryRecallDeps): MemoryRecall {
               MEMORY_RECALL_PATHS_MAX,
               MEMORY_RECALL_PATH_MAX_CHARS,
             ),
-            text: cut(request.text, MEMORY_RECALL_TEXT_MAX_CHARS),
+            // Redacted before it is cut. A cut first could end inside a
+            // secret and leave its first characters too short for the
+            // detector to recognise, and they would be sent.
+            text: cut(redactText(request.text), MEMORY_RECALL_TEXT_MAX_CHARS),
           }),
           signal,
         },

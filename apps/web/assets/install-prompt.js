@@ -128,7 +128,7 @@
     "position:fixed;z-index:2147483000;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));" +
     "margin:0 auto;max-width:380px;box-sizing:border-box;display:grid;grid-template-columns:auto 1fr auto;gap:calc(var(--ox-space, 0.25rem) * 3);align-items:start;" +
     "padding:calc(var(--ox-space, 0.25rem) * 3.5);border-radius:var(--ox-radius-card, 0.81rem);border:1px solid var(--line);background:var(--bg);color:var(--fg);" +
-    "box-shadow:var(--shadow);font:var(--ox-a-body, 0.875rem)/1.45 var(--ox-font, Aeonik),ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;" +
+    "box-shadow:var(--shadow);font:var(--ox-a-body, 0.875rem)/1.45 var(--ox-font, Geist),ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;" +
     "animation:rise .22s ease-out}" +
     ".card.dark{--bg:var(--popover, var(--ox-panel, #18181B));--fg:var(--popover-foreground, var(--ox-text, #FAFAFA));" +
     "--muted:var(--muted-foreground, var(--ox-muted, #A1A1AA));--line:var(--border, var(--ox-border, #27272A));" +

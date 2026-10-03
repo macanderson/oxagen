@@ -7,6 +7,7 @@
 // show.
 import { useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
+import { Button } from "@/ui/button";
 
 export type PlaneMode = "shared" | "dedicated" | "firewall";
 const PLANE_MODES: readonly PlaneMode[] = ["shared", "dedicated", "firewall"];
@@ -30,19 +31,21 @@ export function DataPlaneModes({
         className="inline-flex w-fit max-w-full flex-wrap gap-0.5 rounded-xl border border-border bg-hl p-0.5"
       >
         {PLANE_MODES.map((mode) => (
-          <button
+          <Button
             key={mode}
             type="button"
+            variant="ghost"
+            size="sm"
             aria-pressed={shown === mode}
             data-mode={mode}
             onClick={() => {
               setShown(mode);
             }}
-            className="min-h-8 rounded-md px-3 text-sm text-muted-foreground aria-pressed:bg-card aria-pressed:text-foreground aria-pressed:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11"
+            className="rounded-md text-sm aria-pressed:bg-card aria-pressed:text-foreground aria-pressed:shadow-sm max-md:min-h-11"
           >
             {t(`modes.${mode}`)}
             {mode === current ? ` · ${t("current")}` : null}
-          </button>
+          </Button>
         ))}
       </div>
       {shown === current ? null : (

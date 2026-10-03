@@ -277,23 +277,29 @@ export interface ReplayGradeExplanation {
  *   new model call can be made while tool results are served from the cassette.
  * - `retry`: `fork` plus a harness that reports a reproducible run.
  *
- * Unknown gap kinds are refused: a gap the vocabulary does not name cannot be
- * graded, and grading it as harmless would raise a grade the record does not
- * support.
+ * A gap kind the vocabulary does not name, such as the `backfill` a
+ * backfilled session seals with, stops every rung above `inspect` with the
+ * reason `unknown_gap:<kind>`. Nobody can grade that word, and grading it as
+ * harmless would raise a grade the record does not support. The wrapped
+ * session's seal grades through this function too, so a ladder drawn from a
+ * seal's gaps never reaches a rung above the grade that seal recorded.
  */
 export function explainReplayGrade(
   input: ReplayGradeInput,
 ): ReplayGradeExplanation {
   const gaps = new Set(input.gaps);
-  for (const gap of gaps) {
-    if (!isCompletenessGapKind(gap)) {
-      throw new RangeError(`unknown completeness gap kind: ${gap}`);
-    }
-  }
 
   // `inspect` is the floor: a recording that exists reaches it. Everything
   // above it is a reason to stop, evaluated in ladder order.
-  const blocking = [...gaps].filter((gap) => INSPECT_ONLY_GAPS.has(gap)).sort();
+  const blocking = [...gaps]
+    .flatMap((gap): string[] =>
+      !isCompletenessGapKind(gap)
+        ? [`unknown_gap:${gap}`]
+        : INSPECT_ONLY_GAPS.has(gap)
+          ? [gap]
+          : [],
+    )
+    .sort();
   const viewBlock =
     blocking.length > 0
       ? blocking.join(",")
@@ -366,9 +372,10 @@ export interface TachoSeal {
  * plane observed. `tool_bodies` is derived from the session's own counters,
  * the same rule the ledger seal applies to its rows, so a host's self-report
  * can add the gap and never remove it. A gap kind outside the vocabulary is
- * kept on the record and grades `inspect`: a word nobody can grade cannot
- * raise a grade. `retry` needs a harness that reports a reproducible run; no
- * wrapped harness does, so `harnessReproducible` is false here.
+ * kept on the record and grades `inspect`, by the rule `explainReplayGrade`
+ * applies: a word nobody can grade cannot raise a grade. `retry` needs a
+ * harness that reports a reproducible run; no wrapped harness does, so
+ * `harnessReproducible` is false here.
  */
 export function sealTachoSession(input: TachoSealInput): TachoSeal {
   const gaps = new Set<string>(input.hostGaps);
@@ -379,12 +386,6 @@ export function sealTachoSession(input: TachoSealInput): TachoSeal {
   else if (input.bodyFrames < input.contentFrames) gaps.add("body_missing");
   if (input.toolCalls > 0 && input.toolBodyFrames === 0)
     gaps.add("tool_bodies");
-  const known: CompletenessGapKind[] = [];
-  let unknown = false;
-  for (const gap of gaps) {
-    if (isCompletenessGapKind(gap)) known.push(gap);
-    else unknown = true;
-  }
   const tier =
     input.enforcementTier === "contained" ||
     input.enforcementTier === "gateway" ||
@@ -393,13 +394,11 @@ export function sealTachoSession(input: TachoSealInput): TachoSeal {
       : "observe";
   return {
     completenessGaps: [...gaps],
-    replayGrade: unknown
-      ? "inspect"
-      : computeReplayGrade({
-          gaps: known,
-          enforcementTier: tier,
-          harnessReproducible: false,
-          retainedBodies: input.bodyFrames,
-        }),
+    replayGrade: computeReplayGrade({
+      gaps: [...gaps],
+      enforcementTier: tier,
+      harnessReproducible: false,
+      retainedBodies: input.bodyFrames,
+    }),
   };
 }

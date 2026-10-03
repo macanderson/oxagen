@@ -68,7 +68,9 @@ export const appendRecord = defineTool({
     "Append one steering record to the workspace's lineage graph — an observation, a memory, a knowledge claim, evidence, or a record of context being used. Canonically hashed per §9. An agent cannot append a directive; that is propose_record.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
+  // No "app" layer: no contract it absorbs declares one, so no rev1 page
+  // carries it until cutover (tools/scripts/check_ui_parity.mjs).
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
 
   absorbs: [

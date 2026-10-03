@@ -2,7 +2,8 @@
  * The daemon process after the tachod service audit: a stray rejection is
  * logged and the process keeps serving, an uncaught exception gets a
  * bounded clean stop and exit 1 for the supervisor to restart it, and
- * `tachod.pid` records the executable and is removed as the daemon exits.
+ * `tachod.pid` records the executable, is written before the collectors
+ * start, and is removed as the daemon exits.
  */
 import { EventEmitter } from "node:events";
 import {
@@ -16,7 +17,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { parseDaemonPid } from "../host/process-scan";
+import { formatDaemonPid, parseDaemonPid } from "../host/process-scan";
 
 const daemon = vi.hoisted(() => ({
   stop: vi.fn(async () => undefined),
@@ -24,6 +25,7 @@ const daemon = vi.hoisted(() => ({
 }));
 vi.mock("./daemon", () => ({ startDaemon: vi.fn(async () => daemon) }));
 
+import { startDaemon } from "./daemon";
 import {
   guardDaemonProcess,
   releaseDaemonPid,
@@ -123,6 +125,93 @@ describe("tachod.pid", () => {
     expect(existsSync(path)).toBe(true);
   });
 
+  it("records the start Linux counts in /proc when it has one", () => {
+    const path = join(scratch(), "tachod.pid");
+    writeDaemonPid(
+      path,
+      new Date("2026-09-23T10:00:00.000Z"),
+      "/usr/bin/node",
+      "boot-1:4410",
+    );
+    expect(parseDaemonPid(readFileSync(path, "utf8"))).toEqual({
+      pid: process.pid,
+      started_at: "2026-09-23T10:00:00.000Z",
+      exe: "/usr/bin/node",
+      start: "boot-1:4410",
+    });
+  });
+
+  /**
+   * Run the daemon body for one agent whose collector fails to start, as a
+   * second daemon does on the ports the first one holds. Returns what the
+   * body rejected with, and what `tachod.pid` held while the collector was
+   * starting.
+   */
+  async function startThatFails(
+    home: string,
+    pidPath: string,
+  ): Promise<{ error: unknown; during: string | undefined }> {
+    const agentDir = join(home, "agents", "a1b2c3d4");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(join(agentDir, "host.json"), "{}\n");
+    let during: string | undefined;
+    vi.mocked(startDaemon).mockImplementationOnce(async () => {
+      during = existsSync(pidPath) ? readFileSync(pidPath, "utf8") : undefined;
+      throw new Error("listen EADDRINUSE: address already in use");
+    });
+    const events = ["uncaughtException", "unhandledRejection"] as const;
+    const before = new Map<string, unknown[]>(
+      events.map((event) => [event, process.listeners(event)]),
+    );
+    const previous = process.env["TACHO_HOME"];
+    process.env["TACHO_HOME"] = home;
+    try {
+      const error = await runDaemonProcess().then(
+        () => undefined,
+        (reason: unknown) => reason,
+      );
+      return { error, during };
+    } finally {
+      if (previous === undefined) delete process.env["TACHO_HOME"];
+      else process.env["TACHO_HOME"] = previous;
+      for (const event of events)
+        for (const listener of process.listeners(event))
+          if (!before.get(event)?.includes(listener))
+            process.off(event, listener as (...args: unknown[]) => void);
+    }
+  }
+
+  // A reinstall that ran while the collectors were starting found no file,
+  // stopped nothing, and started a second daemon beside this one.
+  it("is written before any collector starts, and removed when none starts", async () => {
+    const home = scratch();
+    const pidPath = join(home, "tachod.pid");
+    const { error, during } = await startThatFails(home, pidPath);
+    expect(error).toBeInstanceOf(Error);
+    expect(parseDaemonPid(during ?? "")).toMatchObject({
+      pid: process.pid,
+      exe: process.execPath,
+    });
+    expect(existsSync(pidPath)).toBe(false);
+  });
+
+  it("puts back the record it replaced when no collector starts", async () => {
+    // The first daemon's record. The second daemon fails on its ports and
+    // must not leave it with nothing to be stopped by.
+    const home = scratch();
+    const pidPath = join(home, "tachod.pid");
+    const first = formatDaemonPid({
+      pid: 999999,
+      started_at: "2026-09-23T10:00:00.000Z",
+      exe: process.execPath,
+    });
+    writeFileSync(pidPath, first);
+    const { error, during } = await startThatFails(home, pidPath);
+    expect(error).toBeInstanceOf(Error);
+    expect(parseDaemonPid(during ?? "")?.pid).toBe(process.pid);
+    expect(readFileSync(pidPath, "utf8")).toBe(first);
+  });
+
   it("is written at start and removed when SIGTERM stops the daemon", async () => {
     const home = scratch();
     // One agent to serve: tachod refuses to start on a machine with none. An
@@ -160,10 +249,16 @@ describe("tachod.pid", () => {
         expect(process.listenerCount(event)).toBe(
           (before.get(event)?.length ?? 0) + 1,
         );
-      const sigterm = process
-        .listeners("SIGTERM")
-        .find((listener) => !before.get("SIGTERM")?.includes(listener));
-      (sigterm as () => void)();
+      // The record is on disk before the collectors start, and the SIGTERM
+      // handler goes on once they are up.
+      const sigterm = await vi.waitFor(() => {
+        const added = process
+          .listeners("SIGTERM")
+          .find((listener) => !before.get("SIGTERM")?.includes(listener));
+        expect(added).toBeDefined();
+        return added as () => void;
+      });
+      sigterm();
       await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
       expect(daemon.stop).toHaveBeenCalledTimes(1);
       expect(existsSync(pidPath)).toBe(false);

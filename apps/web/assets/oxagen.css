@@ -273,9 +273,10 @@
 
 /* The house faces, self-hosted from /fonts/ (vendored by
    tools/scripts/sync-brand-assets.mjs). On this site Space Grotesk, the kit's
-   display face, sets every h1, h2, and h3, and Aeonik sets h4 to h6 and all
+   display face, sets every h1, h2, and h3, and Geist sets h4 to h6 and all
    other text. Monaspace Neon sets code, data, and figures, with texture
-   healing on (Mac, 2026-10-02, oxageninc/brand#83). The heroes set their
+   healing on (Mac, 2026-10-02, oxageninc/brand#83). Mac set Geist back in
+   place of Aeonik on 2026-10-03. The heroes set their
    headline at 680, which resolves to the 700 file; every other heading is
    600. Those are the two Space Grotesk weights declared here. */
 @font-face {
@@ -293,6 +294,16 @@
   font-display: swap;
 }
 @font-face {
+  font-family: "Geist";
+  src: url("/fonts/geist-latin-wght.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+/* Aeonik, Aeonik Mono, and Aeonik Fono load for a page that names them. No
+   rule on this site does; Geist is the text face and Monaspace Neon the
+   code face. */
+@font-face {
   font-family: "Aeonik";
   src: url("/fonts/aeonik-wght.woff2") format("woff2");
   font-weight: 100 900;
@@ -306,8 +317,6 @@
   font-style: italic;
   font-display: swap;
 }
-/* Aeonik Mono and Aeonik Fono load for a page that names them. No rule on
-   this site does yet; Monaspace Neon stays the code face. */
 @font-face {
   font-family: "Aeonik Mono";
   src: url("/fonts/aeonik-mono-wght.woff2") format("woff2");

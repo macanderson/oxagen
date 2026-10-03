@@ -102,6 +102,34 @@ describe("the harness pid on a hook", () => {
     expect(asked).toBe(false);
   });
 
+  // H-14: an unenrolled machine posts nothing, so the walk's answer would be
+  // thrown away. It used to run up to two `ps` calls on every prompt anyway.
+  it.each([
+    ["start", CODEX_START],
+    ["prompt", CODEX_PROMPT],
+  ])(
+    "does not walk the process tree for a Codex %s on an unenrolled machine",
+    async (_event, stdin) => {
+      let asked = false;
+      const result = await runTachoHook({
+        paths: scratchPaths(),
+        env: { HOME: "/h" },
+        stdin,
+        harness: "codex",
+        harnessPid: () => {
+          asked = true;
+          return 4242;
+        },
+        platform: "linux",
+        post: async () => {
+          throw new Error("an unenrolled machine posts nothing");
+        },
+      });
+      expect(result.path).toBe("unenrolled");
+      expect(asked).toBe(false);
+    },
+  );
+
   it("is left off a Codex hook when the walk finds no per-session Codex process", async () => {
     expect(await sentEnv("codex", CODEX_START, () => undefined)).toEqual({});
   });

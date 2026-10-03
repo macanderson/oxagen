@@ -7,9 +7,11 @@
 //   1. The token, by digest, outside any tenant scope (the call carries no
 //      credential but the token). Unknown → not_found. Expired or already
 //      used → conflict, and the refusal is counted on the row, including a
-//      presentation that waited on the row lock and found the token used.
+//      presentation that waited on the row lock and found the token used or
+//      expired.
 //   2. Inside the token's tenant scope, one transaction: lock the token row
-//      (a second presenter waits here and then reads it as used), resolve the
+//      (a second presenter waits here and then reads it as used, and one that
+//      waited on a member removal reads it as expired), resolve the
 //      agent and its key (it refuses a deleted or retired agent with
 //      `agent_retired`; one live host per key; a revoked host gives its key
 //      up), mint the host bound to the agent and its principal,
@@ -111,10 +113,13 @@ export const tachoHostEnrollHandler: CapabilityHandler<
     () =>
       withTenantDb(async (tx) => {
         // The row lock serialises two presentations of one token: the second
-        // waits for the first to commit and then reads its used_at.
+        // waits for the first to commit and then reads its used_at. It also
+        // orders this presentation after a member removal, which expires the
+        // person's unused tokens (member-lifecycle.ts).
         const [locked] = await tx
           .select({
             usedAt: schema.tachoEnrollmentTokens.usedAt,
+            expiresAt: schema.tachoEnrollmentTokens.expiresAt,
             agentId: schema.tachoEnrollmentTokens.agentId,
           })
           .from(schema.tachoEnrollmentTokens)
@@ -131,6 +136,15 @@ export const tachoHostEnrollHandler: CapabilityHandler<
           throw tokenRefusal(
             "token_used",
             `This enrollment token was used at ${locked.usedAt.toISOString()}; enrollment tokens are single use`,
+          );
+        }
+        // Checked against the clock after the lock wait, not `now`. A removal
+        // that began after this presentation read the token stamps its own
+        // start as the expiry, which is later than `now`.
+        if (locked.expiresAt.getTime() <= Date.now()) {
+          throw tokenRefusal(
+            "token_expired",
+            `This enrollment token expired at ${locked.expiresAt.toISOString()}`,
           );
         }
 
@@ -241,8 +255,12 @@ export const tachoHostEnrollHandler: CapabilityHandler<
   ).catch(async (err: unknown) => {
     // The losing presentation of a race reads the token as unused, waits on
     // the row lock, and is refused inside the transaction, which rolls back;
-    // it is counted here so every refused presentation is counted once.
-    if (isHandlerError(err) && err.reason === "token_used") {
+    // it is counted here so every refused presentation is counted once. So is
+    // one that a member removal expired while it waited.
+    if (
+      isHandlerError(err) &&
+      (err.reason === "token_used" || err.reason === "token_expired")
+    ) {
       await countRejection(token.id);
     }
     throw err;

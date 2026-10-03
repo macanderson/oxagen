@@ -37,12 +37,8 @@ import {
   chooseToolPatterns,
 } from "@/features/shell/client";
 import { routes } from "@/shared/safe-path";
-import {
-  buttonSecondary,
-  inputBase,
-  mono,
-  textareaBase,
-} from "@/ui/control-styles";
+import { inputBase, mono, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { RecordMultiPicker, RecordPicker } from "@/ui/record-picker";
@@ -337,9 +333,9 @@ export function GrantMandate({
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={buttonSecondary}
+        variant="outline"
         data-testid={`${testId}-open`}
         aria-label={
           request === null
@@ -351,7 +347,7 @@ export function GrantMandate({
         }}
       >
         {request === null ? t("open") : t("grantRequest")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {

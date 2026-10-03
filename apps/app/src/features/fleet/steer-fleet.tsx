@@ -29,13 +29,8 @@ import {
 } from "@/data/contracts/runs";
 import { DeliveryReport } from "@/features/run/client";
 import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
-import {
-  buttonDanger,
-  buttonPrimary,
-  buttonSecondary,
-  mono,
-  textareaBase,
-} from "@/ui/control-styles";
+import { mono, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { type PickerOption, RecordMultiPicker } from "@/ui/record-picker";
@@ -227,19 +222,19 @@ export function SteerFleetDialog({
         : {})}
       footer={
         receipt === null ? (
-          <button
+          <Button
             type="submit"
             form={formId}
             data-touch-target=""
             disabled={blocked || pending}
-            className={interrupting ? buttonDanger : buttonPrimary}
+            variant={interrupting ? "destructive-outline" : "primary"}
           >
             {pending
               ? t("sending")
               : interrupting
                 ? t("sendInterrupt")
                 : t("send")}
-          </button>
+          </Button>
         ) : undefined
       }
     >
@@ -294,26 +289,26 @@ export function SteerFleetDialog({
                 })}
               </label>
               <span className="flex gap-1.5">
-                <button
+                <Button
                   type="button"
                   data-touch-target=""
-                  className={`${buttonSecondary} px-2 py-0.5 text-sm`}
+                  variant="outline" className="px-2 py-0.5 text-sm"
                   onClick={() => {
                     setSelected(new Set(agents.map((agent) => agent.agentKey)));
                   }}
                 >
                   {t("all")}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   data-touch-target=""
-                  className={`${buttonSecondary} px-2 py-0.5 text-sm`}
+                  variant="outline" className="px-2 py-0.5 text-sm"
                   onClick={() => {
                     setSelected(new Set());
                   }}
                 >
                   {t("none")}
-                </button>
+                </Button>
               </span>
             </div>
             {agents.length === 0 ? (
@@ -374,8 +369,10 @@ export function SteerFleetDialog({
                 </span>
               </div>
               <span className="flex flex-none flex-col items-end gap-1">
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   role="switch"
                   aria-checked={interrupting}
                   aria-label={t("interrupt")}
@@ -384,11 +381,7 @@ export function SteerFleetDialog({
                   onClick={() => {
                     setInterrupt(!interrupting);
                   }}
-                  className={`inline-flex min-h-8 items-center gap-2 rounded-full border px-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${
-                    interrupting
-                      ? "border-info text-info"
-                      : "border-border text-muted-foreground"
-                  }`}
+                  className="gap-2 px-2.5 text-sm disabled:opacity-60 aria-checked:border-info aria-checked:text-info"
                 >
                   {t("interrupt")}
                   <i
@@ -397,7 +390,7 @@ export function SteerFleetDialog({
                       interrupting ? "bg-info" : "bg-border"
                     }`}
                   />
-                </button>
+                </Button>
                 <span
                   id={`${formId}-interrupt`}
                   data-testid="steer-interrupt-reason"
