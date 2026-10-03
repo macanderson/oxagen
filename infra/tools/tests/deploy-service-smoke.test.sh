@@ -122,7 +122,8 @@ for fn in port_released retire_current finish_draining; do
   fi
 done
 
-# swap FN INSPECT_RC CURL_RC OVERLAP DRAINING: runs FN against a docker that
+# swap FN INSPECT_RC CURL_RC OVERLAP DRAINING: runs FN, with $FN_ARG as its
+# argument when set, against a docker that
 # records each call in $work/calls, and a curl that always exits CURL_RC (7
 # is a refused connection). Prints the draining name FN leaves behind and
 # exits with FN's status.
@@ -144,16 +145,16 @@ swap() {
       # shellcheck disable=SC1090 # the functions extracted above
       . "$DIR/$f.sh"
     done
-    "$FN" && rc=0 || rc=$?
+    "$FN" ${FN_ARG:+"$FN_ARG"} && rc=0 || rc=$?
     printf "%s" "$draining"
     exit "$rc"
   ' 2>/dev/null
 }
 calls() { cat "$work/calls"; }
 
-if swap port_released 0 7 true >/dev/null; then pass; else fail "a refused connection should read as a released port"; fi
-if swap port_released 0 0 true >/dev/null; then fail "an HTTP answer should read as a port still held"; else pass; fi
-if swap port_released 0 28 true >/dev/null; then fail "a timeout should read as a port still held"; else pass; fi
+if FN_ARG=2 swap port_released 0 7 true >/dev/null; then pass; else fail "a refused connection should read as a released port"; fi
+if FN_ARG=2 swap port_released 0 0 true >/dev/null; then fail "an HTTP answer should read as a port still held"; else pass; fi
+if FN_ARG=2 swap port_released 0 28 true >/dev/null; then fail "a timeout should read as a port still held"; else pass; fi
 
 # A Next server closes its port on SIGTERM and keeps running.
 left=$(swap retire_current 0 7 true)
