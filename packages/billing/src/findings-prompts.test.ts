@@ -71,7 +71,7 @@ const BY_SESSION = new Map([
 const TESTS = "Run the unit tests before you open a pull request.";
 
 interface Row {
-  root_session_uuid: string;
+  root: string;
   seq: string | number;
   at: string;
   prompt_digest: string;
@@ -82,7 +82,7 @@ interface Row {
 
 function row(over: Partial<Row> = {}): Row {
   return {
-    root_session_uuid: S_A,
+    root: S_A,
     seq: "1",
     at: "2026-09-10T10:00:00.000000Z",
     prompt_digest: "sha256:prompt",
@@ -231,9 +231,9 @@ describe("readRunPrompts", () => {
       data: [
         row({ seq: "3", at: "2026-09-10T10:05:00.123456Z", prompt_digest: "sha256:same", bytes_ref: "ref1", content_digest: "sha256:x" }),
         row({ seq: "1", at: "2026-09-10T10:00:00.000000Z", prompt_digest: "sha256:first", prompt_length: 50 }),
-        row({ root_session_uuid: S_B, at: "2026-09-10T09:00:00.000000Z", prompt_digest: "sha256:same" }),
-        row({ root_session_uuid: S_X, prompt_digest: "sha256:same" }),
-        row({ root_session_uuid: S_D, prompt_digest: "sha256:same" }),
+        row({ root: S_B, at: "2026-09-10T09:00:00.000000Z", prompt_digest: "sha256:same" }),
+        row({ root: S_X, prompt_digest: "sha256:same" }),
+        row({ root: S_D, prompt_digest: "sha256:same" }),
       ],
     });
     const frames = new Map<string, PricedRequestFrame[]>([[RUN_A, []]]);
