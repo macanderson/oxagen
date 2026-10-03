@@ -268,7 +268,10 @@ describe("clickhouse tenant seam", () => {
         () => selectTachoTurnFacts({ sessionUuids: chains }),
       ],
     ] as const)("reads %s in batches that each pass the fence", async (_name, read) => {
-      await runInTenantScope({ orgId: ORG, workspaceId: WS }, read);
+      // The two reads answer different row types; the test reads neither.
+      await runInTenantScope({ orgId: ORG, workspaceId: WS }, async () => {
+        await read();
+      });
       expect(query).toHaveBeenCalledTimes(2);
       for (const [call] of query.mock.calls as unknown as [
         { query: string; query_params: Record<string, unknown> },
