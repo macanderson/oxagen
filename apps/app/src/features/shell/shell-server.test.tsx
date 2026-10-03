@@ -162,6 +162,7 @@ function stubSource() {
       tree: vi.fn(),
     },
     steeringRepo: { get: vi.fn() },
+    changes: { changeSet: vi.fn(), revisionDiff: vi.fn() },
     tools: {
       versions: vi.fn(),
       grants: vi.fn(),
