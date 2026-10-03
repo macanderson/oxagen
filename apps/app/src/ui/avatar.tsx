@@ -116,6 +116,18 @@ function initialsScale(letters: number): number {
 export type AvatarShape = "person" | "agent";
 
 /**
+ * How much larger every avatar draws than the size its caller names. The
+ * call sites keep the sizes they were laid out with, and this one factor
+ * makes every avatar in the app a little easier to read.
+ */
+export const AVATAR_SCALE = 1.1;
+
+/** The side, in CSS pixels, that an avatar of the named size draws at. */
+export function avatarSide(size: number): number {
+  return Math.round(size * AVATAR_SCALE);
+}
+
+/**
  * The avatar for a person or an agent. Decorative in every state: the name it
  * belongs to is rendered as text beside it, or carried by the trigger's
  * `aria-label`, so the image has an empty alt and the tiles are hidden from
@@ -134,7 +146,10 @@ export function Avatar({
   value: string | null | undefined;
   /** What the initials tile shows when the value names no avatar. */
   initials: string;
-  /** The tile's side in CSS pixels; the glyph scales with it. */
+  /**
+   * The tile's size before `AVATAR_SCALE`; it draws `avatarSide(size)` CSS
+   * pixels wide, and the glyph scales with it.
+   */
   size?: number;
   shape?: AvatarShape;
   /** The initials tile's tone when the value names no avatar. */
@@ -147,7 +162,8 @@ export function Avatar({
   const spec = parseAvatarValue(value);
   const radius = shape === "person" ? "rounded-full" : "rounded-[27%]";
   const box = `inline-grid flex-none place-items-center overflow-hidden border box-border align-middle leading-none ${radius}`;
-  const side = { width: size, height: size };
+  const px = avatarSide(size);
+  const side = { width: px, height: px };
 
   if (spec.kind === "image" && spec.url !== failedUrl)
     return (
@@ -195,7 +211,7 @@ export function Avatar({
         data-testid={testId}
         data-avatar="emoji"
         data-tone="soft"
-        style={{ ...side, fontSize: Math.round(size * 0.58) }}
+        style={{ ...side, fontSize: Math.round(px * 0.58) }}
         className={`${box} ${TONE_CLASS.soft}`}
       >
         {spec.emoji}
@@ -214,7 +230,7 @@ export function Avatar({
       data-font={font}
       style={{
         ...side,
-        fontSize: Math.round(size * initialsScale(text.length)),
+        fontSize: Math.round(px * initialsScale(text.length)),
         letterSpacing: "0.02em",
       }}
       className={`${box} ${TONE_CLASS[tone]} ${FONT_CLASS[font]}`}
