@@ -36,6 +36,9 @@
  * - `superseded`: a newer item shares its lineage. Only the newest version of
  *   a record, or the newest steer in a thread, is a candidate.
  * - `budget`: it ranked, and the text had no room left for it.
+ * - `incomplete`: its source holds it but it cannot steer, because it has no
+ *   force to rank by or no statement to say. It is listed after every ranked
+ *   item, so the manifest still names it (#3296).
  */
 import { createHash } from "node:crypto";
 import { budgetTokens } from "@contextgraphprotocol/typescript-sdk";
@@ -120,6 +123,20 @@ export interface SteeringCandidate {
   lineage?: string;
 }
 
+/**
+ * Something a source holds that cannot steer: it has no force, or nothing to
+ * say. It is not a candidate, because it cannot be ranked or printed, but the
+ * manifest lists it as cut for `incomplete` so the run record still names it.
+ */
+export interface IncompleteSteeringItem {
+  id: string;
+  kind: SteeringItemKind;
+  /** The force it carries, when it has one. */
+  force?: SteeringForce;
+  /** When this version took effect, ISO 8601, or "" when it never did. */
+  recordedAt: string;
+}
+
 /** What one assembly is for. */
 export interface RunContext {
   orgId: string;
@@ -136,14 +153,17 @@ export interface RunContext {
    */
   header?: string;
   candidates: readonly SteeringCandidate[];
+  /** What the sources hold that cannot steer, each listed as cut. */
+  incomplete?: readonly IncompleteSteeringItem[];
 }
 
-export type SteeringCutReason = "tier" | "budget" | "superseded";
+export type SteeringCutReason = "tier" | "budget" | "superseded" | "incomplete";
 
 export interface SteeringManifestItem {
   id: string;
   kind: SteeringItemKind;
-  force: SteeringForce;
+  /** Absent only on an `incomplete` item that has no force. */
+  force?: SteeringForce;
   recorded_at: string;
   /** The budget cost of this item's line on its own. */
   tokens: number;
@@ -155,7 +175,10 @@ export interface SteeringManifestItem {
 
 export const STEERING_MANIFEST_SCHEMA = "oxagen.steering.manifest/1" as const;
 
-/** Every candidate, in rank order, with what happened to it. */
+/**
+ * Every candidate, in rank order, with what happened to it, then every
+ * incomplete item, by id.
+ */
 export interface SteeringManifest {
   schema: typeof STEERING_MANIFEST_SCHEMA;
   delivers: SteeringForce[];
@@ -241,6 +264,11 @@ function supersede(
     if (candidate !== winner) losers.set(candidate, winner.id);
   }
   return losers;
+}
+
+/** Code-unit order, the same in every locale. */
+function compareText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function digest(text: string): string {
@@ -329,7 +357,26 @@ export function assembleSteering(
     text = lines.join("\n");
   }
 
-  const items = ranked.map((candidate) => outcomes.get(candidate)!);
+  // Sorted by id, then kind, so the same set lists the same way whatever
+  // order the store returned it in. The manifest is signed into the bundle,
+  // and the bundle etag is a digest of its content.
+  const incomplete = [...(run.incomplete ?? [])]
+    .sort((a, b) => compareText(a.id, b.id) || compareText(a.kind, b.kind))
+    .map(
+      (item): SteeringManifestItem => ({
+        id: item.id,
+        kind: item.kind,
+        ...(item.force !== undefined ? { force: item.force } : {}),
+        recorded_at: item.recordedAt,
+        tokens: 0,
+        outcome: "cut",
+        reason: "incomplete",
+      }),
+    );
+  const items = [
+    ...ranked.map((candidate) => outcomes.get(candidate)!),
+    ...incomplete,
+  ];
   return {
     text,
     manifest: {

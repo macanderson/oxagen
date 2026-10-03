@@ -29,6 +29,7 @@ import {
   BUNDLE_FEATURE_INDEPENDENT_MODELS,
   BUNDLE_FEATURE_HOOK_FAIL_OPEN,
   BUNDLE_FEATURE_MODEL_PRICES,
+  BUNDLE_FEATURE_STEERING_INCOMPLETE,
   BUNDLE_FEATURE_STEERING_MANIFEST,
   BUNDLE_FEATURE_UNBOUND_REPO,
   BUNDLE_FEATURE_WORK_ORDERS,
@@ -469,6 +470,11 @@ function hookFailOpen(host: TachoHostRow): { hook_fail_open?: string[] } {
  * strict on the host, so a host built before the field would reject the
  * whole mandate; a host that advertises it seals the manifest into every
  * session's chain as a `steering.manifest` frame at `SessionStart`.
+ *
+ * An item cut for `incomplete` is signed only to a host that also advertised
+ * `BUNDLE_FEATURE_STEERING_INCOMPLETE`. Any other host gets the list without
+ * those items, and `cut` still counts them, the way `capManifestItems` leaves
+ * the counts alone when it shortens the list.
  */
 function steeringManifest(
   host: TachoHostRow,
@@ -480,7 +486,16 @@ function steeringManifest(
     !advertised.includes(BUNDLE_FEATURE_STEERING_MANIFEST)
   )
     return {};
-  return { manifest: steering.manifest };
+  if (advertised.includes(BUNDLE_FEATURE_STEERING_INCOMPLETE))
+    return { manifest: steering.manifest };
+  return {
+    manifest: {
+      ...steering.manifest,
+      items: steering.manifest.items.filter(
+        (item) => item.reason !== "incomplete",
+      ),
+    },
+  };
 }
 
 /**

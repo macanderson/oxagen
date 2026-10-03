@@ -495,7 +495,8 @@
                           "enum": [
                             "tier",
                             "budget",
-                            "superseded"
+                            "superseded",
+                            "incomplete"
                           ]
                         },
                         "superseded_by": {
@@ -507,7 +508,6 @@
                       "required": [
                         "id",
                         "kind",
-                        "force",
                         "recorded_at",
                         "tokens",
                         "outcome"
