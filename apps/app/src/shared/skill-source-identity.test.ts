@@ -126,13 +126,20 @@ describe("one YAML parser for skill headers", () => {
   );
 
   it("declares no YAML parser as an app dependency", () => {
-    const manifest = JSON.parse(
+    const manifest: unknown = JSON.parse(
       readFileSync(path.join(APP_DIR, "package.json"), "utf8"),
-    ) as Record<string, Record<string, string> | undefined>;
-    const declared = [
-      ...Object.keys(manifest.dependencies ?? {}),
-      ...Object.keys(manifest.devDependencies ?? {}),
-    ];
+    );
+    const keys = (block: unknown): string[] =>
+      typeof block === "object" && block !== null ? Object.keys(block) : [];
+    const dependencies =
+      typeof manifest === "object" && manifest !== null && "dependencies" in manifest
+        ? manifest.dependencies
+        : undefined;
+    const devDependencies =
+      typeof manifest === "object" && manifest !== null && "devDependencies" in manifest
+        ? manifest.devDependencies
+        : undefined;
+    const declared = [...keys(dependencies), ...keys(devDependencies)];
     expect(declared.length).toBeGreaterThan(0);
     expect(declared.filter(isYamlParser)).toEqual([]);
   });
