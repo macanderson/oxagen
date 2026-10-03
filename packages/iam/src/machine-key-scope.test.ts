@@ -684,6 +684,42 @@ describe("a served gateway call is recorded where the tier can read it", () => {
     expect(JSON.stringify(set["chainGenesisHash"])).toContain("COALESCE");
   });
 
+  it("binds no raw Date inside the upsert's SQL fragments (#5447)", async () => {
+    // A Date inside a hand-written `sql` fragment has no column type, so
+    // postgres-js cannot serialise it and the whole statement throws
+    // ERR_INVALID_ARG_TYPE. In production that failed every gateway call:
+    // the kernel turned the throw into "IAM check errored … failing closed".
+    // This fixture never runs SQL, so it walks the fragments for a Date.
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    await machineKeyDenial({
+      orgId: ORG,
+      apiKeyId: "aky_g",
+      userId: null,
+      capabilityName: "query_ontology",
+      gatewaySessionUuid: "tachod-abc",
+    });
+    const dates: unknown[] = [];
+    const walk = (node: unknown, seen: Set<unknown>): void => {
+      if (node instanceof Date) {
+        dates.push(node);
+        return;
+      }
+      if (node === null || typeof node !== "object" || seen.has(node)) return;
+      seen.add(node);
+      for (const value of Object.values(node as Record<string, unknown>)) {
+        walk(value, seen);
+      }
+    };
+    const set = chainSets[0] ?? {};
+    expect(Object.keys(set).length).toBeGreaterThan(0);
+    for (const fragment of Object.values(set)) walk(fragment, new Set());
+    expect(dates).toEqual([]);
+  });
+
   it("keeps the chains of one host apart", async () => {
     // Bounded by chains, not collapsed to the host: the whole point of the
     // table is that it says WHICH chain, so two chains are two rows.

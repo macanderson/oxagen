@@ -510,6 +510,8 @@ describe("prepareAssistantTurn", () => {
     expect(mocks.log).toEqual(["roles", "funding", "gate"]);
     expect(mocks.evaluateTurnCreditGate).toHaveBeenCalledWith("org-1", {
       fundedBy: "platform",
+      lane: "assistant",
+      workspaceId: "ws-1",
     });
     expect(captured.inserts).toHaveLength(0);
     expect(mocks.openAssistantRun).not.toHaveBeenCalled();
@@ -839,6 +841,7 @@ describe("the prepared turn", () => {
       surface: "app",
       messageId: "msg-user",
       userId: "user-1",
+      capabilityName: "ask_assistant",
     });
 
     // The reply is persisted with the run it was recorded as, and the

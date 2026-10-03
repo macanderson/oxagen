@@ -2,6 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-03
+- **Amended by:** ADR-297 (each revision lists its commits, and each commit
+  is stored once with its own diff and the run that made it).
 - **Owners:** repositories, runs, work
 - **Related:** issue #5264, issue #5259, ADR-192 (pull request state per run),
   ADR-002 (no BullMQ), ADR-042 (data planes), ADR-251 (work order results),
