@@ -1,6 +1,6 @@
 # get_run_work
 
-Read the machine and checkout locations recorded for a run, captured patch references, connected pull requests with their CI checks, and the subagents the session started.
+Read the machine and checkout locations recorded for a run, captured patch references, the run's pull requests with their CI checks, and the subagents the session started.
 
 **Surfaces:** api, agent
 **Agent:** Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
@@ -34,10 +34,10 @@ The state is read when the page loads, from the repository's first 100 releases 
 
 The frame read stops at 2,000 frames with the `release_frame_limit` warning. Ledger runs return an empty list, because the ledger records no shell commands.
 
-The read limits checkout groups and recorded diffs to 200 each, PRs and discovery requests to 20 each, and each PR patch response to 512 KiB. A collector snapshot holds at most 256 KiB and probes at most 32 untracked files. Limits do not turn missing evidence into an empty successful result.
+The read limits checkout groups and recorded diffs to 200 each, PRs and discovery requests to 20 each, and each PR patch response to 512 KiB. Recorded receipts are read before checkout branches, so a run with many branches never loses the pull requests its record names to the discovery limit. A collector snapshot holds at most 256 KiB and probes at most 32 untracked files. Limits do not turn missing evidence into an empty successful result.
 
 Checkouts, captured diffs, subagents and pull request receipts come from every frame the control plane accepted from the run's host, including frames past a chain break. When the session's hash chain broke, the read returns `complete: false` with the `chain_break` warning rather than dropping those frames (ADR-171). A sealed run also names the break in its completeness gaps.
 
-A wrapped run's `oxagen:pr_link` frames are its recorded receipts: each names `pr.number`, `pr.url`, and `pr.repository`, the attributes a `pr_open` call's effect frame carries. A frame sealed before #3944 names them `pr_number`, `pr_url`, and `pr_repository`, and the read accepts either spelling. Frames with the same URL count once. A receipt resolves only against a repository connected to this workspace that carries its provider repository id.
+A wrapped run's `oxagen:pr_link` frames are its recorded receipts: each names `pr.number`, `pr.url`, and `pr.repository`, the attributes a `pr_open` call's effect frame carries. A frame sealed before #3944 names them `pr_number`, `pr_url`, and `pr_repository`, and the read accepts either spelling. Frames with the same URL count once. A receipt in a repository linked to this workspace is read through that repository's connection. A receipt in a github.com repository the workspace does not link is read through the workspace's own GitHub connection for the repository's owner, the same connection the ADR-192 backfill reads the pull request's state with, and its `repository.connected` is `false` (#5296). An agent of this workspace can open a pull request in a repository another workspace links, and the run's record still names it. A receipt no connection reaches is left out with the `recorded_repository_not_connected` warning. A receipt whose connection lookup failed is left out with the `pull_request_read_failed` warning. A branch match reads only repositories linked to this workspace.
 
 Ledger runs reuse recorded PR receipts. Their receipts do not record a host checkout, so location remains absent. The existing Outputs view retains file observations and ledger change locators.
