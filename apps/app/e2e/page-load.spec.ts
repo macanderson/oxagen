@@ -7,20 +7,32 @@
 // redirect to /login all answer 200 with a DIFFERENT title, so a row cannot pass
 // by rendering the wrong thing. The console check is the second half: a page that
 // renders its title while throwing in a client component is not a page that works.
+// A page that only redirects is walked to the row it lands on and held to that
+// row's path and title.
 import { expect, type Page, test } from "@playwright/test";
 import {
   ANONYMOUS_ROUTES,
   expectedTitle,
+  REDIRECT_ROUTES,
+  type RedirectRow,
   type RouteRow,
   SIGNED_IN_ROUTES,
+  seededRoutes,
 } from "./routes";
+import { readSeedRecord } from "./support";
 
-async function loadsAndTitlesItself(page: Page, row: RouteRow): Promise<void> {
+/** The console errors and uncaught exceptions the page reports from here on. */
+function collectErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(message.text());
   });
   page.on("pageerror", (error) => errors.push(String(error)));
+  return errors;
+}
+
+async function loadsAndTitlesItself(page: Page, row: RouteRow): Promise<void> {
+  const errors = collectErrors(page);
 
   const response = await page.goto(row.path, { waitUntil: "domcontentloaded" });
   expect(response?.status(), `${row.path} must answer 200`).toBe(200);
@@ -37,8 +49,30 @@ async function loadsAndTitlesItself(page: Page, row: RouteRow): Promise<void> {
   expect(errors, `${row.path} logged console errors`).toEqual([]);
 }
 
-for (const row of SIGNED_IN_ROUTES) {
-  test(`${row.path} loads and titles itself ${row.titleKey}`, async ({
+/**
+ * A redirect lands on its row: the server's redirect is followed by goto, and
+ * one issued while the page streams is followed by the client, so the landing
+ * is awaited rather than read once.
+ */
+async function movesOn(page: Page, row: RedirectRow): Promise<void> {
+  const errors = collectErrors(page);
+
+  const response = await page.goto(row.path, { waitUntil: "domcontentloaded" });
+  expect(response?.status(), `${row.path} must answer 200`).toBe(200);
+  await expect(page, `${row.path} must land on ${row.landsOn.path}`).toHaveURL(
+    (url) => url.pathname + url.search === row.landsOn.path,
+    { timeout: 15_000 },
+  );
+  await expect(page).toHaveTitle(expectedTitle(row.landsOn), {
+    timeout: 15_000,
+  });
+  expect(errors, `${row.path} logged console errors`).toEqual([]);
+}
+
+const SIGNED_IN = [...SIGNED_IN_ROUTES, ...seededRoutes(readSeedRecord())];
+
+for (const row of SIGNED_IN) {
+  test(`${row.path} loads and titles itself ${expectedTitle(row)}`, async ({
     page,
   }) => {
     await loadsAndTitlesItself(page, row);
@@ -101,6 +135,12 @@ for (const row of SIGNED_IN_ROUTES) {
   });
 }
 
+for (const row of REDIRECT_ROUTES) {
+  test(`${row.path} moves on to ${row.landsOn.path}`, async ({ page }) => {
+    await movesOn(page, row);
+  });
+}
+
 // A fresh context, no saved storage state: these rows must render for a browser
 // that holds no session at all, which is the browser the CLI sends to
 // /cli/complete.
@@ -108,7 +148,7 @@ test.describe("anonymous", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
   for (const row of ANONYMOUS_ROUTES) {
-    test(`${row.path} loads and titles itself ${row.titleKey} with no session`, async ({
+    test(`${row.path} loads and titles itself ${expectedTitle(row)} with no session`, async ({
       page,
     }) => {
       await loadsAndTitlesItself(page, row);

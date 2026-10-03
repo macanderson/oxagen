@@ -19,6 +19,7 @@ import type { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
 import type { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import type { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import type { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
+import type { workspaceSettingsRead } from "@oxagen/oxagen/contracts/workspace.settings.read";
 import type { z } from "zod";
 import type {
   ApiKeyList,
@@ -31,6 +32,7 @@ import type {
   SsoSettings,
   WorkspaceFacts,
   WorkspaceList,
+  WorkspaceSpendSettings,
 } from "@/data/contracts/org";
 import type { ContractOutput } from "@/server/kernel";
 
@@ -128,9 +130,30 @@ export function toWorkspaceList(
  */
 const INTERACTIVE_AGENT_SLUG = "qa-chat";
 
+/**
+ * `get_workspace_settings` onto the Edit dialog's spend controls. Both fields
+ * are optional in the contract's output, and an absent one reads the way the
+ * stored bag reads it (packages/oxagen/src/run-enrichment.ts and
+ * workspace-budgets.ts): enrichment on, and no limit on any lane.
+ */
+export function toWorkspaceSpendSettings(
+  out: ContractOutput<typeof workspaceSettingsRead>,
+): z.input<typeof WorkspaceSpendSettings> {
+  return {
+    runEnrichmentEnabled: out.runEnrichmentEnabled ?? true,
+    dailyBudgetUsd: {
+      runEnrichment: out.dailyBudgetUsd?.runEnrichment ?? null,
+      assistant: out.dailyBudgetUsd?.assistant ?? null,
+      work: out.dailyBudgetUsd?.work ?? null,
+    },
+  };
+}
+
 export function toWorkspaceFacts(
   repositories: ContractOutput<typeof repositoryList>,
   agents: ContractOutput<typeof agentList>,
+  /** Null when the settings read refused; the facts still carry the rest. */
+  settings: ContractOutput<typeof workspaceSettingsRead> | null,
 ): z.input<typeof WorkspaceFacts> {
   return {
     repositories: repositories.repositories.map((repo) => ({
@@ -146,6 +169,7 @@ export function toWorkspaceFacts(
       ).length,
       more: agents.nextCursor !== null,
     },
+    settings: settings === null ? null : toWorkspaceSpendSettings(settings),
   };
 }
 

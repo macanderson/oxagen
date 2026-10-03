@@ -132,7 +132,6 @@
         "pending": "Saving",
         "facts": {
           "toolbelt": "Toolbelt limit",
-          "budget": "Default budget",
           "agents": "Agents",
           "agentsCount": "{count} registered"
         }
@@ -155,6 +154,18 @@
           "refused": "The name was saved. The governance mode was not changed: {reason}",
           "close": "Done"
         }
+      },
+      "spend": {
+        "heading": "Model spend",
+        "enrichment": "Name and summarize runs",
+        "enrichmentHint": "Stella writes a name and a short account for each run. Turn it off to show run ids only.",
+        "runEnrichment": "Run names and summaries",
+        "assistant": "Stella chat",
+        "work": "Work orders",
+        "unit": "US dollars a day",
+        "noLimit": "No limit",
+        "hint": "Each lane has its own limit. Blank is no limit, 0 switches the lane off, and the day resets at 00:00 UTC.",
+        "unread": "The current values could not be read. A blank input leaves its limit as it is."
       },
       "archiveWorkspace": {
         "open": "Archive",

@@ -96,7 +96,9 @@ const NO_PLACES = {
   reauthorize: [],
 };
 
-const { workspaceRow } = await import("./organization.builders");
+const { workspaceFacts, workspaceRow } = await import(
+  "./organization.builders"
+);
 const { ArchiveWorkspace, CreateWorkspace, EditWorkspace } = await import(
   "./workspace-actions"
 );
@@ -562,13 +564,7 @@ describe("EditWorkspace", () => {
         <EditWorkspace
           org="acme"
           workspace={workspace}
-          facts={{
-            repositories: [
-              { role: "main", fullName: "acme/platform", defaultRef: "main" },
-            ],
-            agents: 64,
-            archiveBlockers: { count: 63, more: false },
-          }}
+          facts={workspaceFacts()}
         />
       </IntlProvider>,
     );
@@ -611,7 +607,7 @@ describe("EditWorkspace", () => {
       workspace.namespace,
     );
     expect(within(dialog).getByLabelText("Governance mode")).toHaveValue("");
-    for (const fact of ["Toolbelt limit", "Default budget", "Agents"]) {
+    for (const fact of ["Toolbelt limit", "Agents"]) {
       expect(dialog).toHaveTextContent(fact);
     }
     const name = within(dialog).getByLabelText("Name");
@@ -620,7 +616,9 @@ describe("EditWorkspace", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     // The governance select was left on "leave unchanged", so the mode travels
     // empty and no governance capability is invoked (see
-    // workspace-governance.test.tsx for the modes themselves).
+    // workspace-governance.test.tsx for the modes themselves). The spend
+    // controls were left as they opened: the switch travels as stored, and
+    // no lane is in the patch (workspace-spend.test.tsx has the rest).
     expect(editWorkspace).toHaveBeenCalledWith(
       "acme",
       "wrk_0a1b2c3d4e5f6g7h8j9k0m",
@@ -629,6 +627,8 @@ describe("EditWorkspace", () => {
         slug: "core-platform",
         mode: "",
         applyImmediately: false,
+        runEnrichmentEnabled: true,
+        dailyBudgetUsd: {},
       },
     );
     expect(router.replace).toHaveBeenCalledWith("/acme?tab=workspaces");
@@ -716,11 +716,11 @@ describe("ArchiveWorkspace", () => {
         <ArchiveWorkspace
           org="acme"
           workspace={workspace}
-          facts={{
+          facts={workspaceFacts({
             repositories: [],
             agents: 65,
             archiveBlockers: { count: 64, more: false },
-          }}
+          })}
         />
       </IntlProvider>,
     );
@@ -745,11 +745,11 @@ describe("ArchiveWorkspace", () => {
         <ArchiveWorkspace
           org="acme"
           workspace={workspace}
-          facts={{
+          facts={workspaceFacts({
             repositories: [],
             agents: 140,
             archiveBlockers: { count: 99, more: true },
-          }}
+          })}
         />
       </IntlProvider>,
     );
@@ -768,11 +768,11 @@ describe("ArchiveWorkspace", () => {
         <ArchiveWorkspace
           org="acme"
           workspace={workspace}
-          facts={{
+          facts={workspaceFacts({
             repositories: [],
             agents: 1,
             archiveBlockers: { count: 0, more: false },
-          }}
+          })}
         />
       </IntlProvider>,
     );

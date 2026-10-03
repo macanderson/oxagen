@@ -2070,6 +2070,14 @@
       "verifiedAt": "2026-10-01",
       "verifiedBy": "steering-memories-tab (#4914)"
     },
+    "get_workspace_settings": {
+      "route": "/[org]?tab=workspaces",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "Organization › Workspaces: Edit workspace opens its Model spend section on the run enrichment switch and the three daily budgets get_workspace_settings answers, read inside each workspace the viewer may enter (data/live/org.ts org.workspaceFacts, features/organization/workspace-actions.tsx)",
+      "proof": "apps/app/src/features/organization/workspace-spend.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "workspace-budgets-screen (#5426)"
+    },
     "promote_memories": {
       "route": "/[org]/[ws]/steering/memories",
       "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
