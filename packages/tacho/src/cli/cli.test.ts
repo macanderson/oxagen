@@ -4234,6 +4234,78 @@ describe("brokered credentials (ADR-143)", () => {
     expect(settings.apiKeyHelper).toBeUndefined();
     expect(d.store.status()).toEqual([]);
   });
+  it("waits for a daemon that says it is starting, then routes once it is up (#5411)", async () => {
+    const d = brokeredDeps({
+      claude: { env: { ANTHROPIC_API_KEY: ANTHROPIC_KEY } },
+    });
+    // The hook port is bound at once, and the daemon answers that it is
+    // starting for longer than the 5 s silence bound would allow.
+    let polls = 0;
+    const base = d.daemonGet;
+    d.daemonGet = async (path: string) => {
+      if (path !== "/health") return base(path);
+      polls += 1;
+      return polls <= 60 ? { error: "collector is starting" } : base(path);
+    };
+    const result = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+        harnesses: ["claude-code"],
+        credentials: "passthrough",
+      },
+      d,
+    );
+    expect(result.ok).toBe(true);
+    expect(result.warnings.join("\n")).not.toContain("not listening");
+    expect(result.warnings.join("\n")).not.toContain("did not answer");
+    expect(polls).toBeGreaterThan(60);
+    expect(d.lines.join("\n")).toContain("tachod is starting on 127.0.0.1:");
+    expect(d.lines.join("\n")).toContain("tachod healthy on");
+    expect(settingsOf(d.home).env.ANTHROPIC_BASE_URL).toBe(
+      "http://127.0.0.1:47124/anthropic",
+    );
+  });
+  it("leaves the model base URL alone when the daemon is still starting at the bound (#5411)", async () => {
+    const d = brokeredDeps({
+      claude: { env: { ANTHROPIC_API_KEY: ANTHROPIC_KEY } },
+    });
+    expect(
+      (
+        await enroll(
+          {
+            token: "tok",
+            org: "acme",
+            workspace: "core",
+            apiUrl: "https://api.test",
+            harnesses: ["claude-code"],
+            credentials: "passthrough",
+          },
+          d,
+        )
+      ).ok,
+    ).toBe(true);
+    expect(settingsOf(d.home).env.ANTHROPIC_BASE_URL).toBe(
+      "http://127.0.0.1:47124/anthropic",
+    );
+    // The re-apply after an upgrade restarts a daemon over a WAL so large
+    // it is still starting when enroll stops waiting.
+    const base = d.daemonGet;
+    d.daemonGet = async (path: string) =>
+      path === "/health" ? { error: "collector is starting" } : base(path);
+    const again = await enroll({ credentials: "passthrough" }, d);
+    expect(again.ok).toBe(true);
+    expect(again.shipping?.healthy).toBe(false);
+    expect(again.warnings).toEqual([
+      expect.stringContaining("tachod is still starting after 120s"),
+    ]);
+    expect(again.shipping?.detail).toContain("still starting");
+    expect(settingsOf(d.home).env.ANTHROPIC_BASE_URL).toBe(
+      "http://127.0.0.1:47124/anthropic",
+    );
+  });
   it("describes each harness state in one line, and credential status prints custody without secrets", async () => {
     const base = {
       file: "/home/dev/.claude/settings.json",

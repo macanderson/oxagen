@@ -204,6 +204,51 @@ const FIRST_CONTACT_ATTEMPTS = 60;
 const FIRST_CONTACT_POLL_MS = 500;
 
 /**
+ * How long enroll waits for the daemon to answer at all after the service
+ * restarts, and how much longer it waits once the daemon has answered that
+ * it is starting. A daemon over a large WAL binds its port at once and
+ * answers `collector is starting` while it repairs and restores (45 s on a
+ * 10 GB WAL, #5411), which is not the silence of a service that failed.
+ */
+const HEALTH_POLL_MS = 250;
+const HEALTH_SILENCE_ATTEMPTS = 20;
+const HEALTH_STARTING_ATTEMPTS = 480;
+
+/** What the health probe found, with the gateway facts a healthy daemon gave. */
+interface HealthProbe {
+  /** `healthy`: answered ok. `starting`: still said it was starting at the bound. `silent`: never answered. */
+  outcome: "healthy" | "starting" | "silent";
+  gateway?: { listening?: boolean; port?: number };
+}
+
+/**
+ * Poll `/health` until the daemon answers ok. Silence for
+ * `HEALTH_SILENCE_ATTEMPTS` polls means the service did not come up. An
+ * answer that says the collector is starting is waited on, up to
+ * `HEALTH_STARTING_ATTEMPTS` polls, with one line that says so, because the
+ * hook port is bound and the daemon listens once its start-up finishes.
+ */
+async function probeHealth(deps: CliDeps, port: number): Promise<HealthProbe> {
+  let answered = false;
+  for (let attempt = 0; ; attempt += 1) {
+    const health = (await deps.daemonGet("/health")) as
+      | { ok?: boolean; gateway?: { listening?: boolean; port?: number } }
+      | undefined;
+    if (health?.ok === true)
+      return { outcome: "healthy", gateway: health.gateway };
+    if (health !== undefined && !answered) {
+      answered = true;
+      deps.out(
+        `      tachod is starting on 127.0.0.1:${port}; waiting up to ${(HEALTH_STARTING_ATTEMPTS * HEALTH_POLL_MS) / 1000}s for it to finish`,
+      );
+    }
+    const bound = answered ? HEALTH_STARTING_ATTEMPTS : HEALTH_SILENCE_ATTEMPTS;
+    if (attempt + 1 >= bound) return { outcome: answered ? "starting" : "silent" };
+    await deps.sleep(HEALTH_POLL_MS);
+  }
+}
+
+/**
  * Wait for the daemon to prove it can talk to Oxagen: a bundle fetch or an
  * ingest that succeeded, and, when events are already waiting, a batch that
  * shipped. A daemon that answers locally but never reaches the control plane
@@ -1573,16 +1618,9 @@ async function enrollSteps(
   }
   let shipping: ShippingHealth | undefined;
   if (options.service !== false) {
-    let healthy = false;
-    let gateway: { listening?: boolean; port?: number } | undefined;
-    for (let attempt = 0; attempt < 20 && !healthy; attempt += 1) {
-      const health = (await deps.daemonGet("/health")) as
-        | { ok?: boolean; gateway?: { listening?: boolean; port?: number } }
-        | undefined;
-      healthy = health?.ok === true;
-      gateway = health?.gateway;
-      if (!healthy) await deps.sleep(250);
-    }
+    const probe = await probeHealth(deps, host.port);
+    const healthy = probe.outcome === "healthy";
+    const gateway = probe.gateway;
     // The gateway (ADR-094): point Claude Code, Codex and Stella at the daemon's
     // loopback model proxy. Only here, after the daemon has said the proxy
     // is listening and on which port, and never before: a base URL that
@@ -1715,6 +1753,13 @@ async function enrollSteps(
             );
           }
         }
+      } else if (probe.outcome === "starting") {
+        // The daemon is up and still starting, so the proxy it names will
+        // listen; taking the base URL out now would unroute a machine whose
+        // model calls are about to be routed (#5411).
+        warnings.push(
+          `tachod is still starting after ${(HEALTH_STARTING_ATTEMPTS * HEALTH_POLL_MS) / 1000}s, so the model base URL was left as it is. Run \`oxagen agent status\` once it is up; check ${deps.paths.log} if it never is`,
+        );
       } else {
         // A re-enroll finds the previous enrollment's base URL and helper
         // still in the files, naming a port nothing listens on now, so they
@@ -1756,16 +1801,21 @@ async function enrollSteps(
           ? `      tachod healthy on 127.0.0.1:${host.port}`
           : `      tachod healthy on 127.0.0.1:${host.port} and ${deps.paths.socket}`,
       );
-    else
+    else if (probe.outcome === "silent")
       warnings.push(
         `tachod did not answer on 127.0.0.1:${host.port}; check ${deps.paths.log}`,
       );
     shipping = healthy
       ? await awaitFirstContact(deps)
-      : {
-          healthy: false,
-          detail: `tachod did not answer on 127.0.0.1:${host.port}, so nothing is recorded or shipped; check ${deps.paths.log}`,
-        };
+      : probe.outcome === "starting"
+        ? {
+            healthy: false,
+            detail: `tachod is still starting on 127.0.0.1:${host.port}; nothing ships until it is up. Run \`oxagen agent status\` in a minute, and check ${deps.paths.log} if it is still starting`,
+          }
+        : {
+            healthy: false,
+            detail: `tachod did not answer on 127.0.0.1:${host.port}, so nothing is recorded or shipped; check ${deps.paths.log}`,
+          };
     if (shipping.healthy)
       deps.out(`      tachod reached Oxagen (${shipping.detail})`);
   }
