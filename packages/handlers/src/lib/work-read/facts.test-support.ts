@@ -296,6 +296,20 @@ export const f = {
       dedupeKey: `reopened:${minute}`,
       data: { reason: "The bug came back.", after_send: afterSend },
     }),
+  /** GitHub merged pull request `number` in the same repository, which names the send's pull request as reverted. */
+  reverted: (order: string, minute: number, number = 640) =>
+    newFact({
+      kind: "reverted",
+      source: "provider",
+      itemRevision: 1,
+      actor: "github",
+      occurredAt: at(minute),
+      dedupeKey: `reverted:${order}:${REPOSITORY}#${number}`,
+      orderId: order,
+      repository: REPOSITORY,
+      prNumber: number,
+      data: { merge_commit: "4".repeat(40) },
+    }),
 };
 
 /** Triaged, brief revision 1 approved on item revision 1. */

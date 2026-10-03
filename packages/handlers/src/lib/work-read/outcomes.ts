@@ -22,6 +22,13 @@
 //   - Cost sums the runs linked to the accepted items' sends whose cost the
 //     rollup recorded. A run with no recorded cost adds nothing and stays
 //     unknown.
+//   - Reverts count over the reopen cohort below, and share its waiting
+//     count. A cohort item counts as reverted when the send whose done time
+//     placed it in the cohort carries a reverted fact: GitHub merged a pull
+//     request whose body names that send's pull request as
+//     `Reverts <owner>/<repo>#<n>`. A revert made by hand without that line is
+//     not recorded, so it is not counted. A revert of the revert does not
+//     clear it. The fact never moves the item out of done.
 //   - The reopen cohort is the items whose done time falls 30 to 30 + days
 //     days ago. One reopened when a reopen fact follows that done time. Items
 //     done in the last 30 days wait to count.
@@ -131,6 +138,14 @@ function isoDay(at: Date): string {
 
 function within(time: number, start: number, end: number): boolean {
   return time >= start && time <= end;
+}
+
+/** Whether the send that finished at `doneAt` was reverted. */
+function revertedAt(projection: WorkItemProjection, doneAt: number): boolean {
+  return projection.orders.some((order) => {
+    const at = doneAtOf(order);
+    return order.revert !== null && at !== null && Date.parse(at) === doneAt;
+  });
 }
 
 /** Every done time of the item's sends, in milliseconds. */
@@ -246,6 +261,7 @@ export function computeOutcomes(input: OutcomesInput): Omit<WorkOutcomesGetOutpu
   const cohortFrom = waitFrom - input.days * DAY_MS;
   let cohort = 0;
   let reopened = 0;
+  let reverted = 0;
   let waiting = 0;
   for (const item of input.items) {
     const times = doneTimes(item.projection);
@@ -254,6 +270,9 @@ export function computeOutcomes(input: OutcomesInput): Omit<WorkOutcomesGetOutpu
     if (doneAt === null) continue;
     cohort += 1;
     if (item.facts.some((fact) => fact.kind === "reopened" && Date.parse(fact.occurredAt) > doneAt)) reopened += 1;
+    // Bound to the send, not to a time: a merge seen before review can be
+    // reverted before the acceptance that sets the done time.
+    if (revertedAt(item.projection, doneAt)) reverted += 1;
   }
 
   const intakeOf = new Map(input.intake.map((row) => [row.week, row]));
@@ -285,6 +304,7 @@ export function computeOutcomes(input: OutcomesInput): Omit<WorkOutcomesGetOutpu
     touches: { per_item: accepted.length === 0 ? null : touchTotal / accepted.length, ...touches },
     cost: costOf(runIds, input.runs),
     reopens: { cohort, reopened, waiting },
+    reverts: { cohort, reverted, waiting },
     delivery: countDelivery(input.sends, input.sendsTruncated),
     weeks,
   };

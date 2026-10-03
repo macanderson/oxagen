@@ -2352,7 +2352,7 @@
     "get_work_outcomes": {
       "route": "/[org]/[ws]/work/outcomes",
       "page": "apps/app/src/app/[org]/[ws]/work/outcomes/page.tsx",
-      "entry": "Outcomes: the six tiles, the weekly trend, touches by kind, cost coverage and reopens over the last 30 days (features/work/outcomes/outcomes-page.tsx).",
+      "entry": "Outcomes: the six tiles, the weekly trend, touches by kind, cost coverage, and reopens and reverts over the last 30 days (features/work/outcomes/outcomes-page.tsx).",
       "testid": "work-outcome-accepted",
       "proof": "apps/app/src/features/work/outcomes/outcomes-page.test.tsx",
       "verifiedAt": "2026-10-02",

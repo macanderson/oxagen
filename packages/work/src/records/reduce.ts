@@ -18,6 +18,9 @@
 //     changed. A running order keeps the brief it was sent with.
 //   - Reopening keeps every earlier fact and starts a fresh delivery on a new
 //     revision.
+//   - A revert of the merged pull request is the provider's fact and moves
+//     nothing: a done item stays done until a person reopens it. The send
+//     shows the revert, and the Outcomes revert count reads it.
 import type { Sha256Digest } from "@oxagen/run-evidence";
 import {
   type CheckConclusion,
@@ -162,6 +165,12 @@ export interface OrderProjection {
   released: boolean;
   /** The send is over. Another send may start. */
   closed: boolean;
+  /**
+   * The first merged pull request that reverted this send's merge, with its
+   * merge commit. Null until the send merged and a revert of it merged. It
+   * moves no state.
+   */
+  revert: { repository: string; number: number; mergeCommit: string; at: string } | null;
 }
 
 /** A work item, as its facts describe it. */
@@ -309,6 +318,16 @@ function reduceOrder(
     if (fact.runId !== null && !runIds.includes(fact.runId)) runIds.push(fact.runId);
   }
 
+  // A revert names the reverting pull request, not the send's, so it is read
+  // without the current pull request's filter. It counts only once the send
+  // merged, and the first one stands. Nothing above reads it: a revert leaves
+  // done, closed, and released as they were.
+  const revertFact = merge === null ? undefined : ofKind(facts, "reverted")[0];
+  const revert =
+    revertFact && revertFact.repository !== null && revertFact.prNumber !== null
+      ? { repository: revertFact.repository, number: revertFact.prNumber, mergeCommit: revertFact.data.merge_commit, at: revertFact.occurredAt }
+      : null;
+
   return {
     orderId: request.orderId as string,
     send: request.data.send,
@@ -337,6 +356,7 @@ function reduceOrder(
     done,
     released,
     closed,
+    revert,
   };
 }
 

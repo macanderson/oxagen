@@ -26,7 +26,7 @@ import {
   newFact,
 } from "@oxagen/work/records";
 import { asCapabilityRefusal } from "./errors";
-import { parsePullRequestUrl, workPullRequestDeliveryOf } from "./results";
+import { MAX_REVERT_TARGETS, parsePullRequestUrl, revertedPullRequestsOf, workPullRequestDeliveryOf } from "./results";
 import { returnedReasonBefore, sourceAt, workOrderNamedBy } from "./runtime";
 import { forecastRuntimeTier } from "./target";
 
@@ -95,6 +95,7 @@ describe("workPullRequestDeliveryOf", () => {
     expect(workPullRequestDeliveryOf(body)).toEqual({
       repository: "aintel/platform",
       number: 612,
+      reverts: [],
       pull: {
         headSha: "1".repeat(40),
         baseRef: "main",
@@ -110,6 +111,47 @@ describe("workPullRequestDeliveryOf", () => {
   it("drops a head that is not a commit id, and a delivery with no pull request", () => {
     expect(workPullRequestDeliveryOf({ ...body, pull_request: { ...body.pull_request, head: { sha: "main" } } })?.pull.headSha).toBeNull();
     expect(workPullRequestDeliveryOf({ action: "opened", repository: body.repository })).toBeNull();
+  });
+});
+
+describe("revertedPullRequestsOf", () => {
+  it("reads the line GitHub's Revert button writes, in the delivering repository", () => {
+    expect(revertedPullRequestsOf("Reverts AIntel/Platform#612", "aintel/platform", 640)).toEqual([612]);
+    expect(revertedPullRequestsOf("Broke sign-in.\r\n\r\n  reverts aintel/platform#7\r\nReverts aintel/platform#9.", "AIntel/Platform", 640)).toEqual([7, 9]);
+  });
+
+  it("names nothing for a revert without the full link", () => {
+    const none = [
+      null,
+      "",
+      // A bare number, and a git revert's commit line.
+      "Reverts #612",
+      "This reverts commit 9999999999999999999999999999999999999999.",
+      // Not at the start of a line.
+      "This change Reverts aintel/platform#612",
+      // A pull request in another repository: a merge here changes nothing there.
+      "Reverts aintel/other#612",
+      // The pull request itself.
+      "Reverts aintel/platform#640",
+      "Reverts aintel/platform#612abc",
+    ];
+    for (const body of none) expect(revertedPullRequestsOf(body, "aintel/platform", 640), String(body)).toEqual([]);
+  });
+
+  it("names each pull request once, up to its cap", () => {
+    expect(revertedPullRequestsOf("Reverts aintel/platform#5\nReverts aintel/platform#5", "aintel/platform", 640)).toEqual([5]);
+    const many = Array.from({ length: MAX_REVERT_TARGETS + 5 }, (_, index) => `Reverts aintel/platform#${index + 1}`).join("\n");
+    expect(revertedPullRequestsOf(many, "aintel/platform", 640)).toHaveLength(MAX_REVERT_TARGETS);
+  });
+
+  it("reaches the delivery from the pull request's body", () => {
+    const delivery = workPullRequestDeliveryOf({
+      action: "closed",
+      repository: { full_name: "aintel/platform" },
+      pull_request: { number: 640, body: "Reverts aintel/platform#612", state: "closed", merged: true, head: { sha: "1".repeat(40) } },
+    });
+    expect(delivery?.reverts).toEqual([612]);
+    expect(workPullRequestDeliveryOf({ repository: { full_name: "aintel/platform" }, pull_request: { number: 640, body: 7 } })?.reverts).toEqual([]);
   });
 });
 

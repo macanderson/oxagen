@@ -228,3 +228,60 @@ describe("the pilot measures", () => {
     expect(done.weeks.map((week) => week.full_flow)).toEqual([false, true]);
   });
 });
+
+// #5244: reverts over the reopen cohort. A revert counts on the send whose
+// done time placed the item in the cohort, never by time alone.
+describe("reverts", () => {
+  /** Days back for each fixture, so each falls where the case needs it. */
+  const OLD = -35 * DAY_MS;
+  const items = [
+    // Done 35 days ago and reverted after: in the cohort, reverted.
+    outcome(shift([...DONE_FAST, f.reverted(O1, 30)], OLD)),
+    // Done 35 days ago with no revert: in the cohort only.
+    outcome(shift(DONE_FAST, OLD)),
+    // Merged before review, reverted, then accepted: the revert precedes the
+    // acceptance that sets the done time, and still counts on that send.
+    outcome(shift([...IN_REVIEW, f.merged(O1, SHA1, 12), f.reverted(O1, 13), f.accepted(O1, SHA1, 14)], -34 * DAY_MS)),
+    // Done yesterday and reverted: it waits for its 30 days.
+    outcome([...DONE_FAST, f.reverted(O1, 30)]),
+  ];
+  const out = workOutcomesGet.output.parse({ ...computeOutcomes({ ...EMPTY, items }), truncated: false });
+
+  it("counts reverted items in the reopen cohort, with the same cohort and waiting count", () => {
+    expect(out.reverts).toEqual({ cohort: 3, reverted: 2, waiting: 1 });
+    expect(out.reverts.cohort).toBe(out.reopens.cohort);
+    expect(out.reverts.waiting).toBe(out.reopens.waiting);
+  });
+
+  it("counts a reverted item as accepted and merged in its window, because a revert never undoes done", () => {
+    const recent = computeOutcomes({ ...EMPTY, items: [outcome([...DONE_FAST, f.reverted(O1, 30)])] });
+    expect(recent.accepted_merged).toBe(1);
+  });
+
+  it("leaves out a revert of an earlier send when a later send finished the item again", () => {
+    const redone = [
+      ...DONE_FAST,
+      f.reverted(O1, 30),
+      f.reopened(2, 1, 31),
+      f.saved(2, 2, 32),
+      f.approved(2, 2, 33),
+      f.send(O2, 2, 2, 2, 34),
+      f.runtime("claimed", O2, 35),
+      f.prLinked(O2, 36),
+      f.head(O2, SHA1, 37),
+      f.runtime("run_ended", O2, 38),
+      f.required(O2, SHA1, ["test"], 39),
+      f.check(O2, SHA1, "test", "success", 40),
+      f.accepted(O2, SHA1, 41),
+      f.merged(O2, SHA1, 42),
+    ];
+    const result = computeOutcomes({ ...EMPTY, items: [outcome(shift(redone, OLD))] });
+    expect(result.reverts).toEqual({ cohort: 1, reverted: 0, waiting: 0 });
+    // The reopen came before the second finish, so it does not count either.
+    expect(result.reopens).toEqual({ cohort: 1, reopened: 0, waiting: 0 });
+  });
+
+  it("counts nothing in an empty window", () => {
+    expect(computeOutcomes(EMPTY).reverts).toEqual({ cohort: 0, reverted: 0, waiting: 0 });
+  });
+});

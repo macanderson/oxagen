@@ -155,7 +155,7 @@ unknown cost is null, never 0.
 | Triage decision | `work.triage_decisions` (append only, `item_revision`), `work.triage_corrections` | `triage_recorded`, `triage_failed`, `triage_overridden` | Registered by P1-03 |
 | Acceptance brief | `work.briefs` | `brief_saved`, `brief_approved` | Save and approve are registered with P1-04's mutations, under `run.control` and `run.approve` |
 | Work order | `work.orders` | `send_requested`, `send_delivered`, `send_rejected`, `send_withdrawn`, `claimed`, `run_linked`, `run_ended`, `stop_requested`, `stopped` | Send, withdraw, and stop by P1-04, which delivers through `tacho.control_commands` and reuses `dispatch_command` for a live run |
-| Evidence and review | `work.item_facts` with the head commit, pull request, run, and criterion | `pr_linked`, `head_observed`, `checks_required`, `check_observed`, `criterion_claimed`, `returned`, `accepted`, `merged`, `pr_closed` | Return and accept by P1-04. The pull request and head come from `get_run_work` and `tacho.run_pull_requests`, and the merge from the GitHub `pull_request` webhook |
+| Evidence and review | `work.item_facts` with the head commit, pull request, run, and criterion | `pr_linked`, `head_observed`, `checks_required`, `check_observed`, `criterion_claimed`, `returned`, `accepted`, `merged`, `pr_closed`, `reverted` (ADR-286, amended 2026-10-03) | Return and accept by P1-04. The pull request and head come from `get_run_work` and `tacho.run_pull_requests`, and the merge from the GitHub `pull_request` webhook |
 | History | `work.item_facts` | every kind above | `invoke()` audit rows in ClickHouse, run cost in `cost.run_totals` |
 
 The store in `packages/handlers/src/lib/work-records/store.ts` is the one

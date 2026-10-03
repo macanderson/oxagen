@@ -13105,6 +13105,7 @@ type Messages = {
         title: string;
         cohort: string;
         reopened: string;
+        reverted: string;
         waiting: string;
         reverts: string;
       };
@@ -13469,6 +13470,7 @@ type Messages = {
         accepted: string;
         merged: string;
         pr_closed: string;
+        reverted: string;
         closed: string;
         reopened: string;
       };

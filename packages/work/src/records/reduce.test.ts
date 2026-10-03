@@ -417,3 +417,57 @@ describe("reduceWorkItem: order independence", () => {
     for (let run = 0; run < 500; run += 1) expect(reduceWorkItem(shuffled(history, next))).toEqual(expected);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Reverts (#5244)
+// ---------------------------------------------------------------------------
+
+/** GitHub merged pull request #640 in the same repository, which reverts the send's pull request. */
+function reverted(order: string, minute: number, number = 640) {
+  return newFact({
+    kind: "reverted",
+    source: "provider",
+    itemRevision: 1,
+    actor: "github",
+    occurredAt: at(minute),
+    dedupeKey: `reverted:${order}:aintel/platform#${number}`,
+    orderId: order,
+    repository: "aintel/platform",
+    prNumber: number,
+    data: { merge_commit: "4".repeat(40) },
+  });
+}
+
+describe("reduceWorkItem: a revert of the merged pull request", () => {
+  const DONE = [...IN_REVIEW, f.accepted("o1", SHA1, 1, 12), f.merged("o1", SHA1, 13)];
+
+  it("keeps a done item done, and shows the revert on its send", () => {
+    const item = reduceWorkItem([...DONE, reverted("o1", 20)]);
+    expect(item.state).toBe("done");
+    expect(item.orders[0]).toMatchObject({ done: true, closed: true, released: true });
+    expect(item.orders[0]?.revert).toEqual({ repository: "aintel/platform", number: 640, mergeCommit: "4".repeat(40), at: at(20) });
+    expect(item.orders[0]?.pullRequest).toEqual({ repository: "aintel/platform", number: 612 });
+    expect(reduceWorkItem(DONE).orders[0]?.revert).toBeNull();
+  });
+
+  it("keeps the first revert, and shows none on a send that never merged", () => {
+    const twice = reduceWorkItem([...DONE, reverted("o1", 20), reverted("o1", 25, 641)]);
+    expect(twice.orders[0]?.revert).toMatchObject({ number: 640 });
+    const open = reduceWorkItem([...IN_REVIEW, reverted("o1", 20)]);
+    expect(open.state).toBe("review");
+    expect(open.orders[0]?.revert).toBeNull();
+  });
+
+  it("lets a person reopen a reverted item, and keeps the revert in its history", () => {
+    const item = reduceWorkItem([...DONE, reverted("o1", 20), f.reopened(2, 1, 21)]);
+    expect(item).toMatchObject({ state: "triaged", revision: 2, reopenedAfterSend: 1 });
+    expect(item.orders[0]?.revert).toMatchObject({ number: 640 });
+  });
+
+  it("reduces every arrival order of a revert, an acceptance, and a merge to the same done item", () => {
+    const facts = [f.accepted("o1", SHA1, 1, 12), f.merged("o1", SHA1, 13), reverted("o1", 20)];
+    const expected = reduceWorkItem([...IN_REVIEW, ...facts]);
+    expect(expected.state).toBe("done");
+    for (const order of permutations(facts)) expect(reduceWorkItem([...IN_REVIEW, ...order])).toEqual(expected);
+  });
+});
