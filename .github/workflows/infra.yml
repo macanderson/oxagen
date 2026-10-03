@@ -67,8 +67,6 @@ jobs:
         run: |
           python3 infra/tools/tests/node-toolchain.test.py
           python3 infra/tools/tests/node-memory-budget.test.py
-          # Real Docker: a slow request across a container swap (#5318).
-          python3 infra/tools/tests/node-swap.test.py
 
       - id: pick
         run: |

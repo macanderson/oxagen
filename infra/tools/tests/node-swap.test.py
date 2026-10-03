@@ -5,8 +5,8 @@ recording docker. This test runs the same functions, extracted from
 deploy-service.sh, against real Docker: a container serving a slow request is
 retired, a new one starts on the same port, and the slow request must still
 answer from the old one. A container with no SIGTERM handler must still give
-up the port, by SIGKILL. It needs Docker, so it runs in the infra workflow's
-discover job on a GitHub runner, never on a laptop.
+up the port, by SIGKILL. It needs Docker, so it runs in the node swap workflow
+(.github/workflows/node-swap.yml) on a GitHub runner, never on a laptop.
 """
 
 import json

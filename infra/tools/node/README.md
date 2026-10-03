@@ -95,7 +95,7 @@ SIGKILL, as every service did before. The api handles SIGTERM itself
 (`apps/api/src/shutdown.ts`), and mcp starts with
 `--require ./drain-preload.cjs`, which closes the ports xmcp's server opens.
 `infra/tools/tests/node-swap.test.py` runs both cases against real Docker in
-the infra workflow.
+the node swap workflow (`.github/workflows/node-swap.yml`).
 
 The app build needs `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` from Parameter Store,
 so its server action ids stay the same from one deploy to the next and a page
