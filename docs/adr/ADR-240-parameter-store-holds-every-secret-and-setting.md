@@ -2,6 +2,10 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-30
+- **Amended by:** ADR-295 (the ClickHouse Cloud and Cloud Postgres values are
+  staged under `/oxagen/production` as `CLICKHOUSE_CLOUD_*`,
+  `DATABASE_CLOUD_URL`, and `DATABASE_CLOUD_ADMIN_URL`, and replace the
+  values of `CLICKHOUSE_*` and `DATABASE_URL` at the switch).
 - **Owners:** platform
 - **Supersedes:** ADR-004
 - **Related:** issue #4925, #4832, #4833, ADR-088, ADR-150,

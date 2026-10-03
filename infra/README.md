@@ -291,8 +291,10 @@ token whose subject the trust policy accepts.
 **No CI role has a shell on the node.** Each may write one S3 object per service
 it owns and send exactly one SSM document, `oxagen-deploy-service`, whose only
 argument is a service name constrained by `allowedPattern` at the API. That
-instance also runs Neo4j and ClickHouse (Postgres moved to Aurora Serverless
-v2); `AWS-RunShellScript` on it is root, and no deploy needs root.
+instance also runs Neo4j and a ClickHouse container. Production Postgres and
+ClickHouse move to ClickHouse Cloud
+([ADR-295](../docs/adr/ADR-295-clickhouse-and-postgres-run-in-clickhouse-cloud.md)).
+`AWS-RunShellScript` on the node is root, and no deploy needs root.
 
 ## Applying from CI
 
@@ -430,8 +432,18 @@ Terraform and an alarm that sits at OK forever.
 
 ## ClickHouse memory on the app node
 
-ClickHouse runs in one container on the app node.
-`infra/modules/app-node/user-data.sh.tftpl` sizes it:
+ClickHouse runs in one container on the app node. Production ClickHouse moves
+from that container to ClickHouse Cloud, because the cap below refused
+hundreds of queries an hour (#4243,
+[ADR-295](../docs/adr/ADR-295-clickhouse-and-postgres-run-in-clickhouse-cloud.md)).
+`/oxagen/production/CLICKHOUSE_URL` names the one production uses: the node's
+`http://127.0.0.1:8123`, or an https Cloud URL. Cloud admits only the NAT
+instance's Elastic IP, so CI reaches it through an SSM port forward to the
+node, and `infra/tools/clickhouse-tunnel.sh` picks the route from the URL. The
+container stays until a later change removes it, and this section describes
+it until then.
+
+`infra/modules/app-node/user-data.sh.tftpl` sizes the container:
 
 | Setting | Value | Where |
 |---|---|---|
@@ -468,9 +480,11 @@ it lands. #3722 carries a cap on that.
 Postgres, Neo4j and ClickHouse.** In the new account only Postgres is
 managed: Aurora (`stacks-new/oxagen`'s `data-services.tf`) is reached over
 the VPC from the app node, and its password lives at
-`/oxagen-app/postgres/password` rather than under `/oxagen-data/`. ClickHouse
-and Neo4j both run on the app node there, with passwords at
-`/oxagen-app/clickhouse/password` and `/oxagen-app/neo4j/password`.
+`/oxagen-app/postgres/password` rather than under `/oxagen-data/`. Neo4j and a
+ClickHouse container run on the app node there, with passwords at
+`/oxagen-app/clickhouse/password` and `/oxagen-app/neo4j/password`. Production
+Postgres and ClickHouse move to ClickHouse Cloud
+([ADR-295](../docs/adr/ADR-295-clickhouse-and-postgres-run-in-clickhouse-cloud.md)).
 
 Nothing is exposed. The security group opens no inbound port and there is no
 SSH key; every port is additionally bound to loopback on the instance, so a

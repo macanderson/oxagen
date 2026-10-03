@@ -223,6 +223,10 @@ resource "aws_instance" "nat" {
   tags = merge(local.tags, { Name = "${var.name}-nat" })
 }
 
+# The address every private-subnet instance reaches the internet from. In
+# production, ClickHouse Cloud's IP access list names this address and no other
+# (ADR-295), so a replacement cuts the platform and CI off from Cloud until the
+# allow list names the new address.
 resource "aws_eip" "nat" {
   domain   = "vpc"
   instance = aws_instance.nat.id

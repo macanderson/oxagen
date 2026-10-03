@@ -1,9 +1,21 @@
 # open-store-tunnels — reach production ClickHouse and Neo4j from a runner.
 #
-# Both stores bind 127.0.0.1 on the `oxagen-app` node and neither is exposed to
-# the VPC, so a forwarded port is the only way in. This opens one SSM port-
-# forwarding session per store, reads the connection parameters out of
-# Parameter Store, and rewrites the endpoints to point at the forwarded ports.
+# Neo4j binds 127.0.0.1 on the `oxagen-app` node and is not exposed to the VPC,
+# so a forwarded port is the only way in. ClickHouse is in one of two places,
+# and CLICKHOUSE_URL in Parameter Store says which (ADR-295):
+#
+# - `http://...` is ClickHouse in a container on the node, bound to loopback
+#   like Neo4j. The runner forwards the node's port 8123.
+# - `https://...` is ClickHouse Cloud. Cloud admits only the node's NAT
+#   address, and a GitHub runner has no fixed address to admit, so the runner
+#   forwards a local port through the node to the Cloud host. The rewritten
+#   URL keeps the Cloud host name, and /etc/hosts maps that name to loopback,
+#   so TLS checks the certificate against the real name.
+#
+# This reads the connection parameters out of Parameter Store, opens one SSM
+# port-forwarding session per store, and rewrites the endpoints to point at
+# the forwarded ports. `infra/tools/clickhouse-tunnel.sh` makes the ClickHouse
+# decision, and `infra/tools/tests/clickhouse-tunnel.test.sh` holds it.
 #
 # Why it is an action rather than steps in a workflow: two workflows now need
 # it — `store-migrate-drift.yml`, which asks every morning whether production
@@ -30,7 +42,7 @@ inputs:
     required: false
     default: /oxagen/production
   clickhouse-port:
-    description: Local port to forward ClickHouse's 8123 to.
+    description: Local port the ClickHouse tunnel listens on, for the node's 8123 or for ClickHouse Cloud.
     required: false
     default: "8123"
   neo4j-port:
@@ -124,6 +136,62 @@ runs:
         echo "instance=$INSTANCE" >> "$GITHUB_OUTPUT"
         echo "node: $INSTANCE"
 
+    # Before the tunnels, because the ClickHouse tunnel's far end comes from
+    # CLICKHOUSE_URL.
+    - name: Read the target store config
+      shell: bash
+      env:
+        PARAMETER_PREFIX: ${{ inputs.parameter-prefix }}
+      run: |
+        set -euo pipefail
+        # Written to the environment file rather than echoed: these are
+        # SecureString values and a `set -x` here would print them.
+        #
+        # NEO4J_DATABASE is on this list because SHOW CONSTRAINTS and SHOW
+        # INDEXES answer for ONE database, and the applier writes to the one
+        # this parameter names. Omitting it pointed the check at the connection
+        # default and reported "0 present" about a database nothing migrates.
+        for key in CLICKHOUSE_URL CLICKHOUSE_USERNAME CLICKHOUSE_PASSWORD CLICKHOUSE_DATABASE \
+                   NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD NEO4J_DATABASE; do
+          value=$(aws ssm get-parameter --name "$PARAMETER_PREFIX/$key" \
+            --with-decryption --query Parameter.Value --output text)
+          echo "::add-mask::$value"
+          echo "$key=$value" >> "$GITHUB_ENV"
+        done
+        echo "read 8 parameters"
+
+    # The node's own ClickHouse, or ClickHouse Cloud through the node. The
+    # decision and its reasons are in infra/tools/clickhouse-tunnel.sh. The
+    # Cloud host name comes out of a SecureString, so it is masked before
+    # anything prints it.
+    - name: Decide how to reach ClickHouse
+      id: clickhouse
+      shell: bash
+      env:
+        CH_PORT: ${{ inputs.clickhouse-port }}
+      run: |
+        set -euo pipefail
+        plan="$RUNNER_TEMP/clickhouse-tunnel.txt"
+        bash "$GITHUB_WORKSPACE/infra/tools/clickhouse-tunnel.sh" "$CLICKHOUSE_URL" "$CH_PORT" > "$plan"
+        mode=$(sed -n 's/^mode=//p' "$plan")
+        host=$(sed -n 's/^host=//p' "$plan")
+        port=$(sed -n 's/^port=//p' "$plan")
+        if [ "$mode" = remote ]; then
+          echo "::add-mask::$host"
+          echo "::add-mask::$(sed -n 's/^url=//p' "$plan")"
+          # Only this runner resolves the name to its forwarding socket. The
+          # SSM agent on the node resolves it from inside the VPC.
+          printf '127.0.0.1 %s\n' "$host" | sudo tee -a /etc/hosts >/dev/null
+          echo "ClickHouse: ClickHouse Cloud through the node, remote port $port"
+        else
+          echo "ClickHouse: the node's own, port $port"
+        fi
+        {
+          echo "mode=$mode"
+          echo "host=$host"
+          echo "port=$port"
+        } >> "$GITHUB_OUTPUT"
+
     # Backgrounded, then waited on: `start-session` does not return once the
     # tunnel is up.
     - name: Open the tunnels
@@ -132,6 +200,9 @@ runs:
         CH_PORT: ${{ inputs.clickhouse-port }}
         NEO_PORT: ${{ inputs.neo4j-port }}
         INSTANCE: ${{ steps.node.outputs.instance }}
+        CH_MODE: ${{ steps.clickhouse.outputs.mode }}
+        CH_HOST: ${{ steps.clickhouse.outputs.host }}
+        CH_REMOTE_PORT: ${{ steps.clickhouse.outputs.port }}
       run: |
         set -euo pipefail
         open_tunnel() {
@@ -143,7 +214,23 @@ runs:
             > "/tmp/tunnel-$label.log" 2>&1 &
           echo $! > "/tmp/tunnel-$label.pid"
         }
-        open_tunnel 8123 "$CH_PORT" clickhouse
+        # ClickHouse Cloud: the node forwards to the Cloud host, so the
+        # connection leaves AWS from the node's NAT address, the one address
+        # Cloud admits. The same document the Aurora coordinator tunnel uses.
+        open_remote_tunnel() {
+          local host=$1 remote=$2 local_port=$3 label=$4
+          aws ssm start-session \
+            --target "$INSTANCE" \
+            --document-name AWS-StartPortForwardingSessionToRemoteHost \
+            --parameters "{\"host\":[\"$host\"],\"portNumber\":[\"$remote\"],\"localPortNumber\":[\"$local_port\"]}" \
+            > "/tmp/tunnel-$label.log" 2>&1 &
+          echo $! > "/tmp/tunnel-$label.pid"
+        }
+        if [ "$CH_MODE" = remote ]; then
+          open_remote_tunnel "$CH_HOST" "$CH_REMOTE_PORT" "$CH_PORT" clickhouse
+        else
+          open_tunnel 8123 "$CH_PORT" clickhouse
+        fi
         open_tunnel 7687 "$NEO_PORT" neo4j
 
         # Waited for rather than slept through: SSM takes a few seconds and a
@@ -167,40 +254,20 @@ runs:
         echo "--- tunnel logs ---"
         tail -3 /tmp/tunnel-*.log || true
 
-    - name: Read the target store config
-      shell: bash
-      env:
-        PARAMETER_PREFIX: ${{ inputs.parameter-prefix }}
-      run: |
-        set -euo pipefail
-        # Written to the environment file rather than echoed: these are
-        # SecureString values and a `set -x` here would print them.
-        #
-        # NEO4J_DATABASE is on this list because SHOW CONSTRAINTS and SHOW
-        # INDEXES answer for ONE database, and the applier writes to the one
-        # this parameter names. Omitting it pointed the check at the connection
-        # default and reported "0 present" about a database nothing migrates.
-        for key in CLICKHOUSE_URL CLICKHOUSE_USERNAME CLICKHOUSE_PASSWORD CLICKHOUSE_DATABASE \
-                   NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD NEO4J_DATABASE; do
-          value=$(aws ssm get-parameter --name "$PARAMETER_PREFIX/$key" \
-            --with-decryption --query Parameter.Value --output text)
-          echo "::add-mask::$value"
-          echo "$key=$value" >> "$GITHUB_ENV"
-        done
-        echo "read 8 parameters"
-
-    # The parameters name the stores as the NODE reaches them, over loopback.
-    # This runner reaches them over a forwarded port on its own loopback, so the
-    # host is right and only the scheme and port need to survive the trip.
-    # Rewritten here rather than in the check script, because the tunnel is this
-    # action's arrangement and the script should not have to know about it.
+    # The parameters name the stores as the NODE reaches them. This runner
+    # reaches them over a forwarded port on its own loopback. For the node's
+    # stores only the scheme and port survive the trip. For ClickHouse Cloud
+    # the host name survives too, because /etc/hosts sends it to loopback and
+    # TLS needs it. Rewritten here rather than in the check script, because
+    # the tunnel is this action's arrangement and the script should not have
+    # to know about it.
     - name: Point the endpoints at the tunnel
       shell: bash
       env:
-        CH_PORT: ${{ inputs.clickhouse-port }}
         NEO_PORT: ${{ inputs.neo4j-port }}
       run: |
         set -euo pipefail
-        echo "CLICKHOUSE_URL=http://127.0.0.1:$CH_PORT/" >> "$GITHUB_ENV"
+        url=$(sed -n 's/^url=//p' "$RUNNER_TEMP/clickhouse-tunnel.txt")
+        echo "CLICKHOUSE_URL=$url" >> "$GITHUB_ENV"
         echo "NEO4J_URI=bolt://127.0.0.1:$NEO_PORT" >> "$GITHUB_ENV"
         echo "endpoints point at the forwarded ports"

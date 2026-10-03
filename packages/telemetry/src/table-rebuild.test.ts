@@ -549,12 +549,45 @@ describe("rebuildPartitionKey", () => {
   });
 
   it("refuses a database that cannot swap tables", async () => {
+    for (const engine of ["Ordinary", "Lazy", ""]) {
+      const store = new MemoryStore(seed());
+      store.engine = engine;
+      await expect(
+        rebuildPartitionKey(store, DIRECTIVE, quiet),
+      ).rejects.toThrow(/needs an Atomic, Replicated, or Shared database/);
+      expect(store.statements).toEqual([]);
+    }
+  });
+
+  // ClickHouse Cloud creates its databases with the Shared engine, or with
+  // Replicated on an older service. Both swap tables the way Atomic does, so
+  // a rebuild there runs the same steps (#5395).
+  it.each(["Shared", "Replicated"])(
+    "rebuilds a table in a %s database, as ClickHouse Cloud creates them",
+    async (engine) => {
+      const store = new MemoryStore(seed());
+      store.engine = engine;
+      await expect(rebuildPartitionKey(store, DIRECTIVE, quiet)).resolves.toBe(
+        "rebuilt",
+      );
+      expectRebuilt(store, ["a", "b", "c", "d", "e"]);
+    },
+  );
+
+  // The tables in ClickHouse Cloud were created from production's own DDL, so
+  // they already carry every key a past REBUILD TABLE set. Replaying that
+  // migration there has to finish without asking what the database can do.
+  it("passes a table that already has the key without asking the engine", async () => {
     const store = new MemoryStore(seed());
+    await rebuildPartitionKey(store, DIRECTIVE, quiet);
+    const statements = store.statements.length;
     store.engine = "Ordinary";
-    await expect(rebuildPartitionKey(store, DIRECTIVE, quiet)).rejects.toThrow(
-      /needs an Atomic database/,
+    const asked = vi.spyOn(store, "databaseEngine");
+    await expect(rebuildPartitionKey(store, DIRECTIVE, quiet)).resolves.toBe(
+      "current",
     );
-    expect(store.statements).toEqual([]);
+    expect(asked).not.toHaveBeenCalled();
+    expect(store.statements.length).toBe(statements);
   });
 
   it("refuses a shadow table it did not create", async () => {

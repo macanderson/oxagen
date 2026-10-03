@@ -155,6 +155,22 @@ export const REBUILD_CLIENT_OPTIONS = {
   },
 } satisfies ClickHouseClientConfigOptions;
 
+/**
+ * The database engines whose tables `EXCHANGE TABLES` can swap.
+ *
+ * `Atomic` is the open-source default, and the node's ClickHouse runs it.
+ * ClickHouse Cloud creates every database with `Shared`, or with `Replicated`
+ * on an older service, and both are built on `Atomic` (ADR-295). ClickHouse
+ * documents `EXCHANGE` for `Atomic` and `Shared`, and `Replicated` inherits it
+ * from `Atomic`. Any other engine, such as the old `Ordinary`, cannot swap,
+ * so a rebuild there stops before it writes anything.
+ */
+const SWAP_ENGINES: ReadonlySet<string> = new Set([
+  "Atomic",
+  "Replicated",
+  "Shared",
+]);
+
 /** A table as `system.tables` describes it. */
 export interface TableShape {
   partitionKey: string;
@@ -172,7 +188,7 @@ export type PartitionRows = Map<string, { rows: number; id: string }>;
 export interface RebuildStore {
   /** The named tables in the current database that exist. */
   shapes(names: readonly string[]): Promise<Map<string, TableShape>>;
-  /** The current database's engine: `Atomic` supports `EXCHANGE TABLES`. */
+  /** The current database's engine, checked against `SWAP_ENGINES`. */
   databaseEngine(): Promise<string>;
   /** Rows of `table` per value of `partitionBy`, keyed by the value as text. */
   partitionRows(table: string, partitionBy: string): Promise<PartitionRows>;
@@ -402,10 +418,13 @@ export async function rebuildPartitionKey(
     return "resumed";
   }
 
+  // Asked only here, once a rebuild has work to do. A table that already has
+  // the key returned above, so a store whose engine this list does not name
+  // still passes every migration it is already current for.
   const engine = await store.databaseEngine();
-  if (engine !== "Atomic") {
+  if (!SWAP_ENGINES.has(engine)) {
     throw new RebuildStateError(
-      `${table} is in a database with the ${engine} engine. The rebuild swaps tables with EXCHANGE TABLES, which needs an Atomic database.`,
+      `${table} is in a database with the ${engine || "unknown"} engine. The rebuild swaps tables with EXCHANGE TABLES, which needs an Atomic, Replicated, or Shared database.`,
     );
   }
   // The shadow becomes the live table at the swap, so it has to be exactly
