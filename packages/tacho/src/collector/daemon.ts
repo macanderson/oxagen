@@ -87,7 +87,7 @@ import {
 import type { TachoPaths } from "../host/paths";
 import {
   isProcessAlive,
-  listClaudeProcesses,
+  parsePsListing,
   readProcessStarts,
   readProcessStartsAsync,
   readProcessStartsNoWait,
@@ -807,6 +807,7 @@ async function initializeDaemon(
   // session cannot reach.
   const reflectionToolRegistered = (session: {
     startedAt: string;
+    cwd?: string;
   }): boolean => {
     try {
       const current = readHostFile(paths.hostFile) ?? host;
@@ -815,6 +816,9 @@ async function initializeDaemon(
         hasGatewayKey: current.gateway_api_key !== undefined,
         registeredAt: current.mcp_registered_at?.["claude-code"],
         sessionStartedAt: session.startedAt,
+        // A local- or project-scope `oxagen` server in this directory wins
+        // over ours, and would refuse the reflection.
+        ...(session.cwd !== undefined ? { cwd: session.cwd } : {}),
         readUserConfig: () =>
           readJsonFileIfExists(
             withRecordedHarnessFiles(paths, current).claudeUserConfig,
@@ -2219,7 +2223,12 @@ async function initializeDaemon(
       };
       return hostRecorder;
     },
-    listProcesses: () => listClaudeProcesses(exec),
+    // Through `execAsync`, so the reporting tick does not hold the daemon's
+    // only thread, and every hook waiting on it, while `ps` runs (#5390).
+    listProcesses: async () => {
+      const result = await execAsync("ps", ["-axo", "pid=,ppid=,command="]);
+      return result.status === 0 ? parsePsListing(result.stdout) : [];
+    },
     transcriptRoots: options.transcriptRoots ?? [paths.claudeProjects],
     readSettings: () => readJsonFileIfExists(paths.claudeSettings) ?? {},
     // The harness list and the enrollment id it belongs to, read together
@@ -2278,6 +2287,17 @@ async function initializeDaemon(
       } {
     const parsed = parseBackfillRequest(input);
     if ("error" in parsed) return { status: 400, body: { error: parsed.error } };
+    // The transcripts are Claude Code's. An agent that does not hook Claude
+    // Code would seal them on its own chains and ship them as its own runs,
+    // and a later backfill from the right agent would skip them (#5390).
+    if (!currentEnrollment(paths.hostFile, host).harnesses.includes("claude-code"))
+      return {
+        status: 409,
+        body: {
+          error:
+            "This agent does not hook Claude Code, so it takes no Claude Code backfill. Run `oxagen agent backfill`, which sends it to the agent that does.",
+        },
+      };
     if (backfillRunning)
       return {
         status: 409,

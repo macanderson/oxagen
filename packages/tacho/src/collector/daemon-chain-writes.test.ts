@@ -312,4 +312,21 @@ describe("the daemon's writers outside a hook", () => {
     expect(stops()).toHaveLength(1);
     expect(second.wal.read(uuid)).toHaveLength(written);
   });
+
+  it("refuses a Claude Code backfill on an agent that does not hook Claude Code (#5390, negative)", async () => {
+    // A Cursor-only agent would seal Claude Code's transcripts on its own
+    // chains and ship them as its runs.
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    writeHostFile(
+      paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle()), {
+        harnesses: ["cursor"],
+      }),
+    );
+    const handle = await boot({ paths });
+    const started = handle.api.startBackfill?.({});
+    expect(started).toMatchObject({ status: 409 });
+    expect(JSON.stringify(started)).toMatch(/does not hook Claude Code/);
+  });
 });
