@@ -740,6 +740,127 @@ describe("get_spend prompt sources (#5295)", () => {
   });
 });
 
+describe("get_spend request windows (#5341)", () => {
+  /** A priced run whose rollup stored the window composition given; undefined stores none. */
+  const windowedRun = (
+    windows: NonNullable<SpendRunRecord["breakdown"]["windows"]> | null | undefined,
+    over: Parameters<typeof pricedRun>[1] = {},
+  ): SpendRunRecord => {
+    const base = pricedRun(500n, over);
+    return {
+      ...base,
+      breakdown: {
+        ...base.breakdown,
+        ...(windows === undefined ? {} : { windows }),
+      },
+    };
+  };
+
+  const composition = (
+    blocks: { system: number | null; conversation: number | null; tools?: number | null },
+    requests = 1,
+  ) => {
+    const tools = blocks.tools ?? null;
+    return {
+      requests,
+      requestsWithoutTokens: 0,
+      promptTokens:
+        (blocks.system ?? 0) + (blocks.conversation ?? 0) + (tools ?? 0),
+      blocks: {
+        system: blocks.system,
+        steering: null,
+        tools,
+        context: null,
+        conversation: blocks.conversation,
+      },
+      initialConversationTokens: null,
+    };
+  };
+
+  it("sums an agent's runs' windows block by block, past a run with none and a run rolled up before them", async () => {
+    const h = harness({
+      daily: [daily({ groupKind: "agent", groupKey: "acme.core.cc" })],
+      runs: [
+        windowedRun(composition({ system: 1_000, conversation: 4_000, tools: 3_000 }, 2)),
+        windowedRun(composition({ system: 500, conversation: 2_500 }, 3)),
+        // A run that recorded no window, and one rolled up before #5341.
+        windowedRun(null),
+        windowedRun(undefined),
+      ],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
+    expect(out.rows[0]?.windows).toEqual({
+      runs: 2,
+      requests: 5,
+      requestsWithoutTokens: 0,
+      promptTokens: 11_000,
+      blocks: {
+        system: 1_500,
+        // No run's windows carried steering or context, so both stay null.
+        steering: null,
+        tools: 3_000,
+        context: null,
+        conversation: 6_500,
+      },
+    });
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers null for a row none of whose runs stored windows, never a zero (negative)", async () => {
+    const h = harness({
+      daily: [daily({ groupKind: "agent", groupKey: "acme.core.cc" })],
+      runs: [windowedRun(null), windowedRun(undefined)],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
+    expect(out.rows[0]?.windows).toBeNull();
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+
+  it("carries no windows on a model row, which holds part of a run (negative)", async () => {
+    const h = harness({
+      daily: [
+        daily({
+          groupKind: "model",
+          groupKey: "claude-sonnet-5",
+          costMicros: 500n,
+          costBasis: "client_attested",
+        }),
+      ],
+      runs: [windowedRun(composition({ system: 100, conversation: 900 }))],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "model" }, ctx());
+    expect(out.rows[0]).not.toHaveProperty("windows");
+  });
+
+  it("gives the assistant row its own runs' windows, and leaves them out of the operator's row", async () => {
+    const h = harness({
+      daily: [
+        daily({
+          groupKind: "operator",
+          groupKey: OPERATOR,
+          runs: 2,
+          costMicros: 1000n,
+          costBasis: "client_attested",
+        }),
+      ],
+      runs: [
+        {
+          ...windowedRun(composition({ system: 200, conversation: 800 })),
+          inApp: true,
+        },
+        windowedRun(composition({ system: 50, conversation: 950 })),
+      ],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "operator" }, ctx());
+    expect(
+      out.rows.map((r) => [r.key, r.windows?.blocks.conversation ?? null]),
+    ).toEqual([
+      [OPERATOR, 950],
+      [ASSISTANT_SPEND_KEY, 800],
+    ]);
+  });
+});
+
 describe("get_spend reported spend", () => {
   it("sums the models the harness reported and leaves gateway and mixed models out", () => {
     const reported = pricedRun(300n);

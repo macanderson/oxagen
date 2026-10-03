@@ -101,6 +101,22 @@ export function toSpendReport(
               toolResultTokens: row.tokenSources.toolResultTokens,
             },
           }),
+      // Null says no run of the row stored windows (#5341); a row that holds
+      // part of a run carries no key.
+      ...(row.windows === undefined
+        ? {}
+        : {
+            windows:
+              row.windows === null
+                ? null
+                : {
+                    runs: row.windows.runs,
+                    requests: row.windows.requests,
+                    requestsWithoutTokens: row.windows.requestsWithoutTokens,
+                    promptTokens: row.windows.promptTokens,
+                    blocks: { ...row.windows.blocks },
+                  },
+          }),
     })),
   };
 }

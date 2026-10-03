@@ -140,6 +140,29 @@ const SpendRow = SpendFigure.extend({
       toolResultTokens: Count.nullable(),
     })
     .optional(),
+  /**
+   * The row's runs' request windows summed block by block (#5341), the one
+   * record of their conversation and system tokens. Each block is its byte
+   * share of the prompt total each request reported. Null when no run of the
+   * row stored a window composition, and absent where `tokenSources` is.
+   */
+  windows: z
+    .object({
+      /** The runs whose rollup stored windows; every sum covers these alone. */
+      runs: Count,
+      requests: Count,
+      requestsWithoutTokens: Count,
+      promptTokens: Count,
+      blocks: z.object({
+        system: Count.nullable(),
+        steering: Count.nullable(),
+        tools: Count.nullable(),
+        context: Count.nullable(),
+        conversation: Count.nullable(),
+      }),
+    })
+    .nullable()
+    .optional(),
 });
 
 /**

@@ -109,6 +109,39 @@ export const spendTokenSourcesSchema = z
   })
   .strict();
 
+const windowCountSchema = z.number().int().nonnegative();
+
+/**
+ * What the request windows of a row's runs held, block by block, summed over
+ * every run whose rollup stored a window composition (#5341). Each block's
+ * tokens are its byte share of the prompt total the vendor reported on each
+ * request, as `get_run_context` splits them, so the blocks sum to
+ * `promptTokens`. The conversation block holds every message a request
+ * re-sent, tool results included. A block none of those runs carried is
+ * null, never a zero.
+ */
+export const spendWindowsSchema = z
+  .object({
+    /** The row's runs whose rollup stored a composition. Every sum below covers these runs alone. */
+    runs: windowCountSchema,
+    /** Their requests that reported a prompt total. */
+    requests: windowCountSchema,
+    /** Their requests that reported none, which no sum counts. */
+    requestsWithoutTokens: windowCountSchema,
+    /** The prompt tokens of the `requests`, summed. */
+    promptTokens: windowCountSchema,
+    blocks: z
+      .object({
+        system: windowCountSchema.nullable(),
+        steering: windowCountSchema.nullable(),
+        tools: windowCountSchema.nullable(),
+        context: windowCountSchema.nullable(),
+        conversation: windowCountSchema.nullable(),
+      })
+      .strict(),
+  })
+  .strict();
+
 export const spendRowSchema = spendFigureSchema
   .extend({
     /**
@@ -137,6 +170,14 @@ export const spendRowSchema = spendFigureSchema
      * {@link OTHER_SPEND_KEY} row.
      */
     tokenSources: spendTokenSourcesSchema.optional(),
+    /**
+     * The row's request windows summed over its runs (#5341), which carry
+     * the conversation and system tokens no other source measures. Present
+     * on the rows that carry `tokenSources`. Null when none of the row's
+     * runs stored a window composition: a run that recorded no window, and
+     * a run rolled up before the composition was kept, is not measured.
+     */
+    windows: spendWindowsSchema.nullable().optional(),
   })
   .strict();
 
@@ -144,7 +185,7 @@ export const spendGet = registerCapability({
   name: "get_spend",
   domain: "spend",
   description:
-    "Read this workspace's spend over a day range, rolled up by operator, agent, model, tool, task, cost center or MCP server, with every figure in micros and the basis that says who observed it, the period total with proven and accepted spend kept apart, the spend by day, each row's costliest runs, and on a row of whole runs the tokens those runs spent on tool definitions, context frames, steering and tool results.",
+    "Read this workspace's spend over a day range, rolled up by operator, agent, model, tool, task, cost center or MCP server, with every figure in micros and the basis that says who observed it, the period total with proven and accepted spend kept apart, the spend by day, each row's costliest runs, and on a row of whole runs the tokens those runs spent on tool definitions, context frames, steering and tool results, and their request windows summed block by block, conversation and system included.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -220,3 +261,4 @@ export type SpendGroupBy = z.output<typeof spendGroupBySchema>;
 export type SpendRow = z.output<typeof spendRowSchema>;
 export type SpendTopRun = z.output<typeof spendTopRunSchema>;
 export type SpendTokenSources = z.output<typeof spendTokenSourcesSchema>;
+export type SpendWindows = z.output<typeof spendWindowsSchema>;
