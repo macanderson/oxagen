@@ -34,6 +34,7 @@ import { Money } from "@/ui/money";
 import { formatCount, formatDuration, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { OperatorName } from "@/ui/operator";
+import { ProviderMark } from "@/ui/provider-mark";
 import { isBackfilled } from "./backfill";
 import { EnrichmentSwitch } from "./enrichment-switch";
 import { useHarness } from "./header";
@@ -234,6 +235,11 @@ export function SummaryPanel({
             <>
               {t("summary.generatedBy")}{" "}
               <b className="font-semibold text-muted-foreground">
+                <ProviderMark
+                  model={summary.model}
+                  size={14}
+                  className="mr-1 align-middle"
+                />
                 {summary.model}
               </b>{" "}
               ·{" "}

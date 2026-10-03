@@ -66,6 +66,7 @@ function harness(
     savings?: KindSaving[];
     spend?: FrameTimeSpend[];
     partial?: (string | null)[];
+    outside?: number;
   } = {},
 ) {
   const deps = {
@@ -75,6 +76,7 @@ function harness(
       partial: new Set(over.partial ?? []),
     })),
     readKindSavings: vi.fn(async () => over.savings ?? []),
+    countFindingsOutside: vi.fn(async () => over.outside ?? 0),
   } satisfies UnproductiveSpendDeps;
   return { deps, handler: createUnproductiveSpendHandler(deps) };
 }
@@ -127,6 +129,7 @@ describe("get_unproductive_spend headline", () => {
     await h.handler({ period: PERIOD }, ctx());
     expect(h.deps.readClaims).toHaveBeenCalledWith(SCOPE, WINDOW);
     expect(h.deps.readSpend).toHaveBeenCalledWith(SCOPE, WINDOW);
+    expect(h.deps.countFindingsOutside).toHaveBeenCalledWith(SCOPE, WINDOW);
     expect(h.deps.readKindSavings).toHaveBeenCalledWith(SCOPE, WINDOW, [
       "standing_context",
       "cache_writes_never_read",
@@ -151,7 +154,20 @@ describe("get_unproductive_spend headline", () => {
         { detector: 5, ...zero },
       ],
       estimate: zero,
+      findingsOutsidePeriod: 0,
     });
+    expect(() => spendUnproductive.output.parse(out)).not.toThrow();
+  });
+
+  // #5294: the Findings list holds every open finding, so a zero headline
+  // says how many of them claim calls only outside the period.
+  it("answers a zero headline beside the open findings whose calls all ran outside the period", async () => {
+    const out = await harness([], { outside: 4 }).handler(
+      { period: PERIOD },
+      ctx(),
+    );
+    expect(out.unproductive).toEqual({ micros: "0", currency: "USD" });
+    expect(out.findingsOutsidePeriod).toBe(4);
     expect(() => spendUnproductive.output.parse(out)).not.toThrow();
   });
 });

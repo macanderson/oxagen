@@ -9275,9 +9275,12 @@ type Messages = {
       };
       costData: string;
       hero: string;
+      heroWindow: string;
       heroShareOf: string;
       heroPeriod: string;
       heroNoSpend: string;
+      heroSpendNote: string;
+      heroOutside: string;
       mixedCurrency: string;
       parts: {
         title: string;
@@ -9405,9 +9408,19 @@ type Messages = {
       causeRuns: string;
       cause: {
         cache_write_never_read: string;
+        spin_loops: string;
+        retry_loops: string;
+        repeated_calls: string;
+        recurring_runs: string;
+        spend_with_no_outcome: string;
       };
       why: {
         cache_write_never_read: string;
+        spin_loops: string;
+        retry_loops: string;
+        repeated_calls: string;
+        recurring_runs: string;
+        spend_with_no_outcome: string;
       };
       designCause: {
         cacheMisses: string;
@@ -9417,11 +9430,10 @@ type Messages = {
         idleWhileParked: string;
         haltedEarly: string;
       };
+      causesNote: string;
       causesMissing: string;
-      retryLoopsWhy: string;
-      retryLoopsNone: string;
-      retryLoopsFindings: string;
-      retryLoopsOpen: string;
+      outside: string;
+      openFindings: string;
       runs: string;
       note: string;
       runAmountMissing: string;
@@ -9624,6 +9636,12 @@ type Messages = {
         repeatCalls: string;
         retries: string;
       };
+      toolSpendNote: string;
+      toolCacheNote: string;
+      observedNote: string;
+      toolDefinitionsNote: string;
+      resultBodyNote: string;
+      toolEstimate: string;
       byDay: string;
       peak: string;
       on: string;
@@ -9638,7 +9656,19 @@ type Messages = {
         operator: string;
         model: string;
       };
-      crossMissing: string;
+      cutEmpty: {
+        agent: string;
+        operator: string;
+        model: string;
+      };
+      columns: {
+        agent: string;
+        operator: string;
+        model: string;
+        tokens: string;
+        resultTokens: string;
+        resultCost: string;
+      };
       toolsEmpty: string;
       findings: string;
       noFindings: string;
@@ -9762,9 +9792,10 @@ type Messages = {
         toolResults: string;
         reasoning: string;
         basis: string;
+        part: string;
       };
       composition: string;
-      compositionMissing: string;
+      compositionFooter: string;
       parts: {
         conversation: string;
         toolResults: string;
@@ -10948,6 +10979,8 @@ type Messages = {
         pendingApproval: string;
         exhausted: string;
         unavailable: string;
+        noAnswer: string;
+        commitNoAnswer: string;
         billing: string;
       };
     };

@@ -23,7 +23,6 @@ import { useTranslations } from "next-intl";
 import { type ReactNode, useMemo, useState, useTransition } from "react";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { routes } from "@/shared/safe-path";
-import { unanswered } from "@/ui/action-failure";
 import {
   buttonPrimary,
   buttonSecondary,
@@ -39,6 +38,8 @@ import {
   parseMarkdownImport,
 } from "./actions";
 import {
+  COMMIT_NO_ANSWER,
+  NO_ANSWER,
   TOO_LARGE,
   fileOfField,
   type ImportFailure,
@@ -198,8 +199,8 @@ function ImportDialog({
     setFailed(null);
     setProgress({ done, total: documents.length });
     for (const batch of batches) {
-      const result = await parseMarkdownImport(org, ws, batch).catch(() =>
-        unanswered("action_failed"),
+      const result = await parseMarkdownImport(org, ws, batch).catch(
+        () => NO_ANSWER,
       );
       if (!result.ok) {
         setProgress(null);
@@ -228,7 +229,7 @@ function ImportDialog({
       const rowsToMatch = matchRowsOf(merged.records);
       if (matchRowsFit(rowsToMatch)) {
         const marks = await matchMarkdownImport(org, ws, rowsToMatch).catch(
-          () => unanswered("action_failed"),
+          () => NO_ANSWER,
         );
         if (!marks.ok) {
           setProgress(null);
@@ -257,8 +258,8 @@ function ImportDialog({
     }
     setFailed(null);
     startCommit(async () => {
-      const result = await commitMarkdownImport(org, ws, payload).catch(() =>
-        unanswered("action_failed"),
+      const result = await commitMarkdownImport(org, ws, payload).catch(
+        () => COMMIT_NO_ANSWER,
       );
       if (!result.ok) {
         setFailed({ failure: result, file: null });

@@ -20,6 +20,7 @@ const out = {
     { detector: 5, saving: usd("600"), findings: 1 },
   ],
   estimate: { saving: usd("1500"), findings: 4 },
+  findingsOutsidePeriod: 3,
 };
 
 describe("get_unproductive_spend contract", () => {
@@ -45,6 +46,18 @@ describe("get_unproductive_spend contract", () => {
       spendUnproductive.output.safeParse({ ...out, spend: null, share: null })
         .success,
     ).toBe(true);
+  });
+
+  // #5294: the Findings list is the open backlog, so the answer says how many
+  // open findings claim calls only outside the period.
+  it("carries the count of open findings that claim calls only outside the period, and refuses an answer without it", () => {
+    expect(spendUnproductive.output.parse(out).findingsOutsidePeriod).toBe(3);
+    const { findingsOutsidePeriod: _dropped, ...without } = out;
+    expect(spendUnproductive.output.safeParse(without).success).toBe(false);
+    expect(
+      spendUnproductive.output.safeParse({ ...out, findingsOutsidePeriod: -1 })
+        .success,
+    ).toBe(false);
   });
 
   it("refuses an answer that drops a part", () => {

@@ -39,6 +39,14 @@ const outcomes = {
   },
   exportCommand: true,
   moved: [] as Array<{ agentKey: string; from: string; ok: boolean }>,
+  claudeCodeMcp: [] as Array<{
+    agentKey: string;
+    path: string;
+    ok: boolean;
+    problem?: string;
+  }>,
+  /** Set to make the MCP repair throw, as an unwritable config directory does. */
+  claudeCodeMcpError: undefined as string | undefined,
   run: 0,
   work: 0,
 };
@@ -81,6 +89,12 @@ vi.mock("@oxagen/recorder/cli", () => ({
   moveOffTachoNames: async (...args: unknown[]) => {
     calls.push({ name: "move", args });
     return outcomes.moved;
+  },
+  addMissingClaudeCodeMcp: (...args: unknown[]) => {
+    calls.push({ name: "claudeCodeMcp", args });
+    if (outcomes.claudeCodeMcpError !== undefined)
+      throw new Error(outcomes.claudeCodeMcpError);
+    return outcomes.claudeCodeMcp;
   },
   detect: (...args: unknown[]) => {
     calls.push({ name: "detect", args });
@@ -158,6 +172,8 @@ describe("oxagen tacho", () => {
     outcomes.status = { enrolled: true };
     outcomes.reassign = { ok: true, warnings: [], to: undefined };
     outcomes.moved = [];
+    outcomes.claudeCodeMcp = [];
+    outcomes.claudeCodeMcpError = undefined;
     outcomes.run = 0;
     outcomes.work = 0;
   });
@@ -306,7 +322,11 @@ describe("oxagen tacho", () => {
       { agentKey: "acme.core.codex-laptop", from: "tacho hook", ok: false },
     ];
     expect(await handleTachoStatus({ json: true }, writer)).toBe(true);
-    expect(calls.map((c) => c.name)).toEqual(["move", "status"]);
+    expect(calls.map((c) => c.name)).toEqual([
+      "move",
+      "claudeCodeMcp",
+      "status",
+    ]);
     // stdout carries only the status document a script parses.
     expect(output()).not.toContain("Moved");
     expect(errors()).toContain(
@@ -324,6 +344,59 @@ describe("oxagen tacho", () => {
     moveDeps.err("cannot write ~/.claude/settings.json");
     expect(output()).not.toContain("Installing the service");
     expect(errors()).toContain("cannot write ~/.claude/settings.json");
+  });
+
+  it("says on stderr which agents it gave Claude Code Oxagen's MCP server, and which it could not (#5287)", async () => {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const writer = {
+      write: (line: string) => {
+        stdout.push(line);
+      },
+      writeErr: (line: string) => {
+        stderr.push(line);
+      },
+    };
+    outcomes.claudeCodeMcp = [
+      {
+        agentKey: "acme.core.cc-laptop",
+        path: "/Users/dev/.claude.json",
+        ok: true,
+      },
+      {
+        agentKey: "acme.core.cc-desk",
+        path: "/Users/dev/.claude.json",
+        ok: false,
+        problem: "/Users/dev/.claude.json: is read-only",
+      },
+    ];
+    expect(await handleTachoStatus({ json: true }, writer)).toBe(true);
+    expect(stdout.join("\n")).not.toContain("MCP server");
+    expect(stderr.join("\n")).toContain(
+      "Added Oxagen's MCP server to Claude Code for acme.core.cc-laptop in /Users/dev/.claude.json. New Claude Code sessions list Oxagen's tools.",
+    );
+    expect(stderr.join("\n")).toContain(
+      "Could not add Oxagen's MCP server to Claude Code for acme.core.cc-desk: /Users/dev/.claude.json: is read-only.",
+    );
+    // The repair runs with the oxagen CLI's own runtime commands.
+    const repairDeps = lastCall("claudeCodeMcp")?.args[0] as {
+      runtime: unknown;
+    };
+    expect(repairDeps.runtime).toBe(OXAGEN_RUNTIME);
+  });
+
+  it("still reports status when the MCP repair throws", async () => {
+    const { writer, output } = captureWriter();
+    outcomes.claudeCodeMcpError = "EACCES: permission denied, mkdir";
+    expect(await handleTachoStatus({ json: true }, writer)).toBe(true);
+    expect(calls.map((c) => c.name)).toEqual([
+      "move",
+      "claudeCodeMcp",
+      "status",
+    ]);
+    expect(output()).toContain(
+      "Could not check Claude Code for Oxagen's MCP server: EACCES: permission denied, mkdir.",
+    );
   });
 
   it("detect and run hand the recorder this executable's deps", async () => {
@@ -396,9 +469,14 @@ describe("oxagen tacho", () => {
   it("status, unenroll, export, and verify report their outcome as the exit status", async () => {
     const { writer, output } = captureWriter();
     expect(await handleTachoStatus({ json: true }, writer)).toBe(true);
-    // The move runs first, so the report describes the machine as it now is.
-    expect(calls.map((c) => c.name)).toEqual(["move", "status"]);
-    expect(calls[1]?.args[0]).toEqual({ json: true });
+    // The move and the MCP repair run first, so the report describes the
+    // machine as it now is.
+    expect(calls.map((c) => c.name)).toEqual([
+      "move",
+      "claudeCodeMcp",
+      "status",
+    ]);
+    expect(calls[2]?.args[0]).toEqual({ json: true });
     outcomes.status = { enrolled: false };
     expect(await handleTachoStatus({}, writer)).toBe(false);
     expect(

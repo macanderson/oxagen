@@ -35,6 +35,7 @@ const STOP: ReflectionAskOptions = {
   harness: "claude-code",
   stopHookActive: false,
   replayed: false,
+  toolRegistered: () => true,
 };
 
 let sessions = 0;
@@ -241,6 +242,41 @@ describe("the ask", () => {
     ).toBeUndefined();
     expect(reflectionAsk(record, { ...STOP, replayed: true })).toBeUndefined();
     expect(reflectionAsk(record, STOP)).toBeDefined();
+  });
+
+  it("does not ask when the session cannot reach the tool, and keeps the ask for later (#5287)", () => {
+    const record = freshRecord();
+    noteToolFailure(record, "Bash");
+    let checks = 0;
+    const unregistered = () => {
+      checks += 1;
+      return false;
+    };
+    expect(
+      reflectionAsk(record, { ...STOP, toolRegistered: unregistered }),
+    ).toBeUndefined();
+    expect(checks).toBe(1);
+    // A Stop that found no tool did not use up the one ask.
+    expect(reflectionAsk(record, STOP)).toBeDefined();
+  });
+
+  it("checks for the tool only after every cheaper check passes", () => {
+    let checks = 0;
+    const counted = { ...STOP, toolRegistered: () => (checks += 1) > 0 };
+    // No signal, a Stop after a block, a replay, and another harness.
+    expect(reflectionAsk(freshRecord(), counted)).toBeUndefined();
+    const record = freshRecord();
+    noteToolFailure(record, "Bash");
+    expect(
+      reflectionAsk(record, { ...counted, stopHookActive: true }),
+    ).toBeUndefined();
+    expect(reflectionAsk(record, { ...counted, replayed: true })).toBeUndefined();
+    expect(
+      reflectionAsk(record, { ...counted, harness: "codex" }),
+    ).toBeUndefined();
+    expect(checks).toBe(0);
+    expect(reflectionAsk(record, counted)).toBeDefined();
+    expect(checks).toBe(1);
   });
 
   it("does not ask a run with no signal", () => {

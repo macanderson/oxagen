@@ -70,6 +70,7 @@ import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount, formatDuration, ratioWidth } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
+import { ProviderMark } from "@/ui/provider-mark";
 import type { ActionResult } from "@/server/kernel";
 import { readTranscriptPage } from "./actions";
 import { frameHref } from "./frame-link";
@@ -1008,7 +1009,20 @@ function UsageRow({
       pause={pause}
       line={
         <div className="tx-ln tx-quiet truncate" data-truncate={line}>
-          {line}
+          {/* The same line, with the model's maker's mark before its name (#5297). */}
+          {t("usage")}
+          {row.model === null ? null : (
+            <>
+              {" · "}
+              <ProviderMark
+                model={row.model}
+                size={14}
+                className="mr-1 align-middle"
+              />
+              {row.model}
+            </>
+          )}
+          {counts.map((count) => ` · ${count}`).join("")}
         </div>
       }
       margin={
@@ -2457,7 +2471,20 @@ export function TranscriptView({
             </span>
             <span className="term-t">
               <b>{run.taskRef ?? runId}</b>
-              {meta.join(" · ")}
+              {meta.map((part, index) => (
+                <span key={part}>
+                  {index === 0 ? null : " · "}
+                  {run.model !== null && part === run.model.slug ? (
+                    <ProviderMark
+                      provider={run.model.provider}
+                      model={part}
+                      size={14}
+                      className="mr-1 align-middle"
+                    />
+                  ) : null}
+                  {part}
+                </span>
+              ))}
             </span>
             <span className="term-h">
               {errorsOnly ? (

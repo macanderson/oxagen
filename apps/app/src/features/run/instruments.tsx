@@ -33,6 +33,7 @@ import {
   formatRatio,
   ratioWidth,
 } from "@/ui/money-format";
+import { ProviderMark } from "@/ui/provider-mark";
 import {
   cacheRebuildShare,
   type ClassPrices,
@@ -270,14 +271,21 @@ function ProvisionalModels({ provisional }: { provisional: ProvisionalSpend }) {
   const locale = useLocale();
   const shown = provisional.byModel.slice(0, PROVISIONAL_MODELS);
   const more = provisional.byModel.length - shown.length;
-  const part = ({ model, cost, calls }: ProvisionalModel) =>
+  // Each model's name carries its maker's mark (#5297).
+  const named = (model: string, provider: string | null) => (
+    <b className="inline-flex items-center gap-1 align-bottom">
+      <ProviderMark provider={provider} model={model} />
+      {model}
+    </b>
+  );
+  const part = ({ model, provider, cost, calls }: ProvisionalModel) =>
     cost === null
       ? t.rich("provisionalModelUnpriced", {
-          model: () => <b>{model}</b>,
+          model: () => named(model, provider),
           calls,
         })
       : t.rich("provisionalModel", {
-          model: () => <b>{model}</b>,
+          model: () => named(model, provider),
           cost: () => (
             <b>{formatMoney(cost, { locale, precision: "cents" })}</b>
           ),

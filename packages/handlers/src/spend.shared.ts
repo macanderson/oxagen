@@ -17,7 +17,9 @@
 // assistant.
 import type {
   Cost,
+  Money,
   SpendFigure,
+  StandingTokens,
   TokenCounts,
   UnmeteredRuns,
 } from "@oxagen/oxagen/contracts/spend.shared";
@@ -30,6 +32,7 @@ import {
   utcDay,
   type CostBasis,
   type DailyTotalsRecord,
+  type RunTokenSources,
   type RunTotalsRecord,
   type SpendGroupKind,
   ZERO_TOKENS,
@@ -150,6 +153,90 @@ export function addTokens(into: TokenCounts, from: TokenCounts): TokenCounts {
 
 export { ZERO_TOKENS };
 
+/**
+ * cache_read ÷ (input_uncached + cache_read) over summed token counts: the
+ * token-weighted ratio the Spend page's Tokens tile and Fleet's cache tile
+ * print (`cacheHitRate` in apps/app/src/features/spend/rollup.ts). Null when
+ * no input token was read: a rate over nothing is not a zero. A run row's own
+ * `cacheHitRate` is spend-weighted (billing `cacheHitRate`), a different
+ * figure, so a sum of rows takes its rate from the summed tokens instead.
+ */
+export function tokenCacheHitRate(tokens: TokenCounts): number | null {
+  const input = tokens.input_uncached + tokens.cache_read;
+  return input === 0 ? null : tokens.cache_read / input;
+}
+
+/**
+ * The part of the runs' spend one observer metered: every model whose priced
+ * frames all carry `basis`. A run rolled up before its breakdown existed
+ * counts whole when its own basis is `basis`. A `mixed` or `estimated` model
+ * counts for neither observer, since its split is not recorded. Null when no
+ * such part carries a cost.
+ */
+export function spendOnBasis(
+  runs: readonly RunTotalsRecord[],
+  basis: CostBasis,
+): Money | null {
+  let micros: bigint | null = null;
+  let currency = "USD";
+  for (const run of runs) {
+    currency = run.currency;
+    const parts =
+      run.breakdown.models.length === 0
+        ? [{ costMicros: run.costMicros, basis: run.costBasis }]
+        : run.breakdown.models;
+    for (const part of parts)
+      if (part.costMicros !== null && part.basis === basis)
+        micros = (micros ?? 0n) + part.costMicros;
+  }
+  return micros === null ? null : money(micros, currency);
+}
+
+const STANDING_SOURCES = [
+  "toolDefinitionTokens",
+  "contextFrameTokens",
+  "steeringTokens",
+] as const;
+
+/**
+ * Each standing source summed over the runs (#4493). A source no run
+ * measured stays null, and a run row built without the columns, as a test
+ * fake is, measured none.
+ */
+export function sumStanding(runs: readonly SpendRunRecord[]): StandingTokens {
+  const out: StandingTokens = {
+    toolDefinitionTokens: null,
+    contextFrameTokens: null,
+    steeringTokens: null,
+  };
+  for (const run of runs)
+    for (const source of STANDING_SOURCES) {
+      const tokens = run[source];
+      if (tokens === null || tokens === undefined) continue;
+      out[source] = (out[source] ?? 0) + tokens;
+    }
+  return out;
+}
+
+/**
+ * The tool-result tokens the runs recorded: one tool's when `tool` is given,
+ * every tool's otherwise. Each result counts once, when it was recorded. Null
+ * when no call recorded any.
+ */
+export function resultTokensOf(
+  runs: readonly RunTotalsRecord[],
+  tool?: string,
+): number | null {
+  let tokens: number | null = null;
+  for (const run of runs)
+    for (const t of run.breakdown.tools) {
+      if (tool !== undefined && t.name !== tool) continue;
+      if (t.resultTokens === null) continue;
+      tokens = (tokens ?? 0) + t.resultTokens;
+    }
+  return tokens;
+}
+
 /** The figure a run row is, for the sums above. */
 export function runFigure(run: RunTotalsRecord): FigureSource {
   return {
@@ -245,9 +332,12 @@ function runFilterPredicate(filter: RunFilter) {
 /**
  * A run row as {@link readRunTotals} returns it. `inApp` is true when the run
  * is the in-app assistant's (ADR-235). The read always sets it. A row built
- * without it, as a test fake is, reads as not in-app.
+ * without it, as a test fake is, reads as not in-app. The standing sources
+ * are the row's measured prompt composition (#4493): the read sets them, and
+ * a row built without them measured none.
  */
-export type SpendRunRecord = RunTotalsRecord & { inApp?: boolean };
+export type SpendRunRecord = RunTotalsRecord &
+  Partial<RunTokenSources> & { inApp?: boolean };
 
 /**
  * The run rows that started in an inclusive day range, oldest first. Each row
