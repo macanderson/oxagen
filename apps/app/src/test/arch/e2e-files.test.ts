@@ -8,8 +8,10 @@
 // `support/`, so the suite directory exists and every entry is checked. The
 // entries WL-47 (`page-load.spec.ts`, `routes.ts`) and WL-48 (`pay.spec.ts`)
 // land are carried in baseline.json as `missing-entry` violations until they
-// do; the baseline only shrinks. The route-set and catalog-key clauses of
-// INV-20 land with `routes.ts` (WL-47). The `--pass-with-no-tests` clause is
+// do; the baseline only shrinks. The route-set clause of INV-20 is
+// e2e-routes.test.ts. The catalog-key clause is the `RouteRow` type in
+// `routes.ts`: a row names a `pages.*` key, or a title it reads from another
+// catalog. The `--pass-with-no-tests` clause is
 // checked below: with all three specs present, a Playwright run that matches
 // no test must fail, or a `testMatch` mistake passes the gate green.
 import { readdirSync, readFileSync } from "node:fs";

@@ -2,6 +2,7 @@
 // (ARCHITECTURE.md §5) and the runtime files the harness writes under
 // `e2e/.auth/` (INV-20 admits that dot-entry). This module imports no
 // platform package, so the config and the specs load it without a database.
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,10 +35,32 @@ export const OWNER_STATE = path.join(AUTH_DIR, "owner.json");
 
 /**
  * What `seed:e2e` minted that a spec cannot know ahead of time: the seeded
- * run's `arun_…` public id, as `{ runPublicId }`. Written by the seed; the
- * reader lands with its first consumer, the WL-47 routes oracle.
+ * run's `arun_…` public id, as `{ runPublicId }`. Written by the seed and read
+ * by `readSeedRecord`.
  */
 export const SEED_RECORD = path.join(AUTH_DIR, "seed.json");
+
+/** What `seed:e2e` writes to SEED_RECORD. */
+export type SeedRecord = { readonly runPublicId: string };
+
+/**
+ * The record `seed:e2e` wrote. page-load reads it for the rows whose path
+ * names a record the seed minted (e2e/routes.ts `seededRoutes`), so a run
+ * that skipped the seed fails here and says why.
+ */
+export function readSeedRecord(): SeedRecord {
+  const raw: unknown = JSON.parse(readFileSync(SEED_RECORD, "utf8"));
+  if (
+    typeof raw === "object" &&
+    raw !== null &&
+    "runPublicId" in raw &&
+    typeof raw.runPublicId === "string" &&
+    raw.runPublicId !== ""
+  ) {
+    return { runPublicId: raw.runPublicId };
+  }
+  throw new Error(`${SEED_RECORD} names no runPublicId. Run seed:e2e first.`);
+}
 
 /** `/{org}/{ws}` — the Fleet page of the seeded workspace. */
 export const FLEET_PATH = `/${SEED.orgSlug}/${SEED.workspaceSlug}`;
