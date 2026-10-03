@@ -2,6 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-03
+- **Amended by:** ADR-297 (a run's change set is the commits it made, not the
+  whole diff of each pull request it is linked to).
 - **Owners:** runs, work, repositories
 - **Related:** issue #5284, ADR-288 (the forge store), ADR-192 (state per run),
   ADR-251 (work order results), ADR-226 (pages follow the design of record),
