@@ -1085,15 +1085,15 @@ describe("the hosted server's transport rules (#5356)", () => {
     expect(
       answerFor(3, { status: 200, body: matched, text: text(matched) }),
     ).toEqual({ status: 200, body: matched });
-    // A long body is quoted only in part.
+    // A long body is quoted only in part: its first 200 characters.
     const long = answerFor(3, {
       status: 500,
       body: undefined,
       text: "x".repeat(5_000),
     });
     expect(
-      (long.body as { error: { message: string } }).error.message.length,
-    ).toBeLessThan(300);
+      (long.body as { error: { message: string } }).error.message,
+    ).toMatch(/to this request: x{200}$/);
   });
 });
 
