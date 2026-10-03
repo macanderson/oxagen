@@ -223,6 +223,14 @@ describe("naming the token", () => {
     expect(sizes.get("--ox-radius-card")).toBeCloseTo(12.96);
   });
 
+  it("reads a type step written as its scale's base times a ratio", () => {
+    const scale = tokenSizes(
+      "--ox-a-base: 0.875rem;\n--ox-a-body: var(--ox-a-base);\n--ox-a-micro: calc(var(--ox-a-base) * 0.857143);",
+    );
+    expect(scale.get("--ox-a-body")).toBe(14);
+    expect(scale.get("--ox-a-micro")).toBeCloseTo(12, 4);
+  });
+
   it("reads no step without the base it multiplies, and no alias of an unknown token", () => {
     expect(tokenSizes("--ox-radius-lg: calc(var(--ox-radius-base) * 1);").size).toBe(0);
     expect(tokenSizes("--ox-radius-card: var(--ox-radius-2xl);").size).toBe(0);

@@ -273,8 +273,10 @@ export function isLiteral(group, value) {
 
 /**
  * The kit's size tokens in pixels, read from the text of house-tokens.css:
- * every `--ox-*: <n>rem|px;`, every `calc(var(--ox-radius-base) * <k>)` step,
- * and every alias of one of those (`--ox-radius-card: var(--ox-radius-2xl)`).
+ * every `--ox-*: <n>rem|px;`, every step written as a base times a ratio
+ * (`calc(var(--ox-radius-base) * <k>)`, `calc(var(--ox-a-base) * <k>)`), and
+ * every alias of one of those (`--ox-radius-card: var(--ox-radius-2xl)`,
+ * `--ox-a-body: var(--ox-a-base)`).
  * A kit file the guard cannot read gives an empty map, and each suggestion
  * falls back to the token family's name.
  *
@@ -288,13 +290,11 @@ export function tokenSizes(tokensCss) {
   )) {
     sizes.set(name, Number(n) * (unit === "rem" ? 16 : 1));
   }
-  const base = sizes.get("--ox-radius-base");
-  if (base !== undefined) {
-    for (const [, name, k] of tokensCss.matchAll(
-      /(--ox-radius-[\w]+):\s*calc\(var\(--ox-radius-base\)\s*\*\s*(\d*\.?\d+)\)/g,
-    )) {
-      sizes.set(name, base * Number(k));
-    }
+  for (const [, name, baseName, k] of tokensCss.matchAll(
+    /(--ox-[\w-]+):\s*calc\(var\((--ox-[\w-]+-base)\)\s*\*\s*(\d*\.?\d+)\)/g,
+  )) {
+    const base = sizes.get(baseName);
+    if (base !== undefined) sizes.set(name, base * Number(k));
   }
   for (const [, name, target] of tokensCss.matchAll(
     /(--ox-[\w-]+):\s*var\((--ox-[\w-]+)\)\s*;/g,
@@ -320,7 +320,8 @@ function nearest(px, names, sizes, fallback) {
 const RADIUS_STEPS = ["xs", "sm", "md", "lg", "xl", "2xl", "3xl", "4xl"].map(
   (step) => `--ox-radius-${step}`,
 );
-const TYPE_STEPS = ["h1", "h2", "h3", "h4", "body", "micro"];
+/** The type steps. Only the app scale has 2xs, its 10px step. */
+const TYPE_STEPS = ["h1", "h2", "h3", "h4", "body", "micro", "2xs"];
 
 /**
  * What to write instead of a literal, for the guard's message.
