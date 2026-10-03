@@ -76,6 +76,7 @@ import {
   embeddingsBackfill,
   embeddingsBackfillSchedule,
 } from "./functions/embeddings.backfill";
+import { similarityReconcile } from "./functions/similarity.reconcile";
 import { observabilityCaptureFailure } from "./functions/observability.capture-failure";
 import {
   evidenceRunExport,
@@ -170,6 +171,8 @@ export const functions: any[] = [
   stellaSessionArchive,
   embeddingsBackfill,
   embeddingsBackfillSchedule,
+  // Link entities ingestion wrote without a similarity match (#4148).
+  similarityReconcile,
   observabilityCaptureFailure,
   evidenceRunExport,
   evidenceRunExportOnFailure,
