@@ -215,7 +215,7 @@ The tail start is the first frame of a model step on the run's own chain. It is 
 
 - it lies at or before the first frame of the last entry the reader was sent, before any entry the page had no room for, and before any call still waiting on its result;
 - no entry spans it;
-- the server received it before the read's settle margin (60 seconds, `RECEIPT_SETTLE_MS`). A chain's frames are received in seq order, so every frame before it was readable by that read and none can land late behind it;
+- the server received it before the read's settle margin (60 seconds, `RECEIPT_SETTLE_MS`), so its batch had landed. No earlier frame of the run's own chain can land after it. The host sends a chain's next batch only after ingest accepted the one before, and ingest accepts a batch only once ClickHouse holds it;
 - it lies past every later sighting of a model call the read shows on the run's own chain. When a second source kept a richer body, the read shows that copy in place of the first sighting and moves the first one's cost onto it, and a read that started between the two would show the copy without that cost. So a run whose model calls each show as such a copy, as a harness recorded with no proxy can, gets no tail start and reads the turn's window;
 - on a run that counts its turns by their recorded index, it carries one.
 
@@ -225,7 +225,7 @@ Inside a turn the fold joins frames that share a call key however far apart they
 
 A cursor with no tail start in the process that serves its read reads the turn's window, as every read did before #4340: another process served the read before it, the process restarted, or the start was evicted. So a reader whose stream reconnects resumes from its cursor either way, and the entries it is sent are the same.
 
-The process keeps at most 512 tail starts and 32,768 call keys across them (`TAIL_CACHE_LIMITS` in `lib/transcript-tail-cache.ts`), under 4 MB, and evicts the oldest first. It keeps no frames, bodies or text. A reader holds one tail start at a time, since its next read takes the one before. A turn with more call keys than the whole bound keeps no tail start.
+The process keeps at most 512 tail starts and 32,768 call keys across them (`TAIL_CACHE_LIMITS` in `lib/transcript-tail-cache.ts`), and evicts the oldest first. It keeps no frames, bodies or text. A reader holds one tail start at a time, since its next read takes the one before. A turn with more call keys than the whole bound keeps no tail start.
 
 One check differs from a read of the turn's window. A read from a tail start compares a reply with its turn's prompt only when the prompt lies inside the read, so a reply there that repeats the prompt word for word stays shown. Only recorders from before #4051 sealed such a copy of the prompt.
 

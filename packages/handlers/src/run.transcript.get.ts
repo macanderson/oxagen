@@ -1777,9 +1777,12 @@ function nextWindow(facts: WindowFacts): TranscriptWindowFrom | null {
  *   the words a reply is compared with (`markWords`: what was said last
  *   before it in its turn on its chain) lie inside the read.
  * - The server received it before this read's settle margin
- *   (`RECEIPT_SETTLE_MS`). A chain's batches are received in seq order, so
- *   every frame before it on the run's own chain was readable by this read,
- *   and none of them can land late behind the tail start.
+ *   (`RECEIPT_SETTLE_MS`), so its own batch had landed. No frame before it
+ *   on the run's own chain can land after it: the host ships one drain at a
+ *   time from its WAL cursor and moves the cursor only once ingest accepts a
+ *   batch (`Shipper.drain`, #3782), ingest answers only after the ClickHouse
+ *   insert, and it refuses a batch that skips past the recorded head. So a
+ *   batch is sent only after every earlier batch of its chain has landed.
  * - It lies past every later sighting of a model call that the read shows
  *   on the run's own chain. Such a copy stands in for a first sighting the
  *   read hides, and took that sighting's cost. On a run whose every model

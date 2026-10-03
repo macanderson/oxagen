@@ -53,11 +53,9 @@ export interface TailCacheLimits {
 
 /**
  * 512 tail starts and 32,768 call keys. A key is a tool call's id or a model
- * call's request id with its chain, about 100 bytes held, so the keys take
- * about 3 MB and the cache stays under 4 MB. One follower holds one entry at
- * a time, because its next read takes the one before. A turn with more keys
- * than the whole bound keeps no tail start, and its readers read the turn's
- * window.
+ * call's request id, with its chain. One follower holds one entry at a time,
+ * because its next read takes the one before. A turn with more keys than the
+ * whole bound keeps no tail start, and its readers read the turn's window.
  */
 export const TAIL_CACHE_LIMITS: TailCacheLimits = {
   maxEntries: 512,
