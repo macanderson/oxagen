@@ -72,6 +72,7 @@ import {
   ctx,
   harness,
   type Harness,
+  lapseMergeClaims,
 } from "./context.steering.test-support";
 
 const LINEAGE = "ctx.release.no-reread-changelog";
@@ -1334,6 +1335,7 @@ describe("merge_steering_pr", () => {
     expect(h.store.proposals[0]!.status).toBe("checks_passed");
     expect(h.store.records).toHaveLength(0);
 
+    lapseMergeClaims(h);
     const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
     expect(out.status).toBe("merged");
     expect(out.mergedCommit).toBe("0000000000000000000000000000000000000519");
@@ -1448,6 +1450,7 @@ describe("merge_steering_pr", () => {
     const pr = h.github.pulls[0]!;
     const mergedAt = pr.mergedAt;
     pr.mergedAt = null;
+    lapseMergeClaims(h);
     await expect(
       merge({ proposalId: id }, ctx({ userId: REVIEWER })),
     ).rejects.toMatchObject({
@@ -1491,6 +1494,7 @@ describe("merge_steering_pr", () => {
     h.now();
     h.now();
 
+    lapseMergeClaims(h);
     await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
     expect(h.store.records[0]!.publishedAt?.getTime()).toBe(
       mergedAt!.getTime(),
@@ -1535,6 +1539,7 @@ describe("merge_steering_pr", () => {
     expect(commitB).not.toBe(commitA);
 
     // A's retry lands after B published, stamped with A's merge time.
+    lapseMergeClaims(h);
     await merge({ proposalId: a }, ctx({ userId: REVIEWER }));
     expect(h.store.records).toHaveLength(2);
     const latest = await h.store.latestPublication(SCOPE);
@@ -2379,6 +2384,7 @@ describe("merge_steering_pr", () => {
     expect(s5.publish).not.toHaveBeenCalled();
 
     verify.mockImplementation(async () => undefined);
+    lapseMergeClaims(h);
     const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
 
     expect(out.status).toBe("merged");
@@ -2675,6 +2681,7 @@ describe("merge_steering_pr", () => {
       publishBundle(s5.deps, BUNDLE_IDENTITY, "0000000000000000000000000000000000000519"),
     ).resolves.toMatchObject({ status: "published", version: 1 });
 
+    lapseMergeClaims(h);
     const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
     expect(out.status).toBe("merged");
     expect(h.github.merges).toHaveLength(1);
@@ -2725,6 +2732,7 @@ describe("merge_steering_pr", () => {
 
     // The published version is the later merge's, and the retry still finds
     // version 1 for its own commit.
+    lapseMergeClaims(h);
     const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
     expect(out.status).toBe("merged");
     expect(out.publishedVersion).toBe(1);
@@ -2764,6 +2772,7 @@ describe("merge_steering_pr", () => {
       publishBundle(s5.deps, BUNDLE_IDENTITY, LATER),
     ).resolves.toMatchObject({ status: "published", version: 1 });
 
+    lapseMergeClaims(h);
     await expect(
       merge({ proposalId: id }, ctx({ userId: REVIEWER })),
     ).rejects.toMatchObject({
@@ -2831,6 +2840,7 @@ describe("merge_steering_pr", () => {
     // switched to it. The production branch is still at the merge commit.
     store.versionAt.mockResolvedValue({ version: 1, published: false });
     store.highestVersion.mockResolvedValue(1);
+    lapseMergeClaims(h);
     const warn = vi.spyOn(logger, "warn");
     try {
       const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
@@ -3136,8 +3146,10 @@ describe("merge_steering_pr", () => {
         expect.stringContaining("the host merged the pull request"),
       );
 
-      // The retry reads the merged PR at the checked head and resumes.
+      // The retry reads the merged PR at the checked head and resumes once
+      // the claim the failed call kept has lapsed.
       h.github.mergePullRequest = mergePullRequest;
+      lapseMergeClaims(h);
       const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
       expect(out.status).toBe("merged");
       expect(h.store.proposals[0]!.mergeClaimedAt).toBeNull();
@@ -3145,6 +3157,61 @@ describe("merge_steering_pr", () => {
     } finally {
       warn.mockRestore();
     }
+  });
+
+  // #4567: a claim names no owner on the old code, so a landing that
+  // outlived its claim cleared the claim a newer merge had written.
+  it("leaves a newer merge's claim standing when an older landing fails after its claim lapsed", async () => {
+    const h = harness();
+    const id = await opened(h);
+    h.github.mergeRefusedWith = "At least 1 approving review is required";
+    let newer: Date | null = null;
+    const mergePullRequest = h.github.mergePullRequest.bind(h.github);
+    h.github.mergePullRequest = async (repo, args) => {
+      // This landing ran past MERGE_CLAIM_SECONDS, and a second merge, in
+      // another process, claimed the row again before the host answered.
+      newer = new Date(h.now().getTime() + 1000);
+      Object.assign(h.store.proposals[0]!, { mergeClaimedAt: newer });
+      return mergePullRequest(repo, args);
+    };
+    const warn = vi.spyOn(logger, "warn");
+    try {
+      await expect(
+        createMergeSteeringPrHandler(h)({ proposalId: id }, ctx({ userId: REVIEWER })),
+      ).rejects.toMatchObject({ code: "conflict", reason: "github_refused" });
+      // The failed landing tried to release its own claim, and left the newer one.
+      expect(h.store.proposals[0]!.mergeClaimedAt).toEqual(newer);
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({ proposal: h.store.proposals[0]!.publicId }),
+        expect.stringContaining("could not release the merge claim"),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  // #4567: on the old code a second call rode a live claim once the host had
+  // merged at the checked head. In a repository with no version store, it
+  // then published first and took the merger and the approval from the call
+  // that landed the PR.
+  it("refuses a second legacy-layout merge between the host merge and the publish", async () => {
+    const h = harness();
+    const id = await opened(h);
+    // The first call claimed the row and the host merged the PR. It has not
+    // published yet.
+    Object.assign(h.store.proposals[0]!, { mergeClaimedAt: h.now() });
+    h.github.mergeOnHost(h.github.pulls[0]!.number);
+
+    await expect(
+      createMergeSteeringPrHandler(h)({ proposalId: id }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({ code: "conflict", reason: "merge_in_progress" });
+    expect(h.store.proposals[0]).toMatchObject({
+      status: "checks_passed",
+      mergedByUserId: null,
+    });
+    expect(h.store.records).toEqual([]);
+    expect(h.store.ledger).toEqual([]);
+    expect(h.events).toEqual([]);
   });
 
   it("keeps the claim when the landing failed and the PR could not be read, and logs it", async () => {

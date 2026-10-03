@@ -52,8 +52,11 @@
 // of those would otherwise read a moved head and strand a proposal the host
 // has merged (#4504). The publication clears the claim. A landing that fails
 // before the host merged releases it. A landing that fails after the host
-// merged keeps it, and a retry resumes the merge. A claim a crash left behind
-// lapses after MERGE_CLAIM_SECONDS.
+// merged keeps it, and a retry resumes the merge once it lapses. A claim a
+// crash left behind lapses after MERGE_CLAIM_SECONDS. The claim's instant is
+// its owner (#4567): a call releases a claim only while the row still holds
+// the instant it wrote, and a call never rides a claim it did not write, even
+// after the host merged.
 //
 // A governance proposal (#4795, ADR-232) is the review-route PR
 // set_governance_mode opens on steering/governance. It lands through the same
@@ -339,11 +342,12 @@ export function createMergeSteeringPrHandler(
       let pr = await deps.github.getPullRequest(repo, prNumber);
       // Another call is landing this PR. Its stamp commit is the PR's head
       // until the host merges it, and the row moves to that commit only once
-      // it has, so the head check below would misread either.
-      if (
-        mergeClaimed(recorded, deps.now()) &&
-        (!pr.merged || pr.headSha !== recorded.headSha)
-      ) {
+      // it has, so the head check below would misread either. A claim this
+      // call did not write refuses even after the host merged: the call that
+      // landed the PR may be publishing it now, and a second publish would
+      // take its merger and its approval (#4567). Only a lapsed claim lets a
+      // retry resume the merge.
+      if (mergeClaimed(recorded, deps.now())) {
         throw mergeInProgress(recorded.publicId, recorded.mergeClaimedAt);
       }
       // A merge that stopped between its stamp and the host merge left the
@@ -1323,7 +1327,7 @@ async function steeringVersion(
     if (head !== mergedAs) {
       // The sync links this merge, so an earlier call's claim must not hold
       // it off.
-      if (row.mergeClaimedAt !== null) await releaseClaim(deps, row);
+      await releaseClaim(deps, row);
       await requestSync(deps, scope, row);
       throw new HandlerError({
         code: "conflict",
@@ -1354,18 +1358,25 @@ const CLAIMABLE = [
 ] as const;
 
 /**
- * Clear a proposal's merge claim. A failure is logged and not thrown, so the
- * error that led here reaches the caller. The claim then lapses after
+ * Clear a proposal's merge claim, but only the claim `row` names. A call
+ * that outlived its claim must not clear the claim a newer merge wrote after
+ * this one lapsed (#4567), so the write is guarded by the claim's instant. A
+ * failure, that refusal included, is logged and not thrown, so the error
+ * that led here reaches the caller. A claim left standing lapses after
  * MERGE_CLAIM_SECONDS.
  */
 async function releaseClaim(
   deps: SteeringDeps,
-  row: Pick<ProposalRow, "id" | "publicId">,
+  row: Pick<ProposalRow, "id" | "publicId" | "mergeClaimedAt">,
 ): Promise<void> {
+  if (row.mergeClaimedAt === null) return;
   try {
-    await deps.store.updateProposal(row.id, { mergeClaimedAt: null }, [
-      ...CLAIMABLE,
-    ]);
+    await deps.store.updateProposal(
+      row.id,
+      { mergeClaimedAt: null },
+      [...CLAIMABLE],
+      { claimedAt: row.mergeClaimedAt },
+    );
   } catch (err) {
     logger.warn(
       { err, proposal: row.publicId },
@@ -1384,7 +1395,7 @@ async function releaseUnmergedClaim(
   deps: SteeringDeps,
   repo: SteeringRepository,
   prNumber: number,
-  row: Pick<ProposalRow, "id" | "publicId">,
+  row: Pick<ProposalRow, "id" | "publicId" | "mergeClaimedAt">,
 ): Promise<void> {
   let merged: boolean;
   try {
