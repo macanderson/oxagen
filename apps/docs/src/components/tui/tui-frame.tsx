@@ -2,6 +2,21 @@ import type { ReactNode } from "react";
 import { TUI_MONO, tuiChrome } from "./tui-theme";
 
 /**
+ * The smallest label any screen draws, in its own units. An SVG scales its
+ * text with its width, so a screen never draws narrower than the width at
+ * which an 11-unit label reads the kit's smallest step (--ox-a-micro, 14px):
+ * on a phone it scrolls sideways instead (Mac, 2026-10-02,
+ * oxageninc/brand#83). The banner's wordmark, drawn at 9 units, is art
+ * made of letters, not text a reader reads.
+ */
+const SMALLEST_LABEL = 11;
+
+/** The width a screen `width` units wide never draws below. */
+function minWidth(width: number): string {
+  return `calc(${width / SMALLEST_LABEL} * var(--ox-a-micro))`;
+}
+
+/**
  * TuiFrame — the reusable macOS-style terminal window every full-screen TUI
  * screenshot composes inside. Mirrors `.lp-term` (apps/docs/src/app/global.css)
  * and `TypewriterTerminal` (apps/docs/src/components/landing/typewriter-terminal.tsx):
@@ -39,55 +54,58 @@ export function TuiFrame({
 }): ReactNode {
   const shadowId = `${id}-shadow`;
   return (
-    <svg
-      role="img"
-      aria-hidden="true"
-      viewBox={`0 0 ${width} ${height}`}
-      className={className ?? "h-auto w-full"}
-    >
-      <title>{title}</title>
-      <defs>
-        <filter id={shadowId} x="-20%" y="-30%" width="140%" height="170%">
-          <feDropShadow
-            dx="0"
-            dy="16"
-            stdDeviation="20"
-            floodColor={tuiChrome.shadowColor}
-            floodOpacity="0.26"
-          />
-        </filter>
-      </defs>
-
-      <g filter={`url(#${shadowId})`}>
-        <rect
-          x={0.75}
-          y={0.75}
-          width={width - 1.5}
-          height={height - 1.5}
-          rx={12}
-          fill={tuiChrome.background}
-          fillOpacity={tuiChrome.backgroundOpacity}
-          stroke={tuiChrome.border}
-        />
-      </g>
-
-      {/* Title bar */}
-      <line x1={0} y1={32} x2={width} y2={32} stroke={tuiChrome.border} />
-      <circle cx={20} cy={16} r={5} fill={tuiChrome.trafficRed} />
-      <circle cx={38} cy={16} r={5} fill={tuiChrome.trafficAmber} />
-      <circle cx={56} cy={16} r={5} fill={tuiChrome.trafficGreen} />
-      <text
-        x={78}
-        y={20.5}
-        fontFamily={TUI_MONO}
-        fontSize={11}
-        fill={tuiChrome.titleColor}
+    <div className="overflow-x-auto">
+      <svg
+        role="img"
+        aria-hidden="true"
+        viewBox={`0 0 ${width} ${height}`}
+        className={className ?? "h-auto w-full"}
+        style={{ minWidth: minWidth(width) }}
       >
-        {title}
-      </text>
+        <title>{title}</title>
+        <defs>
+          <filter id={shadowId} x="-20%" y="-30%" width="140%" height="170%">
+            <feDropShadow
+              dx="0"
+              dy="16"
+              stdDeviation="20"
+              floodColor={tuiChrome.shadowColor}
+              floodOpacity="0.26"
+            />
+          </filter>
+        </defs>
 
-      <g fontFamily={TUI_MONO}>{children}</g>
-    </svg>
+        <g filter={`url(#${shadowId})`}>
+          <rect
+            x={0.75}
+            y={0.75}
+            width={width - 1.5}
+            height={height - 1.5}
+            rx={12}
+            fill={tuiChrome.background}
+            fillOpacity={tuiChrome.backgroundOpacity}
+            stroke={tuiChrome.border}
+          />
+        </g>
+
+        {/* Title bar */}
+        <line x1={0} y1={32} x2={width} y2={32} stroke={tuiChrome.border} />
+        <circle cx={20} cy={16} r={5} fill={tuiChrome.trafficRed} />
+        <circle cx={38} cy={16} r={5} fill={tuiChrome.trafficAmber} />
+        <circle cx={56} cy={16} r={5} fill={tuiChrome.trafficGreen} />
+        <text
+          x={78}
+          y={20.5}
+          fontFamily={TUI_MONO}
+          fontSize={11}
+          fill={tuiChrome.titleColor}
+        >
+          {title}
+        </text>
+
+        <g fontFamily={TUI_MONO}>{children}</g>
+      </svg>
+    </div>
   );
 }
 
@@ -121,53 +139,56 @@ export function TuiZoom({
   const shadowId = `${id}-shadow`;
   const bracket = 14;
   return (
-    <svg
-      role="img"
-      aria-hidden="true"
-      viewBox={`0 0 ${width} ${height}`}
-      className={className ?? "h-auto w-full"}
-    >
-      <title>{title}</title>
-      <defs>
-        <filter id={shadowId} x="-20%" y="-30%" width="140%" height="170%">
-          <feDropShadow
-            dx="0"
-            dy="12"
-            stdDeviation="16"
-            floodColor={tuiChrome.shadowColor}
-            floodOpacity="0.2"
-          />
-        </filter>
-      </defs>
-
-      <g filter={`url(#${shadowId})`}>
-        <rect
-          x={0.75}
-          y={0.75}
-          width={width - 1.5}
-          height={height - 1.5}
-          rx={10}
-          fill={tuiChrome.background}
-          fillOpacity={tuiChrome.backgroundOpacity}
-          stroke={tuiChrome.border}
-        />
-      </g>
-
-      {/* Corner "zoom" brackets — a close-up, not a full window. */}
-      <g
-        stroke="#7CE8F4"
-        strokeWidth={2}
-        strokeLinecap="round"
-        fill="none"
-        opacity={0.5}
+    <div className="overflow-x-auto">
+      <svg
+        role="img"
+        aria-hidden="true"
+        viewBox={`0 0 ${width} ${height}`}
+        className={className ?? "h-auto w-full"}
+        style={{ minWidth: minWidth(width) }}
       >
-        <path d={`M ${8} ${8 + bracket} L 8 8 L ${8 + bracket} 8`} />
-        <path
-          d={`M ${width - 8 - bracket} ${height - 8} L ${width - 8} ${height - 8} L ${width - 8} ${height - 8 - bracket}`}
-        />
-      </g>
+        <title>{title}</title>
+        <defs>
+          <filter id={shadowId} x="-20%" y="-30%" width="140%" height="170%">
+            <feDropShadow
+              dx="0"
+              dy="12"
+              stdDeviation="16"
+              floodColor={tuiChrome.shadowColor}
+              floodOpacity="0.2"
+            />
+          </filter>
+        </defs>
 
-      <g fontFamily={TUI_MONO}>{children}</g>
-    </svg>
+        <g filter={`url(#${shadowId})`}>
+          <rect
+            x={0.75}
+            y={0.75}
+            width={width - 1.5}
+            height={height - 1.5}
+            rx={10}
+            fill={tuiChrome.background}
+            fillOpacity={tuiChrome.backgroundOpacity}
+            stroke={tuiChrome.border}
+          />
+        </g>
+
+        {/* Corner "zoom" brackets — a close-up, not a full window. */}
+        <g
+          stroke="#7CE8F4"
+          strokeWidth={2}
+          strokeLinecap="round"
+          fill="none"
+          opacity={0.5}
+        >
+          <path d={`M ${8} ${8 + bracket} L 8 8 L ${8 + bracket} 8`} />
+          <path
+            d={`M ${width - 8 - bracket} ${height - 8} L ${width - 8} ${height - 8} L ${width - 8} ${height - 8 - bracket}`}
+          />
+        </g>
+
+        <g fontFamily={TUI_MONO}>{children}</g>
+      </svg>
+    </div>
   );
 }

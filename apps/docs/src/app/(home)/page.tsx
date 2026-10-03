@@ -97,7 +97,7 @@ export default function HomePage(): ReactNode {
         <div className="relative z-10 mx-auto grid w-full max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-[1.05fr_1fr] lg:py-28">
           <div className="flex flex-col items-start text-left">
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-              <span className="ox-eyebrow !text-[11px] !tracking-[0.14em]">
+              <span className="ox-eyebrow !tracking-[0.14em]">
                 The agent control plane
               </span>
             </span>
@@ -112,7 +112,7 @@ export default function HomePage(): ReactNode {
               skills. Inspect its recorded work in Oxagen. These docs cover the
               CLI, REST API, and MCP surfaces whose capability calls pass
               through the{" "}
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.9em]">
                 invoke()
               </code>{" "}
               boundary.

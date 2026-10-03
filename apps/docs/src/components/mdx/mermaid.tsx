@@ -44,6 +44,19 @@ function cachePromise<T>(
   return promise;
 }
 
+/**
+ * The kit's smallest type step in px (--ox-a-micro, 14px), read from the page
+ * so Mermaid lays its boxes out for the size the stylesheet draws its labels
+ * at. Mermaid takes a number, not a token.
+ */
+function microPx(): number {
+  const root = getComputedStyle(document.documentElement);
+  const value = root.getPropertyValue("--ox-a-micro").trim();
+  const n = Number.parseFloat(value);
+  if (!Number.isFinite(n)) return 14;
+  return value.endsWith("rem") ? n * Number.parseFloat(root.fontSize) : n;
+}
+
 function monoStack(): string {
   const value = getComputedStyle(document.documentElement)
     .getPropertyValue("--font-mono")
@@ -72,14 +85,18 @@ function MermaidContent({ chart }: { chart: string }) {
   );
 
   const mono = monoStack();
+  const micro = microPx();
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: "loose",
     theme: "base",
     fontFamily: mono,
-    themeVariables: { fontFamily: mono, fontSize: "12px" },
+    themeVariables: { fontFamily: mono, fontSize: `${micro}px` },
     themeCSS: "margin: 1.5rem auto 0;",
+    // Every diagram draws at its own size and scrolls sideways in a narrow
+    // column instead of shrinking, so no label reads under 14px.
     flowchart: {
+      useMaxWidth: false,
       curve: "basis",
       padding: 10,
       nodeSpacing: 32,
@@ -89,15 +106,19 @@ function MermaidContent({ chart }: { chart: string }) {
       actorFontFamily: mono,
       messageFontFamily: mono,
       noteFontFamily: mono,
-      actorFontSize: 12,
-      messageFontSize: 12,
-      noteFontSize: 11,
+      useMaxWidth: false,
+      actorFontSize: micro,
+      messageFontSize: micro,
+      noteFontSize: micro,
       // One row of participant boxes: the repeat along the bottom is height
       // the reader scrolls past for nothing.
       mirrorActors: false,
       boxMargin: 8,
       messageMargin: 32,
     },
+    state: { useMaxWidth: false },
+    er: { useMaxWidth: false },
+    class: { useMaxWidth: false },
   });
 
   const { svg, bindFunctions } = use(
@@ -119,7 +140,7 @@ function MermaidContent({ chart }: { chart: string }) {
       // supplies. If a chart ever becomes user-supplied, this must move to
       // `securityLevel: "strict"` before that lands.
       dangerouslySetInnerHTML={{ __html: svg }}
-      className="ox-mermaid max-w-full overflow-auto [&_svg]:mx-auto [&_svg]:h-auto [&_svg]:max-w-full"
+      className="ox-mermaid max-w-full overflow-auto [&_svg]:mx-auto [&_svg]:h-auto"
     />
   );
 }

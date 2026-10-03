@@ -75,7 +75,7 @@ export default function InstallPage(): ReactNode {
         <div className="relative z-10 mx-auto grid w-full max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-[1.05fr_1fr] lg:py-28">
           <div className="flex flex-col items-start text-left">
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-              <span className="ox-eyebrow !text-[11px] !tracking-[0.14em]">
+              <span className="ox-eyebrow !tracking-[0.14em]">
                 Oxagen CLI
               </span>
             </span>
@@ -86,12 +86,12 @@ export default function InstallPage(): ReactNode {
 
             <p className="mt-5 max-w-xl text-pretty text-base text-muted-foreground sm:text-lg">
               The{" "}
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.9em]">
                 oxagen
               </code>{" "}
               CLI puts the fleet in your terminal: the same knowledge graph, the
               same scoped retrieval, and the same audited{" "}
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.9em]">
                 invoke()
               </code>{" "}
               boundary as the app. One command installs it.
@@ -175,7 +175,7 @@ export default function InstallPage(): ReactNode {
               The install script
             </h2>
             <p className="mt-5 max-w-lg text-base text-muted-foreground">
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.9em]">
                 install.sh
               </code>{" "}
               downloads one file and checks it before it installs anything.

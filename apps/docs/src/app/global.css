@@ -75,9 +75,17 @@
  *
  * `.prose` is the page body and also each item in the table of contents,
  * which Fumadocs marks `prose text-sm`.
+ *
+ * The house type rule (Mac, 2026-10-02, oxageninc/brand#83) holds here too:
+ * no text under 14px, and h1 to h3 in Space Grotesk, the kit's display face,
+ * because the docs are a customer site. The kit's base rule sets h1 to h3
+ * from --font-heading, which reads the text face, Aeonik, until a site points
+ * it at --font-display, as this block does. h4 to h6 and all other text stay
+ * Aeonik, and code stays Monaspace Neon.
  * ─────────────────────────────────────────────────────────────────────────── */
 :root {
   --docs-step: calc(8 / 7);
+  --font-heading: var(--font-display);
 }
 
 .prose {
@@ -135,9 +143,10 @@
    and the search dialog, and any entry a Fumadocs upgrade adds with one of
    these sizes.
 
-   Each step is taken one up, times --docs-step, like the rest of the page.
-   text-lg sets two things: the description under the title, and the search
-   field. The h4 step keeps the description reading as a lead above the
+   text-sm and text-lg are taken one up, times --docs-step, like the rest
+   of the page. text-xs reads the micro step as it is, 14px, the house floor,
+   so small print stays a step under the 16px body. text-lg sets two things:
+   the description under the title, and the search field. The h4 step keeps the description reading as a lead above the
    body, and keeps the search field above 16px, the size under which a
    phone's browser zooms the page when the field takes focus.
 
@@ -145,7 +154,7 @@
    sidebar, drawer, and table of contents keep the ids its own themes style.
    The search dialog renders outside the layout, so it is found by its role. */
 :is(#nd-sidebar, #nd-sidebar-mobile, #nd-toc, [data-toc-popover], #nd-page, [role="dialog"]) {
-  --text-xs: calc(var(--ox-a-micro) * var(--docs-step));
+  --text-xs: var(--ox-a-micro);
   --text-xs--line-height: var(--ox-a-micro-leading);
   --text-sm: calc(var(--ox-a-body) * var(--docs-step));
   --text-sm--line-height: var(--ox-a-body-leading);
@@ -299,7 +308,7 @@ figure.shiki pre {
   fill: var(--ox-dg-sub) !important;
   color: var(--ox-dg-sub) !important;
   font-family: var(--font-mono) !important;
-  font-size: 11px !important;
+  font-size: var(--ox-a-micro) !important;
 }
 /* No chip behind a wire label: only the page ground, so the wire stops short
    of the words instead of striking through them. */
