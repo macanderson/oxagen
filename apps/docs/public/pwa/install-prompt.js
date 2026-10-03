@@ -115,27 +115,36 @@
   /* The house palette: obsidian and white with zinc between. The button is ink,
      not gold: gold is at most one action per screen, and the page under the
      card may already spend it. Gold stays the focus ring. The card follows the page's theme when it states one on <html>
-     (class="dark", data-theme="dark"), otherwise the system's. */
+     (class="dark", data-theme="dark"), otherwise the system's.
+     Each colour, corner, shadow, and space reads the page's tokens: a semantic
+     name first (--popover, --border, --ring, --ui-shadow-pop), then the raw
+     --ox-* token, then the house value, so the card draws the same on a page
+     that loads no tokens. The custom properties on .card are its token layer. */
   var CSS =
     ":host{all:initial}" +
-    ".card{--bg:#FFFFFF;--fg:#09090B;--muted:#52525B;--line:#E4E4E7;--gold:#D4AF37;" +
+    ".card{--bg:var(--popover, var(--ox-paper-panel, #FFFFFF));--fg:var(--popover-foreground, var(--ox-text-ink, #09090B));" +
+    "--muted:var(--muted-foreground, var(--ox-muted-text-ink, #52525B));--line:var(--border, var(--ox-paper-border, #E4E4E7));" +
+    "--gold:var(--ring, var(--ox-gold, #D4AF37));--shadow:var(--ui-shadow-pop, var(--ox-shadow-pop-ink, 0 12px 32px rgba(9,9,11,.28)));" +
     "position:fixed;z-index:2147483000;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));" +
-    "margin:0 auto;max-width:380px;box-sizing:border-box;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start;" +
-    "padding:14px;border-radius:14px;border:1px solid var(--line);background:var(--bg);color:var(--fg);" +
-    "box-shadow:0 12px 32px rgba(9,9,11,.28);font:var(--ox-a-body, 0.875rem)/1.45 var(--ox-font, Aeonik),ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;" +
+    "margin:0 auto;max-width:380px;box-sizing:border-box;display:grid;grid-template-columns:auto 1fr auto;gap:calc(var(--ox-space, 0.25rem) * 3);align-items:start;" +
+    "padding:calc(var(--ox-space, 0.25rem) * 3.5);border-radius:var(--ox-radius-card, 0.81rem);border:1px solid var(--line);background:var(--bg);color:var(--fg);" +
+    "box-shadow:var(--shadow);font:var(--ox-a-body, 0.875rem)/1.45 var(--ox-font, Aeonik),ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;" +
     "animation:rise .22s ease-out}" +
-    ".card.dark{--bg:#18181B;--fg:#FAFAFA;--muted:#A1A1AA;--line:#27272A}" +
+    ".card.dark{--bg:var(--popover, var(--ox-panel, #18181B));--fg:var(--popover-foreground, var(--ox-text, #FAFAFA));" +
+    "--muted:var(--muted-foreground, var(--ox-muted, #A1A1AA));--line:var(--border, var(--ox-border, #27272A));" +
+    "--shadow:var(--ui-shadow-pop, var(--ox-shadow-pop, 0 12px 32px rgba(9,9,11,.28)))}" +
     "@media (prefers-reduced-motion:reduce){.card{animation:none}}" +
     "@keyframes rise{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}" +
-    ".icon{width:40px;height:40px;border-radius:9px;display:block}" +
+    ".icon{width:40px;height:40px;border-radius:var(--ox-radius-xl, 0.63rem);display:block}" +
     ".title{margin:0;font-weight:600;font-size:var(--ox-a-body, 0.875rem)}" +
-    ".body{margin:2px 0 0;color:var(--muted);font-size:var(--ox-a-body, 0.875rem)}" +
-    ".body svg{vertical-align:-3px;margin:0 2px;color:var(--fg)}" +
-    ".acts{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}" +
-    "button{font:inherit;font-size:var(--ox-a-body, 0.875rem);font-weight:500;cursor:pointer;border-radius:8px;padding:7px 12px;border:1px solid var(--line);background:transparent;color:var(--fg)}" +
+    ".body{margin:calc(var(--ox-space, 0.25rem) * 0.5) 0 0;color:var(--muted);font-size:var(--ox-a-body, 0.875rem)}" +
+    ".body svg{vertical-align:-3px;margin:0 calc(var(--ox-space, 0.25rem) * 0.5);color:var(--fg)}" +
+    ".acts{margin-top:calc(var(--ox-space, 0.25rem) * 2.5);display:flex;gap:calc(var(--ox-space, 0.25rem) * 2);flex-wrap:wrap}" +
+    "button{font:inherit;font-size:var(--ox-a-body, 0.875rem);font-weight:500;cursor:pointer;border-radius:var(--ox-radius-lg, 0.45rem);" +
+    "padding:calc(var(--ox-space, 0.25rem) * 1.75) calc(var(--ox-space, 0.25rem) * 3);border:1px solid var(--line);background:transparent;color:var(--fg)}" +
     "button.primary{background:var(--fg);border-color:var(--fg);color:var(--bg)}" +
     "button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}" +
-    "button.x{border:0;padding:4px;line-height:0;color:var(--muted)}";
+    "button.x{border:0;padding:var(--ox-space, 0.25rem);line-height:0;color:var(--muted)}";
 
   function darkPage(win, doc) {
     var html = doc.documentElement;
