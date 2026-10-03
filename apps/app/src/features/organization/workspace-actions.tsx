@@ -121,7 +121,7 @@ function GovernanceField({ idPrefix }: { idPrefix: string }) {
         onChange={(event) => {
           setMode(event.target.value);
         }}
-        className={`${inputBase} max-md:text-lg`}
+        className={`${inputBase} max-md:text-input-touch`}
       >
         <option value="">{t("unchanged")}</option>
         {GOVERNANCE_MODES.map((choice) => (
@@ -191,7 +191,7 @@ function UnrecordedField({
         disabled
         value={value ?? t("notRecorded")}
         aria-describedby={`${id}-hint`}
-        className={`${inputBase} max-md:text-lg ${value === undefined ? "text-dim" : "font-mono"}`}
+        className={`${inputBase} max-md:text-input-touch ${value === undefined ? "text-dim" : "font-mono"}`}
       />
       <p id={`${id}-hint`} className="text-sm text-muted-foreground">
         {hint}
@@ -221,7 +221,7 @@ function BranchSelect({ id, branch }: { id: string; branch: string | null }) {
         disabled
         aria-describedby={`${id}-hint`}
         data-testid="edit-workspace-branch"
-        className={`${inputBase} max-md:text-lg ${branch === null ? "text-dim" : "font-mono"}`}
+        className={`${inputBase} max-md:text-input-touch ${branch === null ? "text-dim" : "font-mono"}`}
       >
         <option>{branch ?? t("notRecorded")}</option>
       </select>

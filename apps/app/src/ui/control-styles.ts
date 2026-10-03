@@ -68,7 +68,7 @@ export const buttonSmall =
 const fieldSkin =
   // 16px below md as well as by phone.css, so the class list alone says an
   // input never makes iOS zoom the page on focus.
-  "block w-full min-w-0 border border-input-border bg-input-bg px-3 text-base max-md:text-lg text-input-fg placeholder:text-input-placeholder " +
+  "block w-full min-w-0 border border-input-border bg-input-bg px-3 text-base max-md:text-input-touch text-input-fg placeholder:text-input-placeholder " +
   "hover:border-input-border-hover focus-visible:border-input-border-focus focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-input-ring " +
   "disabled:bg-input-disabled-bg disabled:text-input-disabled-fg aria-invalid:border-input-invalid-border aria-invalid:outline-input-invalid-ring";
 

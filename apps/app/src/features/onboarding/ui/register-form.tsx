@@ -60,7 +60,7 @@ import type { RegisterPlace } from "../register-actions";
 import { CancelRegistration } from "./cancel-registration";
 
 /** An input at 16px on a phone, so iOS does not zoom on focus. */
-const control = `${inputBase} min-h-10 max-md:min-h-11 max-md:text-lg`;
+const control = `${inputBase} min-h-10 max-md:min-h-11 max-md:text-input-touch`;
 const label = "text-sm font-semibold text-foreground";
 const hint = "text-sm text-muted-foreground";
 const sectionTitle = "text-sm font-semibold text-foreground";

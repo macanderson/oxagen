@@ -196,7 +196,7 @@ export function PauseWorkspaceDialog({
               onChange={(event) => {
                 setReason(event.target.value);
               }}
-              className={`${textareaBase} resize-y max-md:min-h-11 max-md:text-lg`}
+              className={`${textareaBase} resize-y max-md:min-h-11 max-md:text-input-touch`}
             />
             <p
               id={`${reasonId}-help`}

@@ -110,7 +110,7 @@ function Filters({ at, view }: { at: MandateAt; view: MandateView }) {
               label: t(`kind.${state}`),
             })),
           ]}
-          className="w-full data-[size=default]:h-10 max-md:text-lg"
+          className="w-full data-[size=default]:h-10 max-md:text-input-touch"
         />
       </span>
       <button type="submit" className={`${control} font-medium`}>

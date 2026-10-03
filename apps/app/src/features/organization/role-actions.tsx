@@ -246,7 +246,7 @@ export function RoleEditor({
                 onChange={(event) => {
                   setDraft({ ...draft, name: event.target.value });
                 }}
-                className={`${inputBase} font-mono max-md:text-lg`}
+                className={`${inputBase} font-mono max-md:text-input-touch`}
               />
               <p id={`${id}-name-hint`} className={hint}>
                 {isNew ? t("nameNewHint") : t("nameHint")}
@@ -265,7 +265,7 @@ export function RoleEditor({
                 onChange={(event) => {
                   setDraft({ ...draft, description: event.target.value });
                 }}
-                className={`${inputBase} max-md:text-lg`}
+                className={`${inputBase} max-md:text-input-touch`}
               />
               {isNew ? null : (
                 <p id={`${id}-description-hint`} className={hint}>
@@ -284,7 +284,7 @@ export function RoleEditor({
                 disabled
                 value={isNew ? "agent" : (role?.kind ?? "agent")}
                 aria-describedby={`${id}-kind-hint`}
-                className={`${inputBase} max-md:text-lg`}
+                className={`${inputBase} max-md:text-input-touch`}
               >
                 <option value="human">{tKind("human")}</option>
                 <option value="agent">{tKind("agent")}</option>
@@ -309,7 +309,7 @@ export function RoleEditor({
                     scope: event.target.value === "org" ? "org" : "workspace",
                   });
                 }}
-                className={`${inputBase} max-md:text-lg`}
+                className={`${inputBase} max-md:text-input-touch`}
               >
                 <option value="org">{tScope("org")}</option>
                 <option value="workspace">{tScope("workspace")}</option>

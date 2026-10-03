@@ -25,13 +25,12 @@
     scroll-snap-align: start;
   }
 
-  /* Inputs take the app scale's h4 step, 16px at the 14px base, so iOS
-     never zooms the page on focus. Safari zooms on a field under 16px, so a
-     base under 14px brings the zoom back. */
+  /* A text field takes the kit's touch size, 16px or the app base, whichever
+     is larger, so iOS never zooms the page on focus. */
   input,
   select,
   textarea {
-    font-size: var(--ox-a-h4);
+    font-size: var(--text-input-touch);
   }
 
   /* The fixed thumb bar clears the home indicator. */

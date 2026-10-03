@@ -34,7 +34,7 @@ export const SEARCH_PAUSE_MS = 400;
 
 const PR_FILTERS: readonly PullRequestFilter[] = ["any", "with", "without"];
 
-const triggerSize = "text-sm max-md:min-h-11 max-md:text-lg";
+const triggerSize = "text-sm max-md:min-h-11 max-md:text-input-touch";
 
 type Facet = "status" | "tier" | "replay";
 
@@ -148,7 +148,7 @@ function SearchBox({
         onChange={(event) => {
           setDraft(event.target.value);
         }}
-        className={`${inputBase} w-full py-1.5 max-md:min-h-11 max-md:text-lg`}
+        className={`${inputBase} w-full py-1.5 max-md:min-h-11 max-md:text-input-touch`}
       />
     </form>
   );

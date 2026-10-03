@@ -181,9 +181,9 @@ const ACTOR_KIND_NOTE = "audit-actor-kind-note";
  * house input is about 38 px tall, and 16 px keeps the browser from zooming
  * the page when the field takes focus.
  */
-const control = `${inputBase} max-md:min-h-11 max-md:text-lg`;
+const control = `${inputBase} max-md:min-h-11 max-md:text-input-touch`;
 /** A filter's trigger at the same phone size. It wears the input's colours. */
-const select = "max-md:min-h-11 max-md:text-lg";
+const select = "max-md:min-h-11 max-md:text-input-touch";
 
 function Filters({ org, query }: { org: string; query: AuditQuery }) {
   const t = useTranslations("audit.events");

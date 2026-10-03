@@ -50,7 +50,7 @@ function refusalFields(result: Refusal): FieldErrors {
 }
 
 // Phone inputs are 16px so iOS does not zoom on focus.
-const phoneInput = "max-md:text-lg";
+const phoneInput = "max-md:text-input-touch";
 
 export function OrganizationForm({
   initialName = "",

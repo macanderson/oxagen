@@ -153,7 +153,7 @@ function compare(a: string, b: string, numeric: boolean): number {
  * (`size="sm"`), so its list opens on the translucent menu surface. These keep
  * the old 12px text, and make the trigger 44px tall with 16px text on a phone.
  */
-export const listSelect = "text-sm max-md:min-h-11 max-md:text-lg";
+export const listSelect = "text-sm max-md:min-h-11 max-md:text-input-touch";
 
 /** What each row in a body renders, by the row's key, whitespace collapsed. */
 function readTexts(
@@ -339,7 +339,7 @@ export function ListTable({
             setPage(1);
           }}
           data-touch-target=""
-          className="min-w-[140px] flex-[1_1_200px] rounded-lg border border-input-border bg-input-bg px-2.5 py-1.5 text-sm text-input-fg placeholder:text-dim focus-visible:border-input-border-focus focus-visible:outline-none max-md:basis-full max-md:text-lg"
+          className="min-w-[140px] flex-[1_1_200px] rounded-lg border border-input-border bg-input-bg px-2.5 py-1.5 text-sm text-input-fg placeholder:text-dim focus-visible:border-input-border-focus focus-visible:outline-none max-md:basis-full max-md:text-input-touch"
         />
         {filters}
         {facets.map(({ column, values }) => {

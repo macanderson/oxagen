@@ -94,7 +94,9 @@ function fakeKit(kit: string) {
     "tokens/house-tokens.json",
     JSON.stringify({ version: "9.9.9", gold: { hex: TOKENS.gold }, tokens: TOKENS }),
   );
-  for (const f of ["house-tokens.css", "house-tailwind.css"]) put(kit, `tokens/${f}`, `/* ${f} */\n`);
+  for (const f of ["house-tokens.css", "house-tailwind.css", "house-text-scale.css"]) {
+    put(kit, `tokens/${f}`, `/* ${f} */\n`);
+  }
   put(kit, "tokens/house-fonts.css", "@font-face { src: url(../fonts/face.woff2); }\n");
   put(kit, "fonts/face.woff2", "face");
   put(kit, "fonts/LICENSE-OFL.txt", "licence");

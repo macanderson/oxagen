@@ -359,7 +359,7 @@ export function SteerFleetDialog({
               onChange={(event) => {
                 setText(event.target.value);
               }}
-              className={`${textareaBase} resize-y max-md:min-h-11 max-md:text-lg`}
+              className={`${textareaBase} resize-y max-md:min-h-11 max-md:text-input-touch`}
             />
           </div>
           <div className="flex flex-col gap-1.5">

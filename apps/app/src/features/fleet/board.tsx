@@ -1039,7 +1039,7 @@ function PauseDialog({
             onChange={(event) => {
               setReason(event.target.value);
             }}
-            className={`${textareaBase} resize-y max-md:text-lg`}
+            className={`${textareaBase} resize-y max-md:text-input-touch`}
           />
           <p className="text-sm text-muted-foreground">
             {ledger ? command("ledgerReasonHelp") : t("note")}

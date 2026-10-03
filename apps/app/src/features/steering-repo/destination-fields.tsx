@@ -144,7 +144,7 @@ export function SteeringRepoDestinationFields({
         }}
         error={nameMessage}
         data-testid={nameId}
-        className="max-md:text-lg"
+        className="max-md:text-input-touch"
       />
     </div>
   );

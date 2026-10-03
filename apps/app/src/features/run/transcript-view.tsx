@@ -196,7 +196,7 @@ const txTools = "flex flex-wrap items-center gap-2 pb-2.5";
  * phone gets the 16px input the house sheets use.
  */
 const txSearch =
-  "w-[220px] max-w-full max-md:w-full rounded-lg border border-border bg-void px-2.5 py-1.5 font-mono text-sm text-foreground placeholder:text-dim focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ring max-md:text-lg";
+  "w-[220px] max-w-full max-md:w-full rounded-lg border border-border bg-void px-2.5 py-1.5 font-mono text-sm text-foreground placeholder:text-dim focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ring max-md:text-input-touch";
 /** `.tx-kinds { display:flex; flex-wrap:wrap; gap:3px }` */
 const txKinds = "flex flex-wrap gap-[3px]";
 /**

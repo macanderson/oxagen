@@ -68,10 +68,14 @@
 /*
  * The kit's Tailwind layer, which imports house-tokens.css from beside it. It
  * carries what the palette alone cannot: the `--color-ox-*` theme entries, the
- * tracking scale, and the twelve type utilities — `text-m-h1` to `text-m-micro`
- * for a page read once, `text-a-h1` to `text-a-micro` for a dashboard read all
+ * tracking scale, and the thirteen type utilities — `text-m-h1` to `text-m-micro`
+ * for a page read once, `text-a-h1` to `text-a-2xs` for a dashboard read all
  * day. Each one sets size, line-height, face and weight together, so a heading
  * cannot land on the body face or an off-scale size by accident.
+ *
+ * The kit's house-text-scale.css, which maps Tailwind's `text-xs` to `text-3xl`
+ * on the app steps, is not imported here. The docs site loads this file and
+ * keeps Tailwind's stock sizes, so each app imports the scale itself.
  *
  * It is imported FIRST on purpose. Every name this file also defines below —
  * the semantic `:root` and `.dark` blocks, `--font-sans`, `--font-mono` — wins

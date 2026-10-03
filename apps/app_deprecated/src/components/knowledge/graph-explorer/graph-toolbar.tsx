@@ -106,7 +106,7 @@ export function GraphToolbar(props: GraphToolbarProps) {
             placeholder="Search the graph in natural language…"
             aria-label="Search the graph"
             // 16px font below md so iOS Safari doesn't auto-zoom on focus.
-            className="pl-8 text-lg md:text-base"
+            className="pl-8 text-input-touch md:text-base"
           />
         </form>
       )}

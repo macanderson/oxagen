@@ -190,7 +190,7 @@ export function BeltSearch({ belt }: { belt: Toolbelt }) {
           value={query}
           placeholder={t("placeholder")}
           aria-label={t("label")}
-          className={`${inputBase} border-0 bg-transparent px-1 max-md:text-lg`}
+          className={`${inputBase} border-0 bg-transparent px-1 max-md:text-input-touch`}
           onChange={(event) => {
             setQuery(event.target.value);
           }}

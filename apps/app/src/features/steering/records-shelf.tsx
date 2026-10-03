@@ -478,7 +478,7 @@ export function RecordsList({
           <span id={sortLabelId}>{t("sort")}</span>
           <ListSelect
             size="sm"
-            className="max-md:min-h-11 max-md:text-lg"
+            className="max-md:min-h-11 max-md:text-input-touch"
             aria-labelledby={sortLabelId}
             items={SORTS.map((s) => ({ value: s, label: t(`sorts.${s}`) }))}
             value={sort}

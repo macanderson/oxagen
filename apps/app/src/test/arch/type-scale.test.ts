@@ -431,7 +431,12 @@ describe("type scale: one base, every size from a token", () => {
       expect.arrayContaining([
         `${UI_STYLES}globals.css`,
         `${UI_STYLES}house-tailwind.css`,
+        `${UI_STYLES}house-text-scale.css`,
       ]),
+    );
+    // The kit's scale comes after the kit's Tailwind layer, so it wins.
+    expect(seen.indexOf(`${UI_STYLES}house-text-scale.css`)).toBeGreaterThan(
+      seen.indexOf(`${UI_STYLES}house-tailwind.css`),
     );
     expect(resolveImport("@oxagen/ui/styles/globals.css", ENTRY)).toBe(
       `${UI_STYLES}globals.css`,

@@ -104,7 +104,7 @@ const label = "text-sm font-medium text-muted-foreground";
  * A 44 px tap target and 16 px text on a phone (audit.md, Mobile), so the
  * browser does not zoom the page when a field takes focus.
  */
-const control = `${inputBase} max-md:min-h-11 max-md:text-lg`;
+const control = `${inputBase} max-md:min-h-11 max-md:text-input-touch`;
 
 /** A submit the missing write keeps disabled, described by the sentence that says why. */
 function DisabledSubmit({

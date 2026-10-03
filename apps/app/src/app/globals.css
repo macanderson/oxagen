@@ -3,6 +3,13 @@
  * @oxagen/ui (tokens, fonts, light/dark). House tokens only; no raw palette.
  */
 @import "@oxagen/ui/styles/globals.css";
+/* The kit's text scale: Tailwind's text-xs to text-3xl on the app steps, in
+   order. text-base is the app base (14px), text-sm (12px) and text-xs (10px)
+   are smaller, and text-lg and up are larger. Every step is the kit's
+   --ox-a-base times a ratio, so a new base in the kit resizes them all. The
+   app opts in here and not in @oxagen/ui's globals.css, because the docs site
+   loads that file too and keeps Tailwind's stock text-sm. */
+@import "@oxagen/ui/styles/house-text-scale.css";
 @import "../ui/phone.css";
 @import "../ui/transcript-skins.css";
 
@@ -65,28 +72,12 @@
      tokens: the theme's corner base (0.45rem, shadcn's base-maia preset) times
      each step's multiplier. `rounded-4xl` is the pill a maia button and input
      wear; `rounded-2xl` is a card, a popover and a menu. */
-  /* The text scale. Each Tailwind step reads a step of the kit's app scale,
-     and every kit step is the kit's base, `--ox-a-base` (14px), times a
-     ratio. A new base in the kit resizes every step (Mac, 2026-10-03, #5256).
-     `text-base` is body text. `text-sm` and `text-xs` are smaller, and
-     `text-lg` and up are larger. The kit names no step above h1, so 4xl to
-     6xl are the base times a ratio here, at Tailwind's stock 36px, 48px and
-     60px. No class or stylesheet sets a size of its own
+  /* The text steps above text-3xl. house-text-scale.css, imported above,
+     maps text-xs to text-3xl, and the kit names no step above h1 (30px). So
+     4xl to 6xl are the kit's base times a ratio here, at Tailwind's stock
+     36px, 48px and 60px, and they follow the base too (Mac, 2026-10-03,
+     #5256). No class or stylesheet sets a size of its own
      (src/test/arch/type-scale.test.ts). */
-  --text-xs: var(--ox-a-2xs);
-  --text-xs--line-height: var(--ox-a-2xs-leading);
-  --text-sm: var(--ox-a-micro);
-  --text-sm--line-height: var(--ox-a-micro-leading);
-  --text-base: var(--ox-a-body);
-  --text-base--line-height: var(--ox-a-body-leading);
-  --text-lg: var(--ox-a-h4);
-  --text-lg--line-height: var(--ox-a-h4-leading);
-  --text-xl: var(--ox-a-h3);
-  --text-xl--line-height: var(--ox-a-h3-leading);
-  --text-2xl: var(--ox-a-h2);
-  --text-2xl--line-height: var(--ox-a-h2-leading);
-  --text-3xl: var(--ox-a-h1);
-  --text-3xl--line-height: var(--ox-a-h1-leading);
   --text-4xl: calc(var(--ox-a-base) * 18 / 7);
   --text-4xl--line-height: var(--ox-a-h1-leading);
   --text-5xl: calc(var(--ox-a-base) * 24 / 7);

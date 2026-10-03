@@ -106,7 +106,7 @@ export function OpenIncident({
           <input
             id={subjectId}
             defaultValue={`${String(status)} ${code}`}
-            className={`${inputBase} max-md:min-h-11 max-md:text-lg`}
+            className={`${inputBase} max-md:min-h-11 max-md:text-input-touch`}
           />
           <label htmlFor={severityId} className="text-sm font-medium">
             {t("severity")}
@@ -114,7 +114,7 @@ export function OpenIncident({
           <select
             id={severityId}
             defaultValue="warning"
-            className={`${inputBase} max-md:min-h-11 max-md:text-lg`}
+            className={`${inputBase} max-md:min-h-11 max-md:text-input-touch`}
           >
             {(["critical", "warning", "info"] as const).map((sev) => (
               <option key={sev} value={sev}>
@@ -206,7 +206,7 @@ export function RequestAccess({
             id={roleId}
             readOnly
             value={denied("neededValue", { permission, ws })}
-            className={`${inputBase} font-mono max-md:min-h-11 max-md:text-lg`}
+            className={`${inputBase} font-mono max-md:min-h-11 max-md:text-input-touch`}
           />
           <label htmlFor={whyId} className="text-sm font-medium">
             {t("why")}
@@ -214,7 +214,7 @@ export function RequestAccess({
           <textarea
             id={whyId}
             rows={3}
-            className={`${textareaBase} resize-y max-md:min-h-11 max-md:text-lg`}
+            className={`${textareaBase} resize-y max-md:min-h-11 max-md:text-input-touch`}
           />
           <p className="text-sm text-muted-foreground">{t("note")}</p>
           <p

@@ -15,6 +15,9 @@
  * See packages/ui/src/styles/fonts/README.md for the family/weight map.
  */
 @import "@oxagen/ui/styles/globals.css";
+/* The kit's text scale, as in apps/app: text-base is the app base (14px),
+   text-sm and text-xs are smaller, and text-lg and up are larger. */
+@import "@oxagen/ui/styles/house-text-scale.css";
 
 /**
  * Streamdown streaming animation keyframes (sd-fadeIn, sd-blurIn, sd-slideUp).
@@ -35,26 +38,9 @@
 /* Scan the components folder located one directory up */
 @source "../components";
 
-/* The text scale, the same as apps/app/src/app/globals.css. Each Tailwind
-   step reads a step of the kit's app scale, and every kit step is the kit's
-   base, `--ox-a-base` (14px), times a ratio. `text-base` is body text,
-   `text-sm` and `text-xs` are smaller, and `text-lg` and up are larger
-   (Mac, 2026-10-03, #5256). */
+/* The text steps above text-3xl, as in apps/app/src/app/globals.css: the
+   kit's base times a ratio, at Tailwind's stock 36px, 48px and 60px. */
 @theme inline {
-  --text-xs: var(--ox-a-2xs);
-  --text-xs--line-height: var(--ox-a-2xs-leading);
-  --text-sm: var(--ox-a-micro);
-  --text-sm--line-height: var(--ox-a-micro-leading);
-  --text-base: var(--ox-a-body);
-  --text-base--line-height: var(--ox-a-body-leading);
-  --text-lg: var(--ox-a-h4);
-  --text-lg--line-height: var(--ox-a-h4-leading);
-  --text-xl: var(--ox-a-h3);
-  --text-xl--line-height: var(--ox-a-h3-leading);
-  --text-2xl: var(--ox-a-h2);
-  --text-2xl--line-height: var(--ox-a-h2-leading);
-  --text-3xl: var(--ox-a-h1);
-  --text-3xl--line-height: var(--ox-a-h1-leading);
   --text-4xl: calc(var(--ox-a-base) * 18 / 7);
   --text-4xl--line-height: var(--ox-a-h1-leading);
   --text-5xl: calc(var(--ox-a-base) * 24 / 7);
