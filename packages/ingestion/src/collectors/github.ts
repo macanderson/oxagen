@@ -59,6 +59,8 @@ const NODES_PER_QUERY = 100;
 const MAX_STALLED_PAGES = 10;
 /** Pages of the repository list read before listChangedSince stops. */
 const MAX_REPO_PAGES = 100;
+/** Accounts a read failure names before it counts the rest. */
+const MAX_NAMED_OWNERS = 3;
 /** The cursor stays this far behind the read, so a late write lands in the next read. */
 const CURSOR_LAG_MS = 60_000;
 /** The overlap each reconcile reads before its cursor, because `since` counts whole seconds. */
@@ -600,11 +602,21 @@ async function fetchById(ref: ItemRef, conn: Connection): Promise<ProviderItem> 
   return { ref, updatedAt: issue.updated_at, record: { issue: raw, lastActor: lastActorOf(node) } };
 }
 
-async function reachableRepos(token: string): Promise<string[]> {
+/** What a connection's token reaches. Every key is lowercased. */
+interface Reach {
+  /** Repositories with issues on, spelled as GitHub spells them. */
+  readable: Map<string, string>;
+  /** Repositories with issues turned off. */
+  issuesOff: Set<string>;
+  /** Accounts that own a reachable repository, spelled as GitHub spells them. */
+  owners: Map<string, string>;
+}
+
+async function reachableRepos(token: string): Promise<Reach> {
   // An installation token (ghs_) lists its installation's repositories.
   // A user token lists the repositories its user can reach.
   const installation = token.startsWith("ghs_");
-  const names = new Map<string, string>();
+  const reach: Reach = { readable: new Map(), issuesOff: new Set(), owners: new Map() };
   for (let page = 1; page <= MAX_REPO_PAGES; page++) {
     const path = installation
       ? `/installation/repositories?per_page=${PAGE_SIZE}&page=${page}`
@@ -614,11 +626,62 @@ async function reachableRepos(token: string): Promise<string[]> {
       ? z.object({ repositories: z.array(repoSchema) }).passthrough().parse(data).repositories
       : z.array(repoSchema).parse(data);
     for (const repo of repos) {
-      if (repo.has_issues !== false) names.set(repo.full_name.toLowerCase(), repo.full_name);
+      const key = repo.full_name.toLowerCase();
+      if (repo.has_issues === false) reach.issuesOff.add(key);
+      else reach.readable.set(key, repo.full_name);
+      const owner = ownerOf(repo.full_name);
+      if (!reach.owners.has(owner.toLowerCase())) reach.owners.set(owner.toLowerCase(), owner);
     }
-    if (repos.length < PAGE_SIZE) return [...names.values()];
+    if (repos.length < PAGE_SIZE) return reach;
   }
   throw new Error(`The GitHub connection reaches more than ${MAX_REPO_PAGES * PAGE_SIZE} repositories. The collector reads no further.`);
+}
+
+function ownerOf(fullName: string): string {
+  return fullName.split("/")[0] ?? fullName;
+}
+
+/** The accounts a connection reaches, for a sentence that ends in "only". */
+function ownersPhrase(owners: ReadonlyMap<string, string>): string {
+  const names = [...owners.values()];
+  const shown = names.slice(0, MAX_NAMED_OWNERS).join(", ");
+  const more = names.length - MAX_NAMED_OWNERS;
+  return more > 0 ? `${shown} and ${more} other accounts` : shown;
+}
+
+/**
+ * Why the connection cannot read repositories the collector names, and what
+ * fixes each one. An App installation belongs to one account. So when the
+ * connection reaches nothing an owner holds, granting that installation more
+ * repositories cannot help: the workspace needs the installation on that owner.
+ */
+function cannotReadMessage(missing: string[], reach: Reach): string {
+  const sentences = [`The GitHub connection cannot read ${missing.join(", ")}.`];
+  const issuesOff = missing.filter((name) => reach.issuesOff.has(name.toLowerCase()));
+  const hidden = missing.filter((name) => !reach.issuesOff.has(name.toLowerCase()));
+  const unreached = new Map<string, string>();
+  for (const name of hidden) {
+    const owner = ownerOf(name);
+    const key = owner.toLowerCase();
+    if (!reach.owners.has(key) && !unreached.has(key)) unreached.set(key, owner);
+  }
+  const ungranted = hidden.filter((name) => reach.owners.has(ownerOf(name).toLowerCase()));
+  if (issuesOff.length > 0) {
+    sentences.push(`Issues are turned off on ${issuesOff.join(", ")}. Turn them on in the repository settings on GitHub.`);
+  }
+  if (unreached.size > 0) {
+    const owners = [...unreached.values()].join(", ");
+    sentences.push(
+      reach.owners.size === 0
+        ? "It reaches no repositories."
+        : `It reaches repositories owned by ${ownersPhrase(reach.owners)} only.`,
+      `Attach the Oxagen GitHub App installation on ${owners} to this workspace, or install the App on ${owners} first.`,
+    );
+  }
+  if (ungranted.length > 0) {
+    sentences.push(`Give the Oxagen GitHub App access to ${ungranted.join(", ")}.`);
+  }
+  return sentences.join(" ");
 }
 
 interface RepoRead {
@@ -691,16 +754,11 @@ async function lastActors(token: string, nodeIds: string[]): Promise<Map<string,
  * when the connection cannot read a repository the scope names.
  */
 async function reposToRead(token: string, config: GitHubCollectorConfig | undefined): Promise<string[]> {
-  const reachable = await reachableRepos(token);
-  if (config === undefined) return reachable;
-  const byName = new Map(reachable.map((name) => [name.toLowerCase(), name]));
-  const missing = config.repos.filter((name) => !byName.has(name.toLowerCase()));
-  if (missing.length > 0) {
-    throw new Error(
-      `The GitHub connection cannot read ${missing.join(", ")}. Give the Oxagen GitHub App access to each repository the collector names, or reconnect GitHub.`,
-    );
-  }
-  return [...new Set(config.repos.map((name) => byName.get(name.toLowerCase()) as string))];
+  const reach = await reachableRepos(token);
+  if (config === undefined) return [...reach.readable.values()];
+  const missing = config.repos.filter((name) => !reach.readable.has(name.toLowerCase()));
+  if (missing.length > 0) throw new Error(cannotReadMessage(missing, reach));
+  return [...new Set(config.repos.map((name) => reach.readable.get(name.toLowerCase()) as string))];
 }
 
 async function listChangedSince(
