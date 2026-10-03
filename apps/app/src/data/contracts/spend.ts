@@ -273,15 +273,35 @@ export const SpendDrill = z.object({
 });
 export type SpendDrill = z.infer<typeof SpendDrill>;
 
-/** `list_waste`: spend the frames show bought nothing, by cause. */
+/**
+ * The causes `list_waste` names: a cache written and never read, then the
+ * calls findings claim, in counting order (ADR-208).
+ */
+export const WASTE_CAUSES = [
+  "cache_write_never_read",
+  "spin_loops",
+  "retry_loops",
+  "repeated_calls",
+  "recurring_runs",
+  "spend_with_no_outcome",
+] as const;
+const WasteCause = z.enum(WASTE_CAUSES);
+
+/**
+ * `list_waste`: spend the frames show bought nothing, by cause, largest
+ * first. `wasted` is the unproductive spend headline for the period plus the
+ * cache-write cause. `findingsOutsidePeriod` counts the open findings whose
+ * calls all ran outside the period.
+ */
 export const SpendWaste = z.object({
   wasted: Cost.nullable(),
   share: Ratio.nullable(),
   runsWithWaste: Count,
-  largestCause: z.enum(["cache_write_never_read"]).nullable(),
+  largestCause: WasteCause.nullable(),
+  findingsOutsidePeriod: Count,
   causes: z.array(
     z.object({
-      cause: z.enum(["cache_write_never_read"]),
+      cause: WasteCause,
       wasted: Cost,
       runs: Count,
       /**
@@ -413,6 +433,8 @@ const FindingFigure = z.object({ saving: Money, findings: Count });
  * totals. `spend` and `share` are null when the period's spend has no single
  * figure. `parts` holds detectors 2, 3, and 5 in that order and `estimate`
  * detector 4: each sits beside the headline and stays out of it.
+ * `findingsOutsidePeriod` counts the open findings whose calls all ran
+ * outside the period: the list shows them, and the headline does not.
  */
 export const UnproductiveSpend = z.object({
   period: DayRange,
@@ -425,6 +447,7 @@ export const UnproductiveSpend = z.object({
     }),
   ),
   estimate: FindingFigure,
+  findingsOutsidePeriod: Count,
 });
 export type UnproductiveSpend = z.infer<typeof UnproductiveSpend>;
 

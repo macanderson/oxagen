@@ -93,6 +93,7 @@ const HEADLINE: UnproductiveSpend = {
     { detector: 5, saving: { micros: "984600000", currency: "USD" }, findings: 1 },
   ],
   estimate: { saving: { micros: "300000", currency: "USD" }, findings: 1 },
+  findingsOutsidePeriod: 0,
 };
 
 const cost = (micros: string, basis: Cost["basis"] = "gateway_observed") => ({
@@ -402,6 +403,7 @@ const wasteRead: SpendWaste = {
   share: 0.2,
   runsWithWaste: 2,
   largestCause: "cache_write_never_read",
+  findingsOutsidePeriod: 0,
   causes: [
     {
       cause: "cache_write_never_read",
@@ -618,6 +620,8 @@ describe("Spend › header, tiles and tabs", () => {
     expect(wasted).toHaveTextContent("$2.47");
     expect(wasted).toHaveTextContent("20% of spend");
     expect(wasted.querySelector('[data-tone="critical"]')).not.toBeNull();
+    // Every money figure carries its basis, the wasted one too (#5294).
+    expect(wasted.querySelector('[data-basis="client_attested"]')).not.toBeNull();
   });
 
   // #5293. get_spend answers the part of the total the gateway metered, and
@@ -1320,7 +1324,11 @@ describe("Spend › Findings", () => {
     expect(within(hero).getByTestId("spend-headline-share")).toHaveTextContent(
       "25%",
     );
-    expect(hero).toHaveTextContent("of $20.00 spent this month.");
+    expect(hero).toHaveTextContent("of $20.00 spent on calls in this window.");
+    // The hero names the days it counts: the month to date (#5294).
+    expect(within(hero).getByTestId("spend-headline-window")).toHaveTextContent(
+      "Counts the calls that ran from Sep 1, 2026 to Sep 15, 2026.",
+    );
     // The listed findings' savings summed across kinds is not the headline.
     expect(hero).not.toHaveTextContent("$1,670.80");
     expect(hero).not.toHaveTextContent("a year at this run rate");
@@ -1994,7 +2002,7 @@ describe("Spend › Wasted spend", () => {
     expect(agentsList).not.toHaveBeenCalled();
   });
 
-  it("prints the four tiles, the recorded cause, retry loops from the findings, the five other design causes as not recorded, and a card per run with its two links", async () => {
+  it("prints the four tiles, the recorded cause, the six design causes as not recorded, and a card per run with its two links", async () => {
     loaded();
     await renderSpend(["waste"]);
     const wasted = screen.getAllByText("Wasted", { selector: "dt" });
@@ -2018,15 +2026,18 @@ describe("Spend › Wasted spend", () => {
     ]) {
       expect(causes).toHaveTextContent(cause);
     }
+    // No finding claims a call in the period, so retry loops and halted
+    // early read not recorded beside the four no detector meters (#5294).
     expect(causes.querySelectorAll('li[data-recorded="false"]')).toHaveLength(
-      5,
+      6,
     );
-    // Retry loops come from the open findings, which answered.
     expect(
       causes
         .querySelector('li[data-cause="retryLoops"]')
         ?.getAttribute("data-recorded"),
-    ).toBe("true");
+    ).toBe("false");
+    // The page reads the waste answer alone: the findings list adds no cause.
+    expect(screen.queryByTestId("waste-outside")).toBeNull();
     const named = document.querySelector('[data-run="arun_01k5rn8f3j"]');
     if (!(named instanceof HTMLElement)) throw new Error("no named run card");
     expect(named).toHaveTextContent("Repair the login redirect");
@@ -2657,6 +2668,7 @@ describe("Spend › what a read did not record", () => {
         runsWithWaste: 0,
         largestCause: null,
         causes: [],
+        findingsOutsidePeriod: 0,
       }),
     );
     await renderSpend(["waste"]);

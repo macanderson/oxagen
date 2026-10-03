@@ -184,6 +184,7 @@ describe("spend port", () => {
                 runsWithWaste: 0,
                 largestCause: null,
                 causes: [],
+                findingsOutsidePeriod: 0,
               })
             : readOk({ budgets: [] }),
         ),
@@ -383,6 +384,7 @@ describe("spend port", () => {
         { detector: 5, saving: usd("300"), findings: 2 },
       ],
       estimate: { saving: usd("900"), findings: 1 },
+      findingsOutsidePeriod: 2,
     };
     kernelRead.mockResolvedValue(readOk(answer));
     const read = await spend.unproductive(ctx, period);

@@ -9269,9 +9269,12 @@ type Messages = {
       };
       costData: string;
       hero: string;
+      heroWindow: string;
       heroShareOf: string;
       heroPeriod: string;
       heroNoSpend: string;
+      heroSpendNote: string;
+      heroOutside: string;
       mixedCurrency: string;
       parts: {
         title: string;
@@ -9398,9 +9401,19 @@ type Messages = {
       causeRuns: string;
       cause: {
         cache_write_never_read: string;
+        spin_loops: string;
+        retry_loops: string;
+        repeated_calls: string;
+        recurring_runs: string;
+        spend_with_no_outcome: string;
       };
       why: {
         cache_write_never_read: string;
+        spin_loops: string;
+        retry_loops: string;
+        repeated_calls: string;
+        recurring_runs: string;
+        spend_with_no_outcome: string;
       };
       designCause: {
         cacheMisses: string;
@@ -9410,11 +9423,10 @@ type Messages = {
         idleWhileParked: string;
         haltedEarly: string;
       };
+      causesNote: string;
       causesMissing: string;
-      retryLoopsWhy: string;
-      retryLoopsNone: string;
-      retryLoopsFindings: string;
-      retryLoopsOpen: string;
+      outside: string;
+      openFindings: string;
       runs: string;
       note: string;
       runAmountMissing: string;

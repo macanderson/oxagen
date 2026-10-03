@@ -185,6 +185,7 @@ export function toSpendWaste(
     share: out.share,
     runsWithWaste: out.runsWithWaste,
     largestCause: out.largestCause,
+    findingsOutsidePeriod: out.findingsOutsidePeriod,
     causes: out.causes.map((cause) => ({
       cause: cause.cause,
       wasted: cause.wasted,
@@ -277,6 +278,7 @@ export function toUnproductiveSpend(
       findings: part.findings,
     })),
     estimate: { saving: out.estimate.saving, findings: out.estimate.findings },
+    findingsOutsidePeriod: out.findingsOutsidePeriod,
   };
 }
 

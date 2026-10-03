@@ -364,14 +364,7 @@ async function body({
     }
     case "waste":
       if (!waste.ok) return <SpendReadFailure read={waste} {...failure} />;
-      return (
-        <WasteSection
-          waste={waste.value}
-          findings={listed(findings)}
-          month={month}
-          at={at}
-        />
-      );
+      return <WasteSection waste={waste.value} month={month} at={at} />;
     case "budgets": {
       if (!budgets.ok) return <SpendReadFailure read={budgets} {...failure} />;
       const gateway = await source.spend.gatewayPolicy(ctx);
