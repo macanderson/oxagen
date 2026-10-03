@@ -248,3 +248,78 @@ export async function readRunPullRequests(
     trunks: branches.trunks,
   };
 }
+
+/** One pull request's issue links, as `readClosingIssueLinks` answers them. */
+export type StoredClosingIssues = {
+  key: PullKey;
+  /** False when the forge store holds no row for the pull request. */
+  stored: boolean;
+  /**
+   * False when the pull request has no revision yet. The sync reads its
+   * closing references with each new head, so none were read.
+   */
+  read: boolean;
+  issues: IssueRow[];
+};
+
+/**
+ * The issue links of pull requests named by provider, repository, and number,
+ * in the order the keys came, and whether the store holds each one.
+ */
+export async function readClosingIssueLinks(
+  db: Db,
+  scope: Scope,
+  keys: readonly PullKey[],
+): Promise<StoredClosingIssues[]> {
+  if (keys.length === 0) return [];
+  const keyOf = (key: PullKey) =>
+    `${key.provider}:${key.repository.toLowerCase()}#${key.number}`;
+  const rows = await db
+    .select({
+      id: pulls.id,
+      provider: pulls.provider,
+      repository: pulls.repository,
+      number: pulls.number,
+    })
+    .from(pulls)
+    .where(
+      and(
+        eq(pulls.orgId, scope.orgId),
+        eq(pulls.workspaceId, scope.workspaceId),
+        inArray(pulls.number, [...new Set(keys.map((key) => key.number))]),
+      ),
+    );
+  const byKey = new Map(
+    rows.map((row) => [
+      keyOf({
+        provider: row.provider as PullKey["provider"],
+        repository: row.repository,
+        number: row.number,
+      }),
+      row.id,
+    ]),
+  );
+  const ids = [...new Set(byKey.values())];
+  const revisions = schema.forgePullRequestRevisions;
+  const captured =
+    ids.length === 0
+      ? []
+      : await db
+          .selectDistinct({ id: revisions.pullRequestId })
+          .from(revisions)
+          .where(
+            and(
+              eq(revisions.orgId, scope.orgId),
+              eq(revisions.workspaceId, scope.workspaceId),
+              inArray(revisions.pullRequestId, ids),
+            ),
+          );
+  const read = new Set(captured.map((row) => row.id));
+  const issues = await issuesOf(db, scope, ids);
+  return keys.map((key) => {
+    const id = byKey.get(keyOf(key));
+    return id === undefined
+      ? { key, stored: false, read: false, issues: [] }
+      : { key, stored: true, read: read.has(id), issues: issues.get(id) ?? [] };
+  });
+}

@@ -24,7 +24,7 @@ This console read does not consume AI credits (`noBillingGate: true`). IAM is de
 | `runId` | string | as asked |
 | `issues` | object[] | at most 200; the run's task first, then by the first frame that names each issue |
 | `complete` | boolean | false when a read limit cut the list; `warnings` names which |
-| `warnings` | string[] | `closing_issue_limit`, `closing_issues_read_failed`, `recorded_repository_not_connected`, `issue_frame_limit`, `tracker_read_limit`, `pull_request_ref_skipped`, `chain_break` or `ledger_event_limit` |
+| `warnings` | string[] | `closing_issue_limit`, `closing_issues_not_read`, `pull_request_not_stored`, `recorded_repository_not_connected`, `issue_frame_limit`, `tracker_read_limit`, `pull_request_ref_skipped`, `chain_break` or `ledger_event_limit` |
 
 Each issue:
 
@@ -49,7 +49,7 @@ Each issue:
 Three records name an issue, and nothing else does (ADR-197):
 
 - **The task.** The run's task reference. `owner/repo#N` or a GitHub issue URL names a GitHub issue. Any other reference, such as `ENG-4121`, is a tracker key Oxagen does not read, and its row says `not_github`.
-- **Closing references.** The issues GitHub records as closed by each pull request the run recorded opening: a wrapped run's `oxagen:pr_link` frames, and a ledger run's `provider_publish.pull_request_opened` events. Only the closing list is read. A pull request matched by branch or head commit adds nothing, because it does not show the run opened it.
+- **Closing references.** The issues each pull request the run recorded opening closes: a wrapped run's `oxagen:pr_link` frames, and a ledger run's `provider_publish.pull_request_opened` events. They come from the forge store's issue links (`forge.pull_request_issues`, ADR-292), which the sync reads from GitHub's closing references at each new head, so this read asks GitHub nothing for them. A pull request the store does not hold yet adds the `pull_request_not_stored` warning, and one whose references were never read adds `closing_issues_not_read`. Both mark the list incomplete. A pull request matched by branch or head commit adds nothing, because it does not show the run opened it.
 - **Frames.** A wrapped run's command and GitHub MCP frames. The server parses each command head for `gh issue <verb> <N|URL>`, `gh api repos/o/r/issues/N`, and literal `github.com/o/r/issues/N` URLs. It also reads the `issue.repository`, `issue.number`, `issue.url` and `issue.action` attrs the recorder writes on a GitHub MCP issue tool's frame and on `gh issue create`'s frame. `echo gh issue view 3`, a here-document body and `gh issue list` name nothing. A ledger run records no command, so it lists its task and closing references only.
 
 One row stands for each issue. A task that a frame or a closing reference also names keeps `relation: "task"` and `edge: "stated"` and carries those frames. A closing issue a frame also names stays `resolves`.
@@ -58,7 +58,7 @@ A bare `#N` takes its repository from the command's `-R`, `--repo` or `GH_REPO`,
 
 ## Tracker reads and the cache
 
-A closing reference carries GitHub's title and state with the closing list. Every other issue in a GitHub repository is read on load through the workspace's connection for that repository, one GraphQL call per repository. A run reads at most 50 issues per load. Past that, a row reads `read_limit` and the answer carries `tracker_read_limit`.
+A closing reference carries the title and state the forge store recorded with its issue link. Every other issue in a GitHub repository is read on load through the workspace's connection for that repository, one GraphQL call per repository. A run reads at most 50 issues per load. Past that, a row reads `read_limit` and the answer carries `tracker_read_limit`.
 
 Each state GitHub gives is cached in the serving process for 60 seconds, keyed by organization, workspace, repository and number. A load inside that minute answers from the cache and reads GitHub for nothing. `readAt` is when GitHub answered, so a cached row says how old its state is. A failed read is not cached.
 

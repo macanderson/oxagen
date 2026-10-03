@@ -331,16 +331,16 @@ describe("get_run_issues (#3970)", () => {
     ]);
   });
 
-  it("marks the list incomplete when a closing list was not read (negative)", async () => {
-    const { handler, deps } = setup();
-    deps.closingIssues.mockResolvedValue({
-      closing: [],
-      warnings: ["closing_issues_read_failed"],
-    });
-    const result = await handler({ runId: TACHO_ID }, ctx());
-    expect(result.complete).toBe(false);
-    expect(result.warnings).toContain("closing_issues_read_failed");
-  });
+  it.each(["closing_issues_not_read", "pull_request_not_stored"])(
+    "marks the list incomplete when a closing list was not read (%s, negative)",
+    async (warning) => {
+      const { handler, deps } = setup();
+      deps.closingIssues.mockResolvedValue({ closing: [], warnings: [warning] });
+      const result = await handler({ runId: TACHO_ID }, ctx());
+      expect(result.complete).toBe(false);
+      expect(result.warnings).toContain(warning);
+    },
+  );
 
   it("keeps the list whole when only a state was not read, and says why for that row", async () => {
     const { handler, deps } = setup();
