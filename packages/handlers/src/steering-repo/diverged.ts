@@ -215,10 +215,15 @@ function oxagenCommits(
   return made;
 }
 
-/** Whether main holds commits that no pull request merged, judged from `range`. */
+/**
+ * Whether main holds commits that no pull request merged, judged from
+ * `range`. `noun` is the host's name for one, so a GitLab reason says
+ * "merge request".
+ */
 export function judgeHistory(
   published: PublishedCommit,
   range: HistoryRange,
+  noun: "pull request" | "merge request" = "pull request",
 ): Divergence | null {
   if (range.status === "identical") return null;
   const main_sha = range.main_sha;
@@ -241,8 +246,8 @@ export function judgeHistory(
   if (first === undefined) return null;
   const reason =
     foreign.length === 1
-      ? `main holds 1 commit that no pull request merged: ${short(first.sha)}`
-      : `main holds ${foreign.length} commits that no pull request merged, starting with ${short(first.sha)}`;
+      ? `main holds 1 commit that no ${noun} merged: ${short(first.sha)}`
+      : `main holds ${foreign.length} commits that no ${noun} merged, starting with ${short(first.sha)}`;
   return { reason, main_sha };
 }
 
@@ -950,13 +955,17 @@ export async function gitlabDiverged(
   const main = await gitlabMainSha(t);
   if (main === published.sha) return null;
   const gone = (): Divergence | null =>
-    judgeHistory(published, {
-      status: "diverged",
-      commits: [],
-      truncated: false,
-      main_sha: main,
-      restored_at: -1,
-    });
+    judgeHistory(
+      published,
+      {
+        status: "diverged",
+        commits: [],
+        truncated: false,
+        main_sha: main,
+        restored_at: -1,
+      },
+      "merge request",
+    );
   // 400: GitLab no longer knows the published commit. 404: no merge base.
   const base = await t.rest.request<{ id: string }>(
     "GET",
@@ -978,13 +987,19 @@ export async function gitlabDiverged(
     message: commit.message,
   }));
   const truncated = compare.compare_timeout === true;
-  return judgeHistory(published, {
-    status: "ahead",
-    commits,
-    truncated,
-    main_sha: main,
-    restored_at: truncated ? -1 : await gitlabRestoredAt(t, published.sha, commits),
-  });
+  return judgeHistory(
+    published,
+    {
+      status: "ahead",
+      commits,
+      truncated,
+      main_sha: main,
+      restored_at: truncated
+        ? -1
+        : await gitlabRestoredAt(t, published.sha, commits),
+    },
+    "merge request",
+  );
 }
 
 async function gitlabFileContent(

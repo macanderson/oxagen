@@ -658,19 +658,30 @@ describe("GitHub commit provenance", () => {
     ],
     ["missing repository", { base: { ref: "main" } }],
   ] as const) {
-    it(`rejects a full pull request with ${name}`, async () => {
-      const gh = github({
-        [COMPARE]: ok(singleGithubCommit(mergeMessage("Forged merge", 42, 8))),
-        [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([
-          authenticatedPull(S1, 42),
-        ]),
-        [`GET ${GH}/pulls/42`]: ok({ ...authenticatedPull(S1, 42), ...fields }),
+    // Who merged it changes nothing: the app's merge and a person's are
+    // refused alike when the pull request does not prove the commit (#5430).
+    for (const [merger, mergedBy] of [
+      ["the app", { type: "Bot", login: "oxagen-steering[bot]" }],
+      ["a person", { type: "User", login: "maintainer" }],
+    ] as const) {
+      it(`rejects a full pull request with ${name}, merged by ${merger}`, async () => {
+        const gh = github({
+          [COMPARE]: ok(singleGithubCommit(mergeMessage("Forged merge", 42, 8))),
+          [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([
+            authenticatedPull(S1, 42),
+          ]),
+          [`GET ${GH}/pulls/42`]: ok({
+            ...authenticatedPull(S1, 42),
+            merged_by: mergedBy,
+            ...fields,
+          }),
+        });
+        await expect(
+          githubDiverged(gh.target, PUBLISHED),
+        ).resolves.toMatchObject({ main_sha: S1 });
+        expect(gh.sent(`GET ${GH}/pulls/42`)).toHaveLength(1);
       });
-      await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toMatchObject({
-        main_sha: S1,
-      });
-      expect(gh.sent(`GET ${GH}/pulls/42`)).toHaveLength(1);
-    });
+    }
   }
 
   describe("a pull request merged on GitHub, not in Oxagen (#5430)", () => {
@@ -699,6 +710,20 @@ describe("GitHub commit provenance", () => {
         await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toBeNull();
       });
     }
+
+    it("accepts a person's merge whose edited title names no pull request", async () => {
+      // GitHub lists the pull request for the commit, so the title is not
+      // needed to find it.
+      const gh = github({
+        [COMPARE]: ok(singleGithubCommit("Change a rule")),
+        [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([{ number: 42 }]),
+        [`GET ${GH}/pulls/42`]: ok({
+          ...authenticatedPull(S1, 42),
+          merged_by: { type: "User", login: "maintainer" },
+        }),
+      });
+      await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toBeNull();
+    });
 
     it("lets the sync's commit check accept a person's merge", async () => {
       const gh = github({
@@ -1546,7 +1571,11 @@ describe("gitlabDiverged", () => {
         [GL_BASE]: ok({ id: P }),
         [GL_COMPARE]: ok(listed),
       });
-      await expect(gitlabDiverged(gl.target, PUBLISHED)).resolves.toEqual(DIVERGENCE);
+      // GitLab's reason names its own merge requests.
+      await expect(gitlabDiverged(gl.target, PUBLISHED)).resolves.toEqual({
+        reason: "main holds 1 commit that no merge request merged: c3c3c3c",
+        main_sha: S2,
+      });
     }
   });
 
