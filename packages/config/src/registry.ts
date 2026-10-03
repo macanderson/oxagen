@@ -1840,6 +1840,26 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     },
   },
 
+  // ── Next.js ──────────────────────────────────────────────────────────────────
+  NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: {
+    group: "Next.js",
+    description:
+      "The key Next salts every server action id with and encrypts bound action arguments under. " +
+      "Without it each build makes a random key, every action id changes at a deploy, and every " +
+      "page left open breaks until it is reloaded (#5318). Next itself reads it at build and at " +
+      "run time, and writes it into the build's server manifest, as it did the random key. " +
+      "package-for-node.sh refuses to package the app without it.",
+    secret: true,
+    clientExposed: false,
+    services: ["app"],
+    requiredIn: ["production"],
+    valueOrigin: "generate",
+    refresh: {
+      how: "Mint 32 random bytes, base64. A new value changes every server action id, so every page open at the next app deploy breaks once and works after a reload. Keep production and staging (/oxagen/staging) on different values.",
+      command: "openssl rand -base64 32",
+    },
+  },
+
   // ── Public URLs ───────────────────────────────────────────────────────────────
   NEXT_PUBLIC_APP_URL: {
     group: "Public URLs",
