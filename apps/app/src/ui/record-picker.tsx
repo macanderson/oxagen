@@ -369,7 +369,7 @@ function OptionList({
                 onClick={() => {
                   onPick(row.value);
                 }}
-                className={`flex cursor-pointer items-start gap-2.5 rounded-xl px-3 py-2 text-sm ${
+                className={`flex cursor-pointer items-start gap-2.5 rounded-xl px-3 py-2 text-base ${
                   active ? menuItemActive : ""
                 }`}
               >
@@ -394,19 +394,19 @@ function OptionList({
                     ))}
                   </span>
                   {row.context === undefined ? null : (
-                    <span className="truncate text-xs text-muted-foreground">
+                    <span className="truncate text-sm text-muted-foreground">
                       {row.context}
                     </span>
                   )}
                   {row.detail !== undefined && row.detail !== row.label ? (
                     <span
-                      className={`${mono} truncate text-xs text-muted-foreground`}
+                      className={`${mono} truncate text-sm text-muted-foreground`}
                     >
                       {row.detail}
                     </span>
                   ) : null}
                   {row.description === undefined ? null : (
-                    <span className="line-clamp-2 text-xs text-muted-foreground">
+                    <span className="line-clamp-2 text-sm text-muted-foreground">
                       {row.description}
                     </span>
                   )}
@@ -419,7 +419,7 @@ function OptionList({
       {status !== null || more > 0 || partial ? (
         <p
           role="status"
-          className="border-t border-border px-3 py-2 text-xs text-muted-foreground first:border-t-0"
+          className="border-t border-border px-3 py-2 text-sm text-muted-foreground first:border-t-0"
         >
           {status ?? (more > 0 ? t("more", { count: more }) : t("partial"))}
         </p>
@@ -761,7 +761,7 @@ export function RecordMultiPicker({
               key={v}
               data-chip={v}
               title={shown.context}
-              className="inline-flex max-w-full items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-xs text-foreground"
+              className="inline-flex max-w-full items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-sm text-foreground"
             >
               {shown.icon === undefined ? null : (
                 <PickerMark icon={shown.icon} size={16} />

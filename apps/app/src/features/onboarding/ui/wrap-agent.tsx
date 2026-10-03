@@ -49,7 +49,7 @@ const LANGUAGE_TABS = "flex rounded-[9px] border border-border bg-hl p-[3px]";
 const osTab =
   "flex-1 rounded-md px-3 py-1.5 text-sm text-muted-foreground aria-selected:bg-card aria-selected:text-foreground aria-selected:shadow-sm focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11";
 const tokenBox =
-  "rounded-lg border border-dashed border-border bg-hl px-3 py-2.5 font-mono text-sm leading-relaxed text-foreground";
+  "rounded-lg border border-dashed border-border bg-hl px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground";
 const codeLine = `${mono} block overflow-x-auto whitespace-pre rounded-lg border border-border bg-hl px-3 py-2.5 text-sm`;
 
 type Token = { token: string; expiresAt: string; enrollCommand: string };
@@ -176,7 +176,7 @@ function TokenBox({
         </button>
       ) : (
         <>
-          <span className="text-xs text-muted-foreground">{t("orRun")}</span>
+          <span className="text-sm text-muted-foreground">{t("orRun")}</span>
           <code data-testid="enroll-command" className={codeLine}>
             {token.enrollCommand}
           </code>
@@ -253,7 +253,7 @@ function Download({
         id={`${baseId}-unpublished`}
         data-testid="not-backed"
         data-element="signed-installer"
-        className="text-xs text-muted-foreground"
+        className="text-sm text-muted-foreground"
       >
         {t("notPublished")}
       </p>
@@ -320,7 +320,7 @@ function CredentialColumn({
         <br />
         <span className="text-muted-foreground">{t("facts")}</span>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         {t.rich("use", {
           code: (chunks) => <span className={mono}>{chunks}</span>,
         })}
@@ -338,7 +338,7 @@ function CredentialColumn({
           >
             {pending ? t("issuing") : t("issue")}
           </button>
-          <p className="text-xs text-muted-foreground">{t("issueNote")}</p>
+          <p className="text-sm text-muted-foreground">{t("issueNote")}</p>
         </>
       ) : null}
     </div>
@@ -475,7 +475,7 @@ export function WrapAgent({
               <span className="text-sm font-semibold">
                 {t(`tabs.${item}.name`)}
               </span>
-              <span className="font-mono text-sm text-muted-foreground max-md:hidden">
+              <span className="font-mono text-xs text-muted-foreground max-md:hidden">
                 {t(`tabs.${item}.sub`)}
               </span>
             </button>
@@ -494,7 +494,7 @@ export function WrapAgent({
               <p
                 data-testid="not-backed"
                 data-element="sdk-package"
-                className="text-xs text-muted-foreground"
+                className="text-sm text-muted-foreground"
               >
                 {credentialT("sdkNotPublished")}
               </p>
@@ -525,7 +525,7 @@ export function WrapAgent({
         <SafeLink to={back} className={`${buttonSecondary} max-md:w-full`}>
           {registerT("back")}
         </SafeLink>
-        <span className="text-xs text-muted-foreground md:ml-auto">
+        <span className="text-sm text-muted-foreground md:ml-auto">
           {t("caption")}
         </span>
         <button

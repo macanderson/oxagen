@@ -60,9 +60,9 @@ import type { RegisterPlace } from "../register-actions";
 import { CancelRegistration } from "./cancel-registration";
 
 /** An input at 16px on a phone, so iOS does not zoom on focus. */
-const control = `${inputBase} min-h-10 max-md:min-h-11 max-md:text-base`;
+const control = `${inputBase} min-h-10 max-md:min-h-11 max-md:text-lg`;
 const label = "text-sm font-semibold text-foreground";
-const hint = "text-xs text-muted-foreground";
+const hint = "text-sm text-muted-foreground";
 const sectionTitle = "text-sm font-semibold text-foreground";
 
 export type ReservedAgent = {
@@ -84,7 +84,7 @@ function SectionHead({ title, done }: { title: string; done?: string }) {
       {done === undefined ? null : (
         <span
           data-testid="register-toolbelt-done"
-          className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-sm text-muted-foreground"
+          className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground"
         >
           <CheckIcon aria-hidden className="size-3" />
           {done}
@@ -340,7 +340,7 @@ export function RegisterAgentForm({
   const fieldError = (field: AgentField, id: string) => {
     const text = errorText(field);
     return text === null ? null : (
-      <p id={id} className="text-sm text-error-ink">
+      <p id={id} className="text-base text-error-ink">
         {text}
       </p>
     );

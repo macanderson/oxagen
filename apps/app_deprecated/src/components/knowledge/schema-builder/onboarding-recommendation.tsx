@@ -86,8 +86,8 @@ export function OnboardingRecommendation({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="space-y-1">
-          <p className="text-sm font-medium">Sample size</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-base font-medium">Sample size</p>
+          <p className="text-sm text-muted-foreground">
             Nodes sampled: {sampleLimit}
           </p>
         </div>
@@ -106,7 +106,7 @@ export function OnboardingRecommendation({
             >
               <ChevronDown className="h-3.5 w-3.5" />
             </Button>
-            <span className="text-sm w-12 text-center">{sampleLimit}</span>
+            <span className="text-base w-12 text-center">{sampleLimit}</span>
             <Button
               variant="outline"
               size="icon"
@@ -140,7 +140,7 @@ export function OnboardingRecommendation({
       )}
 
       {error && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-base text-destructive">
           {error}
         </div>
       )}
@@ -155,7 +155,7 @@ export function OnboardingRecommendation({
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium">{schema.displayName}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <p className="text-sm text-muted-foreground mt-0.5">
                     {schema.labels.length} label
                     {schema.labels.length !== 1 ? "s" : ""}
                     {" · "}
@@ -175,7 +175,7 @@ export function OnboardingRecommendation({
                 {schema.labels.map((l) => (
                   <span
                     key={l.name}
-                    className="inline-flex items-center rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-xs"
+                    className="inline-flex items-center rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-sm"
                     title={l.description}
                   >
                     {l.name}
@@ -195,11 +195,11 @@ export function OnboardingRecommendation({
               "rounded-xl border border-border bg-muted/30 px-4 py-3",
             )}
           >
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+            <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-1">
               Rationale
             </p>
-            <p className="text-sm text-muted-foreground">{result.rationale}</p>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-base text-muted-foreground">{result.rationale}</p>
+            <p className="text-sm text-muted-foreground mt-1">
               Based on {result.sampledCount} sampled nodes.
             </p>
           </div>

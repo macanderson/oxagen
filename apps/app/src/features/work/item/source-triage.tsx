@@ -38,10 +38,10 @@ export function SourcePanel({ detail }: { detail: WorkItemDetail }) {
       className="min-w-0 text-sm"
     >
       <div className="mb-2.5 flex items-baseline gap-2.5">
-        <h2 id="work-source-heading" className="text-xs font-semibold text-muted-foreground">
+        <h2 id="work-source-heading" className="text-sm font-semibold text-muted-foreground">
           {t("heading")}
         </h2>
-        <span className="text-xs text-muted-foreground">{t("treatedAsData")}</span>
+        <span className="text-sm text-muted-foreground">{t("treatedAsData")}</span>
       </div>
       <dl className={kvList}>
         {item.origin === "manual" ? (
@@ -69,7 +69,7 @@ export function SourcePanel({ detail }: { detail: WorkItemDetail }) {
                 revision: String(last.revision),
                 at: when(last.at),
               })}
-              <span className="block text-xs text-muted-foreground">
+              <span className="block text-sm text-muted-foreground">
                 {t("firstArrived", { at: when(first.at) })}
               </span>
             </>
@@ -90,12 +90,12 @@ export function SourcePanel({ detail }: { detail: WorkItemDetail }) {
       )}
       {changed ? (
         <div data-testid="work-source-first" className="mt-3 flex flex-col gap-1">
-          <p className="text-xs font-semibold text-muted-foreground">{t("firstRead")}</p>
-          <p className="whitespace-pre-wrap text-xs text-foreground [overflow-wrap:anywhere]">
+          <p className="text-sm font-semibold text-muted-foreground">{t("firstRead")}</p>
+          <p className="whitespace-pre-wrap text-sm text-foreground [overflow-wrap:anywhere]">
             {first.subject}
           </p>
           {first.description === null ? null : (
-            <p className="whitespace-pre-wrap text-xs text-muted-foreground [overflow-wrap:anywhere]">
+            <p className="whitespace-pre-wrap text-sm text-muted-foreground [overflow-wrap:anywhere]">
               {first.description}
             </p>
           )}
@@ -152,7 +152,7 @@ export function TriagePanel({ detail, at }: { detail: WorkItemDetail; at: At }) 
         <p className="text-foreground">
           <span className="font-semibold">{t("failed")}</span> {triage.failure.reason}
         </p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {t("failedNote", { at: when(triage.failure.at) })}
         </p>
       </div>
@@ -259,7 +259,7 @@ export function TriagePanel({ detail, at }: { detail: WorkItemDetail; at: At }) 
       className="min-w-0 text-sm max-md:mt-4 max-md:border-t max-md:border-border max-md:pt-4 md:border-l md:border-border md:pl-7"
     >
       <div className="mb-2.5 flex items-center gap-2.5">
-        <h2 id="work-triage-heading" className="text-xs font-semibold text-muted-foreground">
+        <h2 id="work-triage-heading" className="text-sm font-semibold text-muted-foreground">
           {t("heading")}
         </h2>
         {CORRECTABLE.has(item.status) && triage.failure === null ? (
@@ -274,13 +274,13 @@ export function TriagePanel({ detail, at }: { detail: WorkItemDetail; at: At }) 
           data-testid="work-triage-question"
           className="mt-3 flex flex-col gap-2 rounded-lg border border-border p-3"
         >
-          <p className="text-xs font-semibold text-muted-foreground">{t("question")}</p>
+          <p className="text-sm font-semibold text-muted-foreground">{t("question")}</p>
           {questions.map((question) => (
             <p key={question} className="whitespace-pre-wrap text-foreground [overflow-wrap:anywhere]">
               {question}
             </p>
           ))}
-          <p className="text-xs text-muted-foreground">{t("questionNote")}</p>
+          <p className="text-sm text-muted-foreground">{t("questionNote")}</p>
           <RecordAnswer
             org={at.org}
             ws={at.ws}

@@ -339,7 +339,7 @@ describe("the design's labels, the receipt and the phone", () => {
       for (const input of inputs) {
         expect(getComputedStyle(input).fontSize).toBe("16px");
         // The class list says so as well, for a reader of the markup.
-        expect(input.className).toContain("max-md:text-base");
+        expect(input.className).toContain("max-md:text-lg");
       }
     } finally {
       phone.restore();

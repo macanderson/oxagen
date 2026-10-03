@@ -80,7 +80,7 @@ export default function CreditsPurchaseInline({
             className="h-5 w-5 shrink-0 text-success"
             aria-hidden="true"
           />
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-base font-medium text-foreground">
             Redirecting to checkout…
           </p>
         </div>
@@ -101,10 +101,10 @@ export default function CreditsPurchaseInline({
           className="h-4 w-4 shrink-0 text-muted-foreground"
           aria-hidden="true"
         />
-        <span className="text-sm font-semibold text-foreground">
+        <span className="text-base font-semibold text-foreground">
           Purchase credits
         </span>
-        <span className="ml-auto text-xs text-muted-foreground">
+        <span className="ml-auto text-sm text-muted-foreground">
           1 credit = $0.01
         </span>
       </div>
@@ -120,7 +120,7 @@ export default function CreditsPurchaseInline({
             }}
             disabled={isSubmitting}
             className={cn(
-              "rounded-xl border py-2 text-sm font-medium transition-colors",
+              "rounded-xl border py-2 text-base font-medium transition-colors",
               "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
               !useCustom && amountUsd === amt
                 ? "border-primary bg-primary/5 text-foreground"
@@ -155,7 +155,7 @@ export default function CreditsPurchaseInline({
       {formState === "error" && errorMessage !== null && (
         <p
           role="alert"
-          className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-base text-destructive"
         >
           {errorMessage}
         </p>

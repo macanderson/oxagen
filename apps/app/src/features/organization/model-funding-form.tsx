@@ -110,7 +110,7 @@ function Verdict({
   return (
     <p
       role="status"
-      className="rounded-lg border border-success/45 bg-success/10 px-3 py-2.5 text-sm"
+      className="rounded-lg border border-success/45 bg-success/10 px-3 py-2.5 text-base"
       data-testid="funding-verdict-ok"
     >
       {needsBaseUrl(provider) && verdict.toolCalling === true
@@ -257,14 +257,14 @@ export function ModelFundingForm({
         open={provider !== "openrouter" || undefined}
         data-testid="funding-vendor"
       >
-        <summary className="cursor-pointer text-sm font-medium max-md:min-h-11">
+        <summary className="cursor-pointer text-base font-medium max-md:min-h-11">
           {t("form.vendor")}
         </summary>
         <div className="mt-3 flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="funding-provider"
-              className="text-sm font-medium text-foreground"
+              className="text-base font-medium text-foreground"
             >
               {t("form.provider")}
             </label>
@@ -286,7 +286,7 @@ export function ModelFundingForm({
                 </option>
               ))}
             </select>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {t(`providers.${provider}.hint`)}
             </p>
           </div>
@@ -313,7 +313,7 @@ export function ModelFundingForm({
               className="flex flex-col gap-3"
               data-testid="funding-models"
             >
-              <legend className="text-sm font-medium">
+              <legend className="text-base font-medium">
                 {t("form.models")}
               </legend>
               <Field
@@ -345,7 +345,7 @@ export function ModelFundingForm({
                   setPrecise(e.target.value);
                 }}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {t("form.unmappedNote")}
               </p>
             </fieldset>
@@ -353,7 +353,7 @@ export function ModelFundingForm({
 
           {provider === "anthropic" ? (
             <p
-              className="text-xs text-muted-foreground"
+              className="text-sm text-muted-foreground"
               data-testid="funding-anthropic-note"
             >
               {t("providers.anthropic.caching")}
@@ -367,7 +367,7 @@ export function ModelFundingForm({
         <FormAlert testId="funding-failure">{wholeFormFailure}</FormAlert>
       ) : null}
       {saved ? (
-        <p role="status" className="text-sm" data-testid="funding-saved">
+        <p role="status" className="text-base" data-testid="funding-saved">
           {t("form.saved")}
         </p>
       ) : null}
@@ -387,7 +387,7 @@ export function ModelFundingForm({
               className="flex flex-wrap items-center gap-3"
               data-testid="funding-remove-confirm"
             >
-              <p className="text-sm">{t("remove.confirm")}</p>
+              <p className="text-base">{t("remove.confirm")}</p>
               <button
                 type="button"
                 className={buttonSecondary}

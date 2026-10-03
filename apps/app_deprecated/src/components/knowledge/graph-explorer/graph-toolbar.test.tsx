@@ -375,7 +375,7 @@ describe("GraphToolbar — compact mode (<md)", () => {
   it("search input uses a 16px font below md to prevent iOS zoom", () => {
     render(<GraphToolbar {...makeProps({ view: "2d" })} />);
     const input = screen.getByRole("textbox", { name: /search the graph/i });
-    expect(input.className).toContain("text-base");
+    expect(input.className).toContain("text-lg");
   });
 });
 

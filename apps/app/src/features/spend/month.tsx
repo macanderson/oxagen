@@ -98,7 +98,7 @@ function BudgetMeter({
     return (
       <SafeLink
         to={routes.spend(at.org, at.ws, { tab: "budgets" })}
-        className={`${linkText} text-xs`}
+        className={`${linkText} text-sm`}
       >
         {t("none")}
       </SafeLink>
@@ -111,7 +111,7 @@ function BudgetMeter({
   const used = formatRatio(budget.ratio, locale);
   return (
     <div className="flex flex-col gap-1.5 pt-2" data-budget-state={budget.state}>
-      <p className="flex items-baseline justify-between gap-3 text-xs">
+      <p className="flex items-baseline justify-between gap-3 text-sm">
         <span className="text-muted-foreground">{t("label")}</span>
         <span className="font-semibold">
           {t("used", {
@@ -179,7 +179,7 @@ function Total({
         <p className="text-3xl font-semibold tracking-tight">
           <CostFigure cost={report.total.cost} />
         </p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {t("span", {
             from: format.dateTime(dayDate(from), monthDay),
             to: format.dateTime(dayDate(to), monthDay),
@@ -188,7 +188,7 @@ function Total({
         </p>
         {report.total.cost === null || estimatedRuns === 0 ? null : (
           <p
-            className="text-xs text-muted-foreground"
+            className="text-sm text-muted-foreground"
             data-testid="spend-month-estimate"
           >
             {tSummary("estimated", { count: estimatedRuns })}
@@ -196,7 +196,7 @@ function Total({
         )}
         <UnmeteredNote
           unmetered={report.unmeteredRuns}
-          className="text-xs text-muted-foreground"
+          className="text-sm text-muted-foreground"
           testId="spend-month-unmetered"
         />
         <BudgetMeter budgets={budgets} at={at} />
@@ -249,7 +249,7 @@ function UngroupedLabel({
   return (
     <span className="flex min-w-0 flex-col">
       <span className="font-semibold">{t("label")}</span>
-      <span className="text-xs text-muted-foreground">{t(`note.${by}`)}</span>
+      <span className="text-sm text-muted-foreground">{t(`note.${by}`)}</span>
     </span>
   );
 }
@@ -275,7 +275,7 @@ function GroupLabel({
     return (
       <span className="flex min-w-0 flex-col">
         <span className="font-semibold">{t("other.label")}</span>
-        <span className="text-xs text-muted-foreground">{t("other.note")}</span>
+        <span className="text-sm text-muted-foreground">{t("other.note")}</span>
       </span>
     );
   }
@@ -285,7 +285,7 @@ function GroupLabel({
     return (
       <span className="flex min-w-0 flex-col">
         <span className="font-semibold">{t("assistant.label")}</span>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           {t("assistant.note")}
         </span>
       </span>
@@ -315,7 +315,7 @@ function GroupLabel({
         <span className="flex min-w-0 flex-col">
           <span className={`${mono} truncate font-semibold`}>{row.key}</span>
           {row.provider === null ? null : (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               {row.provider}
             </span>
           )}
@@ -369,7 +369,7 @@ function Share({
           style={{ width: ratioWidth(Math.min(1, bar)) }}
         />
       </span>
-      <span className="font-mono text-xs text-muted-foreground tabular-nums">
+      <span className="font-mono text-sm text-muted-foreground tabular-nums">
         {formatRatio(share, locale)}
       </span>
     </span>
@@ -408,7 +408,7 @@ function RunList({
               <span className="truncate text-foreground">
                 {run.name ?? run.runId}
               </span>
-              <span className="flex gap-2 text-xs text-muted-foreground">
+              <span className="flex gap-2 text-sm text-muted-foreground">
                 {run.agentKey === null ? null : (
                   <span className={mono}>{run.agentKey}</span>
                 )}
@@ -426,7 +426,7 @@ function RunList({
         </li>
       ))}
       {more > 0 ? (
-        <li className="px-2 py-1.5 text-xs text-muted-foreground">
+        <li className="px-2 py-1.5 text-sm text-muted-foreground">
           {t("moreRuns", { count: more })}
         </li>
       ) : null}
@@ -461,7 +461,7 @@ function PerMergedPrFigure({ agent }: { agent: AgentPerMergedPr | null }) {
     return (
       <span className="flex flex-col items-end" data-per-merged-pr="absent">
         <span className="text-muted-foreground">{t("absent")}</span>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           {t("absence.no_bounded_run")}
         </span>
       </span>
@@ -469,7 +469,7 @@ function PerMergedPrFigure({ agent }: { agent: AgentPerMergedPr | null }) {
   }
   const unpriced =
     agent.unpricedRuns === 0 ? null : (
-      <span className="text-xs text-muted-foreground">
+      <span className="text-sm text-muted-foreground">
         {t("unpriced", { count: agent.unpricedRuns })}
       </span>
     );
@@ -481,7 +481,7 @@ function PerMergedPrFigure({ agent }: { agent: AgentPerMergedPr | null }) {
     return (
       <span className="flex flex-col items-end" data-per-merged-pr="absent">
         <span className="text-muted-foreground">{t("absent")}</span>
-        <span className="text-xs text-muted-foreground">{reason}</span>
+        <span className="text-sm text-muted-foreground">{reason}</span>
         {unpriced}
       </span>
     );
@@ -491,7 +491,7 @@ function PerMergedPrFigure({ agent }: { agent: AgentPerMergedPr | null }) {
       <span className="font-semibold">
         <Money value={agent.perMergedPr} />
       </span>
-      <span className="text-xs text-muted-foreground">
+      <span className="text-sm text-muted-foreground">
         {t("figure", { merged: agent.mergedPrs, runs: agent.boundedRuns })}
       </span>
       {unpriced}
@@ -515,8 +515,8 @@ function PerMergedPrRuns({
       className="flex flex-col gap-1 border-t border-border pt-2"
       data-testid="spend-month-per-merged-pr-runs"
     >
-      <h3 className="px-2 text-xs font-semibold">{t("runsTitle")}</h3>
-      <p className="px-2 text-xs text-muted-foreground">{t("runsNote")}</p>
+      <h3 className="px-2 text-sm font-semibold">{t("runsTitle")}</h3>
+      <p className="px-2 text-sm text-muted-foreground">{t("runsNote")}</p>
       <ul className="flex flex-col">
         {agent.runs.map((run) => (
           <li
@@ -530,7 +530,7 @@ function PerMergedPrRuns({
               >
                 {run.runId}
               </SafeLink>
-              <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
                 <Instant iso={run.startedAt} />
                 {run.pullRequests.map((pr) => (
                   <span
@@ -550,7 +550,7 @@ function PerMergedPrRuns({
           </li>
         ))}
         {more > 0 ? (
-          <li className="px-2 py-1.5 text-xs text-muted-foreground">
+          <li className="px-2 py-1.5 text-sm text-muted-foreground">
             {t("moreRuns", { count: more })}
           </li>
         ) : null}

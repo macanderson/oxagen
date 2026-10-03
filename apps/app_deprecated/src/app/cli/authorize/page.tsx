@@ -37,11 +37,11 @@ function ParamErrorPage({ errors }: { errors: string[] }) {
         <h1 className="text-xl font-semibold text-destructive">
           Invalid Authorization Request
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           This authorization link is invalid or has expired. Please re-run the
           CLI login command to generate a new link.
         </p>
-        <ul className="list-disc list-inside text-sm text-destructive/80 space-y-1">
+        <ul className="list-disc list-inside text-base text-destructive/80 space-y-1">
           {errors.map((e) => (
             <li key={e}>{e}</li>
           ))}

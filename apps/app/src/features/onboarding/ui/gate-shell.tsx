@@ -37,7 +37,7 @@ function Mark({ n, state }: { n: number; state: "done" | "current" | "todo" }) {
   return (
     <span
       aria-hidden="true"
-      className={`inline-flex size-[22px] flex-none items-center justify-center rounded-full border text-sm ${tone}`}
+      className={`inline-flex size-[22px] flex-none items-center justify-center rounded-full border text-xs ${tone}`}
     >
       {state === "done" ? "✓" : n}
     </span>
@@ -138,7 +138,7 @@ export function GateShell({
     <>
       <GateRail step={step} back={back} />
       {children}
-      <p className="mt-1 text-center text-xs leading-relaxed text-muted-foreground">
+      <p className="mt-1 text-center text-sm leading-relaxed text-muted-foreground">
         {t("caption")}
       </p>
     </>
@@ -153,7 +153,7 @@ export function GateShell({
             {email === null ? null : (
               <span
                 data-testid="gate-email"
-                className="truncate font-mono text-sm text-muted-foreground max-sm:hidden"
+                className="truncate font-mono text-xs text-muted-foreground max-sm:hidden"
               >
                 {email}
               </span>
@@ -161,7 +161,7 @@ export function GateShell({
             <SafeLink
               to={cancel}
               data-testid="gate-cancel"
-              className={`${buttonSecondary} text-xs`}
+              className={`${buttonSecondary} text-sm`}
             >
               {t("cancel")}
             </SafeLink>
@@ -198,10 +198,10 @@ export function GateHeader({
           {eyebrow}
         </p>
       )}
-      <h1 className="text-2xl font-bold tracking-tight text-foreground">
+      <h1 className="text-xl font-bold tracking-tight text-foreground">
         {title}
       </h1>
-      <p className="max-w-[560px] text-sm leading-relaxed text-muted-foreground">
+      <p className="max-w-[560px] text-base leading-relaxed text-muted-foreground">
         {lead}
       </p>
     </div>
@@ -230,7 +230,7 @@ export function GateFooter({
       {start}
       <div className="flex flex-wrap items-center gap-2.5 md:ml-auto max-md:flex-col max-md:items-stretch">
         {caption === undefined ? null : (
-          <span className="text-xs text-muted-foreground max-md:text-center">
+          <span className="text-sm text-muted-foreground max-md:text-center">
             {caption}
           </span>
         )}

@@ -139,7 +139,7 @@ export function AgentKillSwitch({
         </button>
         <span
           data-testid="agent-kill-switch-no-role"
-          className="max-w-prose text-xs text-muted-foreground"
+          className="max-w-prose text-sm text-muted-foreground"
         >
           {t("needsRole")}
         </span>
@@ -170,10 +170,10 @@ export function AgentKillSwitch({
             onSubmit={(e) => void submit(e)}
             className="flex flex-col gap-3"
           >
-            <p className="text-sm text-muted-foreground">{t("body")}</p>
+            <p className="text-base text-muted-foreground">{t("body")}</p>
             <div
               data-testid="agent-kill-switch-blast-radius"
-              className="rounded-lg border border-destructive/45 bg-destructive/10 px-3 py-2.5 text-sm"
+              className="rounded-lg border border-destructive/45 bg-destructive/10 px-3 py-2.5 text-base"
             >
               <p className="font-medium text-foreground">{t("blastTitle")}</p>
               <p className="mt-1 text-muted-foreground">{t("blastBody")}</p>
@@ -181,7 +181,7 @@ export function AgentKillSwitch({
             <div className="flex min-w-0 flex-col gap-1.5">
               <label
                 htmlFor="agent-kill-switch-reason"
-                className="text-sm font-medium text-foreground"
+                className="text-base font-medium text-foreground"
               >
                 {t("reason")}
               </label>
@@ -206,7 +206,7 @@ export function AgentKillSwitch({
             />
           </form>
         ) : (
-          <div className="flex flex-col gap-2 text-sm">
+          <div className="flex flex-col gap-2 text-base">
             {outcome.changed ? null : (
               <p
                 data-testid="agent-kill-switch-unchanged"

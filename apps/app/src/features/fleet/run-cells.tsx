@@ -58,7 +58,7 @@ function PullRequestItem({ pull }: { pull: RunPullRequest }) {
     <li className="flex items-center gap-x-1.5 gap-y-0.5 max-md:flex-wrap">
       {url === null ? (
         <span
-          className={`${mono} min-w-0 text-sm md:truncate`}
+          className={`${mono} min-w-0 text-xs md:truncate`}
           title={pull.url}
         >
           {label}
@@ -77,7 +77,7 @@ function PullRequestItem({ pull }: { pull: RunPullRequest }) {
           onClick={(event) => {
             event.stopPropagation();
           }}
-          className={`${linkText} flex min-w-0 items-center gap-1 whitespace-nowrap font-mono text-sm`}
+          className={`${linkText} flex min-w-0 items-center gap-1 whitespace-nowrap font-mono text-xs`}
         >
           <GitPullRequestIcon aria-hidden className="size-3 flex-none" />
           <span className="min-w-0 md:truncate">{label}</span>
@@ -88,7 +88,7 @@ function PullRequestItem({ pull }: { pull: RunPullRequest }) {
           data-testid="row-pr-state"
           data-state="unknown"
           title={t("stateUnknownHint")}
-          className="whitespace-nowrap text-sm text-muted-foreground"
+          className="whitespace-nowrap text-xs text-muted-foreground"
         >
           {t("stateUnknown")}
         </span>
@@ -158,7 +158,7 @@ export function PullRequestsCell({ run }: { run: RunRow }) {
         <PullRequestItem key={pull.url} pull={pull} />
       ))}
       {pulls.length > shown.length ? (
-        <li className="text-sm text-muted-foreground md:truncate">
+        <li className="text-xs text-muted-foreground md:truncate">
           {t("more", { count: pulls.length - shown.length })}
         </li>
       ) : null}
@@ -196,7 +196,7 @@ export function DiffCell({ diff }: { diff: RunDiff | null | undefined }) {
         })}
       </span>
       {diff.basis === "git_observed" ? (
-        <span className="block text-sm text-muted-foreground md:truncate">
+        <span className="block text-xs text-muted-foreground md:truncate">
           {t("uncommitted")}
         </span>
       ) : null}
@@ -233,12 +233,12 @@ export function TokensCell({ run }: { run: RunRow }) {
     >
       {formatCount(shown.total, locale)}
       {shown.cached === null ? null : (
-        <span className="block text-sm text-muted-foreground md:truncate">
+        <span className="block text-xs text-muted-foreground md:truncate">
           {t("tokens.cached", { ratio: formatRatio(shown.cached, locale) })}
         </span>
       )}
       {shown.reported ? (
-        <span className="block text-sm text-muted-foreground md:truncate">
+        <span className="block text-xs text-muted-foreground md:truncate">
           {t("tokens.reported")}
         </span>
       ) : null}
@@ -274,7 +274,7 @@ export function TokensTile({ listed }: { listed: readonly ListedRun[] }) {
           <span
             data-testid="tokens-not-recorded"
             data-recorded="false"
-            className="text-base font-medium text-muted-foreground"
+            className="text-lg font-medium text-muted-foreground"
           >
             {t("notRecorded")}
           </span>

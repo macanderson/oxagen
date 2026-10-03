@@ -73,7 +73,7 @@ export function SchemaList({
   if (schemas.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <p className="text-sm text-muted-foreground">No schemas defined yet.</p>
+        <p className="text-base text-muted-foreground">No schemas defined yet.</p>
       </div>
     );
   }
@@ -84,7 +84,7 @@ export function SchemaList({
         <Alert className="border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-900/10">
           <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
           <AlertDescription className="flex items-center justify-between">
-            <span className="text-amber-800 dark:text-amber-300 text-sm">
+            <span className="text-amber-800 dark:text-amber-300 text-base">
               Schema changes detected. Consider running reconciliation to
               re-label existing nodes.
             </span>
@@ -122,19 +122,19 @@ export function SchemaList({
               <div className="flex items-center gap-3 min-w-0">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-sm">
+                    <span className="font-medium text-base">
                       {schema.displayName}
                     </span>
                     <span
                       className={cn(
-                        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                        "inline-flex items-center rounded-full px-2 py-0.5 text-sm font-medium",
                         sourceBadge.className,
                       )}
                     >
                       {sourceBadge.label}
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <p className="text-sm text-muted-foreground mt-0.5">
                     {schema.labels.length} label
                     {schema.labels.length !== 1 ? "s" : ""}
                     {" · "}
@@ -146,7 +146,7 @@ export function SchemaList({
               <div className="flex items-center gap-3 shrink-0 ml-4">
                 <Badge
                   variant={schema.enabled ? "default" : "secondary"}
-                  className="text-xs"
+                  className="text-sm"
                 >
                   {schema.enabled ? "Active" : "Inactive"}
                 </Badge>

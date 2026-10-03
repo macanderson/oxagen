@@ -167,7 +167,7 @@ export function ReceiptsTab() {
               disabled
               placeholder={t("searchPlaceholder")}
               aria-describedby={note}
-              className={`${inputBase} max-md:min-h-11 max-md:text-base`}
+              className={`${inputBase} max-md:min-h-11 max-md:text-lg`}
             />
           </label>
           <button
@@ -189,7 +189,7 @@ export function ReceiptsTab() {
                 type="button"
                 disabled
                 aria-describedby={note}
-                className={`${buttonSecondary} min-h-7 px-2 py-0.5 text-xs`}
+                className={`${buttonSecondary} min-h-7 px-2 py-0.5 text-sm`}
               >
                 {t(`chips.${chip}`)}
               </button>
@@ -200,7 +200,7 @@ export function ReceiptsTab() {
               type="button"
               disabled
               aria-describedby={note}
-              className="min-h-7 px-2 text-xs text-muted-foreground max-md:min-h-11"
+              className="min-h-7 px-2 text-sm text-muted-foreground max-md:min-h-11"
             >
               {t("clear")}
             </button>
@@ -338,7 +338,7 @@ function BundleCard({
           id={verifyNote}
           data-testid="audit-not-recorded"
           data-issue={AUDIT_GAPS.exports.issue}
-          className="text-xs text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           {t("verifyNotRecorded")}
         </p>
@@ -421,7 +421,7 @@ function PolicyField({
 /** A field whose read did not answer: "unread" and the code, marked as such. */
 function Unread({ children }: { children: string }) {
   return (
-    <span data-recorded="unread" className="font-mono text-xs">
+    <span data-recorded="unread" className="font-mono text-sm">
       {children}
     </span>
   );

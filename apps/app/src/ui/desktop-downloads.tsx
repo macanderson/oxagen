@@ -30,8 +30,8 @@ export function DesktopDownloads() {
       aria-label={t("title")}
       className="flex flex-col gap-2 rounded-md border border-border p-3"
     >
-      <h3 className="text-sm font-semibold text-foreground">{t("title")}</h3>
-      <p className="max-w-prose text-xs text-muted-foreground">
+      <h3 className="text-base font-semibold text-foreground">{t("title")}</h3>
+      <p className="max-w-prose text-sm text-muted-foreground">
         {t.rich("lead", {
           code: (chunks) => (
             <code className={`${mono} rounded bg-muted px-1`}>{chunks}</code>
@@ -63,7 +63,7 @@ export function DesktopDownloads() {
         ))}
       </dl>
       <p
-        className="max-w-prose text-xs text-muted-foreground"
+        className="max-w-prose text-sm text-muted-foreground"
         data-testid="desktop-downloads-macos-first-launch"
       >
         {t("macosFirstLaunch")}
@@ -71,12 +71,12 @@ export function DesktopDownloads() {
       {/* ADR-202: every surface that hands out an installer says that the
           macOS app updates itself. */}
       <p
-        className="max-w-prose text-xs text-muted-foreground"
+        className="max-w-prose text-sm text-muted-foreground"
         data-testid="desktop-downloads-macos-updates"
       >
         {t("macosUpdates")}
       </p>
-      <p className="text-xs">
+      <p className="text-sm">
         <DesktopDownloadsPageLink
           to={DESKTOP_DOWNLOADS_PAGE}
           data-testid="desktop-downloads-all"

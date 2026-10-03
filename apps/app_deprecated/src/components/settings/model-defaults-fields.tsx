@@ -152,7 +152,7 @@ export function ModelDefaultsFields({
             {/* System default */}
             <SelectItem value={SYSTEM_VALUE}>
               <span className="font-medium">System default</span>
-              <span className="ml-2 text-xs text-muted-foreground">
+              <span className="ml-2 text-sm text-muted-foreground">
                 Oxagen selects automatically
               </span>
             </SelectItem>
@@ -163,7 +163,7 @@ export function ModelDefaultsFields({
               {TEXT_TIERS.map((tier) => (
                 <SelectItem key={tier.id} value={`tier:${tier.id}`}>
                   <span className="font-medium">{tier.name}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">
+                  <span className="ml-2 text-sm text-muted-foreground">
                     {tier.blurb}
                   </span>
                 </SelectItem>
@@ -180,7 +180,7 @@ export function ModelDefaultsFields({
                       {models.map((m) => (
                         <SelectItem key={m.id} value={`model:${m.id}`}>
                           <span className="font-medium">{m.name}</span>
-                          <span className="ml-2 text-xs text-muted-foreground">
+                          <span className="ml-2 text-sm text-muted-foreground">
                             {vendorLabels[vendor]}
                             {m.context ? ` · ${m.context}` : ""}
                           </span>
@@ -195,7 +195,7 @@ export function ModelDefaultsFields({
         </Select>
       </div>
 
-      <p className="text-xs text-muted-foreground">{scopeNote}</p>
+      <p className="text-sm text-muted-foreground">{scopeNote}</p>
     </div>
   );
 }

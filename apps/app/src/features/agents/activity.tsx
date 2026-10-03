@@ -79,7 +79,7 @@ function Runs({
       id="agent-runs"
       title={t("title")}
       aside={
-        <span className={`${mono} text-sm text-dim`}>
+        <span className={`${mono} text-xs text-dim`}>
           {t("shown", { count: formatCount(runs.value.length, locale) })}
         </span>
       }
@@ -103,13 +103,13 @@ function Runs({
               <SafeLink
                 to={routes.run(place.org, place.ws, run.id)}
                 title={run.name ?? run.taskRef ?? undefined}
-                className="block truncate text-xs underline-offset-4 hover:underline"
+                className="block truncate text-sm underline-offset-4 hover:underline"
               >
                 {run.name ?? run.taskRef ?? t("untitled")}
               </SafeLink>
               <span
                 data-testid="agent-run-id"
-                className={`${mono} block truncate text-sm text-dim`}
+                className={`${mono} block truncate text-xs text-dim`}
               >
                 {run.id}
               </span>
@@ -128,7 +128,7 @@ function Runs({
               )}
             </td>
             <td className={numericCell}>{formatCount(run.frames, locale)}</td>
-            <td className={`${cell} ${mono} text-xs text-dim`}>
+            <td className={`${cell} ${mono} text-sm text-dim`}>
               <Instant at={run.startedAt} />
             </td>
           </tr>
@@ -162,13 +162,13 @@ function Accounting({
       title={t("title")}
       lead={t("lead")}
       aside={
-        <span className={`${mono} text-sm text-dim`}>{t("window")}</span>
+        <span className={`${mono} text-xs text-dim`}>{t("window")}</span>
       }
     >
       {spend !== null && !spend.ok ? (
         <ReadFailure read={spend} section={t("title")} />
       ) : r === null ? (
-        <p className="text-sm text-muted-foreground">{t("none")}</p>
+        <p className="text-base text-muted-foreground">{t("none")}</p>
       ) : (
         <>
           <Table
@@ -329,7 +329,7 @@ function Last30({
                   <Money value={finding.saving} /> {t("atStake")}
                 </Badge>
               </p>
-              <p className="text-xs text-muted-foreground">{finding.why}</p>
+              <p className="text-sm text-muted-foreground">{finding.why}</p>
               <span className="flex gap-2">
                 <SafeLink
                   to={routes.spend(place.org, place.ws, {

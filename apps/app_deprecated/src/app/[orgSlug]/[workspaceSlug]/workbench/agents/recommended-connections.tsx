@@ -49,11 +49,11 @@ export function RecommendedConnections({
     >
       <div className="mb-1 flex items-center gap-2">
         <Plug className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-        <p className="text-sm font-medium text-foreground">
+        <p className="text-base font-medium text-foreground">
           Recommended connections
         </p>
       </div>
-      <p className="mb-3 text-xs text-muted-foreground">
+      <p className="mb-3 text-sm text-muted-foreground">
         Not registered in this workspace yet, so they weren&rsquo;t allowlisted.
         Connect one, then re-generate or add it under Tools.
       </p>
@@ -68,20 +68,20 @@ export function RecommendedConnections({
               <div className="flex flex-wrap items-center gap-2">
                 <Badge
                   variant="outline"
-                  className="gap-1 text-[10px] font-medium"
+                  className="gap-1 text-xs font-medium"
                 >
                   <Server className="h-3 w-3" aria-hidden="true" />
                   MCP server
                 </Badge>
                 <span
-                  className="truncate text-sm font-medium text-foreground"
+                  className="truncate text-base font-medium text-foreground"
                   data-testid="agent-recommendation-name"
                 >
                   {rec.name}
                 </span>
               </div>
               <p
-                className="text-xs text-muted-foreground"
+                className="text-sm text-muted-foreground"
                 data-testid="agent-recommendation-reason"
               >
                 {rec.reason}

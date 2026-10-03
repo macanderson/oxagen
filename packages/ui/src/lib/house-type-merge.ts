@@ -7,10 +7,11 @@ import type {
 /**
  * The steps of the two house type scales. `house-tailwind.css`, which the
  * brand sync copies from the kit, turns each one into a `text-m-<step>` and a
- * `text-a-<step>` utility. `utils.test.ts` fails when that file gains a step
- * this list lacks.
+ * `text-a-<step>` utility. Only the app scale has `2xs`, its 10px step, and
+ * the list serves both scales, so `text-m-2xs` merges as a size too.
+ * `utils.test.ts` fails when that file gains a step this list lacks.
  */
-const TYPE_STEPS = ["h1", "h2", "h3", "h4", "body", "micro"] as const;
+const TYPE_STEPS = ["h1", "h2", "h3", "h4", "body", "micro", "2xs"] as const;
 
 /**
  * The tailwind-merge config every `cn()` in product builds on, through

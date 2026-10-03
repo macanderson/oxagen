@@ -53,7 +53,7 @@ function Headline({ headline }: { headline: Read<UnproductiveSpend> }) {
   if (!headline.ok) {
     if (headline.reason === "error" && headline.code === MIXED_CURRENCY)
       return (
-        <p className="text-sm text-muted-foreground">{t("mixedCurrency")}</p>
+        <p className="text-base text-muted-foreground">{t("mixedCurrency")}</p>
       );
     return <ReadFailure read={headline} section={t("hero")} />;
   }
@@ -129,7 +129,7 @@ function PartFigures({ headline }: { headline: Read<UnproductiveSpend> }) {
         <div data-detector="4" className="contents">
           <dt className="text-muted-foreground">
             {t("estimate")}{" "}
-            <span className="rounded-sm border border-border px-1 text-sm">
+            <span className="rounded-sm border border-border px-1 text-xs">
               {t("estimated")}
             </span>
           </dt>
@@ -219,8 +219,8 @@ export function FindingsSection({
           data-state="empty"
           className={`${panel} flex flex-col gap-2 p-6`}
         >
-          <h2 className="text-base font-semibold">{t("emptyTitle")}</h2>
-          <p className="text-sm text-muted-foreground">{t("empty")}</p>
+          <h2 className="text-lg font-semibold">{t("emptyTitle")}</h2>
+          <p className="text-base text-muted-foreground">{t("empty")}</p>
         </section>
       ) : (
         <FindingsList
@@ -366,7 +366,7 @@ export function FindingEvidence({
                     </SafeLink>
                     <span
                       data-testid="run-id"
-                      className={`${mono} block truncate text-sm text-dim`}
+                      className={`${mono} block truncate text-xs text-dim`}
                     >
                       {run.runId}
                     </span>

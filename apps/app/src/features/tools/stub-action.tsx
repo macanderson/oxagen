@@ -88,7 +88,7 @@ export function StubAction({
             data-gap={gapRef(gap)}
             className="rounded-lg border border-dashed border-border px-3 py-2.5 text-sm text-muted-foreground"
           >
-            <span className="mb-0.5 block text-sm font-semibold uppercase tracking-[0.1em] text-dim">
+            <span className="mb-0.5 block text-xs font-semibold uppercase tracking-[0.1em] text-dim">
               {t("notBacked")}
             </span>
             {note}
@@ -118,10 +118,10 @@ export function StubField({
   placeholder?: string;
 }) {
   const field =
-    "block w-full min-w-0 rounded-md border border-input-border bg-input-disabled-bg px-3 py-2 text-base text-input-disabled-fg md:text-sm";
+    "block w-full min-w-0 rounded-md border border-input-border bg-input-disabled-bg px-3 py-2 text-lg text-input-disabled-fg md:text-sm";
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-foreground">
+      <label htmlFor={id} className="text-base font-medium text-foreground">
         {label}
       </label>
       {options === undefined ? (
@@ -134,7 +134,7 @@ export function StubField({
         </select>
       )}
       {hint === undefined ? null : (
-        <p className="text-xs text-muted-foreground">{hint}</p>
+        <p className="text-sm text-muted-foreground">{hint}</p>
       )}
     </div>
   );

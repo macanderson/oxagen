@@ -105,8 +105,8 @@ export function UserPrivacyPanel() {
     <div className="flex flex-col gap-8 max-w-xl">
       {/* Data Export — Art.20 */}
       <section className="flex flex-col gap-3">
-        <h3 className="text-base font-semibold">Export your data</h3>
-        <p className="text-sm text-muted-foreground">
+        <h3 className="text-lg font-semibold">Export your data</h3>
+        <p className="text-base text-muted-foreground">
           Download a machine-readable ZIP archive of your personal data,
           including your profile, conversations, API key metadata, and generated
           assets. (GDPR Article 20)
@@ -123,28 +123,28 @@ export function UserPrivacyPanel() {
           </Button>
         )}
         {exportState.phase === "pending" && (
-          <p className="text-sm text-muted-foreground">Submitting request…</p>
+          <p className="text-base text-muted-foreground">Submitting request…</p>
         )}
         {exportState.phase === "queued" && (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             Your data export is being prepared. This page will update when
             it&apos;s ready (usually within a few minutes).
           </p>
         )}
         {exportState.phase === "ready" && (
           <div className="flex flex-col gap-2">
-            <p className="text-sm text-success">Your export is ready.</p>
+            <p className="text-base text-success">Your export is ready.</p>
             <a
               href={exportState.downloadUrl}
               download
-              className="text-sm underline underline-offset-4"
+              className="text-base underline underline-offset-4"
             >
               Download ZIP archive
             </a>
           </div>
         )}
         {exportState.phase === "error" && (
-          <p className="text-sm text-destructive">{exportState.message}</p>
+          <p className="text-base text-destructive">{exportState.message}</p>
         )}
       </section>
 
@@ -152,10 +152,10 @@ export function UserPrivacyPanel() {
 
       {/* Account Erasure — Art.17 */}
       <section className="flex flex-col gap-3">
-        <h3 className="text-base font-semibold text-destructive">
+        <h3 className="text-lg font-semibold text-destructive">
           Delete your account
         </h3>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           Permanently delete your account and all associated personal data. Your
           sessions will be revoked immediately. Data deletion is scheduled
           within 30 days. This action cannot be undone. (GDPR Article 17)
@@ -173,7 +173,7 @@ export function UserPrivacyPanel() {
         )}
         {eraseState.phase === "confirming" && (
           <div className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-            <p className="text-sm font-medium">
+            <p className="text-base font-medium">
               Are you sure? This will permanently delete your account and all
               data. You will be signed out immediately.
             </p>
@@ -192,10 +192,10 @@ export function UserPrivacyPanel() {
           </div>
         )}
         {eraseState.phase === "pending" && (
-          <p className="text-sm text-muted-foreground">Processing…</p>
+          <p className="text-base text-muted-foreground">Processing…</p>
         )}
         {eraseState.phase === "queued" && (
-          <p className="text-sm">
+          <p className="text-base">
             Account deletion has been scheduled. Effective date:{" "}
             <span className="font-medium">
               {new Date(eraseState.effectiveAt).toLocaleDateString()}
@@ -204,7 +204,7 @@ export function UserPrivacyPanel() {
           </p>
         )}
         {eraseState.phase === "error" && (
-          <p className="text-sm text-destructive">{eraseState.message}</p>
+          <p className="text-base text-destructive">{eraseState.message}</p>
         )}
       </section>
     </div>

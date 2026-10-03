@@ -77,10 +77,10 @@ export default async function MembersPendingPage({
           <Mail className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
         </span>
         <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-base font-medium text-foreground">
             No pending invitations
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Members who have been invited but have not yet accepted will appear
             here.
           </p>
@@ -106,17 +106,17 @@ export default async function MembersPendingPage({
             className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:gap-4"
           >
             {/* Avatar initial */}
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted text-xs font-medium text-muted-foreground uppercase">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted text-sm font-medium text-muted-foreground uppercase">
               {inv.email.charAt(0)}
             </span>
 
             {/* Email + expiry */}
             <div className="flex flex-1 flex-col gap-0.5 min-w-0">
-              <span className="text-sm font-medium text-foreground truncate">
+              <span className="text-base font-medium text-foreground truncate">
                 {inv.email}
               </span>
               {inv.expiresAt ? (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   {formatExpiry(inv.expiresAt)}
                 </span>
               ) : null}
@@ -124,7 +124,7 @@ export default async function MembersPendingPage({
 
             {/* Role + actions */}
             <div className="flex shrink-0 items-center gap-2">
-              <Badge variant="outline" className="capitalize text-xs">
+              <Badge variant="outline" className="capitalize text-sm">
                 {inv.role}
               </Badge>
               {canManage ? (

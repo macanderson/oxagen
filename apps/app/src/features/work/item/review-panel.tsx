@@ -108,7 +108,7 @@ function Why({ send }: { send: WorkSend }) {
       break;
   }
   return (
-    <p data-testid="work-review-why" className="min-w-0 text-xs text-muted-foreground">
+    <p data-testid="work-review-why" className="min-w-0 text-sm text-muted-foreground">
       {text}
     </p>
   );
@@ -184,7 +184,7 @@ export function ReviewPanel({
                       {shortSha(head)}
                     </code>
                     {pr.headAt === null ? null : (
-                      <span className="block text-xs text-muted-foreground">
+                      <span className="block text-sm text-muted-foreground">
                         {t("headMoved", { at: when(pr.headAt) })}
                       </span>
                     )}
@@ -201,11 +201,11 @@ export function ReviewPanel({
               </dd>
             </dl>
             <div className="flex flex-col gap-1.5">
-              <p className="text-xs font-semibold text-muted-foreground">{t("required")}</p>
+              <p className="text-sm font-semibold text-muted-foreground">{t("required")}</p>
               {required === null ? (
-                <p className="text-xs text-muted-foreground">{t("requiredUnread")}</p>
+                <p className="text-sm text-muted-foreground">{t("requiredUnread")}</p>
               ) : required.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   {t("requiredNone", { head: head === null ? "" : shortSha(head) })}
                 </p>
               ) : (
@@ -218,8 +218,8 @@ export function ReviewPanel({
             </div>
             {optional.length === 0 ? null : (
               <div className="flex flex-col gap-1.5" data-testid="work-review-optional">
-                <p className="text-xs font-semibold text-muted-foreground">{t("optional")}</p>
-                <p className="text-xs text-muted-foreground">{t("optionalNote")}</p>
+                <p className="text-sm font-semibold text-muted-foreground">{t("optional")}</p>
+                <p className="text-sm text-muted-foreground">{t("optionalNote")}</p>
                 <ul className="flex flex-col gap-1.5">
                   {optional.map((check) => (
                     <CheckRow
@@ -253,8 +253,8 @@ export function ReviewPanel({
             </p>
             {earlier === null ? null : (
               <>
-                <p className="text-xs font-semibold text-muted-foreground">{t("earlier")}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm font-semibold text-muted-foreground">{t("earlier")}</p>
+                <p className="text-sm text-muted-foreground">
                   {t("earlierNote", { head: shortSha(earlier.head) })}
                 </p>
                 <ul className="flex flex-col gap-1.5">
@@ -269,7 +269,7 @@ export function ReviewPanel({
               </>
             )}
             {send.staleAcceptance === null ? null : (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {t("staleAcceptance", {
                   by: person(send.staleAcceptance.by),
                   head: shortSha(send.staleAcceptance.head),
@@ -306,7 +306,7 @@ export function ReviewPanel({
           </p>
         )}
         {reviewing && pr !== null && head !== null && !closedUnmerged && !acceptedHere ? (
-          <p data-testid="work-review-consequence" className="text-xs text-muted-foreground">
+          <p data-testid="work-review-consequence" className="text-sm text-muted-foreground">
             {t("consequence", { head: shortSha(head) })}
           </p>
         ) : null}

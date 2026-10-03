@@ -81,7 +81,7 @@ function Chooser({
       wide
       testId="create-chooser"
     >
-      <div className="flex flex-col gap-3 text-sm">
+      <div className="flex flex-col gap-3 text-base">
         <p className="text-muted-foreground">{t("chooser.lead")}</p>
         <ul className="grid gap-2.5 sm:grid-cols-2">
           {offeredKinds().map((kind) => {
@@ -110,7 +110,7 @@ function Chooser({
                       {t(`kinds.${kind}.body`)}
                     </span>
                     <span
-                      className={`${mono} break-all text-xs text-muted-foreground`}
+                      className={`${mono} break-all text-sm text-muted-foreground`}
                     >
                       {t(`kinds.${kind}.file`)}
                     </span>
@@ -209,9 +209,9 @@ function Wizard({
       }
     >
       <Rail steps={steps} current={step} />
-      <p className="mb-3 text-sm text-muted-foreground">{view.subtitle}</p>
+      <p className="mb-3 text-base text-muted-foreground">{view.subtitle}</p>
       {view.body}
-      <p className={`${mono} mt-4 text-xs text-muted-foreground`}>
+      <p className={`${mono} mt-4 text-sm text-muted-foreground`}>
         {t.rich("needs", {
           grant: wizard.need,
           workspace: ctx.ws,
@@ -287,7 +287,7 @@ function WizardLoadFailed({
       title={t("loadFailed.title")}
       testId="create-load-failed"
     >
-      <p role="alert" className="text-sm text-muted-foreground">
+      <p role="alert" className="text-base text-muted-foreground">
         {t("loadFailed.body")}
       </p>
       <div className="mt-4 flex gap-2">

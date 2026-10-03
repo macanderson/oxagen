@@ -164,7 +164,7 @@ export function ConnectMcpForm({
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1">
-          <Label htmlFor="mcp-server-name" className="text-xs">
+          <Label htmlFor="mcp-server-name" className="text-sm">
             Server name
           </Label>
           <Input
@@ -178,7 +178,7 @@ export function ConnectMcpForm({
           />
         </div>
         <div className="flex flex-col gap-1">
-          <Label htmlFor="mcp-server-endpoint" className="text-xs">
+          <Label htmlFor="mcp-server-endpoint" className="text-sm">
             Endpoint URL
           </Label>
           <Input
@@ -194,7 +194,7 @@ export function ConnectMcpForm({
       </div>
 
       <div className="flex flex-col gap-1">
-        <Label htmlFor="mcp-server-transport" className="text-xs">
+        <Label htmlFor="mcp-server-transport" className="text-sm">
           Transport
         </Label>
         <Select
@@ -220,7 +220,7 @@ export function ConnectMcpForm({
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label className="text-xs">Authentication</Label>
+        <Label className="text-sm">Authentication</Label>
         <RadioGroup
           value={authKind}
           onValueChange={(v) => {
@@ -231,7 +231,7 @@ export function ConnectMcpForm({
           {AUTH_KINDS.map((k) => (
             <label
               key={k.value}
-              className={`flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm transition-colors ${
+              className={`flex cursor-pointer items-start gap-3 rounded-md border p-3 text-base transition-colors ${
                 authKind === k.value
                   ? "border-primary bg-primary/5"
                   : "border-border/60 hover:border-border hover:bg-muted/30"
@@ -240,7 +240,7 @@ export function ConnectMcpForm({
               <Radio value={k.value} disabled={pending} className="mt-0.5" />
               <span>
                 <span className="font-medium text-foreground">{k.label}</span>
-                <span className="block text-xs text-muted-foreground">
+                <span className="block text-sm text-muted-foreground">
                   {k.description}
                 </span>
               </span>
@@ -249,7 +249,7 @@ export function ConnectMcpForm({
         </RadioGroup>
       </div>
 
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div>
         <Button

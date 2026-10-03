@@ -101,14 +101,14 @@ function SecretPanel({ secret }: { secret: NewApiKey }) {
   const t = useTranslations("organization.apiKeys.actions.secret");
   return (
     <div className="flex flex-col gap-3" data-testid="api-key-secret">
-      <p className="text-sm text-muted-foreground">{t("body")}</p>
+      <p className="text-base text-muted-foreground">{t("body")}</p>
       <code
         data-testid="api-key-secret-value"
         className={`${mono} block break-all rounded-md border border-border bg-muted px-3 py-2.5 text-foreground`}
       >
         {secret.secret}
       </code>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-base text-muted-foreground">
         {t("named", { name: secret.name, prefix: secret.prefix })}
       </p>
     </div>
@@ -358,8 +358,8 @@ export function CreateKeyDialog({
       listedIds={listedIds}
       after={after}
     >
-      <p className="text-sm text-muted-foreground">{t("body")}</p>
-      <label htmlFor="api-key-name" className="text-sm font-medium">
+      <p className="text-base text-muted-foreground">{t("body")}</p>
+      <label htmlFor="api-key-name" className="text-base font-medium">
         {t("name")}
       </label>
       <input
@@ -370,7 +370,7 @@ export function CreateKeyDialog({
           setName(event.currentTarget.value);
         }}
       />
-      <label htmlFor="api-key-expires" className="text-sm font-medium">
+      <label htmlFor="api-key-expires" className="text-base font-medium">
         {t("expires")}
       </label>
       <select
@@ -390,7 +390,7 @@ export function CreateKeyDialog({
         ))}
       </select>
       {stored === null ? null : (
-        <p id="api-key-expires-note" className="text-sm text-muted-foreground">
+        <p id="api-key-expires-note" className="text-base text-muted-foreground">
           {t("expiresAt", { at: stored })}
         </p>
       )}
@@ -451,7 +451,7 @@ export function KeyRowActions({
           listedIds={listedIds}
           after={afterRotate}
         >
-          <p className="text-sm text-muted-foreground">{t("rotate.body")}</p>
+          <p className="text-base text-muted-foreground">{t("rotate.body")}</p>
         </KeyWriteDialog>
       ) : null}
       <KeyWriteDialog
@@ -467,7 +467,7 @@ export function KeyRowActions({
         listedIds={listedIds}
         after={after}
       >
-        <p className="text-sm text-muted-foreground">{t("revoke.body")}</p>
+        <p className="text-base text-muted-foreground">{t("revoke.body")}</p>
       </KeyWriteDialog>
     </div>
   );

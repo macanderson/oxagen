@@ -133,7 +133,7 @@ function Chip({
   children: React.ReactNode;
 }) {
   return (
-    <span className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/50 px-1.5 py-0.5 text-[11px] font-medium text-foreground">
+    <span className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/50 px-1.5 py-0.5 text-xs font-medium text-foreground">
       {tone ? (
         <span
           className={cn("size-1.5 shrink-0 rounded-full", tone)}
@@ -225,7 +225,7 @@ function RecordGrid({
 }) {
   const entries = Object.entries(record);
   if (entries.length === 0) {
-    return <span className="text-xs text-muted-foreground">No fields</span>;
+    return <span className="text-sm text-muted-foreground">No fields</span>;
   }
   // Scalar pairs flow two-per-row when the FIELD CONTAINER is wide (container
   // query on the StructuredField wrapper, not a viewport breakpoint: the chat
@@ -239,12 +239,12 @@ function RecordGrid({
         isScalar(val) ? (
           <React.Fragment key={key}>
             <dt
-              className="truncate pt-px text-xs text-muted-foreground"
+              className="truncate pt-px text-sm text-muted-foreground"
               title={humanizeKey(key)}
             >
               {humanizeKey(key)}
             </dt>
-            <dd className="min-w-0 text-xs text-foreground">
+            <dd className="min-w-0 text-sm text-foreground">
               <StructuredValue value={val} keyHint={key} depth={depth + 1} />
             </dd>
           </React.Fragment>
@@ -254,12 +254,12 @@ function RecordGrid({
             className="col-span-2 grid min-w-0 grid-cols-[minmax(5rem,max-content)_minmax(0,1fr)] gap-x-4 @lg:col-span-4"
           >
             <dt
-              className="truncate pt-px text-xs text-muted-foreground"
+              className="truncate pt-px text-sm text-muted-foreground"
               title={humanizeKey(key)}
             >
               {humanizeKey(key)}
             </dt>
-            <dd className="min-w-0 text-xs text-foreground">
+            <dd className="min-w-0 text-sm text-foreground">
               <StructuredValue value={val} keyHint={key} depth={depth + 1} />
             </dd>
           </div>
@@ -279,7 +279,7 @@ function ArrayValue({
   depth: number;
 }) {
   if (items.length === 0) {
-    return <span className="text-xs text-muted-foreground">Empty</span>;
+    return <span className="text-sm text-muted-foreground">Empty</span>;
   }
   // Scalar arrays render as a tidy row of chips (tags / ids / enums).
   if (items.every(isScalar)) {
@@ -308,7 +308,7 @@ function ArrayValue({
     <div className="space-y-2">
       {items.map((item, i) => (
         <div key={i} className="border-l-2 border-border/60 pl-3">
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground/70">
             {i + 1}
           </div>
           <StructuredValue value={item} depth={depth + 1} />
@@ -358,7 +358,7 @@ function CopyJsonButton({ value }: { value: unknown }) {
       onClick={onCopy}
       title={copied ? "Copied" : "Copy as JSON"}
       aria-label="Copy value as JSON"
-      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {copied ? (
         <Check className="size-3 text-success" aria-hidden="true" />
@@ -395,7 +395,7 @@ export function StructuredField({
       data-testid="structured-field"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {label}
         </span>
         {copyable && value !== undefined && value !== null ? (

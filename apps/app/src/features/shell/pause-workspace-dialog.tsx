@@ -123,7 +123,7 @@ export function PauseWorkspaceDialog({
         <div
           role="status"
           data-testid="pause-workspace-receipt"
-          className="flex flex-col gap-3 text-sm"
+          className="flex flex-col gap-3 text-base"
         >
           <p data-testid="pause-workspace-queued">
             {t("queued", { count: receipt.queued })}
@@ -133,7 +133,7 @@ export function PauseWorkspaceDialog({
               <p>{t("skipped", { count: receipt.skipped.length })}</p>
               <ul
                 data-testid="pause-workspace-skipped"
-                className="flex flex-col gap-1 text-xs text-muted-foreground"
+                className="flex flex-col gap-1 text-sm text-muted-foreground"
               >
                 {receipt.skipped.map((skip) => (
                   <li key={skip.commandId} data-run={skip.runId}>
@@ -148,11 +148,11 @@ export function PauseWorkspaceDialog({
           {receipt.commandIds.length === 0 ? null : (
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium">{t("commandIds")}</span>
+                <span className="text-sm font-medium">{t("commandIds")}</span>
                 <button
                   type="button"
                   data-touch-target=""
-                  className={`${buttonSecondary} px-2 py-0.5 text-xs`}
+                  className={`${buttonSecondary} px-2 py-0.5 text-sm`}
                   onClick={() => {
                     copyIds(receipt.commandIds);
                   }}
@@ -162,27 +162,27 @@ export function PauseWorkspaceDialog({
               </div>
               <code
                 data-testid="pause-workspace-ids"
-                className={`${mono} block select-all whitespace-pre-wrap break-all rounded-lg border border-border px-3 py-2 text-xs`}
+                className={`${mono} block select-all whitespace-pre-wrap break-all rounded-lg border border-border px-3 py-2 text-sm`}
               >
                 {receipt.commandIds.join("\n")}
               </code>
             </div>
           )}
-          <p className="text-xs text-muted-foreground">{t("recorded")}</p>
+          <p className="text-sm text-muted-foreground">{t("recorded")}</p>
         </div>
       ) : (
         <form
           id={formId}
           onSubmit={submit}
           noValidate
-          className="flex flex-col gap-4 text-sm"
+          className="flex flex-col gap-4 text-base"
         >
           <p>{t("body")}</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t("skippedNote")} {t("ledger")}
           </p>
           <div className="flex flex-col gap-1.5">
-            <label htmlFor={reasonId} className="text-xs font-medium">
+            <label htmlFor={reasonId} className="text-sm font-medium">
               {t("reasonLabel")}
             </label>
             <textarea
@@ -196,16 +196,16 @@ export function PauseWorkspaceDialog({
               onChange={(event) => {
                 setReason(event.target.value);
               }}
-              className={`${textareaBase} resize-y max-md:min-h-11 max-md:text-base`}
+              className={`${textareaBase} resize-y max-md:min-h-11 max-md:text-lg`}
             />
             <p
               id={`${reasonId}-help`}
-              className="text-xs text-muted-foreground"
+              className="text-sm text-muted-foreground"
             >
               {t("reasonHelp")}
             </p>
           </div>
-          <p className="text-xs text-muted-foreground">{t("roles")}</p>
+          <p className="text-sm text-muted-foreground">{t("roles")}</p>
           {failure === null ? null : (
             <FormAlert testId="pause-workspace-failure">{failure}</FormAlert>
           )}

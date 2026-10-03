@@ -151,7 +151,7 @@ export function SignupForm({
           label={t("signup.submit")}
           pendingLabel={t("signup.pending")}
         />
-        <p className="text-xs leading-relaxed text-dim">
+        <p className="text-sm leading-relaxed text-dim">
           {t.rich("signup.terms", {
             terms: (chunks) => (
               <a

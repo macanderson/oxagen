@@ -63,7 +63,7 @@ export function PinChangeDialog({
             />
             <Label
               htmlFor="prune-toggle"
-              className="text-sm leading-snug cursor-pointer"
+              className="text-base leading-snug cursor-pointer"
             >
               Prune properties not in the schema
             </Label>
@@ -71,7 +71,7 @@ export function PinChangeDialog({
           {prune && (
             <Alert className="border-destructive/30 bg-destructive/10">
               <AlertTriangle className="h-4 w-4 text-destructive" />
-              <AlertDescription className="text-destructive text-sm">
+              <AlertDescription className="text-destructive text-base">
                 Destructive: properties not in the schema will be permanently
                 removed from existing nodes.
               </AlertDescription>

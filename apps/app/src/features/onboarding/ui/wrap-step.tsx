@@ -201,7 +201,7 @@ function TokenBox({
   return (
     <div
       data-testid="enrollment-token"
-      className="rounded-lg border border-dashed border-border bg-hl px-3 py-2.5 font-mono text-sm leading-relaxed"
+      className="rounded-lg border border-dashed border-border bg-hl px-3 py-2.5 font-mono text-xs leading-relaxed"
     >
       <span className="text-foreground">{t("tokenEmbedded")}</span>
       <br />
@@ -398,7 +398,7 @@ export function WrapStep({
       </button>
       <p
         data-testid="wrap-package-not-backed"
-        className="font-mono text-sm leading-relaxed text-muted-foreground"
+        className="font-mono text-xs leading-relaxed text-muted-foreground"
       >
         {t("packageNotBacked")}
         {profile ? (
@@ -421,7 +421,7 @@ export function WrapStep({
       />
       {command === null ? null : (
         <>
-          <span className="text-xs text-muted-foreground">{t("orRun")}</span>
+          <span className="text-sm text-muted-foreground">{t("orRun")}</span>
           <pre
             data-testid="wrap-enroll-command"
             className="overflow-x-auto rounded-lg border border-border bg-hl px-3 py-2.5 font-mono text-sm"
@@ -489,7 +489,7 @@ export function WrapStep({
           {noAgent ?? (
             <div
               data-testid="wrap-credential"
-              className="rounded-lg border border-dashed border-border bg-hl px-3 py-2.5 font-mono text-sm leading-relaxed"
+              className="rounded-lg border border-dashed border-border bg-hl px-3 py-2.5 font-mono text-xs leading-relaxed"
             >
               {t("credentialIssued")}
               <br />
@@ -504,7 +504,7 @@ export function WrapStep({
               </span>
             </div>
           )}
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t.rich("credentialBody", { mono: monoChunk })}
           </p>
           <pre className="overflow-x-auto rounded-lg border border-border bg-hl px-3 py-2.5 font-mono text-sm">
@@ -560,10 +560,10 @@ export function WrapStep({
           onChange={setTab}
           render={(item) => (
             <span className="flex flex-col items-start gap-0.5 px-3.5 py-3 text-left">
-              <span className="text-sm font-semibold text-foreground">
+              <span className="text-base font-semibold text-foreground">
                 {t(`tabs.${item}.name`)}
               </span>
-              <span className="font-mono text-sm text-muted-foreground">
+              <span className="font-mono text-xs text-muted-foreground">
                 {t(`tabs.${item}.sub`)}
               </span>
             </span>
@@ -582,7 +582,7 @@ export function WrapStep({
         <p
           role="status"
           data-testid="wrap-status"
-          className="px-[18px] pb-3 text-sm text-foreground empty:hidden"
+          className="px-[18px] pb-3 text-base text-foreground empty:hidden"
         >
           {status}
         </p>

@@ -46,7 +46,7 @@ export function CitationComplianceSummary({
 
   if (total === 0) {
     return (
-      <div className="flex h-[160px] items-center justify-center text-sm text-muted-foreground">
+      <div className="flex h-[160px] items-center justify-center text-base text-muted-foreground">
         No citations recorded in this window yet.
       </div>
     );
@@ -63,14 +63,14 @@ export function CitationComplianceSummary({
             <Badge className={`${COMPLIANCE_CONFIG[r.key].className} border-0`}>
               {COMPLIANCE_CONFIG[r.key].label}
             </Badge>
-            <span className="text-sm font-medium tabular-nums text-foreground">
+            <span className="text-base font-medium tabular-nums text-foreground">
               {r.count.toLocaleString()}
             </span>
           </div>
         ))}
       </div>
       {violations > 0 ? (
-        <div className="flex items-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-700 dark:text-red-400">
+        <div className="flex items-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-700 dark:text-red-400">
           <ShieldAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           {violations.toLocaleString()} rule violation
           {violations === 1 ? "" : "s"} recorded in this window — see Most

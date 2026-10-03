@@ -19,7 +19,7 @@ export function TopCitedNodesList({ nodes }: TopCitedNodesListProps) {
         <Network className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <h3
           id="top-cited-nodes-heading"
-          className="text-sm font-semibold text-foreground"
+          className="text-base font-semibold text-foreground"
         >
           Top Cited Graph Nodes
         </h3>
@@ -38,7 +38,7 @@ export function TopCitedNodesList({ nodes }: TopCitedNodesListProps) {
               className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-3 py-2"
             >
               <NodeRef node={row.node} className="min-w-0" />
-              <div className="flex shrink-0 items-center gap-3 text-xs tabular-nums text-muted-foreground">
+              <div className="flex shrink-0 items-center gap-3 text-sm tabular-nums text-muted-foreground">
                 <span>{row.citationCount.toLocaleString()} cites</span>
                 <span>{row.decisiveCount.toLocaleString()} decisive</span>
                 <span>{row.ignoredCount.toLocaleString()} ignored</span>

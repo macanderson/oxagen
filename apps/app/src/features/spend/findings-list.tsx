@@ -59,7 +59,7 @@ function Filter<T extends string>({
         id={id}
         aria-labelledby={`${id}-label`}
         size="sm"
-        className="text-sm max-md:min-h-11 max-md:text-base"
+        className="text-sm max-md:min-h-11 max-md:text-lg"
       />
     </span>
   );

@@ -87,7 +87,7 @@ function InertImage({ alt }: { alt?: string }) {
  * paragraphs.
  */
 const PROSE_CLASS =
-  "max-w-none text-sm leading-5 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_h1]:mt-4 [&_h1]:mb-1.5 [&_h1]:text-base [&_h1]:leading-5 [&_h2]:mt-4 [&_h2]:mb-1.5 [&_h2]:text-sm [&_h2]:leading-5 [&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:text-sm [&_h3]:leading-5 [&_h4]:mt-3 [&_h4]:mb-1 [&_h4]:text-sm [&_h5]:text-sm [&_h6]:text-sm [&_code]:text-sm [&_li]:py-0.5 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_table]:text-sm";
+  "max-w-none text-sm leading-5 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_h1]:mt-4 [&_h1]:mb-1.5 [&_h1]:text-base [&_h1]:leading-5 [&_h2]:mt-4 [&_h2]:mb-1.5 [&_h2]:text-base [&_h2]:leading-5 [&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:text-sm [&_h3]:leading-5 [&_h4]:mt-3 [&_h4]:mb-1 [&_h4]:text-sm [&_h5]:text-sm [&_h6]:text-sm [&_code]:text-sm [&_li]:py-0.5 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_table]:text-sm";
 
 const COMPONENTS = { img: InertImage };
 

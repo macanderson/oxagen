@@ -403,11 +403,11 @@ export function FindingCard({
           <h3 className="text-base font-semibold">
             {t(`findings.kind.${finding.kind}`)}
           </h3>
-          <span className="rounded-md border border-border px-1.5 py-0.5 text-sm text-muted-foreground">
+          <span className="rounded-md border border-border px-1.5 py-0.5 text-xs text-muted-foreground">
             {t(`findings.level.${finding.level}`)}
           </span>
           <span
-            className={`rounded-md border px-1.5 py-0.5 text-sm font-semibold ${finding.confidence === "high" ? "border-success/45 text-success" : "border-link/45 text-link"}`}
+            className={`rounded-md border px-1.5 py-0.5 text-xs font-semibold ${finding.confidence === "high" ? "border-success/45 text-success" : "border-link/45 text-link"}`}
           >
             {t(`findings.confidence.${finding.confidence}`)}
           </span>
@@ -443,7 +443,7 @@ export function FindingCard({
         <p className="text-sm text-muted-foreground">
           {t(`findings.kindDefinition.${finding.kind}`)}
         </p>
-        <p className={`${mono} text-sm text-muted-foreground`}>
+        <p className={`${mono} text-xs text-muted-foreground`}>
           {t("findings.evidenceLine", {
             runs: formatCount(finding.runs, locale),
             calls: formatCount(finding.calls, locale),

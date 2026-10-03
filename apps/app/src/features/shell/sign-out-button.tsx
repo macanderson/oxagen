@@ -58,7 +58,7 @@ export function SignOutButton() {
         role="alert"
         aria-live="assertive"
         data-testid="sign-out-button-failed"
-        className={failed ? "basis-full text-xs text-destructive" : "sr-only"}
+        className={failed ? "basis-full text-sm text-destructive" : "sr-only"}
       >
         {failed ? t("userMenu.signOutFailed") : ""}
       </p>

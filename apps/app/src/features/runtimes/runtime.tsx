@@ -123,7 +123,7 @@ function HostPanel({
       // otherwise not recorded (#3818).
       value: hooksReadBack(host) ? (
         <>
-          <span className={`${mono} text-sm`}>{COMMAND_HOOKS}</span>
+          <span className={`${mono} text-xs`}>{COMMAND_HOOKS}</span>
           <Sub>{t("detail.hooksFive")}</Sub>
         </>
       ) : (
@@ -181,7 +181,7 @@ function HostPanel({
         // Three facts, one per item, so no mid-dot joins them into a label.
         <ul
           data-testid="runtime-subtitle"
-          className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted-foreground"
+          className="mt-0.5 flex flex-wrap gap-x-3 text-sm text-muted-foreground"
         >
           {t.rich("detail.subtitle", {
             kind: () => (
@@ -305,7 +305,7 @@ function agentRow({
       agent === null || agent.principalId === null ? (
         notRecorded
       ) : (
-        <span key="principal" className={`${mono} text-xs`}>
+        <span key="principal" className={`${mono} text-sm`}>
           {agent.principalId}
         </span>
       ),
@@ -339,7 +339,7 @@ function AgentsPanel({
       {!assigned ? (
         <p
           data-testid="runtime-agents-none"
-          className={`${panelBody} text-sm text-muted-foreground`}
+          className={`${panelBody} text-base text-muted-foreground`}
         >
           {t("none")}
         </p>
@@ -403,7 +403,7 @@ function RollbackPanel({
       <div className={`${panelBody} flex flex-col gap-3`}>
         <pre
           data-testid="runtime-unenroll-command"
-          className={`${mono} overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-muted px-3.5 py-3 text-xs`}
+          className={`${mono} overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-muted px-3.5 py-3 text-sm`}
         >
           {t("command", { agent, id: host.id })}
         </pre>
@@ -526,7 +526,7 @@ function ContainmentPanel({
     <Panel id="runtime-containment" title={t("title")}>
       <div
         data-testid="runtime-containment"
-        className={`${panelBody} flex flex-col gap-3 text-sm`}
+        className={`${panelBody} flex flex-col gap-3 text-base`}
       >
         <p className="text-muted-foreground">{t("lead")}</p>
         {canEdit ? (
@@ -700,7 +700,7 @@ function DrawerFor({
       <RuntimeDrawer title={t("title")} closeTo={closeTo}>
         <p
           data-testid="runtime-missing"
-          className="text-sm text-muted-foreground"
+          className="text-base text-muted-foreground"
         >
           {t("missing")}
         </p>

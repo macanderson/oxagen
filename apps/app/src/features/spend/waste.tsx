@@ -73,7 +73,7 @@ function RetryLoops({
         <span>
           <span className="font-semibold">{t("designCause.retryLoops")}</span>{" "}
           {loops.length === 0 ? null : (
-            <span className={`${mono} text-sm text-muted-foreground`}>
+            <span className={`${mono} text-xs text-muted-foreground`}>
               {t("causeRuns", { runs: formatCount(runs, locale) })}
             </span>
           )}
@@ -145,7 +145,7 @@ export function WasteSection({
               <Money value={waste.wasted} />
             </span>
           )}
-          <span className="flex flex-wrap gap-x-1 text-sm font-normal text-muted-foreground">
+          <span className="flex flex-wrap gap-x-1 text-xs font-normal text-muted-foreground">
             <BasisLabel basis={waste.wasted?.basis ?? null} />
             {waste.wasted === null ? null : (
               <span>{t("currency", { currency: waste.wasted.currency })}</span>
@@ -201,7 +201,7 @@ export function WasteSection({
                       {t(`cause.${cause.cause}`)}
                     </span>{" "}
                     <span
-                      className={`${mono} text-sm text-muted-foreground`}
+                      className={`${mono} text-xs text-muted-foreground`}
                     >
                       {t("causeRuns", {
                         runs: formatCount(cause.runs, locale),
@@ -272,12 +272,12 @@ export function WasteSection({
                     </span>
                     <span
                       data-testid="run-id"
-                      className={`${mono} truncate text-sm text-dim`}
+                      className={`${mono} truncate text-xs text-dim`}
                     >
                       {run.runId}
                     </span>
                   </span>
-                  <span className="inline-flex w-fit items-center gap-1.5 rounded-md border border-destructive/40 px-1.5 py-0.5 text-sm font-semibold text-destructive">
+                  <span className="inline-flex w-fit items-center gap-1.5 rounded-md border border-destructive/40 px-1.5 py-0.5 text-xs font-semibold text-destructive">
                     <span
                       aria-hidden="true"
                       className="size-1.5 rounded-full bg-destructive"

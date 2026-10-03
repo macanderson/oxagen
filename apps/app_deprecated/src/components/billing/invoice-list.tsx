@@ -39,13 +39,13 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
             return (
               <li
                 key={inv.publicId}
-                className="flex items-center justify-between py-3 text-sm"
+                className="flex items-center justify-between py-3 text-base"
               >
                 <div>
                   <div className="font-medium">
                     {inv.number ?? inv.publicId}
                   </div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-sm text-muted-foreground">
                     {formatDate(inv.periodStart)} → {formatDate(inv.periodEnd)}
                   </div>
                 </div>

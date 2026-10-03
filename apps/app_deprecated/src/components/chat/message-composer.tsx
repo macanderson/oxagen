@@ -1471,7 +1471,7 @@ export function MessageComposer({
       <SelectTrigger
         size="sm"
         className={cn(
-          "w-auto gap-1.5 border-0 bg-transparent px-2 text-xs font-medium shadow-none hover:bg-muted focus:ring-0",
+          "w-auto gap-1.5 border-0 bg-transparent px-2 text-sm font-medium shadow-none hover:bg-muted focus:ring-0",
           isMobile ? "min-h-11" : "h-8",
         )}
         aria-label={`Reasoning effort: ${model.effort ?? "medium"}`}
@@ -1604,7 +1604,7 @@ export function MessageComposer({
           toast) — set by queueAttachmentBatch's client-side pre-check. */}
         {attachmentSizeError && !collapsed ? (
           <p
-            className="text-xs text-destructive"
+            className="text-sm text-destructive"
             data-testid="attachment-size-error"
           >
             {attachmentSizeError}
@@ -1642,9 +1642,9 @@ export function MessageComposer({
             onSendNow={sendQueuedNow}
           />
         )}
-        {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {disabled && disabledReason ? (
-          <p className="text-xs text-muted-foreground">{disabledReason}</p>
+          <p className="text-sm text-muted-foreground">{disabledReason}</p>
         ) : null}
 
         {/* v2 condensed row: ONE row replaces the entire toolbar below — plus
@@ -1746,7 +1746,7 @@ export function MessageComposer({
                   type="button"
                   data-testid="composer-expand-affordance"
                   onClick={expandComposer}
-                  className="h-10 min-w-0 flex-1 truncate rounded-md px-2 text-left text-sm text-muted-foreground hover:bg-muted"
+                  className="h-10 min-w-0 flex-1 truncate rounded-md px-2 text-left text-base text-muted-foreground hover:bg-muted"
                 >
                   {placeholder}
                 </button>
@@ -1828,7 +1828,7 @@ export function MessageComposer({
               )}
               <div className="ml-auto flex items-center gap-1.5">
                 {isStreaming && queue.length > 0 ? (
-                  <span className="text-xs tabular-nums text-muted-foreground">
+                  <span className="text-sm tabular-nums text-muted-foreground">
                     {queue.length} queued
                   </span>
                 ) : null}
@@ -1923,14 +1923,14 @@ export function MessageComposer({
             className="max-h-[70vh] rounded-t-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))]"
           >
             <SheetHeader className="mb-2">
-              <SheetTitle className="text-sm">Composer options</SheetTitle>
+              <SheetTitle className="text-base">Composer options</SheetTitle>
               <SheetDescription className="sr-only">
                 Model, agent, effort, and MCP server controls for this turn.
               </SheetDescription>
             </SheetHeader>
             <SheetPanel className="gap-1">
               <div className="flex min-h-11 items-center justify-between gap-2">
-                <span className="text-sm">Model</span>
+                <span className="text-base">Model</span>
                 <ModelPicker
                   value={model}
                   onChange={setModel}
@@ -1939,7 +1939,7 @@ export function MessageComposer({
               </div>
               {(availableAgents?.length ?? 0) > 0 && (
                 <div className="flex min-h-11 items-center justify-between gap-2">
-                  <span className="text-sm">Agent</span>
+                  <span className="text-base">Agent</span>
                   <AgentContextChip
                     agents={availableAgents ?? []}
                     defaultAgentId={defaultAgentId ?? null}
@@ -1951,7 +1951,7 @@ export function MessageComposer({
               )}
               {showEffortControl && (
                 <div className="flex min-h-11 items-center justify-between gap-2">
-                  <span className="text-sm">Reasoning effort</span>
+                  <span className="text-base">Reasoning effort</span>
                   {effortSelect}
                 </div>
               )}
@@ -1959,7 +1959,7 @@ export function MessageComposer({
                   are no manual "Generate image/video" rows here anymore. */}
               {(availableMcpServers?.length ?? 0) > 0 && (
                 <div className="flex min-h-11 items-center justify-between gap-2">
-                  <span className="text-sm">MCP servers</span>
+                  <span className="text-base">MCP servers</span>
                   <McpServerPicker
                     servers={availableMcpServers!}
                     activeServerIds={activeServerIds}

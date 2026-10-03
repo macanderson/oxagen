@@ -73,10 +73,10 @@ export default function InstallInstructions({
           />
         </div>
         <div>
-          <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+          <p className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
             Install
           </p>
-          <p className="text-sm font-medium text-foreground leading-tight">
+          <p className="text-base font-medium text-foreground leading-tight">
             Oxagen for {clientLabel}
           </p>
         </div>
@@ -89,12 +89,12 @@ export default function InstallInstructions({
             {/* Step number + label */}
             <div className="flex items-start gap-2.5 mb-2">
               <span
-                className="flex-shrink-0 flex items-center justify-center size-5 rounded-full bg-muted text-muted-foreground text-xs font-semibold mt-0.5"
+                className="flex-shrink-0 flex items-center justify-center size-5 rounded-full bg-muted text-muted-foreground text-sm font-semibold mt-0.5"
                 aria-hidden="true"
               >
                 {index + 1}
               </span>
-              <p className="text-sm text-foreground leading-snug">
+              <p className="text-base text-foreground leading-snug">
                 {step.label}
               </p>
             </div>
@@ -102,7 +102,7 @@ export default function InstallInstructions({
             {/* Command block — only rendered when a command is present */}
             {step.command && (
               <div className="ml-7 flex items-start gap-2 rounded-lg bg-muted/60 dark:bg-muted/30 border border-border px-3 py-2.5 group">
-                <pre className="flex-1 text-xs font-mono text-foreground whitespace-pre-wrap break-all leading-relaxed overflow-x-auto">
+                <pre className="flex-1 text-sm font-mono text-foreground whitespace-pre-wrap break-all leading-relaxed overflow-x-auto">
                   {step.command}
                 </pre>
                 <CopyButton

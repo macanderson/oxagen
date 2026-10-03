@@ -76,7 +76,7 @@ export function Freshness({
         </Fact>
         <Fact name="repository" term={t("repository")}>
           {bound ? (
-            <span className="font-mono text-xs">
+            <span className="font-mono text-sm">
               {read.repository}
               {read.defaultBranch === null ? "" : ` · ${read.defaultBranch}`}
             </span>
@@ -86,7 +86,7 @@ export function Freshness({
         </Fact>
         {read.headCommit === null ? null : (
           <Fact name="published" term={t("published")}>
-            <span className="font-mono text-xs">
+            <span className="font-mono text-sm">
               {read.headCommit.slice(0, 7)}
             </span>
             {read.publishedAt === null ? null : ` · ${date(read.publishedAt)}`}
@@ -181,7 +181,7 @@ function SyncFindings({ findings }: { findings: Sync["findings"] }) {
   const t = useTranslations("steering.freshness");
   return (
     <div className="flex flex-col gap-2" data-testid="sync-findings">
-      <h3 className="text-sm font-medium text-foreground">
+      <h3 className="text-base font-medium text-foreground">
         {t("syncFindingsTitle")}
       </h3>
       <ul className="flex flex-col gap-2">
@@ -189,7 +189,7 @@ function SyncFindings({ findings }: { findings: Sync["findings"] }) {
           <li
             key={`${f.path}:${f.lineage ?? ""}:${f.message}`}
             data-level={f.level}
-            className="flex flex-col gap-0.5 text-sm"
+            className="flex flex-col gap-0.5 text-base"
           >
             <span
               className={
@@ -238,11 +238,11 @@ function GateBox({
       <div className="flex flex-col gap-1">
         <label
           htmlFor={`steering-gate-${name}`}
-          className="text-sm text-foreground"
+          className="text-base text-foreground"
         >
           {label}
         </label>
-        <p id={hintId} className="max-w-prose text-sm text-muted-foreground">
+        <p id={hintId} className="max-w-prose text-base text-muted-foreground">
           {hint}
         </p>
       </div>

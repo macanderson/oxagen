@@ -269,14 +269,14 @@ function TierDelivers({
             {rung === tier ? (
               <Badge tone="allowed">{t("thisAgent")}</Badge>
             ) : null}
-            <span className="text-xs text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               {t(`rungs.${rung}`)}
             </span>
           </li>
         ))}
       </ol>
       {tier === null ? (
-        <p className="text-xs text-muted-foreground">{t("noRun")}</p>
+        <p className="text-sm text-muted-foreground">{t("noRun")}</p>
       ) : null}
       <Facts
         rows={[
@@ -302,7 +302,7 @@ function NeedsRole() {
   return (
     <p
       data-testid="runtime-needs-role"
-      className="max-w-prose text-xs text-muted-foreground"
+      className="max-w-prose text-sm text-muted-foreground"
     >
       {t("needsRole")}
     </p>

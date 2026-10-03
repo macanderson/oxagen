@@ -106,7 +106,7 @@ export const stateCode =
  * them. It is a `.state-wrap p` too, so it keeps the paragraph's measure.
  */
 export const stateTrace =
-  "mx-auto mt-4 max-w-[52ch] font-mono text-sm text-dim";
+  "mx-auto mt-4 max-w-[52ch] font-mono text-xs text-dim";
 
 /**
  * The denied state's facts: `.kv` with `margin-top:20px; text-align:left;

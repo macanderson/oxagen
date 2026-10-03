@@ -53,7 +53,7 @@ export function PageHeader({
             {title}
           </h1>
           {description && (
-            <p className="text-sm text-muted-foreground leading-snug">
+            <p className="text-base text-muted-foreground leading-snug">
               {description}
             </p>
           )}
@@ -69,7 +69,7 @@ export function PageHeader({
                 onClick={onAskAboutThis}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-xl border border-border",
-                  "bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground",
+                  "bg-background px-3 py-1.5 text-sm font-medium text-muted-foreground",
                   "transition-colors hover:bg-accent hover:text-accent-foreground",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 )}

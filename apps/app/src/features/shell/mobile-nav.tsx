@@ -39,7 +39,7 @@ import { SheetDialog } from "@/ui/sheet-dialog";
 import { StellaIcon } from "@/ui/stella-mark";
 
 const slotClass =
-  "relative flex min-h-13 flex-col items-center justify-center gap-1 rounded-lg px-1 text-sm font-semibold focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring aria-[current=page]:text-app-topbar-fg";
+  "relative flex min-h-13 flex-col items-center justify-center gap-1 rounded-lg px-1 text-xs font-semibold focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring aria-[current=page]:text-app-topbar-fg";
 
 /**
  * `.mn .ct.hot`: the slot's count, in the approval ink. A null count is a
@@ -59,7 +59,7 @@ function SlotCount({
   return count === null ? (
     <span
       data-count-unrecorded=""
-      className="absolute left-[calc(50%+6px)] top-0.5 min-w-[18px] rounded-full border border-dashed border-border bg-app-raised-bg px-1 text-center font-mono text-sm text-muted-foreground"
+      className="absolute left-[calc(50%+6px)] top-0.5 min-w-[18px] rounded-full border border-dashed border-border bg-app-raised-bg px-1 text-center font-mono text-xs text-muted-foreground"
     >
       <span aria-hidden="true">?</span>
       <span className="sr-only">{label}</span>
@@ -67,7 +67,7 @@ function SlotCount({
   ) : (
     <span
       data-count={count}
-      className="absolute left-[calc(50%+6px)] top-0.5 min-w-[18px] rounded-full border border-info/40 bg-app-raised-bg px-1 text-center font-mono text-sm text-info"
+      className="absolute left-[calc(50%+6px)] top-0.5 min-w-[18px] rounded-full border border-info/40 bg-app-raised-bg px-1 text-center font-mono text-xs text-info"
     >
       <span aria-hidden="true">
         {count}
@@ -152,13 +152,13 @@ function Tile({
         </span>
       )}
       <span className="min-w-0 flex-1">
-        <b className="block truncate text-sm font-semibold">{label}</b>
-        <span className="block truncate text-xs font-normal text-muted-foreground">
+        <b className="block truncate text-base font-semibold">{label}</b>
+        <span className="block truncate text-sm font-normal text-muted-foreground">
           {sub}
         </span>
       </span>
       {count === null ? null : (
-        <span className="flex-none rounded-[5px] border border-info/40 px-[5px] font-mono text-sm text-info">
+        <span className="flex-none rounded-[5px] border border-info/40 px-[5px] font-mono text-xs text-info">
           <span aria-hidden="true">{count}</span>
           <span className="sr-only">{countLabel}</span>
         </span>

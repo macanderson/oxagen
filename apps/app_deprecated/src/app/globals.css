@@ -35,6 +35,34 @@
 /* Scan the components folder located one directory up */
 @source "../components";
 
+/* The text scale, the same as apps/app/src/app/globals.css. Each Tailwind
+   step reads a step of the kit's app scale, and every kit step is the kit's
+   base, `--ox-a-base` (14px), times a ratio. `text-base` is body text,
+   `text-sm` and `text-xs` are smaller, and `text-lg` and up are larger
+   (Mac, 2026-10-03, #5256). */
+@theme inline {
+  --text-xs: var(--ox-a-2xs);
+  --text-xs--line-height: var(--ox-a-2xs-leading);
+  --text-sm: var(--ox-a-micro);
+  --text-sm--line-height: var(--ox-a-micro-leading);
+  --text-base: var(--ox-a-body);
+  --text-base--line-height: var(--ox-a-body-leading);
+  --text-lg: var(--ox-a-h4);
+  --text-lg--line-height: var(--ox-a-h4-leading);
+  --text-xl: var(--ox-a-h3);
+  --text-xl--line-height: var(--ox-a-h3-leading);
+  --text-2xl: var(--ox-a-h2);
+  --text-2xl--line-height: var(--ox-a-h2-leading);
+  --text-3xl: var(--ox-a-h1);
+  --text-3xl--line-height: var(--ox-a-h1-leading);
+  --text-4xl: calc(var(--ox-a-base) * 18 / 7);
+  --text-4xl--line-height: var(--ox-a-h1-leading);
+  --text-5xl: calc(var(--ox-a-base) * 24 / 7);
+  --text-5xl--line-height: var(--ox-a-h1-leading);
+  --text-6xl: calc(var(--ox-a-base) * 30 / 7);
+  --text-6xl--line-height: var(--ox-a-h1-leading);
+}
+
 /* Headings used to be overridden here to borrow the wordmark's face back from
  * a separate display family. The house system is ONE face — --font-display and
  * --font-wordmark both resolve to Space Grotesk — so the override said nothing

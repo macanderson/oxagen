@@ -53,7 +53,7 @@ export function GraphStatsBoxes({
           >
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <Icon className="size-3.5" aria-hidden="true" />
-              <span className="text-[11px] font-medium uppercase tracking-wide">
+              <span className="text-xs font-medium uppercase tracking-wide">
                 {label}
               </span>
             </div>
@@ -64,7 +64,7 @@ export function GraphStatsBoxes({
         ))}
       </div>
       {stats.lastModifiedAt && new Date(stats.lastModifiedAt).getTime() > 0 ? (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Last updated {new Date(stats.lastModifiedAt).toLocaleString()}
         </p>
       ) : null}

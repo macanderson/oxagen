@@ -70,7 +70,7 @@ export async function SourcesTile({
   const footer = (
     <Link
       href={reposHref}
-      className="text-sm font-medium text-primary hover:underline"
+      className="text-base font-medium text-primary hover:underline"
     >
       View sources →
     </Link>
@@ -92,7 +92,7 @@ export async function SourcesTile({
             action={
               <Link
                 href={reposHref}
-                className="text-sm font-medium text-primary hover:underline"
+                className="text-base font-medium text-primary hover:underline"
               >
                 Connect a source →
               </Link>
@@ -103,7 +103,7 @@ export async function SourcesTile({
             {visible.map((c) => (
               <li
                 key={c.id}
-                className="flex items-center justify-between gap-2 text-sm"
+                className="flex items-center justify-between gap-2 text-base"
               >
                 <span className="min-w-0 truncate text-foreground">
                   {c.displayName}
@@ -112,7 +112,7 @@ export async function SourcesTile({
                   status={HEALTH_TONE[c.healthStatus] ?? "neutral"}
                   size="sm"
                   label={c.healthStatus}
-                  className="shrink-0 text-xs text-muted-foreground"
+                  className="shrink-0 text-sm text-muted-foreground"
                 />
               </li>
             ))}

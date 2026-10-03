@@ -92,7 +92,7 @@ function StateMachine({ status }: { status: ProposalStatus }) {
   return (
     <ol
       aria-label={t("pr.machine")}
-      className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs"
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm"
     >
       {STEPS.map((step, index) => {
         const shown =
@@ -117,8 +117,8 @@ function Checks({ checks }: { checks: SteeringPr["checks"] }) {
   const t = useTranslations("steering.pr.checks");
   return (
     <div className="flex flex-col gap-2">
-      <h3 className="text-sm font-semibold text-foreground">{t("title")}</h3>
-      <ol className="flex flex-col divide-y divide-border text-sm">
+      <h3 className="text-base font-semibold text-foreground">{t("title")}</h3>
+      <ol className="flex flex-col divide-y divide-border text-base">
         {checks.map((check) => (
           <li
             key={check.name}
@@ -131,12 +131,12 @@ function Checks({ checks }: { checks: SteeringPr["checks"] }) {
                 {t(`names.${check.name}`)}
               </span>
               {check.summary === "" ? null : (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   {check.summary}
                 </span>
               )}
             </span>
-            <span className="text-xs font-medium text-foreground">
+            <span className="text-sm font-medium text-foreground">
               {t(`statuses.${check.status}`)}
             </span>
           </li>
@@ -214,10 +214,10 @@ export function SteeringPrPanel({
       {/* The page header carries the state badge and the link to the host. */}
       <StateMachine status={status} />
       {status === "rejected" ? (
-        <p className="text-sm text-foreground">{t("rejected")}</p>
+        <p className="text-base text-foreground">{t("rejected")}</p>
       ) : null}
       {pr === null ? (
-        <p className="text-sm text-muted-foreground">{t("notOpened")}</p>
+        <p className="text-base text-muted-foreground">{t("notOpened")}</p>
       ) : null}
       <Facts>
         {pr === null ? null : (
@@ -269,11 +269,11 @@ export function SteeringPrPanel({
           data-drift={finding.path}
           className="flex flex-col gap-2 rounded-md border border-border p-3"
         >
-          <h3 className="text-sm font-semibold text-foreground">
+          <h3 className="text-base font-semibold text-foreground">
             {t("drift.title", { path: finding.path })}
           </h3>
           {finding.message === "" ? null : (
-            <p className="text-sm text-muted-foreground">{finding.message}</p>
+            <p className="text-base text-muted-foreground">{finding.message}</p>
           )}
           <RestoreManagedBlock
             org={at.org}
@@ -285,12 +285,12 @@ export function SteeringPrPanel({
       ))}
       {memoryBranch === null || records === null ? null : (
         <div data-memory-pr="" className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold text-foreground">
+          <h3 className="text-base font-semibold text-foreground">
             {t("memory.title")}
           </h3>
           {records.ok ? (
             records.value.records.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-base text-muted-foreground">
                 {t("memory.empty")}
               </p>
             ) : (
@@ -306,12 +306,12 @@ export function SteeringPrPanel({
         </div>
       )}
       {value.body === null ? null : (
-        <details className="text-sm">
+        <details className="text-base">
           <summary className="cursor-pointer text-muted-foreground">
             {t("body")}
           </summary>
           <pre
-            className={`${mono} mt-2 overflow-x-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-xs`}
+            className={`${mono} mt-2 overflow-x-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-sm`}
           >
             {value.body}
           </pre>
@@ -319,7 +319,7 @@ export function SteeringPrPanel({
       )}
       {merged === null ? null : (
         <div data-merged="" className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold text-foreground">
+          <h3 className="text-base font-semibold text-foreground">
             {t("merged.title")}
           </h3>
           <Facts>
@@ -357,10 +357,10 @@ export function SteeringPrPanel({
       )}
       {open ? (
         <div data-on-merge="" className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold text-foreground">
+          <h3 className="text-base font-semibold text-foreground">
             {t("onMerge.title")}
           </h3>
-          <ol className="flex list-decimal flex-col gap-1 ps-5 text-sm text-foreground">
+          <ol className="flex list-decimal flex-col gap-1 ps-5 text-base text-foreground">
             {/* A governance change publishes no record and appends no
                 promotion event (ADR-232), so it lists only what it does. A
                 steering PR (#5122) lists the merge's own checks, its files,

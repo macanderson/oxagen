@@ -78,7 +78,7 @@ const Stat = React.forwardRef<HTMLDivElement, StatProps>(
         {...props}
       >
         <div className="flex items-center justify-between gap-2">
-          <div className="truncate text-xs font-medium text-muted-foreground">
+          <div className="truncate text-sm font-medium text-muted-foreground">
             {label}
           </div>
           {icon && (
@@ -105,7 +105,7 @@ const Stat = React.forwardRef<HTMLDivElement, StatProps>(
             {(delta != null || TrendIcon) && (
               <span
                 className={cn(
-                  "inline-flex items-center gap-0.5 text-xs font-medium tabular-nums",
+                  "inline-flex items-center gap-0.5 text-sm font-medium tabular-nums",
                   intentClass[resolvedIntent],
                 )}
               >
@@ -117,7 +117,7 @@ const Stat = React.forwardRef<HTMLDivElement, StatProps>(
             )}
           </div>
         )}
-        {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
+        {hint && <div className="text-sm text-muted-foreground">{hint}</div>}
       </div>
     );
   },

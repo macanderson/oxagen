@@ -32,7 +32,7 @@ export function FirstRunBanner({
         <button
           type="button"
           data-testid="first-run-dismiss"
-          className={`${buttonSecondary} px-2.5 py-1 text-xs`}
+          className={`${buttonSecondary} px-2.5 py-1 text-sm`}
           onClick={() => {
             setShown(false);
           }}

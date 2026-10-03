@@ -29,7 +29,7 @@ export function Deliveries({ read }: { read: Read<SteeringDeliveries> }) {
         <p>{t("empty")}</p>
       ) : (
         <>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             {t("sample", { count: report.scanned, shown: report.runs.length })}
           </p>
           {report.truncated ? <p role="status">{t("truncated")}</p> : null}
@@ -56,7 +56,7 @@ export function Deliveries({ read }: { read: Read<SteeringDeliveries> }) {
                     />
                     <div className="min-w-0">
                       <div className="md:truncate">{run.agentKey}</div>
-                      <div className="text-xs text-muted-foreground md:truncate">
+                      <div className="text-sm text-muted-foreground md:truncate">
                         {run.harness} · {date(run.ts.replace(" ", "T") + "Z")}
                       </div>
                     </div>
@@ -79,8 +79,8 @@ export function Deliveries({ read }: { read: Read<SteeringDeliveries> }) {
               </tr>
             ))}
           </Table>
-          <h3 className="text-sm font-semibold">{t("unreached")}</h3>
-          <p className="text-sm text-muted-foreground">{t("unreachedLead")}</p>
+          <h3 className="text-base font-semibold">{t("unreached")}</h3>
+          <p className="text-base text-muted-foreground">{t("unreachedLead")}</p>
           {report.undelivered.length === 0 ? (
             <p>{t("noUnreached")}</p>
           ) : (

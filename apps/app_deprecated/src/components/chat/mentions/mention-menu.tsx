@@ -59,10 +59,10 @@ export function MentionMenu({
               />
             );
           })()}
-          <span className="text-xs font-medium">
+          <span className="text-sm font-medium">
             {selectedType.pluralLabel}
           </span>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             — type to search
           </span>
         </div>
@@ -70,7 +70,7 @@ export function MentionMenu({
       <ul className="max-h-64 overflow-y-auto py-1">
         {stage === "type" ? (
           types.length === 0 ? (
-            <li className="px-3 py-1.5 text-xs text-muted-foreground">
+            <li className="px-3 py-1.5 text-sm text-muted-foreground">
               No reference types match.
             </li>
           ) : (
@@ -101,10 +101,10 @@ export function MentionMenu({
                       aria-hidden="true"
                     />
                     <span className="flex min-w-0 flex-col gap-0.5">
-                      <span className="text-xs font-medium">
+                      <span className="text-sm font-medium">
                         {info.pluralLabel}
                       </span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-sm text-muted-foreground">
                         {info.summary}
                       </span>
                     </span>
@@ -114,11 +114,11 @@ export function MentionMenu({
             })
           )
         ) : loading && results.length === 0 ? (
-          <li className="px-3 py-1.5 text-xs text-muted-foreground">
+          <li className="px-3 py-1.5 text-sm text-muted-foreground">
             Searching…
           </li>
         ) : results.length === 0 ? (
-          <li className="px-3 py-1.5 text-xs text-muted-foreground">
+          <li className="px-3 py-1.5 text-sm text-muted-foreground">
             {query.trim() ? "No matches." : "Type to search."}
           </li>
         ) : (
@@ -147,11 +147,11 @@ export function MentionMenu({
                     aria-hidden="true"
                   />
                   <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className="truncate text-xs font-medium">
+                    <span className="truncate text-sm font-medium">
                       {result.label}
                     </span>
                     {result.description || result.location ? (
-                      <span className="truncate text-xs text-muted-foreground">
+                      <span className="truncate text-sm text-muted-foreground">
                         {result.description ?? result.location}
                       </span>
                     ) : null}

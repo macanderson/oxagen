@@ -33,7 +33,7 @@ function EffectBadge({
         ? ("default" as const)
         : ("secondary" as const);
   return (
-    <Badge variant={variant} size="sm" className="text-[10px]">
+    <Badge variant={variant} size="sm" className="text-xs">
       {label}
     </Badge>
   );
@@ -56,7 +56,7 @@ function CapabilityList({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+        className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
         data-testid={`${testId}-toggle`}
       >
         {open ? (
@@ -68,7 +68,7 @@ function CapabilityList({
       </button>
       {open ? (
         <ul
-          className="mt-1 max-h-48 overflow-y-auto rounded-md border bg-muted/20 px-3 py-2 font-mono text-[11px] leading-5 text-muted-foreground"
+          className="mt-1 max-h-48 overflow-y-auto rounded-md border bg-muted/20 px-3 py-2 font-mono text-xs leading-5 text-muted-foreground"
           data-testid={`${testId}-list`}
         >
           {capabilities.map((cap) => (
@@ -94,8 +94,8 @@ function DimensionCard({
       className="rounded-md border bg-muted/10 px-3 py-2.5"
       data-testid={testId}
     >
-      <div className="mb-1.5 text-xs font-medium text-foreground">{title}</div>
-      <div className="space-y-1.5 text-xs text-muted-foreground">
+      <div className="mb-1.5 text-sm font-medium text-foreground">{title}</div>
+      <div className="space-y-1.5 text-sm text-muted-foreground">
         {children}
       </div>
     </div>
@@ -116,7 +116,7 @@ export function EffectiveScopePanel(props: EffectiveScopeInput) {
     >
       <div className="flex flex-wrap items-center gap-2">
         <ShieldCheck className="h-4 w-4 text-primary" aria-hidden="true" />
-        <h3 className="text-sm font-medium text-foreground">Effective scope</h3>
+        <h3 className="text-base font-medium text-foreground">Effective scope</h3>
         {view.roleName ? (
           <Badge
             variant="secondary"
@@ -126,7 +126,7 @@ export function EffectiveScopePanel(props: EffectiveScopeInput) {
             {view.roleName}
           </Badge>
         ) : null}
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           role ceiling ∩ agent configuration — display of what the runtime
           enforces, not an override of it.
         </span>
@@ -134,7 +134,7 @@ export function EffectiveScopePanel(props: EffectiveScopeInput) {
 
       {!view.ceilingKnown && view.roleName ? (
         <p
-          className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground"
+          className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-foreground"
           role="status"
           data-testid="effective-scope-ceiling-unknown"
         >
@@ -199,7 +199,7 @@ export function EffectiveScopePanel(props: EffectiveScopeInput) {
                     className="flex items-center justify-between gap-2"
                     data-testid={`scope-equipped-${item.ref}`}
                   >
-                    <span className="truncate font-mono text-[11px]">
+                    <span className="truncate font-mono text-xs">
                       {item.ref}
                     </span>
                     <EffectBadge effect={item.effect} />
@@ -251,10 +251,10 @@ export function EffectiveScopePanel(props: EffectiveScopeInput) {
                   key={`${rule.pattern}-${i}`}
                   className="flex items-center justify-between gap-2"
                 >
-                  <span className="truncate font-mono text-[11px]">
+                  <span className="truncate font-mono text-xs">
                     {rule.pattern}
                   </span>
-                  <Badge variant="outline" size="sm" className="text-[10px]">
+                  <Badge variant="outline" size="sm" className="text-xs">
                     {rule.effect}
                   </Badge>
                 </li>

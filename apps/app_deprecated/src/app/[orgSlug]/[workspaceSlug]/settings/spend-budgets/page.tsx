@@ -62,8 +62,8 @@ export default async function SpendBudgetsPage({
           aria-hidden="true"
         />
         <div>
-          <p className="text-sm font-semibold text-foreground">Spend budgets</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-base font-semibold text-foreground">Spend budgets</p>
+          <p className="text-sm text-muted-foreground">
             Hard period-to-date spend ceilings. The organization ceiling covers
             every workspace; the workspace ceiling covers this workspace only.
             Once a ceiling is exceeded, agent runs against that scope are denied

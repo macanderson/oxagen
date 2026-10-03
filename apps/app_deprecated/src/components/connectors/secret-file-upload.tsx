@@ -112,7 +112,7 @@ export function SecretFileUpload({
             className="h-4 w-4 shrink-0 text-success"
             aria-hidden="true"
           />
-          <span className="flex-1 truncate text-sm text-foreground">
+          <span className="flex-1 truncate text-base text-foreground">
             {fileName ?? "Uploaded file"}
           </span>
           <button
@@ -154,8 +154,8 @@ export function SecretFileUpload({
             aria-hidden="true"
           />
           <div>
-            <p className="text-sm font-medium text-foreground">{label}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-base font-medium text-foreground">{label}</p>
+            <p className="text-sm text-muted-foreground">
               JSON files only. Drag &amp; drop or click.
             </p>
           </div>
@@ -175,7 +175,7 @@ export function SecretFileUpload({
       />
 
       {error && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}

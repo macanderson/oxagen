@@ -109,7 +109,7 @@ export function MarkdownCodeEditor({
           autocompletion: false,
         }}
         aria-label={ariaLabel}
-        className="text-sm"
+        className="text-base"
       />
     </div>
   );

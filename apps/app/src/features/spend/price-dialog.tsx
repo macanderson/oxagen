@@ -293,7 +293,7 @@ export function PriceDialog({
           }}
           className="flex flex-col gap-3"
         >
-          <p className="text-sm text-muted-foreground">{t("dialog.body")}</p>
+          <p className="text-base text-muted-foreground">{t("dialog.body")}</p>
           {alert === null ? null : (
             <FormAlert testId="spend-price-failure">
               <span className="flex flex-col gap-1">
@@ -367,10 +367,10 @@ export function PriceDialog({
             }}
           />
           <fieldset className="flex min-w-0 flex-col gap-3 border-0 p-0">
-            <legend className="text-sm font-medium text-foreground">
+            <legend className="text-base font-medium text-foreground">
               {t("dialog.rates")}
             </legend>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {t("dialog.ratesHint")}
             </p>
             {shown.map((tokenClass) => (

@@ -162,7 +162,7 @@ export function PageError({
           <p
             id={noteId}
             data-testid="page-error-incident-not-backed"
-            className="mt-2 text-xs text-muted-foreground"
+            className="mt-2 text-sm text-muted-foreground"
           >
             {t("incidentNotBacked")}
           </p>
@@ -311,7 +311,7 @@ export function PageDenied({
           <p
             id={noteId}
             data-testid="page-denied-request-not-backed"
-            className="mt-2 text-xs text-muted-foreground"
+            className="mt-2 text-sm text-muted-foreground"
           >
             {t("requestNotBacked")}
           </p>

@@ -36,8 +36,8 @@
  * Left out on purpose:
  * - `apps/app/src/ui/transcript-skins.css`: each skin copies another
  *   product's terminal, so its corners are that product's. Its font sizes
- *   read the app's body token, and `apps/app/src/test/arch/type-scale.test.ts`
- *   holds them to the app's 14px floor.
+ *   read the app scale's tokens, and `apps/app/src/test/arch/type-scale.test.ts`
+ *   fails on a literal one.
  * - `apps/app_deprecated/`: the archived app, which publishes no page.
  * - `apps/desktop/src/styles.css`: the desktop app's window, not a web page.
  * - the files the sync writes (`house-*.css`): they are the kit's own.
@@ -75,13 +75,6 @@ export const KEEP = {
       prop: "box-shadow",
       values: ["0 0 14px 1px color-mix(in oklab, var(--gold) 45%, transparent)"],
       why: "the launcher's unread glow, an animated cue and not elevation",
-    },
-  ],
-  "apps/app/src/ui/phone.css": [
-    {
-      prop: "font-size",
-      values: ["16px"],
-      why: "Safari's floor for an input, below which iOS zooms the page on focus",
     },
   ],
   "apps/docs/src/app/global.css": [

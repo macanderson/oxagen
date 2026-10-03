@@ -34,7 +34,7 @@ export function RequestAccess({ permission }: { permission: string }) {
         <p
           data-testid="not-backed"
           data-element="request-access"
-          className="text-sm text-muted-foreground"
+          className="text-base text-muted-foreground"
         >
           {t("dialogBody", { permission })}
         </p>

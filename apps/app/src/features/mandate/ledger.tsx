@@ -52,7 +52,7 @@ function MovementState({ kind }: { kind: MandateMovement }) {
   return (
     <span
       data-state={kind}
-      className="flex min-w-0 items-center gap-1.5 whitespace-nowrap text-xs font-medium text-foreground"
+      className="flex min-w-0 items-center gap-1.5 whitespace-nowrap text-sm font-medium text-foreground"
     >
       <span
         aria-hidden="true"
@@ -63,10 +63,10 @@ function MovementState({ kind }: { kind: MandateMovement }) {
   );
 }
 
-const field = "flex min-w-40 flex-col gap-1 text-sm";
-const fieldLabel = "text-xs font-medium text-muted-foreground";
+const field = "flex min-w-40 flex-col gap-1 text-base";
+const fieldLabel = "text-sm font-medium text-muted-foreground";
 const control =
-  "min-h-10 rounded-md border border-input-border bg-input-bg px-2 py-1.5 text-sm text-input-fg focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-input-ring";
+  "min-h-10 rounded-md border border-input-border bg-input-bg px-2 py-1.5 text-base text-input-fg focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-input-ring";
 
 function Filters({ at, view }: { at: MandateAt; view: MandateView }) {
   const t = useTranslations("mandate.ledger");
@@ -110,7 +110,7 @@ function Filters({ at, view }: { at: MandateAt; view: MandateView }) {
               label: t(`kind.${state}`),
             })),
           ]}
-          className="w-full data-[size=default]:h-10 max-md:text-base"
+          className="w-full data-[size=default]:h-10 max-md:text-lg"
         />
       </span>
       <button type="submit" className={`${control} font-medium`}>
@@ -124,7 +124,7 @@ function Filters({ at, view }: { at: MandateAt; view: MandateView }) {
           {t("clear")}
         </SafeLink>
       )}
-      <p className="ms-auto text-xs text-muted-foreground">{t("searchHint")}</p>
+      <p className="ms-auto text-sm text-muted-foreground">{t("searchHint")}</p>
     </SafeForm>
   );
 }
@@ -202,16 +202,16 @@ export function MandateLedger({
   return (
     <section aria-labelledby="mandate-ledger" className={panel}>
       <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 pb-2 pt-4">
-        <h2 id="mandate-ledger" className="text-base font-semibold">
+        <h2 id="mandate-ledger" className="text-lg font-semibold">
           {t("title")}
         </h2>
-        <p className="text-xs text-muted-foreground">{t("basis")}</p>
+        <p className="text-sm text-muted-foreground">{t("basis")}</p>
       </div>
-      <p className="px-4 pb-3 text-xs text-muted-foreground">{t("note")}</p>
+      <p className="px-4 pb-3 text-sm text-muted-foreground">{t("note")}</p>
       {detail.readBound === null ? null : (
         <p
           data-state="read-bound"
-          className="max-w-prose px-4 pb-3 text-sm text-foreground"
+          className="max-w-prose px-4 pb-3 text-base text-foreground"
         >
           {t("readBound", { shown: String(detail.readBound) })}
         </p>
@@ -219,8 +219,8 @@ export function MandateLedger({
       <Filters at={at} view={view} />
       {detail.ledger.length === 0 ? (
         <div data-state="empty" className="flex flex-col gap-2 px-4 py-8">
-          <h3 className="text-base font-semibold">{t("empty")}</h3>
-          <p className="max-w-prose text-sm text-muted-foreground">
+          <h3 className="text-lg font-semibold">{t("empty")}</h3>
+          <p className="max-w-prose text-base text-muted-foreground">
             {/* An empty ledger does not mean the limits are live authority.
                 Enforcement honours only an active mandate inside its half-open
                 window (`isEffective`), so a draft, revoked, expired or
@@ -239,8 +239,8 @@ export function MandateLedger({
           data-state="filtered-empty"
           className="flex flex-col items-start gap-2 px-4 py-8"
         >
-          <h3 className="text-base font-semibold">{t("filteredEmpty")}</h3>
-          <p className="max-w-prose text-sm text-muted-foreground">
+          <h3 className="text-lg font-semibold">{t("filteredEmpty")}</h3>
+          <p className="max-w-prose text-base text-muted-foreground">
             {t("filteredEmptyBody")}
           </p>
           <SafeLink
@@ -273,7 +273,7 @@ export function MandateLedger({
                 </td>
                 <td className={cell}>
                   <span className={mono}>{row.measure}</span>
-                  <div className="text-xs text-muted-foreground md:truncate">
+                  <div className="text-sm text-muted-foreground md:truncate">
                     {row.periodKey}
                   </div>
                 </td>
@@ -285,11 +285,11 @@ export function MandateLedger({
                 </td>
                 <td className={cell}>
                   {row.externalEffectRef === null ? (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-sm text-muted-foreground">
                       {t("notRecorded")}
                     </span>
                   ) : (
-                    <span className={`${mono} text-xs`}>
+                    <span className={`${mono} text-sm`}>
                       {row.externalEffectRef}
                     </span>
                   )}
@@ -297,7 +297,7 @@ export function MandateLedger({
                 <td className={cell}>
                   <span
                     data-receipt="not-recorded"
-                    className="text-xs text-muted-foreground"
+                    className="text-sm text-muted-foreground"
                   >
                     {t("notRecorded")}
                   </span>
@@ -308,7 +308,7 @@ export function MandateLedger({
           <Pager at={at} view={view} page={page} />
         </>
       )}
-      <div className="flex flex-col gap-1 border-t border-border px-4 py-3 text-xs text-muted-foreground">
+      <div className="flex flex-col gap-1 border-t border-border px-4 py-3 text-sm text-muted-foreground">
         <p className="max-w-prose">{t("callBasis")}</p>
         <p className="max-w-prose">{t("receiptBasis")}</p>
       </div>

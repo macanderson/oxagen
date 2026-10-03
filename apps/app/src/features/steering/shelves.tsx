@@ -59,7 +59,7 @@ export function ShelfRow({
           >
             {t(shelf)}
             <span
-              className="font-mono text-sm text-dim"
+              className="font-mono text-xs text-dim"
               data-count={count === null ? "not-recorded" : String(count)}
             >
               {count === null ? t("notRecorded") : count}

@@ -62,8 +62,8 @@ export function AgentEnvironmentsCard(props: Props): JSX.Element {
       data-testid="agent-environments-card"
     >
       <div>
-        <h3 className="text-sm font-medium">Environments</h3>
-        <p className="text-xs text-muted-foreground">
+        <h3 className="text-base font-medium">Environments</h3>
+        <p className="text-sm text-muted-foreground">
           Bind this agent to the environments whose variables and secrets it is
           authorised to resolve. The primary binding resolves first; unbinding
           the primary falls back to the workspace default environment.
@@ -78,11 +78,11 @@ export function AgentEnvironmentsCard(props: Props): JSX.Element {
       )}
 
       {bindings.length === 0 ? (
-        <p className="rounded-md border border-border/40 px-3 py-4 text-center text-sm text-muted-foreground">
+        <p className="rounded-md border border-border/40 px-3 py-4 text-center text-base text-muted-foreground">
           No bindings — this agent uses the workspace default environment.
         </p>
       ) : (
-        <ul className="divide-y divide-border/30 overflow-hidden rounded-md border border-border/40 text-sm">
+        <ul className="divide-y divide-border/30 overflow-hidden rounded-md border border-border/40 text-base">
           {bindings.map((b) => (
             <li
               key={b.id}
@@ -91,13 +91,13 @@ export function AgentEnvironmentsCard(props: Props): JSX.Element {
             >
               <div className="min-w-0 flex-1">
                 <span className="font-medium">{b.environmentName}</span>{" "}
-                <span className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   {b.environmentSlug}
                 </span>
               </div>
               <dl className="flex flex-wrap items-center gap-x-6 gap-y-2">
                 <div>
-                  <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Primary
                   </dt>
                   <dd className="mt-0.5">
@@ -126,7 +126,7 @@ export function AgentEnvironmentsCard(props: Props): JSX.Element {
                         Make primary
                       </Button>
                     ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
+                      <span className="text-sm text-muted-foreground">—</span>
                     )}
                   </dd>
                 </div>
@@ -160,14 +160,14 @@ export function AgentEnvironmentsCard(props: Props): JSX.Element {
 
       {canManage && (
         <div className="flex flex-col gap-2 rounded-md border border-border/40 p-3">
-          <span className="text-xs font-medium text-muted-foreground">
+          <span className="text-sm font-medium text-muted-foreground">
             Bind an environment
           </span>
           <div className="flex flex-wrap items-end gap-2">
-            <label className="flex flex-col gap-1 text-xs">
+            <label className="flex flex-col gap-1 text-sm">
               <span className="text-muted-foreground">Environment</span>
               <select
-                className="max-md:h-11 rounded-md border border-border/50 bg-background px-2 py-1.5 text-sm"
+                className="max-md:h-11 rounded-md border border-border/50 bg-background px-2 py-1.5 text-base"
                 value={envId}
                 onChange={(e) => setEnvId(e.target.value)}
                 data-testid="agent-bind-env-select"
@@ -180,7 +180,7 @@ export function AgentEnvironmentsCard(props: Props): JSX.Element {
                 ))}
               </select>
             </label>
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2 text-base">
               <Switch checked={primary} onCheckedChange={setPrimary} />
               Primary
             </label>
@@ -209,7 +209,7 @@ export function AgentEnvironmentsCard(props: Props): JSX.Element {
             </Button>
           </div>
           {availableEnvs.length === 0 && environments.length > 0 && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               This agent is bound to every environment.
             </p>
           )}

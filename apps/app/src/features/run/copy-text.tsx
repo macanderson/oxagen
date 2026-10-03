@@ -27,7 +27,7 @@ function useCopy(text: string): [CopyState, () => Promise<void>] {
 function CopyStatus({ state, text }: { state: CopyState; text: string }) {
   const t = useTranslations("run.header");
   return (
-    <span role="status" className="text-sm text-muted-foreground">
+    <span role="status" className="text-xs text-muted-foreground">
       {state === "copied"
         ? t("copied", { text })
         : state === "failed"
@@ -52,7 +52,7 @@ export function CopyRunId({ id }: { id: string }) {
         data-testid="run-id"
         onClick={() => void copy()}
         aria-label={t("copyLabel", { text: id })}
-        className="inline-flex min-w-0 items-center gap-1 rounded-sm font-mono text-sm text-dim hover:text-foreground max-md:min-h-11"
+        className="inline-flex min-w-0 items-center gap-1 rounded-sm font-mono text-xs text-dim hover:text-foreground max-md:min-h-11"
       >
         <span className="min-w-0 break-all">{id}</span>
         <CopyIcon aria-hidden="true" className="size-3 flex-none opacity-70" />
@@ -82,7 +82,7 @@ export function CopyPath({
         onClick={() => void copy()}
         title={title}
         aria-label={t("copyLabel", { text })}
-        className={`${linkChip} font-mono text-sm font-medium`}
+        className={`${linkChip} font-mono text-xs font-medium`}
       >
         <TreeStructureIcon
           aria-hidden="true"

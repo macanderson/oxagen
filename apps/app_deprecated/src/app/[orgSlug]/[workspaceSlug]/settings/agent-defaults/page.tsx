@@ -146,10 +146,10 @@ export default async function AgentDefaultsPage({
                 aria-hidden="true"
               />
               <div>
-                <p className="text-sm font-semibold text-foreground">
+                <p className="text-base font-semibold text-foreground">
                   AI model defaults
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   The default text tier or model applied to every agent turn in
                   this workspace. Workspace defaults take precedence over
                   personal preferences for all members.

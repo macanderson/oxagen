@@ -11,16 +11,16 @@ type Story = StoryObj<typeof meta>;
 export const Horizontal: Story = {
   render: () => (
     <div className="max-w-xs">
-      <p className="text-sm">Section one</p>
+      <p className="text-base">Section one</p>
       <Separator className="my-3" />
-      <p className="text-sm">Section two</p>
+      <p className="text-base">Section two</p>
     </div>
   ),
 };
 
 export const Vertical: Story = {
   render: () => (
-    <div className="flex h-8 items-center gap-3 text-sm">
+    <div className="flex h-8 items-center gap-3 text-base">
       <span>Docs</span>
       <Separator orientation="vertical" />
       <span>API</span>

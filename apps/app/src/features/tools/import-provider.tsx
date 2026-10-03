@@ -135,12 +135,12 @@ function Field({
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-foreground">
+      <label htmlFor={id} className="text-base font-medium text-foreground">
         {label}
       </label>
       {children}
       {hint === undefined ? null : (
-        <p className="text-xs text-muted-foreground">{hint}</p>
+        <p className="text-sm text-muted-foreground">{hint}</p>
       )}
     </div>
   );
@@ -151,7 +151,7 @@ function Steps({ step }: { step: Step }) {
   return (
     <ol
       aria-label={t("label")}
-      className="mb-1 flex flex-wrap items-center gap-2 text-xs"
+      className="mb-1 flex flex-wrap items-center gap-2 text-sm"
     >
       {([1, 2, 3] as const).map((n) => (
         <li
@@ -177,13 +177,13 @@ function RedirectUrl({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <span className="text-sm font-medium text-foreground">
+      <span className="text-base font-medium text-foreground">
         {t("redirect")}
       </span>
       <div className="flex min-w-0 items-center gap-2">
         <code
           data-testid={`${TESTID}-redirect-url`}
-          className={`${mono} min-w-0 flex-1 break-all rounded border border-border bg-muted px-2 py-1.5 text-xs`}
+          className={`${mono} min-w-0 flex-1 break-all rounded border border-border bg-muted px-2 py-1.5 text-sm`}
         >
           {value}
         </code>
@@ -208,7 +208,7 @@ function RedirectUrl({ value }: { value: string }) {
           {copied ? t("copied") : t("copy")}
         </button>
       </div>
-      <p className="text-xs text-muted-foreground">{t("redirectHint")}</p>
+      <p className="text-sm text-muted-foreground">{t("redirectHint")}</p>
     </div>
   );
 }
@@ -287,7 +287,7 @@ function OAuthClientFields({
       {docs === null ? null : (
         <ProviderLink
           to={docs}
-          className="text-xs text-app-link-fg underline-offset-2 hover:underline"
+          className="text-sm text-app-link-fg underline-offset-2 hover:underline"
         >
           {t("docs")}
         </ProviderLink>
@@ -339,7 +339,7 @@ function OAuthStatus({
   const t = useTranslations("tools.import.oauth");
   if (phase.kind === "starting") {
     return (
-      <p role="status" className="text-sm text-muted-foreground">
+      <p role="status" className="text-base text-muted-foreground">
         {t("starting")}
       </p>
     );
@@ -349,7 +349,7 @@ function OAuthStatus({
     <div
       role="status"
       data-testid={`${TESTID}-oauth-waiting`}
-      className="flex flex-col gap-2 rounded-lg border border-border bg-muted px-3 py-2.5 text-sm"
+      className="flex flex-col gap-2 rounded-lg border border-border bg-muted px-3 py-2.5 text-base"
     >
       <p className="text-foreground">
         {phase.blockedUrl === null
@@ -790,7 +790,7 @@ export function ImportProvider({
                       <span className="font-semibold text-foreground">
                         {packagePick.name}
                       </span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-sm text-muted-foreground">
                         {packagePick.publisher}
                       </span>
                     </div>
@@ -842,11 +842,11 @@ export function ImportProvider({
                           <span className="font-semibold text-foreground">
                             {picked.name}
                           </span>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-sm text-muted-foreground">
                             {picked.publisher}
                           </span>
                           <span
-                            className={`${mono} break-all text-sm text-muted-foreground`}
+                            className={`${mono} break-all text-xs text-muted-foreground`}
                           >
                             {picked.endpointUrl}
                           </span>
@@ -1144,12 +1144,12 @@ export function ImportProvider({
                 />
               </Field>
             ) : listed.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-base text-muted-foreground">
                 {t("nothingListed")}
               </p>
             ) : (
               <fieldset className="flex flex-col gap-1.5">
-                <legend className="mb-1 text-sm font-medium text-foreground">
+                <legend className="mb-1 text-base font-medium text-foreground">
                   {t("listed")}
                 </legend>
                 <label htmlFor="import-filter" className="sr-only">
@@ -1190,7 +1190,7 @@ export function ImportProvider({
                   ))}
                 <p
                   data-testid={`${TESTID}-selected`}
-                  className="text-xs text-muted-foreground"
+                  className="text-sm text-muted-foreground"
                 >
                   {t("selected", {
                     selected: selected.size,
@@ -1204,13 +1204,13 @@ export function ImportProvider({
           {step === 3 ? (
             <>
               {chosenTools.length === 0 ? (
-                <p className="text-sm text-foreground">{t("allPins")}</p>
+                <p className="text-base text-foreground">{t("allPins")}</p>
               ) : (
                 <ul className="flex flex-wrap gap-1.5">
                   {chosenTools.map((tool) => (
                     <li
                       key={tool}
-                      className={`${mono} rounded border border-border px-1.5 py-0.5 text-xs`}
+                      className={`${mono} rounded border border-border px-1.5 py-0.5 text-sm`}
                     >
                       {tool}
                     </li>
@@ -1228,7 +1228,7 @@ export function ImportProvider({
                   <p
                     role="status"
                     data-testid={`${TESTID}-done`}
-                    className="rounded-lg border border-border bg-muted px-3 py-2.5 text-sm text-foreground"
+                    className="rounded-lg border border-border bg-muted px-3 py-2.5 text-base text-foreground"
                   >
                     {t("done", {
                       published: done.published,

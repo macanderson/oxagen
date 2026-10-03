@@ -80,7 +80,7 @@ export function TokensSection({
           id="spend-token-classes"
           title={t("byClass")}
           action={
-            <span className={`${mono} text-sm text-muted-foreground`}>
+            <span className={`${mono} text-xs text-muted-foreground`}>
               {t("classTotal", {
                 tokens: formatCount(total, locale),
                 from: month.period.from,

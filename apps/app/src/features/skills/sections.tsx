@@ -50,7 +50,7 @@ function WindowLines({ inventory }: { inventory: SkillInventory }) {
   return (
     <div
       data-window=""
-      className="flex flex-col gap-0.5 text-sm text-muted-foreground"
+      className="flex flex-col gap-0.5 text-base text-muted-foreground"
     >
       <p>
         {t("window", {
@@ -75,7 +75,7 @@ function WindowLines({ inventory }: { inventory: SkillInventory }) {
  */
 export function SkillsLede() {
   const t = useTranslations("skills");
-  return <p className="text-sm text-muted-foreground">{t("lede")}</p>;
+  return <p className="text-base text-muted-foreground">{t("lede")}</p>;
 }
 
 export function SkillsInventory({
@@ -108,7 +108,7 @@ export function SkillsInventory({
       className={`${panel} flex flex-col`}
     >
       <div className="flex flex-col gap-2 px-4 pt-4 pb-3">
-        <h2 id="skills-inventory" className="text-sm font-semibold">
+        <h2 id="skills-inventory" className="text-base font-semibold">
           {t("inventory.title")}
         </h2>
         <WindowLines inventory={inventory} />
@@ -132,7 +132,7 @@ export function SkillsInventory({
                 {skill.name}
               </p>
               <CloneButton kind="skill" sourceRef={skill.name} />
-              <p className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+              <p className="flex flex-wrap gap-x-3 text-sm text-muted-foreground">
                 <span data-sessions={skill.sessions}>
                   {t("row.sessions", {
                     count: skill.sessions,
@@ -155,7 +155,7 @@ export function SkillsInventory({
                   <li
                     key={harness}
                     data-harness={harness}
-                    className={`${mono} rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground`}
+                    className={`${mono} rounded-full border border-border px-2 py-0.5 text-sm text-muted-foreground`}
                   >
                     {harness}
                   </li>
@@ -163,7 +163,7 @@ export function SkillsInventory({
                 {skill.harnessCount > skill.harnesses.length ? (
                   <li
                     data-harness-omitted=""
-                    className="px-2 py-0.5 text-xs text-muted-foreground"
+                    className="px-2 py-0.5 text-sm text-muted-foreground"
                   >
                     {t("row.moreHarnesses", {
                       count: skill.harnessCount - skill.harnesses.length,

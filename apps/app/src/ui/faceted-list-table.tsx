@@ -44,10 +44,10 @@ const PER_PAGE = [5, 10, 25, 50, 0] as const;
 // Select, as wide as the choice it shows, so its list opens on the
 // translucent menu surface. It keeps the bar's height and never shrinks.
 const control =
-  "min-h-8 max-md:min-h-11 rounded-4xl border border-input-border bg-input-bg py-1.5 text-sm max-md:text-base text-input-fg " +
+  "min-h-8 max-md:min-h-11 rounded-4xl border border-input-border bg-input-bg py-1.5 text-base max-md:text-lg text-input-fg " +
   "hover:border-input-border-hover focus-visible:border-input-border-focus focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-input-ring";
 const search = `${control} min-w-0 flex-[1_1_14rem] px-3 placeholder:text-input-placeholder`;
-const filter = "shrink-0 max-md:min-h-11 max-md:text-base";
+const filter = "shrink-0 max-md:min-h-11 max-md:text-lg";
 
 type Sort = { key: string; dir: 1 | -1 } | null;
 

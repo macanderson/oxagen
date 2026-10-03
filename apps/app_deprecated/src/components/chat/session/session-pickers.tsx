@@ -115,14 +115,14 @@ export function SessionPickerList({
       />
       <div className="flex flex-col gap-1 overflow-y-auto">
         {filteredGroups.length === 0 ? (
-          <p className="py-6 text-center text-xs text-muted-foreground">
+          <p className="py-6 text-center text-sm text-muted-foreground">
             {emptyMessage}
           </p>
         ) : (
           filteredGroups.map((g) => (
             <div key={g.id} role="group" aria-label={g.label ?? undefined}>
               {g.label ? (
-                <div className="px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   {g.label}
                 </div>
               ) : null}
@@ -138,7 +138,7 @@ export function SessionPickerList({
                     disabled={row.disabled}
                     onClick={() => onSelect(row.id)}
                     className={cn(
-                      "flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
+                      "flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-base transition-colors",
                       "hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                       "disabled:cursor-not-allowed disabled:opacity-50",
                       selected && "bg-accent/40",
@@ -149,12 +149,12 @@ export function SessionPickerList({
                         {row.label}
                       </span>
                       {row.sublabel ? (
-                        <span className="block truncate text-xs text-muted-foreground">
+                        <span className="block truncate text-sm text-muted-foreground">
                           {row.sublabel}
                         </span>
                       ) : null}
                       {row.meta ? (
-                        <span className="block truncate text-[11px] text-muted-foreground/80">
+                        <span className="block truncate text-xs text-muted-foreground/80">
                           {row.meta}
                         </span>
                       ) : null}
@@ -302,7 +302,7 @@ export function ModelPickerRows({
           <button
             type="button"
             onClick={() => setExpanded(true)}
-            className="flex min-h-11 w-full items-center rounded-md px-2 py-1.5 text-left text-sm font-medium text-primary hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex min-h-11 w-full items-center rounded-md px-2 py-1.5 text-left text-base font-medium text-primary hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             All providers
           </button>

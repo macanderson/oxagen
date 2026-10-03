@@ -89,7 +89,7 @@ export function WorkspaceSwitcherSlot({
   return (
     <>
       <span
-        className="select-none text-sm text-muted-foreground/50"
+        className="select-none text-base text-muted-foreground/50"
         aria-hidden="true"
       >
         /

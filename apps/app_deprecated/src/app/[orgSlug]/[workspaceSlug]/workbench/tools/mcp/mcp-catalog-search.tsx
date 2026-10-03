@@ -241,7 +241,7 @@ export function McpCatalogSearch({
 
       {error ? (
         <p
-          className="text-xs text-destructive"
+          className="text-sm text-destructive"
           data-testid="mcp-catalog-search-error"
         >
           {error}
@@ -250,7 +250,7 @@ export function McpCatalogSearch({
 
       {rows.length === 0 && !loading && !error ? (
         <p
-          className="text-sm text-muted-foreground"
+          className="text-base text-muted-foreground"
           data-testid="mcp-catalog-search-empty"
         >
           No servers match{query.trim() ? ` “${query.trim()}”` : ""} yet.
@@ -271,14 +271,14 @@ export function McpCatalogSearch({
                 <RowIcon icons={row.icons} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium">{title}</p>
+                    <p className="truncate text-base font-medium">{title}</p>
                     {row.transportTypes.map((t) => (
                       <Badge key={t} variant="outline" size="sm">
                         {t}
                       </Badge>
                     ))}
                   </div>
-                  <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+                  <p className="mt-0.5 line-clamp-1 text-sm text-muted-foreground">
                     {row.description}
                   </p>
                 </div>

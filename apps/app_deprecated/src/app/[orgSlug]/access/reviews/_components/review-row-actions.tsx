@@ -80,7 +80,7 @@ export function ReviewRowActions({
 
   if (status === "confirmed") {
     return (
-      <Badge variant="success" className="text-xs">
+      <Badge variant="success" className="text-sm">
         Confirmed
       </Badge>
     );
@@ -88,7 +88,7 @@ export function ReviewRowActions({
 
   if (status === "revoked") {
     return (
-      <Badge variant="muted" className="text-xs">
+      <Badge variant="muted" className="text-sm">
         Revoked
       </Badge>
     );
@@ -97,7 +97,7 @@ export function ReviewRowActions({
   if (status === "error") {
     return (
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-destructive">{errorMsg}</span>
+        <span className="text-sm text-destructive">{errorMsg}</span>
         <Button
           variant="ghost"
           size="sm"
@@ -105,7 +105,7 @@ export function ReviewRowActions({
             setStatus("idle");
             setErrorMsg(null);
           }}
-          className="h-6 px-2 text-xs"
+          className="h-6 px-2 text-sm"
         >
           Dismiss
         </Button>
@@ -116,14 +116,14 @@ export function ReviewRowActions({
   if (status === "confirming_revoke") {
     return (
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           Remove {targetUserName}?
         </span>
         <Button
           variant="destructive"
           size="sm"
           onClick={handleRevoke}
-          className="h-6 px-2 text-xs"
+          className="h-6 px-2 text-sm"
         >
           Confirm
         </Button>
@@ -131,7 +131,7 @@ export function ReviewRowActions({
           variant="ghost"
           size="sm"
           onClick={() => setStatus("idle")}
-          className="h-6 px-2 text-xs"
+          className="h-6 px-2 text-sm"
         >
           Cancel
         </Button>
@@ -146,7 +146,7 @@ export function ReviewRowActions({
         size="sm"
         onClick={handleConfirm}
         disabled={status === "working" || isSelf}
-        className="h-7 px-2.5 text-xs text-muted-foreground hover:text-[hsl(142_71%_45%)]"
+        className="h-7 px-2.5 text-sm text-muted-foreground hover:text-[hsl(142_71%_45%)]"
         title="Confirm access is appropriate"
       >
         <CheckCircle2 className="mr-1 h-3 w-3" aria-hidden="true" />
@@ -158,7 +158,7 @@ export function ReviewRowActions({
           size="sm"
           onClick={handleRevoke}
           disabled={status === "working"}
-          className="h-7 px-2.5 text-xs text-muted-foreground hover:text-destructive"
+          className="h-7 px-2.5 text-sm text-muted-foreground hover:text-destructive"
           title="Remove member's access"
         >
           <UserMinus className="mr-1 h-3 w-3" aria-hidden="true" />
@@ -166,7 +166,7 @@ export function ReviewRowActions({
         </Button>
       )}
       {isSelf && (
-        <Badge variant="muted" className="text-[10px]">
+        <Badge variant="muted" className="text-xs">
           You
         </Badge>
       )}

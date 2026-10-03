@@ -105,13 +105,13 @@ describe("buttonVariants", () => {
   it("applies xs size classes", () => {
     const cls = buttonVariants({ size: "xs" });
     expect(cls).toContain("h-6");
-    expect(cls).toContain("text-xs");
+    expect(cls).toContain("text-sm");
   });
 
   it("applies sm size classes", () => {
     const cls = buttonVariants({ size: "sm" });
     expect(cls).toContain("h-7");
-    expect(cls).toContain("text-xs");
+    expect(cls).toContain("text-sm");
   });
 
   it("applies lg size classes", () => {

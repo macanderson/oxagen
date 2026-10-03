@@ -48,7 +48,7 @@ type Edge = "observed" | "stated" | "inferred" | "commit" | "branch";
  * line-height:1.7 }`: the provenance chip, and the `fr N` chip beside it.
  */
 const edgeChip =
-  "inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] border px-1.5 font-mono text-sm leading-[1.7]";
+  "inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] border px-1.5 font-mono text-xs leading-[1.7]";
 
 /**
  * `.edge.observed { color:var(--st-proven) }`, `.edge.stated { color:
@@ -224,7 +224,7 @@ function Item({
           line === null ? null : (
             <span
               key={name}
-              className="block text-sm leading-[1.5] text-muted-foreground [overflow-wrap:anywhere]"
+              className="block text-xs leading-[1.5] text-muted-foreground [overflow-wrap:anywhere]"
             >
               {line}
             </span>
@@ -264,7 +264,7 @@ function ListPanel({
     >
       <div className="px-3.5 pb-2.5 pt-2">
         {count === 0 ? (
-          <p className="py-2 text-sm text-muted-foreground">{empty}</p>
+          <p className="py-2 text-xs text-muted-foreground">{empty}</p>
         ) : (
           <ul className="flex flex-col">{children}</ul>
         )}
@@ -639,7 +639,7 @@ const DIFF_ROW: Record<DiffLine["kind"], string> = {
 
 function Diff({ patch }: { patch: string }) {
   return (
-    <div className="mb-2.5 max-h-[360px] overflow-auto rounded-[9px] border border-border bg-void font-mono text-sm leading-[1.6]">
+    <div className="mb-2.5 max-h-[360px] overflow-auto rounded-[9px] border border-border bg-void font-mono text-xs leading-[1.6]">
       {diffLines(patch).map((line, i) => (
         <div
           // A patch's lines are positional.
@@ -666,7 +666,7 @@ function Diff({ patch }: { patch: string }) {
 function Stat({ added, removed }: { added: number; removed: number }) {
   const locale = useLocale();
   return (
-    <span className="flex-none whitespace-nowrap font-mono text-sm">
+    <span className="flex-none whitespace-nowrap font-mono text-xs">
       <b className={ADDED}>+{formatCount(added, locale)}</b>{" "}
       <b className={REMOVED}>−{formatCount(removed, locale)}</b>
     </span>
@@ -711,7 +711,7 @@ function FilesChanged({
       flush
       aside={
         files.length === 0 ? undefined : (
-          <span className="flex items-center gap-2 font-mono text-sm text-muted-foreground">
+          <span className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
             <Stat added={added} removed={removed} />
             <span
               aria-hidden="true"
@@ -740,11 +740,11 @@ function FilesChanged({
             const patch = patches.get(node.name) ?? null;
             const summary = (
               <>
-                <span className="min-w-0 truncate font-mono text-sm text-foreground">
+                <span className="min-w-0 truncate font-mono text-xs text-foreground">
                   {node.name}
                 </span>
                 {patch === null ? (
-                  <span className="flex-none text-sm text-dim">
+                  <span className="flex-none text-xs text-dim">
                     {t("noPatch")}
                   </span>
                 ) : null}
@@ -789,14 +789,14 @@ function FilesChanged({
               <li
                 key={`${diff.checkoutRef}:${diff.seq}`}
                 data-testid="run-linked-captured"
-                className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border py-1.5 text-sm text-muted-foreground first:border-t-0"
+                className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border py-1.5 text-xs text-muted-foreground first:border-t-0"
               >
                 <FrameChip frame={{ seq: diff.seq }} place={place} />
                 <span>{t(`capture.${diff.completeness}`)}</span>
                 {diff.digest === null ? null : (
                   <code
                     data-truncate={diff.digest}
-                    className={`${mono} min-w-0 break-all text-sm text-dim`}
+                    className={`${mono} min-w-0 break-all text-xs text-dim`}
                   >
                     {`${diff.digest.slice(0, "sha256:".length + 12)}…`}
                   </code>
@@ -807,7 +807,7 @@ function FilesChanged({
               </li>
             ))}
           </ul>
-          <p className="mt-1.5 text-sm text-dim">
+          <p className="mt-1.5 text-xs text-dim">
             {t("capturedBasis", {
               count: formatCount(work.diffs.length, locale),
             })}
@@ -856,7 +856,7 @@ function Legend({ edges }: { edges: readonly Edge[] }) {
   if (edges.includes("branch")) shown.push("branch");
   const inferred = edges.filter((edge) => edge === "inferred").length;
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-sm text-dim">
+    <div className="mb-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs text-dim">
       <p className={`${eyebrowQuiet} m-0`}>{t("title")}</p>
       {shown.map((edge) => (
         <span key={edge} className="inline-flex items-center gap-1.5">
@@ -939,7 +939,7 @@ export function LinkedWorkLoading() {
   return (
     <section aria-label={t("title")} aria-busy="true">
       <p className={`${eyebrowQuiet} mb-3`}>{t("title")}</p>
-      <p role="status" className="text-xs text-muted-foreground">
+      <p role="status" className="text-sm text-muted-foreground">
         {t("loading")}
       </p>
     </section>

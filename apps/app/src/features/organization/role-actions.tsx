@@ -51,7 +51,7 @@ import {
 type EditorMode = "create" | "duplicate" | "edit" | "view";
 
 const label = "text-sm font-semibold text-muted-foreground";
-const hint = "text-xs text-muted-foreground";
+const hint = "text-sm text-muted-foreground";
 
 /** The permission the Merge without review box grants, drawn apart from its group. */
 const MERGE_WITHOUT_REVIEW = "pr.merge_without_review";
@@ -246,7 +246,7 @@ export function RoleEditor({
                 onChange={(event) => {
                   setDraft({ ...draft, name: event.target.value });
                 }}
-                className={`${inputBase} font-mono max-md:text-base`}
+                className={`${inputBase} font-mono max-md:text-lg`}
               />
               <p id={`${id}-name-hint`} className={hint}>
                 {isNew ? t("nameNewHint") : t("nameHint")}
@@ -265,7 +265,7 @@ export function RoleEditor({
                 onChange={(event) => {
                   setDraft({ ...draft, description: event.target.value });
                 }}
-                className={`${inputBase} max-md:text-base`}
+                className={`${inputBase} max-md:text-lg`}
               />
               {isNew ? null : (
                 <p id={`${id}-description-hint`} className={hint}>
@@ -284,7 +284,7 @@ export function RoleEditor({
                 disabled
                 value={isNew ? "agent" : (role?.kind ?? "agent")}
                 aria-describedby={`${id}-kind-hint`}
-                className={`${inputBase} max-md:text-base`}
+                className={`${inputBase} max-md:text-lg`}
               >
                 <option value="human">{tKind("human")}</option>
                 <option value="agent">{tKind("agent")}</option>
@@ -309,7 +309,7 @@ export function RoleEditor({
                     scope: event.target.value === "org" ? "org" : "workspace",
                   });
                 }}
-                className={`${inputBase} max-md:text-base`}
+                className={`${inputBase} max-md:text-lg`}
               >
                 <option value="org">{tScope("org")}</option>
                 <option value="workspace">{tScope("workspace")}</option>
@@ -336,7 +336,7 @@ export function RoleEditor({
             <div className="grid gap-3 sm:grid-cols-2">
               {groups.map((group) => (
                 <div key={group} className="flex flex-col gap-1">
-                  <p className="text-sm font-semibold uppercase tracking-[0.09em] text-dim">
+                  <p className="text-xs font-semibold uppercase tracking-[0.09em] text-dim">
                     {group}
                   </p>
                   {grouped
@@ -496,7 +496,7 @@ export function DeleteRole({ org, role }: { org: string; role: Role }) {
           </button>
         }
       >
-        <div className="flex flex-col gap-3 text-sm">
+        <div className="flex flex-col gap-3 text-base">
           <p>{tDel("body", { name: role.name })}</p>
           <p className="text-muted-foreground">
             {role.heldBy > 0

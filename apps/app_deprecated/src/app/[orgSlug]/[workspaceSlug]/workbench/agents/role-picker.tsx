@@ -45,7 +45,7 @@ export function roleTestId(roleName: string): string {
 function GrantCounts({ option }: { option: AgentRoleOption }) {
   if (!option.grantsKnown) {
     return (
-      <span className="text-xs text-muted-foreground">
+      <span className="text-sm text-muted-foreground">
         Grant details unavailable
       </span>
     );
@@ -57,7 +57,7 @@ function GrantCounts({ option }: { option: AgentRoleOption }) {
   const deny = option.grants.filter((g) => g.effect === "deny").length;
   return (
     <span
-      className="flex flex-wrap items-center gap-1.5 text-[11px] tabular-nums text-muted-foreground"
+      className="flex flex-wrap items-center gap-1.5 text-xs tabular-nums text-muted-foreground"
       data-testid={`role-grant-counts-${roleTestId(option.roleName)}`}
     >
       <span className="text-success">{allow} allowed</span>
@@ -98,7 +98,7 @@ export function RolePicker({
 
   return (
     <div className="flex flex-col gap-4" data-testid="agent-role-picker">
-      <p className="text-sm text-muted-foreground">
+      <p className="text-base text-muted-foreground">
         The role is the agent&rsquo;s permission ceiling — what it may ever do.
         The configuration in the other steps is its request; at run time the
         agent gets the intersection of the two.
@@ -106,7 +106,7 @@ export function RolePicker({
 
       {rolesError ? (
         <div
-          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-base text-destructive"
           role="alert"
           data-testid="agent-role-error"
         >
@@ -134,7 +134,7 @@ export function RolePicker({
 
         {custom.length > 0 ? (
           <>
-            <p className="mt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="mt-2 text-sm font-medium uppercase tracking-wide text-muted-foreground">
               Custom roles
             </p>
             {custom.map((option) => (
@@ -153,7 +153,7 @@ export function RolePicker({
 
       {custom.length === 0 && !rolesError ? (
         <p
-          className="text-xs text-muted-foreground"
+          className="text-sm text-muted-foreground"
           data-testid="agent-role-custom-empty"
         >
           No custom roles in this org yet. Custom roles are defined under
@@ -206,15 +206,15 @@ function RoleCard({
       </span>
       <span className="min-w-0 flex-1 space-y-1">
         <span className="flex flex-wrap items-center gap-1.5">
-          <span className="text-sm font-medium text-foreground">
+          <span className="text-base font-medium text-foreground">
             {option.roleName}
           </span>
           {option.isSystemDefault ? (
-            <Badge variant="outline" size="sm" className="text-[10px]">
+            <Badge variant="outline" size="sm" className="text-xs">
               System
             </Badge>
           ) : (
-            <Badge variant="secondary" size="sm" className="text-[10px]">
+            <Badge variant="secondary" size="sm" className="text-xs">
               Custom
             </Badge>
           )}
@@ -222,7 +222,7 @@ function RoleCard({
             <Badge
               variant="secondary"
               size="sm"
-              className="text-[10px]"
+              className="text-xs"
               data-testid={`role-current-${testId}`}
             >
               <ShieldCheck className="mr-0.5 h-2.5 w-2.5" aria-hidden="true" />
@@ -236,7 +236,7 @@ function RoleCard({
             />
           ) : null}
         </span>
-        <span className="block text-xs text-muted-foreground">
+        <span className="block text-sm text-muted-foreground">
           {option.description}
         </span>
         <GrantCounts option={option} />

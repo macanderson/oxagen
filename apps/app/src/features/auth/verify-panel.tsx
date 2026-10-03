@@ -99,7 +99,7 @@ export function VerifyPanel({
               </button>
             </p>
             {error ? (
-              <p className="text-sm text-error-ink">{t(`errors.${error}`)}</p>
+              <p className="text-base text-error-ink">{t(`errors.${error}`)}</p>
             ) : null}
           </>
         ) : (

@@ -41,7 +41,7 @@ export function ToolName({
         {primary}
       </span>
       <span
-        className={`text-xs text-muted-foreground md:truncate ${names === "api" ? "" : mono}`}
+        className={`text-sm text-muted-foreground md:truncate ${names === "api" ? "" : mono}`}
       >
         {secondary}
       </span>
@@ -60,7 +60,7 @@ export function HazardCell({ version }: { version: ToolVersion }) {
         label={t(`risk.${version.riskGrade}`)}
       />
       {version.classification === null ? null : (
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           {t(`sideEffect.${version.classification.sideEffect}`)}
         </span>
       )}
@@ -85,11 +85,11 @@ export function CategoryCell({ version }: { version: ToolVersion }) {
   const t = useTranslations("tools.registry");
   if (version.classification === null) {
     return (
-      <span className="text-xs text-muted-foreground">{t("unclassified")}</span>
+      <span className="text-sm text-muted-foreground">{t("unclassified")}</span>
     );
   }
   if (version.classification.impacts.length === 0) {
-    return <span className="text-xs text-muted-foreground">{t("noTags")}</span>;
+    return <span className="text-sm text-muted-foreground">{t("noTags")}</span>;
   }
   return (
     <span className="flex gap-1 max-md:flex-wrap">
