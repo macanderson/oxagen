@@ -797,4 +797,156 @@ describe("the daemon's reconciliation against a real repository", () => {
     await second.tick();
     expect(listed(second)).toEqual([["feature.txt"]]);
   });
+
+  it("seals the session's commits and its merge, and leaves out a commit from before it", async () => {
+    const r = rig();
+    // A commit written an hour before the session, which it later
+    // cherry-picks. The copy keeps the old author date, so it is not the
+    // session's (ADR-188).
+    const hourAgo = `@${Math.floor(Date.now() / 1000) - 3600} +0000`;
+    r.git(r.work, ["checkout", "-q", "-b", "old"]);
+    writeFileSync(join(r.work, "old.txt"), "written before the session\n");
+    r.git(r.work, ["add", "."]);
+    r.git(r.work, ["commit", "-q", "-m", "old work"], {
+      GIT_AUTHOR_DATE: hourAgo,
+      GIT_COMMITTER_DATE: hourAgo,
+    });
+    r.git(r.work, ["checkout", "-q", "main"]);
+
+    const handle = await boot(r.exec);
+    await handle.api.handleHook(hook("SessionStart", r.work));
+    await handle.tick();
+    const tool = (
+      name: string,
+      id: string,
+      toolName: string,
+      input: Record<string, unknown>,
+    ) => ({
+      payload: {
+        session_id: SESSION,
+        hook_event_name: name,
+        cwd: r.work,
+        tool_name: toolName,
+        tool_input: input,
+        tool_use_id: id,
+      },
+      env: {},
+    });
+    // Git dates are whole seconds, so each commit gets its own second and
+    // the list's order is the order they were made.
+    const nextSecond = () =>
+      new Promise((resolve) => setTimeout(resolve, 1_100));
+
+    // The session writes a file with its own tool, then commits it.
+    const first = join(r.work, "first.txt");
+    const write = { file_path: first, content: "one\n" };
+    await handle.api.handleHook(
+      tool("PreToolUse", "toolu_w", "Write", write),
+    );
+    writeFileSync(first, "one\n");
+    await handle.api.handleHook(
+      tool("PostToolUse", "toolu_w", "Write", write),
+    );
+    r.git(r.work, ["add", "."]);
+    r.git(r.work, ["commit", "-q", "-m", "first"]);
+    await nextSecond();
+
+    // Someone else pushes, and the session merges the remote-tracking branch.
+    pushUpstream(r);
+    r.git(r.work, ["fetch", "-q", "origin"]);
+    r.git(r.work, ["merge", "-q", "--no-ff", "--no-edit", "origin/main"]);
+    await nextSecond();
+    r.git(r.work, ["cherry-pick", "old"]);
+    await nextSecond();
+
+    // A commit made inside one Bash call, which the frame names.
+    writeFileSync(join(r.work, "second.txt"), "two\nthree\n");
+    const bash = { command: "git add . && git commit -m second" };
+    await handle.api.handleHook(
+      tool("PreToolUse", "toolu_c", "Bash", bash),
+    );
+    r.git(r.work, ["add", "."]);
+    r.git(r.work, ["commit", "-q", "-m", "second"]);
+    await handle.api.handleHook(
+      tool("PostToolUse", "toolu_c", "Bash", bash),
+    );
+    await handle.api.handleHook(hook("Stop", r.work));
+    await handle.tick();
+
+    const sha = (ref: string) => r.git(r.work, ["rev-parse", ref]).trim();
+    const refs = ["HEAD~3", "HEAD~2", "HEAD~1", "HEAD"];
+    const [c1, merge, picked, c2] = refs.map(sha);
+    const shown = (commit = "") => {
+      const format = "--format=%P%n%at%n%ct%n%s";
+      const out = r.git(r.work, ["show", "-s", format, commit]).trim();
+      const [parents = "", at = "", ct = "", subject = ""] = out.split("\n");
+      return {
+        sha: commit,
+        parent_shas: parents.split(" "),
+        authored_at: toProtocolTimestamp(Number(at) * 1000),
+        committed_at: toProtocolTimestamp(Number(ct) * 1000),
+        subject,
+      };
+    };
+    const patchId = (commit = "") => {
+      const script = `git show ${commit} | git patch-id --stable`;
+      const out = execFileSync("sh", ["-c", script], {
+        cwd: r.work,
+        env: r.env,
+        encoding: "utf8",
+      });
+      return out.split(" ")[0];
+    };
+
+    const [frame] = reconciliations(handle);
+    const body = frame?.body as {
+      observed_changes: { repo_relative_path: string }[];
+      session_commits: unknown[];
+      session_commits_total: number;
+      session_commits_truncated: boolean;
+    };
+    expect(body.session_commits).toEqual([
+      {
+        ...shown(c1),
+        kind: "change",
+        patch_id: patchId(c1),
+        added: 1,
+        removed: 0,
+        files_total: 1,
+        files: [{ path: "first.txt", status: "added", added: 1, removed: 0 }],
+        test: "unpushed",
+        files_outside_session: false,
+      },
+      {
+        ...shown(merge),
+        kind: "merge",
+        patch_id: null,
+        added: 0,
+        removed: 0,
+        files_total: 0,
+        files: [],
+        test: "unpushed",
+      },
+      {
+        ...shown(c2),
+        kind: "change",
+        patch_id: patchId(c2),
+        added: 2,
+        removed: 0,
+        files_total: 1,
+        files: [{ path: "second.txt", status: "added", added: 2, removed: 0 }],
+        test: "unpushed",
+        tool_use_id: "toolu_c",
+        files_outside_session: true,
+      },
+    ]);
+    expect(body.session_commits_total).toBe(3);
+    expect(body.session_commits_truncated).toBe(false);
+    // The cherry-picked copy of the earlier commit is not listed.
+    expect(shown(picked).subject).toBe("old work");
+    // The merge brought in the upstream files, and none of them is reported.
+    expect(
+      body.observed_changes.map((change) => change.repo_relative_path),
+    ).toEqual(["first.txt", "second.txt"]);
+  });
 });

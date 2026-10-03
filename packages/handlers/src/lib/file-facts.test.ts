@@ -4,6 +4,7 @@ import {
   languageOf,
   observedChangesOf,
   repoRelativePathOf,
+  sessionCommitsOf,
   worktreeRootOf,
 } from "./file-facts";
 
@@ -290,5 +291,65 @@ describe("fileIdentityOf", () => {
     expect(fileIdentityOf("src\\a.ts", "/repo").key).not.toBe(
       fileIdentityOf("src/a.ts", "/repo").key,
     );
+  });
+});
+
+describe("sessionCommitsOf", () => {
+  const change = {
+    sha: "a".repeat(40),
+    parent_shas: ["b".repeat(40)],
+    kind: "change",
+    patch_id: "c".repeat(40),
+    authored_at: "2026-10-03T20:00:00.000Z",
+    committed_at: "2026-10-03T20:00:01.000Z",
+    subject: "Add the session file",
+    added: 3,
+    removed: 1,
+    files_total: 1,
+    files: [{ path: "session.txt", status: "added", added: 3, removed: 1 }],
+    test: "unpushed",
+  };
+  const merge = {
+    ...change,
+    sha: "d".repeat(40),
+    parent_shas: ["a".repeat(40), "e".repeat(40)],
+    kind: "merge",
+    patch_id: null,
+    subject: "Merge remote-tracking branch 'origin/main'",
+    added: 0,
+    removed: 0,
+    files_total: 0,
+    files: [],
+  };
+
+  it("reads each commit and the list's totals", () => {
+    expect(
+      sessionCommitsOf({
+        session_commits: [change, merge],
+        session_commits_total: 2,
+        session_commits_truncated: false,
+      }),
+    ).toEqual({ commits: [change, merge], total: 2, truncated: false });
+  });
+
+  it("tells a frame with no list from a list of none", () => {
+    expect(sessionCommitsOf({ observed_changes: [] })).toBeUndefined();
+    expect(
+      sessionCommitsOf({
+        session_commits: [],
+        session_commits_total: 0,
+        session_commits_truncated: false,
+      }),
+    ).toEqual({ commits: [], total: 0, truncated: false });
+  });
+
+  it("skips a malformed item and reads the list as truncated", () => {
+    expect(
+      sessionCommitsOf({
+        session_commits: [change, { ...merge, sha: "not a commit" }],
+        session_commits_total: 2,
+        session_commits_truncated: false,
+      }),
+    ).toEqual({ commits: [change], total: 2, truncated: true });
   });
 });
