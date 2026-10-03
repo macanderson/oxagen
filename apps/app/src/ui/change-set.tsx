@@ -24,6 +24,7 @@ import type {
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import type { ActionFailure } from "./action-failure";
 import { Badge, type BadgeTone } from "./badge";
+import { Button } from "./button";
 import { eyebrowQuiet, linkText, mono, note } from "./control-styles";
 import { DiffView } from "./diff-view";
 import { useFormatter } from "./formatter";
@@ -306,12 +307,13 @@ function FileRow({
       data-testid="change-file"
       className="border-t border-border first:border-t-0"
     >
-      <button
+      <Button
         type="button"
+        variant="ghost"
         aria-expanded={open}
         aria-controls={regionId}
         onClick={toggle}
-        className="flex w-full min-w-0 items-center gap-2.5 py-2 text-left text-sm text-foreground hover:text-link focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        className="h-auto w-full min-w-0 justify-start gap-2.5 rounded-md px-0 py-2 text-left font-normal text-foreground"
       >
         <span aria-hidden="true" className="flex-none text-dim">
           {open ? "▾" : "▸"}
@@ -325,7 +327,7 @@ function FileRow({
           </span>
           <LineCounts additions={file.additions} deletions={file.deletions} />
         </span>
-      </button>
+      </Button>
       <div id={regionId} hidden={!open} className="pl-5">
         {started
           ? file.pullRequestIds.map((id) => (
@@ -504,18 +506,19 @@ export function ChangeSetDisclosure({
   else body = <AnswerFailure failure={state} />;
   return (
     <div data-testid={testId} className="min-w-0">
-      <button
+      <Button
         type="button"
+        variant="ghost"
         aria-expanded={open}
         aria-controls={regionId}
         onClick={toggle}
-        className="flex min-w-0 items-center gap-2 py-1.5 text-left text-sm font-medium text-foreground hover:text-link focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        className="h-auto min-w-0 justify-start gap-2 rounded-md px-0 py-1.5 text-left text-foreground"
       >
         <span aria-hidden="true" className="flex-none text-dim">
           {open ? "▾" : "▸"}
         </span>
         <span className="min-w-0 truncate">{label}</span>
-      </button>
+      </Button>
       <div id={regionId} hidden={!open} className="pb-2 pl-5">
         {body}
       </div>
