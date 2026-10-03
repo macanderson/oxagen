@@ -302,8 +302,8 @@ export async function agentTraceGetHandler(
   }
 
   const root = build(rootId);
-  const { turnMetrics, replayDeterministic } = deriveTurnMetrics(root);
-  return { ...root, turnMetrics, replayDeterministic };
+  const { turnMetrics, metricsInRange } = deriveTurnMetrics(root);
+  return { ...root, turnMetrics, metricsInRange };
 }
 
 /**
@@ -319,18 +319,20 @@ export async function agentTraceGetHandler(
  * belongs to engram's context-compile telemetry, which this per-step shape
  * never carried.
  *
- * `replayDeterministic` keeps the exact predicate `analyzeReplay` applied to
- * the synthesized log: every step's token total is non-negative and the (fixed)
- * cache-hit rate is in range — i.e. the stored rows are internally sane.
+ * `metricsInRange` says the stored rows are internally sane: every step's
+ * token total is non-negative and the (fixed) cache-hit rate is in range. It
+ * checks the recorded figures and replays nothing. Until #2974 it was named
+ * `replayDeterministic`, after the engram `analyzeReplay` it copied, which
+ * claimed a replay this check never ran.
  */
 function deriveTurnMetrics(root: TraceExecutionNode): {
   turnMetrics: NonNullable<TraceExecutionNode["turnMetrics"]>;
-  replayDeterministic: boolean;
+  metricsInRange: boolean;
 } {
-  let replayDeterministic = true;
+  let metricsInRange = true;
   const turnMetrics = root.steps.map((step) => {
     const tokens = (step.inputTokens ?? 0) + (step.outputTokens ?? 0);
-    if (tokens < 0) replayDeterministic = false;
+    if (tokens < 0) metricsInRange = false;
     return {
       turnId: step.stepId,
       compileMs: step.latencyMs ?? 0,
@@ -345,5 +347,5 @@ function deriveTurnMetrics(root: TraceExecutionNode): {
             : ("interrupted" as const),
     };
   });
-  return { turnMetrics, replayDeterministic };
+  return { turnMetrics, metricsInRange };
 }

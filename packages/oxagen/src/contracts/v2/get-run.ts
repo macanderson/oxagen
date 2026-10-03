@@ -225,7 +225,7 @@ export const getRun = defineTool({
      * `get_execution_trace`. Whole rather than by field because it is a
      * `z.lazy` self-reference: each node carries its own steps and its child
      * runs (subagent fan-out and A2A lineage), and `turnMetrics` plus
-     * `replayDeterministic` are populated only on the root.
+     * `metricsInRange` are populated only on the root.
      */
     tree: agentTraceGet.output,
 
