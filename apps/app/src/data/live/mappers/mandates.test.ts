@@ -285,9 +285,13 @@ describe("toMandateList", () => {
   });
 
   it("answers an empty workspace with no mandates", () => {
-    const at = new Date("2026-09-16T12:00:00.000Z");
     expect(
-      MandateList.parse(toMandateList(mandateListOutput([]), 100, at)),
+      MandateList.parse(
+        toMandateList(
+          mandateListOutput([], "2026-09-16T12:00:00.000Z"),
+          100,
+        ),
+      ),
     ).toEqual({
       mandates: [],
       truncatedAt: null,
@@ -299,19 +303,41 @@ describe("toMandateList", () => {
 describe("toMandateList asOf", () => {
   // Whether a mandate is in effect is a question about an instant, and the
   // page may not ask a clock during render, so the answer carries the instant
-  // it was read at.
-  it("stamps the instant the ledger answered", () => {
-    const at = new Date("2026-03-04T05:06:07.008Z");
-    expect(toMandateList(mandateListOutput([]), 100, at).asOf).toBe(
-      "2026-03-04T05:06:07.008Z",
-    );
+  // its authority was counted at (#3152). That is the handler's instant. The
+  // mapper used to stamp its own after the call returned, which described no
+  // row reliably, and it has no clock of its own to fall back to.
+  it("carries the instant list_mandates counted the authority at", () => {
+    const asOf = "2026-03-04T05:06:07.008Z";
+    expect(toMandateList(mandateListOutput([], asOf), 100).asOf).toBe(asOf);
   });
 
-  it("defaults to now when no instant is given", () => {
-    const before = Date.now();
-    const asOf = Date.parse(toMandateList(mandateListOutput([]), 100).asOf);
-    expect(asOf).toBeGreaterThanOrEqual(before);
-    expect(asOf).toBeLessThanOrEqual(Date.now());
+  it("reads no clock of its own (negative)", () => {
+    // Years from now and years ago: a mapper that made its own instant would
+    // answer neither.
+    for (const asOf of ["2001-01-01T00:00:00.000Z", "2099-12-31T23:59:59.999Z"])
+      expect(toMandateList(mandateListOutput([], asOf), 100).asOf).toBe(asOf);
+  });
+
+  it("carries the instant the row's period keys were counted at", () => {
+    // The handler names the period each balance belongs to at its instant, so
+    // the instant the page judges a window against is the one those keys
+    // describe.
+    const list = toMandateList(
+      mandateListOutput(
+        [
+          mandateOutput({
+            authority: [authorityOutput(), callsAuthorityOutput()],
+          }),
+        ],
+        "2026-09-16T12:00:00.000Z",
+      ),
+      100,
+    );
+    expect(list.asOf).toBe("2026-09-16T12:00:00.000Z");
+    expect(list.mandates[0]?.authority.map((a) => a.periodKey)).toEqual([
+      "2026-09",
+      "2026-09-16",
+    ]);
   });
 });
 
@@ -560,11 +586,14 @@ describe("toMandateDetail", () => {
     expect(detail([ledgerOutput()], 500).readBound).toBeNull();
   });
 
-  it("stamps the answer with the instant it was mapped", () => {
-    const at = new Date("2026-09-16T12:00:00.000Z");
-    expect(toMandateDetail(mandateGetOutput(), 500, at).asOf).toBe(
-      at.toISOString(),
-    );
+  it("carries the instant get_mandate counted the authority at", () => {
+    const asOf = "2026-03-04T05:06:07.008Z";
+    expect(
+      toMandateDetail(
+        mandateGetOutput([ledgerOutput()], mandateOutput(), asOf),
+        500,
+      ).asOf,
+    ).toBe(asOf);
   });
 });
 
@@ -577,7 +606,6 @@ describe("toMandateDetail, an empty recorded effect id", () => {
     const detail = toMandateDetail(
       mandateGetOutput([ledgerOutput({ externalEffectId: "" })]),
       500,
-      new Date("2026-09-19T00:00:00.000Z"),
     );
     expect(detail.ledger[0]?.externalEffectRef).toBeNull();
     expect(MandateDetail.safeParse(detail).success).toBe(true);

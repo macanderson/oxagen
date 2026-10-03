@@ -58,7 +58,16 @@ export const mandateList = registerCapability({
       limit: z.number().int().min(1).max(100).default(50),
     })
     .strict(),
-  output: z.object({ items: z.array(mandateSchema) }).strict(),
+  // `asOf` is the one instant every row's authority was counted at (#3152).
+  // Whether a mandate is in effect, and which period its balances belong to,
+  // are questions about an instant, so the answer names the one it used and a
+  // reader asks its own question of that instant rather than of its clock.
+  output: z
+    .object({
+      items: z.array(mandateSchema),
+      asOf: z.string().datetime({ offset: true }),
+    })
+    .strict(),
 });
 
 export type MandateListInput = z.output<typeof mandateList.input>;

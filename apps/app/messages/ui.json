@@ -127,6 +127,16 @@
         "monthly": "month"
       }
     },
+    "mandateStatus": {
+      "status": {
+        "draft": "requested",
+        "active": "active",
+        "expired": "expired",
+        "revoked": "revoked"
+      },
+      "startsOn": "starts {date}",
+      "endedOn": "ended {date}"
+    },
     "sourceFilename": {
       "rename": "Rename {path}",
       "name": "Source name",

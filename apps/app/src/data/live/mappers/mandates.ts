@@ -26,9 +26,12 @@
 // The ratios the meter draws are computed here, on integers, so the
 // component does no arithmetic (INV-09).
 //
-// The answer is stamped `asOf` with the instant it was mapped, because whether
-// a mandate is in effect is a question about an instant and a component may
-// not ask a clock during render.
+// The answer carries `asOf`, the instant the handler counted every row's
+// authority at (#3152), because whether a mandate is in effect is a question
+// about an instant and a component may not ask a clock during render. The
+// mapper passes that instant through. It used to stamp its own after the call
+// returned, which was the last clock read of the whole sequence and described
+// no row reliably.
 import type { mandateGet } from "@oxagen/oxagen/contracts/mandate.get";
 import type { mandateList } from "@oxagen/oxagen/contracts/mandate.list";
 import type { z } from "zod";
@@ -165,10 +168,9 @@ function toMandateRow(
 export function toMandateList(
   out: Out,
   limit: number,
-  asOf: Date = new Date(),
 ): z.input<typeof MandateList> {
   return {
-    asOf: asOf.toISOString(),
+    asOf: out.asOf,
     truncatedAt: out.items.length >= limit ? limit : null,
     mandates: out.items.map(toMandateRow),
   };
@@ -189,10 +191,9 @@ export function toMandateList(
 export function toMandateDetail(
   out: DetailOut,
   ledgerLimit: number,
-  asOf: Date = new Date(),
 ): z.input<typeof MandateDetail> {
   return {
-    asOf: asOf.toISOString(),
+    asOf: out.asOf,
     // What the read can establish: the bound it asked for, when the answer
     // filled it. Not "truncated" — a ledger of exactly the bound looks the same
     // as one of the bound plus a thousand, and `get_mandate` answers no total, no

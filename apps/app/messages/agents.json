@@ -1123,12 +1123,6 @@
         "validTo": "Expires",
         "status": "Status"
       },
-      "status": {
-        "draft": "requested",
-        "active": "active",
-        "expired": "expired",
-        "revoked": "revoked"
-      },
       "request": {
         "open": "Request a mandate",
         "title": "Request a mandate",
@@ -1169,7 +1163,6 @@
       "noneListedDetail": "An org Owner, Admin, Billing or Compliance reader sees every mandate recorded in the workspace. Ask one of them whether this agent holds authority, or read the Tools ledger with that role.",
       "retired": "This agent is retired, so it cannot be given a mandate: its principal is suspended and authority granted now could never be drawn. The mandates recorded for it stay listed.",
       "noneEffectiveUpcoming": "No mandate recorded for this agent is in effect yet, so it cannot carry a consequence. A mandate granted below has not reached the date it starts on; any others are a request awaiting a decision, or history.",
-      "startsOn": "starts {date}",
       "cannotMove": "cannot move money",
       "active": "{count} active",
       "chain": {

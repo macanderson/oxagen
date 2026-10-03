@@ -14,6 +14,9 @@ type AuthorityOutput = MandateOutput["authority"][number];
 export const MANDATE_ID = "mnd_4f2a9c";
 const AT = "2026-09-01T00:00:00.000Z";
 
+/** The instant the handler counted the sample's authority at (#3152). */
+const AS_OF = "2026-09-16T12:00:00.000Z";
+
 export function authorityOutput(
   overrides: Partial<AuthorityOutput> = {},
 ): AuthorityOutput {
@@ -92,8 +95,9 @@ export function mandateOutput(
 
 export function mandateListOutput(
   items: MandateOutput[] = [mandateOutput()],
+  asOf: string = AS_OF,
 ): MandatesOutput {
-  return { items };
+  return { items, asOf };
 }
 
 type MandateGetOutput = ContractOutput<typeof mandateGet>;
@@ -131,6 +135,7 @@ export function ledgerOutput(
 export function mandateGetOutput(
   ledger: LedgerOutput[] = [ledgerOutput()],
   mandate: MandateOutput = mandateOutput(),
+  asOf: string = AS_OF,
 ): MandateGetOutput {
-  return { mandate, ledger };
+  return { mandate, ledger, asOf };
 }

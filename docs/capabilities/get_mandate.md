@@ -21,7 +21,9 @@ newest first: the mandate page (tiles, the ledger, the grant).
 
 ## Output
 
-`{ mandate, ledger }`. A ledger row: `id`, `toolCallId`, `kind` (`reserve`
+`{ mandate, ledger, asOf }`. `asOf` is the instant the mandate's authority was
+counted at, an ISO 8601 timestamp, as `list_mandates` returns it. A reader
+judges the mandate's window against it rather than its own clock. A ledger row: `id`, `toolCallId`, `kind` (`reserve`
 | `settle` | `release`), `measure`, `value`, `unitOrCurrency`, `measureKind`
 (`money` or `count`, ADR-108, stamped on the row when it was written and
 never re-derived; null only on a row written before this field existed),

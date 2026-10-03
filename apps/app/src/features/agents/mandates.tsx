@@ -42,12 +42,16 @@
 // `MandateAuthorityList` in `@/ui` and the next table to show a mandate gets
 // them without asking.
 //
-// A third fact is this page's own. An `active` mandate whose `validFrom` is
+// A third fact went the same way. An `active` mandate whose `validFrom` is
 // still ahead is granted and not yet usable — `isEffective` excludes it, the
 // status column calls it active, and the empty state offered only "a request
-// awaiting a decision, or history". Both readings were on screen at once. The
-// row now says when it starts and the empty state has a sentence for the state
-// it is in.
+// awaiting a decision, or history". Both readings were on screen at once. This
+// table learned to say when such a row starts and the Tools ledger did not,
+// and neither said when an active row's window had closed (#3152). The status
+// cell now draws through `MandateStatus` in `@/ui`, which keeps the stored word
+// and says under it when the window opens or closed, judged by `windowOf` at
+// the answer's own instant. The empty state has a sentence for the upcoming
+// case.
 //
 // The warning is driven by authority and not by row count. A draft, a revoked
 // row and an expired one all authorize nothing, and `request_mandate` writes a
@@ -63,6 +67,7 @@ import {
   isEffective,
   isUpcoming,
   type MandateList,
+  windowOf,
 } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
@@ -70,6 +75,7 @@ import { holdsWorkspaceAuthority } from "@/shared/workspace-authority";
 import { linkText, mono, panel } from "@/ui/control-styles";
 import { MandateAuthorityList } from "@/ui/mandate-authority";
 import { MandateScope } from "@/ui/mandate-scope";
+import { MandateStatus } from "@/ui/mandate-status";
 import { Badge } from "@/ui/badge";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
@@ -288,15 +294,11 @@ export function MandatesSection({
                     </thead>
                     <tbody>
                       {held.map((mandate) => {
-                        /** Granted, and not yet started: the row says so beside the status. */
-                        const starts =
-                          asOf !== null && isUpcoming(mandate, asOf);
                         return (
                           <tr
                             key={mandate.id}
                             data-testid="agent-mandate"
                             data-status={mandate.status}
-                            data-effect={starts ? "upcoming" : undefined}
                             className="border-t border-border align-top"
                           >
                             <td className="px-3 py-2">
@@ -348,20 +350,12 @@ export function MandatesSection({
                               })}
                             </td>
                             <td className="px-3 py-2">
-                              {t(`status.${mandate.status}`)}
-                              {starts ? (
-                                <div
-                                  data-state="upcoming"
-                                  className="whitespace-nowrap text-sm text-muted-foreground md:truncate"
-                                >
-                                  {t("startsOn", {
-                                    date: format.dateTime(
-                                      new Date(mandate.validFrom),
-                                      { dateStyle: "medium" },
-                                    ),
-                                  })}
-                                </div>
-                              ) : null}
+                              <MandateStatus
+                                mandate={mandate}
+                                windowState={
+                                  asOf === null ? null : windowOf(mandate, asOf)
+                                }
+                              />
                             </td>
                           </tr>
                         );

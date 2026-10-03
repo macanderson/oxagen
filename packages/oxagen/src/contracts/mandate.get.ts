@@ -47,10 +47,14 @@ export const mandateGet = registerCapability({
       ledgerLimit: z.number().int().min(1).max(500).default(100),
     })
     .strict(),
+  // The instant the mandate's authority was counted at, as `list_mandates`
+  // answers it (#3152), so the page judges the window against the read's own
+  // instant and not one it makes up after the answer returns.
   output: z
     .object({
       mandate: mandateSchema,
       ledger: z.array(mandateLedgerRowSchema),
+      asOf: z.string().datetime({ offset: true }),
     })
     .strict(),
 });

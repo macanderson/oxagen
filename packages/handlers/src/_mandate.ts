@@ -24,9 +24,8 @@ import {
 import {
   measureKindOf,
   parseMandateRow,
-  readAuthority,
+  readAuthorities,
   toolMatches,
-  type MandateRecord,
 } from "@oxagen/rules";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
@@ -515,11 +514,20 @@ async function agentsByPrincipal(
   return out;
 }
 
-/** Map mandate rows to the contract shape, with authority read from the ledger. */
+/**
+ * Map mandate rows to the contract shape, with authority read from the ledger.
+ *
+ * Every row's authority is counted at the one instant `at` (#3152). The
+ * caller that answers with it, `list_mandates` or `get_mandate`, reads the
+ * clock once and passes it, so no two rows of one answer sit in two periods.
+ * The page costs three round trips whatever its length: the users it names,
+ * the agents it names, and the ledger sums (`readAuthorities`).
+ */
 export async function mapMandates(
   tx: Tx,
   workspaceId: string,
   rows: readonly (typeof schema.mandates.$inferSelect)[],
+  at: Date = new Date(),
 ): Promise<MandateOut[]> {
   const users = await userPublicIds(
     tx,
@@ -530,9 +538,14 @@ export async function mapMandates(
     workspaceId,
     rows.map((r) => r.agentPrincipalId),
   );
+  const parsed = rows.map((row) => ({ row, record: parseMandateRow(row) }));
+  const authority = await readAuthorities(
+    tx,
+    parsed.map((p) => p.record),
+    at,
+  );
   const out: MandateOut[] = [];
-  for (const row of rows) {
-    const record: MandateRecord = parseMandateRow(row);
+  for (const { row, record } of parsed) {
     const agent = agents.get(row.agentPrincipalId);
     if (!agent) {
       throw new HandlerError({
@@ -564,7 +577,7 @@ export async function mapMandates(
       revokedAt: row.revokedAt?.toISOString() ?? null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
-      authority: await readAuthority(tx, record),
+      authority: authority.get(record.id) ?? [],
     });
   }
   return out;

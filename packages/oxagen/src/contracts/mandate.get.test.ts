@@ -71,4 +71,15 @@ describe("get_mandate contract", () => {
     );
     expect(ledger.safeParse([{ ...row, kind: "refund" }]).success).toBe(false);
   });
+
+  // #3152: the same instant `list_mandates` answers, so the mandate page reads
+  // the read's own instant rather than one made after the answer returned.
+  it("answers the instant its authority was counted at, and requires it", () => {
+    const asOf = mandateGet.output.shape.asOf;
+    expect(asOf.isOptional()).toBe(false);
+    expect(asOf.parse("2026-09-16T12:00:00.000Z")).toBe(
+      "2026-09-16T12:00:00.000Z",
+    );
+    expect(asOf.safeParse("yesterday").success).toBe(false);
+  });
 });

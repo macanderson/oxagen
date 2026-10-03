@@ -365,10 +365,14 @@
           ],
           "additionalProperties": false
         }
+      },
+      "asOf": {
+        "type": "string"
       }
     },
     "required": [
-      "items"
+      "items",
+      "asOf"
     ],
     "additionalProperties": false
   }

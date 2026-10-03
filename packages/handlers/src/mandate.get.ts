@@ -21,6 +21,12 @@ export const mandateGetHandler: CapabilityHandler<typeof mandateGet> = async (
 ) => {
   const workspaceId = requireWorkspace(ctx, "get_mandate");
   const operatorId = await readerFilter(ctx);
+  // The instant the authority is counted at, returned as `asOf` (#3152), the
+  // same as `list_mandates`. One row has one `readAuthority` call, so its
+  // measures never split across a period boundary here. The defect this
+  // closes is the page's: it judged the window against a clock it read after
+  // the answer came back, which is not the instant the figures describe.
+  const at = new Date();
 
   return withTenantDb(async (tx) => {
     const row = await loadMandateRow(tx, workspaceId, input.mandateId);
@@ -62,7 +68,7 @@ export const mandateGetHandler: CapabilityHandler<typeof mandateGet> = async (
         });
       }
     }
-    const [mandate] = await mapMandates(tx, workspaceId, [row]);
+    const [mandate] = await mapMandates(tx, workspaceId, [row], at);
     const l = schema.mandateLedger;
     const ledger = await tx
       .select()
@@ -85,6 +91,7 @@ export const mandateGetHandler: CapabilityHandler<typeof mandateGet> = async (
         balanceAfter: r.balanceAfter,
         at: r.createdAt.toISOString(),
       })),
+      asOf: at.toISOString(),
     };
   });
 };

@@ -1192,12 +1192,6 @@ type Messages = {
         validTo: string;
         status: string;
       };
-      status: {
-        draft: string;
-        active: string;
-        expired: string;
-        revoked: string;
-      };
       request: {
         open: string;
         title: string;
@@ -1238,7 +1232,6 @@ type Messages = {
       noneListedDetail: string;
       retired: string;
       noneEffectiveUpcoming: string;
-      startsOn: string;
       cannotMove: string;
       active: string;
       chain: {
@@ -11841,12 +11834,6 @@ type Messages = {
         status: string;
         tools: string;
       };
-      status: {
-        draft: string;
-        active: string;
-        expired: string;
-        revoked: string;
-      };
       truncated: string;
       partial: string;
       emptyListed: string;
@@ -12509,6 +12496,16 @@ type Messages = {
         weekly: string;
         monthly: string;
       };
+    };
+    mandateStatus: {
+      status: {
+        draft: string;
+        active: string;
+        expired: string;
+        revoked: string;
+      };
+      startsOn: string;
+      endedOn: string;
     };
     sourceFilename: {
       rename: string;
