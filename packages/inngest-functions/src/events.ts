@@ -72,13 +72,16 @@ export const RUN_PULL_REQUEST_LINKED_EVENT = "run/pull-request.linked";
  * diff of its head commit, and the link to the run that named it. Sent by the
  * GitHub App webhook route for each `pull_request` delivery and each
  * workspace connected to the installation, with the pull request's facts from
- * the payload, and by the tacho ingest handler beside `run/pull-request.linked`
- * for each link a run records, with the run's root session and no facts.
+ * the payload, by the tacho ingest handler beside `run/pull-request.linked`
+ * for each link a run records, with the run's root session and no facts, and
+ * by `forge.pull-request-backfill` for each link recorded before the forge
+ * store existed, with the run's root session, the work order, or both
+ * (ADR-292).
  *
  * Data is `{ orgId, workspaceId, provider, repository, number, pullKey,
- * facts?, link? }`. `pullKey` names the pull request within the workspace, and
- * the function runs one event per key at a time. The id names the delivery
- * or the link, so a re-sent one asks once.
+ * facts?, link?, workOrderId? }`. `pullKey` names the pull request within
+ * the workspace, and the function runs one event per key at a time. The id
+ * names the delivery or the link, so a re-sent one asks once.
  */
 export const FORGE_PULL_REQUEST_OBSERVED_EVENT = "forge/pull-request.observed";
 

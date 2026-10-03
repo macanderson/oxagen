@@ -64,6 +64,12 @@ export type ForgePullRequestSyncRequest = {
     /** True when a `pr_open` call recorded the link, so the run opened it. */
     opened: boolean;
   };
+  /**
+   * A work order (`work.orders.id`) to link the pull request to. The backfill
+   * names the order a `pr_linked` fact recorded before the forge store
+   * existed (ADR-292).
+   */
+  workOrderId?: string;
 };
 
 /** What the first step did. */

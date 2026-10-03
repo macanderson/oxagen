@@ -14,6 +14,7 @@ import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
 import { setRunPrOutcomesRunner } from "@oxagen/inngest-functions/run-pr-outcomes-runner";
 import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
 import { setForgePullRequestSyncRunner } from "@oxagen/inngest-functions/forge-pull-request-sync-runner";
+import { setForgeBackfillRunner } from "@oxagen/inngest-functions/forge-pull-request-backfill-runner";
 import { setWorkOrderResultsRunner } from "@oxagen/inngest-functions/work-order-results-runner";
 import { setWorkOrderSendBackPorts } from "@oxagen/inngest-functions/work-order-send-back-ports";
 import { setSteeringRepoHealthRunner } from "@oxagen/inngest-functions/steering-repo-health-runner";
@@ -226,6 +227,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
     record: async (request, pullRequestId, target, capture) =>
       (await forgeSync()).record(request, pullRequestId, target, capture),
   });
+  // The forge backfill (ADR-292) reads the run links and work order facts
+  // that predate the forge store through this package, for the same reason,
+  // and is loaded on its first run.
+  setForgeBackfillRunner(async (request) =>
+    (await import("./lib/forge-pull-requests/backfill")).forgeBackfillPage(
+      request,
+    ),
+  );
   // A work order's run end and pull request (ADR-251) write work records and
   // read GitHub through this package too, and load on their first run.
   setWorkOrderResultsRunner({

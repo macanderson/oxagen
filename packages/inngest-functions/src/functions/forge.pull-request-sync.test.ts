@@ -25,6 +25,7 @@ import {
   FORGE_PULL_REQUEST_DIFF_READY_EVENT,
   FORGE_PULL_REQUEST_OBSERVED_EVENT,
   forgePullRequestSync,
+  forgePullRequestSyncSchema,
 } from "./forge.pull-request-sync";
 
 type Handler = (args: {
@@ -220,6 +221,23 @@ describe("forge.pull-request-sync", () => {
       "record-revision",
     ]);
     expect(sent).toEqual([]);
+  });
+
+  it("hands the runner the work order a backfill event names", async () => {
+    const fake = runner();
+    setForgePullRequestSyncRunner(fake);
+    const data = { ...DATA, workOrderId: "0192d4a8-7c1e-7a00-8000-0000000000f1" };
+    await handler({ event: { data }, step });
+    expect(fake.upsert).toHaveBeenCalledWith(data);
+    expect(forgePullRequestSyncSchema.safeParse(data).success).toBe(true);
+  });
+
+  it("refuses a work order that is not a uuid without retrying (negative)", async () => {
+    setForgePullRequestSyncRunner(runner());
+    await expect(
+      handler({ event: { data: { ...DATA, workOrderId: "wo_12" } }, step }),
+    ).rejects.toBeInstanceOf(NonRetriableError);
+    expect(steps).toEqual([]);
   });
 
   it("refuses malformed event data without retrying (negative)", async () => {
