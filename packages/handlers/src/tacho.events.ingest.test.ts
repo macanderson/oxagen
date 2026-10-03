@@ -3111,6 +3111,14 @@ describe("ingest_tacho_events", () => {
         }),
       ),
       seal(unsealed("policy_decision", { policy_decision: "deny" })),
+      // Claude Code's own PermissionDenied, as a host older than #5390 seals
+      // it: Oxagen decided nothing, so the counts below stay at one.
+      seal(
+        unsealed("policy_decision", {
+          policy_decision: "deny",
+          policy_source: "harness",
+        }),
+      ),
       seal(unsealed("network", { effect_kind: "network" })),
       // A repository effect is counted off its `effect_kind`, not off the
       // frame kind: a pull request opened from the shell is a `command`

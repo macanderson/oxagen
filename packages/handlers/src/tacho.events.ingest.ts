@@ -455,6 +455,15 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
       break;
     case "policy_decision":
     case "token_denied":
+      // A hook frame with `policy_source: "harness"` is Claude Code's own
+      // permission fact (PostToolBatch, PermissionDenied) from a host older
+      // than #5390, which seals those as `harness_permission`. Oxagen made
+      // no decision there, so it counts toward neither figure.
+      if (
+        event.source === "hook" &&
+        body["policy_source"] === "harness"
+      )
+        break;
       if (
         event.source === "hook" ||
         event.source === "collector" ||
@@ -519,7 +528,8 @@ const OXAGEN_MCP_SERVER = "oxagen";
  *      brokered git push, which the hook already reported as the harness's
  *      shell call.
  *   3. `tool_status === "ok"`. A denial never reaches PostToolUse. It seals a
- *      `policy_decision` (PermissionDenied, a Tacho deny) or `token_denied`,
+ *      `harness_permission` (PermissionDenied), a `policy_decision` (a Tacho
+ *      deny) or `token_denied`,
  *      so denials stay free by construction. A frame reporting `rejected` or
  *      `cancelled` is a person or the harness stopping the call, and `error`
  *      is a call that failed. None of them bill, which is the rule the kernel
