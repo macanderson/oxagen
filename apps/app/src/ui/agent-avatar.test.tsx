@@ -35,20 +35,30 @@ describe("AgentAvatar", () => {
     },
   );
 
-  it.each([
-    [18, 10],
-    [28, 13],
-    [30, 14],
-    [56, 26],
-  ])(
+  // The size a caller names, the side it draws at, the badge's side, and the
+  // badge's side before both grew (`max(10, round(size × 0.46))`).
+  const SIZES = [
+    [18, 20, 12, 10],
+    [22, 24, 12, 10],
+    [28, 31, 15, 13],
+    [30, 33, 16, 14],
+    [56, 62, 30, 26],
+  ] as const;
+
+  it.each(SIZES)(
     "keeps the badge outside the lower left of a %ipx avatar",
-    (size, badgeSize) => {
+    (size, side, badgeSize) => {
       const { container } = render(
         <AgentAvatar value={null} initials="RB" harness="codex" size={size} />,
       );
       expect(container.firstElementChild).toHaveStyle({
-        width: `${String(size)}px`,
-        height: `${String(size)}px`,
+        width: `${String(side)}px`,
+        height: `${String(side)}px`,
+      });
+      // The tile fills the wrapper, so the badge sits on the tile's corner.
+      expect(container.querySelector("[data-avatar]")).toHaveStyle({
+        width: `${String(side)}px`,
+        height: `${String(side)}px`,
       });
       expect(container.firstElementChild).not.toHaveClass("overflow-hidden");
       const badge = container.querySelector("[data-harness-badge]");
@@ -62,6 +72,30 @@ describe("AgentAvatar", () => {
         width: `${String(badgeSize)}px`,
         height: `${String(badgeSize)}px`,
       });
+      expect(badge?.querySelector("[data-harness-mark]")).toHaveStyle({
+        width: `${String(badgeSize - 3)}px`,
+      });
+    },
+  );
+
+  it.each(SIZES)(
+    "grows the badge of a %ipx avatar by a larger share than the avatar",
+    (size, side, badgeSize, before) => {
+      const { container } = render(
+        <AgentAvatar value={null} initials="RB" harness="codex" size={size} />,
+      );
+      const drawn = (element: Element | null) =>
+        Number.parseFloat(
+          element instanceof HTMLElement ? element.style.width : "",
+        );
+      const avatarGrowth =
+        drawn(container.querySelector("[data-agent-avatar]")) / size;
+      const badgeGrowth =
+        drawn(container.querySelector("[data-harness-badge]")) / before;
+      expect(avatarGrowth).toBeCloseTo(side / size);
+      expect(avatarGrowth).toBeGreaterThan(1);
+      expect(badgeGrowth).toBeCloseTo(badgeSize / before);
+      expect(badgeGrowth).toBeGreaterThan(avatarGrowth);
     },
   );
 

@@ -30,6 +30,7 @@ import {
 import { DesktopDownloads } from "@/ui/desktop-downloads";
 import { FormAlert } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
+import { HarnessIcon } from "@/ui/harness-icon";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { advanceOnboarding, issueEnrollmentToken } from "../actions";
 import {
@@ -472,7 +473,11 @@ export function WrapAgent({
               onKeyDown={onKey}
               className="flex min-h-11 flex-col items-start gap-0.5 border-b-2 border-transparent px-3.5 py-3 text-left aria-selected:border-accent-text aria-selected:bg-hl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
             >
-              <span className="text-sm font-semibold">
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                {/* The SDK tab wraps an agent of your own, not a harness. */}
+                {item === "sdk" ? null : (
+                  <HarnessIcon harness={item} size={16} />
+                )}
                 {t(`tabs.${item}.name`)}
               </span>
               <span className="font-mono text-sm text-muted-foreground max-md:hidden">

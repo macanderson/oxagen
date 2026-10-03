@@ -2765,6 +2765,7 @@ type Messages = {
       columns: {
         run: string;
         agent: string;
+        harness: string;
         operator: string;
         status: string;
         pullRequests: string;
@@ -2778,6 +2779,7 @@ type Messages = {
       };
       parked: string;
       notRecorded: string;
+      harnessRegistered: string;
       noUsage: string;
       basisNotRecorded: string;
       estimate: string;

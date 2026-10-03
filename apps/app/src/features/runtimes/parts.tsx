@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { Fragment, type ReactNode } from "react";
 import type { RuntimeEnrollment } from "@/data/contracts/runtimes";
 import { Badge } from "@/ui/badge";
+import { HarnessIcon } from "@/ui/harness-icon";
 import {
   mono,
   panel,
@@ -280,6 +281,7 @@ export function HarnessNames({ host }: { host: RuntimeEnrollment }) {
           data-harness={harness}
           className="md:[td_&]:truncate"
         >
+          <HarnessIcon harness={harness} size={16} className="mr-1.5" />
           <HarnessLabel harness={harness} />{" "}
           {harness === "claude-code" && host.claudeVersionAtEnroll !== null ? (
             <span className="text-muted-foreground">
