@@ -7,7 +7,6 @@
 import { useState } from "react";
 import { Button } from "@/ui/button";
 import { SheetDialog } from "@/ui/sheet-dialog";
-import { buttonDanger } from "./parts";
 
 export function StubAction({
   label,

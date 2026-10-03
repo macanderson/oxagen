@@ -25,10 +25,6 @@ import { eyebrow, mono } from "@/ui/control-styles";
 import { Button } from "@/ui/button";
 import { KindBadge, KindTile } from "./kind";
 
-/** `.btn.danger`: the red outline a destructive action takes. */
-export const buttonDanger =
-  "inline-flex min-h-8 max-md:min-h-11 items-center justify-center gap-1.5 rounded-xl border border-error/45 bg-card px-3.25 py-1.5 text-sm font-medium text-error-ink transition-colors hover:bg-error/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45";
-
 const code = (chunks: ReactNode) => <span className={mono}>{chunks}</span>;
 
 /** One named property: the name above, the value below. */

@@ -28,7 +28,6 @@ import { cell, headCell } from "@/ui/table";
 import { WORKSPACE_JSON, WORKSPACE_TOML } from "./draft";
 import { useRepositoriesFailure } from "./failure";
 import {
-  buttonSmall,
   CheckRows,
   code,
   type Load,

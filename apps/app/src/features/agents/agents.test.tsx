@@ -19,11 +19,7 @@ import { readError } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
 import { phoneWidth } from "@/test/phone";
-import {
-  buttonDanger,
-  buttonPrimary,
-  buttonSecondary,
-} from "@/ui/control-styles";
+import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
 import { agentPage, agentRow, agentsSource } from "./agents.builders";
 
 const push = vi.fn();
@@ -571,7 +567,7 @@ describe("Agents, loaded", () => {
     );
     expect(
       within(row).getByRole("button", { name: "Deregister" }).className,
-    ).toBe(buttonDanger);
+    ).toContain("text-error-ink");
     fireEvent.click(within(row).getByRole("button", { name: "Roles" }));
     expect(await screen.findByTestId("assign-role")).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();

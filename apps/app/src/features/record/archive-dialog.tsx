@@ -15,7 +15,6 @@ import { mono } from "@/ui/control-styles";
 import { Button } from "@/ui/button";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { RECORD_GAPS } from "./gaps";
-import { buttonDanger } from "./header";
 import { note } from "./styles";
 
 const code = (chunks: ReactNode) => <span className={mono}>{chunks}</span>;

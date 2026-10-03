@@ -23,15 +23,13 @@ import { cn } from "./cn";
  * A link that looks like a button reads the kit Button's classes
  * (button-variants.ts), so a link and a button never drift apart. `<Button>`
  * is the button itself (INV-37). `buttonPrimary` is the one gold action a
- * screen carries, `buttonSecondary` the neutral outline, and `buttonDanger`
- * an action that ends something, in the error ink. Each runs through `cn()`
+ * screen carries, and `buttonSecondary` the neutral outline. A destructive
+ * action is always a button, `<Button variant="destructive-outline">`. Each
+ * runs through `cn()`
  * as `<Button>` does, so a link and a button carry the same class string.
  */
 export const buttonPrimary = cn(buttonVariants({ variant: "primary" }));
 export const buttonSecondary = cn(buttonVariants({ variant: "outline" }));
-export const buttonDanger = cn(
-  buttonVariants({ variant: "destructive-outline" }),
-);
 
 /** `a { color:var(--accent-text) }` — gold as ink, underlined on hover. */
 export const linkText =

@@ -44,7 +44,7 @@ export function CheckAgain({ className = "" }: { className?: string }) {
         setChecking(true);
         navigate.refresh();
       }}
-      variant="outline" className={`${className}`}
+      variant="outline" className={className}
     >
       {checking ? t("checking") : t("again")}
     </Button>

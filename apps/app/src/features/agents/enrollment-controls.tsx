@@ -23,7 +23,6 @@ import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
-import { buttonDanger } from "./parts";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import {
   type EnrollmentToken,

@@ -51,7 +51,7 @@ function Segmented<V extends string>({
           key={option.value}
           type="button"
           aria-pressed={option.value === value}
-          variant="outline" className={`${pressed}`}
+          variant="outline" className={pressed}
           onClick={() => {
             onChange(option.value);
           }}
@@ -498,7 +498,7 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
             <Button
               type="button"
               aria-pressed={category === null}
-              variant="outline" className={`${pressed}`}
+              variant="outline" className={pressed}
               onClick={() => {
                 setCategory(null);
               }}
@@ -510,7 +510,7 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
                 key={key}
                 type="button"
                 aria-pressed={category === key}
-                variant="outline" className={`${pressed}`}
+                variant="outline" className={pressed}
                 onClick={() => {
                   setCategory(key);
                 }}

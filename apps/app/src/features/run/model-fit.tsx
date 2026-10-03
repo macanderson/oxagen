@@ -18,7 +18,6 @@
 import { useTranslations } from "next-intl";
 import type { RunRow } from "@/data/contracts/runs";
 import { Badge } from "@/ui/badge";
-import { buttonSecondary } from "@/ui/control-styles";
 import { Button } from "@/ui/button";
 import {
   effortVerdict,
@@ -28,9 +27,6 @@ import {
   runEffort,
 } from "./fit";
 import { Note, Panel, PanelBody } from "./parts";
-
-/** `.btn.sm { padding:4px 9px; font-size:12px; border-radius:7px }` */
-const buttonSmall = `${buttonSecondary} min-h-7 rounded-lg px-2.25 py-1 text-sm`;
 
 /** `.panel-b b` over `p.muted { margin:6px 0 0; font-size:12.5px }`: a card's title and its reading. */
 const cardTitle = "m-0 text-base font-bold text-foreground";
