@@ -2559,7 +2559,28 @@ describe("Spend › a tab's own read failing", () => {
         perCall: null,
         perRun: null,
         share: null,
+        tokens: {
+          input_uncached: 0,
+          cache_read: 0,
+          cache_write_5m: 0,
+          cache_write_1h: 0,
+          output: 0,
+          reasoning: 0,
+          server_tool_request: 0,
+        },
+        cacheHitRate: null,
+        modelCalls: 0,
+        observed: null,
+        standing: {
+          toolDefinitionTokens: null,
+          contextFrameTokens: null,
+          steeringTokens: null,
+        },
+        resultTokens: null,
         tools: [],
+        byAgent: [],
+        byOperator: [],
+        byModel: [],
       }),
     );
     findings.mockResolvedValue(readOk(listing()));

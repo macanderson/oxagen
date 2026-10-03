@@ -277,7 +277,7 @@ export type SpendDrill = z.infer<typeof SpendDrill>;
  * The causes `list_waste` names: a cache written and never read, then the
  * calls findings claim, in counting order (ADR-208).
  */
-export const WASTE_CAUSES = [
+const WASTE_CAUSES = [
   "cache_write_never_read",
   "spin_loops",
   "retry_loops",

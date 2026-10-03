@@ -18,7 +18,6 @@ import type { spendUnproductive } from "@oxagen/oxagen/contracts/spend.unproduct
 import type { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import type { z } from "zod";
 import type {
-  DrillCutRow,
   FleetSpend,
   GatewayPolicy,
   OperatorRanking,
@@ -118,7 +117,9 @@ export function toFleetSpend(
 type DrillCutOut = ContractOutput<typeof spendDrill>["byAgent"][number];
 
 /** One cross-cut row, every figure copied whole with the basis it carried. */
-function toDrillCutRow(row: DrillCutOut): z.input<typeof DrillCutRow> {
+function toDrillCutRow(
+  row: DrillCutOut,
+): z.input<typeof SpendDrill>["byAgent"][number] {
   return {
     key: row.key,
     provider: row.provider,
