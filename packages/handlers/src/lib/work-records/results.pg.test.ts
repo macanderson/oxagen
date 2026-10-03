@@ -554,7 +554,10 @@ describe.skipIf(!enabled)("work order results against Postgres", { timeout: 30_0
     const sent = await send(space, item, r);
     await claim(space, r.hostA, sent.orderPublicId);
     const stray = await openRun(space, r);
-    const naming = (workOrder: string) => [{ attrs: { "oxagen.enforcement_tier": "harness" } }, { attrs: { [WORK_ORDER_RUN_ATTR]: workOrder } }];
+    const naming = (workOrder: string): { attrs: Record<string, string> }[] => [
+      { attrs: { "oxagen.enforcement_tier": "harness" } },
+      { attrs: { [WORK_ORDER_RUN_ATTR]: workOrder } },
+    ];
     const marker = `MARK-${tag}-${counter}`;
 
     const inIngest = await inScope(space, async (tx) => {
