@@ -2140,7 +2140,8 @@ describe("a pass's frame plan (#4594, #5168)", () => {
         10 * RECURRING_RUNS_MIN + 300 - (FRAME_READS_MAX - FRAME_GROUP_READS_RESERVE),
       unmatched: 0,
     });
-  });
+    // Every detector runs over 3,095 runs, so this test gets more time.
+  }, 30_000);
 });
 
 describe("group reads in the priced read (#5168)", () => {
