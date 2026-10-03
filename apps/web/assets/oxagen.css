@@ -99,7 +99,7 @@
      holds it to that). The primary action is the one per screen that
      carries the kit's sheen, so it adds --button-primary-image. The sheen
      runs gold to gold-bright, not from gold-deep, because ink text on
-     gold-deep is 4.26:1 and the button text sits over the sheen's start. The
+     gold-deep is 4.27:1 and the button text sits over the sheen's start. The
      fill is the kit's gold in both themes, as @oxagen/ui draws it. The default
      button is glass over the backdrop, with a hairline that warms on hover.
      Gold is the focus ring, as everywhere on the site. ---- */
