@@ -738,6 +738,8 @@ jobs:
           Installers for macOS, Windows, and Linux, each with its SHA-256: https://downloads.oxagen.sh/
 
           The bare \`tacho\` and \`oxagen\` executables for each platform are on the same page and attached below, each with a \`.sha256\`. They are the same binaries the app links onto your PATH.
+
+          On macOS, the app installs new versions on its own and runs them after your next restart. To turn this off, clear Install updates automatically in the app's Updates panel. Windows and Linux ask first. How updates work: https://docs.oxagen.sh/docs/cli/desktop#updates
           EOF
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
             --title "Oxagen $v" --notes-file notes.md --draft=false --latest=false

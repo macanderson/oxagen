@@ -5,6 +5,8 @@ import {
   CANARY_EVENT_NAME,
   canaryQueryUrl,
   checkKeyPosture,
+  syncApp,
+  syncRetryDelayMs,
   unseenCanaryComplaint,
 } from "./inngest-verify";
 
@@ -88,6 +90,97 @@ describe("unseenCanaryComplaint", () => {
     expect(message).toContain("last status 503");
     expect(message).toContain("whether the keys agree is unknown");
     expect(message).not.toContain("different Inngest environments");
+  });
+});
+
+describe("syncRetryDelayMs", () => {
+  it("waits as long as Retry-After asks on an overloaded api", () => {
+    expect(syncRetryDelayMs(503, "2")).toBe(2_000);
+  });
+
+  it("keeps the wait between one and fifteen seconds", () => {
+    expect(syncRetryDelayMs(429, "0")).toBe(1_000);
+    expect(syncRetryDelayMs(503, "120")).toBe(15_000);
+  });
+
+  it("waits the default when Retry-After is missing or not a number", () => {
+    expect(syncRetryDelayMs(502, null)).toBe(2_000);
+    expect(syncRetryDelayMs(504, "")).toBe(2_000);
+    expect(syncRetryDelayMs(503, "Wed, 21 Oct 2026 07:28:00 GMT")).toBe(2_000);
+  });
+
+  it("treats a refusal from Inngest as final", () => {
+    expect(syncRetryDelayMs(400, "2")).toBeNull();
+    expect(syncRetryDelayMs(401, null)).toBeNull();
+    expect(syncRetryDelayMs(500, null)).toBeNull();
+  });
+});
+
+describe("syncApp", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function overloaded(): Response {
+    return new Response(
+      JSON.stringify({ error: { code: "service_overloaded" } }),
+      { status: 503, headers: { "Retry-After": "2" } },
+    );
+  }
+
+  // The deploy of 60e2da346 (#5324) failed on the first 503 while Inngest's
+  // own step calls filled the api's background lane.
+  it("retries an overloaded api and succeeds once it answers", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(overloaded())
+      .mockResolvedValueOnce(overloaded())
+      .mockResolvedValueOnce(new Response('{"message":"Successfully registered"}'));
+    const sleepImpl = vi.fn(async () => {});
+
+    await syncApp("https://example.test/api/inngest", { fetchImpl, sleepImpl });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(sleepImpl).toHaveBeenCalledTimes(2);
+    expect(sleepImpl).toHaveBeenCalledWith(2_000);
+  });
+
+  it("fails at once when Inngest refuses the sync", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(process, "exit").mockImplementation(() => {
+      throw new Error("verification refused");
+    });
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response("batch size too large", { status: 400 }));
+    const sleepImpl = vi.fn(async () => {});
+
+    await expect(
+      syncApp("https://example.test/api/inngest", { fetchImpl, sleepImpl }),
+    ).rejects.toThrow("verification refused");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(sleepImpl).not.toHaveBeenCalled();
+  });
+
+  it("fails once the retry budget is spent", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(process, "exit").mockImplementation(() => {
+      throw new Error("verification refused");
+    });
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => overloaded());
+    const sleepImpl = vi.fn(async () => {});
+
+    await expect(
+      syncApp("https://example.test/api/inngest", {
+        fetchImpl,
+        sleepImpl,
+        budgetMs: 5_000,
+      }),
+    ).rejects.toThrow("verification refused");
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("returned 503 on attempt 3"));
   });
 });
 
