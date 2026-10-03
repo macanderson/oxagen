@@ -33,11 +33,11 @@ export function Section({
       className={`${panel} flex flex-col gap-3 p-5`}
       {...rest}
     >
-      <h2 id={id} className="text-base font-semibold text-foreground">
+      <h2 id={id} className="text-lg font-semibold text-foreground">
         {title}
       </h2>
       {lead === undefined ? null : (
-        <p className="max-w-prose text-sm text-muted-foreground">{lead}</p>
+        <p className="max-w-prose text-base text-muted-foreground">{lead}</p>
       )}
       {children}
     </section>
@@ -46,7 +46,7 @@ export function Section({
 
 export function Facts({ children }: { children: ReactNode }) {
   return (
-    <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+    <dl className="grid gap-x-6 gap-y-2 text-base sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
       {children}
     </dl>
   );

@@ -60,7 +60,7 @@ export function Panel({
             {title}
           </h2>
           {note === undefined ? null : (
-            <p className="text-xs text-muted-foreground">{note}</p>
+            <p className="text-sm text-muted-foreground">{note}</p>
           )}
         </div>
         {action}
@@ -74,7 +74,7 @@ export function Panel({
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <p className="p-4 text-sm text-muted-foreground">{children}</p>;
+  return <p className="p-4 text-base text-muted-foreground">{children}</p>;
 }
 
 export function HeaderCell({
@@ -117,7 +117,7 @@ function Savings({
       <span className="max-w-full text-link md:truncate">
         <Money value={saving} />
       </span>
-      <span className="max-w-full font-sans text-sm text-muted-foreground md:truncate">
+      <span className="max-w-full font-sans text-xs text-muted-foreground md:truncate">
         {t("findings", {
           count: own.length,
           n: formatCount(own.length, locale),
@@ -396,7 +396,7 @@ export function BudgetsTable({
                         style={{ width: ratioWidth(budget.ratio) }}
                       />
                     </span>
-                    <span className="text-sm text-muted-foreground md:truncate">
+                    <span className="text-xs text-muted-foreground md:truncate">
                       {t("budgets.position", {
                         ratio: formatRatio(budget.ratio, locale),
                         state: t(`budgets.state.${budget.state}`),

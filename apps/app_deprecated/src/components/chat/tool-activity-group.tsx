@@ -81,7 +81,7 @@ export function ToolActivityGroup({ items, live }: ToolActivityGroupProps) {
 
   return (
     <div
-      className="my-1 text-sm"
+      className="my-1 text-base"
       data-component="tool-activity-group"
       data-testid="tool-activity-group"
     >
@@ -92,7 +92,7 @@ export function ToolActivityGroup({ items, live }: ToolActivityGroupProps) {
         aria-label={
           expanded ? "Collapse tool activity" : "Expand tool activity"
         }
-        className="flex min-h-7 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs transition-colors hover:bg-muted/50"
+        className="flex min-h-7 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-muted/50"
       >
         {expanded ? (
           <ChevronDown
@@ -166,7 +166,7 @@ export function ToolActivityGroup({ items, live }: ToolActivityGroupProps) {
                   type="button"
                   onClick={() => toggleRow(item.toolCallId)}
                   aria-expanded={rowOpen}
-                  className="flex min-h-6 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs transition-colors hover:bg-muted/50"
+                  className="flex min-h-6 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-muted/50"
                 >
                   <Icon
                     className="h-3 w-3 shrink-0 text-muted-foreground"

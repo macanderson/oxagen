@@ -55,7 +55,7 @@ function PersonCell({ member }: { member: Member }) {
         <div className="font-semibold text-foreground md:truncate">
           {member.name ?? member.email}
         </div>
-        <div className={`${mono} text-sm text-dim md:truncate`}>
+        <div className={`${mono} text-xs text-dim md:truncate`}>
           {member.email}
         </div>
       </div>
@@ -75,10 +75,10 @@ function MemberFacts({ member }: { member: Member }) {
   const tRole = useTranslations("organization.roles");
   const term = "text-muted-foreground";
   const sectionTitle =
-    "mt-4 mb-1.5 text-sm font-semibold uppercase tracking-[0.09em] text-dim";
+    "mt-4 mb-1.5 text-xs font-semibold uppercase tracking-[0.09em] text-dim";
   return (
     <div data-issue="3932">
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-base">
         <dt className={term}>{t("email")}</dt>
         <dd className={mono}>{member.email}</dd>
         <dt className={term}>{t("role")}</dt>
@@ -126,7 +126,7 @@ function MemberFacts({ member }: { member: Member }) {
         <NotRecordedValue />
       </p>
       <h3 className={sectionTitle}>{t("mandates")}</h3>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-base">
         <dt className={term}>{t("granted")}</dt>
         <dd>
           <NotRecordedValue />
@@ -170,7 +170,7 @@ export function PeopleTab({
     values: { status: "active" },
     cells: [
       <PersonCell key="person" member={member} />,
-      <span key="role" className={`${mono} text-sm`}>
+      <span key="role" className={`${mono} text-xs`}>
         {tRole(member.role)}
       </span>,
       <NotRecordedValue key="workspaces" />,
@@ -296,16 +296,16 @@ function RolesInUse({
         <tbody className="divide-y divide-border">
           {[...held.entries()].map(([role, count]) => (
             <tr key={role} data-role-in-use={role}>
-              <td className={`${cell} ${mono} text-sm`}>{tRole(role)}</td>
+              <td className={`${cell} ${mono} text-xs`}>{tRole(role)}</td>
               <td className={numericCell}>{count}</td>
-              <td className={`${cell} text-sm text-dim`}>
+              <td className={`${cell} text-xs text-dim`}>
                 {describe(role) ?? t("noDescription")}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <p className={`${panelBody} text-sm text-dim`}>
+      <p className={`${panelBody} text-xs text-dim`}>
         {t("footer", { agents: agentRoles })}
       </p>
     </section>
@@ -352,10 +352,10 @@ export function InvitationsTab({
       rowId: invitation.id,
       values,
       cells: [
-        <span key="email" className={`${mono} text-xs`}>
+        <span key="email" className={`${mono} text-sm`}>
           {invitation.email}
         </span>,
-        <span key="role" className={`${mono} text-sm`}>
+        <span key="role" className={`${mono} text-xs`}>
           {tRole(invitation.role)}
         </span>,
         <NotRecordedValue key="by" />,

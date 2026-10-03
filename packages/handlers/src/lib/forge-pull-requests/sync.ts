@@ -73,11 +73,12 @@ export interface ForgeSyncDeps {
     source: "opened" | "recorded",
   ): Promise<number>;
   workOrdersOf(scope: Scope, runId: string, repository: string): Promise<string[]>;
+  /** `runId` names the run whose link brought the order; null when none did. */
   linkWorkOrders(
     scope: Scope,
     pullRequestId: string,
     orderIds: readonly string[],
-    runId: string,
+    runId: string | null,
   ): Promise<number>;
   store(): DiffStore | null;
   readDiff(
@@ -126,8 +127,9 @@ export async function upsertObserved(
     return { outcome: facts, needsCapture: false, links: 0 };
   const pullRequestId = await deps.upsert(scope, request, facts, deps.now());
   let links = 0;
+  let runId: string | null = null;
   if (request.link !== undefined) {
-    const runId = await deps.runPublicId(scope, request.link.rootSessionUuid);
+    runId = await deps.runPublicId(scope, request.link.rootSessionUuid);
     if (runId !== null) {
       links += await deps.linkRun(
         scope,
@@ -139,6 +141,15 @@ export async function upsertObserved(
       links += await deps.linkWorkOrders(scope, pullRequestId, orders, runId);
     }
   }
+  // The backfill names the work order a `pr_linked` fact recorded, so the
+  // order is linked whether or not a run link came with it.
+  if (request.workOrderId !== undefined)
+    links += await deps.linkWorkOrders(
+      scope,
+      pullRequestId,
+      [request.workOrderId],
+      runId,
+    );
   const held = await deps.revisionStatus(scope, pullRequestId, facts.headSha);
   const needsCapture =
     held === null || (held === "unconfigured" && deps.store() !== null);

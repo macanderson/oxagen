@@ -72,12 +72,12 @@ function Field({
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-foreground">
+      <label htmlFor={id} className="text-base font-medium text-foreground">
         {label}
       </label>
       {children}
       {hint === undefined ? null : (
-        <p id={`${id}-hint`} className="text-xs text-muted-foreground">
+        <p id={`${id}-hint`} className="text-sm text-muted-foreground">
           {hint}
         </p>
       )}
@@ -136,7 +136,7 @@ export function CredentialForm({
     >
       <fieldset className="flex min-w-0 flex-col gap-3">
         <fieldset className="flex flex-col gap-1.5">
-          <legend className="mb-1.5 text-sm font-medium text-foreground">
+          <legend className="mb-1.5 text-base font-medium text-foreground">
             {t("kind")}
           </legend>
           <div className="flex flex-wrap gap-3">

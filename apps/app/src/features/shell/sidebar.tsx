@@ -54,7 +54,7 @@ export function SidebarNav({
         <div key={section.key} className="mb-3">
           <p
             id={`${labelId}-${section.key}`}
-            className="px-2 pb-1.5 pt-3 text-sm font-semibold uppercase tracking-[0.13em] text-sidebar-nav-label-fg"
+            className="px-2 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-[0.13em] text-sidebar-nav-label-fg"
           >
             {t(`sidebar.sections.${section.key}`)}
           </p>
@@ -88,7 +88,7 @@ export function SidebarNav({
                         data-count={item.key}
                         data-count-unrecorded=""
                         title={t("sidebar.countNotRecorded")}
-                        className="rounded-[5px] border border-dashed border-border bg-card px-[5px] font-mono text-sm text-sidebar-nav-label-fg"
+                        className="rounded-[5px] border border-dashed border-border bg-card px-[5px] font-mono text-xs text-sidebar-nav-label-fg"
                       >
                         <span aria-hidden="true">?</span>
                         <span className="sr-only">
@@ -98,7 +98,7 @@ export function SidebarNav({
                     ) : (
                       <span
                         data-count={item.key}
-                        className={`rounded-[5px] border bg-card px-[5px] font-mono text-sm ${
+                        className={`rounded-[5px] border bg-card px-[5px] font-mono text-xs ${
                           waiting.hot
                             ? "border-info/40 text-info"
                             : "border-border text-sidebar-nav-label-fg"

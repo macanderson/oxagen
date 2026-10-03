@@ -30,6 +30,7 @@ import {
   workCheckConclusionSchema,
   workChecksWordSchema,
   workCostSchema,
+  workForgePullRequestSchema,
   workGateSchema,
   workItemRowSchema,
   workMoneySchema,
@@ -128,6 +129,8 @@ const sendSchema = z
       })
       .strict()
       .nullable(),
+    /** Every pull request the send has in the forge store, newest first. */
+    pull_requests: z.array(workForgePullRequestSchema),
     /** The checks the base branch requires on the head. Null until Oxagen reads them for this head. */
     required_checks: z.array(z.string()).nullable(),
     checks: z.array(checkSchema),

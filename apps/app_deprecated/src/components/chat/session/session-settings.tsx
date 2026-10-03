@@ -89,7 +89,7 @@ function AgentRow({
       <div className="flex flex-col gap-1 rounded-md px-2 py-1.5">
         <div className="flex items-center gap-2">
           {avatar}
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+          <span className="min-w-0 flex-1 truncate text-base font-medium text-foreground">
             {name}
           </span>
           <Lock
@@ -97,14 +97,14 @@ function AgentRow({
             aria-hidden="true"
           />
         </div>
-        <p className="pl-8 text-xs text-muted-foreground">
+        <p className="pl-8 text-sm text-muted-foreground">
           Locked after the first message
         </p>
         {onStartNewChat ? (
           <button
             type="button"
             onClick={onStartNewChat}
-            className="ml-8 self-start text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="ml-8 self-start text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Start a new chat with a different agent
           </button>
@@ -121,7 +121,7 @@ function AgentRow({
       className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {avatar}
-      <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+      <span className="min-w-0 flex-1 truncate text-base font-medium text-foreground">
         {name}
       </span>
       <ChevronRight
@@ -174,17 +174,17 @@ function PickerFieldRow({
         aria-hidden="true"
       />
       <span className="min-w-0 flex-1">
-        <span className="block text-xs text-muted-foreground">{label}</span>
-        <span className="block truncate text-sm font-medium text-foreground">
+        <span className="block text-sm text-muted-foreground">{label}</span>
+        <span className="block truncate text-base font-medium text-foreground">
           {value}
         </span>
         {sublabel ? (
-          <span className="block truncate text-xs text-muted-foreground">
+          <span className="block truncate text-sm text-muted-foreground">
             {sublabel}
           </span>
         ) : null}
         {warning ? (
-          <span className="block text-xs text-destructive">{warning}</span>
+          <span className="block text-sm text-destructive">{warning}</span>
         ) : null}
       </span>
       {locked ? (
@@ -330,7 +330,7 @@ export function SessionSettings({
           >
             <ChevronLeft className="size-5" aria-hidden="true" />
           </button>
-          <h3 className="text-sm font-semibold text-foreground">
+          <h3 className="text-base font-semibold text-foreground">
             {PICKER_TITLES[pushed]}
           </h3>
         </div>
@@ -345,7 +345,7 @@ export function SessionSettings({
     <div className="flex flex-col gap-5">
       {/* Session */}
       <section className="flex flex-col gap-1">
-        <h3 className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <h3 className="px-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Session
         </h3>
         <AgentRow
@@ -364,7 +364,7 @@ export function SessionSettings({
           popoverContent={pickerContentFor("model")}
         />
         <div className="flex flex-col gap-1.5 px-2 py-1.5">
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             Reasoning effort
           </span>
           <SegmentedControl
@@ -387,7 +387,7 @@ export function SessionSettings({
             onClick={onOpenWallet}
             aria-label="Add funds"
             className={cn(
-              "flex min-h-11 w-full items-center justify-between rounded-md px-2 text-sm",
+              "flex min-h-11 w-full items-center justify-between rounded-md px-2 text-base",
               walletBalanceUsd < 5 ? "text-warning" : "text-foreground",
             )}
           >

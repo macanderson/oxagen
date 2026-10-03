@@ -59,7 +59,7 @@ export function AgentContextChip({
             variant="ghost"
             size="sm"
             aria-label={`Agent: ${label}`}
-            className={cn("h-8 gap-1.5 px-2 text-xs font-medium", className)}
+            className={cn("h-8 gap-1.5 px-2 text-sm font-medium", className)}
           />
         }
       >

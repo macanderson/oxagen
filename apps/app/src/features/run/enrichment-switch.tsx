@@ -29,7 +29,7 @@ export function EnrichmentSwitch({
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   return (
-    <div className={`max-w-prose ${compact ? "text-xs" : "text-sm"}`}>
+    <div className={`max-w-prose ${compact ? "text-sm" : "text-base"}`}>
       <label
         className={`flex items-center gap-2 ${compact ? "text-muted-foreground" : ""}`}
         title={compact ? t("description") : undefined}
@@ -60,12 +60,12 @@ export function EnrichmentSwitch({
       </label>
       <p
         id={descriptionId}
-        className={compact ? "sr-only" : "mt-1 text-xs text-muted-foreground"}
+        className={compact ? "sr-only" : "mt-1 text-sm text-muted-foreground"}
       >
         {t("description")}
       </p>
       {failure ? (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-sm text-destructive">
           {failure}
         </p>
       ) : null}

@@ -252,13 +252,13 @@ function CommandPalette({
               open(active);
             }
           }}
-          className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+          className="flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground"
         />
       </div>
       {ordered.length === 0 ? (
         <p
           role="status"
-          className="px-3 py-6 text-center text-sm text-muted-foreground"
+          className="px-3 py-6 text-center text-base text-muted-foreground"
         >
           {t("commands.empty", { query })}
         </p>
@@ -307,13 +307,13 @@ function CommandPalette({
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">{c.label}</span>
                       {c.detail === undefined ? null : (
-                        <span className="block truncate text-xs text-muted-foreground">
+                        <span className="block truncate text-sm text-muted-foreground">
                           {c.detail}
                         </span>
                       )}
                     </span>
                     {"shortcut" in c && c.shortcut !== undefined ? (
-                      <kbd className="flex-none font-mono text-sm text-muted-foreground">
+                      <kbd className="flex-none font-mono text-xs text-muted-foreground">
                         {t("commands.shortcut", { n: c.shortcut })}
                       </kbd>
                     ) : null}
@@ -326,7 +326,7 @@ function CommandPalette({
                 <p
                   data-testid="command-tools-not-backed"
                   data-gap={TOOL_ROW_GAP}
-                  className="px-3 pb-1 pt-0.5 text-xs text-muted-foreground"
+                  className="px-3 pb-1 pt-0.5 text-sm text-muted-foreground"
                 >
                   {t("commands.search.toolsNotBacked")}
                 </p>
@@ -339,12 +339,12 @@ function CommandPalette({
         <p
           role="status"
           data-testid="command-search-failed"
-          className="border-t border-border px-4 py-2 text-xs text-muted-foreground"
+          className="border-t border-border px-4 py-2 text-sm text-muted-foreground"
         >
           {t("commands.search.failed")}
         </p>
       ) : null}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-4 py-2 text-sm text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-4 py-2 text-xs text-muted-foreground">
         <span>
           <kbd className="font-mono">↑↓</kbd> {t("commands.footer.move")}
         </span>

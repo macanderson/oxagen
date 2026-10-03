@@ -183,12 +183,12 @@ export function MemoryCitationsPanel({
         <Quote className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <h2
           id="memory-citations-heading"
-          className="text-sm font-semibold text-foreground"
+          className="text-base font-semibold text-foreground"
         >
           Memory Citations
         </h2>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         Look up an execution to see which memories it cited, how much each one
         shaped the outcome, and any rule violations recorded against them.
       </p>
@@ -230,7 +230,7 @@ export function MemoryCitationsPanel({
           </Select>
         </div>
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-foreground">Influence</span>
+          <span className="text-sm font-medium text-foreground">Influence</span>
           <div
             className="flex flex-wrap gap-1.5"
             role="group"
@@ -252,7 +252,7 @@ export function MemoryCitationsPanel({
                       return next;
                     })
                   }
-                  className={`rounded-md border px-2 py-1 text-[10px] font-medium transition-colors ${
+                  className={`rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
                     active
                       ? "border-transparent " + INFLUENCE_CONFIG[influence]
                       : "border-border/60 text-muted-foreground hover:bg-muted/50"
@@ -271,13 +271,13 @@ export function MemoryCitationsPanel({
       </form>
 
       {validationError && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-sm text-destructive">
           {validationError}
         </p>
       )}
 
       {violationCount > 0 && (
-        <div className="flex items-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-700 dark:text-red-400">
+        <div className="flex items-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-700 dark:text-red-400">
           <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
           {violationCount} rule violation{violationCount === 1 ? "" : "s"}{" "}
           recorded in this execution.
@@ -326,14 +326,14 @@ export function MemoryCitationsPanel({
                 </TableCell>
                 <TableCell>
                   <Badge
-                    className={`${INFLUENCE_CONFIG[citation.influence]} border-0 text-[10px] font-medium`}
+                    className={`${INFLUENCE_CONFIG[citation.influence]} border-0 text-xs font-medium`}
                   >
                     {citation.influence}
                   </Badge>
                 </TableCell>
                 <TableCell>
                   <Badge
-                    className={`${COMPLIANCE_CONFIG[citation.compliance]} border-0 text-[10px] font-medium`}
+                    className={`${COMPLIANCE_CONFIG[citation.compliance]} border-0 text-xs font-medium`}
                   >
                     {citation.compliance}
                   </Badge>
@@ -346,7 +346,7 @@ export function MemoryCitationsPanel({
                       markdown={false}
                     />
                   ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
+                    <span className="text-sm text-muted-foreground">—</span>
                   )}
                 </TableCell>
               </TableRow>

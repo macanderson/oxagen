@@ -80,7 +80,7 @@ export function TagInput({
       {value.map((tag) => (
         <span
           key={tag}
-          className="flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-foreground"
+          className="flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-sm font-medium text-foreground"
         >
           {tag}
           <button
@@ -110,11 +110,11 @@ export function TagInput({
         }}
         placeholder={value.length === 0 ? placeholder : ""}
         disabled={disabled}
-        className="flex-1 min-w-[100px] bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"
+        className="flex-1 min-w-[100px] bg-transparent text-base outline-none placeholder:text-muted-foreground disabled:opacity-50"
         aria-label="Add tag"
       />
       {tagError && (
-        <p role="alert" className="w-full text-xs text-destructive mt-0.5">
+        <p role="alert" className="w-full text-sm text-destructive mt-0.5">
           {tagError}
         </p>
       )}
@@ -156,7 +156,7 @@ export function MultiSelectWidget({
             disabled={disabled}
             aria-pressed={selected}
             className={cn(
-              "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+              "rounded-md border px-2.5 py-1 text-sm font-medium transition-colors",
               selected
                 ? "border-primary bg-primary/10 text-primary"
                 : "border-border/60 bg-transparent text-muted-foreground hover:border-border hover:text-foreground",
@@ -248,13 +248,13 @@ export function JsonCodeField({
         onBlur={onBlur}
         placeholder={placeholder}
         disabled={disabled}
-        className="resize-y min-h-[140px] font-mono text-xs"
+        className="resize-y min-h-[140px] font-mono text-sm"
         spellCheck={false}
         aria-invalid={Boolean(invalid || error)}
         aria-describedby={ariaDescribedBy}
       />
       {error ? (
-        <p className="mt-1 text-xs text-destructive" role="status">
+        <p className="mt-1 text-sm text-destructive" role="status">
           {error}
         </p>
       ) : null}

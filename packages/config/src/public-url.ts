@@ -57,6 +57,55 @@ export function redactUrlCredentials(text: string): string {
   );
 }
 
+/**
+ * A query or fragment parameter name that reads like a secret. Loose on
+ * purpose: hiding a harmless value costs less than showing a key. The same
+ * rule as `secretName` in the app's MCP Studio connection tab
+ * (`apps/app/src/features/mcp-studio/connection-tab.tsx`), so a stored
+ * address reads the same on every surface.
+ */
+const SECRET_PARAM =
+  /token|secret|passw|pwd|key|auth|sig|credential|session|code/i;
+
+/**
+ * Tested as written and as the server that receives it reads it, because a
+ * name may percent-encode any character: `%74oken` is `token`. A malformed
+ * escape makes decodeURIComponent throw, and then the name as written is the
+ * only reading there is.
+ */
+function secretParamName(name: string): boolean {
+  if (SECRET_PARAM.test(name)) return true;
+  try {
+    return SECRET_PARAM.test(decodeURIComponent(name));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A stored address with every credential it carries replaced by `***`: the
+ * userinfo, as `redactUrlCredentials` does, and the value of each query or
+ * fragment parameter whose name reads like a secret, such as `?api_key=…`,
+ * `?token=…` or Azure's `?subscription-key=…`. Use it wherever a stored
+ * address is returned or shown (#3720).
+ *
+ * The register guard refuses userinfo but not a query, and some hosted MCP
+ * servers take their key as a query parameter, so a stored address can hold
+ * a key with nobody having done anything wrong. The connection still reads
+ * the stored column. Only what a person or a client is shown is redacted.
+ *
+ * String work, like its neighbour, so text that does not parse as a URL is
+ * still cleaned rather than thrown on. Names and order are kept, so the
+ * address still says which parameters it sends.
+ */
+export function redactUrlSecrets(url: string): string {
+  return redactUrlCredentials(url).replace(
+    /([?&;#])([^=&;#\s]+)=([^&;#\s]*)/g,
+    (match, separator: string, name: string) =>
+      secretParamName(name) ? `${separator}${name}=***` : match,
+  );
+}
+
 export interface AssertPublicHttpUrlOptions {
   /**
    * Prefixed to every refusal so the message names the thing being refused —

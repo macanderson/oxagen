@@ -65,7 +65,7 @@ export default async function CapabilitiesCatalogPage({
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-sm text-muted-foreground">
+      <p className="text-base text-muted-foreground">
         Every capability is a typed contract — identity, knowledge scope,
         permitted action, commercial terms, verified outcome, and audit record
         bound into one enforced object. Click a row to inspect the full chain.

@@ -97,11 +97,18 @@
      --button-default-*), so a button reads the same tokens here as on
      docs.oxagen.sh, and a .btn rule reads nothing else (the brand check
      holds it to that). The primary action is the one per screen that
-     carries the kit's sheen, so it adds --button-primary-image. The default
+     carries the kit's sheen, so it adds --button-primary-image. The sheen
+     runs gold to gold-bright, not from gold-deep, because ink text on
+     gold-deep is 4.27:1 and the button text sits over the sheen's start. The
+     fill is the kit's gold in both themes, as @oxagen/ui draws it. The default
      button is glass over the backdrop, with a hairline that warms on hover.
      Gold is the focus ring, as everywhere on the site. ---- */
-  --button-primary-bg: var(--gold);
-  --button-primary-image: var(--grad-ember);
+  --button-primary-bg: var(--ox-gold);
+  --button-primary-image: linear-gradient(
+    100deg,
+    var(--ox-gold) 0%,
+    var(--ox-gold-bright) 100%
+  );
   --button-primary-fg: var(--ox-ink); /* ink on the metal in both themes */
   --button-primary-border: transparent;
   --button-primary-shadow: var(--shadow-ui);

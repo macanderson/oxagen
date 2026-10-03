@@ -150,7 +150,7 @@ export function OrgGeneralForm({
             className="font-mono"
             disabled={isSaving || !canEdit}
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Used in your organization&rsquo;s URL. Lowercase letters, numbers,
             and hyphens only. Clear it and edit the name to regenerate it.
           </p>
@@ -179,14 +179,14 @@ export function OrgGeneralForm({
 
         {/* Permission note for viewers */}
         {!canEdit && (
-          <p className="text-xs text-muted-foreground" role="note">
+          <p className="text-sm text-muted-foreground" role="note">
             Only organization owners and admins can edit these settings.
           </p>
         )}
 
         {/* Inline error */}
         {status === "error" && errorMsg && (
-          <p className="text-sm text-destructive" role="alert">
+          <p className="text-base text-destructive" role="alert">
             {errorMsg}
           </p>
         )}
@@ -204,7 +204,7 @@ export function OrgGeneralForm({
             {isSaving ? "Saving…" : "Save changes"}
           </Button>
           {status === "saved" && (
-            <span className="text-xs text-muted-foreground" role="status">
+            <span className="text-sm text-muted-foreground" role="status">
               Saved
             </span>
           )}

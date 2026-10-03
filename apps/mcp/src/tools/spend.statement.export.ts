@@ -12,6 +12,9 @@ export const schema = {
   format: spendStatementExport.input.shape.format.describe(
     "The statement format; csv is the one format today",
   ),
+  rows: spendStatementExport.input.shape.rows.describe(
+    "groups for one line per operator, agent, model, tool, task and cost center (the default); runs for one line per run with its agent, operator, work item and cost",
+  ),
 };
 
 export const metadata: ToolMetadata = {

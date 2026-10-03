@@ -309,13 +309,16 @@ export async function workOrdersOf(
   return rows.map((row) => row.orderId);
 }
 
-/** Link work orders to a pull request. Answers how many links were new. */
+/**
+ * Link work orders to a pull request. `runId` names the run whose link
+ * brought them, or null when none did. Answers how many links were new.
+ */
 export async function linkWorkOrders(
   tx: Pick<Tx, "insert">,
   scope: Scope,
   pullRequestId: string,
   orderIds: readonly string[],
-  runId: string,
+  runId: string | null,
 ): Promise<number> {
   if (orderIds.length === 0) return 0;
   const written = await tx

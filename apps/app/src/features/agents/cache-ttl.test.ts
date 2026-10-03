@@ -37,6 +37,8 @@ function listOf(findings: Partial<SpendFinding>[]): SpendFindings {
       ...finding,
     })),
     truncated: false,
+    nextCursor: null,
+    offset: 0,
   };
 }
 

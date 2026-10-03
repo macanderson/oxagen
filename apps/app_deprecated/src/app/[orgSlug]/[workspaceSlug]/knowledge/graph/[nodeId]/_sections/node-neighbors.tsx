@@ -78,7 +78,7 @@ export async function NodeNeighbors({
     <div className="space-y-4">
       {groups.map((group) => (
         <div key={group.key}>
-          <h3 className="mb-1.5 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <h3 className="mb-1.5 flex items-center gap-1 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             {group.direction === "out" ? (
               <>
                 {humanizeKey(group.edgeType)}

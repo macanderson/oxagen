@@ -73,7 +73,7 @@ export function CancelRegistration({
         {pending ? t("cancelling") : t("cancel")}
       </button>
       {failure === null ? null : (
-        <span role="alert" className="max-w-xs text-xs text-error-ink">
+        <span role="alert" className="max-w-xs text-sm text-error-ink">
           {failure}
         </span>
       )}

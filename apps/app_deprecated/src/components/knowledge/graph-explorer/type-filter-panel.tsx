@@ -42,11 +42,11 @@ export function TypeFilterPanel(props: TypeFilterPanelProps) {
         <div className="mb-2 flex items-center justify-between">
           <h3
             id="node-types-heading"
-            className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            className="text-sm font-semibold uppercase tracking-wide text-muted-foreground"
           >
             Node types
           </h3>
-          <div className="flex items-center gap-1 text-[11px]">
+          <div className="flex items-center gap-1 text-xs">
             <button
               type="button"
               onClick={props.onShowAllNodeTypes}
@@ -68,7 +68,7 @@ export function TypeFilterPanel(props: TypeFilterPanelProps) {
         </div>
         <ul className="flex flex-col gap-0.5">
           {props.nodeCounts.length === 0 && (
-            <li className="text-xs text-muted-foreground">No nodes in view.</li>
+            <li className="text-sm text-muted-foreground">No nodes in view.</li>
           )}
           {props.nodeCounts.map((tc) => (
             <FilterRow
@@ -86,7 +86,7 @@ export function TypeFilterPanel(props: TypeFilterPanelProps) {
       <section aria-labelledby="visibility-heading">
         <h3
           id="visibility-heading"
-          className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+          className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground"
         >
           Visibility
         </h3>
@@ -114,13 +114,13 @@ export function TypeFilterPanel(props: TypeFilterPanelProps) {
       <section aria-labelledby="edge-types-heading">
         <h3
           id="edge-types-heading"
-          className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+          className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground"
         >
           Relationship types
         </h3>
         <ul className="flex flex-col gap-0.5">
           {props.edgeCounts.length === 0 && (
-            <li className="text-xs text-muted-foreground">
+            <li className="text-sm text-muted-foreground">
               No relationships in view.
             </li>
           )}
@@ -164,7 +164,7 @@ function FilterRow({
     <li>
       <label
         className={cn(
-          "flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm transition-colors hover:bg-muted/60",
+          "flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-base transition-colors hover:bg-muted/60",
           disabled && "cursor-default opacity-70 hover:bg-transparent",
         )}
       >
@@ -184,7 +184,7 @@ function FilterRow({
         <span className="min-w-0 flex-1 truncate text-foreground" title={label}>
           {label}
         </span>
-        <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
+        <span className="shrink-0 tabular-nums text-sm text-muted-foreground">
           {count.toLocaleString()}
         </span>
       </label>

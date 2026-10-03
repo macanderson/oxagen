@@ -73,16 +73,16 @@ function FileDiff({ file }: { file: SteeringPrDiff["files"][number] }) {
       className="flex flex-col gap-1.5 rounded-md border border-border"
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
-        <span className={`${mono} text-xs text-foreground break-all`}>
+        <span className={`${mono} text-sm text-foreground break-all`}>
           {file.path}
         </span>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           {t(`statuses.${file.status}`)}
         </span>
       </div>
       <table
         aria-label={t("fileLabel", { path: file.path })}
-        className={`${mono} w-full border-collapse text-sm`}
+        className={`${mono} w-full border-collapse text-xs`}
       >
         <tbody>
           {rows.map((row) =>
@@ -99,12 +99,12 @@ function FileDiff({ file }: { file: SteeringPrDiff["files"][number] }) {
         </tbody>
       </table>
       {diff.wholesale ? (
-        <p className="px-3 pb-2 text-xs text-muted-foreground">
+        <p className="px-3 pb-2 text-sm text-muted-foreground">
           {t("wholesale")}
         </p>
       ) : null}
       {file.truncated ? (
-        <p className="px-3 pb-2 text-xs text-muted-foreground">
+        <p className="px-3 pb-2 text-sm text-muted-foreground">
           {t("truncated")}
         </p>
       ) : null}
@@ -137,9 +137,9 @@ export function SteeringPrDiffBody({
   return (
     <Section id="steering-pr-diff" title={title} data-diff-state={diff.state}>
       {diff.state === "no_pr" ? (
-        <p className="text-sm text-muted-foreground">{t("noPr")}</p>
+        <p className="text-base text-muted-foreground">{t("noPr")}</p>
       ) : diff.state === "settled" ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           {t("settled")}{" "}
           {prUrl === null ? null : (
             <PullRequestLink to={prUrl} className={linkText}>
@@ -148,11 +148,11 @@ export function SteeringPrDiffBody({
           )}
         </p>
       ) : diff.files.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("empty")}</p>
+        <p className="text-base text-muted-foreground">{t("empty")}</p>
       ) : (
         <div className="flex flex-col gap-3">
           {diff.baseRef === null || diff.headSha === null ? null : (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {t("against", {
                 base: diff.baseRef,
                 head: diff.headSha.slice(0, 7),
@@ -163,7 +163,7 @@ export function SteeringPrDiffBody({
             <FileDiff key={file.path} file={file} />
           ))}
           {diff.moreFiles ? (
-            <p className="text-xs text-muted-foreground">{t("moreFiles")}</p>
+            <p className="text-sm text-muted-foreground">{t("moreFiles")}</p>
           ) : null}
         </div>
       )}

@@ -669,6 +669,8 @@ describe("toSpendFindings", () => {
       counts: { findings: 1, high: 1, medium: 0, operators: 3 },
       findings: [listedFinding],
       truncated: false,
+      nextCursor: null,
+      offset: 0,
     });
     const view = SpendFindings.parse(toSpendFindings(out));
     expect(view.saving).toEqual(saving);
@@ -708,6 +710,8 @@ describe("toSpendFindings", () => {
       counts: { findings: 1, high: 1, medium: 0, operators: 3 },
       findings: [{ ...listedFinding, recommendation }],
       truncated: false,
+      nextCursor: null,
+      offset: 0,
     });
     const view = SpendFindings.parse(toSpendFindings(out));
     expect(view.findings[0]?.recommendation).toEqual(recommendation);
@@ -724,6 +728,8 @@ describe("toSpendFindings", () => {
       counts: { findings: 0, high: 0, medium: 0, operators: 0 },
       findings: [],
       truncated: false,
+      nextCursor: null,
+      offset: 0,
     });
     const view = SpendFindings.parse(toSpendFindings(out));
     expect(view).toEqual({
@@ -735,10 +741,12 @@ describe("toSpendFindings", () => {
       counts: { findings: 0, high: 0, medium: 0, operators: 0 },
       findings: [],
       truncated: false,
+      nextCursor: null,
+      offset: 0,
     });
   });
 
-  it("copies the count of every open finding and truncated when the list is cut (#5262)", () => {
+  it("copies the count of every open finding, truncated, and the next page's cursor when the list is cut (#5262, #5303)", () => {
     const out = findingList.output.parse({
       status: "open",
       window: listedFinding.window,
@@ -749,11 +757,15 @@ describe("toSpendFindings", () => {
       counts: { findings: 62, high: 62, medium: 0, operators: 3 },
       findings: Array.from({ length: 50 }, () => listedFinding),
       truncated: true,
+      nextCursor: "c2",
+      offset: 0,
     });
     const view = SpendFindings.parse(toSpendFindings(out));
     expect(view.truncated).toBe(true);
     expect(view.counts.findings).toBe(62);
     expect(view.findings).toHaveLength(50);
+    expect(view.nextCursor).toBe("c2");
+    expect(view.offset).toBe(0);
   });
 
   it("copies one finding's arithmetic and the runs it cites", () => {

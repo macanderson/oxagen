@@ -123,6 +123,8 @@ describe.skipIf(!enabled)("the Work reads against Postgres", { timeout: 60_000 }
     await withSystemDb(async (tx) => {
       const { orgId } = scope;
       await tx.delete(schema.runTotals).where(eq(schema.runTotals.orgId, orgId));
+      // Deleting a pull request deletes its work order links.
+      await tx.delete(schema.forgePullRequests).where(eq(schema.forgePullRequests.orgId, orgId));
       await tx.delete(schema.workItemFacts).where(eq(schema.workItemFacts.orgId, orgId));
       await tx.delete(schema.tachoControlCommands).where(eq(schema.tachoControlCommands.orgId, orgId));
       await tx.delete(schema.workOrders).where(eq(schema.workOrders.orgId, orgId));
@@ -613,6 +615,58 @@ describe.skipIf(!enabled)("the Work reads against Postgres", { timeout: 60_000 }
     );
     expect(detail.history.find((entry) => entry.kind === "claimed")?.actor).toMatch(/^laptop-/);
     expect(detail.history.find((entry) => entry.kind === "brief_approved")?.actor).toBe(`amara-${tag}@work-read.test`);
+  });
+
+  it("lists each send's pull requests from the forge store, by link and by the pr_linked fact", async () => {
+    const review = items.review as Sent;
+    const pull = (target: WorkScope, number: number, over: Partial<typeof schema.forgePullRequests.$inferInsert> = {}) => ({
+      orgId: target.orgId,
+      workspaceId: target.workspaceId,
+      provider: "github",
+      host: "github.com",
+      providerRepositoryId: "4242",
+      repository: REPOSITORY,
+      number,
+      url: `https://github.com/${REPOSITORY}/pull/${number}`,
+      title: `Change ${number}`,
+      state: "open",
+      headSha: SHA1,
+      stateSeenAt: new Date("2026-10-03T10:00:00.000Z"),
+      ...over,
+    });
+    await withSystemDb(async (tx) => {
+      const [linked] = await tx
+        .insert(schema.forgePullRequests)
+        .values(pull(scope, 700, { state: "merged", stateSeenAt: new Date("2026-10-03T11:00:00.000Z") }))
+        .returning({ id: schema.forgePullRequests.id });
+      if (!linked) throw new Error("fixture insert returned no row");
+      await tx.insert(schema.forgePullRequestWorkOrders).values({
+        orgId: scope.orgId,
+        workspaceId: scope.workspaceId,
+        pullRequestId: linked.id,
+        workOrderId: review.orderId,
+      });
+      // #612 is the one the send's pr_linked fact names. The same key in
+      // another workspace is that workspace's pull request.
+      await tx.insert(schema.forgePullRequests).values([pull(scope, 612, { draft: true }), pull(other, 612, { state: "closed" })]);
+    });
+
+    const detail = await scoped(() => readWorkItemDetail(scope, review.publicId));
+    const parsed = workItemGet.output.parse({ ...detail!, viewer: { can_control: true, can_approve: true } });
+    const send = parsed.sends[0]!;
+    expect(send.pull_requests.map((entry) => [entry.number, entry.state])).toEqual([
+      [700, "merged"],
+      [612, "draft"],
+    ]);
+    expect(send.pull_requests[0]?.id).toMatch(/^fpr_/);
+    // The facts still decide the pull request acceptance is judged on.
+    expect(send.pull_request).toMatchObject({ number: 612, head: SHA1 });
+    expect(send.checks_word).toBe("passing");
+
+    const page = await scoped(() => readWorkItemRows(scope, 500));
+    const row = page.items.find((entry) => entry.id === review.publicId);
+    expect(row?.send?.pull_requests.map((entry) => entry.number)).toEqual([700, 612]);
+    expect(page.items.find((entry) => entry.id === items.running.publicId)?.send?.pull_requests).toEqual([]);
   });
 
   it("finds no item from another workspace, and no deleted item", async () => {

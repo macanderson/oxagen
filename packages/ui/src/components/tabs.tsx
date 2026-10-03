@@ -58,7 +58,7 @@ const TabsTab = React.forwardRef<
   <TabsPrimitive.Tab
     ref={ref}
     className={cn(
-      "inline-flex items-center justify-center whitespace-nowrap text-sm font-medium text-tab-fg transition-all hover:text-tab-fg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+      "inline-flex items-center justify-center whitespace-nowrap text-base font-medium text-tab-fg transition-all hover:text-tab-fg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
       // Default (pill) list treatment — active pill is a flat card surface.
       "group-data-[variant=default]/list:rounded-md group-data-[variant=default]/list:px-3 group-data-[variant=default]/list:py-1 group-data-[variant=default]/list:data-[active]:bg-card group-data-[variant=default]/list:data-[active]:text-tab-fg-active",
       // Underline list treatment — constant-width border at rest, color flips on state.

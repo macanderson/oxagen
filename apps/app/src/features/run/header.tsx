@@ -65,7 +65,7 @@ function Chip({
     <span
       data-testid={testId}
       title={title}
-      className={`inline-flex min-w-0 max-w-full items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-hl px-[7px] py-0.5 leading-normal tracking-[0.02em] text-muted-foreground ${code ? "font-mono text-sm font-medium" : "text-sm font-semibold"}`}
+      className={`inline-flex min-w-0 max-w-full items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-hl px-[7px] py-0.5 leading-normal tracking-[0.02em] text-muted-foreground ${code ? "font-mono text-xs font-medium" : "text-xs font-semibold"}`}
     >
       {children}
     </span>
@@ -438,7 +438,7 @@ function ForgeChip({
       to={target}
       title={title}
       data-testid={testId}
-      className={`${linkChip} ${code ? "font-mono text-sm font-medium" : ""}`}
+      className={`${linkChip} ${code ? "font-mono text-xs font-medium" : ""}`}
     >
       {children}
     </GitHubLink>
@@ -497,7 +497,7 @@ function PullChip({
         <PullRequestLink
           to={target}
           title={title}
-          className={`${linkChip} font-mono text-sm font-medium`}
+          className={`${linkChip} font-mono text-xs font-medium`}
         >
           {content}
         </PullRequestLink>
@@ -505,7 +505,7 @@ function PullChip({
       <span
         data-testid="run-pull-state"
         data-state={state ?? "unknown"}
-        className="whitespace-nowrap text-sm text-dim"
+        className="whitespace-nowrap text-xs text-dim"
       >
         {state === null ? t("pullState.unknown") : t(`pullState.${state}`)}
       </span>
@@ -721,7 +721,7 @@ function SubagentsFromWork({
       data-testid="run-subagents"
       className="mt-2 flex flex-wrap items-center gap-[9px]"
     >
-      <span className="text-sm font-semibold uppercase tracking-[0.1em] text-dim">
+      <span className="text-xs font-semibold uppercase tracking-[0.1em] text-dim">
         {t("subagents")}
       </span>
       {subagents.slice(0, SUBAGENT_CHIPS).map((subagent) => (
@@ -732,7 +732,7 @@ function SubagentsFromWork({
         />
       ))}
       {subagents.length > SUBAGENT_CHIPS ? (
-        <span className="text-sm text-dim">
+        <span className="text-xs text-dim">
           {t("moreSubagents", { count: subagents.length - SUBAGENT_CHIPS })}
         </span>
       ) : null}
@@ -1052,7 +1052,7 @@ export function RunHeader({
               it to copy. With automatic names off, get_run already sends
               the harness's own title as `name` (or null), so the header
               takes it as sent. */}
-          <h1 className="mb-1 break-words text-xl font-bold leading-tight text-foreground">
+          <h1 className="mb-1 break-words text-lg font-bold leading-tight text-foreground">
             {run.name ?? run.taskRef ?? t("header.untitled")}
           </h1>
           <CopyRunId id={run.id} />
@@ -1103,7 +1103,7 @@ export function RunHeader({
           {run.completenessGaps.length === 0 ? null : (
             <p
               data-testid="run-gaps"
-              className="mt-1 max-w-prose text-xs text-muted-foreground"
+              className="mt-1 max-w-prose text-sm text-muted-foreground"
             >
               {t("gaps")}{" "}
               {run.completenessGaps.map((gap) => t(`gap.${gap}`)).join(", ")}

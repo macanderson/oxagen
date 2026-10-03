@@ -23,21 +23,21 @@ export default async function ResetPasswordPage({
           <h1 className="text-2xl font-semibold tracking-tight">
             Set a new password
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             Enter your new password below
           </p>
         </div>
 
         <ResetPasswordForm token={token} />
 
-        <p className="text-center text-sm text-muted-foreground">
+        <p className="text-center text-base text-muted-foreground">
           <Link href="/login" className="text-accent hover:underline">
             Back to sign in
           </Link>
         </p>
       </div>
 
-      <p className="text-center text-xs text-muted-foreground">
+      <p className="text-center text-sm text-muted-foreground">
         SOC 2 Type II · SSO/SCIM · RBAC-enforced retrieval
       </p>
     </div>

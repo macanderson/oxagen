@@ -124,14 +124,14 @@ export function PromptCacheBar({
         </div>
         {/* Headline: cache-hit rate. Muted, tabular so it doesn't jitter. */}
         <span
-          className="text-xs tabular-nums text-muted-foreground"
+          className="text-sm tabular-nums text-muted-foreground"
           aria-hidden="true"
         >
           {formatPct(hitRate)} cached
         </span>
       </TooltipTrigger>
       <TooltipPopup>
-        <div className="flex flex-col gap-0.5 text-xs">
+        <div className="flex flex-col gap-0.5 text-sm">
           <span className="font-medium">
             Prompt cache · {formatPct(hitRate)} hit rate
           </span>

@@ -57,7 +57,7 @@ import {
 
 /** `.btn.sm { padding:4px 9px; font-size:12px; border-radius:7px }` over `.btn`. A phone keeps the 44px target. */
 const smallButton =
-  "inline-flex items-center gap-1.5 rounded-[7px] border border-button-default-border bg-button-default-bg px-[9px] py-1 text-xs font-medium text-button-default-fg transition-colors hover:border-rule hover:bg-button-default-hover-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11";
+  "inline-flex items-center gap-1.5 rounded-[7px] border border-button-default-border bg-button-default-bg px-[9px] py-1 text-sm font-medium text-button-default-fg transition-colors hover:border-rule hover:bg-button-default-hover-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11";
 
 /**
  * `.navitem { display:flex; align-items:center; gap:10px; padding:7px 9px;
@@ -65,12 +65,12 @@ const smallButton =
  * 12px, `:hover { background:var(--hl); color:var(--fg) }`.
  */
 const listItem =
-  "flex w-full items-center gap-2.5 rounded-lg px-[9px] py-[7px] text-xs font-medium text-muted-foreground no-underline transition-colors hover:bg-hl hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring";
+  "flex w-full items-center gap-2.5 rounded-lg px-[9px] py-[7px] text-sm font-medium text-muted-foreground no-underline transition-colors hover:bg-hl hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring";
 /** The open frame: `background:var(--hl); box-shadow:inset 2px 0 0 var(--gold); color:var(--fg)`. */
 const listItemOn = "bg-hl text-foreground shadow-[inset_2px_0_0_var(--gold)]";
 /** `.navitem .ct { margin-left:auto; font-family:var(--mono); font-size:10.5px; color:var(--dim); background:var(--panel); border:1px solid var(--border); border-radius:5px; padding:0 5px }` */
 const costChip =
-  "ml-auto whitespace-nowrap rounded-[5px] border border-border bg-card px-[5px] font-mono text-sm text-dim";
+  "ml-auto whitespace-nowrap rounded-[5px] border border-border bg-card px-[5px] font-mono text-xs text-dim";
 
 const DECISION_TONE: Record<string, BadgeTone> = {
   allow: "allowed",
@@ -103,7 +103,7 @@ function Redactions({
       {redactions.map((redaction) => (
         <li
           key={redaction.originalDigest}
-          className="text-sm text-muted-foreground"
+          className="text-xs text-muted-foreground"
         >
           {t("redacted", { path: redaction.path, reason: redaction.reason })}
         </li>
@@ -256,7 +256,7 @@ function FrameBody({
   return (
     <div data-testid="frame-body" className="flex min-w-0 flex-col gap-2">
       <p className={`${eyebrowQuiet} m-0`}>{t("heading")}</p>
-      <p className="m-0 flex flex-wrap gap-x-3 text-sm text-muted-foreground">
+      <p className="m-0 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
         <span className={mono}>{body.contentType ?? t("noType")}</span>
         <span>
           {body.bytes === null
@@ -276,7 +276,7 @@ function FrameBody({
         </p>
       ) : (
         <pre
-          className={`${mono} m-0 max-h-[26rem] overflow-auto whitespace-pre-wrap break-words rounded-md bg-code-bg p-3 text-xs`}
+          className={`${mono} m-0 max-h-[26rem] overflow-auto whitespace-pre-wrap break-words rounded-md bg-code-bg p-3 text-sm`}
         >
           {body.text}
         </pre>
@@ -352,7 +352,7 @@ export function FramePanel({
         <div className="ml-auto flex min-w-0 flex-wrap items-center gap-[7px]">
           <EnforcementTierBadge tier={tier} />
           {at === null ? null : (
-            <time dateTime={at} className={`${mono} text-sm text-dim`}>
+            <time dateTime={at} className={`${mono} text-xs text-dim`}>
               {format.dateTime(new Date(at), {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -412,7 +412,7 @@ export function FramePanel({
           </StepLink>
           <span
             data-testid="frame-position"
-            className={`${mono} ml-auto text-sm text-dim`}
+            className={`${mono} ml-auto text-xs text-dim`}
           >
             {open.index < 0
               ? t("positionOff", {
@@ -458,7 +458,7 @@ export function FrameList({
         <h3 className={panelTitle}>{t("title")}</h3>
         <span
           data-testid="frame-list-state"
-          className="ml-auto text-sm text-dim"
+          className="ml-auto text-xs text-dim"
         >
           {t(`state.${state}`)}
         </span>
@@ -561,7 +561,7 @@ export function FramesEmpty({
           {t("emptyTitle")}
         </h3>
       </div>
-      <div className={`${panelBody} flex flex-col gap-2 text-sm`}>
+      <div className={`${panelBody} flex flex-col gap-2 text-base`}>
         <p data-testid="frames-empty" className="m-0 text-muted-foreground">
           {cursor === null ? t("empty") : t("emptyPage")}
         </p>

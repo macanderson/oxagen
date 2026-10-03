@@ -41,8 +41,8 @@ function GateRail({
       className={`${panel} flex flex-col gap-3 p-4`}
     >
       <div className="flex flex-col gap-0.5">
-        <h2 className="text-base font-semibold">{t("title")}</h2>
-        <p className="max-w-prose text-xs text-muted-foreground">{t("lead")}</p>
+        <h2 className="text-lg font-semibold">{t("title")}</h2>
+        <p className="max-w-prose text-sm text-muted-foreground">{t("lead")}</p>
       </div>
       <Rail label={t("railLabel")} steps={steps} />
     </section>

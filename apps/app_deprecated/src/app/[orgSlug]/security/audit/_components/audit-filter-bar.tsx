@@ -103,7 +103,7 @@ export function AuditFilterBar({
           type="button"
           onClick={() => commit((sp) => sp.delete("event_type"))}
           className={cn(
-            "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+            "rounded-md border px-2.5 py-1 text-sm font-medium transition-colors",
             !anyGroupActive
               ? "border-primary/40 bg-primary/15 text-foreground"
               : "border-border/60 bg-background text-muted-foreground hover:text-foreground",
@@ -117,7 +117,7 @@ export function AuditFilterBar({
             type="button"
             onClick={() => toggleGroup(group)}
             className={cn(
-              "rounded-md border px-2.5 py-1 font-mono text-xs transition-colors",
+              "rounded-md border px-2.5 py-1 font-mono text-sm transition-colors",
               groupActive(group)
                 ? "border-primary/40 bg-primary/15 text-foreground"
                 : "border-border/60 bg-background text-muted-foreground hover:text-foreground",
@@ -147,7 +147,7 @@ export function AuditFilterBar({
             onChange={(e) => setText(e.target.value)}
             placeholder="Filter by capability, IP, request ID, user agent…"
             aria-label="Free-text audit filter"
-            className="w-full rounded-md border border-border/60 bg-background py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="w-full rounded-md border border-border/60 bg-background py-1.5 pl-8 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
         </form>
 
@@ -155,7 +155,7 @@ export function AuditFilterBar({
           aria-label="Outcome filter"
           value={selectedOutcome ?? ""}
           onChange={(e) => setParam("outcome", e.target.value || null)}
-          className="rounded-md border border-border/60 bg-background px-2 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
           <option value="">All outcomes</option>
           {SECURITY_OUTCOMES.map((o) => (
@@ -177,7 +177,7 @@ export function AuditFilterBar({
                 : null,
             )
           }
-          className="rounded-md border border-border/60 bg-background px-2 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
         <input
           type="date"
@@ -191,7 +191,7 @@ export function AuditFilterBar({
                 : null,
             )
           }
-          className="rounded-md border border-border/60 bg-background px-2 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
 
         {hasFilter && (
@@ -209,11 +209,11 @@ export function AuditFilterBar({
 
       {anyGroupActive && (
         <div className="flex flex-wrap items-center gap-1">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          <span className="text-xs uppercase tracking-wide text-muted-foreground">
             Active:
           </span>
           {selectedEventTypes.map((t) => (
-            <Badge key={t} variant="muted" className="text-[10px]">
+            <Badge key={t} variant="muted" className="text-xs">
               {t}
             </Badge>
           ))}

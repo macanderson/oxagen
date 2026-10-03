@@ -349,7 +349,7 @@ describe("the Issues panel", () => {
       issues: readOk(
         runIssues({
           complete: false,
-          warnings: ["closing_issues_read_failed"],
+          warnings: ["closing_issues_not_read"],
         }),
       ),
     });

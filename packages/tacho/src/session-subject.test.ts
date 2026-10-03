@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  ENRICHMENT_BUDGET_NOTE,
+  ENRICHMENT_LIMIT_NOTE,
   SESSION_SUBJECT_MAX,
+  SUMMARY_MAX_CHARS,
   capSubject,
   clipSummary,
+  partialEvidenceNote,
   sessionSubject,
 } from "./session-subject";
 
@@ -132,5 +136,59 @@ describe("clipSummary", () => {
   it("returns null for an empty summary", () => {
     expect(clipSummary(null)).toBeNull();
     expect(clipSummary("  ")).toBeNull();
+  });
+});
+
+// A summary written before #4605 ran to 1,600 characters, and the writer
+// put its notes after it. The Run page cuts such a summary with
+// clipSummary, which used to drop the notes and show a partial account as
+// complete (#4622).
+describe("clipSummary on a summary stored before the cap", () => {
+  const legacy = Array.from(
+    { length: 8 },
+    (_, i) => `Sentence ${i + 1} ${"says more ".repeat(12)}.`,
+  ).join(" ");
+
+  it.each([
+    ["the partial-evidence note", partialEvidenceNote(7)],
+    ["the budget note", ENRICHMENT_BUDGET_NOTE],
+    ["the read-limit note", ENRICHMENT_LIMIT_NOTE],
+  ])("keeps %s whole", (_label, note) => {
+    expect(points(`${legacy}${note}`)).toBeGreaterThan(SUMMARY_MAX_CHARS);
+    const clipped = clipSummary(`${legacy}${note}`) ?? "";
+    expect(clipped.endsWith(note)).toBe(true);
+    expect(clipped.startsWith("Sentence 1")).toBe(true);
+    expect(clipped).not.toContain("Sentence 4");
+    expect(points(clipped)).toBeLessThanOrEqual(SUMMARY_MAX_CHARS);
+  });
+
+  it("keeps both notes in the order the writer put them", () => {
+    const notes = partialEvidenceNote(2) + ENRICHMENT_BUDGET_NOTE;
+    const clipped = clipSummary(`${legacy}${notes}`) ?? "";
+    expect(clipped.endsWith(notes)).toBe(true);
+    expect(clipped.startsWith("Sentence 1")).toBe(true);
+    expect(clipped).not.toContain("Sentence 2");
+    expect(points(clipped)).toBeLessThanOrEqual(SUMMARY_MAX_CHARS);
+  });
+
+  it("counts each note toward the three sentences", () => {
+    expect(
+      clipSummary(`One. Two. Three. Four.${partialEvidenceNote(2)}`),
+    ).toBe("One. Two. Evidence is partial: 2 recorded bodies were unavailable.");
+  });
+
+  it("cuts a summary with no note to its first sentences", () => {
+    const clipped = clipSummary(legacy) ?? "";
+    expect(clipped.startsWith("Sentence 1")).toBe(true);
+    expect(clipped).not.toContain("Sentence 4");
+    expect(clipped).not.toContain("Evidence is partial");
+    expect(points(clipped)).toBeLessThanOrEqual(SUMMARY_MAX_CHARS);
+  });
+
+  it("treats a note's words in the middle of a summary as the model's text", () => {
+    const text = `One.${partialEvidenceNote(2)} Three. Four.`;
+    expect(clipSummary(text)).toBe(
+      "One. Evidence is partial: 2 recorded bodies were unavailable. Three.",
+    );
   });
 });

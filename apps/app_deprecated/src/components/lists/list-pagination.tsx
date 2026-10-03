@@ -58,7 +58,7 @@ export function ListPagination({
         Prev
       </Button>
       <span
-        className="text-sm text-muted-foreground tabular-nums"
+        className="text-base text-muted-foreground tabular-nums"
         aria-live="polite"
       >
         Page {page} of {pageCount}

@@ -49,6 +49,7 @@ repository:
 | ClickHouse migrations | `packages/telemetry/src/migrations/*.sql` | `SELECT DISTINCT filename FROM <db>._migrations` |
 | ClickHouse tables | `CREATE TABLE` in `packages/telemetry/src/schema.sql` and in `migrations/*.sql` | `SELECT name FROM system.tables` |
 | ClickHouse dropped columns | `DROP COLUMN` in `migrations/*.sql`, less any column a later file adds back or whose table it drops | `SELECT count() FROM system.columns`, one per column, which must be 0 |
+| ClickHouse error log rows | The `source` values of `ErrorEventRow` in `packages/telemetry/src/clickhouse.ts` | `SELECT source, count(), max(created_at) FROM <db>.error_events GROUP BY source`, a report only |
 | Neo4j | named constraints and indexes in `packages/ontology/src/schema.cypher` | `SHOW CONSTRAINTS` / `SHOW INDEXES` |
 
 ClickHouse is asked three questions. The first two exist because its schema arrives two ways.
@@ -67,6 +68,14 @@ ledger does not list. So when the ledger already lists the migration, the
 column has to be dropped by hand with that file's `ALTER TABLE` statement. The
 same check runs in `pipeline.yml`'s `migration-gate`, so a dropped column that
 is still in production holds the deploy until it is gone.
+
+The last read counts the rows in `error_events` for each runtime, with the
+newest row's time, and names each runtime that has written none (#3698). A table
+can exist and stay empty, because `captureError()` reduces a failed insert to
+one stderr line. The count is a report and never changes the exit code. A
+runtime with no rows is not drift, since a day with no unhandled error writes
+none, and the exit code decides whether `migration-gate` applies. The read is
+skipped when the table is missing, which the tables question already reports.
 
 Every statement sent is a `SELECT` or a `SHOW`, and the ClickHouse requests
 carry `readonly=1`, so the server refuses a write regardless of what a later

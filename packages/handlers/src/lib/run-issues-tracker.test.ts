@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ConnectedRunRepository } from "./run-work";
 import {
+  type ClosingIssueDeps,
   createIssueStateCache,
   ISSUE_STATE_CACHE_MAX,
   type IssueTrackerDeps,
@@ -48,14 +49,13 @@ function tracker(clock = { now: T0 }) {
       missing: numbers.filter((n) => n === 404),
     }),
   );
-  const listClosingIssues = vi.fn();
-  const client = vi.fn(async () => ({ getIssues, listClosingIssues }));
+  const client = vi.fn(async () => ({ getIssues }));
   const deps: IssueTrackerDeps = {
     client,
     now: () => clock.now,
     cache: createIssueStateCache(),
   };
-  return { deps, getIssues, listClosingIssues, client, clock };
+  return { deps, getIssues, client, clock };
 }
 
 const ask = (key: string, number: number, repository = view(acme)) => ({
@@ -215,45 +215,58 @@ describe("readIssueStates (#3970)", () => {
 
 describe("readClosingIssues", () => {
   const pull = { repository: acme, number: 511, url: `${acme.url}/pull/511`, seq: "36" };
+  const link = {
+    id: "link-1",
+    orgId: scope.orgId,
+    workspaceId: scope.workspaceId,
+    pullRequestId: "pull-1",
+    issueNodeId: "I_490",
+    repository: "acme/app",
+    number: 490,
+    url: "https://github.com/acme/app/issues/490",
+    title: "Checkout fails",
+    state: "open",
+    linkedAt: new Date("2026-10-03T10:00:00Z"),
+  };
 
-  it("reads GitHub's closing references for each pull request, and nothing else", async () => {
+  it("reads each pull request's closing issues from the forge store, and asks GitHub nothing", async () => {
     const t = tracker();
-    t.listClosingIssues.mockResolvedValue({
-      issues: [
-        {
-          owner: "acme",
-          repo: "app",
-          number: 490,
-          title: "Checkout fails",
-          url: "https://github.com/acme/app/issues/490",
-          state: "open",
-        },
-      ],
-      complete: true,
-    });
-    const result = await readClosingIssues(scope, [pull], t.deps);
-    expect(t.listClosingIssues).toHaveBeenCalledWith({
-      owner: "acme",
-      repo: "app",
-      number: 511,
-    });
-    expect(result.closing[0]?.issues.map((i) => i.number)).toEqual([490]);
+    const links = vi.fn<ClosingIssueDeps["links"]>(async (_scope, keys) =>
+      keys.map((key) => ({ key, stored: true, read: true, issues: [link] })),
+    );
+    const result = await readClosingIssues(scope, [pull], { links });
+    expect(links).toHaveBeenCalledWith(scope, [
+      { provider: "github", repository: "acme/app", number: 511 },
+    ]);
+    expect(t.client).not.toHaveBeenCalled();
+    expect(result.closing[0]?.issues).toEqual([
+      {
+        owner: "acme",
+        repo: "app",
+        number: 490,
+        title: "Checkout fails",
+        url: "https://github.com/acme/app/issues/490",
+        state: "open",
+        nodeId: "I_490",
+      },
+    ]);
     expect(result.warnings).toEqual([]);
   });
 
-  it("names an unread or cut-short list, never reading it as closing nothing (negative)", async () => {
-    const t = tracker();
-    t.listClosingIssues
-      .mockRejectedValueOnce(new Error("graphql refused"))
-      .mockResolvedValueOnce({ issues: [], complete: false });
+  it("names a pull request the store lacks, or whose references were never read, never reading it as closing nothing (negative)", async () => {
+    const links = vi.fn<ClosingIssueDeps["links"]>(async (_scope, keys) => [
+      { key: keys[0]!, stored: false, read: false, issues: [] },
+      { key: keys[1]!, stored: true, read: false, issues: [] },
+    ]);
     const result = await readClosingIssues(
       scope,
       [pull, { ...pull, number: 512 }],
-      t.deps,
+      { links },
     );
+    expect(result.closing.map((entry) => entry.issues)).toEqual([[], []]);
     expect(result.warnings.sort()).toEqual([
-      "closing_issue_limit",
-      "closing_issues_read_failed",
+      "closing_issues_not_read",
+      "pull_request_not_stored",
     ]);
   });
 });

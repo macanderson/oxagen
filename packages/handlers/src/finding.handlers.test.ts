@@ -11,10 +11,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FindingEvidence as StoredEvidence } from "@oxagen/billing";
 import { schema } from "@oxagen/database";
+import { FINDING_KINDS } from "@oxagen/database/schema";
 import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
 import {
   FINDINGS_LIST_MAX,
   findingList,
+  type FindingListOutput,
 } from "@oxagen/oxagen/contracts/finding.list";
 import { drizzle } from "drizzle-orm/postgres-js";
 
@@ -36,6 +38,7 @@ import { createFindingListHandler } from "./finding.list";
 import {
   type FindingDecisionDeps,
   type FindingRow,
+  type FindingStatus,
   type FindingTotalRow,
   readFindingRows,
   readFindingTotals,
@@ -164,7 +167,7 @@ function listHandler(
 ) {
   return createFindingListHandler({
     readFindingTotals: async (scope, filter) =>
-      (await deps.readFindings(scope, filter)).map(totalOf),
+      (await deps.readFindings(scope, filter, null)).map(totalOf),
     ...deps,
   });
 }
@@ -187,6 +190,8 @@ describe("list_findings", () => {
       counts: { findings: 0, high: 0, medium: 0, operators: 0 },
       findings: [],
       truncated: false,
+      nextCursor: null,
+      offset: 0,
     });
     expect(readPricedSpend).not.toHaveBeenCalled();
   });
@@ -221,6 +226,7 @@ describe("list_findings", () => {
     expect(readFindings).toHaveBeenCalledWith(
       { orgId: ORG, workspaceId: WS },
       { status: "open" },
+      null,
     );
     // A read that names no run answers no citation.
     for (const f of out.findings) expect(f).not.toHaveProperty("citation");
@@ -466,6 +472,264 @@ describe("list_findings past one answer (#5262)", () => {
   });
 });
 
+describe("list_findings by page and by subject (#5303)", () => {
+  const spend = async () => ({
+    micros: 900_000n,
+    currency: "USD",
+    basis: "gateway_observed" as const,
+  });
+  const idOf = (i: number) =>
+    `0192d4a8-7c1e-7a00-8000-${String(i).padStart(12, "0")}`;
+
+  /**
+   * `n` findings in the status asked for. Every third shares a saving and a
+   * decision instant with its neighbours, so the id breaks most ties, and the
+   * rows start in no particular order.
+   */
+  const many = (n: number, status: FindingStatus): FindingRow[] =>
+    Array.from({ length: n }, (_, i) => {
+      const j = (i * 37) % n;
+      return findingRow({
+        id: idOf(j),
+        publicId: `fnd_${String(j).padStart(22, "0")}`,
+        subject: `agent-${String(j % 7)}`,
+        fingerprint: `spin_loops|agent|agent-${String(j)}`,
+        estimatedSavingMicros: 10_000n + BigInt(Math.floor(j / 3)),
+        status,
+        decidedAt:
+          status === "open"
+            ? null
+            : new Date(START.getTime() + Math.floor(j / 3) * 60_000),
+      });
+    });
+
+  /** The list order the SQL writes, in JavaScript: the oracle. */
+  function ordered(rows: FindingRow[], status: FindingStatus) {
+    return [...rows].sort((a, b) => {
+      const ka =
+        status === "open" ? a.estimatedSavingMicros : BigInt(+a.decidedAt!);
+      const kb =
+        status === "open" ? b.estimatedSavingMicros : BigInt(+b.decidedAt!);
+      if (ka !== kb) return ka > kb ? -1 : 1;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
+  }
+
+  /**
+   * A page read that applies the cursor the way the keyset predicate does:
+   * the rows after its key and id, one more than a page.
+   */
+  function pages(rows: FindingRow[]): ListDeps["readFindings"] {
+    return async (_scope, filter, after) => {
+      const sorted = ordered(
+        rows.filter((r) => r.status === filter.status),
+        filter.status,
+      );
+      const start =
+        after === null
+          ? 0
+          : sorted.findIndex((r) => {
+              const key =
+                filter.status === "open"
+                  ? r.estimatedSavingMicros
+                  : BigInt(+r.decidedAt!);
+              const cut =
+                filter.status === "open"
+                  ? BigInt(after.key!)
+                  : BigInt(Date.parse(after.key!));
+              return key < cut || (key === cut && r.id > after.id);
+            });
+      return start < 0
+        ? []
+        : sorted.slice(start, start + FINDINGS_LIST_MAX + 1);
+    };
+  }
+
+  async function readAll(
+    status: FindingStatus,
+    rows: FindingRow[],
+  ): Promise<FindingListOutput[]> {
+    const handler = listHandler({
+      readFindings: pages(rows),
+      readFindingTotals: async () => rows.map(totalOf),
+      readPricedSpend: spend,
+    });
+    const out: FindingListOutput[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await handler(
+        cursor === undefined ? { status } : { status, cursor },
+        ctx(),
+      );
+      expect(() => findingList.output.parse(page)).not.toThrow();
+      out.push(page);
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor !== undefined && out.length < 10);
+    return out;
+  }
+
+  it.each(["open", "applied"] as const)(
+    "pages through 120 %s findings in list order with no gap and no repeat",
+    async (status) => {
+      const rows = many(120, status);
+      const read = await readAll(status, rows);
+
+      expect(read.map((p) => p.findings.length)).toEqual([50, 50, 20]);
+      expect(read.map((p) => p.offset)).toEqual([0, 50, 100]);
+      expect(read.at(-1)?.nextCursor).toBeNull();
+      const ids = read.flatMap((p) => p.findings.map((f) => f.id));
+      expect(new Set(ids).size).toBe(120);
+      expect(ids).toEqual(ordered(rows, status).map((r) => r.publicId));
+      // Every page counts and totals all 120, and says it lists fewer.
+      for (const page of read) {
+        expect(page.counts.findings).toBe(120);
+        expect(page.truncated).toBe(true);
+      }
+    },
+  );
+
+  it("answers no cursor when the page holds every finding left", async () => {
+    const rows = many(FINDINGS_LIST_MAX, "open");
+    const read = await readAll("open", rows);
+    expect(read).toHaveLength(1);
+    expect(read[0]?.nextCursor).toBeNull();
+    expect(read[0]?.truncated).toBe(false);
+  });
+
+  it("refuses a cursor it did not write, or one from another status, as invalid input (negative)", async () => {
+    const rows = many(60, "open");
+    const handler = listHandler({
+      readFindings: pages(rows),
+      readPricedSpend: spend,
+    });
+    const first = await handler({ status: "open" }, ctx());
+    const cursor = first.nextCursor;
+    if (cursor === null) throw new Error("the first page named no cursor");
+    const forged = (value: unknown) =>
+      Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
+    for (const bad of [
+      "not a cursor",
+      forged(["open", "10000", "not-a-uuid", 50]),
+      forged(["open", "-5", idOf(1), 50]),
+      // Past the bigint range by one.
+      forged(["open", "9223372036854775808", idOf(1), 50]),
+      forged(["open", "10000", idOf(1), -1]),
+      forged(["applied", "0000-01-01T00:00:00.000Z", idOf(1), 50]),
+      forged(["stale", "10000", idOf(1), 50]),
+    ])
+      await expect(
+        handler({ status: "open", cursor: bad }, ctx()),
+      ).rejects.toMatchObject({
+        code: "invalid_input",
+        message: "invalid_cursor",
+      });
+    // A cursor from the open list keys on a saving, which a decided list
+    // does not order by.
+    await expect(
+      handler({ status: "applied", cursor }, ctx()),
+    ).rejects.toMatchObject({ code: "invalid_input" });
+  });
+
+  it("lists every open finding about one subject in one page, since a subject holds one open finding per kind", () => {
+    // The open fingerprint is kind|level|subject and unique per workspace, so
+    // one level and subject hold at most one open finding per kind. An
+    // agent's page reads one page by its key and relies on this.
+    expect(FINDING_KINDS.length).toBeLessThanOrEqual(FINDINGS_LIST_MAX);
+  });
+
+  it("passes the level, the subject and the kind to both reads", async () => {
+    const readFindings = vi.fn(async () => [findingRow()]);
+    const readFindingTotals = vi.fn(async () => [totalOf(findingRow())]);
+    const handler = createFindingListHandler({
+      readFindings,
+      readFindingTotals,
+      readPricedSpend: spend,
+    });
+    await handler(
+      {
+        status: "open",
+        level: "agent",
+        subject: "acme.core.release-bot",
+        kind: "spin_loops",
+      },
+      ctx(),
+    );
+    const filter = {
+      status: "open",
+      level: "agent",
+      subject: "acme.core.release-bot",
+      kind: "spin_loops",
+    };
+    expect(readFindings).toHaveBeenCalledWith(
+      { orgId: ORG, workspaceId: WS },
+      filter,
+      null,
+    );
+    expect(readFindingTotals).toHaveBeenCalledWith(
+      { orgId: ORG, workspaceId: WS },
+      filter,
+    );
+  });
+
+  it("filters the read on the level and the subject, starts after the cursor, and reads one past the page", async () => {
+    const db = drizzle.mock({ schema });
+    const compiled: { sql: string; params: unknown[] }[] = [];
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => { toSQL(): { sql: string; params: unknown[] } }) => {
+        compiled.push(fn(db).toSQL());
+        return Promise.resolve([]);
+      },
+    );
+    const scope = { orgId: ORG, workspaceId: WS };
+    const id = idOf(4);
+    await readFindingRows(
+      scope,
+      { status: "open", level: "agent", subject: "acme.core.release-bot" },
+      { status: "open", key: "10003", id, offset: 50 },
+    );
+    await readFindingRows(
+      scope,
+      { status: "applied" },
+      { status: "applied", key: "2026-08-16T00:03:00.000Z", id, offset: 50 },
+    );
+    await readFindingTotals(scope, {
+      status: "open",
+      level: "agent",
+      subject: "acme.core.release-bot",
+      kind: "retry_loops",
+    });
+    const [open, decided, totals] = compiled;
+
+    expect(open?.sql).toMatch(/"cost"\."findings"\."level" = \$\d+/);
+    expect(open?.sql).toMatch(/"cost"\."findings"\."subject" = \$\d+/);
+    expect(open?.params).toEqual(
+      expect.arrayContaining(["agent", "acme.core.release-bot", id]),
+    );
+    // The rows after the cursor: a smaller saving, or the same and a later id.
+    expect(open?.sql).toMatch(
+      /\("cost"\."findings"\."estimated_saving_micros" < \$\d+ or \("cost"\."findings"\."estimated_saving_micros" = \$\d+ and "cost"\."findings"\."id" > \$\d+\)\)/,
+    );
+    expect(open?.params).toContain(FINDINGS_LIST_MAX + 1);
+    // A decided list orders and pages on the decision instant at
+    // millisecond precision, the precision a cursor carries.
+    expect(decided?.sql).toMatch(
+      /order by date_trunc\('milliseconds', "cost"\."findings"\."decided_at"\) desc, "cost"\."findings"\."id" asc/,
+    );
+    // The instant is bound as text and cast: a Date compared with an
+    // expression reaches the driver unconverted.
+    expect(decided?.sql).toMatch(
+      /date_trunc\('milliseconds', "cost"\."findings"\."decided_at"\) < \$\d+::timestamptz/,
+    );
+    expect(decided?.params).toContain("2026-08-16T00:03:00.000Z");
+    // The totals cover every finding the filter matches: no cursor, no limit.
+    expect(totals?.sql).toMatch(/"cost"\."findings"\."subject" = \$\d+/);
+    expect(totals?.sql).toMatch(/"cost"\."findings"\."kind" = \$\d+/);
+    expect(totals?.params).toContain("retry_loops");
+    expect(totals?.sql).not.toMatch(/limit/);
+    expect(totals?.sql).not.toMatch(/"id" >/);
+  });
+});
+
 describe("list_findings for one run (#4001)", () => {
   const RUN = "tse_0000000000000000000001";
   const SUBAGENT = "0192d4a8-7c1e-7a00-8000-0000000000bb";
@@ -501,6 +765,7 @@ describe("list_findings for one run (#4001)", () => {
     expect(readFindings).toHaveBeenCalledWith(
       { orgId: ORG, workspaceId: WS },
       { status: "open", runId: RUN },
+      null,
     );
     expect(out.findings[0]?.citation).toEqual({
       runId: RUN,

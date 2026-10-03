@@ -106,14 +106,14 @@ export function GraphToolbar(props: GraphToolbarProps) {
             placeholder="Search the graph in natural language…"
             aria-label="Search the graph"
             // 16px font below md so iOS Safari doesn't auto-zoom on focus.
-            className="pl-8 text-base md:text-sm"
+            className="pl-8 text-input-touch md:text-base"
           />
         </form>
       )}
 
       {props.stats && (
         <div
-          className="flex items-center gap-1 text-xs text-muted-foreground"
+          className="flex items-center gap-1 text-sm text-muted-foreground"
           aria-live="polite"
         >
           <span className="tabular-nums">
@@ -187,12 +187,12 @@ export function GraphToolbar(props: GraphToolbarProps) {
                 {props.animated ? (
                   <>
                     <Pause className="size-3.5" />
-                    <span className="hidden sm:inline text-xs">Pause</span>
+                    <span className="hidden sm:inline text-sm">Pause</span>
                   </>
                 ) : (
                   <>
                     <Play className="size-3.5" />
-                    <span className="hidden sm:inline text-xs">Play</span>
+                    <span className="hidden sm:inline text-sm">Play</span>
                   </>
                 )}
               </Button>

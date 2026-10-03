@@ -290,8 +290,9 @@ async function renderSpend(
   finding?: string,
   as: typeof ctx = ctx,
   by?: string,
+  cursor?: string,
 ) {
-  const view = parseSpendView(segments, finding, by);
+  const view = parseSpendView(segments, finding, by, cursor);
   if (view === null) throw new Error(`no view for ${segments.join("/")}`);
   const element = await Spend({ ctx: as, source, view, today: TODAY });
   return render(
@@ -355,6 +356,8 @@ function listing(over: Partial<SpendFindings> = {}): SpendFindings {
     counts: { findings: 3, high: 2, medium: 1, operators: 3 },
     findings: [found(), onAgent, onOperator],
     truncated: false,
+    nextCursor: null,
+    offset: 0,
     ...over,
   };
 }
@@ -1343,6 +1346,46 @@ describe("Spend › Findings", () => {
     expect(hero).toHaveTextContent("every one opens to its evidence");
   });
 
+  it("reads the page of findings past the first 50 that the cursor names, and ranks it from 51 (#5303)", async () => {
+    loaded({ operator: report([row("prn_marcusbell", { operator: MARCUS })]) });
+    findings.mockResolvedValue(
+      readOk(
+        listing({
+          counts: { findings: 53, high: 52, medium: 1, operators: 3 },
+          truncated: true,
+          offset: 50,
+        }),
+      ),
+    );
+    await renderSpend(["findings"], undefined, ctx, undefined, "c2");
+    expect(findings).toHaveBeenCalledExactlyOnceWith(ctx, { cursor: "c2" });
+    expect(screen.getByTestId("spend-findings-truncated")).toHaveTextContent(
+      "The list shows open findings 51 to 53 of 53.",
+    );
+    const cards = within(
+      screen.getByRole("list", { name: "Findings ranked by savings" }),
+    ).getAllByRole("listitem");
+    expect(cards[0]?.querySelector("span")).toHaveTextContent(/^51$/);
+    // The tab badge counts every open finding, whatever the page.
+    const tabs = screen.getByRole("tablist", { name: "Spend views" });
+    expect(
+      within(tabs).getByRole("tab", { name: /^Findings/ }),
+    ).toHaveTextContent("Findings53");
+    expect(
+      screen.getByRole("link", { name: "Open the first page" }),
+    ).toHaveAttribute("href", "/acme/core-platform/spend/findings");
+  });
+
+  it("reads the first page with no cursor on the Findings tab and on every other tab", async () => {
+    loaded();
+    await renderSpend(["findings"]);
+    expect(findings).toHaveBeenCalledExactlyOnceWith(ctx, {});
+    cleanup();
+    findings.mockClear();
+    await renderSpend(["tokens"], undefined, ctx, undefined, "c2");
+    expect(findings).toHaveBeenCalledExactlyOnceWith(ctx, {});
+  });
+
   it("ranks each card with its kind, level, confidence, who it is about, the evidence line, the amount at stake and its share, Evidence and Fix", async () => {
     loaded({ operator: report([row("prn_marcusbell", { operator: MARCUS })]) });
     await renderSpend(["findings"]);
@@ -1995,6 +2038,74 @@ describe("Spend › By tool", () => {
       "The leading 1 of 2. The table holds every tool.",
     );
   });
+
+  /**
+   * The workspace's first page answers the badge read. The tool findings come
+   * two to a read: `first` on the page with no cursor, `second` on the page
+   * its cursor names, which answers `last`.
+   */
+  function toolPages(
+    first: SpendFinding,
+    second: SpendFinding,
+    last: Read<SpendFindings> = readOk(
+      listing({ findings: [second], nextCursor: null, offset: 1 }),
+    ),
+  ) {
+    findings.mockImplementation((_ctx, query = {}) =>
+      Promise.resolve(
+        query.level !== "tool"
+          ? readOk(listing())
+          : query.cursor === "t2"
+            ? last
+            : readOk(listing({ findings: [first], nextCursor: "t2" })),
+      ),
+    );
+  }
+
+  it("totals a tool's savings over every page of tool findings (#5303)", async () => {
+    loaded({ tool: report([row("github__get_issue")]) });
+    toolPages(
+      found({
+        id: "fnd_a",
+        subject: "github__get_issue",
+        saving: cost("1000000"),
+      }),
+      found({
+        id: "fnd_b",
+        kind: "repeated_shell_commands",
+        subject: "github__get_issue",
+        saving: cost("2000000"),
+      }),
+    );
+    await renderSpend(["tool"]);
+    expect(findings).toHaveBeenCalledWith(ctx, { level: "tool" });
+    expect(findings).toHaveBeenCalledWith(ctx, {
+      level: "tool",
+      cursor: "t2",
+    });
+    const github = rowOf("github__get_issue");
+    if (!(github instanceof HTMLTableRowElement)) throw new Error("not a row");
+    expect(github.cells[8]).toHaveTextContent("$3.00");
+    expect(github.cells[8]).toHaveTextContent("2 findings");
+  });
+
+  it("says not recorded rather than a partial total when a later page fails (negative)", async () => {
+    loaded({ tool: report([row("github__get_issue")]) });
+    toolPages(
+      found({
+        id: "fnd_a",
+        subject: "github__get_issue",
+        saving: cost("1000000"),
+      }),
+      found({ id: "fnd_b", subject: "github__get_issue" }),
+      readError("findings_down", 503),
+    );
+    await renderSpend(["tool"]);
+    const github = rowOf("github__get_issue");
+    if (!(github instanceof HTMLTableRowElement)) throw new Error("not a row");
+    expect(github.cells[8]).toHaveTextContent("not recorded");
+    expect(github.cells[8]).not.toHaveTextContent("$1.00");
+  });
 });
 
 describe("Spend › Wasted spend", () => {
@@ -2154,6 +2265,12 @@ describe("Spend › drill", () => {
       "agent",
       "a-intel.core.stella-ci",
     );
+    // The drill reads the findings about its own key, so one that ranks past
+    // the workspace's first page still counts toward its savings (#5303).
+    expect(findings).toHaveBeenCalledExactlyOnceWith(ctx, {
+      level: "agent",
+      subject: "a-intel.core.stella-ci",
+    });
     expect(byGroup).not.toHaveBeenCalled();
     expect(screen.queryByTestId("spend-summary")).toBeNull();
     const crumb = screen.getByRole("navigation", { name: "Breadcrumb" });

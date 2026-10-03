@@ -99,16 +99,16 @@ export default function AgentDefinitionListCard(
     <div className="my-2" data-component="agent-definition-list-card">
       <div className="flex items-center gap-2 px-2 pb-1.5">
         <Bot className="size-4 shrink-0 text-primary" aria-hidden="true" />
-        <span className="text-sm font-semibold text-foreground">Agents</span>
+        <span className="text-base font-semibold text-foreground">Agents</span>
         {rows.length > 0 ? (
-          <span className="text-xs tabular-nums text-muted-foreground">
+          <span className="text-sm tabular-nums text-muted-foreground">
             {rows.length}
           </span>
         ) : null}
       </div>
 
       {rows.length === 0 ? (
-        <p className="px-2 text-sm text-muted-foreground">
+        <p className="px-2 text-base text-muted-foreground">
           No agents in this workspace.
         </p>
       ) : (
@@ -128,14 +128,14 @@ export default function AgentDefinitionListCard(
                 </span>
                 <div className="min-w-0 flex-1">
                   <p
-                    className="truncate text-sm font-medium text-foreground"
+                    className="truncate text-base font-medium text-foreground"
                     title={row.name}
                   >
                     {row.name}
                   </p>
                   {row.slug ? (
                     <p
-                      className="truncate font-mono text-xs text-muted-foreground"
+                      className="truncate font-mono text-sm text-muted-foreground"
                       title={row.slug}
                     >
                       {row.slug}
@@ -143,12 +143,12 @@ export default function AgentDefinitionListCard(
                   ) : null}
                 </div>
                 {row.managed ? (
-                  <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Managed
                   </span>
                 ) : null}
                 <span
-                  className="shrink-0 text-xs tabular-nums text-muted-foreground"
+                  className="shrink-0 text-sm tabular-nums text-muted-foreground"
                   title="Latest version"
                 >
                   {row.latestVersion === null ? "—" : `v${row.latestVersion}`}

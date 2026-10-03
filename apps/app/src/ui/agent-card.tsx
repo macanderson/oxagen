@@ -65,7 +65,7 @@ export function AgentCard({
           </span>
         )}
         <span
-          className={`truncate ${layout === "compact" ? "text-sm text-dim" : "text-xs text-muted-foreground"}`}
+          className={`truncate ${layout === "compact" ? "text-xs text-dim" : "text-sm text-muted-foreground"}`}
         >
           {sub}
         </span>

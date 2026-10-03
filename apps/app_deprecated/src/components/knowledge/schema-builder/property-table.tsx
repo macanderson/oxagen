@@ -55,7 +55,7 @@ export function PropertyTable({
             (auto layout let Key/Type hog space and truncated Description/Example).
             Description + Example get the largest share since that's the data the
             user is typing and reading back. */}
-        <table className="w-full table-fixed text-sm">
+        <table className="w-full table-fixed text-base">
           <thead className="border-b border-border">
             <tr>
               <th className="px-3 py-2 text-left font-medium text-muted-foreground w-[16%]">
@@ -94,7 +94,7 @@ export function PropertyTable({
                     }
                     placeholder="propertyName"
                     disabled={readOnly}
-                    className="h-7 text-sm"
+                    className="h-7 text-base"
                   />
                 </td>
                 <td className="px-3 py-2">
@@ -108,7 +108,7 @@ export function PropertyTable({
                     }
                     disabled={readOnly}
                   >
-                    <SelectTrigger className="h-7 text-sm">
+                    <SelectTrigger className="h-7 text-base">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -138,7 +138,7 @@ export function PropertyTable({
                     }
                     placeholder="Description"
                     disabled={readOnly}
-                    className="h-7 text-sm"
+                    className="h-7 text-base"
                   />
                 </td>
                 <td className="px-3 py-2">
@@ -149,7 +149,7 @@ export function PropertyTable({
                     }
                     placeholder="e.g. John"
                     disabled={readOnly}
-                    className="h-7 text-sm"
+                    className="h-7 text-base"
                   />
                 </td>
                 {!readOnly && (
@@ -170,7 +170,7 @@ export function PropertyTable({
           </tbody>
         </table>
         {properties.length === 0 && (
-          <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+          <div className="px-3 py-6 text-center text-base text-muted-foreground">
             No properties defined.
           </div>
         )}

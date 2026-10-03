@@ -19,9 +19,9 @@ function join(...parts: readonly (string | false | undefined)[]): string {
 
 const SIZE: Record<AttachmentSize, string> = {
   default:
-    "gap-2 px-2.5 py-2 text-sm has-data-[slot=attachment-media]:p-2 has-data-[slot=attachment-media]:pr-2.5",
-  sm: "gap-2 px-2 py-1.5 text-xs has-data-[slot=attachment-media]:p-1.5 has-data-[slot=attachment-media]:pr-2",
-  xs: "gap-1.5 rounded-lg px-1.5 py-1 text-xs has-data-[slot=attachment-media]:p-1 has-data-[slot=attachment-media]:pr-1.5",
+    "gap-2 px-2.5 py-2 text-base has-data-[slot=attachment-media]:p-2 has-data-[slot=attachment-media]:pr-2.5",
+  sm: "gap-2 px-2 py-1.5 text-sm has-data-[slot=attachment-media]:p-1.5 has-data-[slot=attachment-media]:pr-2",
+  xs: "gap-1.5 rounded-lg px-1.5 py-1 text-sm has-data-[slot=attachment-media]:p-1 has-data-[slot=attachment-media]:pr-1.5",
 };
 
 /** One file. `state` reaches `data-state`, which every slot reads. */
@@ -114,7 +114,7 @@ export function AttachmentDescription({
     <span
       data-slot="attachment-description"
       className={join(
-        "mt-0.5 flex max-w-48 min-w-0 gap-2 truncate text-xs text-muted-foreground group-data-[state=error]/attachment:text-destructive",
+        "mt-0.5 flex max-w-48 min-w-0 gap-2 truncate text-sm text-muted-foreground group-data-[state=error]/attachment:text-destructive",
         className,
       )}
       {...props}

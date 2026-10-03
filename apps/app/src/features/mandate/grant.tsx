@@ -30,8 +30,8 @@ import { useFormatter } from "@/ui/formatter";
 import { MandateScope } from "@/ui/mandate-scope";
 import { useMeasureText } from "@/ui/measure";
 
-const term = "text-xs font-medium text-muted-foreground";
-const value = "text-sm text-foreground";
+const term = "text-sm font-medium text-muted-foreground";
+const value = "text-base text-foreground";
 
 function Row({
   label,
@@ -56,7 +56,7 @@ function Row({
       <dd className={value}>
         {children}
         {basis === undefined ? null : (
-          <p className="mt-0.5 text-xs text-muted-foreground">{basis}</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">{basis}</p>
         )}
       </dd>
     </div>
@@ -133,7 +133,7 @@ export function MandateGrant({
       data-testid="mandate-grant"
       className={panel}
     >
-      <h2 id="mandate-grant" className="px-4 pb-2 pt-4 text-base font-semibold">
+      <h2 id="mandate-grant" className="px-4 pb-2 pt-4 text-lg font-semibold">
         {t("title")}
       </h2>
       <dl className="pb-2">
@@ -155,7 +155,7 @@ export function MandateGrant({
               {mandate.requestedBy === null ? null : (
                 <span
                   data-requested-by={mandate.requestedBy}
-                  className="text-xs text-muted-foreground"
+                  className="text-sm text-muted-foreground"
                 >
                   {t("requestedBy", { user: mandate.requestedBy })}
                 </span>
@@ -165,7 +165,7 @@ export function MandateGrant({
             <span className="flex flex-col gap-0.5">
               <span className={`${mono} break-all`}>{mandate.grantedBy}</span>
               {mandate.roleAtGrant === null ? null : (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   {t("roleAtGrant", { role: mandate.roleAtGrant })}
                 </span>
               )}
@@ -186,7 +186,7 @@ export function MandateGrant({
                   data-target={rule.measure}
                   className="flex flex-col"
                 >
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-sm text-muted-foreground">
                     {rule.measure}
                   </span>
                   <span>

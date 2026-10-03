@@ -25,10 +25,10 @@ describe("Label — render", () => {
     expect(getByText("Email")).toHaveAttribute("for", "email-input");
   });
 
-  it("includes text-sm font-medium classes", () => {
+  it("includes text-base font-medium classes", () => {
     const { getByText } = render(<Label>Label text</Label>);
     const el = getByText("Label text");
-    expect(el.className).toContain("text-sm");
+    expect(el.className).toContain("text-base");
     expect(el.className).toContain("font-medium");
   });
 

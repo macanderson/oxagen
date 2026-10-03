@@ -93,7 +93,7 @@ export function NodeRef({
         />
         <span
           className={cn(
-            "truncate text-sm font-medium",
+            "truncate text-base font-medium",
             emphasis === "muted" ? "text-muted-foreground" : "text-foreground",
           )}
         >
@@ -115,7 +115,7 @@ export function NodeRef({
             <Badge variant="outline" size="sm">
               {node.label}
             </Badge>
-            <p className="mt-1 break-words text-sm font-semibold text-foreground">
+            <p className="mt-1 break-words text-base font-semibold text-foreground">
               {label}
             </p>
             {node.id ? (
@@ -123,7 +123,7 @@ export function NodeRef({
                 <CopyableId value={node.id} label="ID" max={24} />
               </div>
             ) : (
-              <p className="mt-1 text-[11px] text-muted-foreground">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Candidate — not yet materialised in the graph.
               </p>
             )}

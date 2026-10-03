@@ -87,12 +87,12 @@ function LineCounts({
   const locale = useLocale();
   if (additions === null || deletions === null)
     return (
-      <span className="whitespace-nowrap text-sm text-dim">
+      <span className="whitespace-nowrap text-base text-dim">
         {t("countsUnknown")}
       </span>
     );
   return (
-    <span className="whitespace-nowrap font-mono text-sm">
+    <span className="whitespace-nowrap font-mono text-base">
       <b className="font-semibold text-success">
         +{formatCount(additions, locale)}
       </b>{" "}
@@ -108,12 +108,12 @@ function PullName({ pull }: { pull: Pull }) {
   const name = `${pull.repository}#${String(pull.number)}`;
   const target = parsePullRequestUrl(pull.url);
   return target === null ? (
-    <span className={`${mono} text-sm`}>{name}</span>
+    <span className={`${mono} text-base`}>{name}</span>
   ) : (
     <PullRequestLink
       to={target}
       title={pull.title ?? undefined}
-      className={`${mono} ${linkText} text-sm`}
+      className={`${mono} ${linkText} text-base`}
     >
       {name}
     </PullRequestLink>
@@ -140,7 +140,7 @@ function AnswerFailure({ failure }: { failure: ActionFailure | "thrown" }) {
         text = t("other", { code: failure.code });
     }
   return (
-    <p data-testid="change-failure" className="text-sm text-muted-foreground">
+    <p data-testid="change-failure" className="text-base text-muted-foreground">
       {text}
     </p>
   );
@@ -152,9 +152,9 @@ function RevisionLine({ pull }: { pull: Pull }) {
   const kept = useTranslations("ui.diffView.notKept");
   const revision = pull.revision;
   if (revision === null)
-    return <p className="text-sm text-dim">{t("noRevision")}</p>;
+    return <p className="text-base text-dim">{t("noRevision")}</p>;
   return (
-    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-dim">
+    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-dim">
       <LineCounts
         additions={revision.additions}
         deletions={revision.deletions}
@@ -197,13 +197,13 @@ function PullRow({ pull }: { pull: Pull }) {
         </Badge>
       </span>
       {pull.title === null ? null : (
-        <span className="min-w-0 truncate text-sm text-muted-foreground">
+        <span className="min-w-0 truncate text-base text-muted-foreground">
           {pull.title}
         </span>
       )}
       <RevisionLine pull={pull} />
       {pull.state === "closed" ? (
-        <p data-testid="change-left-out" className="text-sm text-dim">
+        <p data-testid="change-left-out" className="text-base text-dim">
           {t("leftOut")}
         </p>
       ) : null}
@@ -225,7 +225,7 @@ function PullHunks({
 }) {
   const t = useTranslations("ui.changeSet");
   const quiet = (text: string) => (
-    <p className="text-sm text-muted-foreground">{text}</p>
+    <p className="text-base text-muted-foreground">{text}</p>
   );
   let body: ReactNode;
   if (pull === undefined) body = quiet(t("pullNotListed"));
@@ -235,7 +235,7 @@ function PullHunks({
       <p
         role="status"
         aria-busy="true"
-        className="text-sm text-muted-foreground"
+        className="text-base text-muted-foreground"
       >
         {t("loadingDiff")}
       </p>
@@ -322,7 +322,7 @@ function FileRow({
           {file.path}
         </span>
         <span className="ml-auto flex flex-none items-center gap-2">
-          <span className="font-mono text-sm text-dim">
+          <span className="font-mono text-base text-dim">
             {refs.filter((ref) => ref !== null).join(" ")}
           </span>
           <LineCounts additions={file.additions} deletions={file.deletions} />
@@ -356,7 +356,7 @@ function RepositoryFiles({
   const t = useTranslations("ui.changeSet");
   return (
     <div data-testid="change-repository" className="flex min-w-0 flex-col">
-      <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
+      <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-base">
         <span className={`${mono} font-semibold text-foreground`}>
           {repository.repository}
         </span>
@@ -406,7 +406,7 @@ export function ChangeSet({
   const filesId = useId();
   if (changeSet.pullRequests.length === 0)
     return (
-      <p data-testid="change-set-empty" className="text-sm text-muted-foreground">
+      <p data-testid="change-set-empty" className="text-base text-muted-foreground">
         {t("empty")}
       </p>
     );
@@ -415,7 +415,7 @@ export function ChangeSet({
   );
   return (
     <div data-testid="change-set" className="flex min-w-0 flex-col gap-3.5">
-      <p className="text-sm text-muted-foreground">{t("rule")}</p>
+      <p className="text-base text-muted-foreground">{t("rule")}</p>
       <section aria-labelledby={pullsId} className="min-w-0">
         <Heading level={headingLevel} id={pullsId}>
           {t("pullsHeading")}
@@ -434,7 +434,7 @@ export function ChangeSet({
           {t("filesHeading")}
         </Heading>
         {changeSet.repositories.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t("noFiles")}</p>
+          <p className="text-base text-muted-foreground">{t("noFiles")}</p>
         ) : (
           <div className="flex flex-col gap-3">
             {changeSet.repositories.map((repository) => (
@@ -494,7 +494,7 @@ export function ChangeSetDisclosure({
       <p
         role="status"
         aria-busy="true"
-        className="text-sm text-muted-foreground"
+        className="text-base text-muted-foreground"
       >
         {t("loading")}
       </p>

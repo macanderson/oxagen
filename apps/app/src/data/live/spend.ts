@@ -173,12 +173,18 @@ export const spend: DataSource["spend"] = {
       method: "gatewayPolicy",
     });
   },
-  async findings(ctx) {
+  async findings(ctx, query = {}) {
     // The section shows what is still open; a finding someone decided leaves
-    // the list and its decision is in the audit record.
+    // the list and its decision is in the audit record. A query narrows the
+    // read to one subject or names a later page (#5303).
     const read = await kernelRead(ctx, {
       contract: findingList,
-      input: { status: "open" },
+      input: {
+        status: "open",
+        ...(query.level === undefined ? {} : { level: query.level }),
+        ...(query.subject === undefined ? {} : { subject: query.subject }),
+        ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+      },
       page: "spend",
     });
     return toView(read, SpendFindings, toSpendFindings, {

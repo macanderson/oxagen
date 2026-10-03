@@ -86,7 +86,7 @@ import type { Theme } from "./theme";
 type Outcome = "saved" | "invalid" | "denied" | "failed";
 
 const tabClass =
-  "inline-flex min-h-10 items-center whitespace-nowrap border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring aria-selected:border-brand aria-selected:text-foreground";
+  "inline-flex min-h-10 items-center whitespace-nowrap border-b-2 border-transparent px-3 text-base font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring aria-selected:border-brand aria-selected:text-foreground";
 
 type ProfileDraft = { userId: string; value: string };
 type ProfileDraftProps = {
@@ -453,8 +453,8 @@ function ProfileTab({
           testId="account-avatar-preview"
         />
         <div className="min-w-0">
-          <p className="truncate text-base font-semibold">{shown}</p>
-          <p className="truncate font-mono text-xs text-muted-foreground">
+          <p className="truncate text-lg font-semibold">{shown}</p>
+          <p className="truncate font-mono text-sm text-muted-foreground">
             {viewer.email} ·{" "}
             {viewer.emailVerified ? t("verified") : t("unverified")}
           </p>
@@ -538,7 +538,7 @@ function ProfileTab({
       <p
         role="status"
         data-testid="account-status"
-        className="mt-3 text-xs text-muted-foreground"
+        className="mt-3 text-sm text-muted-foreground"
       >
         {outcome === "saved" ? (
           <span data-testid="account-saved">{t("saved")}</span>
@@ -719,7 +719,7 @@ function PreferencesTab({ data }: { data: ShellData }) {
 
   if (state.kind === "loading")
     return (
-      <p role="status" className="text-sm text-muted-foreground">
+      <p role="status" className="text-base text-muted-foreground">
         {t("loading")}
       </p>
     );
@@ -816,7 +816,7 @@ function PreferencesTab({ data }: { data: ShellData }) {
           </select>
         </div>
         <div className="sm:col-span-2">
-          <label className="flex items-start gap-2 text-sm text-foreground">
+          <label className="flex items-start gap-2 text-base text-foreground">
             <input
               type="checkbox"
               data-testid="account-enter-to-submit"
@@ -860,7 +860,7 @@ function PreferencesTab({ data }: { data: ShellData }) {
       <p
         role="status"
         data-testid="account-preferences-status"
-        className="mt-3 text-xs text-muted-foreground"
+        className="mt-3 text-sm text-muted-foreground"
       >
         {outcome === "saved" ? (
           <span data-testid="account-preferences-saved">{t("saved")}</span>
@@ -1193,7 +1193,7 @@ function SecurityTab({
               {codes.kind === "issued" ? (
                 <div className="mt-2" data-testid="account-codes">
                   <p className={listText}>{t("codesIssued")}</p>
-                  <ol className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-xs">
+                  <ol className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-sm">
                     {codes.codes.map((code) => (
                       <li key={code}>{code}</li>
                     ))}
@@ -1263,7 +1263,7 @@ function SecurityTab({
       <div>
         <span className={fieldLabel}>{t("sessions")}</span>
         {sessions.kind === "loading" ? (
-          <p role="status" className="text-sm text-muted-foreground">
+          <p role="status" className="text-base text-muted-foreground">
             {t("sessionsLoading")}
           </p>
         ) : sessions.kind === "failed" ? (
@@ -1281,7 +1281,7 @@ function SecurityTab({
                   <p className={listTitle}>
                     {describeAgent(s.userAgent, t("unknownDevice"))}
                     {s.current ? (
-                      <span className="rounded-md border border-success/45 bg-success/10 px-1.5 py-px text-sm font-semibold text-success">
+                      <span className="rounded-md border border-success/45 bg-success/10 px-1.5 py-px text-xs font-semibold text-success">
                         {t("thisDevice")}
                       </span>
                     ) : null}

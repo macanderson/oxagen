@@ -167,7 +167,7 @@ export function NotificationsControls({
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="slack-channel"
-              className="text-sm font-medium text-foreground"
+              className="text-base font-medium text-foreground"
             >
               {t("picker.label")}
             </label>
@@ -191,17 +191,17 @@ export function NotificationsControls({
                 </option>
               ))}
             </select>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {t("picker.invite")}
             </p>
           </div>
           {list.channels.length === 0 ? (
-            <p className="text-sm" data-testid="slack-picker-empty">
+            <p className="text-base" data-testid="slack-picker-empty">
               {t("picker.empty")}
             </p>
           ) : null}
           {list.truncated ? (
-            <p className="text-sm" data-testid="slack-picker-truncated">
+            <p className="text-base" data-testid="slack-picker-truncated">
               {t("picker.truncated")}
             </p>
           ) : null}
@@ -249,7 +249,7 @@ export function NotificationsControls({
             className="flex flex-wrap items-center gap-3"
             data-testid="slack-disconnect-confirm"
           >
-            <p className="text-sm">{t("disconnect.confirm")}</p>
+            <p className="text-base">{t("disconnect.confirm")}</p>
             <button
               type="button"
               className={buttonSecondary}

@@ -72,7 +72,7 @@ export function DailyUsageChart({
   return (
     <div className="flex flex-col gap-3">
       {metric === "tokens" ? (
-        <div className="flex flex-wrap gap-4 text-[11px] text-muted-foreground">
+        <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
           {TOKEN_LEGEND.map((l) => (
             <span key={l.label} className="flex items-center gap-1.5">
               <span
@@ -142,7 +142,7 @@ export function TopModelsChart({
 
 function EmptyChart({ label }: { label: string }) {
   return (
-    <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
+    <div className="flex h-[200px] items-center justify-center text-base text-muted-foreground">
       {label}
     </div>
   );

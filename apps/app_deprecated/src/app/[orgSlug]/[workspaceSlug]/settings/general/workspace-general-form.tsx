@@ -153,7 +153,7 @@ export function WorkspaceGeneralForm({
         {/* Workspace avatar — photo upload+crop or designed emoji/color tile.
             Saved with the rest of the form through workspace.settings.write. */}
         <div className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium leading-none text-foreground">
+          <span className="text-base font-medium leading-none text-foreground">
             Avatar
           </span>
           <AvatarMaker
@@ -173,7 +173,7 @@ export function WorkspaceGeneralForm({
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="ws-name"
-            className="text-sm font-medium leading-none text-foreground"
+            className="text-base font-medium leading-none text-foreground"
           >
             Workspace name
             <span className="ml-1 text-destructive" aria-hidden="true">
@@ -191,7 +191,7 @@ export function WorkspaceGeneralForm({
             onFocus={handleNameFocus}
             placeholder="Production"
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Visible to all workspace members.
           </p>
         </div>
@@ -200,7 +200,7 @@ export function WorkspaceGeneralForm({
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="ws-slug"
-            className="text-sm font-medium leading-none text-foreground"
+            className="text-base font-medium leading-none text-foreground"
           >
             Workspace slug
             <span className="ml-1 text-destructive" aria-hidden="true">
@@ -221,7 +221,7 @@ export function WorkspaceGeneralForm({
             placeholder="production"
             className="font-mono"
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Used in this workspace&rsquo;s URL. Lowercase letters, numbers, and
             hyphens only. Clear it and edit the name to regenerate it.
           </p>
@@ -231,7 +231,7 @@ export function WorkspaceGeneralForm({
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="ws-description"
-            className="text-sm font-medium leading-none text-foreground"
+            className="text-base font-medium leading-none text-foreground"
           >
             Description
           </label>
@@ -245,14 +245,14 @@ export function WorkspaceGeneralForm({
             placeholder="What this workspace is for…"
             className="resize-none"
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Displayed in the workspace switcher and surfaced to the Ask system.
           </p>
         </div>
 
         {/* Error state */}
         {error !== null && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="text-base text-destructive">
             {error}
           </p>
         )}
@@ -271,7 +271,7 @@ export function WorkspaceGeneralForm({
           </Button>
 
           {savedAt && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Saved at{" "}
               {savedAt.toLocaleTimeString(undefined, {
                 hour: "2-digit",

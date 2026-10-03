@@ -69,7 +69,7 @@ export default async function MarketplaceIntegrationsPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">
+      <p className="text-base text-muted-foreground">
         Connect external sources to ingest their data into the knowledge graph.
         Existing connections are managed under{" "}
         <Link
@@ -99,18 +99,18 @@ export default async function MarketplaceIntegrationsPage({
                     size={32}
                   />
                   <div className="flex min-w-0 flex-col gap-1">
-                    <CardTitle className="text-sm">
+                    <CardTitle className="text-base">
                       {connector.displayName}
                     </CardTitle>
                     <div className="flex flex-wrap gap-1.5">
-                      <Badge variant="outline" className="text-[10px]">
+                      <Badge variant="outline" className="text-xs">
                         {DELIVERY_LABELS[connector.deliveryMethod] ??
                           connector.deliveryMethod}
                       </Badge>
                     </div>
                   </div>
                 </div>
-                <CardDescription className="mt-2 line-clamp-3 text-xs">
+                <CardDescription className="mt-2 line-clamp-3 text-sm">
                   {connector.description}
                 </CardDescription>
               </CardHeader>
@@ -139,7 +139,7 @@ export default async function MarketplaceIntegrationsPage({
                   href={`${docsUrl()}/integrations/${encodeURIComponent(connector.connectorId)}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-center text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  className="text-center text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
                   data-testid={`integration-docs-${connector.connectorId}`}
                 >
                   View setup docs

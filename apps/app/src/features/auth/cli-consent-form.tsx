@@ -86,7 +86,7 @@ export function CliConsentForm({
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="cli-org"
-            className="text-sm font-medium text-foreground"
+            className="text-base font-medium text-foreground"
           >
             {t("organization")}
           </label>
@@ -114,7 +114,7 @@ export function CliConsentForm({
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="cli-ws"
-            className="text-sm font-medium text-foreground"
+            className="text-base font-medium text-foreground"
           >
             {t("workspace")}
           </label>
@@ -135,11 +135,11 @@ export function CliConsentForm({
             ))}
           </select>
         </div>
-        <div className="rounded-lg border border-border bg-muted p-3 text-sm text-muted-foreground">
-          <p className="text-xs font-semibold uppercase tracking-wide text-foreground">
+        <div className="rounded-lg border border-border bg-muted p-3 text-base text-muted-foreground">
+          <p className="text-sm font-semibold uppercase tracking-wide text-foreground">
             {t("grantsTitle")}
           </p>
-          <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-xs">
+          <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-sm">
             <li>{t("grantKeys")}</li>
             <li>{t("grantActs")}</li>
           </ul>

@@ -264,7 +264,7 @@ export function FilesTable({
               <span className={`block ${mono} text-foreground`}>
                 {file.path}
               </span>
-              <span className="mt-0.5 block text-sm text-dim">
+              <span className="mt-0.5 block text-xs text-dim">
                 {t("files.lines", { count: file.lines })}
               </span>
             </td>
@@ -307,7 +307,7 @@ export function FilesTable({
               {status.note === null ? null : (
                 <span
                   data-truncate={status.note}
-                  className="mt-0.5 block max-w-[28ch] truncate text-sm text-dim"
+                  className="mt-0.5 block max-w-[28ch] truncate text-xs text-dim"
                 >
                   {status.note}
                 </span>

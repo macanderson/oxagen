@@ -45,7 +45,7 @@ function StubDialog({
         title={title}
         testId={testId}
       >
-        <div className="flex flex-col gap-3 text-sm">{children}</div>
+        <div className="flex flex-col gap-3 text-base">{children}</div>
       </SheetDialog>
     </>
   );

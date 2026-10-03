@@ -134,14 +134,14 @@ export function SwitcherDialog({
                 onChange={(e) => {
                   setQuery(e.target.value);
                 }}
-                className="mb-2.5 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                className="mb-2.5 w-full rounded-lg border border-border bg-card px-3 py-2 text-base text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
               />
             </>
           ) : null}
           {shown.length === 0 ? (
             <p
               role="status"
-              className="px-1 py-2 text-sm text-muted-foreground"
+              className="px-1 py-2 text-base text-muted-foreground"
             >
               {t("noMatch", { query })}
             </p>
@@ -164,15 +164,15 @@ export function SwitcherDialog({
                     >
                       <ChoiceAvatar kind={kind} choice={choice} />
                       <span className="min-w-0 flex-1">
-                        <b className="block truncate text-sm font-semibold">
+                        <b className="block truncate text-base font-semibold">
                           {choice.name}
                         </b>
-                        <span className="block truncate font-mono text-sm text-muted-foreground">
+                        <span className="block truncate font-mono text-xs text-muted-foreground">
                           {choice.slug}
                         </span>
                       </span>
                       {isCurrent ? (
-                        <span className="font-mono text-sm text-muted-foreground">
+                        <span className="font-mono text-xs text-muted-foreground">
                           {t("current")}
                         </span>
                       ) : null}
@@ -185,7 +185,7 @@ export function SwitcherDialog({
           <p
             data-testid="switcher-meta-not-backed"
             data-gap={META_GAP}
-            className="mt-2 text-xs text-muted-foreground"
+            className="mt-2 text-sm text-muted-foreground"
           >
             {kind === "org" ? t("orgMetaNotBacked") : t("wsMetaNotBacked")}
           </p>
@@ -212,7 +212,7 @@ export function SwitcherDialog({
         <p
           role="status"
           data-read={choices.reason}
-          className="text-sm text-muted-foreground"
+          className="text-base text-muted-foreground"
         >
           {choices.reason === "denied" ? t("denied") : t("unavailable")}
         </p>
@@ -324,7 +324,7 @@ export function OrgSwitcher({ data }: { data: ShellData }) {
       />
       <span className="min-w-0 flex-1">
         <b className="block truncate text-sm font-semibold">{org.name}</b>
-        <span className="block truncate font-mono text-sm text-muted-foreground">
+        <span className="block truncate font-mono text-xs text-muted-foreground">
           {org.slug}
         </span>
       </span>
@@ -363,7 +363,7 @@ export function WorkspaceSwitcher({
       />
       <span className="min-w-0 flex-1">
         <b className="block truncate text-sm font-semibold">{name}</b>
-        <span className="block truncate font-mono text-sm text-muted-foreground">
+        <span className="block truncate font-mono text-xs text-muted-foreground">
           {data.org.slug}/{ws}
         </span>
       </span>

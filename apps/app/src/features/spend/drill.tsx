@@ -314,7 +314,7 @@ function CutName({
         <span className="flex min-w-0 flex-col">
           <span className={`${mono} break-all`}>{row.key}</span>
           {row.provider === null ? null : (
-            <span className="text-sm text-muted-foreground">
+            <span className="text-base text-muted-foreground">
               {row.provider}
             </span>
           )}

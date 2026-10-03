@@ -65,7 +65,7 @@ export function Panel({
             {title}
           </h2>
           {lead === undefined ? null : (
-            <p className="text-xs text-muted-foreground">{lead}</p>
+            <p className="text-sm text-muted-foreground">{lead}</p>
           )}
         </div>
         {aside === undefined ? null : (
@@ -96,7 +96,7 @@ export function NotBacked({
     <p
       data-testid="not-backed"
       data-gap={gap}
-      className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground"
+      className="rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground"
     >
       {children}
     </p>
@@ -106,7 +106,7 @@ export function NotBacked({
 /** A fact with the one quiet line under it (the mockup's `dd .sub`). */
 export function Sub({ children }: { children: ReactNode }) {
   return (
-    <span className="mt-0.5 block text-xs text-muted-foreground">
+    <span className="mt-0.5 block text-sm text-muted-foreground">
       {children}
     </span>
   );
@@ -127,7 +127,7 @@ export function Facts({
   rows: readonly { term: string; value: ReactNode }[];
 }) {
   return (
-    <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-[minmax(9rem,auto)_1fr]">
+    <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-base sm:grid-cols-[minmax(9rem,auto)_1fr]">
       {rows.map((row) => (
         <Fragment key={row.term}>
           <dt className="text-muted-foreground">{row.term}</dt>
@@ -216,7 +216,7 @@ export function AgentStatusBadge({ status }: { status: AgentStatus }) {
   return (
     <span
       data-status={status}
-      className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-foreground"
+      className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-foreground"
     >
       <span
         aria-hidden="true"

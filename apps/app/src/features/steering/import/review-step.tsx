@@ -40,7 +40,7 @@ function oneLine(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-const sub = "mt-0.5 block max-w-[24ch] truncate text-sm text-dim";
+const sub = "mt-0.5 block max-w-[24ch] truncate text-xs text-dim";
 
 function where(row: ResolvedRow): { line: number; file: string } {
   return { line: row.record.line, file: row.record.file };

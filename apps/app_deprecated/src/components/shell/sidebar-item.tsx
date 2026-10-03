@@ -73,7 +73,7 @@ export function SidebarItem({
   const sharedClasses = cn(
     // Layout: flex row, icon + label + badge, full-width, mobile tap target
     "group relative flex min-h-[2.75rem] w-full items-center gap-2.5 rounded-md",
-    "px-3 py-2.5 text-sm font-medium",
+    "px-3 py-2.5 text-base font-medium",
     // Rail mode: center the icon, drop horizontal padding
     collapsed && "justify-center gap-0 px-0",
     // Transition — design-system micro easing for hover micro-interactions
@@ -132,7 +132,7 @@ export function SidebarItem({
         <span
           className={cn(
             "inline-flex h-4.5 min-w-[1.125rem] items-center justify-center rounded-full px-1",
-            "text-[10px] font-semibold leading-none",
+            "text-xs font-semibold leading-none",
             // Active rows accent the badge with the sidebar brand token pair.
             active
               ? "bg-sidebar-primary text-sidebar-primary-foreground"

@@ -5,7 +5,10 @@
 // job's Inngest run id (`evidenceScratchKey`), never under the
 // content-addressed `bodies/` prefix that frame bodies share. The job deletes
 // them once its account is written, and its failure handler deletes them
-// when the job fails for good, so none outlives the job that wrote it.
+// when the job fails for good. A cancelled job runs neither, and a delete
+// can fail on every retry, so before its read keeps a chunk the job also
+// schedules `run.enrich-scratch-expire`, which deletes whatever is left a
+// day later (#4383).
 //
 // The job writes a manifest before its first chunk, naming how many chunks
 // it may have written. A cleanup that has only the job's run id reads the
@@ -41,6 +44,47 @@ export const ENRICHMENT_MAX_CHUNKS =
 
 /** The scratch object that names how many chunks a job may have written. */
 export const ENRICHMENT_SCRATCH_MANIFEST = "manifest";
+
+/**
+ * How long a job's scratch objects can outlive the start of its read step
+ * (#4383). The job and its failure handler delete them sooner. When neither
+ * does, `run.enrich-scratch-expire` deletes them once this has passed. A job
+ * still running then loses its chunks: its next read fails, its failure
+ * handler records the failure, and the sweep tries the run again later.
+ */
+export const ENRICHMENT_SCRATCH_TTL_MS = 24 * 60 * 60_000;
+
+/**
+ * Sent by `run.enrich` before its read step keeps any chunk. Consumed by
+ * `run.enrich-scratch-expire`, which sleeps until `expiresAt` and then
+ * deletes the chunks and the manifest the job left. Data is
+ * `{ orgId, workspaceId, jobRunId, expiresAt }`.
+ */
+export const RUN_ENRICH_SCRATCH_KEPT_EVENT = "run/enrich.scratch-kept";
+
+/**
+ * The event that schedules the delete of a job's scratch objects, due
+ * `ENRICHMENT_SCRATCH_TTL_MS` after `readAt`. Its id names the job, so the
+ * provider drops a second copy for the same job.
+ */
+export function scratchExpiryEvent(
+  scope: RunScope,
+  jobRunId: string,
+  readAt: Date,
+) {
+  return {
+    name: RUN_ENRICH_SCRATCH_KEPT_EVENT,
+    id: `run-enrich-scratch:${jobRunId}`,
+    data: {
+      orgId: scope.orgId,
+      workspaceId: scope.workspaceId,
+      jobRunId,
+      expiresAt: new Date(
+        readAt.getTime() + ENRICHMENT_SCRATCH_TTL_MS,
+      ).toISOString(),
+    },
+  };
+}
 
 // Encrypted limits include UTF-8 expansion, the key id, and the envelope.
 export const ENRICHMENT_MANIFEST_MAX_BYTES = 64 * 1024;

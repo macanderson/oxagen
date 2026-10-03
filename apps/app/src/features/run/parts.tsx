@@ -145,7 +145,7 @@ export function Meter({
     share === null ? 0 : Math.max(1, Math.round(Math.min(1, share) * 100));
   return (
     <div className="grid gap-[5px]" title={title}>
-      <div className="flex justify-between gap-2.5 text-xs text-muted-foreground">
+      <div className="flex justify-between gap-2.5 text-sm text-muted-foreground">
         <span className="min-w-0">{label}</span>
         <b className="font-semibold tabular-nums text-foreground">{value}</b>
       </div>

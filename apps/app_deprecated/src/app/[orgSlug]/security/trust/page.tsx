@@ -27,15 +27,15 @@ function SubProcessorRow({ sp }: { sp: SubProcessor }) {
     <div className="flex flex-col gap-1 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 sm:flex-row sm:items-start sm:gap-4">
       <div className="flex flex-1 flex-col gap-0.5 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium text-foreground">{sp.name}</span>
-          <Badge variant="muted" className="text-[10px]">
+          <span className="text-base font-medium text-foreground">{sp.name}</span>
+          <Badge variant="muted" className="text-xs">
             {sp.category}
           </Badge>
         </div>
-        <p className="text-xs text-muted-foreground leading-snug">
+        <p className="text-sm text-muted-foreground leading-snug">
           {sp.purpose}
         </p>
-        <p className="text-xs text-muted-foreground/70 leading-snug">
+        <p className="text-sm text-muted-foreground/70 leading-snug">
           {sp.dataRegion} · {sp.certifications.join(", ")}
         </p>
       </div>
@@ -44,7 +44,7 @@ function SubProcessorRow({ sp }: { sp: SubProcessor }) {
           href={sp.privacyUrl}
           target="_blank"
           rel="noreferrer noopener"
-          className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          className="shrink-0 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           Privacy
           <ExternalLink className="h-3 w-3" aria-hidden="true" />
@@ -94,7 +94,7 @@ export default async function SecurityTrustPage({
           </Button>
         }
       >
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p className="mb-4 text-base text-muted-foreground">
           Data residency, encryption, tenant isolation, sub-processors, and
           retention policies for this platform.
         </p>
@@ -109,10 +109,10 @@ export default async function SecurityTrustPage({
                 aria-hidden="true"
               />
               <div className="flex flex-col gap-0.5">
-                <span className="text-sm font-medium text-foreground">
+                <span className="text-base font-medium text-foreground">
                   {signal.title}
                 </span>
-                <span className="text-xs text-muted-foreground leading-snug">
+                <span className="text-sm text-muted-foreground leading-snug">
                   {signal.description}
                 </span>
               </div>
@@ -123,23 +123,23 @@ export default async function SecurityTrustPage({
 
       {/* Data region */}
       <Panel title="Data region">
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p className="mb-4 text-base text-muted-foreground">
           All data is stored and processed in the United States.
         </p>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">
+              <span className="text-base font-medium text-foreground">
                 Primary region
               </span>
-              <Badge variant="muted" className="text-xs">
+              <Badge variant="muted" className="text-sm">
                 US-central (iad1)
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Postgres (AlloyDB), ClickHouse, Neo4j, and blob storage are all
               provisioned in US-central. Vercel edge functions route to the{" "}
-              <code className="font-mono text-[10px] bg-muted px-1 rounded">
+              <code className="font-mono text-xs bg-muted px-1 rounded">
                 iad1
               </code>{" "}
               region. No data crosses to other regions by default.
@@ -148,28 +148,28 @@ export default async function SecurityTrustPage({
 
           <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">
+              <span className="text-base font-medium text-foreground">
                 Tenant isolation
               </span>
               <Badge
                 variant={rlsEnforced ? "success" : "warning"}
-                className="text-xs"
+                className="text-sm"
               >
                 {rlsEnforced ? "RLS enforced" : "Enforcement pending"}
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Each org&apos;s data is isolated via Postgres row-level security
               (RLS). The application database role (
-              <code className="font-mono text-[10px] bg-muted px-1 rounded">
+              <code className="font-mono text-xs bg-muted px-1 rounded">
                 oxagen_app
               </code>
               ) is{" "}
-              <code className="font-mono text-[10px] bg-muted px-1 rounded">
+              <code className="font-mono text-xs bg-muted px-1 rounded">
                 NOSUPERUSER
               </code>{" "}
               and{" "}
-              <code className="font-mono text-[10px] bg-muted px-1 rounded">
+              <code className="font-mono text-xs bg-muted px-1 rounded">
                 NOBYPASSRLS
               </code>
               , so RLS policies cannot be bypassed by the application layer.
@@ -180,7 +180,7 @@ export default async function SecurityTrustPage({
 
       {/* Encryption */}
       <Panel title="Encryption">
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p className="mb-4 text-base text-muted-foreground">
           All data is encrypted at rest and in transit.
         </p>
         <div className="flex flex-col gap-2">
@@ -209,14 +209,14 @@ export default async function SecurityTrustPage({
               className="flex flex-col gap-1 rounded-xl border border-border/60 bg-muted/30 px-4 py-3"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-sm font-medium text-foreground">
+                <span className="text-base font-medium text-foreground">
                   {row.label}
                 </span>
-                <Badge variant="muted" className="text-xs">
+                <Badge variant="muted" className="text-sm">
                   {row.value}
                 </Badge>
               </div>
-              <p className="text-xs text-muted-foreground leading-snug">
+              <p className="text-sm text-muted-foreground leading-snug">
                 {row.detail}
               </p>
             </div>
@@ -226,7 +226,7 @@ export default async function SecurityTrustPage({
 
       {/* Retention */}
       <Panel title="Data retention">
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p className="mb-4 text-base text-muted-foreground">
           How long different categories of data are kept.
         </p>
         <div className="flex flex-col gap-2">
@@ -267,14 +267,14 @@ export default async function SecurityTrustPage({
               className="flex flex-col gap-1 rounded-xl border border-border/60 bg-muted/30 px-4 py-3"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-sm font-medium text-foreground font-mono text-xs">
+                <span className="text-base font-medium text-foreground font-mono text-sm">
                   {row.category}
                 </span>
-                <Badge variant="outline" className="text-xs">
+                <Badge variant="outline" className="text-sm">
                   {row.retention}
                 </Badge>
               </div>
-              <p className="text-xs text-muted-foreground leading-snug">
+              <p className="text-sm text-muted-foreground leading-snug">
                 {row.basis}
               </p>
             </div>
@@ -284,7 +284,7 @@ export default async function SecurityTrustPage({
 
       {/* Sub-processors */}
       <Panel title="Sub-processors">
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p className="mb-4 text-base text-muted-foreground">
           Third-party vendors that may process your data. All sub-processors are
           bound by data processing agreements (DPAs).
         </p>
@@ -297,7 +297,7 @@ export default async function SecurityTrustPage({
 
       {/* Database architecture */}
       <Panel title="Data store architecture">
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p className="mb-4 text-base text-muted-foreground">
           Purpose-bound storage — each store holds exactly one kind of data.
         </p>
         <div className="flex flex-col gap-2">
@@ -332,14 +332,14 @@ export default async function SecurityTrustPage({
               className="flex flex-col gap-1 rounded-xl border border-border/60 bg-muted/30 px-4 py-3"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-sm font-medium text-foreground">
+                <span className="text-base font-medium text-foreground">
                   {row.store}
                 </span>
-                <Badge variant="muted" className="text-xs">
+                <Badge variant="muted" className="text-sm">
                   {row.region}
                 </Badge>
               </div>
-              <p className="text-xs text-muted-foreground leading-snug">
+              <p className="text-sm text-muted-foreground leading-snug">
                 {row.purpose}
               </p>
             </div>

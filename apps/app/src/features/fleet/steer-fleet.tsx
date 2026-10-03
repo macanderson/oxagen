@@ -247,7 +247,7 @@ export function SteerFleetDialog({
         <div
           role="status"
           data-testid="steer-receipt"
-          className="flex flex-col gap-2 text-sm"
+          className="flex flex-col gap-2 text-base"
         >
           <p>{t("queued", { count: receipt.commandIds.length })}</p>
           {receipt.commandIds.length > 0 ? (
@@ -286,7 +286,7 @@ export function SteerFleetDialog({
               <label
                 htmlFor={pickerId}
                 data-testid="steer-selected"
-                className="text-xs font-medium"
+                className="text-sm font-medium"
               >
                 {t("agents", {
                   selected: picked.length,
@@ -297,7 +297,7 @@ export function SteerFleetDialog({
                 <button
                   type="button"
                   data-touch-target=""
-                  className={`${buttonSecondary} px-2 py-0.5 text-xs`}
+                  className={`${buttonSecondary} px-2 py-0.5 text-sm`}
                   onClick={() => {
                     setSelected(new Set(agents.map((agent) => agent.agentKey)));
                   }}
@@ -307,7 +307,7 @@ export function SteerFleetDialog({
                 <button
                   type="button"
                   data-touch-target=""
-                  className={`${buttonSecondary} px-2 py-0.5 text-xs`}
+                  className={`${buttonSecondary} px-2 py-0.5 text-sm`}
                   onClick={() => {
                     setSelected(new Set());
                   }}
@@ -317,7 +317,7 @@ export function SteerFleetDialog({
               </span>
             </div>
             {agents.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {agentsRead ? t("noAgents") : t("agentsUnread")}
               </p>
             ) : (
@@ -336,19 +336,19 @@ export function SteerFleetDialog({
             {unlisted === 0 ? null : (
               <p
                 data-testid="steer-unlisted"
-                className="text-xs text-muted-foreground"
+                className="text-sm text-muted-foreground"
               >
                 {agentsComplete
                   ? t("keyless", { count: unlisted })
                   : t("stopped", { listed: agents.length, count: unlisted })}
               </p>
             )}
-            <p id={`${formId}-hint`} className="text-xs text-muted-foreground">
+            <p id={`${formId}-hint`} className="text-sm text-muted-foreground">
               {t("hint", { workspace })}
             </p>
           </div>
           <div className="flex flex-col gap-1.5">
-            <label htmlFor={textId} className="text-xs font-medium">
+            <label htmlFor={textId} className="text-sm font-medium">
               {t("text")}
             </label>
             <textarea
@@ -359,14 +359,14 @@ export function SteerFleetDialog({
               onChange={(event) => {
                 setText(event.target.value);
               }}
-              className={`${textareaBase} resize-y max-md:min-h-11 max-md:text-base`}
+              className={`${textareaBase} resize-y max-md:min-h-11 max-md:text-input-touch`}
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium">{t("delivery")}</span>
+            <span className="text-sm font-medium">{t("delivery")}</span>
             <div className="flex items-start gap-3 rounded-lg border border-border px-3 py-2.5">
-              <div className="min-w-0 grow text-xs" data-testid="steer-mode">
-                <b className="block text-sm">
+              <div className="min-w-0 grow text-sm" data-testid="steer-mode">
+                <b className="block text-base">
                   {interrupting ? t("interruptNow") : t("boundary")}
                 </b>
                 <span className="text-muted-foreground">
@@ -384,7 +384,7 @@ export function SteerFleetDialog({
                   onClick={() => {
                     setInterrupt(!interrupting);
                   }}
-                  className={`inline-flex min-h-8 items-center gap-2 rounded-full border px-2.5 text-xs disabled:cursor-not-allowed disabled:opacity-60 ${
+                  className={`inline-flex min-h-8 items-center gap-2 rounded-full border px-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${
                     interrupting
                       ? "border-info text-info"
                       : "border-border text-muted-foreground"
@@ -401,7 +401,7 @@ export function SteerFleetDialog({
                 <span
                   id={`${formId}-interrupt`}
                   data-testid="steer-interrupt-reason"
-                  className="max-w-48 text-right text-sm text-dim"
+                  className="max-w-48 text-right text-xs text-dim"
                 >
                   {interruptible > 0
                     ? t("interruptCarriers", { count: interruptible })
@@ -411,24 +411,24 @@ export function SteerFleetDialog({
                 </span>
               </span>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {t.rich("interruptHint", {
                 mono: (chunks) => <span className={mono}>{chunks}</span>,
               })}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {t.rich("recorded", {
                 mono: (chunks) => <span className={mono}>{chunks}</span>,
               })}
             </p>
           </div>
-          <p className="rounded-lg border border-border bg-hl px-3 py-2 text-xs text-muted-foreground">
+          <p className="rounded-lg border border-border bg-hl px-3 py-2 text-sm text-muted-foreground">
             {t("note")}
           </p>
           {canCommand ? null : (
             <p
               data-testid="steer-role"
-              className="text-xs text-muted-foreground"
+              className="text-sm text-muted-foreground"
             >
               {command("roleReason")}
             </p>

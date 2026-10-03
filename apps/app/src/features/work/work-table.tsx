@@ -2,7 +2,10 @@
 // `inboxItems()`, `wrkByTab()`; mockups/pages/work.md). Each row opens the work
 // item: its title is a link stretched over the row. The Work item cell holds
 // the item's number in mono, its title as text, and the line that says what
-// it waits for. On Inbox the labels follow as quiet chips.
+// it waits for. On Inbox the labels follow as quiet chips. On Review the pull
+// request cell lists every pull request the forge store holds for the send,
+// each with its state (ADR-292), over the head the send's facts name. With no
+// forge row yet, it shows the pull request the facts name.
 //
 // The server decides which tab each item sits on (`item.tab`) and its status
 // word. This module only orders the rows. Inbox puts a failed triage first,
@@ -28,6 +31,7 @@ import {
   ChecksBadge,
   CostText,
   PriorityCell,
+  PullStateBadge,
   shortSha,
   WaitLine,
   WorkStatusBadge,
@@ -276,13 +280,31 @@ function ReviewTable({
     >
       {items.map((item) => {
         const pr = item.send?.pullRequest ?? null;
+        const pulls = item.send?.pullRequests ?? [];
+        const head = pr?.head ?? null;
         return (
           <tr key={item.id} data-work-item={item.number} data-status={item.status} data-wait={item.wait.kind} className={ROW}>
             <td className={cell}>
               <ItemCell org={org} ws={ws} item={item} labels={false} />
             </td>
             <td className={cell}>
-              {pr === null ? (
+              {pulls.length > 0 ? (
+                <span className="flex flex-col gap-1">
+                  {pulls.map((pull) => (
+                    <span key={pull.id} className="flex flex-wrap items-center gap-2" data-pull-request={pull.number}>
+                      <span className={mono}>
+                        {t("table.pullRequest", { number: String(pull.number) })}
+                      </span>
+                      <PullStateBadge pull={pull} />
+                    </span>
+                  ))}
+                  {head === null ? null : (
+                    <span className={`${mono} text-sm text-muted-foreground`}>
+                      {shortSha(head)}
+                    </span>
+                  )}
+                </span>
+              ) : pr === null ? (
                 <Muted>{t("table.none")}</Muted>
               ) : (
                 <span className="flex flex-col" data-pull-request={pr.number}>

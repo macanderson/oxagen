@@ -92,21 +92,21 @@ export function PreviewStep({
               data-testid={`preview-record-type-${rt.sourceRecordType}`}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-foreground">
+                <span className="text-base font-semibold text-foreground">
                   {rt.displayName}
                 </span>
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-xs">
                   {rt.sampleCount} sample{rt.sampleCount === 1 ? "" : "s"}
                 </Badge>
               </div>
               {rt.description && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   {rt.description}
                 </p>
               )}
               {rt.sampleRecords.length > 0 && (
                 <div className="overflow-x-auto rounded-md border border-border/40">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full text-left text-sm">
                     <thead>
                       <tr className="border-b border-border/40 bg-muted/40">
                         {rt.sampleFields.map((field) => (

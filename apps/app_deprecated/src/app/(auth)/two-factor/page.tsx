@@ -26,7 +26,7 @@ export default async function TwoFactorPage({
           <h1 className="text-2xl font-semibold tracking-tight">
             Two-factor authentication
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             Enter the code from your authenticator app to finish signing in.
           </p>
         </div>
@@ -34,7 +34,7 @@ export default async function TwoFactorPage({
         <TwoFactorForm returnTo={returnTo} />
       </div>
 
-      <p className="text-center text-xs text-muted-foreground">
+      <p className="text-center text-sm text-muted-foreground">
         SOC 2 Type II · SSO/SCIM · RBAC-enforced retrieval
       </p>
     </div>

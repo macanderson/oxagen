@@ -1,7 +1,7 @@
 {
   "name": "get_run_work",
   "domain": "run",
-  "description": "Read recorded checkout locations and retained diff references, plus connected pull requests and their current CI checks.",
+  "description": "Read recorded checkout locations and retained diff references, plus the run's pull requests from Oxagen's own store and their current CI checks.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -579,10 +579,24 @@
                             "type": "string"
                           },
                           "additions": {
-                            "type": "number"
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "deletions": {
-                            "type": "number"
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "patch": {
                             "anyOf": [
