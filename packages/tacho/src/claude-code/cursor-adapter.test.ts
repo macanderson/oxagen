@@ -123,6 +123,49 @@ describe("a Cursor payload becomes a Claude Code payload", () => {
     expect(sub).toMatchObject({ agent_id: "sa-1", agent_type: "explore" });
   });
 
+  it("links a subagent to the call that launched it, and keeps how it ended", () => {
+    const launched = translateCursorPayload({
+      conversation_id: "conv-1",
+      hook_event_name: "subagentStart",
+      subagent_id: "sa-1",
+      subagent_type: "explore",
+      tool_call_id: "tc-789",
+    }) as Record<string, unknown>;
+    expect(launched["tool_use_id"]).toBe("tc-789");
+    expect(launched["tool_call_id"]).toBeUndefined();
+    const [spawn] = normalizeHook(launched, {}, { sessionUuid: "uuid-1" });
+    expect(spawn?.body).toEqual({ tool_use_id: "tc-789" });
+
+    const stopped = (status: string) =>
+      normalizeHook(
+        translateCursorPayload({
+          conversation_id: "conv-1",
+          hook_event_name: "subagentStop",
+          subagent_type: "explore",
+          status,
+        }),
+        {},
+        { sessionUuid: "uuid-1" },
+      )[0];
+    expect(stopped("completed")?.body["tool_status"]).toBe("ok");
+    expect(stopped("error")?.body["tool_status"]).toBe("error");
+    expect(stopped("aborted")?.body["tool_status"]).toBe("cancelled");
+    expect(stopped("error")?.attrs["hook.status"]).toBeUndefined();
+
+    // A turn's `stop` keeps its own `status` as Cursor sent it.
+    const [end] = normalizeHook(
+      translateCursorPayload({
+        conversation_id: "conv-1",
+        hook_event_name: "stop",
+        status: "aborted",
+      }),
+      {},
+      { sessionUuid: "uuid-1" },
+    );
+    expect(end?.kind).toBe("turn_end");
+    expect(end?.attrs["hook.status"]).toBe("aborted");
+  });
+
   it("parses MCP arguments sent as a JSON string, and renames the tool", () => {
     const out = translateCursorPayload({
       conversation_id: "conv-1",

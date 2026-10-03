@@ -7,7 +7,7 @@
 // switch then offers both choices, so the setting stays in reach (#4574).
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { setOperatorPseudonymsAction } from "./actions";
@@ -40,7 +40,7 @@ export function OperatorPseudonymsToggle({
     }
   }
   const button = (enabled: boolean, label: string) => (
-    <button
+    <Button
       key={label}
       type="button"
       data-testid={
@@ -48,14 +48,14 @@ export function OperatorPseudonymsToggle({
           ? `operator-pseudonyms-${enabled ? "on" : "off"}`
           : "operator-pseudonyms"
       }
-      className={buttonSecondary}
+      variant="outline"
       disabled={pending}
       onClick={() => {
         void choose(enabled);
       }}
     >
       {pending ? t("saving") : label}
-    </button>
+    </Button>
   );
   return (
     <div className="flex max-w-xs flex-col items-end gap-1.5 text-right">

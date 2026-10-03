@@ -152,6 +152,60 @@ describe("pushCredentialBasis", () => {
     ).resolves.toBe("gateway_brokered");
     expect(calls[0]?.slice(0, 2)).toEqual(["-C", "/repo"]);
   });
+
+  it("is gateway_brokered for a push from a directory inside the configured checkout", async () => {
+    // `configure` rewrote the repository's own remotes, so a push from
+    // `packages/foo` goes through the proxy as one from the root does.
+    const { execAsync, calls } = git(ORIGIN_IS_PROXY);
+    await expect(
+      pushCredentialBasis("git push origin", "/repo/packages/foo", {
+        receipts: () => [RECEIPT],
+        execAsync,
+      }),
+    ).resolves.toBe("gateway_brokered");
+    expect(calls[0]?.slice(0, 2)).toEqual(["-C", "/repo/packages/foo"]);
+    await expect(
+      pushCredentialBasis("git -C ..cache push origin", "/repo", {
+        receipts: () => [RECEIPT],
+        execAsync,
+      }),
+    ).resolves.toBe("gateway_brokered");
+  });
+
+  it("judges a push in a checkout nested in another by the deepest receipt", async () => {
+    const libProxy = "http://127.0.0.1:47111/github/acme/lib.git";
+    const lib = {
+      ...RECEIPT,
+      cwd: "/repo/vendor/lib",
+      repository: "acme/lib",
+      url: libProxy,
+    };
+    const { execAsync } = git({
+      "remote get-url --push --all origin": libProxy,
+    });
+    for (const receipts of [
+      [RECEIPT, lib],
+      [lib, RECEIPT],
+    ])
+      await expect(
+        pushCredentialBasis("git push origin", "/repo/vendor/lib/src", {
+          receipts: () => receipts,
+          execAsync,
+        }),
+      ).resolves.toBe("gateway_brokered");
+  });
+
+  it("does not read a sibling that shares the checkout's name prefix as inside it (negative)", async () => {
+    const { execAsync, calls } = git(ORIGIN_IS_PROXY);
+    for (const cwd of ["/repository", "/repo-old/src"])
+      await expect(
+        pushCredentialBasis("git push origin", cwd, {
+          receipts: () => [RECEIPT],
+          execAsync,
+        }),
+      ).resolves.toBe("harness_held");
+    expect(calls).toEqual([]);
+  });
 });
 
 describe("pushCredentialBasis in a contained run (ADR-254)", () => {

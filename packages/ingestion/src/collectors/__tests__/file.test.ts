@@ -16,6 +16,7 @@ import {
   collectorNameFromPath,
   isCollectorFilePath,
   readCollectorFile,
+  readStoredWriteBack,
   resolveWriteBack,
 } from "../file";
 import { registerCollector, unregisterCollector } from "../registry";
@@ -433,5 +434,21 @@ describe("resolveWriteBack", () => {
       close: true,
       labels: false,
     });
+  });
+});
+
+describe("readStoredWriteBack", () => {
+  it("reads the switches a row stores as true, and every other switch as off", () => {
+    expect(readStoredWriteBack("github", { ...ALL_OFF, send_note: true })).toEqual({ ...ALL_OFF, send_note: true });
+  });
+
+  it("reads a missing or malformed column as all off, never as the file's defaults (negative)", () => {
+    for (const stored of [null, undefined, {}, [], "send_note", { send_note: "true", certify_note: 1 }])
+      expect(readStoredWriteBack("github", stored)).toEqual(ALL_OFF);
+  });
+
+  it("reads every switch off for a type with no write-back", () => {
+    const on = { certify_note: true, send_note: true, status: true, close: true, labels: true };
+    expect(readStoredWriteBack("slack", on)).toEqual(ALL_OFF);
   });
 });

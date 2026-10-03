@@ -16,6 +16,7 @@
 // becomes part of a card's label.
 import { useTranslations } from "next-intl";
 import { type ReactNode, useMemo, useState } from "react";
+import { Button } from "./button";
 import { ListSelect } from "./list-select";
 import { RowsPager } from "./pagination";
 import { headCell } from "./table";
@@ -216,16 +217,18 @@ export function ListTable({
                     }
                     className={`${headCell} ${column.numeric === true ? "text-right" : "text-left"}`}
                   >
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="xs"
                       data-sort={column.key}
                       onClick={() => {
                         toggle(column.key);
                       }}
-                      className={`inline-flex items-center gap-1 uppercase tracking-[inherit] hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring after:font-normal after:opacity-70 ${dir === 1 ? "after:content-(--glyph-sort-asc)" : dir === -1 ? "after:content-(--glyph-sort-desc)" : "after:content-(--glyph-sort)"}`}
+                      className={`h-auto p-0 text-xs font-semibold uppercase tracking-[inherit] text-inherit hover:bg-transparent after:font-normal after:opacity-70 ${dir === 1 ? "after:content-(--glyph-sort-asc)" : dir === -1 ? "after:content-(--glyph-sort-desc)" : "after:content-(--glyph-sort)"}`}
                     >
                       {column.label}
-                    </button>
+                    </Button>
                   </th>
                 );
               })}

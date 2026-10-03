@@ -94,6 +94,34 @@ describe("oxagen agent run --contained", () => {
     });
   });
 
+  it("sends a relative --workspace resolved against this directory, not tachod's", async () => {
+    const { deps, paths } = enrolled();
+    const seen = await daemon(paths.socket, [
+      { result: { sessionId: "contained-x", exitCode: 0 } },
+    ]);
+    expect(
+      await runContained(
+        { agent: "claude", args: [], image: "img", workspace: "../other" },
+        deps,
+      ),
+    ).toBe(0);
+    expect(seen.body).toMatchObject({ workspace: "/work/other" });
+  });
+
+  it("sends an absolute --workspace as given", async () => {
+    const { deps, paths } = enrolled();
+    const seen = await daemon(paths.socket, [
+      { result: { sessionId: "contained-x", exitCode: 0 } },
+    ]);
+    expect(
+      await runContained(
+        { agent: "claude", args: [], image: "img", workspace: "/src/app" },
+        deps,
+      ),
+    ).toBe(0);
+    expect(seen.body).toMatchObject({ workspace: "/src/app" });
+  });
+
   it("names the run's one repository and hands over no GitHub token", async () => {
     const { deps, paths } = enrolled({ GITHUB_REPOSITORY: "acme/other" });
     const seen = await daemon(paths.socket, [

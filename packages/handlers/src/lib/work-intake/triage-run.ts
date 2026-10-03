@@ -20,6 +20,7 @@
 // run out, the job's on-failure companion calls recordTriageFailure with the
 // revision the event was about. A failure that lands late records nothing.
 import { CREDIT_REASONS, generateObjectFor, modelIdOf, selectModelForOrg } from "@oxagen/ai";
+import { assertUnderWorkspaceLaneBudget } from "@oxagen/billing";
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import {
   type TriageDecision,
@@ -75,6 +76,14 @@ export const triageOutputSchema = z.object({
 export function aiTriageModelClient(scope: WorkScope): TriageModelClient {
   return {
     async complete(request) {
+      // The workspace's own daily budget for work orders (#5426). A refusal
+      // throws, so the durable step records it on the item with the reason
+      // the person can read.
+      await assertUnderWorkspaceLaneBudget({
+        orgId: scope.orgId,
+        workspaceId: scope.workspaceId,
+        lane: "work",
+      });
       const selection = await selectModelForOrg(scope.orgId, { tier: "fast" });
       const model = modelIdOf(selection.model);
       try {
@@ -89,7 +98,14 @@ export function aiTriageModelClient(scope: WorkScope): TriageModelClient {
           // The durable step owns retries, and triageItem owns the one retry
           // after an invalid answer.
           maxRetries: 0,
-          telemetry: { orgId: scope.orgId, workspaceId: scope.workspaceId, surface: "runner", messageId: null },
+          telemetry: {
+            orgId: scope.orgId,
+            workspaceId: scope.workspaceId,
+            surface: "runner",
+            messageId: null,
+            // Names the lane on the usage row (#5426).
+            capabilityName: "work_triage",
+          },
         });
         // @oxagen/ai records the cost on the usage row. It does not return it,
         // so the decision's cost stays unknown rather than 0.

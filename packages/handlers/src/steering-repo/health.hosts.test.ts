@@ -90,7 +90,7 @@ const PR: OpenPullRequest = { number: 11, head_sha: SHA, head_ref: "feature/rule
 const REVERT_REF = "steering/revert-to-a1a1a1a-d4d4d4d";
 const PUBLISHED: PublishedCommit = { sha: "a1".repeat(20), version: 7 };
 const DIVERGENCE: Divergence = {
-  reason: "main holds 1 commit Oxagen did not merge: c3c3c3c",
+  reason: "main holds 1 commit that no pull request merged: c3c3c3c",
   main_sha: "d4".repeat(20),
 };
 const REPORT: HealthReport = {
@@ -1052,7 +1052,7 @@ describe("healthNotificationTitle", () => {
       "Oxagen lost access to the steering repo acme/steering",
     );
     expect(healthNotificationTitle(state("diverged"), "acme/steering")).toBe(
-      "main on the steering repo acme/steering holds a commit Oxagen did not merge",
+      "main on the steering repo acme/steering holds a commit that no pull request merged",
     );
   });
 });

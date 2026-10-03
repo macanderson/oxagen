@@ -22,12 +22,8 @@ import {
   UNANSWERED,
   useActionFailure,
 } from "@/ui/command-failure";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  mono,
-  textareaBase,
-} from "@/ui/control-styles";
+import { mono, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -107,15 +103,15 @@ export function PauseWorkspaceDialog({
         : {})}
       footer={
         receipt === null ? (
-          <button
+          <Button
             type="submit"
             form={formId}
             data-touch-target=""
             disabled={pending}
-            className={buttonPrimary}
+            variant="primary"
           >
             {pending ? t("pending") : t("confirm")}
-          </button>
+          </Button>
         ) : undefined
       }
     >
@@ -149,16 +145,16 @@ export function PauseWorkspaceDialog({
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-medium">{t("commandIds")}</span>
-                <button
+                <Button
                   type="button"
                   data-touch-target=""
-                  className={`${buttonSecondary} px-2 py-0.5 text-sm`}
+                  variant="outline" className="px-2 py-0.5 text-sm"
                   onClick={() => {
                     copyIds(receipt.commandIds);
                   }}
                 >
                   {copied ? t("copied") : t("copy")}
-                </button>
+                </Button>
               </div>
               <code
                 data-testid="pause-workspace-ids"

@@ -30,15 +30,8 @@ import type { Read } from "@/data/read";
 import { routes, type SafePath } from "@/shared/safe-path";
 import { AgentAvatar } from "@/ui/agent-avatar";
 import { ChoiceGroup } from "@/ui/choice-group";
-import {
-  buttonPrimary,
-  inputBase,
-  kvTerm,
-  kvValue,
-  linkText,
-  mono,
-  panel,
-} from "@/ui/control-styles";
+import { buttonPrimary, inputBase, kvTerm, kvValue, linkText, mono, panel } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { HarnessIcon } from "@/ui/harness-icon";
 import { SafeLink, useNavigate } from "@/ui/navigation";
@@ -523,14 +516,14 @@ export function RegisterAgentForm({
               {t("continue")}
             </SafeLink>
           ) : (
-            <button
+            <Button
               type="submit"
               disabled={pending}
               aria-busy={pending || undefined}
-              className={`${buttonPrimary} max-md:w-full`}
+              variant="primary" className="max-md:w-full"
             >
               {pending ? t("pending") : t("continue")}
-            </button>
+            </Button>
           )}
         </span>
       </div>

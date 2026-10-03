@@ -32,7 +32,9 @@ export const eraseData = defineTool({
   // Carried: sessions are revoked in the request, the hard-delete is scheduled.
   mode: "async",
   surfaces: ["api", "mcp", "cli", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  // No "app" layer: the live erase_data contract declares none, so no rev1
+  // page carries it until cutover (tools/scripts/check_ui_parity.mjs).
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
 
   absorbs: ["erase_data"],

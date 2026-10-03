@@ -6,7 +6,7 @@
 // before its wizard ships and the button appears the day the kind is offered.
 // Gold, because it is the one action the page is for (creation-spec §6).
 import { CREATE_KINDS, type CreateKind, openCreate } from "@/shared/create";
-import { buttonPrimary, buttonSecondary } from "./control-styles";
+import { Button } from "./button";
 
 export function CreateButton({
   kind,
@@ -20,15 +20,15 @@ export function CreateButton({
 }) {
   if (!CREATE_KINDS.includes(kind)) return null;
   return (
-    <button
+    <Button
       type="button"
       data-create={kind}
-      className={primary ? buttonPrimary : buttonSecondary}
+      variant={primary ? "primary" : "outline"}
       onClick={() => {
         openCreate(kind);
       }}
     >
       {label}
-    </button>
+    </Button>
   );
 }

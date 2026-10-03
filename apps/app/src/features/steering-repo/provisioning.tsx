@@ -56,7 +56,8 @@ import { parseGitHubUrl } from "@/shared/github-url";
 import { parseGitLabUrl } from "@/shared/gitlab-url";
 import type { SafePath } from "@/shared/safe-path";
 import { ChoiceGroup } from "@/ui/choice-group";
-import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
+import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { GitHubLink, GitLabLink, useNavigate } from "@/ui/navigation";
 import {
@@ -158,19 +159,19 @@ function ConnectionChooser({
           ),
         }))}
       />
-      <button
+      <Button
         type="button"
         data-testid="steering-repo-use-connection"
         data-touch-target=""
         disabled={pending || picked === null}
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           if (picked !== null)
             onPick({ provider: picked.provider, id: picked.id });
         }}
       >
         {pending ? pendingLabel : t("choose.action")}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -233,15 +234,15 @@ function RetryWithChanges({
         idPrefix="steering-repo-change"
         places={withPlaces}
       />
-      <button
+      <Button
         type="submit"
         data-testid="steering-repo-retry"
         data-touch-target=""
         disabled={pending}
-        className={buttonSecondary}
+        variant="outline"
       >
         {pending ? pendingLabel : t("retry")}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -547,12 +548,12 @@ export function SteeringRepoProvisioning({
                   })}
                 </p>
                 {changeable ? (
-                  <button
+                  <Button
                     type="button"
                     data-testid="steering-repo-change-connection"
                     data-touch-target=""
                     disabled={pending}
-                    className={buttonSecondary}
+                    variant="outline"
                     onClick={() => {
                       void goOn({ resetConnection: true });
                     }}
@@ -562,7 +563,7 @@ export function SteeringRepoProvisioning({
                         ? "connection.changeGroup"
                         : "connection.change",
                     )}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             ) : null}
@@ -603,12 +604,12 @@ export function SteeringRepoProvisioning({
                     {code === STEERING_NO_CONNECTION && canChangeConnection ? (
                       <ConnectGithub org={org} returnTo={returnTo} />
                     ) : null}
-                    <button
+                    <Button
                       type="button"
                       data-testid="steering-repo-retry"
                       data-touch-target=""
                       disabled={pending}
-                      className={buttonSecondary}
+                      variant="outline"
                       onClick={() => {
                         void goOn();
                       }}
@@ -618,7 +619,7 @@ export function SteeringRepoProvisioning({
                         : importing
                           ? t("moveSteering")
                           : t("retry")}
-                    </button>
+                    </Button>
                   </>
                 )}
               </div>
@@ -631,12 +632,12 @@ export function SteeringRepoProvisioning({
       ) : null}
       {view.status === "not_started" && canAct && ws !== null && movable ? (
         <div className="flex flex-col items-start gap-2">
-          <button
+          <Button
             type="button"
             data-testid="steering-repo-start"
             data-touch-target=""
             disabled={pending}
-            className={buttonPrimary}
+            variant="primary"
             onClick={() => {
               void goOn();
             }}
@@ -646,7 +647,7 @@ export function SteeringRepoProvisioning({
               : view.legacySource === null
                 ? t("create")
                 : t("moveSteering")}
-          </button>
+          </Button>
           <p className="text-sm text-muted-foreground">
             {pending ? t("startingNote") : t("startNote")}
           </p>
@@ -663,18 +664,18 @@ export function SteeringRepoProvisioning({
           <p className="text-sm text-muted-foreground">
             {t("fresh.body")}
           </p>
-          <button
+          <Button
             type="button"
             data-testid="steering-repo-start-fresh"
             data-touch-target=""
             disabled={pending}
-            className={buttonSecondary}
+            variant="outline"
             onClick={() => {
               void goOn({ startFresh: true });
             }}
           >
             {pending ? t("starting") : t("fresh.action")}
-          </button>
+          </Button>
         </div>
       ) : null}
       {view.status === "ready" &&
@@ -689,18 +690,18 @@ export function SteeringRepoProvisioning({
           <p className="text-sm text-muted-foreground">
             {t("finishMove.body", { legacy: moving.fullName })}
           </p>
-          <button
+          <Button
             type="button"
             data-testid="steering-repo-finish-move-action"
             data-touch-target=""
             disabled={pending}
-            className={buttonPrimary}
+            variant="primary"
             onClick={() => {
               void goOn();
             }}
           >
             {pending ? t("moving") : t("finishMove.action")}
-          </button>
+          </Button>
         </div>
       ) : null}
       {outcome === null ? null : <ImportOutcome outcome={outcome} />}

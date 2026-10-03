@@ -20,7 +20,7 @@ import type {
   AssistantSession,
   AssistantThread,
 } from "@/data/contracts/conversations";
-import { linkText } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { useFormatter } from "@/ui/formatter";
 import {
   listAssistantSessions,
@@ -154,16 +154,18 @@ export function AssistantSessions({
                 : null}
       </p>
       {listed.state === "failed" ? (
-        <button
+        <Button
           type="button"
+          variant="link"
+          size="xs"
           data-testid="assistant-sessions-retry"
           onClick={() => {
             setListed({ state: "loading" });
           }}
-          className={`mx-4 mt-1.5 w-fit flex-none text-sm ${linkText}`}
+          className="mx-4 mt-1.5 h-auto w-fit flex-none px-0"
         >
           {t("retry")}
-        </button>
+        </Button>
       ) : null}
       {openFailed === null ? null : (
         <p
@@ -184,8 +186,9 @@ export function AssistantSessions({
             const updated = new Date(session.updatedAt);
             return (
               <li key={session.id}>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   data-testid="assistant-session"
                   aria-current={current ? "true" : undefined}
                   aria-busy={opening === session.id ? true : undefined}
@@ -193,7 +196,7 @@ export function AssistantSessions({
                   onClick={() => {
                     void open(session);
                   }}
-                  className="flex w-full flex-col gap-0.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60 disabled:hover:bg-transparent aria-[current=true]:bg-secondary"
+                  className="h-auto w-full flex-col items-stretch justify-start gap-0.5 rounded-md px-2 py-2 text-left font-normal disabled:opacity-60 aria-[current=true]:bg-secondary"
                 >
                   <span className="truncate text-sm leading-5 text-foreground">
                     {session.title ?? t("untitled")}
@@ -210,7 +213,7 @@ export function AssistantSessions({
                     </time>
                     {current ? <span>{t("current")}</span> : null}
                   </span>
-                </button>
+                </Button>
               </li>
             );
           })}

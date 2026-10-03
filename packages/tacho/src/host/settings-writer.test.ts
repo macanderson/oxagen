@@ -218,6 +218,18 @@ describe("settings writer", () => {
     expect(tachoHookPresence(null, TEST_ENROLLMENT).envOk).toBe(false);
   });
 
+  it("reads an event whose value is not a list as missing, without throwing", () => {
+    // `oxagen agent status` reads the file through here and catches nothing,
+    // so `{"Stop": {}}` failed the command with a TypeError.
+    const merged = mergeTachoSettings(FOREIGN, CONFIG).settings;
+    for (const value of [{}, "x", 3, null]) {
+      const broken = { ...merged, hooks: { ...merged.hooks, Stop: value } };
+      const presence = tachoHookPresence(broken, TEST_ENROLLMENT);
+      expect(presence.missing).toEqual(["Stop"]);
+      expect(presence.complete).toBe(false);
+    }
+  });
+
   it("renders a managed settings document that locks the hooks", () => {
     const managed = renderManagedSettings(CONFIG);
     expect(managed["allowManagedHooksOnly"]).toBe(true);

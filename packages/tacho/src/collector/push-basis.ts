@@ -15,7 +15,7 @@
  * used. The proof is the `token_use` frame the proxy seals, and this
  * attribute lets a reader count the pushes that have none.
  */
-import { isAbsolute, relative, resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { gitSubcommand, tokenizeSimpleCommand } from "../claude-code/tools";
 import type { HostFile } from "../host/host-file";
 import type { ExecAsync } from "../host/service";
@@ -118,7 +118,7 @@ export interface PushBasisDeps {
 /**
  * The basis for one `git push` run in `cwd`.
  *
- * `gateway_brokered` needs two things: a receipt for the directory the push
+ * `gateway_brokered` needs two things: a receipt for the checkout the push
  * ran in, and every push URL Git now reports for the remote equal to that
  * receipt's proxy URL. Git expands `insteadOf` and `pushInsteadOf` when it
  * reports them, so a rewrite that sends the push elsewhere is seen. A remote
@@ -139,7 +139,7 @@ export async function pushCredentialBasis(
   const target = gitPushTarget(command);
   if (target === undefined) return TACHO_CREDENTIAL_HARNESS_HELD;
   const dir = target.chdir.reduce((from, to) => resolve(from, to), cwd);
-  const receipt = receipts.find((entry) => resolve(entry.cwd) === dir);
+  const receipt = receiptFor(receipts, dir);
   if (receipt === undefined) return TACHO_CREDENTIAL_HARNESS_HELD;
   // With no repository argument, Git pushes to the branch's push remote, or
   // `origin` when none is set. `configure` rewrites the remotes that named
@@ -149,6 +149,40 @@ export async function pushCredentialBasis(
   return urls.length > 0 && urls.every((url) => url === receipt.url)
     ? TACHO_CREDENTIAL_GATEWAY_BROKERED
     : TACHO_CREDENTIAL_HARNESS_HELD;
+}
+
+/**
+ * Is `dir` the directory `root` or a directory under it? A child named with a
+ * leading `..`, such as `..cache`, is under it.
+ */
+function isWithin(root: string, dir: string): boolean {
+  const inside = relative(root, dir);
+  return !(
+    inside === ".." ||
+    inside.startsWith(`..${sep}`) ||
+    isAbsolute(inside)
+  );
+}
+
+/**
+ * The receipt for the checkout `dir` lies in. `configure` rewrites the remotes
+ * in the repository's own config, so a push from any directory under the one
+ * it ran in goes through the proxy. When checkouts nest, the deepest receipt
+ * is the one whose repository Git reads at `dir`.
+ */
+function receiptFor(
+  receipts: readonly CustodyReceipt[],
+  dir: string,
+): CustodyReceipt | undefined {
+  let found: CustodyReceipt | undefined;
+  let depth = -1;
+  for (const entry of receipts) {
+    const root = resolve(entry.cwd);
+    if (!isWithin(root, dir) || root.length <= depth) continue;
+    found = entry;
+    depth = root.length;
+  }
+  return found;
 }
 
 /** `owner/name`, lowercased, of an `https://github.com/` remote URL. */
@@ -180,9 +214,7 @@ async function containedPushBasis(
   // A directory outside the checkout is not one the container sees at the
   // same path, so nothing here can read its remotes.
   const dir = target.chdir.reduce((from, to) => resolve(from, to), cwd);
-  const inside = relative(cwd, dir);
-  if (inside.startsWith("..") || isAbsolute(inside))
-    return TACHO_CREDENTIAL_HARNESS_HELD;
+  if (!isWithin(cwd, dir)) return TACHO_CREDENTIAL_HARNESS_HELD;
   const remote = target.remote ?? (await defaultPushRemote(dir, deps));
   const urls = await pushUrls(dir, remote, deps);
   const wanted = repository.toLowerCase();

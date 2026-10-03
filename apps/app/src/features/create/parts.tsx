@@ -12,7 +12,8 @@ import {
 import { SourceFilename } from "@/ui/source-filename";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
-import { buttonSecondary, mono, panel } from "@/ui/control-styles";
+import { mono, panel } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { type DraftApi, railOf, type StepId } from "./wizard";
 
 /** The step rail: every step, the one you are on in gold, the ones behind you ticked. */
@@ -110,17 +111,17 @@ export function DescriptionField({
       {suggestions.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           {suggestions.map((s) => (
-            <button
+            <Button
               key={s}
               type="button"
-              className={`${buttonSecondary} min-h-8 px-3 py-1 text-sm`}
+              variant="outline" className="min-h-8 px-3 py-1 text-sm"
               onClick={() => {
                 api.update({ desc: s });
                 setSeed((n) => n + 1);
               }}
             >
               {s}
-            </button>
+            </Button>
           ))}
         </div>
       ) : null}
@@ -169,19 +170,20 @@ export function OptionCard({
   onPress: () => void;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
       aria-pressed={pressed}
       disabled={disabled}
       onClick={onPress}
-      className="flex flex-col gap-1.5 rounded-xl border border-border bg-card p-3.5 text-left text-base transition-colors hover:border-input-border-hover aria-pressed:border-brand disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className="flex h-auto flex-col items-stretch justify-start gap-1.5 whitespace-normal rounded-xl p-3.5 text-left font-normal aria-pressed:border-brand disabled:opacity-60"
     >
       <span className="font-semibold text-foreground">{title}</span>
       <span className="text-muted-foreground">{body}</span>
       {note ? (
         <span className="text-sm text-muted-foreground">{note}</span>
       ) : null}
-    </button>
+    </Button>
   );
 }
 

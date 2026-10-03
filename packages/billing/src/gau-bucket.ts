@@ -473,6 +473,25 @@ function exhaustedMessage(
   }
 }
 
+/**
+ * Whether the gate refuses the organisation without reading its bucket: no
+ * subscription, past the signup grant or with none, while the Free row
+ * requires a subscription. Units bought in this state land on a bucket the
+ * gate never reads, so `purchase_gau_bucket` refuses them with this same
+ * test (#4886). A subscriber, an organisation inside its grant, and one whose
+ * subscription rule an operator has cleared all have their bought units
+ * counted.
+ */
+export function requiresSubscription(
+  basis: Pick<GauBucketBasis, "kind">,
+  entitlement: Pick<GauBasisInput, "subscriptionRequiredAfterGrant">,
+): boolean {
+  return (
+    basis.kind === "after_signup_grant" &&
+    entitlement.subscriptionRequiredAfterGrant === true
+  );
+}
+
 export class GauExhaustedError extends Error {
   readonly code = "gau_exhausted" as const;
   /** Null only from a caller other than the gate, which always names one. */
@@ -532,14 +551,14 @@ export async function assertGauAvailable(
   const grant = entitlement.grant ?? null;
   let reason: GauExhaustedReason;
   let remaining = 0;
-  if (basis.kind === "signup_grant" || !entitlement.subscriptionRequiredAfterGrant) {
+  if (requiresSubscription(basis, entitlement)) {
+    reason = grant === null ? "no_signup_grant" : "signup_grant_expired";
+  } else {
     const bucket = await readBucket(orgId, basis);
     if (bucket.remainingGau > 0) return;
     remaining = bucket.remainingGau;
     reason =
       basis.kind === "signup_grant" ? "signup_grant_used" : "monthly_allowance_used";
-  } else {
-    reason = grant === null ? "no_signup_grant" : "signup_grant_expired";
   }
 
   logger.warn(

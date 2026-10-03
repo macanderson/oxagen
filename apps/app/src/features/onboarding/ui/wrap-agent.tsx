@@ -20,13 +20,8 @@ import { useTranslations } from "next-intl";
 import { type KeyboardEvent, type ReactNode, useId, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  eyebrow,
-  mono,
-  panel,
-} from "@/ui/control-styles";
+import { buttonSecondary, eyebrow, mono, panel } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { DesktopDownloads } from "@/ui/desktop-downloads";
 import { FormAlert } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
@@ -48,7 +43,7 @@ type Os = (typeof OPERATING_SYSTEMS)[number];
 
 const LANGUAGE_TABS = "flex rounded-xl border border-border bg-hl p-0.75";
 const osTab =
-  "flex-1 rounded-md px-3 py-1.5 text-sm text-muted-foreground aria-selected:bg-card aria-selected:text-foreground aria-selected:shadow-sm focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11";
+  "flex-1 rounded-md text-sm aria-selected:bg-card aria-selected:text-foreground aria-selected:shadow-sm max-md:min-h-11";
 const tokenBox =
   "rounded-lg border border-dashed border-border bg-hl px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground";
 const codeLine = `${mono} block overflow-x-auto whitespace-pre rounded-lg border border-border bg-hl px-3 py-2.5 text-sm`;
@@ -167,14 +162,14 @@ function TokenBox({
         <FormAlert testId="wrap-failure">{failure}</FormAlert>
       )}
       {token === null ? (
-        <button
+        <Button
           type="button"
           disabled={pending}
           onClick={() => void issue()}
-          className={`${buttonSecondary} self-start max-md:w-full`}
+          variant="outline" className="self-start max-md:w-full"
         >
           {pending ? t("issuing") : t("issue")}
-        </button>
+        </Button>
       ) : (
         <>
           <span className="text-sm text-muted-foreground">{t("orRun")}</span>
@@ -223,10 +218,12 @@ function Download({
       <p className={eyebrow}>{t("eyebrow")}</p>
       <div role="tablist" aria-label={t("osLabel")} className={LANGUAGE_TABS}>
         {OPERATING_SYSTEMS.map((item) => (
-          <button
+          <Button
             key={item}
             id={tabId(item)}
             type="button"
+            variant="ghost"
+            size="sm"
             role="tab"
             aria-selected={os === item}
             tabIndex={os === item ? 0 : -1}
@@ -237,18 +234,18 @@ function Download({
             className={osTab}
           >
             {t(`os.${item}`)}
-          </button>
+          </Button>
         ))}
       </div>
-      <button
+      <Button
         type="button"
         disabled
         data-testid="download-installer"
         aria-describedby={`${baseId}-unpublished`}
-        className={`${buttonPrimary} w-full`}
+        variant="primary" className="w-full"
       >
         {t("button", { os: t(`os.${os}`) })}
-      </button>
+      </Button>
       {/* Not backed until #3897 lands. */}
       <p
         id={`${baseId}-unpublished`}
@@ -331,14 +328,14 @@ function CredentialColumn({
       )}
       {credential === null ? (
         <>
-          <button
+          <Button
             type="button"
             disabled={pending}
             onClick={() => void issue()}
-            className={`${buttonSecondary} self-start max-md:w-full`}
+            variant="outline" className="self-start max-md:w-full"
           >
             {pending ? t("issuing") : t("issue")}
-          </button>
+          </Button>
           <p className="text-sm text-muted-foreground">{t("issueNote")}</p>
         </>
       ) : null}
@@ -459,10 +456,11 @@ export function WrapAgent({
           className="grid grid-cols-2 border-b border-border md:grid-cols-4"
         >
           {WRAP_TABS.map((item) => (
-            <button
+            <Button
               key={item}
               id={tabId(item)}
               type="button"
+              variant="ghost"
               role="tab"
               aria-selected={tab === item}
               aria-controls={panelId}
@@ -471,7 +469,7 @@ export function WrapAgent({
                 setTab(item);
               }}
               onKeyDown={onKey}
-              className="flex min-h-11 flex-col items-start gap-0.5 border-b-2 border-transparent px-3.5 py-3 text-left aria-selected:border-accent-text aria-selected:bg-hl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+              className="flex h-auto min-h-11 flex-col items-start justify-start gap-0.5 whitespace-normal rounded-none border-0 border-b-2 border-transparent px-3.5 py-3 text-left font-normal aria-selected:border-accent-text aria-selected:bg-hl focus-visible:-outline-offset-2"
             >
               <span className="flex items-center gap-2 text-sm font-semibold">
                 {/* The SDK tab wraps an agent of your own, not a harness. */}
@@ -483,7 +481,7 @@ export function WrapAgent({
               <span className="font-mono text-xs text-muted-foreground max-md:hidden">
                 {t(`tabs.${item}.sub`)}
               </span>
-            </button>
+            </Button>
           ))}
         </div>
         <Panel tab={tab} tabId={tabId(tab)} panelId={panelId}>
@@ -533,14 +531,14 @@ export function WrapAgent({
         <span className="text-sm text-muted-foreground md:ml-auto">
           {t("caption")}
         </span>
-        <button
+        <Button
           type="button"
           disabled={pending}
           onClick={() => void advance()}
-          className={`${buttonSecondary} max-md:w-full`}
+          variant="outline" className="max-md:w-full"
         >
           {pending ? t("advancing") : t("continue")}
-        </button>
+        </Button>
       </div>
     </div>
   );

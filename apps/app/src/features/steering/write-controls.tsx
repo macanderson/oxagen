@@ -17,12 +17,8 @@ import type { ProposalStatus } from "@/data/contracts/steering";
 import type { ActionResult } from "@/server/kernel";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { routes, type SafePath } from "@/shared/safe-path";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  linkText,
-  textareaBase,
-} from "@/ui/control-styles";
+import { linkText, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { PullRequestLink, SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -107,17 +103,17 @@ function WriteDialog({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={`${testId}-open`}
         disabled={blocked}
-        className={primary && !blocked ? buttonPrimary : buttonSecondary}
+        variant={primary && !blocked ? "primary" : "outline"}
         onClick={() => {
           setOpen(true);
         }}
       >
         {copy.open}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
@@ -299,14 +295,14 @@ function WriteButton({
       {failure === null ? null : (
         <FormAlert testId={`${testId}-failure`}>{failure}</FormAlert>
       )}
-      <button
+      <Button
         type="submit"
         data-testid={testId}
         disabled={blocked || pending}
-        className={buttonSecondary}
+        variant="outline"
       >
         {pending ? pendingLabel : label}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -408,15 +404,15 @@ export function RevertSteeringPr({ org, ws, proposalId }: Target) {
   }
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
@@ -520,14 +516,14 @@ export function DropMemoryRecord({
       {failure === null ? null : (
         <FormAlert testId="drop-memory-record-failure">{failure}</FormAlert>
       )}
-      <button
+      <Button
         type="submit"
         disabled={pending}
         aria-label={pending ? undefined : t("label", { title })}
-        className={buttonSecondary}
+        variant="outline"
       >
         {pending ? t("pending") : t("confirm")}
-      </button>
+      </Button>
     </form>
   );
 }

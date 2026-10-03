@@ -1,11 +1,12 @@
-// diverged.ts: whether main holds commits Oxagen did not merge, and the pull
-// request that puts main back at the published commit.
+// diverged.ts: whether main holds commits that no pull request merged, and
+// the pull request that puts main back at the published commit.
 //
-// GitHub provenance comes from the host's merged pull request records. Commit
-// messages and authors cannot prove who merged a change. A `(#N)` at the end
-// of a title only says which pull request record to read. Equal tree hashes
+// GitHub provenance comes from the host's merged pull request records. A pull
+// request merged into main counts whoever merged it, in Oxagen or on GitHub
+// (ADR-296). Commit messages and authors prove nothing. A `(#N)` at the end of
+// a title only says which pull request record to read. Equal tree hashes
 // prove restoration to published files. GitLab retains its protected-branch
-// trailer checks.
+// trailer checks, because only Oxagen's bot can merge there.
 //
 // This module imports only types from ./health, so health.ts reaches it
 // through ./health.hosts.ts without a runtime cycle. Every host error the
@@ -43,19 +44,6 @@ const FIRST_VERSION = 1;
 
 /** The external id of the check run on a revert commit, so a rerun finds it. */
 const REVERT_CHECK_EXTERNAL_ID = "oxagen-steering-revert";
-
-/**
- * The check run adopt_steering_merges posts on each host merge a person
- * adopted in Oxagen (#5195). GitHub lets only the steering app post a run
- * under its app id, so the run is the record the history judge reads, and
- * nothing is written into the repository's history.
- */
-export const ADOPTION_CHECK_NAME = "Oxagen steering adoption";
-const ADOPTION_CHECK_EXTERNAL_ID = "oxagen-steering-adoption";
-/** Files a commit read lists before GitHub cuts the list. */
-const COMMIT_FILES_LIMIT = 300;
-/** Pages of 100 files a pull request read takes before it gives up. */
-const PULL_FILE_PAGES = 30;
 
 const SHORT_SHA = 7;
 /** Commits one GitHub compare page holds. More than this reads as truncated. */
@@ -227,10 +215,15 @@ function oxagenCommits(
   return made;
 }
 
-/** Whether main holds commits Oxagen did not merge, judged from `range`. */
+/**
+ * Whether main holds commits that no pull request merged, judged from
+ * `range`. `noun` is the host's name for one, so a GitLab reason says
+ * "merge request".
+ */
 export function judgeHistory(
   published: PublishedCommit,
   range: HistoryRange,
+  noun: "pull request" | "merge request" = "pull request",
 ): Divergence | null {
   if (range.status === "identical") return null;
   const main_sha = range.main_sha;
@@ -253,8 +246,8 @@ export function judgeHistory(
   if (first === undefined) return null;
   const reason =
     foreign.length === 1
-      ? `main holds 1 commit Oxagen did not merge: ${short(first.sha)}`
-      : `main holds ${foreign.length} commits Oxagen did not merge, starting with ${short(first.sha)}`;
+      ? `main holds 1 commit that no ${noun} merged: ${short(first.sha)}`
+      : `main holds ${foreign.length} commits that no ${noun} merged, starting with ${short(first.sha)}`;
   return { reason, main_sha };
 }
 
@@ -363,11 +356,7 @@ interface GithubPull {
 }
 
 interface GithubCheckRuns {
-  check_runs: {
-    external_id?: string | null;
-    conclusion?: string | null;
-    app?: { id?: number } | null;
-  }[];
+  check_runs: { external_id?: string | null; conclusion?: string | null }[];
 }
 
 function githubRoot(t: GithubHistoryTarget): string {
@@ -446,16 +435,6 @@ interface GithubMergedPull {
   merged?: boolean;
   merge_commit_sha?: string | null;
   base?: { ref?: string; repo?: { id?: number; full_name?: string } | null };
-  head?: { sha?: string } | null;
-  merged_by?: { type?: string; login?: string } | null;
-}
-
-/** One file a commit or a pull request changes, as GitHub lists it. */
-interface GithubChangedFile {
-  filename: string;
-  status: string;
-  sha?: string | null;
-  previous_filename?: string | null;
 }
 
 /** `Title (#12)`: the pull request number GitHub and Oxagen put on a squash title. */
@@ -469,106 +448,59 @@ function titlePull(message: string): number | null {
 }
 
 /**
- * The pull requests that may have merged as `sha`: those GitHub lists for the
- * commit, and the one its title names.
+ * Authenticate the merge against the full pull request returned by GitHub.
  *
  * GitHub fills in a commit's list of pull requests a few seconds after the
- * merge, so a read just after Oxagen merges finds none (#5157). Every merge
- * Oxagen makes ends its title with `(#N)`, so pull request N is read as well.
- * The title only says which pull request to read. The proof is the pull
- * request itself (see `mergedAs`). A forged title can name a real pull
- * request, but that pull request's merge commit is another commit, so the
- * forged one still fails.
- */
-async function candidatePulls(
-  t: GithubHistoryTarget,
-  sha: string,
-  message: string,
-): Promise<number[]> {
-  const listed = await t.rest.request<{ number: number }[]>(
-    "GET",
-    `${githubRoot(t)}/commits/${seg(sha)}/pulls?per_page=100`,
-  );
-  const numbers = need(listed.data, "GitHub commit pull requests").map(
-    (summary) => summary.number,
-  );
-  const named = titlePull(message);
-  if (named !== null && !numbers.includes(named)) numbers.push(named);
-  return numbers;
-}
-
-async function githubPull(
-  t: GithubHistoryTarget,
-  number: number,
-): Promise<GithubMergedPull> {
-  const response = await t.rest.request<GithubMergedPull>(
-    "GET",
-    `${githubRoot(t)}/pulls/${seg(number)}`,
-  );
-  return need(response.data, "GitHub pull request");
-}
-
-/** Whether GitHub says `pull` merged into this repository's production branch as exactly `sha`. */
-function mergedAs(t: GithubHistoryTarget, pull: GithubMergedPull, sha: string): boolean {
-  const repo = pull.base?.repo;
-  const sameRepo =
-    t.repo.id !== undefined
-      ? repo?.id === t.repo.id
-      : repo?.full_name?.toLowerCase() ===
-        `${t.repo.owner}/${t.repo.name}`.toLowerCase();
-  return (
-    pull.merged === true &&
-    pull.merge_commit_sha === sha &&
-    pull.base?.ref === (t.defaultBranch ?? STEERING_DEFAULT_BRANCH) &&
-    sameRepo
-  );
-}
-
-function mergedByApp(t: GithubHistoryTarget, pull: GithubMergedPull): boolean {
-  return (
-    pull.merged_by?.type === "Bot" &&
-    pull.merged_by.login === `${t.app.slug}[bot]`
-  );
-}
-
-/** Whether the steering app posted the adoption check run on `sha` (#5195). */
-async function githubAdopted(t: GithubHistoryTarget, sha: string): Promise<boolean> {
-  const res = await t.rest.request<GithubCheckRuns>(
-    "GET",
-    `${githubRoot(t)}/commits/${seg(sha)}/check-runs?check_name=${seg(ADOPTION_CHECK_NAME)}&app_id=${seg(t.app.id)}`,
-  );
-  return (res.data?.check_runs ?? []).some(
-    (run) =>
-      run.external_id === ADOPTION_CHECK_EXTERNAL_ID &&
-      run.conclusion === "success" &&
-      run.app?.id === t.app.id,
-  );
-}
-
-/**
- * Authenticate the merge against the full pull request returned by GitHub:
- * GitHub must say the app merged it into this repository's production branch
- * as exactly this commit.
+ * merge, so a read just after a merge finds none (#5157). Every squash merge
+ * ends its title with `(#N)`, so when the list does not prove the merge, pull
+ * request N is read as well. The title only says which pull request to read.
+ * The proof is the pull request itself: GitHub must say it merged into this
+ * repository's production branch as exactly this commit. A forged title can
+ * name a real pull request, but that pull request's merge commit is another
+ * commit, so the forged one still fails.
  *
- * A pull request a person merged on the host proves nothing about who
- * approved it. It counts only once a person the governance mode lets merge
- * adopted it in Oxagen, which leaves the app's adoption check run on the
- * commit (adopt_steering_merges, #5195). A commit no pull request merged, such
- * as a push past the branch rules, never counts.
+ * Who merged it does not matter (ADR-296, #5430). A person with write access
+ * can merge a steering PR on GitHub, and nothing on GitHub Free stops them
+ * (ADR-237). Oxagen reads that merge as it reads its own, so the webhook's
+ * health read stays healthy and the sync publishes main. A commit that no
+ * pull request merged, such as a direct push, never counts.
  */
 async function githubAuthenticatedMerge(
   t: GithubHistoryTarget,
   sha: string,
   message: string,
 ): Promise<boolean> {
-  let hostMerged = false;
-  for (const number of await candidatePulls(t, sha, message)) {
-    const pull = await githubPull(t, number);
-    if (!mergedAs(t, pull, sha)) continue;
-    if (mergedByApp(t, pull)) return true;
-    hostMerged = true;
+  const root = githubRoot(t);
+  const listed = await t.rest.request<{ number: number }[]>(
+    "GET",
+    `${root}/commits/${seg(sha)}/pulls?per_page=100`,
+  );
+  const numbers = need(listed.data, "GitHub commit pull requests").map(
+    (summary) => summary.number,
+  );
+  const named = titlePull(message);
+  if (named !== null && !numbers.includes(named)) numbers.push(named);
+  for (const number of numbers) {
+    const response = await t.rest.request<GithubMergedPull>(
+      "GET",
+      `${root}/pulls/${seg(number)}`,
+    );
+    const pull = need(response.data, "GitHub pull request");
+    const repo = pull.base?.repo;
+    const sameRepo =
+      t.repo.id !== undefined
+        ? repo?.id === t.repo.id
+        : repo?.full_name?.toLowerCase() ===
+          `${t.repo.owner}/${t.repo.name}`.toLowerCase();
+    if (
+      pull.merged === true &&
+      pull.merge_commit_sha === sha &&
+      pull.base?.ref === (t.defaultBranch ?? STEERING_DEFAULT_BRANCH) &&
+      sameRepo
+    )
+      return true;
   }
-  return hostMerged && (await githubAdopted(t, sha));
+  return false;
 }
 
 /** Judge the exact candidate, or the default branch, since `published`. */
@@ -868,137 +800,6 @@ export async function githubCloseRevert(
   await t.rest.request("PATCH", path, { state: "closed" });
 }
 
-// ── Adoption (GitHub) ────────────────────────────────────────────────────────
-
-/** A commit on main after the published one that no app merge or adoption proves. */
-export interface UnprovenCommit {
-  sha: string;
-  message: string;
-}
-
-/**
- * The commits on main since `published` that the history judge would call
- * foreign, oldest first, or why Oxagen cannot list them. Only a main that is
- * ahead of the published commit can be adopted: a rewritten or truncated
- * history has no list of merges to prove.
- */
-export async function githubUnproven(
-  t: GithubHistoryTarget,
-  published: PublishedCommit,
-): Promise<{ main_sha: string; commits: UnprovenCommit[] } | { refused: string }> {
-  const p7 = short(published.sha);
-  const res = await t.rest.request<GithubCompare>(
-    "GET",
-    `${githubRoot(t)}/compare/${seg(published.sha)}...${seg(t.defaultBranch ?? STEERING_DEFAULT_BRANCH)}?per_page=${COMPARE_PAGE}`,
-    undefined,
-    [404],
-  );
-  if (res.status === 404)
-    return { refused: `main no longer contains the published commit ${p7}` };
-  const compare = need(res.data, "GitHub compare");
-  if (compare.status === "identical")
-    return { main_sha: published.sha, commits: [] };
-  if (compare.status !== "ahead")
-    return { refused: `main no longer contains the published commit ${p7}` };
-  if (compare.commits.length < compare.total_commits)
-    return {
-      refused: `main holds more commits since the published commit ${p7} than Oxagen can read`,
-    };
-  const baseTree = compare.base_commit.commit.tree.sha;
-  let restored_at = -1;
-  compare.commits.forEach((commit, index) => {
-    if (commit.commit.tree.sha === baseTree) restored_at = index;
-  });
-  const commits: UnprovenCommit[] = [];
-  for (const commit of compare.commits.slice(restored_at + 1))
-    if (!(await githubAuthenticatedMerge(t, commit.sha, commit.commit.message)))
-      commits.push({ sha: commit.sha, message: commit.commit.message });
-  const last = compare.commits.at(-1);
-  return { main_sha: last?.sha ?? published.sha, commits };
-}
-
-/** The pull request a person merged on the host as one commit, and the head it merged. */
-export interface HostMerge {
-  number: number;
-  headSha: string;
-}
-
-/**
- * The pull request GitHub says merged into this repository's production
- * branch as exactly `sha`, by someone other than the steering app, or null.
- */
-export async function githubHostMerge(
-  t: GithubHistoryTarget,
-  commit: UnprovenCommit,
-): Promise<HostMerge | null> {
-  for (const number of await candidatePulls(t, commit.sha, commit.message)) {
-    const pull = await githubPull(t, number);
-    const headSha = pull.head?.sha;
-    if (mergedAs(t, pull, commit.sha) && !mergedByApp(t, pull) && typeof headSha === "string")
-      return { number, headSha };
-  }
-  return null;
-}
-
-function changeKey(file: GithubChangedFile): string {
-  return [file.status, file.filename, file.previous_filename ?? "", file.sha ?? ""].join("\t");
-}
-
-/**
- * Whether merge commit `sha` changes exactly what pull request `number`
- * changes: the same paths, with the same status and the same blob. The
- * commit is compared with its first parent, so a pull request merged after
- * another one still matches when the two touched different files. A list
- * GitHub cuts short proves nothing, so it answers false.
- */
-export async function githubSameChanges(
-  t: GithubHistoryTarget,
-  sha: string,
-  number: number,
-): Promise<boolean> {
-  const root = githubRoot(t);
-  const commit = await t.rest.request<{ files?: GithubChangedFile[] }>(
-    "GET",
-    `${root}/commits/${seg(sha)}`,
-  );
-  const merged = need(commit.data, "GitHub commit").files ?? [];
-  if (merged.length >= COMMIT_FILES_LIMIT) return false;
-  const proposed: GithubChangedFile[] = [];
-  for (let page = 1; ; page++) {
-    if (page > PULL_FILE_PAGES) return false;
-    const res = await t.rest.request<GithubChangedFile[]>(
-      "GET",
-      `${root}/pulls/${seg(number)}/files?per_page=100${pageParam(page)}`,
-    );
-    const rows = need(res.data, "GitHub pull request files");
-    proposed.push(...rows);
-    if (rows.length < 100) break;
-  }
-  const a = merged.map(changeKey).sort();
-  const b = proposed.map(changeKey).sort();
-  return a.length === b.length && a.every((key, index) => key === b[index]);
-}
-
-/**
- * Post the adoption check run on `sha`, so every later history read counts
- * the commit as Oxagen's (#5195). `summary` names who adopted it and from
- * which pull request.
- */
-export async function githubRecordAdoption(
-  t: GithubHistoryTarget,
-  sha: string,
-  summary: string,
-): Promise<void> {
-  await t.rest.request("POST", `${githubRoot(t)}/check-runs`, {
-    name: ADOPTION_CHECK_NAME,
-    head_sha: sha,
-    status: "completed",
-    conclusion: "success",
-    external_id: ADOPTION_CHECK_EXTERNAL_ID,
-    output: { title: "Adopted in Oxagen", summary },
-  });
-}
-
 // ── GitLab ───────────────────────────────────────────────────────────────────
 
 export interface GitlabHistoryTarget {
@@ -1146,7 +947,7 @@ async function gitlabRestoredAt(
   return -1;
 }
 
-/** Whether main holds commits Oxagen did not merge since `published`. */
+/** Whether main holds commits that no pull request merged since `published`. */
 export async function gitlabDiverged(
   t: GitlabHistoryTarget,
   published: PublishedCommit,
@@ -1154,13 +955,17 @@ export async function gitlabDiverged(
   const main = await gitlabMainSha(t);
   if (main === published.sha) return null;
   const gone = (): Divergence | null =>
-    judgeHistory(published, {
-      status: "diverged",
-      commits: [],
-      truncated: false,
-      main_sha: main,
-      restored_at: -1,
-    });
+    judgeHistory(
+      published,
+      {
+        status: "diverged",
+        commits: [],
+        truncated: false,
+        main_sha: main,
+        restored_at: -1,
+      },
+      "merge request",
+    );
   // 400: GitLab no longer knows the published commit. 404: no merge base.
   const base = await t.rest.request<{ id: string }>(
     "GET",
@@ -1182,13 +987,19 @@ export async function gitlabDiverged(
     message: commit.message,
   }));
   const truncated = compare.compare_timeout === true;
-  return judgeHistory(published, {
-    status: "ahead",
-    commits,
-    truncated,
-    main_sha: main,
-    restored_at: truncated ? -1 : await gitlabRestoredAt(t, published.sha, commits),
-  });
+  return judgeHistory(
+    published,
+    {
+      status: "ahead",
+      commits,
+      truncated,
+      main_sha: main,
+      restored_at: truncated
+        ? -1
+        : await gitlabRestoredAt(t, published.sha, commits),
+    },
+    "merge request",
+  );
 }
 
 async function gitlabFileContent(

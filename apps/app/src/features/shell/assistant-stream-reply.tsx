@@ -15,6 +15,7 @@
 // nothing to load by, so it offers to ask again.
 import { useTranslations } from "next-intl";
 import { routes } from "@/shared/safe-path";
+import { Button } from "@/ui/button";
 import { linkText } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { AssistantMarkdown } from "./assistant-markdown";
@@ -89,15 +90,17 @@ export function AssistantDropped({
         {runId === null ? t("dropped.noRun") : t("dropped.body")}
       </p>
       {runId === null ? (
-        <button
+        <Button
           type="button"
+          variant="link"
+          size="xs"
           data-testid="assistant-retry"
           disabled={retryDisabled}
           onClick={onRetry}
-          className={`mt-1.5 text-sm ${linkText} disabled:opacity-60`}
+          className="mt-1.5 h-auto px-0 disabled:opacity-60"
         >
           {t("retry")}
-        </button>
+        </Button>
       ) : (
         <>
           <p className="mt-1 font-mono text-xs text-muted-foreground">
@@ -112,16 +115,18 @@ export function AssistantDropped({
           </p>
           <DroppedLoadLine load={load} />
           {load === "ended" ? null : (
-            <button
+            <Button
               type="button"
+              variant="link"
+              size="xs"
               data-testid="assistant-load-reply"
               disabled={load === "loading"}
               aria-busy={load === "loading" || undefined}
               onClick={onLoad}
-              className={`mt-1.5 text-sm ${linkText} disabled:opacity-60`}
+              className="mt-1.5 h-auto px-0 disabled:opacity-60"
             >
               {load === "loading" ? t("dropped.loading") : t("dropped.load")}
-            </button>
+            </Button>
           )}
         </>
       )}

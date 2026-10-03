@@ -547,6 +547,27 @@ export interface CliInstallReport {
   skipped: string[];
   profile: string | null;
   note: string;
+  /**
+   * What the launch-time re-apply did, when this launch found an agent whose
+   * hooks ran another of the app's copies (#5421). Absent when none did.
+   */
+  reapply?: {
+    state: "moved" | "failed";
+    from: string[];
+    detail: string;
+  };
+}
+
+/**
+ * A launch-time re-apply that failed, as the sentence the Rust side wrote
+ * for it, or null. Shown as an alert where the Re-apply button is, so the
+ * person sees it on every launch until a re-apply succeeds.
+ */
+export function describeFailedReapply(
+  install: CliInstallReport | null | undefined,
+): string | null {
+  if (install?.reapply?.state !== "failed") return null;
+  return install.note;
 }
 
 /** The Command line panel's one line on what the launch-time auto-link did. */
@@ -558,6 +579,10 @@ export function describeCliInstall(
   const profile = install.profile ? ` Updated ${install.profile}.` : "";
   const skipped =
     install.skipped.length > 0 ? ` Skipped ${install.skipped.join(", ")}.` : "";
+  const moved =
+    install.reapply?.state === "moved"
+      ? " The hooks and the collector were moved to this version."
+      : "";
   switch (install.state) {
     case "linked":
       // "linked" with nothing in `files` means every link was already
@@ -565,22 +590,26 @@ export function describeCliInstall(
       // "Linked nothing into ...". `profile` can still be set (the profile
       // block is checked every launch regardless), so it still shows.
       return install.files.length > 0
-        ? `Linked ${files} into ${install.dir} on launch.${profile}${skipped}`
-        : `Already on PATH in ${install.dir}.${profile}${skipped}`;
+        ? `Linked ${files} into ${install.dir} on launch.${profile}${skipped}${moved}`
+        : `Already on PATH in ${install.dir}.${profile}${skipped}${moved}`;
     case "already":
       // The Rust side leaves `files` empty here: nothing needed linking, so
       // there is nothing to list. Say so plainly rather than "nothing
       // already on PATH".
-      return `Already on PATH in ${install.dir}.${skipped}`;
+      return `Already on PATH in ${install.dir}.${skipped}${moved}`;
     case "skipped":
       return `Skipped linking on launch: ${install.note}`;
     case "opted_out":
       // "Remove links" lands here, and it reports what it refused to delete
       // (a binary of the same name that Oxagen did not create) the same way
       // the install path reports what it refused to overwrite.
-      return `Not linked: you opted out. ${install.note}${skipped}`;
+      return `Not linked: you opted out. ${install.note}${skipped}${moved}`;
     case "failed":
-      return `Could not link into ${install.dir}: ${install.note}`;
+      // A failed re-apply is reported where the Re-apply button is
+      // (`describeFailedReapply`); the links themselves are fine.
+      return install.reapply?.state === "failed"
+        ? `Linked into ${install.dir}, but the hooks and the collector were not moved to this version.`
+        : `Could not link into ${install.dir}: ${install.note}`;
     case "pending":
       return "Linking on launch…";
     default:

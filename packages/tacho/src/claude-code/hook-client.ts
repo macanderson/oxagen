@@ -1116,8 +1116,13 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   // SessionEnd waits out the daemon's six-hour idle bound (#3989). The walk
   // runs at the session's start and at each prompt, not on every tool call:
   // the registry keeps a pid once a hook has carried it, and the prompt is
-  // the fallback for a session first seen mid-run.
-  if (codex && CODEX_PID_EVENTS.has(input.hook_event_name))
+  // the fallback for a session first seen mid-run. An unenrolled machine
+  // posts nothing, so it runs no `ps` either (H-14), as for Stella.
+  if (
+    codex &&
+    CODEX_PID_EVENTS.has(input.hook_event_name) &&
+    (host !== undefined || hostReadError !== undefined)
+  )
     harnessPid = (
       deps.harnessPid ?? (() => codexHarnessPid(process.ppid, platform))
     )();

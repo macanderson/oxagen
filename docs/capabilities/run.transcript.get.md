@@ -207,6 +207,28 @@ A read from a cursor reads a window of the run, not the run again from its first
 
 A window counts turns and cost from its own first frame, and `from` carries the run's turn and cost there. So a window's entries carry the run's turn numbers and cumulative cost, never the window's own count of them.
 
+### The tail start (#4340)
+
+A coding agent's run is often one long turn, and a window that starts at the turn's first frame then holds most of the run. So a read of a live run at `steps` with no `query`, the read the Run page makes as it follows a run, also picks a later frame for the next read from its cursor: the tail start. The server keeps it per process, keyed by the cursor that read wrote, and the next read from that cursor takes it. That read reads the run's own chain from the tail start, with the subagent chains spawned after it, so its cost follows the frames recorded since the reader's last read and not the turn's length.
+
+The tail start is the first frame of a model step on the run's own chain. It is the latest one that meets every rule:
+
+- it lies at or before the first frame of the last entry the reader was sent, before any entry the page had no room for, and before any call still waiting on its result;
+- no entry spans it;
+- the server received it before the read's settle margin (60 seconds, `RECEIPT_SETTLE_MS`), so its batch had landed. No earlier frame of the run's own chain can land after it. The host sends a chain's next batch only after ingest accepted the one before, and ingest accepts a batch only once ClickHouse holds it;
+- it lies past every later sighting of a model call the read shows on the run's own chain. When a second source kept a richer body, the read shows that copy in place of the first sighting and moves the first one's cost onto it, and a read that started between the two would show the copy without that cost. So a run whose model calls each show as such a copy, as a harness recorded with no proxy can, gets no tail start and reads the turn's window;
+- on a run that counts its turns by their recorded index, it carries one.
+
+The latest model step the reader was sent, or an earlier one, is the start, so a reply's echo check (see Words) compares it with a model step the read holds.
+
+Inside a turn the fold joins frames that share a call key however far apart they are, and drops a model call's second sighting by its key. So the server keeps with the tail start every call key the turn's window holds before it, with its chain. A read from the tail start that holds a frame naming one of those keys reads the turn's window instead, and folds the same entries a read of the whole turn folds. The tail start also carries the run's turn, cumulative cost and proxy state at that frame, and whether the run counts its turns by `turn_start` frames, so a read from it with no `turn_start` of its own counts turns as the run does.
+
+A cursor with no tail start in the process that serves its read reads the turn's window, as every read did before #4340: another process served the read before it, the process restarted, or the start was evicted. So a reader whose stream reconnects resumes from its cursor either way, and the entries it is sent are the same.
+
+The process keeps at most 512 tail starts and 32,768 call keys across them (`TAIL_CACHE_LIMITS` in `lib/transcript-tail-cache.ts`), and evicts the oldest first. It keeps no frames, bodies or text. A reader holds one tail start at a time, since its next read takes the one before. A turn with more call keys than the whole bound keeps no tail start.
+
+One check differs from a read of the turn's window. A read from a tail start compares a reply with its turn's prompt only when the prompt lies inside the read, so a reply there that repeats the prompt word for word stays shown. Only recorders from before #4051 sealed such a copy of the prompt.
+
 A read falls back to the whole run when only the whole run can place its entries:
 
 - a subagent chain that began before the window and has recorded since the receipt, less 10 seconds for the ingest's own Postgres write, or that the cursor names;

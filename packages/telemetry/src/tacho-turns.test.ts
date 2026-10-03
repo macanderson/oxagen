@@ -304,10 +304,12 @@ describe("selectTachoTurnGroups", () => {
     expect(query).toMatch(
       /groupArrayIf\(\(seq, multiIf\([\s\S]*\), NOT \(kind = 'llm_call' AND attrs\[\{duplicateAttr:String\}\] != ''\)\)/,
     );
-    // The legacy OTel spelling of Claude Code's own check is not a gate.
+    // The legacy OTel and hook spellings of Claude Code's own check are not
+    // gates.
     expect(query).toContain(
       "JSONExtractString(body, 'policy_source') = 'harness'",
     );
+    expect(query).toContain("(startsWith(source, 'otel') OR source = 'hook')");
     // The model halves are not tacho kinds, so the query no longer asks.
     expect(query).not.toContain("model.request");
   });

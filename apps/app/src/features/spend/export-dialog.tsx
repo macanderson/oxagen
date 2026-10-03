@@ -10,7 +10,7 @@
 // key (ADR-060 §6), so the dialog offers the CSV alone and says so.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
-import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -85,15 +85,15 @@ export function ExportDialog({ at, month }: { at: SpendAt; month: string }) {
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("actions.exportReport")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}

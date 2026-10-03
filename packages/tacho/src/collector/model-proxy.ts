@@ -220,6 +220,11 @@ import {
   type SessionRecord,
   type SessionRegistry,
 } from "./registry";
+import {
+  onSessionQueue,
+  recordOnChain,
+  type SessionExclusive,
+} from "./chain-write";
 
 /** What `beforeForward` is handed, and what it returns. */
 export interface ForwardRequest {
@@ -312,6 +317,12 @@ export interface ModelProxyDeps {
     events: readonly TachoEvent[],
     bodies?: readonly FrameBody[],
   ) => void;
+  /**
+   * Run a call's frame on its session's queue, where the session's hooks
+   * run. The daemon's is the transcript tailer's. Absent, the frame is sealed
+   * as the call settles.
+   */
+  exclusive?: SessionExclusive;
   policy: () => ModelProxyPolicy;
   upstreams?: () => ModelUpstreams;
   /** Observed spend already on a session's chain, read once per session. */
@@ -416,6 +427,25 @@ interface CallAttempt {
   };
   /** The call's frame is sealed, or `settle` will seal it. */
   done: boolean;
+}
+
+/**
+ * What a metered call spent, counted the moment it settles. The frame that
+ * records it can wait on the session's queue, but the next call's admission
+ * reads the spend now.
+ */
+interface CallMetering {
+  usage: ObservedUsage;
+  model: string | undefined;
+  /** The stream stopped before the vendor's closing count, so `usage` is partly estimated. */
+  cut: boolean;
+  priced: number | undefined;
+  /** Priced by a family row alone, so the figure is the family's. */
+  familyPriced: boolean;
+  settledAt: number;
+  durationMs: number;
+  /** The call's error class, or `http_<status>` for a 4xx or 5xx answer. */
+  failed: string | undefined;
 }
 const DEFAULT_UPSTREAM_IDLE_MS = 10 * 60_000;
 const DEFAULT_BEFORE_FORWARD_TIMEOUT_MS = 250;
@@ -1653,12 +1683,17 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     }
     callsObserved += 1;
     observed.set(sessionKey, (observed.get(sessionKey) ?? 0) + 1);
+    // A session that ended while its keep-alive was out has its frame on the
+    // host's own chain, as `sealCall` does for a call.
+    const closed = record.sealed || record.pendingTerminal === true;
     // The request is stored against the parent's when the parent's frame
     // stored that request: the messages, system prompt and tools are the
-    // parent's, so only the changed members ship.
+    // parent's, so only the changed members ship. On the host's chain it is
+    // stored whole. The parent's request is on the session's chain, so a
+    // reader of the host's chain could not resolve a fold against it.
     const requestText = payload.body.toString("utf8");
     const memory = new RequestPrefixMemory();
-    if (payload.priorShape !== undefined)
+    if (payload.priorShape !== undefined && !closed)
       memory.remember("parent", {
         text: "",
         fullDigest: payload.priorShape.requestDigest,
@@ -1672,7 +1707,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     let requestContent =
       fold.storedBytes > TACHO_MAX_BODY_BYTES ? undefined : fold.text;
     let responseContent = answer.responseText;
-    // The same shared cap `settleMetered` holds an exchange to: the response
+    // The same shared cap `sealCall` holds an exchange to: the response
     // is dropped first, then the request if it alone is still too large.
     if (requestContent !== undefined && responseContent !== undefined) {
       const both = Buffer.byteLength(
@@ -1699,7 +1734,6 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     const failed =
       answer.errorClass ??
       (answer.status >= 400 ? `http_${answer.status}` : undefined);
-    const closed = record.sealed || record.pendingTerminal === true;
     const chain = closed ? deps.hostRecorder() : record.recorder;
     const callBody: Record<string, unknown> = {
       provider: "anthropic",
@@ -2167,37 +2201,64 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       attempt.done = true;
       set.delete(entry);
       if (set.size === 0) inFlight.delete(sessionKey);
-      // Taken before the seal, so a write that fails takes the frame's seq
-      // back with it. Left advanced, the recorder stood one seq past a WAL
-      // tail that never held the frame. The next frame then sealed a gap,
-      // and the control plane refuses a chain from its first gap on (#4311).
-      // `settleMetered` is synchronous, so no other writer seals between
-      // the mark and the rollback.
-      const mark = recorder.markChain();
-      let landed = false;
+      // Counted now, as the call leaves the in-flight set, so a call admitted
+      // next reads what this one spent. Only the frame waits below.
+      let metering: CallMetering | undefined;
       try {
-        landed = settleMetered(errorClass);
+        metering = meterCall(errorClass);
       } catch (error) {
-        // Sealing a frame or appending it to the WAL must never surface
-        // here: this runs inside response, error and close event listeners
-        // with nothing above it to catch a throw, and Node treats an
-        // uncaught exception thrown from a listener as fatal, which would
-        // take the whole daemon down mid-call over one frame. The response
-        // already sent, or already decided, is unaffected. Only this call's
-        // own frame is lost, with its body, and that is logged rather than
-        // silent. This call was never remembered, so no later call points
-        // at the body it lost.
-        try {
-          recorder.rollbackChain(mark);
-        } catch (rollbackError) {
-          deps.log(
-            `model proxy: rolling the chain back after a failed frame failed too: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
-          );
-        }
-        deps.log(
-          `model proxy: sealing the call's frame failed, the response the caller already has is unaffected: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        logLostFrame(error);
+        return;
       }
+      // No frame seals for a call the proxy does not meter, so nothing holds
+      // its request and no later call may point at it.
+      if (metering === undefined) return;
+      const counted = metering;
+      const land = (): void => {
+        let landed = false;
+        try {
+          landed = sealCall(counted);
+        } catch (error) {
+          logLostFrame(error);
+        }
+        afterLanding(landed, errorClass);
+      };
+      // A session's chain is written on its queue, where its hooks run. A
+      // hook can stand between its seal and its write: a prompt waits up to
+      // 500 ms on its recalled memories. Sealed beside it, this frame took
+      // the seq after the hook's frame and reached the WAL first. The hook's
+      // write was then refused, its rollback left the chain behind the WAL,
+      // and the session recorded nothing more. The response is already
+      // piped, so the caller never waits on the queue. A call no session was
+      // found for goes on the daemon's own chain, which has no queue.
+      if (record === undefined) land();
+      else
+        void onSessionQueue(deps.exclusive, record, land).catch(
+          (error: unknown) => logLostFrame(error),
+        );
+    };
+
+    /**
+     * Log a call's frame that could not be sealed or written. This runs
+     * inside response, error and close event listeners, or on a session's
+     * queue, with nothing above it to catch a throw. Node treats an uncaught
+     * exception thrown from a listener as fatal, which would take the whole
+     * daemon down mid-call over one frame. The response already sent, or
+     * already decided, is unaffected. Only this call's own frame is lost,
+     * with its body, and that is logged rather than silent. This call was
+     * never remembered, so no later call points at the body it lost.
+     */
+    const logLostFrame = (error: unknown): void => {
+      deps.log(
+        `model proxy: sealing the call's frame failed, the response the caller already has is unaffected: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    };
+
+    /** What the call's frame changes once it is on the WAL, or is not. */
+    const afterLanding = (
+      landed: boolean,
+      errorClass: string | undefined,
+    ): void => {
       // The call's frame, with its request stored as `fold.text`, is on the
       // WAL. Only now does the call become the session's prior (#4348), and
       // its system context goes beside it: sealing the frame measured it, so
@@ -2247,8 +2308,8 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
             },
           });
         } catch (error) {
-          // Like the seal above, this runs inside a response listener, where
-          // a throw would take the daemon down. The call is unaffected.
+          // Like the seal above, this runs where nothing above it catches a
+          // throw, and one would take the daemon down. The call is unaffected.
           deps.log(
             `model proxy: the cache keep-alive could not take this call: ${error instanceof Error ? error.message : String(error)}`,
           );
@@ -2257,14 +2318,13 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     };
 
     /**
-     * Seal the call's frame and write it to the WAL. Returns true when the
-     * frame stored this call's request as `fold.text`, so a later call may
-     * cut against it.
+     * Count what a metered call spent, as it settles. Undefined for a call
+     * the proxy does not meter.
      */
-    const settleMetered = (errorClass: string | undefined): boolean => {
-      // No frame seals for a call the proxy does not meter, so nothing holds
-      // its request and no later call may point at it.
-      if (!metered) return false;
+    const meterCall = (
+      errorClass: string | undefined,
+    ): CallMetering | undefined => {
+      if (!metered) return undefined;
       const usage: ObservedUsage = meter?.end() ?? {};
       const model = usage.model ?? requestModel;
       // A stream that stopped before the vendor's closing count (the caller
@@ -2298,9 +2358,37 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       if (priced !== undefined) daySpend.add(utcDay(settledAt), priced);
       callsObserved += 1;
       observed.set(sessionKey, (observed.get(sessionKey) ?? 0) + 1);
-      const failed =
-        errorClass ??
-        (status !== undefined && status >= 400 ? `http_${status}` : undefined);
+      return {
+        usage,
+        model,
+        cut,
+        priced,
+        familyPriced,
+        settledAt,
+        durationMs: Math.max(0, deps.now() - startedAt),
+        failed:
+          errorClass ??
+          (status !== undefined && status >= 400
+            ? `http_${status}`
+            : undefined),
+      };
+    };
+
+    /**
+     * Seal the call's frame and write it to the WAL. Returns true when the
+     * frame stored this call's request as `fold.text`, so a later call may
+     * cut against it.
+     */
+    const sealCall = ({
+      usage,
+      model,
+      cut,
+      priced,
+      familyPriced,
+      settledAt,
+      durationMs,
+      failed,
+    }: CallMetering): boolean => {
       const responseText = responseBody.text();
       // The exchange ships at most `TACHO_MAX_BODY_BYTES`, request and
       // response together: `prepareContent` (evidence/frame-body.ts) holds no
@@ -2309,17 +2397,27 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       // request alone — usually the smaller half, already folded down to
       // what changed — would have replayed fine on its own. The response is
       // dropped first.
-      // The session can end while its call is still streaming. Its chain is
-      // then sealed, or its terminal is on the way to the WAL, and a frame
-      // sealed there would follow its `agent_stop`. The call goes to the
-      // host's own chain instead, as one that starts after the session ended
-      // does (`session_closed`, C-04). The request is stored whole there: a
-      // fold points at the session's previous body, which sits on another
-      // chain. The session's next call, after a resume, folds against
-      // nothing rather than against a body stored on the host's chain.
+      // The session can end while its call is still streaming, or while
+      // this frame waits on its queue. Its chain is then sealed, or its
+      // terminal is on the way to the WAL, and a frame sealed there would
+      // follow its `agent_stop`. The call goes to the host's own chain
+      // instead, as one that starts after the session ended does
+      // (`session_closed`, C-04). The request is stored whole there: a fold
+      // points at the session's previous body, which sits on another chain.
+      // The session's next call, after a resume, folds against nothing
+      // rather than against a body stored on the host's chain. The record is
+      // looked up again here, because a task queued ahead of this one can
+      // replace it (`SessionRegistry.restore`), and the recorder it held then
+      // writes past the chain the new one holds.
+      const owner =
+        record === undefined
+          ? undefined
+          : deps.registry.byUuid(record.recorder.sessionUuid);
       const closed =
         record !== undefined &&
-        (record.sealed || record.pendingTerminal === true);
+        (owner === undefined ||
+          owner.sealed ||
+          owner.pendingTerminal === true);
       const unfolded = closed && fold !== undefined;
       if (unfolded) priors.forget(sessionKey);
       let requestContentText = unfolded
@@ -2349,8 +2447,8 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         }
       }
       // Whether this frame stores the folded request. Only then may a later
-      // call cut against this one (`settle` remembers it once the frame is
-      // on the WAL). A request cut for size here, alone or only once paired
+      // call cut against this one (`afterLanding` remembers it once the frame
+      // is on the WAL). A request cut for size here, alone or only once paired
       // with the response, is stored nowhere, so this call is never
       // remembered and the next call folds against the last one that did
       // ship, or stores its request whole. It never points at a body nobody
@@ -2375,7 +2473,14 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
             ? "too_large"
             : undefined;
       const exchange = exchangeContent(requestContentText, responseContentText);
-      const chain = closed ? deps.hostRecorder() : recorder;
+      // Chosen before the mark `recordOnChain` takes, so a write that fails
+      // takes back the chain the frame was sealed on.
+      const chain =
+        owner !== undefined && !closed
+          ? owner.recorder
+          : closed
+            ? deps.hostRecorder()
+            : recorder;
       const callBody: Record<string, unknown> = {
         provider: route.provider,
         ...(model !== undefined ? { model } : {}),
@@ -2421,7 +2526,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         ...(firstByteAt !== undefined
           ? { ttft_ms: Math.max(0, firstByteAt - startedAt) }
           : {}),
-        api_duration_ms: Math.max(0, deps.now() - startedAt),
+        api_duration_ms: durationMs,
         ...(status !== undefined ? { api_status_code: status } : {}),
         ...(failed !== undefined || usage.streamError !== undefined
           ? { api_error_class: failed ?? `stream_${usage.streamError}` }
@@ -2433,12 +2538,14 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       };
       // Judged against the session's ledger too, so the session's own record
       // of this call, arriving later, is stamped a duplicate of this frame.
-      const sessionSighting = closed
-        ? recorder.judgeModelCallSealedElsewhere(callBody)
-        : undefined;
-      deps.record(
-        [
-          chain.sealCollectorEvent("llm_call", callBody, {
+      const sessionSighting =
+        closed && record !== undefined
+          ? (owner ?? record).recorder.judgeModelCallSealedElsewhere(callBody)
+          : undefined;
+      recordOnChain(
+        chain,
+        (sealing) => [
+          sealing.sealCollectorEvent("llm_call", callBody, {
             ts: toProtocolTimestamp(settledAt),
             fidelity: "proxy",
             // The recorder redacts these bytes, digests what is left and puts
@@ -2516,7 +2623,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
             },
           }),
         ],
-        chain.takeBodies(),
+        deps.record,
       );
       sessionSighting?.commit();
       return shipsFold;

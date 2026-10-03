@@ -15,7 +15,7 @@ import {
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { ShellNotification } from "@/data/contracts/shell";
-import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { useFormatter } from "@/ui/formatter";
 import { useNavigate } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
@@ -123,15 +123,15 @@ export function NotificationsDialog({ data }: { data: ShellData }) {
                 })}
           </p>
           {unreadIds.length > 0 && ws !== null ? (
-            <button
+            <Button
               type="button"
               data-testid="mark-all-read"
               disabled={pending}
               onClick={() => void markAll()}
-              className={buttonSecondary}
+              variant="outline"
             >
               {t("markAll")}
-            </button>
+            </Button>
           ) : null}
         </>
       }

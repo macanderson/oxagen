@@ -240,6 +240,17 @@ export const workCollectors = workSchema.table(
     cursor: text("cursor"),
     /** The SHA-256 of the file this row mirrors. */
     fileHash: text("file_hash").notNull(),
+    /**
+     * The file's [write_back] switches as the row stores them. A switch the
+     * row leaves out reads off, never the file's default (#4775). Every
+     * switch is off until a person turns one on.
+     */
+    writeBack: jsonb("write_back")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(
+        sql`'{"certify_note": false, "send_note": false, "status": false, "close": false, "labels": false}'::jsonb`,
+      ),
   },
   (t) => ({
     nameUniq: uniqueIndex("collectors_name_uniq").on(

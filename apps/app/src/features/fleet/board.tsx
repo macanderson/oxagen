@@ -48,21 +48,8 @@ import {
   UNANSWERED,
   useActionFailure,
 } from "@/ui/command-failure";
-import {
-  buttonDanger,
-  buttonPrimary,
-  buttonSecondary,
-  mono,
-  panel,
-  panelHeader,
-  panelTitle,
-  statNote,
-  statStrip,
-  statTerm,
-  statTile,
-  statValue,
-  textareaBase,
-} from "@/ui/control-styles";
+import { buttonSecondary, mono, panel, panelHeader, panelTitle, statNote, statStrip, statTerm, statTile, statValue, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
@@ -332,7 +319,7 @@ function Chips({
   return (
     <div role="group" aria-label={t("chipsLabel")} className="flex gap-1.5">
       {RUN_CHIPS.map((name) => (
-        <button
+        <Button
           key={name}
           type="button"
           aria-pressed={chip === name}
@@ -341,10 +328,10 @@ function Chips({
           onClick={() => {
             onChip(name);
           }}
-          className={`${buttonSecondary} px-2.5 py-1 text-sm ${chip === name ? "border-rule bg-hl font-semibold text-foreground" : ""}`}
+          variant="outline" className={`px-2.5 py-1 text-sm ${chip === name ? "border-rule bg-hl font-semibold text-foreground" : ""}`}
         >
           {t(`chips.${name}`)}
-        </button>
+        </Button>
       ))}
     </div>
   );
@@ -376,7 +363,7 @@ function ColumnPicker({
       testId="columns-dialog"
       footerNote={t("columnsPicker.saved")}
       footer={
-        <button
+        <Button
           type="button"
           data-testid="columns-reset"
           data-touch-target=""
@@ -384,10 +371,10 @@ function ColumnPicker({
           onClick={() => {
             onChange({ ...prefs, hidden: new Set() });
           }}
-          className={buttonSecondary}
+          variant="outline"
         >
           {t("columnsPicker.reset")}
-        </button>
+        </Button>
       }
     >
       <fieldset className="flex flex-col gap-0.5">
@@ -664,7 +651,7 @@ function RunRowView({
             {t(action)}
           </SafeLink>
         ) : (
-          <button
+          <Button
             type="button"
             data-testid={`row-${action}`}
             data-touch-target=""
@@ -677,10 +664,10 @@ function RunRowView({
               if (action === "pause") onPause(run);
               else onExport(run);
             }}
-            className={`${buttonSecondary} px-2.5 py-1 text-sm`}
+            variant="outline" className="px-2.5 py-1 text-sm"
           >
             {t(action)}
-          </button>
+          </Button>
         )}
       </td>
     </tr>
@@ -865,7 +852,7 @@ function PauseDialog({
   const actions = ledger ? (
     applied !== null ? null : confirmingCancel ? (
       <>
-        <button
+        <Button
           key="cancel-back"
           ref={backRef}
           type="button"
@@ -881,11 +868,11 @@ function PauseDialog({
             setFailure(null);
             setConfirmingCancel(false);
           }}
-          className={buttonSecondary}
+          variant="outline"
         >
           {t("ledgerCancelBack")}
-        </button>
-        <button
+        </Button>
+        <Button
           key="cancel-confirm"
           type="button"
           data-touch-target=""
@@ -899,14 +886,14 @@ function PauseDialog({
             if (event.detail > 1) return;
             send("cancel");
           }}
-          className={buttonDanger}
+          variant="destructive-outline"
         >
           {pending ? command("cancel.pending") : t("ledgerCancelConfirm")}
-        </button>
+        </Button>
       </>
     ) : (
       <>
-        <button
+        <Button
           key="cancel-run"
           ref={cancelRunRef}
           type="button"
@@ -917,32 +904,32 @@ function PauseDialog({
             setFailure(null);
             setConfirmingCancel(true);
           }}
-          className={buttonDanger}
+          variant="destructive-outline"
         >
           {command("ledgerCancel.confirm")}
-        </button>
-        <button
+        </Button>
+        <Button
           key="pause-run"
           type="submit"
           form={formId}
           data-touch-target=""
           disabled={blocked}
-          className={buttonPrimary}
+          variant="primary"
         >
           {pending ? command("pause.pending") : command("ledgerPause.confirm")}
-        </button>
+        </Button>
       </>
     )
   ) : (
-    <button
+    <Button
       type="submit"
       form={formId}
       data-touch-target=""
       disabled={blocked}
-      className={buttonPrimary}
+      variant="primary"
     >
       {pending ? t("pending") : t("confirm")}
-    </button>
+    </Button>
   );
 
   return (
@@ -1309,17 +1296,19 @@ export function FleetBoard({
                       }
                       className={`${headCell} ${align}`}
                     >
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="xs"
                         aria-label={t("sortBy", { column: label })}
                         onClick={() => {
                           readList(nextSort(list, sortKey));
                         }}
-                        className="inline-flex items-center gap-1 uppercase tracking-[inherit] hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                        className="h-auto p-0 text-xs font-semibold uppercase tracking-[inherit] text-inherit hover:bg-transparent"
                       >
                         {label}
                         <ArrowsDownUpIcon aria-hidden className="size-3" />
-                      </button>
+                      </Button>
                     </th>
                   );
                 })}

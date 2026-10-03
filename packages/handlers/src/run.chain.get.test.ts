@@ -565,6 +565,35 @@ describe("get_run_chain", () => {
     expect(out.gaps.recorded).toEqual(["tool_bodies"]);
   });
 
+  it("stops the ladder at inspect on a seal gap outside the vocabulary, as the seal graded it (negative)", async () => {
+    // A backfilled session seals with the gap `backfill`, and the seal grades
+    // a word it cannot name `inspect`. The ladder used to read only the
+    // published gaps, so it showed `view` and `fork` met beside that grade.
+    const kept = tachoRow(0, {
+      contentDigest: `sha256:${"c".repeat(64)}`,
+      bytesRef: `evb:v1:k:${"c".repeat(64)}`,
+    });
+    const read = (completenessGaps: string[], replayGrade: string) =>
+      tachoHarness([kept], {
+        session: { completenessGaps, replayGrade, enforcementTier: "gateway" },
+      })({ runId: TACHO_ID }, ctx());
+
+    const live = await read([], "fork");
+    expect(live.ladder[2]).toMatchObject({ grade: "fork", met: true });
+
+    const backfilled = await read(["backfill"], "inspect");
+    expect(backfilled.recordedGrade).toBe("inspect");
+    // The published list still keeps to the closed vocabulary.
+    expect(backfilled.gaps.recorded).toEqual([]);
+    expect(backfilled.ladder.map((r) => [r.grade, r.met])).toEqual([
+      ["inspect", true],
+      ["view", false],
+      ["fork", false],
+      ["retry", false],
+    ]);
+    expect(backfilled.ladder[1]?.reason).toBe("unknown_gap:backfill");
+  });
+
   it("a ledger run answers its seal, its root and no checkpoints", async () => {
     const chain = ledgerHarness({ enforcementTier: "gateway" });
     const out = await chain({ runId: LEDGER_ID }, ctx());
@@ -909,7 +938,11 @@ describe("get_run_chain subagent chains (#3823)", () => {
       ["fork", false],
       ["retry", false],
     ]);
-    expect(tail.ladder[1]?.reason).toBe("unobserved_tail");
+    // The child's seal graded the word it could not name `inspect`, so the
+    // ladder names it beside the gap it knows.
+    expect(tail.ladder[1]?.reason).toBe(
+      "unknown_gap:something_new,unobserved_tail",
+    );
   });
 
   // Codex review on #4421: the walk lists CHAIN_SUBAGENTS_MAX chains, and a

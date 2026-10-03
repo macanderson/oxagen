@@ -8,7 +8,8 @@
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
-import { buttonSecondary, mono } from "@/ui/control-styles";
+import { mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
 import { useNavigate } from "@/ui/navigation";
@@ -158,18 +159,18 @@ export function SteeringRepoHealthBannerView({
       ) : null}
       {canAct && health === "drifted" ? (
         <div className="flex flex-col items-start gap-2">
-          <button
+          <Button
             type="button"
             data-testid="steering-repo-repair"
             data-touch-target=""
             disabled={pending}
-            className={buttonSecondary}
+            variant="outline"
             onClick={() => {
               void repair();
             }}
           >
             {pending ? t("repairing") : t("repair")}
-          </button>
+          </Button>
           {failure === null ? null : (
             <FormAlert testId="steering-repo-repair-failure">
               {failure}

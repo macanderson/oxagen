@@ -12,12 +12,8 @@
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import { Badge } from "@/ui/badge";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  inputBase,
-  textareaBase,
-} from "@/ui/control-styles";
+import { inputBase, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 
@@ -25,16 +21,16 @@ export function TryAgain() {
   const t = useTranslations("fleet.error");
   const navigate = useNavigate();
   return (
-    <button
+    <Button
       type="button"
       data-testid="fleet-retry"
-      className={buttonPrimary}
+      variant="primary"
       onClick={() => {
         navigate.refresh();
       }}
     >
       {t("retry")}
-    </button>
+    </Button>
   );
 }
 
@@ -71,16 +67,16 @@ export function OpenIncident({
   const severityId = useId();
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid="fleet-incident"
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {label("incident")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}
@@ -89,14 +85,14 @@ export function OpenIncident({
         headerClose
         closeLabel={t("cancel")}
         footer={
-          <button
+          <Button
             type="button"
             disabled
             aria-describedby={`${subjectId}-why`}
-            className={buttonPrimary}
+            variant="primary"
           >
             {t("raise")}
-          </button>
+          </Button>
         }
       >
         <div className="flex flex-col gap-3">
@@ -170,16 +166,16 @@ export function RequestAccess({
   const whyId = useId();
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid="fleet-request-access"
-        className={buttonPrimary}
+        variant="primary"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("title")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}
@@ -188,14 +184,14 @@ export function RequestAccess({
         headerClose
         closeLabel={t("cancel")}
         footer={
-          <button
+          <Button
             type="button"
             disabled
             aria-describedby={`${roleId}-why`}
-            className={buttonPrimary}
+            variant="primary"
           >
             {t("send")}
-          </button>
+          </Button>
         }
       >
         <div className="flex flex-col gap-3">

@@ -49,13 +49,8 @@ import {
 } from "@/data/contracts/tools";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { Badge, type BadgeTone } from "@/ui/badge";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  inputBase,
-  mono,
-  textareaBase,
-} from "@/ui/control-styles";
+import { inputBase, mono, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { PullRequestLink } from "@/ui/navigation";
 import { DiscoveryProgress, Field, textOf } from "./add-server";
@@ -348,16 +343,16 @@ function MachineServerFlow({
           </FormAlert>
         )}
         {listing === null ? (
-          <button
+          <Button
             type="submit"
             data-testid={`${testId}-submit`}
             data-capability={startStudioListing.name}
             data-retry={stored === null ? undefined : "true"}
             aria-disabled={busy || undefined}
-            className={`${buttonPrimary} self-start`}
+            variant="primary" className="self-start"
           >
             {busy ? t("saving") : stored === null ? t("submit") : t("retry")}
-          </button>
+          </Button>
         ) : null}
       </form>
       {listing === null ? null : (
@@ -484,17 +479,17 @@ function ListingProgress({
               ? t("thrown")
               : t("readFailed", { code: view.code })}
           </FormAlert>
-          <button
+          <Button
             type="button"
             data-testid="studio-listing-reread"
-            className={`${buttonSecondary} self-start`}
+            variant="outline" className="self-start"
             onClick={() => {
               setView({ kind: "loading" });
               setRound((n) => n + 1);
             }}
           >
             {t("reread")}
-          </button>
+          </Button>
         </>
       ) : listing === null ? (
         <p
@@ -780,18 +775,18 @@ function ClassifyTools({
           {failureText(failure.code)}
         </FormAlert>
       )}
-      <button
+      <Button
         type="submit"
         data-testid="studio-add-classify-submit"
         aria-disabled={phase !== "idle" || undefined}
-        className={`${buttonPrimary} self-start`}
+        variant="primary" className="self-start"
       >
         {phase === "saving"
           ? t("saving")
           : phase === "reviewing"
             ? t("reviewing")
             : t("submit")}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -407,7 +407,6 @@ import "./contracts/steering.records.append";
 import "./contracts/steering.records.get";
 import "./contracts/steering.records.list";
 import "./contracts/steering.search";
-import "./contracts/steering_repo.adopt";
 import "./contracts/steering_repo.destinations.list";
 import "./contracts/steering_repo.get";
 import "./contracts/steering_repo.import";

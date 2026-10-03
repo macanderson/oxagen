@@ -34,6 +34,7 @@ import { type ReactNode, useCallback, useId, useRef, useState } from "react";
 import { LinkPager, type LinkPagerProps } from "@/ui/link-pager";
 import { ListSelect } from "@/ui/list-select";
 import { RowsPager } from "@/ui/pagination";
+import { Button } from "@/ui/button";
 import { cell, headCell, numericCell } from "@/ui/table";
 
 export type ListColumn = {
@@ -397,16 +398,18 @@ export function ListTable({
                     aria-sort={state}
                     className={`${headCell} ${align}`}
                   >
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="xs"
                       onClick={() => {
                         toggle(i);
                       }}
                       data-sort={state}
-                      className="inline-flex cursor-pointer select-none items-center uppercase tracking-[inherit] hover:text-muted-foreground data-[sort=ascending]:text-foreground data-[sort=descending]:text-foreground after:ml-1.25 after:text-xs after:text-rule after:content-(--glyph-sort) data-[sort=ascending]:after:text-accent-text data-[sort=ascending]:after:content-(--glyph-sort-asc) data-[sort=descending]:after:text-accent-text data-[sort=descending]:after:content-(--glyph-sort-desc)"
+                      className="h-auto cursor-pointer gap-0 p-0 text-xs font-semibold uppercase tracking-[inherit] text-inherit hover:bg-transparent hover:text-muted-foreground data-[sort=ascending]:text-foreground data-[sort=descending]:text-foreground after:ml-1.25 after:text-xs after:text-rule after:content-(--glyph-sort) data-[sort=ascending]:after:text-accent-text data-[sort=ascending]:after:content-(--glyph-sort-asc) data-[sort=descending]:after:text-accent-text data-[sort=descending]:after:content-(--glyph-sort-desc)"
                     >
                       {column.label}
-                    </button>
+                    </Button>
                   </th>
                 );
               })}

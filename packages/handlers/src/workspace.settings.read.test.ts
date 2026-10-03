@@ -49,6 +49,30 @@ describe("workspace.settings.read handler", () => {
       // Both steering-freshness gates are off until the workspace sets one.
       runEnrichmentEnabled: true,
       steering: { autoSync: false, blockStaleRuns: false },
+      // No lane has a daily budget until the workspace sets one (#5426).
+      dailyBudgetUsd: { runEnrichment: null, assistant: null, work: null },
+    });
+  });
+
+  it("reads the daily lane budgets out of the settings bag (#5426)", async () => {
+    mocks.findFirst.mockResolvedValue({
+      name: "Research",
+      slug: "research",
+      avatarUrl: null,
+      description: null,
+      consequenceRoles: {},
+      settings: {
+        runEnrichmentEnabled: false,
+        dailyBudgetUsd: { runEnrichment: 2, assistant: 0.5, work: "x" },
+      },
+    });
+    const out = await workspaceSettingsReadHandler({}, CTX);
+    expect(out.runEnrichmentEnabled).toBe(false);
+    // A value that does not read is no limit, never a refusal.
+    expect(out.dailyBudgetUsd).toEqual({
+      runEnrichment: 2,
+      assistant: 0.5,
+      work: null,
     });
   });
 

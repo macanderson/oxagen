@@ -28,7 +28,7 @@ import { type SyntheticEvent, useState } from "react";
 import type { ModelCredential, ModelProvider } from "@/data/contracts/org";
 import type { ActionResult } from "@/server/kernel";
 import { ChoiceGroup } from "@/ui/choice-group";
-import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { Field, PasswordField } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -487,35 +487,35 @@ export function ModelFundingForm({
               data-testid="funding-remove-confirm"
             >
               <p className="text-base">{t("remove.confirm")}</p>
-              <button
+              <Button
                 type="button"
-                className={buttonSecondary}
+                variant="outline"
                 onClick={onRemove}
                 aria-disabled={busy !== "idle" || undefined}
               >
                 {busy === "removing" ? t("remove.pending") : t("remove.yes")}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className={buttonSecondary}
+                variant="outline"
                 onClick={() => {
                   setConfirmingRemove(false);
                 }}
               >
                 {t("remove.cancel")}
-              </button>
+              </Button>
             </div>
           ) : (
-            <button
+            <Button
               type="button"
-              className={buttonSecondary}
+              variant="outline"
               onClick={() => {
                 setConfirmingRemove(true);
               }}
               data-testid="funding-remove"
             >
               {t("remove.label")}
-            </button>
+            </Button>
           )
         ) : null}
       </div>

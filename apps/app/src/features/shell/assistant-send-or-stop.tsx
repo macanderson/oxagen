@@ -5,7 +5,9 @@
 // Send and Stop are the same <button> element: React keeps a node whose type
 // and place do not change, so a person who pressed Send keeps focus on the
 // control that now stops the turn, and keeps it when the turn ends and it is
-// Send again.
+// Send again. Both branches render the kit's `Button` for that reason.
+//
+// It is the flyout's one gold action, so it is the `primary` variant.
 //
 // The stop is a POST to the workspace's `assistant/stop` route
 // (`assistant-stop.ts`), not a server action. One page's actions run one at a
@@ -15,6 +17,7 @@
 import { PaperPlaneTiltIcon, StopIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { routes } from "@/shared/safe-path";
+import { Button } from "@/ui/button";
 
 /**
  * Ask the server to stop the turn `turnId` in the workspace it was asked in.
@@ -40,8 +43,11 @@ export async function requestAssistantStop(
   }
 }
 
-const BUTTON =
-  "mb-0.5 grid size-8 flex-none place-items-center rounded-md bg-gold text-on-gold focus-visible:outline-2 focus-visible:outline-ring";
+/**
+ * The kit Button holds an `aria-disabled` press and dims it, so Send and Stop
+ * both read as unavailable while they refuse.
+ */
+const BUTTON = "mb-0.5 flex-none aria-disabled:opacity-60";
 
 export function AssistantSendOrStop({
   stop,
@@ -68,32 +74,34 @@ export function AssistantSendOrStop({
   const t = useTranslations("shell.assistant.composer");
   if (stop === null) {
     return (
-      <button
+      <Button
         type="submit"
+        variant="primary"
+        size="icon-sm"
         aria-label={t("send")}
         aria-disabled={sendDisabled || undefined}
         aria-describedby={unavailableReasonId ?? undefined}
         data-testid="assistant-send"
-        className={`${BUTTON} disabled:opacity-60 ${
-          unavailableReasonId === null ? "" : "cursor-not-allowed opacity-60"
-        }`}
+        className={BUTTON}
       >
         <PaperPlaneTiltIcon aria-hidden="true" className="size-4" />
-      </button>
+      </Button>
     );
   }
   return (
-    <button
+    <Button
       type="button"
+      variant="primary"
+      size="icon-sm"
       aria-label={t("stop")}
       aria-disabled={stop.stopping || undefined}
       data-testid="assistant-stop"
       onClick={() => {
         if (!stop.stopping) stop.onStop();
       }}
-      className={`${BUTTON} aria-disabled:opacity-60`}
+      className={BUTTON}
     >
       <StopIcon aria-hidden="true" className="size-3.5" weight="fill" />
-    </button>
+    </Button>
   );
 }

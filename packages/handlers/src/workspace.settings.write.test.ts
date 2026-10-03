@@ -518,6 +518,60 @@ describe("workspace.settings.write handler", () => {
     });
   });
 
+  // ── The daily lane budgets in the settings bag (#5426) ───────────────────
+  describe("a daily budget write", () => {
+    const SETTINGS = `"workspace"."workspaces"."settings"`;
+    const budgetQuery = async (dailyBudgetUsd: Record<string, number | null>) => {
+      mocks.findFirst
+        .mockResolvedValueOnce(EXISTING)
+        .mockResolvedValueOnce({
+          ...EXISTING,
+          settings: { dailyBudgetUsd: { runEnrichment: 2, assistant: null, work: 0.5 } },
+        });
+      const out = await workspaceSettingsWriteHandler({ dailyBudgetUsd }, CTX);
+      const setArg = mocks.set.mock.calls[0]![0] as { settings?: SQL };
+      expect(setArg.settings).toBeDefined();
+      return { out, ...new PgDialect().sqlToQuery(setArg.settings as SQL) };
+    };
+
+    it("patches the lanes it names into the stored block and answers every lane", async () => {
+      const { out, sql, params } = await budgetQuery({ runEnrichment: 2 });
+      expect(sql).toContain(`jsonb_typeof(${SETTINGS} -> 'dailyBudgetUsd') = 'object'`);
+      expect(sql.match(/\|\|/g)).toHaveLength(2);
+      expect(params).toContain(JSON.stringify({ runEnrichment: 2 }));
+      expect(out.dailyBudgetUsd).toEqual({ runEnrichment: 2, assistant: null, work: 0.5 });
+    });
+
+    it("writes null to remove a lane's limit", async () => {
+      const { params } = await budgetQuery({ work: null });
+      expect(params).toContain(JSON.stringify({ work: null }));
+    });
+
+    it("writes nothing for an empty patch (negative)", async () => {
+      mocks.findFirst.mockResolvedValueOnce(EXISTING).mockResolvedValueOnce(EXISTING);
+      await workspaceSettingsWriteHandler({ dailyBudgetUsd: {} }, CTX);
+      expect(mocks.update).not.toHaveBeenCalled();
+    });
+
+    it("patches the budgets and the enrichment switch in one write", async () => {
+      mocks.findFirst.mockResolvedValueOnce(EXISTING).mockResolvedValueOnce({
+        ...EXISTING,
+        settings: { runEnrichmentEnabled: false, dailyBudgetUsd: { assistant: 1 } },
+      });
+      const out = await workspaceSettingsWriteHandler(
+        { runEnrichmentEnabled: false, dailyBudgetUsd: { assistant: 1 } },
+        CTX,
+      );
+      expect(mocks.set).toHaveBeenCalledTimes(1);
+      const setArg = mocks.set.mock.calls[0]![0] as { settings?: SQL };
+      const { params } = new PgDialect().sqlToQuery(setArg.settings as SQL);
+      expect(params).toContain(JSON.stringify({ runEnrichmentEnabled: false }));
+      expect(params).toContain(JSON.stringify({ assistant: 1 }));
+      expect(out.runEnrichmentEnabled).toBe(false);
+      expect(out.dailyBudgetUsd?.assistant).toBe(1);
+    });
+  });
+
   // ── Slug-history capture ────────────────────────────────────────────────────
   // The handler MUST insert one workspace_slug_history row whenever the
   // workspace slug changes, in the SAME withTenantDb transaction as the

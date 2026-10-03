@@ -30,19 +30,8 @@ import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { routes, WORK_PAGE_TABS, type WorkPageTab } from "@/shared/safe-path";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  buttonSmall,
-  linkText,
-  note,
-  panel,
-  statNote,
-  statStrip,
-  statTerm,
-  statTile,
-  statValue,
-} from "@/ui/control-styles";
+import { buttonPrimary, buttonSecondary, buttonSmall, linkText, note, panel, statNote, statStrip, statTerm, statTile, statValue } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { useFormatter } from "@/ui/formatter";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
@@ -88,17 +77,17 @@ function SendToAgent({
   const reason = canControl ? t("sendNothingReady") : t("sendNoRole");
   return (
     <>
-      <button
+      <Button
         type="button"
         disabled
         data-testid="work-send"
         aria-describedby="work-send-reason"
         title={reason}
-        className={buttonPrimary}
+        variant="primary"
       >
         <PaperPlaneTiltIcon aria-hidden="true" />
         {t("send")}
-      </button>
+      </Button>
       <span id="work-send-reason" className="sr-only">
         {reason}
       </span>

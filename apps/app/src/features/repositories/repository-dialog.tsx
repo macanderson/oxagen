@@ -23,19 +23,15 @@ import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
 import type { LinkedRepository } from "@/data/contracts/repository";
 import { parseGitHubUrl } from "@/shared/github-url";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  eyebrow,
-  inputBase,
-} from "@/ui/control-styles";
+import { eyebrow, inputBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { GitHubLink } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { linkWorkspaceRepository, setProductionBranch } from "./actions";
 import { UNANSWERED, useRepositoriesFailure } from "./failure";
 import { REPOSITORY_GAPS } from "./gaps";
-import { buttonDanger, code, kv, note, prose } from "./parts";
+import { code, kv, note, prose } from "./parts";
 import { TreeBadge } from "./repositories-tab";
 import { SteeringProposal } from "./steering-proposal";
 import { type RepositoryRow, treeState } from "./view";
@@ -103,51 +99,52 @@ export function RepositoryDialog({
     row === null ? null : (
       <>
         {row.role === "linked" ? (
-          <button
+          <Button
             type="button"
             data-testid="repository-dialog-unlink"
             aria-haspopup="dialog"
-            className={`${buttonDanger} max-md:w-full`}
+            variant="destructive-outline" className="max-md:w-full"
             onClick={() => {
               onUnlink(row);
             }}
           >
             {t("unlink")}
-          </button>
+          </Button>
         ) : row.role === "available" && linked === null ? (
-          <button
+          <Button
             type="button"
             data-testid="repository-dialog-link"
             disabled={pending}
-            className={`${buttonPrimary} max-md:w-full`}
+            variant="primary" className="max-md:w-full"
             onClick={() => {
               void link();
             }}
           >
             {pending ? t("linking") : t("link")}
-          </button>
+          </Button>
         ) : null}
         {governed ? (
-          <button
+          <Button
             type="button"
             data-testid="repository-dialog-changes"
-            className={`${buttonSecondary} max-md:w-full`}
+            variant="outline" className="max-md:w-full"
             onClick={onSeeChanges}
           >
             {t("seeChanges")}
-          </button>
+          </Button>
         ) : treeState(row.tree) === "absent" ||
           treeState(row.tree) === "unknown" ? (
-          <button
+          <Button
             type="button"
             data-testid="repository-dialog-add-oxagen"
-            className={`${row.role === "available" ? buttonSecondary : buttonPrimary} max-md:w-full`}
+            variant={row.role === "available" ? "outline" : "primary"}
+            className="max-md:w-full"
             onClick={() => {
               onAddOxagen(row.fullName);
             }}
           >
             {t("addOxagen")}
-          </button>
+          </Button>
         ) : null}
       </>
     );
@@ -447,18 +444,18 @@ function ProductionBranchForm({
         >
           <p className={prose}>{t("moved", { github: suggestion, current })}</p>
           <div>
-            <button
+            <Button
               type="button"
               data-testid="repository-dialog-branch-use-suggestion"
               data-touch-target=""
               disabled={pending}
-              className={buttonSecondary}
+              variant="outline"
               onClick={() => {
                 void save(suggestion);
               }}
             >
               {t("useSuggestion", { branch: suggestion })}
-            </button>
+            </Button>
           </div>
         </div>
       )}
