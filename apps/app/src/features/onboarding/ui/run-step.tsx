@@ -25,6 +25,7 @@ import {
   panel,
 } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
+import { HarnessIcon } from "@/ui/harness-icon";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { GateFooter, GateHeader } from "./gate-shell";
 import type { WrapAgentFacts } from "./wrap-step";
@@ -105,6 +106,7 @@ function Waiting({
             </Badge>
           )}
           <Badge tone="quiet" dot={false}>
+            <HarnessIcon harness={agent.harness} size={14} />
             {harnessName}
           </Badge>
           <Badge tone="quiet" dot={false}>

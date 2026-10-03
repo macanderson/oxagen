@@ -33,6 +33,7 @@ import {
   mono,
   panel,
 } from "@/ui/control-styles";
+import { HarnessIcon } from "@/ui/harness-icon";
 import { formatDuration } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
@@ -177,9 +178,10 @@ function Header({
 }) {
   const t = useTranslations("run.interjection");
   const run = detail.run;
+  const harness = run.harness?.name ?? null;
   const facts = [
     run.agentKey,
-    run.harness?.name ?? null,
+    harness,
     run.operatorName,
     t("tier", { tier: run.enforcementTier }),
     row?.repository ?? null,
@@ -225,6 +227,9 @@ function Header({
         >
           {facts.map((fact) => (
             <li key={fact} className="[overflow-wrap:anywhere]">
+              {fact === harness ? (
+                <HarnessIcon harness={harness} size={16} className="mr-1.5" />
+              ) : null}
               {fact}
             </li>
           ))}

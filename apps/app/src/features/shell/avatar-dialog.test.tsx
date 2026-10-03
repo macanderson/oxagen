@@ -135,13 +135,13 @@ describe("the draft", () => {
     );
   });
 
-  it("previews the draft at 72, 36, 24 and 18 pixels", async () => {
+  it("previews the draft at sizes 72, 36, 24 and 18, each drawn a tenth larger", async () => {
     const { preview } = await openEditor();
     expect(tiles(preview).map((t) => t.style.width)).toEqual([
-      "72px",
-      "36px",
-      "24px",
-      "18px",
+      "79px",
+      "40px",
+      "26px",
+      "20px",
     ]);
   });
 });

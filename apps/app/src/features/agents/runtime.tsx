@@ -24,6 +24,7 @@ import { Badge } from "@/ui/badge";
 import { buttonSecondary, mono } from "@/ui/control-styles";
 import { DesktopDownloads } from "@/ui/desktop-downloads";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
+import { HarnessIcon } from "@/ui/harness-icon";
 import { formatCount } from "@/ui/money-format";
 import { OutcomePanel } from "@/ui/form-feedback";
 import { SafeLink } from "@/ui/navigation";
@@ -111,7 +112,10 @@ function HostPanel({
             term: t("harness"),
             value: (
               <>
-                {agents(`harness.${detail.identity.harness}`)}
+                <span className="inline-flex items-center gap-2">
+                  <HarnessIcon harness={detail.identity.harness} size={16} />
+                  {agents(`harness.${detail.identity.harness}`)}
+                </span>
                 <Sub>{t("harnessSub")}</Sub>
               </>
             ),

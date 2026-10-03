@@ -40,6 +40,7 @@ import {
   panel,
 } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
+import { HarnessIcon } from "@/ui/harness-icon";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { registerAgent } from "../actions";
@@ -115,7 +116,10 @@ function Reserved({ reserved }: { reserved: ReservedAgent }) {
       <dt className={kvTerm}>{t("slug")}</dt>
       <dd className={`${kvValue} ${mono}`}>{reserved.slug}</dd>
       <dt className={kvTerm}>{t("harness")}</dt>
-      <dd className={kvValue}>{harnessT(reserved.harness)}</dd>
+      <dd className={`${kvValue} flex items-center gap-2`}>
+        <HarnessIcon harness={reserved.harness} size={16} />
+        {harnessT(reserved.harness)}
+      </dd>
       <dt className={kvTerm}>{t("runtime")}</dt>
       <dd className={kvValue}>
         {reserved.runtime === null ? t("noRuntime") : reserved.runtime.name}
@@ -431,7 +435,12 @@ export function RegisterAgentForm({
                   }}
                   options={HARNESSES.map((option) => ({
                     value: option,
-                    label: harnessT(option),
+                    label: (
+                      <span className="inline-flex items-center gap-2">
+                        <HarnessIcon harness={option} size={16} />
+                        {harnessT(option)}
+                      </span>
+                    ),
                     disabledReason: takenReason(chosenRuntime, option),
                   }))}
                 />

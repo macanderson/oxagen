@@ -31,6 +31,8 @@ import { Badge } from "@/ui/badge";
 import { buttonSecondary, eyebrow, linkChip } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { useFormatter } from "@/ui/formatter";
+import { HarnessIcon } from "@/ui/harness-icon";
+import { useHarnessName } from "@/ui/harness-name";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { GitHubLink, PullRequestLink, SafeLink } from "@/ui/navigation";
@@ -86,11 +88,12 @@ function harnessOf(agent: Read<AgentDetail> | null) {
  */
 export function useHarness(run: RunRow, agent: Read<AgentDetail> | null) {
   const ta = useTranslations("agents");
+  const nameOf = useHarnessName();
   const registered = harnessOf(agent);
   if (run.harness) {
     return {
       key: run.harness.name,
-      name: run.harness.name,
+      name: nameOf(run.harness.name),
       version: run.harness.version,
     };
   }
@@ -156,6 +159,7 @@ function Rig({
           </span>
         ) : (
           <>
+            <HarnessIcon harness={harness.key} size={16} />
             {harness.name}
             {harness.version === null ? (
               <span className="font-normal text-dim">

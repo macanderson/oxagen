@@ -44,6 +44,7 @@ import {
   panel,
 } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
+import { HarnessIcon } from "@/ui/harness-icon";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import type { Harness } from "./agent-form";
@@ -475,6 +476,7 @@ function Waiting({
             )}
             {harness === null ? null : (
               <Badge tone="quiet" dot={false}>
+                <HarnessIcon harness={harness} size={14} />
                 {harnessT(harness)}
               </Badge>
             )}

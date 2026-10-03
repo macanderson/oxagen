@@ -21,6 +21,7 @@ import {
   panel,
 } from "@/ui/control-styles";
 import { CloneButton } from "@/ui/clone-button";
+import { HarnessIcon } from "@/ui/harness-icon";
 import { LinkPager } from "@/ui/link-pager";
 import { SafeLink } from "@/ui/navigation";
 import { StateWrap, stateCode, stateTrace } from "@/ui/state-wrap";
@@ -155,8 +156,9 @@ export function SkillsInventory({
                   <li
                     key={harness}
                     data-harness={harness}
-                    className={`${mono} rounded-full border border-border px-2 py-0.5 text-sm text-muted-foreground`}
+                    className={`${mono} inline-flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-sm text-muted-foreground`}
                   >
+                    <HarnessIcon harness={harness} size={14} />
                     {harness}
                   </li>
                 ))}

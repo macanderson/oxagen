@@ -179,6 +179,8 @@ function steeringHost() {
     updatePullRequest: vi.fn(async () => ({ number: 42, htmlUrl: "" })),
     findOpenPullRequest: vi.fn(async () => null),
     reportCheckRun: vi.fn(async () => "https://github.com/a-intel/oxagen-core-platform/runs/1"),
+    // The branch holds the production head, so the two share it.
+    mergeBase: vi.fn(async (_repo: SteeringRepository, _head: string, base: string) => base),
   };
   return host;
 }

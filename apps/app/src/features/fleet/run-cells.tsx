@@ -1,7 +1,7 @@
 "use client";
 // The Fleet runs table's cells that board.tsx draws from one row each: the
-// pull requests, the lines changed, the tokens and the status word, and the
-// Tokens shown tile. Kept out of board.tsx to keep that file
+// harness, the pull requests, the lines changed, the tokens and the status
+// word, and the Tokens shown tile. Kept out of board.tsx to keep that file
 // under 1,500 lines.
 import { GitPullRequestIcon } from "@phosphor-icons/react";
 import { useLocale, useTranslations } from "next-intl";
@@ -22,6 +22,8 @@ import {
   statValue,
 } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
+import { HarnessIcon } from "@/ui/harness-icon";
+import { useHarnessName } from "@/ui/harness-name";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { PullRequestLink } from "@/ui/navigation";
 import { StatusBadge } from "@/ui/status-badge";
@@ -32,6 +34,45 @@ import {
   pullRequestLabel,
   type RowState,
 } from "./view";
+
+/**
+ * A row's harness: its logo, its product name and the version it reported.
+ * A run the ledger recorded names no harness of its own, so the cell shows
+ * the harness its agent registered, the one the avatar badge shows, and says
+ * so on hover. With neither, it reads "not recorded".
+ */
+export function HarnessCell({
+  run,
+  registered,
+}: {
+  run: RunRow;
+  /** The harness the run's agent registered, when the roster holds it. */
+  registered: string | undefined;
+}) {
+  const t = useTranslations("fleet.runs");
+  const nameOf = useHarnessName();
+  const harness = run.harness?.name ?? registered;
+  if (harness === undefined)
+    return <span className="text-muted-foreground">{t("notRecorded")}</span>;
+  const version = run.harness?.version ?? null;
+  return (
+    <span
+      data-testid="row-harness"
+      data-harness={harness}
+      data-basis={run.harness ? "run" : "agent"}
+      {...(run.harness ? {} : { title: t("harnessRegistered") })}
+      className="flex min-w-0 items-center gap-2 whitespace-nowrap"
+    >
+      <HarnessIcon harness={harness} size={18} />
+      <span className="min-w-0 md:truncate">
+        {nameOf(harness)}
+        {version === null ? null : (
+          <span className="font-mono text-muted-foreground"> {version}</span>
+        )}
+      </span>
+    </span>
+  );
+}
 
 /** The tone a recorded pull-request state reads in; the Run page uses the same ladder. */
 const PR_STATE_TONE: Record<NonNullable<RunPullRequest["state"]>, BadgeTone> = {

@@ -103,6 +103,11 @@ interface FakeHostOptions {
   branches?: Record<string, string>;
   /** The open PR findOpenPullRequest answers, or null. */
   openPr?: { number: number; htmlUrl: string; body: string } | null;
+  /**
+   * The commit mergeBase answers. By default the branch holds the production
+   * head, so the answer is the base it was asked about.
+   */
+  mergeBase?: string;
 }
 
 /** A host that records every call and answers from the options. */
@@ -166,6 +171,9 @@ function fakeHost(options: FakeHostOptions = {}) {
     async reportCheckRun(target, check) {
       record("reportCheckRun", target, check);
       return "https://example.test/check/1";
+    },
+    async mergeBase(_target, _head, base) {
+      return options.mergeBase ?? base;
     },
   };
   for (const method of Object.keys(host) as (keyof ToolsPullRequestHost)[]) {
@@ -676,6 +684,22 @@ describe("createToolsPullRequestOpener, an existing PR", () => {
     expect(host.reportCheckRun).toHaveBeenCalledWith(
       GITHUB_REPO,
       expect.objectContaining({ headSha: NEW_SHA }),
+    );
+  });
+
+  it("checks a commit on a branch that fell behind against the commit it shares with the production branch (#5139)", async () => {
+    // Another steering PR merged after this branch was cut. Against the
+    // production head, its files would read as files this PR removes.
+    const { host } = fakeHost({
+      branches: { main: PRODUCTION_HEAD, "tools/billing": BRANCH_HEAD },
+      openPr: OPEN_PR,
+      mergeBase: READ_SHA,
+    });
+    await opener(host).open(SCOPE, args({ existing: { number: 12 } }));
+
+    expect(host.mergeBase).toHaveBeenCalledWith(GITHUB_REPO, NEW_SHA, PRODUCTION_HEAD);
+    expect(mocks.checkSteeringChange).toHaveBeenCalledWith(
+      expect.objectContaining({ head: NEW_SHA, base: READ_SHA }),
     );
   });
 
