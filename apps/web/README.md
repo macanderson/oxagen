@@ -153,11 +153,13 @@ Never put `--` before the filename. Each build module has a co-located
   400/500/600/700. Literata variable serif (normal and italic, latin subset)
   sits beside them, and only the book reader offers it as a long-form reading
   option. All of them are cached immutable for a year. Mac set the rule on
-  2026-10-02: Space Grotesk sets every h1, h2, and h3, and so every hero
-  line, and the wordmark when it is text rather than an SVG. Aeonik sets h4
-  and all running text. Monaspace Neon sets code. Aeonik Mono and Aeonik
-  Fono load, and no rule names them yet. A page preloads only the faces its
-  first screen draws.
+  2026-10-02 (oxageninc/brand#83): Space Grotesk sets every h1, h2, and h3,
+  and the wordmark when it is text rather than an SVG. Aeonik sets h4 to h6
+  and all other text. Monaspace Neon sets code, data, and figures. No text
+  is under 14px, and every size reads the site's ramp in
+  `assets/oxagen.css`, which reads the kit's marketing scale. Aeonik Mono
+  and Aeonik Fono load, and no rule names them yet. A page preloads only the
+  faces its first screen draws.
 - `favicon.svg`: the hive, the kit's Oxagen icon: six hexagonal cells, four
   drawn as an outline in the tab's ink and two filled with the gold, one of
   them at half strength. The outline adapts to the tab's colour scheme. The
