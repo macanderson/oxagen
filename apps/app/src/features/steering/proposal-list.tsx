@@ -48,7 +48,7 @@ function PullRequestCell({ pr }: { pr: Proposal["pr"] }) {
           ? t("openOnGitLab", { pr: label })
           : t("openOnGitHub", { pr: label })
       }
-      className={`${linkText} whitespace-nowrap font-mono text-[11.5px]`}
+      className={`${linkText} whitespace-nowrap font-mono text-sm`}
     >
       {label}
     </PullRequestLink>

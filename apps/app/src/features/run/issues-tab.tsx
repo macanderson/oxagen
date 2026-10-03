@@ -62,7 +62,7 @@ function ViewLink({ issue }: { issue: Issue }) {
   const t = useTranslations("run.issues");
   const target = parseGitHubUrl(issue.url);
   if (target === null)
-    return <span className="text-[11.5px] text-dim">{t("noLink")}</span>;
+    return <span className="text-sm text-dim">{t("noLink")}</span>;
   return (
     <GitHubLink
       to={target}
@@ -138,7 +138,7 @@ function issueRow(issue: Issue, place: Place): IssueTableRow {
       <span key="ref" className="flex min-w-0 flex-col">
         <span className={`${mono} text-xs md:truncate`}>{issue.ref}</span>
         {issue.title === null ? null : (
-          <span className="truncate text-[11.5px] text-muted-foreground">
+          <span className="truncate text-sm text-muted-foreground">
             {issue.title}
           </span>
         )}

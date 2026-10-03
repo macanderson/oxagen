@@ -1,6 +1,6 @@
 # ADR-052: The governed action is the billable unit; tokens are reported, never billed
 
-- **Status:** Accepted
+- **Status:** Accepted. Amended by ADR-289, accepted 2026-10-02: compute on Oxagen-operated hosts is a third meter, billed per running sandbox-hour, so a long hosted run costs more
 - **Date:** 2026-09-08
 - **Owners:** platform
 - **Related:** ADR-042 (organisation data planes), ADR-043 (Oxagen governs, does

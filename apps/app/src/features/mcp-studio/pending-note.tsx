@@ -29,7 +29,7 @@ export function PendingNote({
       data-capability={capability}
       data-gap={studioGapRef(gap)}
       data-testid={testId}
-      className="text-[12.5px] text-muted-foreground"
+      className="text-sm text-muted-foreground"
     >
       {children}
     </p>

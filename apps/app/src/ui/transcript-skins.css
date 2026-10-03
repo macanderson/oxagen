@@ -3,7 +3,9 @@
  * oxagen-roadmap, mockups/v3/src/v3.css and replay.js). One set of rows takes
  * four skins: Claude Code (`cc`), Codex (`cx`), Cursor (`cu`) and stella
  * (`st`). Each skin's palette copies its own terminal, so it is the one place
- * in the app with raw colours. A row is a three-column grid: the clock in the
+ * in the app with raw colours. The sizes are not copied. Every line reads the
+ * app's body token, because no text in the app is under 14px (Mac,
+ * 2026-10-02). A row is a three-column grid: the clock in the
  * gutter (`.tg`), the line (`.tc`), and Oxagen's margin (`.tm`) for cost,
  * gaps, and decisions. The rules sit in the components layer, so a utility on
  * the same element wins.
@@ -115,7 +117,7 @@
     align-items: flex-end;
     min-width: 64px;
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: var(--ox-a-body);
     line-height: 1.3;
     font-variant-numeric: tabular-nums;
     color: var(--muted);
@@ -151,7 +153,7 @@
     border: 1px solid var(--t-line);
     border-radius: 10px 10px 0 0;
     background: var(--t-bar);
-    font-size: 12px;
+    font-size: var(--ox-a-body);
     color: var(--t-dim);
   }
   .term-dots {
@@ -186,7 +188,7 @@
     align-items: center;
     gap: 5px;
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: var(--ox-a-body);
   }
   .rp-body {
     max-height: clamp(440px, calc(100vh - 262px), 1000px);
@@ -198,7 +200,7 @@
     overflow: hidden;
     padding: 8px 10px 0 0;
     font-family: var(--mono);
-    font-size: 10.5px;
+    font-size: var(--ox-a-body);
     font-variant-numeric: tabular-nums;
     text-align: right;
     white-space: nowrap;
@@ -209,7 +211,7 @@
     padding: 6px 16px 2px calc(16px + var(--depth, 0) * 2ch);
     border-inline: 1px solid var(--t-line);
     background: var(--t-bg);
-    font-size: var(--t-size, 12.5px);
+    font-size: var(--ox-a-body);
     line-height: var(--t-lh, 1.5);
     overflow-wrap: anywhere;
     color: var(--t-fg);
@@ -229,7 +231,7 @@
     min-width: 0;
     padding: 7px 0 4px 12px;
     font-family: var(--font);
-    font-size: 11.5px;
+    font-size: var(--ox-a-body);
     color: var(--muted);
   }
   .tm > * {
@@ -253,7 +255,7 @@
     border-radius: 6px;
     background: var(--panel);
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: var(--ox-a-body);
     color: var(--fg);
   }
   .mg-note {
@@ -329,7 +331,7 @@
     color: var(--t-err);
   }
   .tx-quiet {
-    font-size: 11.5px;
+    font-size: var(--ox-a-body);
     color: var(--t-dim);
   }
   .tx-err {
@@ -370,7 +372,7 @@
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 2px 12px;
-    font-size: 11.5px;
+    font-size: var(--ox-a-body);
     color: var(--t-dim);
   }
   .tx-fold {
@@ -378,7 +380,7 @@
     border: 0;
     background: none;
     font: inherit;
-    font-size: 11px;
+    font-size: var(--ox-a-body);
     color: var(--t-dim);
     cursor: pointer;
   }
@@ -477,7 +479,7 @@
     margin: 0;
     overflow: visible;
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: var(--ox-a-body);
     line-height: 1.12;
     color: var(--t-acc);
   }
@@ -609,7 +611,6 @@
   /* Cursor. */
   .term.cu {
     --t-font: var(--font);
-    --t-size: 13px;
     --t-lh: 1.55;
     --t-bg: light-dark(#f8f8f8, #181818);
     --t-fg: light-dark(#1f1f1f, #d6d6d6);
@@ -636,10 +637,10 @@
   }
   .term.cu .tx-think {
     --g-w: 1em;
-    font-size: 12.5px;
+    font-size: var(--ox-a-body);
   }
   .term.cu .tx-call {
-    font-size: 12.5px;
+    font-size: var(--ox-a-body);
     color: var(--t-dim);
   }
   .term.cu .tx-name {
@@ -653,7 +654,7 @@
     border-radius: 8px;
     background: light-dark(#fff, #1f1f1f);
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: var(--ox-a-body);
   }
   .term.cu .tx-res + .tx-res {
     margin-top: 0;
@@ -802,7 +803,7 @@
     }
     .term .tc {
       padding-inline: calc(12px + var(--depth, 0) * 1.5ch) 12px;
-      font-size: 11.5px;
+      font-size: var(--ox-a-body);
     }
     .rp-body {
       max-height: 68vh;

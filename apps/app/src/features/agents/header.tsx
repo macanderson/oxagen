@@ -138,7 +138,7 @@ export function AgentHeader({
           </Badge>
         </p>
         {identity.description === null ? null : (
-          <p className="max-w-prose text-[13px] text-muted-foreground">
+          <p className="max-w-prose text-sm text-muted-foreground">
             {identity.description}
           </p>
         )}

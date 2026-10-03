@@ -106,7 +106,7 @@ export function Panel({
 export function Note({ children }: { children: ReactNode }) {
   return (
     <div className={panelBody}>
-      <p className="border-l-2 border-accent-text pl-3 text-[13px] text-muted-foreground">
+      <p className="border-l-2 border-accent-text pl-3 text-sm text-muted-foreground">
         {children}
       </p>
     </div>
@@ -120,7 +120,7 @@ export function Facts({
   rows: readonly { term: string; value: ReactNode; testId: string }[];
 }) {
   return (
-    <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-[13px] sm:grid-cols-[minmax(8rem,auto)_1fr]">
+    <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-[minmax(8rem,auto)_1fr]">
       {rows.map((row) => (
         <Fragment key={row.term}>
           <dt className="text-muted-foreground">{row.term}</dt>

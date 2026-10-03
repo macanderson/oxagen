@@ -104,7 +104,7 @@ const SEGMENT_MARK: Record<StepState, string> = {
 };
 
 const segment =
-  "flex min-h-11 w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] max-md:justify-center";
+  "flex min-h-11 w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm max-md:justify-center";
 
 /**
  * The register gate's rail (register-name spec, Shell; mockup `.reg-steps`):
@@ -129,7 +129,7 @@ export function StepRail({
             <>
               <span
                 aria-hidden="true"
-                className={`inline-flex size-[22px] flex-none items-center justify-center rounded-full border text-[11px] ${SEGMENT_MARK[step.state]}`}
+                className={`inline-flex size-[22px] flex-none items-center justify-center rounded-full border text-sm ${SEGMENT_MARK[step.state]}`}
               >
                 {step.state === "done" ? "✓" : index + 1}
               </span>

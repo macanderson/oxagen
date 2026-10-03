@@ -56,7 +56,7 @@ function Differences({
       <table
         aria-label={t("differencesLabel")}
         data-testid="steering-repo-differences"
-        className="w-full border-collapse text-[13px]"
+        className="w-full border-collapse text-sm"
       >
         <thead>
           <tr className="border-b border-border">
@@ -147,9 +147,9 @@ export function SteeringRepoHealthBannerView({
       data-testid="steering-repo-health-banner"
       data-health={health}
       data-provider={provider ?? "github"}
-      className="mx-auto flex w-full max-w-6xl flex-col gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-[13px] text-foreground"
+      className="mx-auto flex w-full max-w-6xl flex-col gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-foreground"
     >
-      <h2 id={headingId} className="text-[14px] font-semibold">
+      <h2 id={headingId} className="text-sm font-semibold">
         {t(`heading.${health}`)}
       </h2>
       <p>{t("body")}</p>

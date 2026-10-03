@@ -217,7 +217,7 @@ export function LoginForm({
             }
             error={errors.password ? t(`errors.${errors.password}`) : undefined}
           />
-          <label className="flex cursor-pointer items-start gap-[9px] text-[13px] text-foreground">
+          <label className="flex cursor-pointer items-start gap-[9px] text-sm text-foreground">
             <input
               type="checkbox"
               name="rememberMe"

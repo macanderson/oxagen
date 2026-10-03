@@ -135,7 +135,7 @@ export function DeliveryPanel({ detail, at }: { detail: WorkItemDetail; at: At }
         )}
       </div>
       {send === null ? (
-        <p data-testid="work-delivery-none" className={`${panelBody} text-[13px] text-muted-foreground`}>
+        <p data-testid="work-delivery-none" className={`${panelBody} text-sm text-muted-foreground`}>
           {t("notSent")}
         </p>
       ) : (
@@ -174,7 +174,7 @@ export function DeliveryPanel({ detail, at }: { detail: WorkItemDetail; at: At }
             <dt className={kvTerm}>{sendLive(send) ? t("workOrder") : t("lastSend")}</dt>
             <dd className={`${kvValue} flex flex-col items-start gap-0.5`}>
               <span className="flex items-center gap-1.5">
-                <code data-testid="work-delivery-key" className="font-mono text-[0.92em] break-all">
+                <code data-testid="work-delivery-key" className="font-mono break-all">
                   {send.key}
                 </code>
                 <CopyValue value={send.key} label={t("keyLabel")} />

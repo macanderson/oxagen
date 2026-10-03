@@ -122,7 +122,7 @@ function TokenUse({
       aside={
         <span
           data-testid="token-badge"
-          className={`${mono} text-[11px] text-muted-foreground`}
+          className={`${mono} text-sm text-muted-foreground`}
         >
           {t("badge", { tokens: n(r.total) })}
           {" · "}
@@ -141,7 +141,7 @@ function TokenUse({
           const value = c.recorded === null ? null : r[c.recorded];
           return (
             <li key={c.key} data-class={c.key} className="flex flex-col gap-1">
-              <span className="flex items-baseline justify-between gap-3 text-[13px]">
+              <span className="flex items-baseline justify-between gap-3 text-sm">
                 <span>{t(`classes.${c.key}`)}</span>
                 {value === null ? (
                   <NotRecordedValue />

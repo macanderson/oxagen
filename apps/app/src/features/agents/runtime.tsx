@@ -329,7 +329,7 @@ function Rollback({
     <Panel id="agent-rollback" title={t("title")} lead={t("lead")}>
       <pre
         data-testid="unenroll-command"
-        className={`${mono} overflow-x-auto rounded-lg border border-border bg-code-bg px-3 py-2 text-[12px]`}
+        className={`${mono} overflow-x-auto rounded-lg border border-border bg-code-bg px-3 py-2 text-sm`}
       >
         {t("command")}
       </pre>

@@ -50,7 +50,7 @@ import {
 
 type EditorMode = "create" | "duplicate" | "edit" | "view";
 
-const label = "text-[12px] font-semibold text-muted-foreground";
+const label = "text-sm font-semibold text-muted-foreground";
 const hint = "text-xs text-muted-foreground";
 
 /** The permission the Merge without review box grants, drawn apart from its group. */
@@ -336,7 +336,7 @@ export function RoleEditor({
             <div className="grid gap-3 sm:grid-cols-2">
               {groups.map((group) => (
                 <div key={group} className="flex flex-col gap-1">
-                  <p className="text-[10.5px] font-semibold uppercase tracking-[0.09em] text-dim">
+                  <p className="text-sm font-semibold uppercase tracking-[0.09em] text-dim">
                     {group}
                   </p>
                   {grouped
@@ -345,7 +345,7 @@ export function RoleEditor({
                       <label
                         key={entry.permission}
                         data-touch-target=""
-                        className="flex min-h-8 items-start gap-2 text-[12.5px] max-md:min-h-11"
+                        className="flex min-h-8 items-start gap-2 text-sm max-md:min-h-11"
                         title={entry.description}
                       >
                         <input
@@ -369,7 +369,7 @@ export function RoleEditor({
               <label
                 htmlFor={`${id}-merge-without-review`}
                 data-touch-target=""
-                className="flex min-h-8 items-start gap-2 text-[12.5px] max-md:min-h-11"
+                className="flex min-h-8 items-start gap-2 text-sm max-md:min-h-11"
               >
                 <input
                   id={`${id}-merge-without-review`}
@@ -403,12 +403,12 @@ export function RoleEditor({
             <p
               role="note"
               data-testid="role-holders-banner"
-              className="rounded-lg border border-info/40 bg-info/10 px-3 py-2 text-[12.5px] text-foreground"
+              className="rounded-lg border border-info/40 bg-info/10 px-3 py-2 text-sm text-foreground"
             >
               {t("holders", { count: role.heldBy })}
             </p>
           ) : null}
-          <p className="border-l-2 border-gold pl-3 text-[12.5px] text-muted-foreground">
+          <p className="border-l-2 border-gold pl-3 text-sm text-muted-foreground">
             {t("governed")}
           </p>
           {failure === null ? null : (

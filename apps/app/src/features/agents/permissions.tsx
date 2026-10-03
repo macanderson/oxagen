@@ -54,7 +54,7 @@ type Place = { org: string; ws: string; agent: string };
 
 function WireNode({ label, sub }: { label: string; sub?: string }) {
   return (
-    <li className="flex min-w-0 flex-col rounded-lg border border-border bg-hl px-3 py-2 text-[13px]">
+    <li className="flex min-w-0 flex-col rounded-lg border border-border bg-hl px-3 py-2 text-sm">
       <span className={mono}>{label}</span>
       {sub === undefined ? null : (
         <span className="text-xs text-dim">{sub}</span>
@@ -102,7 +102,7 @@ function Roles({
           label={operatorName ?? detail.identity.operatorId ?? t("operator")}
           sub={t("operator")}
         />
-        <li className="flex min-w-0 flex-col rounded-lg border border-gold/50 bg-gold/10 px-3 py-2 text-[13px]">
+        <li className="flex min-w-0 flex-col rounded-lg border border-gold/50 bg-gold/10 px-3 py-2 text-sm">
           <span>
             {toolbelt.ok
               ? t("belt", {
@@ -126,7 +126,7 @@ function Roles({
                       {permissions === null ? (
                         <NotRecordedValue />
                       ) : (
-                        <span className={`${mono} text-[11.5px]`}>
+                        <span className={`${mono} text-sm`}>
                           {permissions.join(" · ")}
                         </span>
                       )}
@@ -218,7 +218,7 @@ function Meter({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <p className="flex items-baseline justify-between gap-3 text-[13px]">
+      <p className="flex items-baseline justify-between gap-3 text-sm">
         <span>{label}</span>
         <b>{value}</b>
       </p>
@@ -265,7 +265,7 @@ function Budgets({
   return (
     <Panel id="agent-budgets" title={t("title")} lead={t("lead")}>
       {limits.invalid ? (
-        <p role="alert" className="text-[13px] text-foreground">
+        <p role="alert" className="text-sm text-foreground">
           {t("invalid")}
         </p>
       ) : null}

@@ -255,7 +255,7 @@ export function DefinitionFields({
         className="flex flex-col gap-3"
         data-testid="studio-add-definition-opened"
       >
-        <p role="status" className="text-[13px]">
+        <p role="status" className="text-sm">
           {url === null ? (
             label
           ) : (
@@ -293,7 +293,7 @@ export function DefinitionFields({
       className="flex flex-col gap-3"
       noValidate
     >
-      <p className="text-[13px] text-muted-foreground">{t("intro")}</p>
+      <p className="text-sm text-muted-foreground">{t("intro")}</p>
       <Field id={`${id}-name`} label={tFields("name")} hint={tFields("nameHint")}>
         <input
           id={`${id}-name`}
@@ -446,7 +446,7 @@ export function RegistryOfferChip({ server }: { server: RegistryServer }) {
   return (
     <span
       data-offer={offer}
-      className="rounded border border-border px-1.5 py-0.5 text-[11px] text-foreground"
+      className="rounded border border-border px-1.5 py-0.5 text-sm text-foreground"
     >
       {t(offer)}
     </span>
@@ -582,12 +582,12 @@ export function DiscoveryProgress({
       {server === null ? (
         <p
           data-testid="studio-discovery-unnamed"
-          className="text-[13px] text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           {t("unnamed")}
         </p>
       ) : view.kind === "loading" ? (
-        <p role="status" className="text-[13px] text-muted-foreground">
+        <p role="status" className="text-sm text-muted-foreground">
           {t("loading")}
         </p>
       ) : view.kind === "failed" ? (
@@ -597,7 +597,7 @@ export function DiscoveryProgress({
       ) : view.discovery === null ? (
         <p
           data-testid="studio-discovery-none"
-          className="text-[13px] text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           {t("none")}
         </p>
@@ -618,7 +618,7 @@ function DiscoveryState({ discovery }: { discovery: StudioDiscovery }) {
       ? null
       : t("pr", { number: String(discovery.pr.number) });
   return (
-    <div className="flex flex-col gap-1.5 text-[13px]">
+    <div className="flex flex-col gap-1.5 text-sm">
       <p role="status" className="flex flex-wrap items-center gap-2">
         <Badge
           tone={STATUS_TONE[discovery.status]}

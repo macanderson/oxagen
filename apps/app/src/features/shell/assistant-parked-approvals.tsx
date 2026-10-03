@@ -251,7 +251,7 @@ export function AssistantParkedApprovals({
       {readFailure === null ? null : (
         <p
           data-testid="assistant-parked-unread"
-          className="text-[12px] text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           {t("unread", { code: readFailure })}
         </p>
@@ -272,7 +272,7 @@ export function AssistantParkedApprovals({
         <button
           type="button"
           data-testid="assistant-parked-check"
-          className={`self-start text-[12px] ${linkText}`}
+          className={`self-start text-sm ${linkText}`}
           onClick={() => {
             setPolls(0);
             void read();
@@ -347,7 +347,7 @@ function ParkedApproval({
     <li
       data-testid="assistant-parked-card"
       data-approval={card.approvalId}
-      className="flex flex-col gap-1.5 rounded-md border border-border px-2.5 py-2 text-[12px]"
+      className="flex flex-col gap-1.5 rounded-md border border-border px-2.5 py-2 text-sm"
     >
       <p className="text-app-raised-fg">
         <span className={mono}>{card.capability}</span>
@@ -464,7 +464,7 @@ function Outcome({
       <p>{line}</p>
       {rule === null ? null : <p>{t("byRule", { rule })}</p>}
       {runId === null ? null : (
-        <p className="font-mono text-[11px]">
+        <p className="font-mono text-sm">
           {t("recordedAs")}{" "}
           <SafeLink
             to={routes.run(org, ws, runId)}

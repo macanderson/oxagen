@@ -78,7 +78,7 @@ function Headline({ headline }: { headline: Read<UnproductiveSpend> }) {
           {share === null ? <NotRecordedValue /> : formatRatio(share, locale)}
         </span>
       </div>
-      <p className="text-[12.5px] text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         {spend === null ? (
           t("heroNoSpend")
         ) : (
@@ -111,7 +111,7 @@ function PartFigures({ headline }: { headline: Read<UnproductiveSpend> }) {
       <h3 className={eyebrow}>{t("title")}</h3>
       <dl
         data-testid="spend-headline-parts"
-        className="grid grid-cols-[minmax(0,1fr)_max-content_max-content] gap-x-4 gap-y-1.5 text-[12.5px]"
+        className="grid grid-cols-[minmax(0,1fr)_max-content_max-content] gap-x-4 gap-y-1.5 text-sm"
       >
         {parts.map((part) => (
           <div
@@ -133,7 +133,7 @@ function PartFigures({ headline }: { headline: Read<UnproductiveSpend> }) {
         <div data-detector="4" className="contents">
           <dt className="text-muted-foreground">
             {t("estimate")}{" "}
-            <span className="rounded-sm border border-border px-1 text-[11px]">
+            <span className="rounded-sm border border-border px-1 text-sm">
               {t("estimated")}
             </span>
           </dt>
@@ -145,7 +145,7 @@ function PartFigures({ headline }: { headline: Read<UnproductiveSpend> }) {
           </dd>
         </div>
       </dl>
-      <p className="text-[12px] text-muted-foreground">{t("note")}</p>
+      <p className="text-sm text-muted-foreground">{t("note")}</p>
     </div>
   );
 }
@@ -191,7 +191,7 @@ export function FindingsSection({
         </div>
         <div className="flex min-w-0 flex-col gap-3">
           <PartFigures headline={headline} />
-          <ul className="flex flex-wrap gap-x-5 gap-y-1 border-t border-border pt-3 text-[12.5px] text-muted-foreground">
+          <ul className="flex flex-wrap gap-x-5 gap-y-1 border-t border-border pt-3 text-sm text-muted-foreground">
             <li>
               <b className="text-foreground">
                 {formatCount(findings.counts.findings, locale)}
@@ -248,7 +248,7 @@ export function FindingsSection({
           />
         </>
       )}
-      <div className="flex flex-col gap-2 border-l-2 border-gold py-1 pl-3 text-[12.5px] text-muted-foreground">
+      <div className="flex flex-col gap-2 border-l-2 border-gold py-1 pl-3 text-sm text-muted-foreground">
         <p>{t("note")}</p>
         <NotBacked gap="findings">{t("attributionMissing")}</NotBacked>
       </div>
@@ -310,7 +310,7 @@ export function FindingEvidence({
             })}
           </Tile>
         </TileStrip>
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-[12.5px]">
+        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-sm">
           <dt className="text-muted-foreground">
             {t("findings.evidence.confidence")}
           </dt>
@@ -383,7 +383,7 @@ export function FindingEvidence({
                     </SafeLink>
                     <span
                       data-testid="run-id"
-                      className={`${mono} block truncate text-[11px] text-dim`}
+                      className={`${mono} block truncate text-sm text-dim`}
                     >
                       {run.runId}
                     </span>

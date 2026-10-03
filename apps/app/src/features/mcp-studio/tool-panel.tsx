@@ -63,7 +63,7 @@ import {
 } from "./studio-calls";
 
 const section = "flex flex-col gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0";
-const heading = "text-[13.5px] font-semibold text-foreground";
+const heading = "text-sm font-semibold text-foreground";
 
 type Choice = {
   risk: ToolRiskGrade | "";
@@ -136,7 +136,7 @@ function Classification({
         {t("classification")}
       </h3>
       {shown === null ? (
-        <p className="text-[13px] text-muted-foreground">{t("unclassified")}</p>
+        <p className="text-sm text-muted-foreground">{t("unclassified")}</p>
       ) : (
         <dl className={kvList} data-testid="studio-panel-classification">
           <dt className={kvTerm}>{t("risk")}</dt>
@@ -154,7 +154,7 @@ function Classification({
         </dl>
       )}
       {staged !== undefined ? (
-        <p className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <Badge tone="approval" data-testid="studio-panel-staged">
             {t("staged")}
           </Badge>
@@ -162,7 +162,7 @@ function Classification({
       ) : null}
       {suggestion === null ? null : (
         <p
-          className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted-foreground"
+          className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
           data-testid="studio-panel-suggested"
         >
           <Badge tone="quiet">{t("suggested")}</Badge>
@@ -175,7 +175,7 @@ function Classification({
       {canEdit && imported ? (
         <div className="flex flex-col gap-3">
           <div className="grid gap-3 sm:grid-cols-3">
-            <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
+            <label className="flex flex-col gap-1 text-sm text-muted-foreground">
               {t("risk")}
               <select
                 value={choice.risk}
@@ -193,7 +193,7 @@ function Classification({
                 ))}
               </select>
             </label>
-            <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
+            <label className="flex flex-col gap-1 text-sm text-muted-foreground">
               {t("sideEffect")}
               <select
                 value={choice.sideEffect}
@@ -214,7 +214,7 @@ function Classification({
                 ))}
               </select>
             </label>
-            <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
+            <label className="flex flex-col gap-1 text-sm text-muted-foreground">
               {t("egress")}
               <select
                 value={choice.egress}
@@ -405,7 +405,7 @@ function Description({
           ) : null}
         </div>
       ) : (
-        <p className="text-[13px] text-foreground">
+        <p className="text-sm text-foreground">
           {staged ?? tool.description ?? t("none")}
         </p>
       )}
@@ -475,7 +475,7 @@ function ResultCap({
         {t("cap")}
       </h3>
       {staged === undefined ? (
-        <p className="text-[13px] text-muted-foreground">{t("capUnread")}</p>
+        <p className="text-sm text-muted-foreground">{t("capUnread")}</p>
       ) : (
         <>
           <dl className={kvList} data-testid="studio-panel-cap">
@@ -492,7 +492,7 @@ function ResultCap({
               </>
             ) : null}
           </dl>
-          <p className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
             <Badge tone="approval" data-testid="studio-panel-cap-staged">
               {t("staged")}
             </Badge>
@@ -505,7 +505,7 @@ function ResultCap({
       {canEdit && imported ? (
         <div className="flex flex-col gap-3">
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
+            <label className="flex flex-col gap-1 text-sm text-muted-foreground">
               {t("capTokens")}
               <input
                 type="number"
@@ -525,7 +525,7 @@ function ResultCap({
               />
             </label>
             {pageable ? (
-              <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
+              <label className="flex flex-col gap-1 text-sm text-muted-foreground">
                 {t("paging")}
                 <select
                   value={paging}
@@ -640,7 +640,7 @@ function ServerSays({ tool }: { tool: StudioTool }) {
           {t("serverMissing")}
         </StudioNotRecorded>
       ) : (
-        <p className="text-[13px] text-foreground">{tool.serverDescription}</p>
+        <p className="text-sm text-foreground">{tool.serverDescription}</p>
       )}
       {tool.annotations.length === 0 ? null : (
         <ul
@@ -707,7 +707,7 @@ function Feedback({ tool }: { tool: StudioTool }) {
           {feedback.notes.length === 0 ? null : (
             <ul
               aria-label={t("notes")}
-              className="flex flex-col gap-1.5 text-[13px] text-foreground"
+              className="flex flex-col gap-1.5 text-sm text-foreground"
             >
               {[...new Set(feedback.notes)].map((text) => (
                 <li key={text} className={note}>
@@ -804,7 +804,7 @@ export function ToolPanel({
             {t("off")}
           </h3>
           {tool.versionId === null ? (
-            <p className="text-[13px] text-muted-foreground">{t("offNone")}</p>
+            <p className="text-sm text-muted-foreground">{t("offNone")}</p>
           ) : (
             <div className="flex flex-col gap-2">
               {off}

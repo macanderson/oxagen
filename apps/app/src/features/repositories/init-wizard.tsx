@@ -361,7 +361,7 @@ export function InitWizard({
             >
               <span
                 aria-hidden="true"
-                className={`grid size-4 place-items-center rounded-full border text-[10px] ${key === step && opened === null ? "border-gold bg-gold text-on-gold" : "border-border"}`}
+                className={`grid size-4 place-items-center rounded-full border text-sm ${key === step && opened === null ? "border-gold bg-gold text-on-gold" : "border-border"}`}
               >
                 {done ? <CheckIcon className="size-2.5" /> : position + 1}
               </span>
@@ -389,7 +389,7 @@ export function InitWizard({
           />
           <p
             data-testid="init-wizard-resume"
-            className="text-[13px] leading-relaxed text-muted-foreground"
+            className="text-sm leading-relaxed text-muted-foreground"
           >
             {t.rich("resume", { repository: proposed.fullName, code })}
           </p>
@@ -406,7 +406,7 @@ export function InitWizard({
             <>
               <p
                 data-testid="init-wizard-connect"
-                className="text-[13px] text-muted-foreground"
+                className="text-sm text-muted-foreground"
               >
                 {t("repository.connect")}
               </p>
@@ -415,7 +415,7 @@ export function InitWizard({
           ) : candidates.length === 0 ? (
             <p
               data-testid="init-wizard-no-candidates"
-              className="text-[13px] text-muted-foreground"
+              className="text-sm text-muted-foreground"
             >
               {t.rich("repository.empty", { code })}
             </p>
@@ -424,7 +424,7 @@ export function InitWizard({
               <div>
                 <label
                   htmlFor={`${id}-repository`}
-                  className="mb-1 block text-[12.5px] font-semibold text-muted-foreground"
+                  className="mb-1 block text-sm font-semibold text-muted-foreground"
                 >
                   {t("repository.label")}
                 </label>
@@ -469,7 +469,7 @@ export function InitWizard({
           <div>
             <label
               htmlFor={`${id}-branch`}
-              className="mb-1 block text-[12.5px] font-semibold text-muted-foreground"
+              className="mb-1 block text-sm font-semibold text-muted-foreground"
             >
               {t("branch.label")}
             </label>
@@ -490,7 +490,7 @@ export function InitWizard({
             </p>
           </div>
           <fieldset>
-            <legend className="mb-1 block text-[12.5px] font-semibold text-muted-foreground">
+            <legend className="mb-1 block text-sm font-semibold text-muted-foreground">
               {t("branch.modeLabel")}
             </legend>
             <div className="grid gap-2.5 sm:grid-cols-3">
@@ -512,7 +512,7 @@ export function InitWizard({
                     }}
                   />
                   <b
-                    className={`${mono} text-[13px] font-semibold text-foreground`}
+                    className={`${mono} text-sm font-semibold text-foreground`}
                   >
                     {option}
                   </b>
@@ -539,7 +539,7 @@ export function InitWizard({
           <section aria-labelledby={`${id}-cannot`}>
             <h3
               id={`${id}-cannot`}
-              className="mb-1.5 text-[12.5px] font-semibold text-muted-foreground"
+              className="mb-1.5 text-sm font-semibold text-muted-foreground"
             >
               {t("permissions.cannotLabel")}
             </h3>
@@ -604,7 +604,7 @@ export function InitWizard({
                 {INIT_BRANCH}
               </span>
             </div>
-            <ul data-testid="init-wizard-files" className="text-[12.5px]">
+            <ul data-testid="init-wizard-files" className="text-sm">
               {INIT_FILES.map((file, position) => {
                 const key = FILE_NOTE[position] ?? "rules";
                 return (
@@ -633,7 +633,7 @@ export function InitWizard({
           <section aria-labelledby={`${id}-checks`}>
             <h3
               id={`${id}-checks`}
-              className="mb-1.5 text-[12.5px] font-semibold text-muted-foreground"
+              className="mb-1.5 text-sm font-semibold text-muted-foreground"
             >
               {t("pullRequest.checksLabel")}
             </h3>
@@ -652,7 +652,7 @@ export function InitWizard({
           </section>
         </div>
       )}
-      <p className="mt-4 font-mono text-[11px] text-dim">
+      <p className="mt-4 font-mono text-sm text-dim">
         {t.rich("needs", { ws, code })}
       </p>
     </SheetDialog>
@@ -667,7 +667,7 @@ function PermissionTable() {
       <table
         aria-label={t("label")}
         data-testid="permission-table"
-        className="w-full border-collapse text-[13px]"
+        className="w-full border-collapse text-sm"
       >
         <thead>
           <tr className="border-b border-border">
@@ -716,7 +716,7 @@ function TomlField({
     <div>
       <label
         htmlFor={id}
-        className="mb-1 block font-mono text-[12px] font-semibold text-muted-foreground"
+        className="mb-1 block font-mono text-sm font-semibold text-muted-foreground"
       >
         {label}
       </label>

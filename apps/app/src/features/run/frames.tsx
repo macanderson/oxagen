@@ -70,7 +70,7 @@ const listItem =
 const listItemOn = "bg-hl text-foreground shadow-[inset_2px_0_0_var(--gold)]";
 /** `.navitem .ct { margin-left:auto; font-family:var(--mono); font-size:10.5px; color:var(--dim); background:var(--panel); border:1px solid var(--border); border-radius:5px; padding:0 5px }` */
 const costChip =
-  "ml-auto whitespace-nowrap rounded-[5px] border border-border bg-card px-[5px] font-mono text-[10.5px] text-dim";
+  "ml-auto whitespace-nowrap rounded-[5px] border border-border bg-card px-[5px] font-mono text-sm text-dim";
 
 const DECISION_TONE: Record<string, BadgeTone> = {
   allow: "allowed",
@@ -103,7 +103,7 @@ function Redactions({
       {redactions.map((redaction) => (
         <li
           key={redaction.originalDigest}
-          className="text-[11px] text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           {t("redacted", { path: redaction.path, reason: redaction.reason })}
         </li>
@@ -236,7 +236,7 @@ function FrameBody({
         <SafeLink
           to={open}
           data-testid="frame-open-body"
-          className={`${linkText} self-start text-[12.5px]`}
+          className={`${linkText} self-start text-sm`}
         >
           {t("open")}
         </SafeLink>
@@ -244,7 +244,7 @@ function FrameBody({
     return (
       <p
         data-testid="frame-body"
-        className="m-0 text-[12.5px] text-muted-foreground"
+        className="m-0 text-sm text-muted-foreground"
       >
         {t("digestOnly")}
       </p>
@@ -256,7 +256,7 @@ function FrameBody({
   return (
     <div data-testid="frame-body" className="flex min-w-0 flex-col gap-2">
       <p className={`${eyebrowQuiet} m-0`}>{t("heading")}</p>
-      <p className="m-0 flex flex-wrap gap-x-3 text-[11.5px] text-muted-foreground">
+      <p className="m-0 flex flex-wrap gap-x-3 text-sm text-muted-foreground">
         <span className={mono}>{body.contentType ?? t("noType")}</span>
         <span>
           {body.bytes === null
@@ -267,11 +267,11 @@ function FrameBody({
       </p>
       <Redactions redactions={body.redactions} />
       {body.bytes === null ? (
-        <p className="m-0 text-[12.5px] text-muted-foreground">
+        <p className="m-0 text-sm text-muted-foreground">
           {t("digestOnly")}
         </p>
       ) : body.text === null ? (
-        <p className="m-0 text-[12.5px] text-muted-foreground">
+        <p className="m-0 text-sm text-muted-foreground">
           {t("notText")}
         </p>
       ) : (
@@ -352,7 +352,7 @@ export function FramePanel({
         <div className="ml-auto flex min-w-0 flex-wrap items-center gap-[7px]">
           <EnforcementTierBadge tier={tier} />
           {at === null ? null : (
-            <time dateTime={at} className={`${mono} text-[11px] text-dim`}>
+            <time dateTime={at} className={`${mono} text-sm text-dim`}>
               {format.dateTime(new Date(at), {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -368,7 +368,7 @@ export function FramePanel({
         {frame === null ? (
           <p
             data-testid="frame-off-page"
-            className="m-0 text-[12.5px] text-muted-foreground"
+            className="m-0 text-sm text-muted-foreground"
           >
             {open.chainRef === undefined
               ? t("offPage", { seq: open.seq })
@@ -376,7 +376,7 @@ export function FramePanel({
           </p>
         ) : null}
         {summary === null ? null : (
-          <p className="m-0 break-words text-[13.5px] text-foreground">
+          <p className="m-0 break-words text-sm text-foreground">
             {summary}
           </p>
         )}
@@ -412,7 +412,7 @@ export function FramePanel({
           </StepLink>
           <span
             data-testid="frame-position"
-            className={`${mono} ml-auto text-[11px] text-dim`}
+            className={`${mono} ml-auto text-sm text-dim`}
           >
             {open.index < 0
               ? t("positionOff", {
@@ -458,7 +458,7 @@ export function FrameList({
         <h3 className={panelTitle}>{t("title")}</h3>
         <span
           data-testid="frame-list-state"
-          className="ml-auto text-[11px] text-dim"
+          className="ml-auto text-sm text-dim"
         >
           {t(`state.${state}`)}
         </span>

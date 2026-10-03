@@ -137,13 +137,13 @@ function Budget({
       </div>
       <div className={`${panelBody} flex flex-col gap-2`}>
         {after === null ? (
-          <p className="text-[13px] text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t("unmeasured", { budget: formatCount(budget, locale) })}
           </p>
         ) : (
           <>
             <p
-              className="text-[13px] text-foreground"
+              className="text-sm text-foreground"
               data-testid="studio-budget-used"
             >
               {t("used", {
@@ -170,7 +170,7 @@ function Budget({
           </>
         )}
         {before !== null && after !== null && before !== after ? (
-          <p className="text-[12.5px] text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t("before", { before: formatCount(before, locale) })}
           </p>
         ) : null}
@@ -188,7 +188,7 @@ function Listed({ listed }: { listed: StudioToolsList }) {
   const locale = useLocale();
   return (
     <div className="flex flex-col gap-2" data-testid="studio-tools-listed">
-      <p className="text-[13px] text-foreground">
+      <p className="text-sm text-foreground">
         {t("counts", {
           imported: formatCount(listed.imported, locale),
           offered: formatCount(listed.offered, locale),
@@ -196,7 +196,7 @@ function Listed({ listed }: { listed: StudioToolsList }) {
       </p>
       {listed.searchRecommended ? (
         <p
-          className="text-[12.5px] text-muted-foreground"
+          className="text-sm text-muted-foreground"
           data-testid="studio-tools-search"
         >
           {t("search")}
@@ -266,7 +266,7 @@ function Exposure({
           <fieldset className="flex flex-col gap-2">
             <legend className="sr-only">{t("title")}</legend>
             {MODES.map((mode) => (
-              <div key={mode} className="flex items-start gap-2 text-[13px]">
+              <div key={mode} className="flex items-start gap-2 text-sm">
                 <input
                   id={`${id}-${mode}`}
                   type="radio"
@@ -289,7 +289,7 @@ function Exposure({
                   </label>
                   <span
                     id={`${id}-${mode}-body`}
-                    className="text-[12.5px] text-muted-foreground"
+                    className="text-sm text-muted-foreground"
                   >
                     {t(`bodies.${mode}`)}
                   </span>
@@ -299,11 +299,11 @@ function Exposure({
           </fieldset>
         ) : (
           <p
-            className="flex flex-col text-[13px] text-foreground"
+            className="flex flex-col text-sm text-foreground"
             data-testid="studio-exposure-mode"
           >
             <span className="font-medium">{t(`modes.${shown}`)}</span>
-            <span className="text-[12.5px] text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               {t(`bodies.${shown}`)}
             </span>
           </p>
@@ -345,7 +345,7 @@ function Calls({
         ) : (
           <>
             <p
-              className="text-[13px] text-foreground"
+              className="text-sm text-foreground"
               data-testid="studio-calls-counts"
             >
               {t("counts", {
@@ -356,7 +356,7 @@ function Calls({
             </p>
             {calls.unrecorded === 0 ? null : (
               <p
-                className="text-[12.5px] text-muted-foreground"
+                className="text-sm text-muted-foreground"
                 data-testid="studio-calls-unrecorded"
               >
                 {t("unrecorded", { count: calls.unrecorded })}
@@ -366,13 +366,13 @@ function Calls({
               <>
                 <h3
                   id={`${id}-uncalled`}
-                  className="text-[13px] font-semibold text-foreground"
+                  className="text-sm font-semibold text-foreground"
                 >
                   {t("uncalled")}
                 </h3>
                 <ul
                   aria-labelledby={`${id}-uncalled`}
-                  className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[12.5px] text-foreground"
+                  className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-sm text-foreground"
                   data-testid="studio-calls-uncalled"
                 >
                   {calls.uncalled.map((name) => (
@@ -510,7 +510,7 @@ export function ToolsTab({
         </StudioNotRecorded>
       ) : null}
       {canEdit ? null : (
-        <p className="text-[12.5px] text-muted-foreground">{t("readOnly")}</p>
+        <p className="text-sm text-muted-foreground">{t("readOnly")}</p>
       )}
       {refused ? (
         <FormAlert testId="studio-tools-refused">{t("refused")}</FormAlert>
@@ -540,7 +540,7 @@ export function ToolsTab({
           <div className="min-w-0 overflow-x-auto">
             <table
               aria-labelledby="studio-tools-h"
-              className="w-full min-w-[720px] border-collapse text-[13px]"
+              className="w-full min-w-[720px] border-collapse text-sm"
             >
               <thead>
                 <tr className="border-b border-border">
@@ -611,7 +611,7 @@ export function ToolsTab({
                         <td className={cell}>
                           <button
                             type="button"
-                            className="text-left font-mono text-[12.5px] text-foreground underline-offset-2 hover:underline"
+                            className="text-left font-mono text-sm text-foreground underline-offset-2 hover:underline"
                             onClick={() => {
                               setOpenTool(tool.name);
                             }}

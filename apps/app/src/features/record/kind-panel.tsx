@@ -44,11 +44,11 @@ const strong = (chunks: ReactNode) => <b>{chunks}</b>;
 
 /** `.eyebrow.q`: a panel's section eyebrow. */
 const sectionEyebrow =
-  "mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground";
+  "mb-1.5 text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground";
 
 /** `.kv`: a two-column definition list. */
 const kv =
-  "grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px] [&>dt]:text-muted-foreground [&>dd]:min-w-0 [&>dd]:text-foreground";
+  "grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm [&>dt]:text-muted-foreground [&>dd]:min-w-0 [&>dd]:text-foreground";
 
 function Panel({ kind, children }: { kind: RecordKind; children: ReactNode }) {
   const term = useTranslations("ui.record");
@@ -140,7 +140,7 @@ function Meter({
   }[tone];
   return (
     <li data-meter={name} className="grid gap-[5px]">
-      <span className="flex text-[11.5px] text-muted-foreground">
+      <span className="flex text-sm text-muted-foreground">
         {label}
         <span className="ms-auto font-semibold tabular-nums text-foreground">
           {value === null ? (
@@ -185,7 +185,7 @@ function Meters({
       <p
         data-testid="record-meters"
         data-state="not-recorded"
-        className="mt-3.5 text-[13px] text-muted-foreground"
+        className="mt-3.5 text-sm text-muted-foreground"
       >
         {t("rollupNotRecorded")}
       </p>
@@ -219,7 +219,7 @@ function Meters({
       <p
         data-state="not-recorded"
         data-gap={RECORD_GAPS.violated}
-        className="text-[11.5px] text-dim"
+        className="text-sm text-dim"
       >
         {t("thirdNotRecorded")}
       </p>
@@ -319,11 +319,11 @@ function ConstraintPanel({
       >
         <span
           data-word=""
-          className="font-mono text-[13px] font-semibold uppercase tracking-[0.06em]"
+          className="font-mono text-sm font-semibold uppercase tracking-[0.06em]"
         >
           {constraintEffect ?? t("effectUnknownWord")}
         </span>
-        <span className="text-[12.3px] leading-normal text-foreground">
+        <span className="text-sm leading-normal text-foreground">
           {constraintEffect === "require"
             ? t("boundary.require")
             : constraintEffect === "forbid"
@@ -390,7 +390,7 @@ function ProcedurePanel({ statement }: { statement: string | null }) {
       <Deliver kind="procedure" />
       <Section title={t("stepsEyebrow")}>
         {steps.length === 0 ? (
-          <p data-state="not-recorded" className="text-[13px]">
+          <p data-state="not-recorded" className="text-sm">
             {t("noSteps")}
           </p>
         ) : (
@@ -401,7 +401,7 @@ function ProcedurePanel({ statement }: { statement: string | null }) {
             {steps.map((step, index) => (
               <li
                 key={`${String(index)}-${step}`}
-                className="pl-1 text-[13px] leading-normal text-foreground"
+                className="pl-1 text-sm leading-normal text-foreground"
               >
                 {step}
               </li>
@@ -548,7 +548,7 @@ function UnclassifiedPanel() {
       </div>
       <p
         data-state="not-recorded"
-        className={`${panelBody} text-[13px] text-foreground`}
+        className={`${panelBody} text-sm text-foreground`}
       >
         {t("body")}
       </p>

@@ -30,7 +30,7 @@ const TONE: Record<BadgeTone, string> = {
 };
 
 const badgeBase =
-  "inline-flex items-center gap-[5px] whitespace-nowrap rounded-md border px-[7px] py-0.5 text-[11px] font-semibold leading-normal tracking-[0.02em]";
+  "inline-flex items-center gap-[5px] whitespace-nowrap rounded-md border px-[7px] py-0.5 text-sm font-semibold leading-normal tracking-[0.02em]";
 
 export function Badge({
   tone,
@@ -56,7 +56,7 @@ export function Badge({
     <span
       {...rest}
       title={title}
-      className={`${badgeBase} ${TONE[tone]} ${mono ? "font-mono text-[10.5px] font-medium lowercase" : ""}`}
+      className={`${badgeBase} ${TONE[tone]} ${mono ? "font-mono text-sm font-medium lowercase" : ""}`}
     >
       {dot ? (
         <span

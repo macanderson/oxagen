@@ -132,14 +132,14 @@ export function DecidedApprovals({
     <div className="flex flex-col gap-2">
       <p
         data-testid="approval-unmatched"
-        className="text-[12.5px] text-muted-foreground"
+        className="text-sm text-muted-foreground"
       >
         {t("noMatch")}
       </p>
       {more ? (
         <p
           data-testid="approvals-partial"
-          className="text-[12.5px] text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           {t("partial", { count: items.length })}
         </p>

@@ -19,7 +19,7 @@ import { note } from "./styles";
 
 const code = (chunks: ReactNode) => <span className={mono}>{chunks}</span>;
 const warnClass =
-  "rounded-lg border border-warning/45 bg-warning/9 px-3 py-2 text-[12.5px] leading-relaxed text-foreground";
+  "rounded-lg border border-warning/45 bg-warning/9 px-3 py-2 text-sm leading-relaxed text-foreground";
 
 export function ArchiveDialog({
   open,

@@ -143,7 +143,7 @@ function listedTools(
  * padding:5px 0; border-bottom:1px solid var(--border); font-size:11.5px }`
  */
 const toolRow =
-  "flex min-w-0 justify-between gap-2.5 border-b border-border py-[5px] text-[11.5px] last:border-b-0";
+  "flex min-w-0 justify-between gap-2.5 border-b border-border py-[5px] text-sm last:border-b-0";
 
 /** `.meter .lab b .dim { font-weight:500 }`: the token count beside an area's money. */
 const areaTokens = "font-medium text-dim";
@@ -259,7 +259,7 @@ export function SpendByArea({
       flush
       aside={
         cost === null ? undefined : (
-          <span className="font-mono text-[11px] text-dim">
+          <span className="font-mono text-sm text-dim">
             <Money value={cost} /> · {cost.basis ?? tCost("basisNotRecorded")}
             {/* An open run's figure grows as it records calls (#3980). */}
             {metrics.costIsEstimate ? (
@@ -308,7 +308,7 @@ export function SpendByArea({
       <PanelBody rule>
         <p className={`${eyebrowQuiet} mb-1 mt-0`}>{t("dearest")}</p>
         {tools.length === 0 ? (
-          <p className="m-0 text-[12.5px] text-muted-foreground">
+          <p className="m-0 text-sm text-muted-foreground">
             {metrics.toolCalls === null ? t("toolsNotRead") : t("noTools")}
           </p>
         ) : (
@@ -343,7 +343,7 @@ export function SpendByArea({
             </ul>
             <p
               data-testid="dearest-tools-note"
-              className="mb-0 mt-2 text-[11.5px] text-muted-foreground"
+              className="mb-0 mt-2 text-sm text-muted-foreground"
             >
               {priced ? t("byCost") : t("byCalls")}
             </p>
