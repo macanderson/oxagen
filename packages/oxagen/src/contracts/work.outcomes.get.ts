@@ -7,7 +7,9 @@
  *
  *   - Accepted and merged, returned, and closed are separate counts and never
  *     add into one rate. An item counts as accepted and merged in the window
- *     when the later of its acceptance and its merge falls in it.
+ *     when the later of its acceptance and its merge falls in it. The count
+ *     is of distinct work items, never sends: an item done twice in the
+ *     window counts once, in the week of its latest done time.
  *   - Lead time runs from the item's first source reading (collected or
  *     entered) to the later of acceptance and merge, with its median, its
  *     90th percentile, and its sample.
@@ -28,6 +30,9 @@
  *     made. Both counts are exact and never stop at a cap.
  *   - A week used the full flow when at least one item was accepted and
  *     merged in it.
+ *   - A week is complete when the window covers all of it, Monday 00:00 to
+ *     Sunday 23:59:59.999 UTC. The oldest week the window cuts and the week
+ *     still running are not, so their counts cover part of a week.
  *
  * Delivery and the weekly counts are the pilot's measures
  * (agent-work-phase-1.html, Release gates). No figure here decides the pilot.
@@ -65,6 +70,7 @@ export const workOutcomesGet = registerCapability({
     .object({
       days: z.number().int().positive(),
       since: z.string(),
+      /** Distinct work items accepted and merged in the window. An item counts once, however many of its sends finished. */
       accepted_merged: z.number().int().nonnegative(),
       returned: z.number().int().nonnegative(),
       closed: z
@@ -152,6 +158,12 @@ export const workOutcomesGet = registerCapability({
             sent: z.number().int().nonnegative(),
             /** True when at least one item was accepted and merged in the week. */
             full_flow: z.boolean(),
+            /**
+             * True when the window covers the whole week. False for the oldest
+             * week the window cuts and for the week still running, whose
+             * counts cover part of a week.
+             */
+            complete: z.boolean(),
           })
           .strict(),
       ),

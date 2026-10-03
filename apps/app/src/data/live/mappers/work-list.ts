@@ -267,6 +267,7 @@ export function toWorkOutcomes(
       acceptedMerged: week.accepted_merged,
       returned: week.returned,
       medianLeadHours: week.median_lead_hours,
+      complete: week.complete,
     })),
   };
 }
@@ -306,6 +307,7 @@ export function toWorkCollectorList(
       lastEventAt: collector.last_event_at,
       createdAt: collector.created_at,
     })),
+    viewer: { canChangeCollectors: out.viewer.can_change_collectors },
   };
 }
 

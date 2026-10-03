@@ -23,7 +23,7 @@ export const workTriageRetry = registerCapability({
     "Queue triage to run again on a work item, after a failure or a change to the priorities record. A person's corrections stay in force.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   sensitivity: "medium",

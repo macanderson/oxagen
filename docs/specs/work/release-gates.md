@@ -72,7 +72,7 @@ The phase's pilot decision is a proposed discovery gate: two independent teams u
 | Reopen rate in a mature 30-day cohort, with the immature count | `reopens.cohort`, `reopens.reopened`, `reopens.waiting` |
 | Revert rate | Not recorded yet (#5244) |
 | A week that used the full flow | `weeks[].full_flow`: at least one item was accepted and merged that week. Only a week with `weeks[].complete` true counts |
-| Work items completed | `items_completed`: distinct items accepted and merged in the window. A send is not an item |
+| Work items completed | `accepted_merged` from one read whose window covers the pilot's weeks. It counts each work item once, however many of its sends finished |
 | Stop condition: teams only use intake | `weeks[].entered` beside `weeks[].sent` |
 | Stop condition: teams cannot reliably receive work | `delivery`: sends claimed, rejected, withdrawn, and waiting, and `delivery.claim_minutes` |
 | Stop condition: teams still rebuild every result outside Oxagen | An observation. No field measures it |
@@ -82,8 +82,9 @@ The phase's pilot decision is a proposed discovery gate: two independent teams u
 
 1. Mac names the pilot teams. Each team is one workspace, and two teams are independent when they sit in different organizations. Record each team's workspace and its first pilot week in the planning service, not the people.
 2. Each team gives the reader a Viewer seat in its workspace, or reads the figures itself and shares the answer. The read takes a signed-in session or an API key: `POST /v1/<org>/<workspace>/work/outcomes/get` with `{"days": 35}`, so four whole weeks fit in the window.
-3. Every Monday, read each team's figures and record each week with `complete` true: its `full_flow`, `accepted_merged`, `entered`, and `sent`, with `delivery`, `touches`, `lead_time`, and `cost`. The current week and a week the window cuts read `complete: false`, and they never count toward "3 of 4 consecutive weeks".
-4. For "at least 20 work items", count the team's finished items with `items_completed`, read over a window that covers the whole pilot. Do not count sends, and do not add up weekly records, because an item reopened and finished again can show in two of them.
-5. When `truncated` or `delivery.truncated` is true, the read stopped at its cap. Read a shorter window.
+3. Every Monday, read each team's figures and keep only the `weeks[]` rows with `complete: true`. The window cuts its oldest week and the newest week is still running, so those two rows count part of a week and never count toward "3 of 4 consecutive weeks". Record each whole week's `full_flow`, `accepted_merged`, `entered`, and `sent`, with `delivery`, `touches`, `lead_time`, and `cost`. A later read of a week replaces the earlier record of that week.
+4. A team used the full flow in 3 of 4 consecutive weeks when at least three of four consecutive whole weeks read `full_flow: true`.
+5. For "at least 20 work items", read once with a window that covers the pilot's weeks, up to 90 days, and take `accepted_merged`. It counts each item once, in the week of its latest done time. Do not count sends, and do not add `accepted_merged` across weekly records, because an item done again after a reopen can count in two reads.
+6. When `truncated` or `delivery.truncated` is true, the read stopped at its cap. Read a shorter window.
 
 The product gate stays pending until those observations exist and Mac records the decision. Phase 2 entry needs the technical gates passed, and at least one pilot that names repeated manual evidence checking or batch dispatch as a real bottleneck and wants to keep using Work.

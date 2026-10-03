@@ -8,7 +8,8 @@
 //     recorded cost, and no answer read from the send's command row
 //   - get_work_item finds an item by its number or its public id, and finds
 //     nothing for another workspace's item or a deleted one
-//   - the viewer flags follow the same role check the actions make
+//   - the viewer flags follow the same role check the actions make, and a
+//     workspace Member may act on items but not change a collector
 //   - list_work_targets names why each agent cannot take a send
 //   - get_work_outcomes counts a done item and a closed one, and the pilot
 //     measures: each send's delivery bucket, the claim time, and each week's
@@ -33,7 +34,7 @@ import { sendWork } from "../work-records/actions";
 import type { WorkActor } from "../work-records/actor";
 import { type WorkScope, appendFacts, approveBrief, readWorkItem, recordSource, saveBrief } from "../work-records/store";
 import { readWorkItemDetail, readWorkItemRows, readWorkOutcomes, readWorkTargets } from "./read";
-import { workViewer } from "./viewer";
+import { collectorViewer, workViewer } from "./viewer";
 
 const enabled = Boolean(process.env.DATABASE_URL);
 if (process.env.CI && !enabled) throw new Error("The Work read test needs DATABASE_URL on CI.");
@@ -66,6 +67,8 @@ describe.skipIf(!enabled)("the Work reads against Postgres", { timeout: 60_000 }
   const AMARA = crypto.randomUUID();
   /** A workspace Viewer. */
   const VERA = crypto.randomUUID();
+  /** A workspace Member: he acts on items and cannot change a collector. */
+  const MILO = crypto.randomUUID();
   const actor: WorkActor = { userId: MARCUS, role: "Owner" };
   let counter = 0;
 
@@ -82,6 +85,7 @@ describe.skipIf(!enabled)("the Work reads against Postgres", { timeout: 60_000 }
         { id: MARCUS, email: `marcus-${tag}@work-read.test`, displayName: "Marcus Lee", status: "active" },
         { id: AMARA, email: `amara-${tag}@work-read.test`, status: "active" },
         { id: VERA, email: `vera-${tag}@work-read.test`, displayName: "Vera", status: "active" },
+        { id: MILO, email: `milo-${tag}@work-read.test`, displayName: "Milo", status: "active" },
       ]);
       await tx.insert(schema.organizations).values({
         id: scope.orgId,
@@ -111,10 +115,19 @@ describe.skipIf(!enabled)("the Work reads against Postgres", { timeout: 60_000 }
         .insert(schema.principals)
         .values({ orgId: scope.orgId, kind: "human", displayName: "Vera", status: "active", parentUserId: VERA })
         .returning({ id: schema.principals.id });
-      if (!owner || !viewer || !marcus || !vera) throw new Error("fixture insert returned no row");
+      const [member] = await tx
+        .insert(schema.roles)
+        .values({ orgId: scope.orgId, scopeKind: "workspace", name: "Member", isSystemDefault: true })
+        .returning({ id: schema.roles.id });
+      const [milo] = await tx
+        .insert(schema.principals)
+        .values({ orgId: scope.orgId, kind: "human", displayName: "Milo", status: "active", parentUserId: MILO })
+        .returning({ id: schema.principals.id });
+      if (!owner || !viewer || !member || !marcus || !vera || !milo) throw new Error("fixture insert returned no row");
       await tx.insert(schema.principalRoleAssignments).values([
         { principalId: marcus.id, roleId: owner.id, orgId: scope.orgId },
         { principalId: vera.id, roleId: viewer.id, orgId: scope.orgId, workspaceId: scope.workspaceId },
+        { principalId: milo.id, roleId: member.id, orgId: scope.orgId, workspaceId: scope.workspaceId },
       ]);
     });
   });
@@ -139,7 +152,7 @@ describe.skipIf(!enabled)("the Work reads against Postgres", { timeout: 60_000 }
       await tx.delete(schema.principals).where(eq(schema.principals.orgId, orgId));
       await tx.delete(schema.workspaces).where(eq(schema.workspaces.orgId, orgId));
       await tx.delete(schema.organizations).where(eq(schema.organizations.id, orgId));
-      await tx.delete(schema.users).where(inArray(schema.users.id, [MARCUS, AMARA, VERA]));
+      await tx.delete(schema.users).where(inArray(schema.users.id, [MARCUS, AMARA, VERA, MILO]));
     });
     await closeDatabase();
   });
@@ -634,6 +647,14 @@ describe.skipIf(!enabled)("the Work reads against Postgres", { timeout: 60_000 }
     expect(await scoped(() => workViewer(contextOf(MARCUS)))).toEqual({ can_control: true, can_approve: true });
     expect(await scoped(() => workViewer(contextOf(VERA)))).toEqual({ can_control: false, can_approve: false });
     expect(await scoped(() => workViewer(contextOf(null, crypto.randomUUID())))).toEqual({ can_control: false, can_approve: false });
+  });
+
+  it("lets an org Owner change collectors, and neither a workspace Member nor a Viewer", async () => {
+    expect(await scoped(() => workViewer(contextOf(MILO)))).toEqual({ can_control: true, can_approve: true });
+    expect(await scoped(() => collectorViewer(contextOf(MARCUS)))).toEqual({ can_change_collectors: true });
+    expect(await scoped(() => collectorViewer(contextOf(MILO)))).toEqual({ can_change_collectors: false });
+    expect(await scoped(() => collectorViewer(contextOf(VERA)))).toEqual({ can_change_collectors: false });
+    expect(await scoped(() => collectorViewer(contextOf(null, crypto.randomUUID())))).toEqual({ can_change_collectors: false });
   });
 
   // -------------------------------------------------------------------------

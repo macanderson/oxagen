@@ -117,11 +117,15 @@ export const LINKED_REPOS = [
   "a-intel/web",
 ];
 
+/** A viewer whose roles may change collectors: a workspace Owner. */
+const COLLECTOR_VIEWER: WorkCollectorList["viewer"] = { canChangeCollectors: true };
+
 export function collectorList(
   collectors: WorkCollector[],
   linked: string[] | null = LINKED_REPOS,
+  viewer: WorkCollectorList["viewer"] = COLLECTOR_VIEWER,
 ): Read<WorkCollectorList> {
-  return readOk({ collectors, linked });
+  return readOk({ collectors, linked, viewer });
 }
 
 /** The priorities record a-intel.work.priorities v7, with three rules. */
@@ -198,9 +202,9 @@ export function outcomes(
     reopens: { cohort: 14, reopened: 1, waiting: 9 },
     truncated: false,
     weeks: [
-      { week: "2026-09-07", acceptedMerged: 5, returned: 2, medianLeadHours: 22 },
-      { week: "2026-09-14", acceptedMerged: 8, returned: 1, medianLeadHours: 18.5 },
-      { week: "2026-09-21", acceptedMerged: 10, returned: 3, medianLeadHours: null },
+      { week: "2026-09-07", acceptedMerged: 5, returned: 2, medianLeadHours: 22, complete: true },
+      { week: "2026-09-14", acceptedMerged: 8, returned: 1, medianLeadHours: 18.5, complete: true },
+      { week: "2026-09-21", acceptedMerged: 10, returned: 3, medianLeadHours: null, complete: true },
     ],
     ...overrides,
   });

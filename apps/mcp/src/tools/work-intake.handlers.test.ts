@@ -115,7 +115,11 @@ describe("work intake MCP tools", () => {
         standing: { outcome: "triaged", by: "oxagen", duplicate_of: null },
       },
     ],
-    ["list_work_collectors", () => listWorkCollectors({}), { collectors: [COLLECTOR] }],
+    [
+      "list_work_collectors",
+      () => listWorkCollectors({}),
+      { collectors: [COLLECTOR], viewer: { can_change_collectors: false } },
+    ],
     [
       "get_work_priorities",
       () => getWorkPriorities({}),

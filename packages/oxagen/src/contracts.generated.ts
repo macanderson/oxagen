@@ -482,6 +482,7 @@ import "./contracts/work.brief.save";
 import "./contracts/work.collector.set";
 import "./contracts/work.collector.sync";
 import "./contracts/work.collectors.list";
+import "./contracts/work.criterion.claim";
 import "./contracts/work.intake.shared";
 import "./contracts/work.item.close";
 import "./contracts/work.item.create";

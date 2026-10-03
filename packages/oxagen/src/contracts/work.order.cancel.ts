@@ -18,7 +18,7 @@ export const workOrderCancel = registerCapability({
     "Withdraw a send that no runtime has claimed. The send ends at once and no run starts.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

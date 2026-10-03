@@ -308,7 +308,8 @@
           "openedPr": "Steering PR <pr>#{number}</pr> in {repository} adds the priorities record.",
           "openedNoPr": "oxagen saved the priorities record as a proposal, but no pull request is open yet. Open it from the proposal.",
           "openedRetry": "Merge the pull request to put the rules in place. Then select Retry triage on each work item whose triage failed.",
-          "review": "Review and merge"
+          "review": "Review and merge",
+          "noRole": "Only a workspace Owner or Member can open this pull request."
         }
       },
       "runtimes": {
@@ -377,7 +378,8 @@
           "lead": "Median lead time"
         },
         "empty": "No week in this window has a finished item.",
-        "noLead": "none"
+        "noLead": "none",
+        "partial": "Partial week"
       },
       "touchKinds": {
         "title": "Touches by kind",

@@ -606,6 +606,8 @@ export const WorkOutcomes = z.object({
       acceptedMerged: Count,
       returned: Count,
       medianLeadHours: z.number().nonnegative().nullable(),
+      /** The window covers the whole week. The oldest week it cuts and the week still running are partial. */
+      complete: z.boolean(),
     }),
   ),
 });
@@ -646,6 +648,8 @@ export const WorkCollectorList = z.object({
    * owner/name. A collector reads only these. Null when they could not be read.
    */
   linked: z.array(z.string()).nullable(),
+  /** What the viewer's roles admit, from the role check set_work_collector makes. */
+  viewer: z.object({ canChangeCollectors: z.boolean() }),
 });
 export type WorkCollectorList = z.infer<typeof WorkCollectorList>;
 

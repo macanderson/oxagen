@@ -3,9 +3,10 @@
 // records produce (roadmap mockups/pages/work-item.md, States): the status
 // word, the head's actions in order with the one primary last, and what each
 // panel shows in that state, each with an axe check (INV-26). The read
-// failures (404, denied, error) and the read-only viewer are here too. The
-// dialogs and the writes they make are in work-item.dialogs.test.tsx, and the
-// actions' capability input in ../actions.test.ts.
+// failures (404, denied, error), the busy skeleton, the read-only viewer, and
+// a viewer who may act and not accept are here too. The dialogs and the
+// writes they make are in work-item.dialogs.test.tsx, and the actions'
+// capability input in ../actions.test.ts.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -79,6 +80,7 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { WorkItemPage } = await import("./work-item-page");
+const { WorkItemLoading } = await import("../loading");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "usr_marcusbell",
@@ -507,6 +509,40 @@ describe("WorkItemPage › a viewer whose roles read work", () => {
   it("shows no note to a viewer who may act", async () => {
     await renderDetail(readyItem());
     expect(screen.queryByTestId("work-viewer-note")).toBeNull();
+  });
+});
+
+describe("WorkItemPage › reading the checks again takes the accept role", () => {
+  it("disables Read the checks again with its reason for a viewer who may act and not accept", async () => {
+    await renderDetail({ ...inReviewItem(), viewer: { canControl: true, canApprove: false } });
+    const refresh = screen.getByTestId("work-action-refresh-checks");
+    expect(refresh).toBeDisabled();
+    expect(refresh).toHaveAccessibleDescription(
+      "Your role in this workspace reads work. A workspace Owner or Member approves briefs and accepts work.",
+    );
+  });
+
+  it("offers Read the checks again to a viewer who may accept and not act", async () => {
+    await renderDetail({ ...inReviewItem(), viewer: { canControl: false, canApprove: true } });
+    const refresh = screen.getByTestId("work-action-refresh-checks");
+    expect(refresh).toBeEnabled();
+    expect(refresh).not.toHaveAttribute("aria-describedby");
+  });
+});
+
+describe("WorkItemPage › loading", () => {
+  it("draws the busy skeleton while the item read runs, says so, and shows no figure", () => {
+    render(
+      <IntlProvider>
+        <WorkItemLoading />
+      </IntlProvider>,
+    );
+    const busy = screen.getByRole("status");
+    expect(busy).toHaveAttribute("aria-busy", "true");
+    expect(busy).toHaveAttribute("data-testid", "work-item-loading");
+    expect(busy.querySelectorAll("[data-skeleton-row]")).toHaveLength(7);
+    expect(busy.textContent).toBe("Loading the work item");
+    expect(document.querySelector("main")).toBeNull();
   });
 });
 

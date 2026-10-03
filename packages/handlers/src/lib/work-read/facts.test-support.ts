@@ -6,7 +6,7 @@
 // 2026-10-01, and each person and row is a fixed uuid.
 import type { Sha256Digest } from "@oxagen/run-evidence";
 import { type TriageCorrection, type TriageDecision, effectiveTriage } from "@oxagen/work";
-import { type CheckConclusion, type WorkFact, newFact, reduceWorkItem } from "@oxagen/work/records";
+import { type CheckConclusion, type CloseResolution, type WorkFact, newFact, reduceWorkItem } from "@oxagen/work/records";
 import type { DerivedItem, Lookups } from "./derive";
 
 export const SHA1 = "1".repeat(40);
@@ -276,7 +276,7 @@ export const f = {
       orderId: order,
       data: {},
     }),
-  closed: (itemRevision: number, minute: number) =>
+  closed: (itemRevision: number, minute: number, resolution: CloseResolution = "declined") =>
     newFact({
       kind: "closed",
       source: "person",
@@ -284,7 +284,7 @@ export const f = {
       actor: MARCUS,
       occurredAt: at(minute),
       dedupeKey: `closed:${minute}`,
-      data: { resolution: "declined", reason: "Not this quarter." },
+      data: { resolution, reason: "Not this quarter." },
     }),
   reopened: (itemRevision: number, afterSend: number, minute: number) =>
     newFact({

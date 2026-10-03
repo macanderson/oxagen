@@ -11,6 +11,12 @@
 // failed in a row. Manual entry is always on. Under the table one sentence
 // says oxagen writes nothing back to GitHub.
 //
+// Add collector follows the collectors read's own flag, the role check
+// set_work_collector makes: a workspace Owner or Admin, or an org Owner or
+// Admin. Read now follows the roles sync_work_collector takes, which admit a
+// workspace Member too, so a Member reads a collector now and cannot change
+// one.
+//
 // Manual entry records no read, and an unbacked cell draws nothing
 // (data/unrecorded.ts).
 import { useTranslations } from "next-intl";
@@ -61,6 +67,7 @@ function CollectorRows({
   collector: WorkCollector;
   /** The workspace's linked repositories, lowercased, or null when they could not be read. */
   linked: ReadonlySet<string> | null;
+  /** Whether the viewer may read the collector now (sync_work_collector). */
   canControl: boolean;
 }) {
   const t = useTranslations("work.setup.collectors");
@@ -162,7 +169,7 @@ export function CollectorsTab({
   org: string;
   ws: string;
   read: Read<WorkCollectorList>;
-  /** Whether the viewer may change collectors; unknown reads as allowed and the server decides. */
+  /** Whether the viewer may read a collector now (sync_work_collector); unknown reads as allowed and the server decides. */
   canControl: boolean;
 }) {
   const t = useTranslations("work.setup");
@@ -174,7 +181,7 @@ export function CollectorsTab({
         retry={routes.workSetup(org, ws, "collectors")}
       />
     );
-  const { collectors, linked } = read.value;
+  const { collectors, linked, viewer } = read.value;
   const linkedSet =
     linked === null ? null : new Set(linked.map((repo) => repo.toLowerCase()));
   return (
@@ -190,7 +197,7 @@ export function CollectorsTab({
         <AddCollector
           org={org}
           ws={ws}
-          canControl={canControl}
+          canChange={viewer.canChangeCollectors}
           collectors={collectors.map((collector) => ({
             name: collector.name,
             repos: collector.repos,

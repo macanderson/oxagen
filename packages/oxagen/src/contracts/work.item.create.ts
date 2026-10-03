@@ -25,7 +25,7 @@ export const workItemCreate = registerCapability({
     "Enter a work item by hand: a subject, an optional description and labels, and the repository it belongs to. Triage reads it next.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   sensitivity: "medium",

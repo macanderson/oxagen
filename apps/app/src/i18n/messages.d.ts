@@ -12923,6 +12923,7 @@ type Messages = {
           openedNoPr: string;
           openedRetry: string;
           review: string;
+          noRole: string;
         };
       };
       runtimes: {
@@ -12992,6 +12993,7 @@ type Messages = {
         };
         empty: string;
         noLead: string;
+        partial: string;
       };
       touchKinds: {
         title: string;

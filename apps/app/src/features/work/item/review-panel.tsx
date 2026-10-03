@@ -239,7 +239,7 @@ export function ReviewPanel({
             ws={at.ws}
             itemId={detail.item.id}
             orderId={send.id}
-            canControl={detail.viewer.canControl}
+            canApprove={detail.viewer.canApprove}
           />
         ) : null}
         {staleFrom === null || head === null ? null : (

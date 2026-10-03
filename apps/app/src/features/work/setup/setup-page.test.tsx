@@ -2,12 +2,14 @@
 // Work setup over a fake DataSource: each tab's reads and rows, a collector's
 // last read, a failed read, a repository no longer linked, and Read now; Add
 // collector picking from the linked repositories with a new and an existing
-// name, and with none linked or none readable; the priorities record with and
-// without a record, and the editor that writes one; and why each agent can or
-// cannot take a send with the budget line its tier earns. Each state runs the
-// axe check (INV-26).
+// name, and with none linked or none readable, and turned off for a role
+// set_work_collector refuses; the priorities record with and without a
+// record, and the editor that writes one, turned off for a Viewer; each tab's
+// failed read; and why each agent can or cannot take a send with the budget
+// line its tier earns. Each state runs the axe check (INV-26).
 import {
   cleanup,
+  fireEvent,
   render,
   screen,
   within,
@@ -22,6 +24,7 @@ import { IntlProvider } from "@/test/intl";
 import {
   collector,
   collectorList,
+  LINKED_REPOS,
   priorities,
   target,
   targetList,
@@ -406,7 +409,7 @@ describe("Work setup › Collectors", () => {
 
   it("disables Add collector and Read now for a role that cannot change them", async () => {
     await renderSetup("collectors", {
-      collectors: collectorList([FAILING]),
+      collectors: collectorList([FAILING], LINKED_REPOS, { canChangeCollectors: false }),
       list: workList([], { canControl: false, canApprove: false }),
     });
     expect(screen.getByTestId("work-add-collector")).toBeDisabled();
@@ -416,12 +419,43 @@ describe("Work setup › Collectors", () => {
     expect(screen.getByTestId("work-reconnect-github")).toBeDisabled();
   });
 
+  it("disables Add collector with the reason for a workspace Member, who may still read a collector now", async () => {
+    syncCollector.mockResolvedValue({ ok: true, value: { queued: true } });
+    // A Member may act on work items (canControl) and cannot change a
+    // collector: set_work_collector takes a workspace Owner.
+    await renderSetup("collectors", {
+      collectors: collectorList([collector()], LINKED_REPOS, { canChangeCollectors: false }),
+      list: workList([], { canControl: true, canApprove: true }),
+    });
+    const add = screen.getByTestId("work-add-collector");
+    expect(add).toBeDisabled();
+    expect(add).toHaveAccessibleDescription("Your role cannot change collectors in this workspace.");
+    const user = userEvent.setup();
+    await user.click(add);
+    expect(screen.queryByTestId("work-add-collector-dialog")).toBeNull();
+    expect(setCollector).not.toHaveBeenCalled();
+    const readNow = screen.getByTestId("work-reconnect-github");
+    expect(readNow).toBeEnabled();
+    await user.click(readNow);
+    expect(syncCollector).toHaveBeenCalledWith("a-intel", "core-platform", { name: "github" });
+  });
+
   it("leaves the buttons on when the roles read fails, so the server decides", async () => {
     await renderSetup("collectors", {
       collectors: collectorList([collector()]),
       list: readError("work_records_unavailable", 503),
     });
     expect(screen.getByTestId("work-add-collector")).toBeEnabled();
+  });
+
+  it("names the code when the collectors read fails", async () => {
+    await renderSetup("collectors", {
+      collectors: readError("work_records_unavailable", 503),
+    });
+    const error = screen.getByTestId("work-error");
+    expect(error).toHaveTextContent("Collectors could not be loaded");
+    expect(error).toHaveTextContent("503 work_records_unavailable");
+    expect(screen.queryByTestId("work-add-collector")).toBeNull();
   });
 
   it("replaces the tab body when the collectors read is refused", async () => {
@@ -455,6 +489,11 @@ const STARTER = [
 ];
 
 describe("Work setup › Priorities", () => {
+  it("reads the priorities record and the viewer's roles", async () => {
+    const { calls } = await renderSetup("priorities", { priorities: priorities() });
+    expect(calls.map((call) => call.read).sort()).toEqual(["work.list", "work.priorities"]);
+  });
+
   it("shows the record's lineage, version, numbered rules and triage figures", async () => {
     await renderSetup("priorities", { priorities: priorities() });
     const record = screen.getByTestId("work-priorities-record");
@@ -577,6 +616,45 @@ describe("Work setup › Priorities", () => {
     await user.click(screen.getByTestId("work-priorities-submit"));
     expect(screen.getByTestId("work-priorities-failure")).toHaveTextContent("Write at least one rule.");
     expect(proposePriorities).not.toHaveBeenCalled();
+  });
+
+  it("turns off the editor's pull request for a Viewer and says why (negative)", async () => {
+    await renderSetup("priorities", {
+      priorities: NO_RECORD,
+      list: workList([], { canControl: false, canApprove: false }),
+    });
+    const submit = screen.getByTestId("work-priorities-submit");
+    expect(submit).toBeDisabled();
+    expect(screen.getByTestId("work-priorities-no-role")).toHaveTextContent(
+      "Only a workspace Owner or Member can open this pull request.",
+    );
+    await userEvent.setup().click(submit);
+    // A submit that reaches the form anyway, as Enter in a field could, proposes nothing.
+    const form = screen.getByTestId("work-priorities-editor").querySelector("form");
+    if (form === null) throw new Error("the editor has no form");
+    fireEvent.submit(form);
+    expect(proposePriorities).not.toHaveBeenCalled();
+    expect(openPrioritiesPr).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("work-priorities-failure")).toBeNull();
+  });
+
+  it("leaves the editor's pull request on when the roles read fails, so the server decides", async () => {
+    await renderSetup("priorities", {
+      priorities: NO_RECORD,
+      list: readError("work_records_unavailable", 503),
+    });
+    expect(screen.getByTestId("work-priorities-submit")).toBeEnabled();
+    expect(screen.queryByTestId("work-priorities-no-role")).toBeNull();
+  });
+
+  it("names the code when the priorities read fails", async () => {
+    await renderSetup("priorities", {
+      priorities: readError("work_records_unavailable", 503),
+    });
+    const error = screen.getByTestId("work-error");
+    expect(error).toHaveTextContent("Priorities could not be loaded");
+    expect(error).toHaveTextContent("503 work_records_unavailable");
+    expect(screen.queryByTestId("work-priorities-editor")).toBeNull();
   });
 
   it("offers no editor when more than one record matches (negative)", async () => {

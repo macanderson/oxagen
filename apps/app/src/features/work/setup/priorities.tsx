@@ -10,7 +10,9 @@
 // record in place the tab says why, in the server's words, and offers the
 // editor that writes one (priorities-editor.tsx). With more than one record
 // in place it offers no editor, because a third record would not help: the
-// person retires all but one.
+// person retires all but one. A Viewer sees the editor with its submit turned
+// off, because proposing the record and opening its pull request take a
+// workspace Owner or Member.
 import { useLocale, useTranslations } from "next-intl";
 import type { WorkPriorities } from "@/data/contracts/work";
 import type { Read } from "@/data/read";
@@ -80,10 +82,13 @@ export function PrioritiesTab({
   org,
   ws,
   read,
+  canControl,
 }: {
   org: string;
   ws: string;
   read: Read<WorkPriorities>;
+  /** Whether the viewer may propose the record and open its pull request; unknown reads as allowed and the server decides. */
+  canControl: boolean;
 }) {
   const t = useTranslations("work.setup");
   const page = useTranslations("work.page");
@@ -118,7 +123,7 @@ export function PrioritiesTab({
           {page("descriptionNoRecord")}
         </StateWrap>
         {problem?.startsWith(AMBIGUOUS) === true ? null : (
-          <PrioritiesEditor org={org} ws={ws} />
+          <PrioritiesEditor org={org} ws={ws} canControl={canControl} />
         )}
         <TriagePanel last30Days={last30Days} />
       </div>

@@ -27,7 +27,7 @@ export const workCollectorSync = registerCapability({
     "Queue a reconcile of one work collector now, even when it is failing, such as after reconnecting GitHub.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   sensitivity: "medium",

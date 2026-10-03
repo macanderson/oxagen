@@ -2317,6 +2317,189 @@
       "proof": "apps/app/src/features/work/outcomes/outcomes-page.test.tsx",
       "verifiedAt": "2026-10-02",
       "verifiedBy": "p1-05-work-surfaces (#5163)"
+    },
+    "create_work_item": {
+      "route": "/[org]/[ws]/work",
+      "page": "apps/app/src/app/[org]/[ws]/work/page.tsx",
+      "entry": "The Work page: New work item opens the dialog that takes a title, a description and a repository, and enters the item for triage (features/work/new-item.tsx, features/work/actions.ts createWorkItem).",
+      "testid": "work-new-item",
+      "proof": "apps/app/src/features/work/new-item.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "session_01Uru5xJ62WfzbRuQqzho2QV"
+    },
+    "revise_work_triage": {
+      "route": "/[org]/[ws]/work/[item]",
+      "page": "apps/app/src/app/[org]/[ws]/work/[item]/page.tsx",
+      "entry": "One work item: Correct triage, Set priority, Record answer, Keep separate, Keep in scope and Confirm duplicate each record a person's correction of triage with the reason (features/work/item/triage-dialogs.tsx, features/work/item/inline-actions.tsx, features/work/actions.ts reviseTriage).",
+      "testid": "work-action-correct-triage",
+      "proof": "apps/app/src/features/work/item/work-item.dialogs.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "session_01Uru5xJ62WfzbRuQqzho2QV"
+    },
+    "retry_work_triage": {
+      "route": "/[org]/[ws]/work/[item]",
+      "page": "apps/app/src/app/[org]/[ws]/work/[item]/page.tsx",
+      "entry": "One work item whose triage failed: Retry triage queues triage again in place (features/work/item/item-actions.tsx, features/work/actions.ts retryTriage).",
+      "testid": "work-action-retry-triage",
+      "proof": "apps/app/src/features/work/item/work-item.dialogs.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "session_01Uru5xJ62WfzbRuQqzho2QV"
+    },
+    "save_work_brief": {
+      "route": "/[org]/[ws]/work/[item]",
+      "page": "apps/app/src/app/[org]/[ws]/work/[item]/page.tsx",
+      "entry": "One work item: Edit brief opens the brief dialog, and saving it records a draft in which each criterion keeps its key (features/work/item/brief-dialog.tsx, features/work/actions.ts saveBrief).",
+      "testid": "work-action-edit-brief",
+      "proof": "apps/app/src/features/work/item/work-item.dialogs.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "session_01Uru5xJ62WfzbRuQqzho2QV"
+    },
+    "approve_work_brief": {
+      "route": "/[org]/[ws]/work/[item]",
+      "page": "apps/app/src/app/[org]/[ws]/work/[item]/page.tsx",
+      "entry": "One work item: Approve brief approves the draft for the item's revision with its digest, saving triage's draft first when no person saved one (features/work/item/item-actions.tsx, features/work/actions.ts approveBrief and saveAndApproveBrief).",
+      "testid": "work-action-approve",
+      "proof": "apps/app/src/features/work/item/work-item.dialogs.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "session_01Uru5xJ62WfzbRuQqzho2QV"
+    },
+    "send_work_order": {
+      "route": "/[org]/[ws]/work/[item]",
+      "page": "apps/app/src/app/[org]/[ws]/work/[item]/page.tsx",
+      "entry": "One work item: Send to an agent opens the Send dialog with the agents that can take the send, and sends the approved brief with its work order key (features/work/item/send-dialog.tsx, features/work/actions.ts sendWork).",
+      "testid": "work-action-send",
+      "proof": "apps/app/src/features/work/item/work-item.dialogs.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "session_01Uru5xJ62WfzbRuQqzho2QV"
+    },
+    "cancel_work_order": {
+      "route": "/[org]/[ws]/work/[item]",
+      "page": "apps/app/src/app/[org]/[ws]/work/[item]/page.tsx",
+      "entry": "One work item: Cancel the send before a runtime claims it, and Withdraw the send when a stopping run was never linked, both with a reason (features/work/item/stop-dialog.tsx, features/work/actions.ts cancelSend).",
+      "testid": "work-action-cancel",
+      "proof": "apps/app/src/features/work/item/work-item.dialogs.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "session_01Uru5xJ62WfzbRuQqzho2QV"
+    },
+    "stop_work_order": {
+      "route": "/[org]/[ws]/work/[item]",
+      "page": "apps/app/src/app/[org]/[ws]/work/[item]/page.tsx",
+      "entry": "One work item: Stop the run asks the runtime to stop a claimed run, with a reason (features/work/item/stop-dialog.tsx, features/work/actions.ts stopSend).",
+      "testid": "work-action-stop",
+      "proof": "apps/app/src/features/work/item/work-item.dialogs.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "session_01Uru5xJ62WfzbRuQqzho2QV"
+    },
+    "return_work_order": {
+      "route": "/[org]/[ws]/work/[item]",
+      "page": "apps/app/src/app/[org]/[ws]/work/[item]/page.tsx",
+      "entry": "One work item in review: Return opens the dialog that sends the work back with a reason, and sends it again by default (features/work/item/review-dialogs.tsx, features/work/actions.ts returnWork).",
+      "testid": "work-action-return",
+      "proof": "apps/app/src/features/work/item/work-item.dialogs.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "session_01Uru5xJ62WfzbRuQqzho2QV"
+    },
+    "accept_work_order": {
+      "route": "/[org]/[ws]/work/[item]",
+      "page": "apps/app/src/app/[org]/[ws]/work/[item]/page.tsx",
+      "entry": "One work item in review: Accept opens the dialog where a person ticks each criterion on the head commit, and accepts that head (features/work/item/review-dialogs.tsx, features/work/actions.ts acceptWork).",
+      "testid": "work-action-accept",
+      "proof": "apps/app/src/features/work/item/work-item.dialogs.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "session_01Uru5xJ62WfzbRuQqzho2QV"
+    },
+    "refresh_work_order_checks": {
+      "route": "/[org]/[ws]/work/[item]",
+      "page": "apps/app/src/app/[org]/[ws]/work/[item]/page.tsx",
+      "entry": "One work item in review: Read the checks again asks GitHub for the pull request's required checks on the head commit (features/work/item/inline-actions.tsx, features/work/item/review-panel.tsx, features/work/actions.ts refreshChecks).",
+      "testid": "work-action-refresh-checks",
+      "proof": "apps/app/src/features/work/item/work-item.dialogs.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "session_01Uru5xJ62WfzbRuQqzho2QV"
+    },
+    "close_work_item": {
+      "route": "/[org]/[ws]/work/[item]",
+      "page": "apps/app/src/app/[org]/[ws]/work/[item]/page.tsx",
+      "entry": "One work item: Close opens the dialog that closes the item as cancelled, declined or a duplicate, with a reason (features/work/item/item-dialogs.tsx, features/work/actions.ts closeItem).",
+      "testid": "work-action-close",
+      "proof": "apps/app/src/features/work/item/work-item.dialogs.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "session_01Uru5xJ62WfzbRuQqzho2QV"
+    },
+    "reopen_work_item": {
+      "route": "/[org]/[ws]/work/[item]",
+      "page": "apps/app/src/app/[org]/[ws]/work/[item]/page.tsx",
+      "entry": "One work item that is done or closed: Reopen opens the dialog that reopens it on a new revision with a reason, keeping its history (features/work/item/item-dialogs.tsx, features/work/actions.ts reopenItem).",
+      "testid": "work-action-reopen",
+      "proof": "apps/app/src/features/work/item/work-item.dialogs.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "session_01Uru5xJ62WfzbRuQqzho2QV"
+    },
+    "list_work_collectors": {
+      "route": "/[org]/[ws]/work/setup",
+      "page": "apps/app/src/app/[org]/[ws]/work/setup/page.tsx",
+      "entry": "Work setup's Collectors tab: one row per collector with the repositories it reads, its health, its last read and a failed read's answer, and Add collector turned on only for a viewer the collectors read says may change them (features/work/setup/collectors.tsx, data/live/work.ts).",
+      "testid": "work-collectors",
+      "proof": "apps/app/src/features/work/setup/setup-page.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "session_01Uru5xJ62WfzbRuQqzho2QV",
+      "also": [
+        {
+          "route": "/[org]/[ws]/work",
+          "page": "apps/app/src/app/[org]/[ws]/work/page.tsx",
+          "entry": "The Work page: the banner that names a failing collector, what it reads and its last good read (features/work/work-page.tsx).",
+          "testid": "work-collector-banner",
+          "proof": "apps/app/src/features/work/work-page.test.tsx"
+        },
+        {
+          "route": "/[org]/[ws]/repositories",
+          "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+          "entry": "Repositories: the Issues switch on each linked repository shows whether a collector reads it (features/repositories/repositories-tab.tsx, features/repositories/actions.ts readIssueCollection).",
+          "proof": "apps/app/src/features/repositories/repositories-tab.test.tsx"
+        }
+      ]
+    },
+    "set_work_collector": {
+      "route": "/[org]/[ws]/work/setup",
+      "page": "apps/app/src/app/[org]/[ws]/work/setup/page.tsx",
+      "entry": "Work setup's Collectors tab: Add collector opens the dialog that names a collector and picks the linked repositories it reads, and saving an existing name changes what it reads (features/work/setup/add-collector.tsx, features/work/actions.ts setCollector).",
+      "testid": "work-add-collector",
+      "proof": "apps/app/src/features/work/setup/setup-page.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "session_01Uru5xJ62WfzbRuQqzho2QV",
+      "also": [
+        {
+          "route": "/[org]/[ws]/repositories",
+          "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+          "entry": "Repositories: the Issues switch on a linked repository turns issue collection on or off through its collector (features/repositories/repositories-tab.tsx, features/repositories/actions.ts setIssueCollection).",
+          "proof": "apps/app/src/features/repositories/repositories-tab.test.tsx"
+        }
+      ]
+    },
+    "sync_work_collector": {
+      "route": "/[org]/[ws]/work/setup",
+      "page": "apps/app/src/app/[org]/[ws]/work/setup/page.tsx",
+      "entry": "Work setup's Collectors tab: Read now on a collector that is not paused reads its repositories again now and says the read started (features/work/setup/reconnect.tsx, features/work/actions.ts syncCollector).",
+      "proof": "apps/app/src/features/work/setup/setup-page.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "session_01Uru5xJ62WfzbRuQqzho2QV"
+    },
+    "get_work_priorities": {
+      "route": "/[org]/[ws]/work/setup?tab=priorities",
+      "page": "apps/app/src/app/[org]/[ws]/work/setup/page.tsx",
+      "entry": "Work setup's Priorities tab: the priorities record's lineage, version and numbered rules with triage's last 30 days, or why triage cannot rank work and the editor that writes the record (features/work/setup/priorities.tsx, data/live/work.ts).",
+      "testid": "work-priorities-record",
+      "proof": "apps/app/src/features/work/setup/setup-page.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "session_01Uru5xJ62WfzbRuQqzho2QV",
+      "also": [
+        {
+          "route": "/[org]/[ws]/work",
+          "page": "apps/app/src/app/[org]/[ws]/work/page.tsx",
+          "entry": "The Work page: the line that cites the priorities record with a link to Setup, or says triage cannot rank work until one is merged (features/work/work-page.tsx).",
+          "proof": "apps/app/src/features/work/work-page.test.tsx"
+        }
+      ]
     }
   }
 }

@@ -225,7 +225,11 @@ describe("retry_work_triage", () => {
 describe("list_work_collectors", () => {
   it("lists the workspace's collectors after the role check", async () => {
     const list = vi.fn(async () => [VIEW]);
-    expect(await createWorkCollectorsListHandler({ list })({}, ctx)).toEqual({ collectors: [VIEW] });
+    const viewer = vi.fn(async () => ({ can_change_collectors: true }));
+    expect(await createWorkCollectorsListHandler({ list, viewer })({}, ctx)).toEqual({
+      collectors: [VIEW],
+      viewer: { can_change_collectors: true },
+    });
     expect(mocks.role).toHaveBeenCalledWith(workCollectorsList, ctx);
     expect(list).toHaveBeenCalledWith(SCOPE);
   });

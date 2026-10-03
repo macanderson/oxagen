@@ -12,6 +12,10 @@
 // merged 30 or more days ago, and the page says reverts are not recorded. In-app
 // triage spend is on Billing, outside these figures. No person is named or
 // ranked. Nothing on the page writes.
+//
+// The weekly trend marks a week the window covers only in part, the oldest
+// week it cuts and the week still running, so nobody reads its counts as a
+// whole week's.
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { WorkOutcomes } from "@/data/contracts/work";
@@ -36,6 +40,7 @@ import {
   statTile,
   statValue,
 } from "@/ui/control-styles";
+import { Badge } from "@/ui/badge";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount, formatDecimal } from "@/ui/money-format";
@@ -207,13 +212,24 @@ function WeeklyTrend({ weeks }: { weeks: WorkOutcomes["weeks"] }) {
           ]}
         >
           {weeks.map((week) => (
-            <tr key={week.week} data-week={week.week}>
+            <tr
+              key={week.week}
+              data-week={week.week}
+              data-complete={week.complete ? "true" : "false"}
+            >
               <td className={`${cell} whitespace-nowrap`}>
-                {format.dateTime(new Date(`${week.week}T00:00:00Z`), {
-                  month: "short",
-                  day: "numeric",
-                  timeZone: "UTC",
-                })}
+                <span className="flex flex-wrap items-center gap-2">
+                  {format.dateTime(new Date(`${week.week}T00:00:00Z`), {
+                    month: "short",
+                    day: "numeric",
+                    timeZone: "UTC",
+                  })}
+                  {week.complete ? null : (
+                    <Badge tone="quiet" dot={false} data-week-partial="">
+                      {t("weeks.partial")}
+                    </Badge>
+                  )}
+                </span>
               </td>
               <td className={numericCell}>
                 {formatCount(week.acceptedMerged, locale)}

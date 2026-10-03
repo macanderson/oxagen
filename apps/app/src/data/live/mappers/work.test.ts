@@ -1,21 +1,30 @@
 // The Work mappers over real contract output: each sample is parsed by its
 // contract's own output schema first, so it is what the handler can return,
 // then mapped and parsed by the view model. A cost the record does not hold
-// stays null, a run's unknown basis is null, and every wait kind keeps its
-// facts under the view's names.
+// stays null, a run's unknown basis is null, every wait kind keeps its facts
+// under the view's names, a week keeps whether it is whole, and the
+// collectors keep whether the viewer may change them.
+import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
+import { workCollectorsList } from "@oxagen/oxagen/contracts/work.collectors.list";
 import { workItemGet } from "@oxagen/oxagen/contracts/work.item.get";
 import { workItemsList } from "@oxagen/oxagen/contracts/work.items.list";
 import { workOutcomesGet } from "@oxagen/oxagen/contracts/work.outcomes.get";
 import { workTargetsList } from "@oxagen/oxagen/contracts/work.targets.list";
 import { describe, expect, it } from "vitest";
 import {
+  WorkCollectorList,
   WorkItemDetail,
   WorkItemList,
   WorkOutcomes,
   WorkTargetList,
 } from "@/data/contracts/work";
 import { toWorkItemDetail } from "./work-item";
-import { toWorkItemList, toWorkOutcomes, toWorkTargetList } from "./work-list";
+import {
+  toWorkCollectorList,
+  toWorkItemList,
+  toWorkOutcomes,
+  toWorkTargetList,
+} from "./work-list";
 
 const HEAD = "3f9a2c1d4e5f60718293a4b5c6d7e8f901234567";
 const EARLIER = "2d4f6a80123456789abcdef0123456789abcdef0";
@@ -312,11 +321,73 @@ describe("toWorkTargetList and toWorkOutcomes", () => {
         truncated: false,
       },
       truncated: false,
-      weeks: [{ week: "2026-09-28", accepted_merged: 0, returned: 1, median_lead_hours: null, entered: 2, sent: 2, full_flow: false }],
+      weeks: [
+        { week: "2026-09-21", accepted_merged: 0, returned: 0, median_lead_hours: null, entered: 0, sent: 0, full_flow: false, complete: true },
+        { week: "2026-09-28", accepted_merged: 0, returned: 1, median_lead_hours: null, entered: 2, sent: 2, full_flow: false, complete: false },
+      ],
     });
     const view = WorkOutcomes.parse(toWorkOutcomes(out));
     expect(view.leadTime).toEqual({ medianHours: null, p90Hours: null, sample: 0 });
     expect(view.cost).toEqual({ runs: 1, knownRuns: 0, total: null });
     expect(view.closed).toEqual({ cancelled: 0, declined: 1, duplicate: 2 });
+    expect(view.weeks.map(({ week, complete }) => ({ week, complete }))).toEqual([
+      { week: "2026-09-21", complete: true },
+      { week: "2026-09-28", complete: false },
+    ]);
+  });
+});
+
+describe("toWorkCollectorList", () => {
+  const out = workCollectorsList.output.parse({
+    collectors: [
+      {
+        collector_id: "00000000-0000-4000-8000-0000000000c1",
+        name: "github",
+        type: "github",
+        connection_id: "con_01k6github",
+        repos: ["acme/platform"],
+        health: "healthy",
+        cursor: null,
+        last_reconcile: null,
+        last_success_at: null,
+        failed_streak: 0,
+        next_check_at: AT,
+        last_event_at: null,
+        created_at: AT,
+      },
+    ],
+    viewer: { can_change_collectors: false },
+  });
+  const repositories = repositoryList.output.parse({
+    repositories: [
+      {
+        bindingId: "rpb_0a1b2c3d",
+        role: "linked",
+        provider: "github",
+        owner: "acme",
+        name: "platform",
+        fullName: "acme/platform",
+        defaultRef: "main",
+        htmlUrl: "https://github.com/acme/platform",
+        boundAt: AT,
+        connectionLive: true,
+        events: "installed",
+      },
+    ],
+  });
+
+  it("keeps whether the viewer may change collectors, and the linked GitHub repositories", () => {
+    const view = WorkCollectorList.parse(toWorkCollectorList(out, repositories));
+    expect(view.viewer).toEqual({ canChangeCollectors: false });
+    expect(view.linked).toEqual(["acme/platform"]);
+    expect(view.collectors[0]).toMatchObject({ name: "github", connectionId: "con_01k6github", repos: ["acme/platform"] });
+  });
+
+  it("leaves the linked repositories null when they could not be read", () => {
+    const view = WorkCollectorList.parse(
+      toWorkCollectorList({ ...out, viewer: { can_change_collectors: true } }, null),
+    );
+    expect(view.linked).toBeNull();
+    expect(view.viewer).toEqual({ canChangeCollectors: true });
   });
 });
