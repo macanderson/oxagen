@@ -30,6 +30,12 @@ export interface MovedAgent {
   /** The hook command `host.json` named before the move. */
   from: string;
   ok: boolean;
+  /**
+   * Set when the move left the agent alone because its recorded harness
+   * files are not where this process finds them. A plain re-run from the
+   * same shell would leave it again, so the caller says what else to do.
+   */
+  skipped?: "harness_files_elsewhere";
 }
 
 /** The base name of one executable word, without a Windows `.exe`. */
@@ -159,6 +165,7 @@ export async function moveOffTachoNames(
         agentKey: host.agent_key,
         from: host.hook_command,
         ok: false,
+        skipped: "harness_files_elsewhere",
       });
       continue;
     }

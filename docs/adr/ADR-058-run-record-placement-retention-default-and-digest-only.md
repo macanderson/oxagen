@@ -123,7 +123,10 @@ seal from `content_frames`, `body_frames`, `tool_body_frames` and the
 session's tool call count; a host's self-reported gaps can add to that and
 never remove from it.
 
-A gap kind outside the vocabulary refuses to grade. The grade is written with
+A gap kind outside the vocabulary grades `inspect` and stops every rung above
+it, in the seal and in the ladder alike (amended 2026-10-03, #5390: it used to
+refuse to grade, so the ladder dropped such a gap and read stronger than the
+seal). The grade is written with
 the Merkle root and the archive segment reference, once, at seal; a seal
 written before the recorder graded stays `NULL`; nothing raises a grade
 afterwards, and an interface renders the recorded word and never a stronger

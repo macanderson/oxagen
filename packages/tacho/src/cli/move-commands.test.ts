@@ -360,6 +360,7 @@ describe("moveOffTachoNames", () => {
         agentKey: "acme.core.aaaaaaaa",
         from: "node /opt/tacho/tacho-hook.mjs",
         ok: false,
+        skipped: "harness_files_elsewhere",
       },
     ]);
     // A re-apply from here would write hooks Claude Code does not read and

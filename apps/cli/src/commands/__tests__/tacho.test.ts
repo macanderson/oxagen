@@ -42,7 +42,12 @@ const outcomes = {
     to: undefined as { org: string; workspace: string } | undefined,
   },
   exportCommand: true,
-  moved: [] as Array<{ agentKey: string; from: string; ok: boolean }>,
+  moved: [] as Array<{
+    agentKey: string;
+    from: string;
+    ok: boolean;
+    skipped?: "harness_files_elsewhere";
+  }>,
   claudeCodeMcp: [] as Array<{
     agentKey: string;
     path: string;
@@ -373,6 +378,12 @@ describe("oxagen tacho", () => {
     outcomes.moved = [
       { agentKey: "acme.core.cc-laptop", from: "tacho hook", ok: true },
       { agentKey: "acme.core.codex-laptop", from: "tacho hook", ok: false },
+      {
+        agentKey: "acme.core.cursor-laptop",
+        from: "tacho hook",
+        ok: false,
+        skipped: "harness_files_elsewhere",
+      },
     ];
     expect(await handleTachoStatus({ json: true }, writer)).toBe(true);
     expect(calls.map((c) => c.name)).toEqual([
@@ -387,6 +398,14 @@ describe("oxagen tacho", () => {
     );
     expect(errors()).toContain(
       "Could not move acme.core.codex-laptop's hooks and service off tacho hook",
+    );
+    // An agent left for its harness files gets no "try again", which from
+    // this shell would leave it again (#5390).
+    expect(errors()).toContain(
+      "Left acme.core.cursor-laptop's hooks and service on tacho hook; they keep working. The line above says how to move them.",
+    );
+    expect(errors()).not.toContain(
+      "Could not move acme.core.cursor-laptop's",
     );
     // The move's own step lines are dropped, and its errors reach stderr.
     const moveDeps = calls[0]?.args[0] as {
