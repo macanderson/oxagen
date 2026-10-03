@@ -4280,6 +4280,35 @@ describe("brokered credentials (ADR-143)", () => {
     expect(authOf(d.home).OPENAI_API_KEY).toBe("sk-proj-NEWER-OWN-KEY");
     expect(existsSync(d.paths.credentials)).toBe(false);
   });
+
+  it("keeps a Claude Code key the person added after enrolling, and says unenroll discarded the older one (#5381)", async () => {
+    const d = await enrolledBoth();
+    // The person rotated the Anthropic key while brokered and pasted the new
+    // one into settings.json. Anthropic shows a key once, so this file may
+    // hold the only copy.
+    const newer = "sk-ant-api03-FAKE-NEWER-OWN-KEY";
+    const edited = settingsOf(d.home);
+    edited.env = { ...edited.env, ANTHROPIC_API_KEY: newer };
+    writeSensitiveFileAtomic(
+      join(d.home, ".claude", "settings.json"),
+      `${JSON.stringify(edited, null, 2)}\n`,
+    );
+    const gone = await unenroll({ token: "tok" }, d);
+    expect(gone.ok).toBe(true);
+    const text = gone.warnings.join("\n");
+    expect(text).toContain(
+      ".claude/settings.json already holds a anthropic credential of its own",
+    );
+    expect(text).toContain("is discarded with the store");
+    const settings = settingsOf(d.home);
+    expect(settings.env.ANTHROPIC_API_KEY).toBe(newer);
+    expect(settings.apiKeyHelper).toBeUndefined();
+    expect(
+      readFileSync(join(d.home, ".claude", "settings.json"), "utf8"),
+    ).not.toContain(ANTHROPIC_KEY);
+    expect(existsSync(d.paths.credentials)).toBe(false);
+  });
+
   it("enroll still routes when the file edit throws, gives custody back, and says the credentials are not brokered", async () => {
     const d = brokeredDeps({
       claude: { env: { ANTHROPIC_API_KEY: ANTHROPIC_KEY } },
