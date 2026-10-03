@@ -84,7 +84,7 @@ function CurrentMarker() {
     <span
       aria-hidden="true"
       data-current-marker=""
-      className="absolute -top-1.5 left-1/2 h-0.5 w-6.5 -translate-x-1/2 rounded-b-[2px] bg-gold"
+      className="absolute -top-1.5 left-1/2 h-0.5 w-6.5 -translate-x-1/2 rounded-b-xs bg-gold"
     />
   );
 }
@@ -158,7 +158,7 @@ function Tile({
         </span>
       </span>
       {count === null ? null : (
-        <span className="flex-none rounded-[5px] border border-info/40 px-1.25 font-mono text-xs text-info">
+        <span className="flex-none rounded-sm border border-info/40 px-1.25 font-mono text-xs text-info">
           <span aria-hidden="true">{count}</span>
           <span className="sr-only">{countLabel}</span>
         </span>

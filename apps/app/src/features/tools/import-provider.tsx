@@ -158,7 +158,7 @@ function Steps({ step }: { step: Step }) {
           key={n}
           aria-current={n === step ? "step" : undefined}
           data-step={n}
-          className={`rounded border px-2 py-0.5 ${
+          className={`rounded-sm border px-2 py-0.5 ${
             n === step
               ? "border-foreground text-foreground"
               : "border-border text-muted-foreground"
@@ -183,7 +183,7 @@ function RedirectUrl({ value }: { value: string }) {
       <div className="flex min-w-0 items-center gap-2">
         <code
           data-testid={`${TESTID}-redirect-url`}
-          className={`${mono} min-w-0 flex-1 break-all rounded border border-border bg-muted px-2 py-1.5 text-sm`}
+          className={`${mono} min-w-0 flex-1 break-all rounded-sm border border-border bg-muted px-2 py-1.5 text-sm`}
         >
           {value}
         </code>
@@ -1210,7 +1210,7 @@ export function ImportProvider({
                   {chosenTools.map((tool) => (
                     <li
                       key={tool}
-                      className={`${mono} rounded border border-border px-1.5 py-0.5 text-sm`}
+                      className={`${mono} rounded-sm border border-border px-1.5 py-0.5 text-sm`}
                     >
                       {tool}
                     </li>

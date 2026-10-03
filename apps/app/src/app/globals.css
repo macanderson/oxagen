@@ -82,6 +82,9 @@
   --spacing-ch: 1ch;
   --spacing-safe-top: env(safe-area-inset-top);
   --spacing-safe-bottom: env(safe-area-inset-bottom);
+  /* An agent's avatar: a corner that is a share of the avatar's size, so the
+     shape holds at every size, where a radius step would not (#5283). */
+  --radius-agent: var(--agent-corner);
   /* The corner scale is @oxagen/ui's, which reads the kit's --ox-radius-<step>
      tokens: the theme's corner base (0.45rem, shadcn's base-maia preset) times
      each step's multiplier. `rounded-4xl` is the pill a maia button and input
@@ -187,6 +190,8 @@
       calc(100vw - var(--spacing) * 4)
     );
     --editor-max-h: calc(100vh - var(--spacing) * 75);
+    /* An agent avatar's corner, as a share of its size (#5283). */
+    --agent-corner: 27%;
     --sidebar-bg: var(--void);
     --mono: var(--ox-font-mono);
     --font: var(--ox-font);

@@ -57,7 +57,7 @@ import {
 
 /** `.btn.sm { padding:4px 9px; font-size:12px; border-radius:7px }` over `.btn`. A phone keeps the 44px target. */
 const smallButton =
-  "inline-flex items-center gap-1.5 rounded-[7px] border border-button-default-border bg-button-default-bg px-2.25 py-1 text-sm font-medium text-button-default-fg transition-colors hover:border-rule hover:bg-button-default-hover-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11";
+  "inline-flex items-center gap-1.5 rounded-lg border border-button-default-border bg-button-default-bg px-2.25 py-1 text-sm font-medium text-button-default-fg transition-colors hover:border-rule hover:bg-button-default-hover-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11";
 
 /**
  * `.navitem { display:flex; align-items:center; gap:10px; padding:7px 9px;
@@ -70,7 +70,7 @@ const listItem =
 const listItemOn = "bg-hl text-foreground shadow-[inset_2px_0_0_var(--gold)]";
 /** `.navitem .ct { margin-left:auto; font-family:var(--mono); font-size:10.5px; color:var(--dim); background:var(--panel); border:1px solid var(--border); border-radius:5px; padding:0 5px }` */
 const costChip =
-  "ml-auto whitespace-nowrap rounded-[5px] border border-border bg-card px-1.25 font-mono text-xs text-dim";
+  "ml-auto whitespace-nowrap rounded-sm border border-border bg-card px-1.25 font-mono text-xs text-dim";
 
 const DECISION_TONE: Record<string, BadgeTone> = {
   allow: "allowed",

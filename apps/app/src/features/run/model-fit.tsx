@@ -29,7 +29,7 @@ import {
 import { Note, Panel, PanelBody } from "./parts";
 
 /** `.btn.sm { padding:4px 9px; font-size:12px; border-radius:7px }` */
-const buttonSmall = `${buttonSecondary} min-h-7 rounded-[7px] px-2.25 py-1 text-sm`;
+const buttonSmall = `${buttonSecondary} min-h-7 rounded-lg px-2.25 py-1 text-sm`;
 
 /** `.panel-b b` over `p.muted { margin:6px 0 0; font-size:12.5px }`: a card's title and its reading. */
 const cardTitle = "m-0 text-base font-bold text-foreground";

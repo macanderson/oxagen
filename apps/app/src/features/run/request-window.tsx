@@ -130,7 +130,7 @@ export function CompositionBar({ recorded }: { recorded: ContextWindow }) {
           >
             <i
               aria-hidden="true"
-              className={`inline-block size-2 rounded-[2px] ${BLOCK_HUE[block.kind]}`}
+              className={`inline-block size-2 rounded-xs ${BLOCK_HUE[block.kind]}`}
             />
             {t(`block.${block.kind}`)}{" "}
             <b className="font-semibold tabular-nums text-foreground">

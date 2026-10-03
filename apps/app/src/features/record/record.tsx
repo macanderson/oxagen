@@ -74,7 +74,7 @@ export function RecordLoading() {
     >
       <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(175px,1fr))]">
         {[0, 1, 2, 3].map((tile) => (
-          <div key={tile} className="skeleton h-16 rounded-[11px]" />
+          <div key={tile} className="skeleton h-16 rounded-xl" />
         ))}
       </div>
       <div className={panel}>

@@ -19,7 +19,7 @@ const AVATAR = {
  * font-size:11.5px; color:var(--dim) }`.
  */
 const COMPACT =
-  "inline-flex max-w-full rounded-[10px] border border-border bg-background py-1.25 pl-1.5 pr-2.75";
+  "inline-flex max-w-full rounded-xl border border-border bg-background py-1.25 pl-1.5 pr-2.75";
 
 export function AgentCard({
   agentKey,

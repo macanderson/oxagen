@@ -69,7 +69,7 @@ function PolicyVersions({ canDraft }: { canDraft: boolean }) {
         </h2>
         <div className="flex flex-wrap items-center gap-2">
           <span
-            className={`${mono} rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground`}
+            className={`${mono} rounded-sm border border-border px-1.5 py-0.5 text-xs text-muted-foreground`}
           >
             {t("versionsTable")}
           </span>
@@ -154,7 +154,7 @@ function Conditions() {
         {CONDITIONS.map((key) => (
           <li
             key={key}
-            className="rounded border border-border px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
+            className="rounded-sm border border-border px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
           >
             {t(`items.${key}`)}
           </li>

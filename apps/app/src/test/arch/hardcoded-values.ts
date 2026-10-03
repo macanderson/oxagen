@@ -22,6 +22,8 @@
 //   `group-data-[…]:`, `peer-…-[…]:`, `supports-[…]:`, `[&>svg]:`) selects an
 //   element and holds no value, so it does not count. Tailwind's variable
 //   form, `w-(--sidebar-width)`, names a token and does not count either.
+// - A bare `rounded`, Tailwind's fixed 0.25rem, which reads no kit step.
+//   `rounded-sm` and the other steps read the kit's `--radius-*`.
 // - A duration or delay step, `duration-200` or `delay-150`. Motion reads the
 //   kit's `--motion-*` tokens: `duration-(--motion-base)`. Tailwind's named
 //   easings (`ease-out`) read its `--ease-*` theme tokens, so they pass.
@@ -96,6 +98,9 @@ const ARBITRARY_PROPERTY = /^\[(?:--)?[a-z][a-z0-9-]*:\S+\]$/;
 
 /** A breakpoint or container size in brackets: `max-[600px]:`, `@min-[24rem]:`. */
 const ARBITRARY_BREAKPOINT = /^(?:@?(?:min|max)-|@)\[[^\]]+\]$/;
+
+/** A bare corner, Tailwind's fixed 0.25rem: `rounded`, `rounded-t`. */
+const BARE_RADIUS = /^rounded(?:-(?:t|r|b|l|s|e|tl|tr|br|bl|ss|se|es|ee))?$/;
 
 /** A duration or delay step: `duration-200`, `delay-75`. */
 const MOTION_STEP = /^(?:duration|delay)-\d+$/;
@@ -220,7 +225,8 @@ export function isHardcodedClass(token: string): boolean {
     ARBITRARY_VALUE.test(utility) ||
     ARBITRARY_MODIFIER.test(utility) ||
     ARBITRARY_PROPERTY.test(utility) ||
-    MOTION_STEP.test(utility)
+    MOTION_STEP.test(utility) ||
+    BARE_RADIUS.test(utility)
   );
 }
 

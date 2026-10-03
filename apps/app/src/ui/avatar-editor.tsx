@@ -502,7 +502,7 @@ function AvatarEditor({
                     aria-pressed={draft.tone === tone}
                     aria-label={t(`tones.${tone}`)}
                     title={t(`tones.${tone}`)}
-                    className="grid place-items-center rounded-[11px] border border-transparent p-0.75 hover:border-input-border aria-pressed:border-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                    className="grid place-items-center rounded-xl border border-transparent p-0.75 hover:border-input-border aria-pressed:border-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
                     onClick={() => {
                       edit({ tone });
                     }}

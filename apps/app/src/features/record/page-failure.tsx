@@ -22,7 +22,7 @@ import { RECORD_GAPS } from "./gaps";
 type Failure = Exclude<Read<unknown>, { ok: true }>;
 
 const code = (chunks: ReactNode) => (
-  <code className="rounded bg-hl px-1 font-mono text-foreground">
+  <code className="rounded-sm bg-hl px-1 font-mono text-foreground">
     {chunks}
   </code>
 );

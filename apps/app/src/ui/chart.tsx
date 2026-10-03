@@ -176,7 +176,7 @@ export function ChartTooltipContent({
               {several ? (
                 <span
                   aria-hidden="true"
-                  className="size-2.5 shrink-0 rounded-[2px]"
+                  className="size-2.5 shrink-0 rounded-xs"
                   style={{ backgroundColor: entry.color }}
                 />
               ) : null}
@@ -223,7 +223,7 @@ export function ChartLegendContent({
           <li key={key} className="flex items-center gap-1.5">
             <span
               aria-hidden="true"
-              className="size-2 shrink-0 rounded-[2px]"
+              className="size-2 shrink-0 rounded-xs"
               style={{ backgroundColor: item.color }}
             />
             {config[key]?.label ?? item.value}

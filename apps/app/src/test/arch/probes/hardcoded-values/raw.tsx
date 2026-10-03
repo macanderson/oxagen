@@ -8,7 +8,7 @@ export function Raw({ pct }: { pct: number }) {
   return (
     <div className={`gap-[10px] md:max-w-[720px] ${recipe}`}>
       <p className="bg-foreground/[0.35] [overflow-wrap:anywhere]">a</p>
-      <p className="min-[67.5rem]:grid-cols-3 duration-200">b</p>
+      <p className="min-[67.5rem]:grid-cols-3 duration-200 rounded">b</p>
       <p className={`rounded-[${String(pct)}px]`}>c</p>
       <p style={{ width: 240 }}>d</p>
       <p style={{ padding: "6px 8px", left: `calc(${String(pct)}% - 12px)` }}>e</p>

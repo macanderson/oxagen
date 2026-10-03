@@ -650,7 +650,7 @@ export function Unenroll({
           </p>
           <p
             data-testid="runtime-unenroll-warn"
-            className="rounded-[10px] border border-critical/45 bg-critical/10 px-3.5 py-2.5 text-sm text-foreground"
+            className="rounded-xl border border-critical/45 bg-critical/10 px-3.5 py-2.5 text-sm text-foreground"
           >
             {t("scope", { agent })}
           </p>

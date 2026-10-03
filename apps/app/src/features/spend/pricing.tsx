@@ -235,7 +235,7 @@ function UnpricedSection({
                       <span key={tokenClass}>
                         <span
                           data-class={tokenClass}
-                          className="rounded border border-border px-1.5 py-0.5 text-sm"
+                          className="rounded-sm border border-border px-1.5 py-0.5 text-sm"
                         >
                           {t(`class.${tokenClass}`)}
                         </span>
@@ -409,7 +409,7 @@ function PriceTable({
                   <span
                     className={
                       entry.negotiated
-                        ? "rounded border border-success/45 bg-success/10 px-1.5 py-0.5 text-sm font-medium text-foreground"
+                        ? "rounded-sm border border-success/45 bg-success/10 px-1.5 py-0.5 text-sm font-medium text-foreground"
                         : "text-sm text-muted-foreground"
                     }
                   >

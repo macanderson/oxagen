@@ -189,7 +189,7 @@ export function ProposeDialog({
           )}
           <div
             data-testid="record-diff"
-            className="overflow-hidden rounded-[10px] border border-border"
+            className="overflow-hidden rounded-xl border border-border"
           >
             <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-sm">
               {repository === null ? null : (

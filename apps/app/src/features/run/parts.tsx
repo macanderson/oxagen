@@ -149,10 +149,10 @@ export function Meter({
         <span className="min-w-0">{label}</span>
         <b className="font-semibold tabular-nums text-foreground">{value}</b>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-[3px] bg-hl">
+      <div className="h-1.5 overflow-hidden rounded-xs bg-hl">
         <i
           aria-hidden="true"
-          className={`block h-full rounded-[3px] ${hue}`}
+          className={`block h-full rounded-xs ${hue}`}
           style={{ width: `${String(width)}%` }}
         />
       </div>

@@ -280,9 +280,9 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
       <div
         className={`min-w-0 ${
           gate
-            ? "rounded-[10px] border border-info/40 bg-info/10 px-3 py-2.5"
+            ? "rounded-xl border border-info/40 bg-info/10 px-3 py-2.5"
             : would
-              ? "rounded-[10px] border border-dashed border-rule px-3 py-2"
+              ? "rounded-xl border border-dashed border-rule px-3 py-2"
               : ""
         }`}
       >

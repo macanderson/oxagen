@@ -216,12 +216,12 @@ export function RegisterSkeleton() {
         className="grid grid-cols-2 gap-3.5 md:grid-cols-4"
       >
         {[0, 1, 2, 3].map((n) => (
-          <div key={n} className={`${block} h-16 rounded-[11px]`} />
+          <div key={n} className={`${block} h-16 rounded-xl`} />
         ))}
       </div>
       <div aria-hidden="true" className={`${panel} flex flex-col`}>
         <div className="border-b border-border bg-hl px-4 py-3">
-          <div className={`${block} h-4 w-44 rounded`} />
+          <div className={`${block} h-4 w-44 rounded-sm`} />
         </div>
         <div className="flex flex-col gap-2 p-4">
           {[0, 1, 2, 3, 4, 5, 6].map((n) => (
@@ -293,7 +293,7 @@ function Denied({ ctx, viewer }: { ctx: WsCtx; viewer: string }) {
             <b className="font-semibold text-foreground">{chunks}</b>
           ),
           code: (chunks) => (
-            <span className={`${mono} rounded bg-hl px-1`}>{chunks}</span>
+            <span className={`${mono} rounded-sm bg-hl px-1`}>{chunks}</span>
           ),
           permission,
         })}

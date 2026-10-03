@@ -87,7 +87,7 @@ export function AssistantLauncher({
       data-touch-target=""
       data-testid="assistant-launcher"
       data-unread={assistantUnread ? "" : undefined}
-      className={`mb-2 flex w-full items-center gap-2.5 rounded-[10px] border bg-card px-2.5 py-2 text-left text-card-foreground transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-ring ${
+      className={`mb-2 flex w-full items-center gap-2.5 rounded-xl border bg-card px-2.5 py-2 text-left text-card-foreground transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-ring ${
         assistantOpen ? "border-gold" : "border-border"
       } ${assistantUnread ? "ox-launcher-unread" : ""}`}
     >

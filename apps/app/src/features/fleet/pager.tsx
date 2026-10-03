@@ -215,7 +215,7 @@ export function RunsPager({
                   <span
                     aria-current="page"
                     data-testid="pager-current"
-                    className="inline-flex min-w-6 items-center justify-center rounded border border-rule px-1 font-mono font-semibold text-foreground tabular-nums"
+                    className="inline-flex min-w-6 items-center justify-center rounded-sm border border-rule px-1 font-mono font-semibold text-foreground tabular-nums"
                   >
                     {count(button.page)}
                   </span>

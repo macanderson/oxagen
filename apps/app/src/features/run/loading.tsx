@@ -44,17 +44,17 @@ export function RunLoading() {
           {BLOCKS.map((block) => (
             <span
               key={block}
-              className={`${sk} h-16 rounded-[11px] border border-border`}
+              className={`${sk} h-16 rounded-xl border border-border`}
             />
           ))}
         </div>
         <div aria-hidden="true" className={panel}>
           <div className={panelHeader}>
-            <span className={`${sk} h-5.5 w-45 rounded-[7px]`} />
+            <span className={`${sk} h-5.5 w-45 rounded-lg`} />
           </div>
           <div className={`${panelBody} flex flex-col gap-2`}>
             {ROWS.map((row) => (
-              <span key={row} className={`${sk} h-9.5 rounded-[9px]`} />
+              <span key={row} className={`${sk} h-9.5 rounded-xl`} />
             ))}
           </div>
         </div>

@@ -139,7 +139,7 @@ export function ProviderRow({
       <td className={cell}>
         <span className="flex flex-col gap-1">
           <span
-            className={`${mono} w-fit rounded border border-border px-1.5 py-0.5 text-xs`}
+            className={`${mono} w-fit rounded-sm border border-border px-1.5 py-0.5 text-xs`}
           >
             {t("transportMcp")}
           </span>

@@ -63,6 +63,7 @@ describe("hardcoded values: every value reaches the page through a token", () =>
       "10 bg-foreground/[0.35]",
       "11 duration-200",
       "11 min-[67.5rem]:grid-cols-3",
+      "11 rounded",
       "12 rounded-[${}px]",
       "13 style:width",
       "14 style:left",

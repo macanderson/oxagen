@@ -110,7 +110,7 @@ export function KindTile({
 }) {
   const { icon: Icon, tile } = KIND_FACE[kind];
   const box =
-    size === "md" ? "size-9 rounded-[9px]" : "size-8.5 rounded-[9px]";
+    size === "md" ? "size-9 rounded-xl" : "size-8.5 rounded-xl";
   return (
     <span
       aria-hidden="true"

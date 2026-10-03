@@ -34,7 +34,7 @@ export function DesktopDownloads() {
       <p className="max-w-prose text-sm text-muted-foreground">
         {t.rich("lead", {
           code: (chunks) => (
-            <code className={`${mono} rounded bg-muted px-1`}>{chunks}</code>
+            <code className={`${mono} rounded-sm bg-muted px-1`}>{chunks}</code>
           ),
         })}
       </p>

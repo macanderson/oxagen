@@ -85,7 +85,7 @@ const cols = "relative flex h-11.5 items-end gap-0.5 pt-3.5";
 /** `.cols .c { flex:1; max-width:24px; height:100%; flex-direction:column; justify-content:flex-end; gap:2px }` */
 const col = "relative flex h-full max-w-6 flex-1 flex-col justify-end gap-0.5";
 /** `.cols .c i { border-radius:4px 4px 0 0; min-height:2px }`; a stacked second `i` is square. */
-const colFill = "block min-h-0.5 w-full first:rounded-t";
+const colFill = "block min-h-0.5 w-full first:rounded-t-sm";
 /** `.cols .c .lab { bottom:calc(100% + 3px); font-family:var(--mono); font-size:10px; color:var(--muted) }` */
 const colLabel =
   "absolute bottom-full mb-0.75 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-xs tabular-nums text-muted-foreground";
@@ -98,12 +98,12 @@ const colBase = "absolute inset-x-0 bottom-0 h-px bg-border";
 const axis =
   "mt-0.75 flex justify-between font-mono text-xs text-dim tabular-nums";
 /** `.stk { display:flex; gap:2px; height:8px; border-radius:4px; margin-top:4px }`, its first and last `i` rounded. */
-const stack = "relative mt-1 flex h-2 gap-0.5 rounded";
-const stackPart = "block h-full min-w-0.5 first:rounded-l last:rounded-r";
+const stack = "relative mt-1 flex h-2 gap-0.5 rounded-sm";
+const stackPart = "block h-full min-w-0.5 first:rounded-l-sm last:rounded-r-sm";
 /** `.leg { gap:10px; font-size:10.5px; color:var(--muted) }`, `.leg i { 9px; border-radius:2px }`, `.leg b { color:var(--fg) }` */
 const legend =
   "flex flex-wrap gap-x-2.5 gap-y-1 text-xs text-muted-foreground tabular-nums";
-const legendSwatch = "size-2.25 flex-none rounded-[2px]";
+const legendSwatch = "size-2.25 flex-none rounded-xs";
 /** `.fams { display:grid; gap:5px }` */
 const families = "grid gap-1.25";
 /** `.frow { grid-template-columns:20px 1fr 34% auto; gap:8px; padding:2px 0; color:var(--body) }` */
@@ -111,15 +111,15 @@ const familyRow =
   "grid grid-cols-[20px_minmax(0,1fr)_34%_auto] items-center gap-2 py-0.5 text-foreground";
 /** `.frow .ti { 20px; border-radius:5px; color:var(--tc,var(--muted)); background:<that at 14%> }` */
 const familyIcon =
-  "grid size-5 place-items-center rounded-[5px] bg-muted-foreground/15 text-muted-foreground";
+  "grid size-5 place-items-center rounded-sm bg-muted-foreground/15 text-muted-foreground";
 /** `.frow .fl { font-size:11.5px; text-overflow:ellipsis }` */
 const familyLabel = "min-w-0 truncate text-xs";
 /** `.frow .fn { font-family:var(--mono); font-size:11px; color:var(--fg); min-width:18px; text-align:right }` */
 const familyCount =
   "min-w-4.5 text-right font-mono text-xs tabular-nums text-foreground";
 /** `.fb { height:7px; border-radius:4px; background:var(--hl) }` and `.fb i { background:var(--fk-model) }` */
-export const fillBar = "block h-1.75 min-w-0 overflow-hidden rounded bg-hl";
-export const fillBarFill = "block h-full rounded bg-fk-model";
+export const fillBar = "block h-1.75 min-w-0 overflow-hidden rounded-sm bg-hl";
+export const fillBarFill = "block h-full rounded-sm bg-fk-model";
 
 /** `.stk i.neu`, `.leg i.neu { background:var(--rule) }`: the part that is not the figure. */
 const NEUTRAL = "bg-rule";

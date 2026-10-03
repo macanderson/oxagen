@@ -77,7 +77,7 @@ describe("AgentCard", () => {
       expect(screen.getByText("acme.core.release-bot").className).toContain(
         keyClass,
       );
-      expect(card?.className.includes("rounded-[10px]")).toBe(pill);
+      expect(card?.className.includes("rounded-xl")).toBe(pill);
     },
   );
 });

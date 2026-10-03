@@ -319,7 +319,7 @@ export function StatementEditor({
                 areaRef.current?.focus();
               }
             }}
-            className="w-42.5 max-w-full rounded-[7px] border border-border bg-input-bg px-2 py-1 font-mono text-lg text-foreground outline-none focus-visible:border-input-border-focus sm:text-sm"
+            className="w-42.5 max-w-full rounded-lg border border-border bg-input-bg px-2 py-1 font-mono text-lg text-foreground outline-none focus-visible:border-input-border-focus sm:text-sm"
           />
           <span
             data-testid="record-find-count"
@@ -452,7 +452,7 @@ function Marks({
       <mark
         key={at}
         data-current={at === current ? "" : undefined}
-        className="rounded-[2px] bg-gold/30 text-transparent data-current:bg-gold/55 data-current:outline data-current:outline-1 data-current:outline-gold"
+        className="rounded-xs bg-gold/30 text-transparent data-current:bg-gold/55 data-current:outline data-current:outline-1 data-current:outline-gold"
       >
         {text.slice(at, at + query.length)}
       </mark>,

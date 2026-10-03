@@ -157,10 +157,10 @@ function WindowBars({ measured }: { measured: ContextWindow }) {
           className={promptBar}
         >
           <span className="truncate">{t(`block.${block.kind}`)}</span>
-          <span className="block h-1.75 min-w-0 overflow-hidden rounded-[4px] bg-hl">
+          <span className="block h-1.75 min-w-0 overflow-hidden rounded-sm bg-hl">
             <i
               aria-hidden="true"
-              className={`block h-full rounded-[4px] ${BLOCK_HUE[block.kind]}`}
+              className={`block h-full rounded-sm ${BLOCK_HUE[block.kind]}`}
               style={{
                 width: `${String(whole === 0 ? 0 : (size(block) / whole) * 100)}%`,
               }}
@@ -249,7 +249,7 @@ function PromptPanel({
                   {parts.map((part) => (
                     <div key={part} className={promptBar}>
                       <span className="truncate">{part}</span>
-                      <span className="block h-1.75 min-w-0 overflow-hidden rounded-[4px] bg-hl" />
+                      <span className="block h-1.75 min-w-0 overflow-hidden rounded-sm bg-hl" />
                       <span className="font-mono text-xs">
                         <NoValue />
                       </span>
@@ -402,7 +402,7 @@ function ManifestSpine({
       {manifest !== null && run.enforcementTier === "observe" ? (
         <p
           data-testid="run-manifest-observe"
-          className="mb-2.5 rounded-[10px] border border-critical/45 bg-critical/10 px-3.5 py-2.75 text-sm text-foreground"
+          className="mb-2.5 rounded-xl border border-critical/45 bg-critical/10 px-3.5 py-2.75 text-sm text-foreground"
         >
           <b className="text-critical">{t("observeTitle")}</b> {t("observe")}
         </p>
@@ -542,7 +542,7 @@ function PromptWindow({
         }
       >
         {/* `.compbar { height:30px; border-radius:9px; border:1px solid var(--border); background:var(--hl) }`, with no band the record can fill. */}
-        <div className="flex h-7.5 items-center justify-center rounded-[9px] border border-border bg-hl font-mono text-xs text-dim">
+        <div className="flex h-7.5 items-center justify-center rounded-xl border border-border bg-hl font-mono text-xs text-dim">
           {t("blocksNotRecorded")}
         </div>
         <div className="mt-3.25">
@@ -715,7 +715,7 @@ function WalkWindow({
               >
                 <span
                   aria-hidden="true"
-                  className={`size-2 flex-none rounded-[2px] ${stop.hue}`}
+                  className={`size-2 flex-none rounded-xs ${stop.hue}`}
                 />
                 <span className="min-w-0 flex-1 truncate font-mono text-xs">
                   {t("stop", { type: stop.entry.type, seq: stop.entry.seq })}

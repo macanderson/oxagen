@@ -215,7 +215,7 @@ describe("Avatar", () => {
       </>,
     );
     expect(screen.getByTestId("p").className).toContain("rounded-full");
-    expect(screen.getByTestId("a").className).toContain("rounded-[27%]");
+    expect(screen.getByTestId("a").className).toContain("rounded-agent");
   });
 
   it("renders an https value as a decorative image", () => {

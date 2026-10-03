@@ -270,9 +270,9 @@ export function MandateLoading() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[0, 1, 2, 3].map((tile) => (
           <div key={tile} className={`${panel} flex flex-col gap-2 p-4`}>
-            <div className="h-3 w-1/3 animate-pulse rounded bg-muted motion-reduce:animate-none" />
-            <div className="h-6 w-2/3 animate-pulse rounded bg-muted motion-reduce:animate-none" />
-            <div className="h-3 w-full animate-pulse rounded bg-muted motion-reduce:animate-none" />
+            <div className="h-3 w-1/3 animate-pulse rounded-sm bg-muted motion-reduce:animate-none" />
+            <div className="h-6 w-2/3 animate-pulse rounded-sm bg-muted motion-reduce:animate-none" />
+            <div className="h-3 w-full animate-pulse rounded-sm bg-muted motion-reduce:animate-none" />
           </div>
         ))}
       </div>

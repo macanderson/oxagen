@@ -26,7 +26,7 @@ export function RuntimesLoading() {
         <div aria-hidden="true" className={panel}>
           <div className={panelHeader}>
             <span
-              className={`${bone} h-5.5 w-45 max-w-full rounded-[7px]`}
+              className={`${bone} h-5.5 w-45 max-w-full rounded-lg`}
             />
           </div>
           <div className={`${panelBody} flex flex-col gap-2`}>
@@ -34,7 +34,7 @@ export function RuntimesLoading() {
               <span
                 key={row}
                 data-skeleton-row=""
-                className={`${bone} h-9.5 rounded-[9px]`}
+                className={`${bone} h-9.5 rounded-xl`}
               />
             ))}
           </div>

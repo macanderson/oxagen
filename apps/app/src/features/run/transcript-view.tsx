@@ -262,7 +262,7 @@ const DOT: Record<FeedGroup, { on: string; off: string }> = {
  * fill, and the play button is `min-width:74px`.
  */
 const buttonShape =
-  "inline-flex items-center justify-center gap-1.75 rounded-[7px] border border-border px-2 py-0.75 font-mono text-xs font-medium text-foreground transition-colors hover:border-rule hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45 max-md:min-h-9";
+  "inline-flex items-center justify-center gap-1.75 rounded-lg border border-border px-2 py-0.75 font-mono text-xs font-medium text-foreground transition-colors hover:border-rule hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45 max-md:min-h-9";
 const txButton = `${buttonShape} min-w-7.5 bg-card`;
 const txGhost = `${buttonShape} min-w-7.5 bg-transparent`;
 const txPlayButton = `${buttonShape} min-w-18.5 bg-card`;
@@ -275,7 +275,7 @@ const txPlayButton = `${buttonShape} min-w-18.5 bg-card`;
 const txSeg =
   "ml-1 inline-flex gap-0.5 rounded-lg border border-border bg-void p-0.5";
 const txSegButton =
-  "inline-flex min-w-7.5 items-center justify-center rounded-[7px] border border-transparent bg-transparent px-2 py-0.75 font-mono text-xs font-medium text-foreground hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl max-md:min-h-9";
+  "inline-flex min-w-7.5 items-center justify-center rounded-lg border border-transparent bg-transparent px-2 py-0.75 font-mono text-xs font-medium text-foreground hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl max-md:min-h-9";
 /** `.tx-play .cnt { font-size:10.5px; color:var(--dim); margin-left:4px }` */
 const txCount = "ml-1 whitespace-nowrap text-xs tabular-nums text-dim";
 /**
@@ -302,7 +302,7 @@ const txProseLine = "min-w-0 truncate";
  * no chip carries two inks.
  */
 const chipShape =
-  "whitespace-nowrap rounded-[5px] border bg-card px-1.5 font-mono text-xs leading-[1.6] tabular-nums";
+  "whitespace-nowrap rounded-sm border bg-card px-1.5 font-mono text-xs leading-[1.6] tabular-nums";
 const CHIP = {
   plain: `${chipShape} border-border text-muted-foreground`,
   ok: `${chipShape} border-border text-success`,
@@ -318,7 +318,7 @@ const txEmpty = "py-3 text-dim";
 /** The control over a live view's first row that reads the page ahead. */
 const txOlder = "flex justify-center pt-1 pb-2";
 /** `.txs mark { background:var(--gold); color:var(--on-gold); border-radius:2px }` */
-const txMark = "rounded-[2px] bg-gold px-px text-on-gold";
+const txMark = "rounded-xs bg-gold px-px text-on-gold";
 
 /**
  * How many tool calls the scrubber marks one by one. Past it the marks would
@@ -1363,7 +1363,7 @@ function KindChips({
           <span
             data-dot=""
             aria-hidden="true"
-            className={`size-2 flex-none rounded-[2px] ${on[group] ? DOT[group].on : DOT[group].off}`}
+            className={`size-2 flex-none rounded-xs ${on[group] ? DOT[group].on : DOT[group].off}`}
           />
           <span>{t(`chip.${group}`)}</span>
           {counts === null ? null : (
@@ -1416,7 +1416,7 @@ function Burn({ spent, total }: { spent: Cost | null; total: Cost | null }) {
   return (
     <span data-testid="tx-burn" className={txBurn}>
       <span>{t("burn")}</span>
-      <span className="h-1 w-30 overflow-hidden rounded-[2px] bg-hl">
+      <span className="h-1 w-30 overflow-hidden rounded-xs bg-hl">
         <i
           aria-hidden="true"
           className="block h-full bg-info transition-[width] duration-200"

@@ -373,7 +373,7 @@ function Loaded({
 
       <div className="border-b border-border px-4 py-3.5">
         <SectionLabel id="change-checks">{t("checksTitle")}</SectionLabel>
-        <div className="min-w-0 overflow-x-auto rounded-[10px] border border-border">
+        <div className="min-w-0 overflow-x-auto rounded-xl border border-border">
           <table
             aria-label={t("checksLabel")}
             data-testid="change-checks"
@@ -440,7 +440,7 @@ function Loaded({
         <ol
           aria-labelledby="change-merge"
           data-testid="change-merge-steps"
-          className="overflow-hidden rounded-[10px] border border-border text-sm"
+          className="overflow-hidden rounded-xl border border-border text-sm"
         >
           {(
             ["squash", "deleteBranch", "reindex", "ledger", "audit"] as const
@@ -593,7 +593,7 @@ function ClosePullRequestDialog({
           data-testid="closepr-submit"
           data-touch-target=""
           disabled={pending}
-          className="inline-flex min-h-9 items-center justify-center rounded-[9px] border border-error bg-error px-3.25 py-1.5 text-sm font-medium text-error-foreground hover:bg-error/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-45"
+          className="inline-flex min-h-9 items-center justify-center rounded-xl border border-error bg-error px-3.25 py-1.5 text-sm font-medium text-error-foreground hover:bg-error/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-45"
           onClick={() => {
             void submit();
           }}
@@ -609,7 +609,7 @@ function ClosePullRequestDialog({
         <p className="text-base leading-relaxed text-foreground">{t("lead")}</p>
         <div
           data-testid="closepr-comment"
-          className="rounded-[10px] border border-border bg-hl px-3.5 py-3 text-sm text-foreground"
+          className="rounded-xl border border-border bg-hl px-3.5 py-3 text-sm text-foreground"
         >
           <p>{closedBy}</p>
           <hr className="my-2.5 border-border" />

@@ -88,7 +88,7 @@ export function SidebarNav({
                         data-count={item.key}
                         data-count-unrecorded=""
                         title={t("sidebar.countNotRecorded")}
-                        className="rounded-[5px] border border-dashed border-border bg-card px-1.25 font-mono text-xs text-sidebar-nav-label-fg"
+                        className="rounded-sm border border-dashed border-border bg-card px-1.25 font-mono text-xs text-sidebar-nav-label-fg"
                       >
                         <span aria-hidden="true">?</span>
                         <span className="sr-only">
@@ -98,7 +98,7 @@ export function SidebarNav({
                     ) : (
                       <span
                         data-count={item.key}
-                        className={`rounded-[5px] border bg-card px-1.25 font-mono text-xs ${
+                        className={`rounded-sm border bg-card px-1.25 font-mono text-xs ${
                           waiting.hot
                             ? "border-info/40 text-info"
                             : "border-border text-sidebar-nav-label-fg"

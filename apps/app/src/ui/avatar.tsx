@@ -149,7 +149,7 @@ export function Avatar({
 }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const spec = parseAvatarValue(value);
-  const radius = shape === "person" ? "rounded-full" : "rounded-[27%]";
+  const radius = shape === "person" ? "rounded-full" : "rounded-agent";
   const box = `inline-grid flex-none place-items-center overflow-hidden border box-border align-middle leading-none ${radius}`;
   const px = avatarSide(size);
   const side = { width: px, height: px };

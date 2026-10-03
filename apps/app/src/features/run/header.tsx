@@ -948,7 +948,7 @@ function PauseBanner({
       data-testid="run-paused"
       data-source={run.source}
       data-state={state}
-      className="mb-3.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[10px] border border-info/40 bg-info/10 px-3.5 py-2.75 text-sm text-foreground"
+      className="mb-3.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-info/40 bg-info/10 px-3.5 py-2.75 text-sm text-foreground"
     >
       <span aria-hidden="true" className="text-info">
         ❙❙

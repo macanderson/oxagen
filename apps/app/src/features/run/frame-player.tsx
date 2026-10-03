@@ -328,7 +328,7 @@ export function PlayerScrub({
             key={`${mark.left}:${String(i)}`}
             title={mark.title}
             // `.fp-ticks i { position:absolute; top:0; width:4px; height:6px; border-radius:2px; margin-left:-2px }`
-            className={`absolute top-0 -ml-0.5 h-1.5 w-1 rounded-[2px] ${mark.hue}`}
+            className={`absolute top-0 -ml-0.5 h-1.5 w-1 rounded-xs ${mark.hue}`}
             style={{ left: mark.left }}
           />
         ))}

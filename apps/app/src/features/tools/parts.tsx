@@ -116,7 +116,7 @@ export function StateDot({
 export function Chip({ children }: { children: ReactNode }) {
   return (
     <span
-      className={`${mono} inline-flex items-center rounded border border-border px-1.5 py-0.5 text-sm text-muted-foreground`}
+      className={`${mono} inline-flex items-center rounded-sm border border-border px-1.5 py-0.5 text-sm text-muted-foreground`}
     >
       {children}
     </span>

@@ -38,14 +38,14 @@ export function FleetLoading() {
               key={tile}
               aria-hidden="true"
               data-testid="skeleton-tile"
-              className={`block h-16 rounded-[11px] ${bone}`}
+              className={`block h-16 rounded-xl ${bone}`}
             />
           ))}
         </div>
         <div aria-hidden="true" className={panel}>
           <div className={panelHeader}>
             <span
-              className={`block h-5.5 w-45 rounded-[7px] ${bone}`}
+              className={`block h-5.5 w-45 rounded-lg ${bone}`}
             />
           </div>
           <div className="flex flex-col gap-2 px-4 py-3.5">
@@ -53,7 +53,7 @@ export function FleetLoading() {
               <span
                 key={row}
                 data-testid="skeleton-row"
-                className={`block h-9.5 rounded-[9px] ${bone}`}
+                className={`block h-9.5 rounded-xl ${bone}`}
               />
             ))}
           </div>
