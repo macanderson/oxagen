@@ -1,24 +1,56 @@
-import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
+import {
+  spendWasteList,
+  WASTE_CLAIM_CAUSES,
+} from "@oxagen/oxagen/contracts/spend.waste";
+import {
+  UNPRODUCTIVE_ESTIMATE,
+  UNPRODUCTIVE_PARTS,
+} from "@oxagen/oxagen/contracts/spend.unproductive";
 import { ZERO_TOKENS } from "@oxagen/billing";
+import {
+  FINDING_CLAIM_DETECTORS,
+  FINDING_KINDS,
+} from "@oxagen/database/schema";
 import { describe, expect, it, vi } from "vitest";
+import type { CauseClaim } from "./lib/finding-claims";
 import type { SpendRunRecord } from "./spend.shared";
-import { cacheWriteNeverRead, createSpendWasteHandler } from "./spend.waste";
+import {
+  cacheWriteNeverRead,
+  claimedHits,
+  createSpendWasteHandler,
+} from "./spend.waste";
+import { createUnproductiveSpendHandler } from "./spend.unproductive";
 import { ctx, pricedRun, run, SCOPE } from "./spend.test-support";
 
 const PERIOD = { from: "2026-09-01", to: "2026-09-30" };
+/** The whole of the period's last day is in the window. */
+const WINDOW = {
+  start: new Date("2026-09-01T00:00:00.000Z"),
+  end: new Date("2026-10-01T00:00:00.000Z"),
+};
 
 function harness(
   rows: SpendRunRecord[],
   names: Record<string, string> = {},
+  over: { claims?: CauseClaim[]; outside?: number } = {},
 ) {
   const readRunTotals = vi.fn(async () => rows);
+  const readClaims = vi.fn(async () => over.claims ?? []);
+  const countFindingsOutside = vi.fn(async () => over.outside ?? 0);
   const readRunNames = vi.fn(
     async (_scope: unknown, ids: readonly string[]) =>
       new Map<string, string | null>(ids.map((id) => [id, names[id] ?? null])),
   );
   return {
-    handler: createSpendWasteHandler({ readRunTotals, readRunNames }),
+    handler: createSpendWasteHandler({
+      readRunTotals,
+      readClaims,
+      countFindingsOutside,
+      readRunNames,
+    }),
     readRunTotals,
+    readClaims,
+    countFindingsOutside,
     readRunNames,
   };
 }
@@ -35,6 +67,32 @@ function cacheRun(
     tokens: { ...ZERO_TOKENS, cache_write_5m: wrote, cache_read: read },
     ...over,
   });
+}
+
+function runId(n: number): string {
+  return `tse_${String(n).padStart(22, "9")}`;
+}
+
+/** One claimed call of run `n`, under a finding of `kind`. */
+function claim(
+  n: number,
+  frame: string,
+  kind: string,
+  micros: bigint,
+  over: Partial<CauseClaim> = {},
+): CauseClaim {
+  const detector =
+    kind === "recurring_runs" ? 7 : kind === "spend_with_no_outcome" ? 8 : 1;
+  return {
+    detector,
+    kind,
+    runId: runId(n),
+    frameKey: frame,
+    costMicros: micros,
+    currency: "USD",
+    basis: "client_attested",
+    ...over,
+  };
 }
 
 describe("cacheWriteNeverRead", () => {
@@ -67,13 +125,15 @@ describe("cacheWriteNeverRead", () => {
 });
 
 describe("list_waste", () => {
-  it("reads every run of the caller's workspace over the period", async () => {
+  it("reads every run of the caller's workspace over the period, and the claims and outside findings over its whole last day", async () => {
     const h = harness([]);
     await h.handler({ period: PERIOD }, ctx());
     expect(h.readRunTotals).toHaveBeenCalledWith(SCOPE, {
       ...PERIOD,
       filter: { kind: "all" },
     });
+    expect(h.readClaims).toHaveBeenCalledWith(SCOPE, WINDOW);
+    expect(h.countFindingsOutside).toHaveBeenCalledWith(SCOPE, WINDOW);
   });
 
   it("answers null waste, no causes and a null share when no run shows the pattern", async () => {
@@ -86,6 +146,7 @@ describe("list_waste", () => {
       runsWithWaste: 0,
       largestCause: null,
       causes: [],
+      findingsOutsidePeriod: 0,
     });
     expect(() => spendWasteList.output.parse(out)).not.toThrow();
   });
@@ -163,5 +224,164 @@ describe("list_waste", () => {
     expect(out.causes[0]?.runIds).toHaveLength(10);
     expect(out.causes[0]?.provingRuns).toHaveLength(10);
     expect(h.readRunNames.mock.calls[0]?.[1]).toHaveLength(10);
+  });
+});
+
+// #5294: the calls findings claim are causes, so Wasted spend shows what the
+// Findings tab shows for the same period.
+describe("list_waste claimed causes", () => {
+  const claims = [
+    // Run 1: a spin loop and a repeat claim one call; it counts once, as a
+    // spin loop, the earlier cause of detector 1.
+    claim(1, "f1", "duplicate_tool_calls", 700n),
+    claim(1, "f1", "spin_loops", 700n),
+    // Run 1's second call, a repeated shell command.
+    claim(1, "f2", "repeated_shell_commands", 300n),
+    // Run 2: detector 7 and detector 8 claim one call; 7 counts it.
+    claim(2, "f1", "spend_with_no_outcome", 900n),
+    claim(2, "f1", "recurring_runs", 900n),
+    // Run 3: a retry loop.
+    claim(3, "f1", "retry_loops", 250n, { basis: "gateway_observed" }),
+    // Run 4: spend with no outcome.
+    claim(4, "f1", "spend_with_no_outcome", 100n),
+  ];
+
+  it("counts each claimed call once, under the lowest detector and then the earliest cause", () => {
+    const hits = claimedHits(claims)
+      .map((h) => `${h.cause} ${h.runId} ${String(h.micros)}`)
+      .sort();
+    expect(hits).toEqual(
+      [
+        `spin_loops ${runId(1)} 700`,
+        `repeated_calls ${runId(1)} 300`,
+        `recurring_runs ${runId(2)} 900`,
+        `retry_loops ${runId(3)} 250`,
+        `spend_with_no_outcome ${runId(4)} 100`,
+      ].sort(),
+    );
+  });
+
+  it("draws every claimed cause, largest first, with the runs that prove each", async () => {
+    const h = harness([], { [runId(2)]: "Nightly dependency check" }, {
+      claims,
+      outside: 2,
+    });
+    const out = await h.handler({ period: PERIOD }, ctx());
+    expect(out.causes.map((c) => [c.cause, c.wasted.micros])).toEqual([
+      ["recurring_runs", "900"],
+      ["spin_loops", "700"],
+      ["repeated_calls", "300"],
+      ["retry_loops", "250"],
+      ["spend_with_no_outcome", "100"],
+    ]);
+    expect(out.largestCause).toBe("recurring_runs");
+    expect(out.wasted).toEqual({
+      micros: "2250",
+      currency: "USD",
+      basis: "mixed",
+    });
+    expect(out.runsWithWaste).toBe(4);
+    expect(out.causes[0]?.provingRuns).toEqual([
+      { runId: runId(2), name: "Nightly dependency check" },
+    ]);
+    // Each cause carries the basis of the findings behind it.
+    expect(out.causes.find((c) => c.cause === "retry_loops")?.wasted.basis).toBe(
+      "gateway_observed",
+    );
+    expect(out.causes.find((c) => c.cause === "spin_loops")?.wasted.basis).toBe(
+      "client_attested",
+    );
+    // A run cited by two causes is read for its name once.
+    expect(h.readRunNames).toHaveBeenCalledTimes(1);
+    expect(h.readRunNames.mock.calls[0]?.[1]).toEqual([
+      runId(2),
+      runId(1),
+      runId(3),
+      runId(4),
+    ]);
+    expect(out.findingsOutsidePeriod).toBe(2);
+    // No run started in the period, so nothing is priced to share against.
+    expect(out.share).toBeNull();
+    expect(() => spendWasteList.output.parse(out)).not.toThrow();
+  });
+
+  it("totals the unproductive spend headline for the same claims and period, plus the cache-write cause", async () => {
+    const cache = cacheRun(5_000n, 100, 0, { cacheWriteMicros: 400n });
+    const out = await harness([cache], {}, { claims }).handler(
+      { period: PERIOD },
+      ctx(),
+    );
+    const headline = await createUnproductiveSpendHandler({
+      readClaims: async () =>
+        claims.map((c) => ({
+          detector: c.detector,
+          runId: c.runId,
+          frameKey: c.frameKey,
+          operatorKey: null,
+          costMicros: c.costMicros,
+          currency: c.currency,
+        })),
+      readSpend: async () => ({ rows: [], partial: new Set() }),
+      readKindSavings: async () => [],
+      countFindingsOutside: async () => 0,
+    })({ period: PERIOD }, ctx());
+    const cacheCause = out.causes.find(
+      (c) => c.cause === "cache_write_never_read",
+    );
+    expect(cacheCause?.wasted.micros).toBe("400");
+    expect(BigInt(out.wasted?.micros ?? "0")).toBe(
+      BigInt(headline.unproductive.micros) + 400n,
+    );
+    // 2,650 wasted of the 5,000 the period's one run was priced at.
+    expect(out.share).toBeCloseTo(2650 / 5000, 10);
+  });
+
+  it("leaves a run whose calls a finding claims out of the cache-write cause", async () => {
+    const claimed = cacheRun(5_000n, 100, 0, {
+      runId: runId(1),
+      cacheWriteMicros: 400n,
+    });
+    const out = await harness([claimed], {}, {
+      claims: [claim(1, "f1", "recurring_runs", 1_000n)],
+    }).handler({ period: PERIOD }, ctx());
+    expect(out.causes.map((c) => c.cause)).toEqual(["recurring_runs"]);
+    expect(out.wasted?.micros).toBe("1000");
+    expect(out.runsWithWaste).toBe(1);
+  });
+
+  it("answers no waste in a period no finding claims a call of, and says how many open findings fall outside it", async () => {
+    const out = await harness([pricedRun(1_000n)], {}, { outside: 4 }).handler(
+      { period: PERIOD },
+      ctx(),
+    );
+    expect(out.wasted).toBeNull();
+    expect(out.causes).toEqual([]);
+    expect(out.findingsOutsidePeriod).toBe(4);
+    expect(() => spendWasteList.output.parse(out)).not.toThrow();
+  });
+
+  it("refuses a period whose causes hold two currencies (negative)", async () => {
+    const refusal = harness([cacheRun(1_000n, 10, 0)], {}, {
+      claims: [claim(1, "f1", "spin_loops", 700n, { currency: "EUR" })],
+    }).handler({ period: PERIOD }, ctx());
+    await expect(refusal).rejects.toMatchObject({
+      code: "conflict",
+      reason: "waste_mixed_currency",
+    });
+    await expect(refusal).rejects.toThrow(/EUR and in USD/);
+  });
+
+  it("names a cause for every kind a counting detector writes, and none for a kind the headline leaves out", () => {
+    const claiming = WASTE_CLAIM_CAUSES.flatMap((c) => [...c.kinds]);
+    const beside: readonly string[] = [
+      ...UNPRODUCTIVE_PARTS.flatMap((p) => p.kinds),
+      ...UNPRODUCTIVE_ESTIMATE.kinds,
+      // Proposes steering records and prices no call.
+      "repeated_instructions",
+    ];
+    expect([...claiming, ...beside].sort()).toEqual([...FINDING_KINDS].sort());
+    const detectors: readonly number[] = FINDING_CLAIM_DETECTORS;
+    for (const c of WASTE_CLAIM_CAUSES)
+      expect(detectors).toContain(c.detector);
   });
 });

@@ -212,6 +212,8 @@ after the registered name separately when their contract uses a dotted stem.
 | [dismiss_memories](steering.memories.dismiss.md) | [steering.memories.dismiss.ts](../../packages/oxagen/src/contracts/steering.memories.dismiss.ts) | api, mcp, cli |
 | [get_steering_pr](steering.pr.get.md) | [steering.pr.get.ts](../../packages/oxagen/src/contracts/steering.pr.get.ts) | api, mcp, agent |
 | [get_steering_pr_diff](steering.pr.diff.get.md) | [steering.pr.diff.get.ts](../../packages/oxagen/src/contracts/steering.pr.diff.get.ts) | api, mcp, agent |
+| [get_change_set](forge.changes.get.md) | [forge.changes.get.ts](../../packages/oxagen/src/contracts/forge.changes.get.ts) | api, mcp, agent |
+| [get_revision_diff](forge.revision.diff.get.md) | [forge.revision.diff.get.ts](../../packages/oxagen/src/contracts/forge.revision.diff.get.ts) | api, mcp, agent |
 | [get_record](steering.records.get.md) | [steering.records.get.ts](../../packages/oxagen/src/contracts/steering.records.get.ts) | api, mcp, agent |
 | [get_published_steering](context.steering.published.get.md) | [context.steering.published.get.ts](../../packages/oxagen/src/contracts/context.steering.published.get.ts) | api, mcp, cli |
 | [get_steering_index](context.steering.index.get.md) | [context.steering.index.get.ts](../../packages/oxagen/src/contracts/context.steering.index.get.ts) | api, cli |

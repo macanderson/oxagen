@@ -51,14 +51,16 @@ import {
   addTokens,
   cost,
   daysBetween,
-  money,
   readDailyTotals,
   readRunTotals,
   readUnmeteredRuns,
+  resultTokensOf,
   runFigure,
   type SpendRunRecord,
   type SpendScope,
+  spendOnBasis,
   sumFigures,
+  sumStanding,
   ZERO_TOKENS,
 } from "./spend.shared";
 
@@ -517,19 +519,28 @@ function spendByDay(
 export function reportedSpend(
   runs: readonly RunTotalsRecord[],
 ): SpendGetOutput["reported"] {
-  let micros: bigint | null = null;
-  let currency = "USD";
-  for (const run of runs) {
-    currency = run.currency;
-    const parts =
-      run.breakdown.models.length === 0
-        ? [{ costMicros: run.costMicros, basis: run.costBasis }]
-        : run.breakdown.models;
-    for (const part of parts)
-      if (part.costMicros !== null && part.basis === "client_attested")
-        micros = (micros ?? 0n) + part.costMicros;
-  }
-  return micros === null ? null : money(micros, currency);
+  return spendOnBasis(runs, "client_attested");
+}
+
+/**
+ * The part of the period's spend the gateway metered: every model whose
+ * frames were all `gateway_observed`, the other side of {@link reportedSpend}.
+ */
+export function observedSpend(
+  runs: readonly RunTotalsRecord[],
+): SpendGetOutput["reported"] {
+  return spendOnBasis(runs, "gateway_observed");
+}
+
+/**
+ * What the period's model calls carried besides the conversation: the
+ * standing context by source and the tool results, from the run rows (#4493,
+ * ADR-199). A part no run recorded is null.
+ */
+export function promptComposition(
+  runs: readonly SpendRunRecord[],
+): NonNullable<SpendGetOutput["composition"]> {
+  return { ...sumStanding(runs), toolResultTokens: resultTokensOf(runs) };
 }
 
 export function createSpendGetHandler(
@@ -620,6 +631,8 @@ export function createSpendGetHandler(
       total: sumFigures(runs.map(runFigure)),
       days: spendByDay(runs, from, to),
       reported: reportedSpend(runs),
+      observed: observedSpend(runs),
+      composition: promptComposition(runs),
       // An open run's row is its running estimate; the page says how many
       // of the period's runs that is. An open run nothing priced adds no
       // figure, so it is no estimate of one.

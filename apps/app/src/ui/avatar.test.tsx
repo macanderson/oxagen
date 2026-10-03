@@ -191,15 +191,17 @@ describe("Avatar", () => {
     expect(deep.textContent).toBe("OX");
   });
 
-  it("sizes the tile in pixels and scales the type with it", () => {
+  it("draws the tile a tenth larger than the size named, and scales the type with it", () => {
     render(
       <>
         <Avatar value={null} initials="MB" size={30} testId="t" />
         <Avatar value={null} initials="MB" size={72} testId="p" />
       </>,
     );
-    expect(screen.getByTestId("t").style.width).toBe("30px");
-    expect(screen.getByTestId("p").style.width).toBe("72px");
+    expect(screen.getByTestId("t").style.width).toBe("33px");
+    expect(screen.getByTestId("p").style.width).toBe("79px");
+    // Two letters set at 0.42 of the tile that draws, not of the size named.
+    expect(screen.getByTestId("t").style.fontSize).toBe("14px");
     expect(parseFloat(screen.getByTestId("p").style.fontSize)).toBeGreaterThan(
       parseFloat(screen.getByTestId("t").style.fontSize),
     );

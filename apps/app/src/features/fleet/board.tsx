@@ -76,6 +76,7 @@ import { toast } from "@/ui/toast";
 import { dispatchRunCommand, exportFleetRun } from "./actions";
 import {
   DiffCell,
+  HarnessCell,
   PullRequestsCell,
   RowStatusBadge,
   TokensCell,
@@ -449,6 +450,10 @@ function RunRowView({
   const to = routes.run(org, ws, run.id);
   const title = runTitle(run);
   const cost = shownCost(run);
+  // The harness the agent registered, for a run that recorded none. The
+  // avatar badge and the Harness column read the same one.
+  const registered =
+    run.agentKey === null ? undefined : agentHarnesses[run.agentKey];
   const operatorLabel =
     run.operatorName ??
     (run.operatorKind === null
@@ -497,19 +502,17 @@ function RunRowView({
           <td key={column} className={`${cell} min-w-48`}>
             <AgentCard
               agentKey={run.agentKey}
-              harness={
-                run.harness?.name ??
-                (run.agentKey === null
-                  ? undefined
-                  : agentHarnesses[run.agentKey])
-              }
+              harness={run.harness?.name ?? registered}
               notRecorded={t("notRecorded")}
-              sub={
-                run.harness
-                  ? `${run.harness.name}${run.harness.version ? ` ${run.harness.version}` : ""}`
-                  : t(`source.${run.source}`)
-              }
+              // The Harness column names the harness and its version.
+              sub={t(`source.${run.source}`)}
             />
+          </td>
+        );
+      case "harness":
+        return (
+          <td key={column} className={cell}>
+            <HarnessCell run={run} registered={registered} />
           </td>
         );
       case "operator":

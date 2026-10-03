@@ -19,6 +19,7 @@
 export const FLEET_COLUMNS = [
   "run",
   "agent",
+  "harness",
   "operator",
   "status",
   "pullRequests",

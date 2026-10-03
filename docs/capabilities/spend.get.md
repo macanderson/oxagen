@@ -31,6 +31,10 @@ The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-0
 | `period` | object | the range as asked |
 | `groupBy` | enum | the level as asked |
 | `total` | figure | the period over every run in the workspace (below) |
+| `days` | object[] | one `{ day, cost, calls, runs }` per day of the period, oldest first, days with no run included with `cost: null` |
+| `reported` | money or null | the part of `total.cost` the harness reported: every model whose frames were all `client_attested`; null when no such model carries a cost |
+| `observed` | money or null, optional | the part of `total.cost` the gateway metered: every model whose frames were all `gateway_observed`. A `mixed` or `estimated` model counts as not observed, so the figure is a floor; null when no such model carries a cost |
+| `composition` | object, optional | `{ toolDefinitionTokens, contextFrameTokens, steeringTokens, toolResultTokens }`: the standing context the period's model calls carried, summed over every call the recorder measured, and the tool-result tokens, each result counted once when it was recorded. A part no run recorded is null, never `0` |
 | `estimatedRuns` | integer, optional | the period's priced runs that were still open when their row was last rebuilt; their cost is in the figures as a running estimate |
 | `unmeteredRuns` | object, optional | `{ total, byHarness: [{ harness, runs }] }`: the period's wrapped runs whose rollup found no model call, by the harness that ran them, most runs first. `total.runs` counts them and `total.cost` cannot, so the Spend page prints this beside the total. See [Runs with no usage](#runs-with-no-usage) |
 | `rows` | row[] | one per group; largest spend first, groups with no cost after those with one, then by key |

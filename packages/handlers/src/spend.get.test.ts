@@ -10,6 +10,8 @@ import {
   groupRows,
   mcpServerOf,
   mcpServerShares,
+  observedSpend,
+  promptComposition,
   reportedSpend,
 } from "./spend.get";
 import type { SpendRunRecord } from "./spend.shared";
@@ -754,5 +756,77 @@ describe("get_spend reported spend", () => {
       reportedSpend([pricedRun(10n, { costBasis: "gateway_observed" })]),
     ).toBeNull();
     expect(reportedSpend([run()])).toBeNull();
+  });
+});
+
+describe("get_spend observed spend", () => {
+  it("sums the models the gateway metered and leaves reported, mixed and estimated models out", () => {
+    const reported = pricedRun(300n);
+    const metered = pricedRun(900n, { costBasis: "gateway_observed" });
+    const mixed = pricedRun(50n, { costBasis: "mixed" });
+    const estimated = pricedRun(70n, { costBasis: "estimated" });
+    expect(observedSpend([reported, metered, mixed, estimated])).toEqual({
+      micros: "900",
+      currency: "USD",
+    });
+  });
+
+  it("answers null when no gateway-observed model carries a cost (negative)", () => {
+    expect(observedSpend([pricedRun(10n)])).toBeNull();
+    expect(observedSpend([run()])).toBeNull();
+  });
+
+  it("answers the observed part beside the reported part on the period", async () => {
+    const h = harness({
+      runs: [
+        pricedRun(300n),
+        pricedRun(900n, { costBasis: "gateway_observed" }),
+      ],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "model" }, ctx());
+    expect(out.reported).toEqual({ micros: "300", currency: "USD" });
+    expect(out.observed).toEqual({ micros: "900", currency: "USD" });
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+});
+
+describe("get_spend prompt composition", () => {
+  it("sums each standing source and the tool results over the period's runs", async () => {
+    const measured: SpendRunRecord = {
+      ...pricedRun(300n),
+      toolDefinitionTokens: 4_000,
+      contextFrameTokens: 0,
+      steeringTokens: null,
+    };
+    measured.breakdown = {
+      ...measured.breakdown,
+      tools: [
+        { name: "Read", calls: 2, resultTokens: 1_200, costMicros: 12n },
+        { name: "Bash", calls: 1, resultTokens: null, costMicros: null },
+      ],
+    };
+    const other: SpendRunRecord = {
+      ...pricedRun(100n),
+      toolDefinitionTokens: 1_000,
+    };
+    const h = harness({ runs: [measured, other] });
+    const out = await h.handler({ period: PERIOD, groupBy: "model" }, ctx());
+    // A source measured at 0 is a reading of 0; a source no run measured is null.
+    expect(out.composition).toEqual({
+      toolDefinitionTokens: 5_000,
+      contextFrameTokens: 0,
+      steeringTokens: null,
+      toolResultTokens: 1_200,
+    });
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers every part null when no run measured one (negative)", () => {
+    expect(promptComposition([run(), pricedRun(10n)])).toEqual({
+      toolDefinitionTokens: null,
+      contextFrameTokens: null,
+      steeringTokens: null,
+      toolResultTokens: null,
+    });
   });
 });

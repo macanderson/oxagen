@@ -1146,6 +1146,17 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "get_change_set",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "repo",
       "name": "get_ci_status",
       "reads": [],
@@ -1607,6 +1618,17 @@
         "agent",
         "api",
         "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "get_revision_diff",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
         "mcp"
       ],
       "writes": []
@@ -5255,6 +5277,7 @@
         "postgres"
       ],
       "tables": [
+        "postgres:forge.pull_request_issues",
         "postgres:forge.pull_request_revisions",
         "postgres:forge.pull_request_runs",
         "postgres:forge.pull_request_work_orders",
@@ -17944,6 +17967,83 @@
       "domain": "evidence",
       "id": "postgres:evidence.witnesses",
       "name": "witnesses",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "pull_request_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:forge.pull_requests",
+          "type": "uuid"
+        },
+        {
+          "name": "issue_node_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "repository",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "number",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "url",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "title",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "state",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "linked_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "forge",
+      "id": "postgres:forge.pull_request_issues",
+      "name": "pull_request_issues",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
