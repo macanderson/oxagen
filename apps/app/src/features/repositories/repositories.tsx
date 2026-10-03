@@ -39,6 +39,7 @@ import { useNavigate } from "@/ui/navigation";
 import { PageHeader } from "@/ui/page-header";
 import { RouteTabPanel, RouteTabs } from "@/ui/route-tabs";
 import {
+  type IssueCollection,
   listInstallationRepositories,
   readIssueCollection,
   readRepositoryChanges,
@@ -116,7 +117,7 @@ export function Repositories({
   const [changes, setChanges] = useState<Load<RepositoryChanges>>({
     kind: "loading",
   });
-  const [issues, setIssues] = useState<Load<{ collected: string[] }>>({
+  const [issues, setIssues] = useState<Load<IssueCollection>>({
     kind: "loading",
   });
   const [trees, setTrees] = useState<Trees>({});

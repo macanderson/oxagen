@@ -29,7 +29,7 @@ import {
 } from "@/ui/list-controls";
 import { FormAlert } from "@/ui/form-feedback";
 import { cell, headCell } from "@/ui/table";
-import { setIssueCollection } from "./actions";
+import { type IssueCollection, setIssueCollection } from "./actions";
 import { UNANSWERED, useRepositoriesFailure } from "./failure";
 import { REPOSITORY_GAPS } from "./gaps";
 import { buttonSmall, code, type Load, note, Panel } from "./parts";
@@ -123,7 +123,7 @@ function IssuesSwitch({
   org: string;
   ws: string;
   row: RepositoryRow;
-  issues: Load<{ collected: string[] }>;
+  issues: Load<IssueCollection>;
   onChanged: (message: string) => void;
 }) {
   const t = useTranslations("repositories.repos.issues");
@@ -134,9 +134,11 @@ function IssuesSwitch({
   const known = issues.kind === "ready";
   const on =
     known && issues.value.collected.includes(row.fullName.toLowerCase());
+  // Only a role set_work_collector admits may flip it; the server checks again.
+  const allowed = known && issues.value.canChange;
 
   async function flip() {
-    if (pending || !known) return;
+    if (pending || !allowed) return;
     setPending(true);
     setFailure(null);
     try {
@@ -168,8 +170,9 @@ function IssuesSwitch({
         type="button"
         role="switch"
         aria-checked={on}
-        aria-disabled={pending || !known || undefined}
+        aria-disabled={pending || !allowed || undefined}
         aria-label={t("label", { repository: row.fullName })}
+        title={known && !allowed ? t("noRole") : undefined}
         data-testid={`repository-issues-${row.fullName}`}
         onClick={(event) => {
           event.stopPropagation();
@@ -191,6 +194,14 @@ function IssuesSwitch({
         </span>
         {pending ? t("saving") : !known ? t("unknown") : on ? t("stateOn") : t("stateOff")}
       </button>
+      {known && !allowed ? (
+        <span
+          className="text-sm text-muted-foreground"
+          data-testid={`repository-issues-no-role-${row.fullName}`}
+        >
+          {t("noRole")}
+        </span>
+      ) : null}
       {failure === null ? null : (
         <FormAlert testId={`repository-issues-failure-${row.fullName}`}>
           {failure}
@@ -215,7 +226,7 @@ export function RepositoriesTab({
   ws: string;
   rows: RepositoryRow[];
   /** Which linked repositories a collector reads (list_work_collectors). */
-  issues: Load<{ collected: string[] }>;
+  issues: Load<IssueCollection>;
   /** A switch changed what a collector reads; the message says what. */
   onIssuesChanged: (message: string) => void;
   /** The installation listing did not answer, so not-linked rows are missing. */
@@ -403,7 +414,7 @@ function Row({
   org: string;
   ws: string;
   row: RepositoryRow;
-  issues: Load<{ collected: string[] }>;
+  issues: Load<IssueCollection>;
   onIssuesChanged: (message: string) => void;
   onOpen: (fullName: string) => void;
   onAddOxagen: (fullName: string | null) => void;

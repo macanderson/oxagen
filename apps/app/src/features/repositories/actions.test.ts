@@ -41,6 +41,7 @@ const {
   openInitPullRequest,
   promoteInstructionToSteering,
   readRepositoryChange,
+  readIssueCollection,
   readRepositoryChanges,
   readRepositoryTree,
   readWorkingCopies,
@@ -226,6 +227,17 @@ describe("readWorkspaceRepository", () => {
       reason: "unavailable",
       code: "contract_output_mismatch",
     });
+  });
+});
+
+describe("readIssueCollection", () => {
+  it("answers whether the viewer may change a collector, from list_work_collectors' viewer flag", async () => {
+    invoke.mockResolvedValue({ collectors: [], viewer: { can_change_collectors: false } });
+    expect(await readIssueCollection("acme", "core-platform")).toEqual({
+      ok: true,
+      value: { collected: [], canChange: false },
+    });
+    expect(invoke).toHaveBeenCalledWith("list_work_collectors", {}, expect.anything());
   });
 });
 

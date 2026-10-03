@@ -5893,6 +5893,7 @@ type Messages = {
         on: string;
         onReading: string;
         off: string;
+        noRole: string;
       };
     };
     dialog: {

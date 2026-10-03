@@ -592,6 +592,17 @@ function collectorNameFor(repository: string): string {
     .replace(/-+$/, "");
 }
 
+/** Which repositories' issues are collected, and whether the viewer may change that. */
+export interface IssueCollection {
+  collected: string[];
+  /**
+   * The viewer may change a collector (list_work_collectors'
+   * viewer.can_change_collectors): set_work_collector admits a workspace
+   * Owner or an org Owner or Admin, and never a key (#5181).
+   */
+  canChange: boolean;
+}
+
 /**
  * The linked GitHub repositories whose issues a collector that is not paused
  * reads, lowercased. A repository is on when one does, whichever collector
@@ -600,7 +611,7 @@ function collectorNameFor(repository: string): string {
 export async function readIssueCollection(
   org: string,
   ws: string,
-): Promise<ActionResult<{ collected: string[] }>> {
+): Promise<ActionResult<IssueCollection>> {
   const ctx = await requireViewer(org, ws);
   const read = await kernelRead(ctx, {
     contract: workCollectorsList,
@@ -614,7 +625,13 @@ export async function readIssueCollection(
     if (collector.health === "paused") continue;
     for (const repo of collector.repos) collected.add(repo.toLowerCase());
   }
-  return { ok: true, value: { collected: [...collected] } };
+  return {
+    ok: true,
+    value: {
+      collected: [...collected],
+      canChange: failed.value.viewer.can_change_collectors,
+    },
+  };
 }
 
 /**

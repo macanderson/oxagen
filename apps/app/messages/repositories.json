@@ -186,7 +186,8 @@
         "saving": "Saving",
         "on": "oxagen collects the issues in {repository}.",
         "onReading": "oxagen is reading the open issues in {repository} now. They show up in Work in a few minutes.",
-        "off": "oxagen stopped collecting the issues in {repository}. Work items it already made stay in Work."
+        "off": "oxagen stopped collecting the issues in {repository}. Work items it already made stay in Work.",
+        "noRole": "Your role cannot change issue collection in this workspace."
       }
     },
     "dialog": {
