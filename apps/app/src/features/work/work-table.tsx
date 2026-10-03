@@ -228,7 +228,7 @@ function RunningTable({
               <span className="flex flex-col">
                 <span>{item.send.agent.name ?? t("table.none")}</span>
                 {item.send.runtime.name === null ? null : (
-                  <span className="text-[12px] text-muted-foreground">
+                  <span className="text-sm text-muted-foreground">
                     {item.send.runtime.name}
                   </span>
                 )}
@@ -239,7 +239,7 @@ function RunningTable({
             <span className="flex flex-col items-start gap-1">
               <WorkStatusBadge status={item.status} />
               {item.send === null ? null : (
-                <span className="text-[12px] text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   {t("table.sentOn", { at: when(item.send.requestedAt) })}
                 </span>
               )}
@@ -290,7 +290,7 @@ function ReviewTable({
                     {t("table.pullRequest", { number: String(pr.number) })}
                   </span>
                   {pr.head === null ? null : (
-                    <span className={`${mono} text-[12px] text-muted-foreground`}>
+                    <span className={`${mono} text-sm text-muted-foreground`}>
                       {shortSha(pr.head)}
                     </span>
                   )}

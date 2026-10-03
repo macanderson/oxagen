@@ -48,7 +48,7 @@ type Edge = "observed" | "stated" | "inferred" | "commit" | "branch";
  * line-height:1.7 }`: the provenance chip, and the `fr N` chip beside it.
  */
 const edgeChip =
-  "inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] border px-1.5 font-mono text-[10px] leading-[1.7]";
+  "inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] border px-1.5 font-mono text-sm leading-[1.7]";
 
 /**
  * `.edge.observed { color:var(--st-proven) }`, `.edge.stated { color:
@@ -208,7 +208,7 @@ function Item({
   return (
     <li
       data-testid={testId}
-      className="flex min-w-0 items-start gap-2.5 border-t border-border py-2 text-[12.5px] first:border-t-0"
+      className="flex min-w-0 items-start gap-2.5 border-t border-border py-2 text-sm first:border-t-0"
     >
       <span
         aria-hidden="true"
@@ -224,7 +224,7 @@ function Item({
           line === null ? null : (
             <span
               key={name}
-              className="block text-[11.5px] leading-[1.5] text-muted-foreground [overflow-wrap:anywhere]"
+              className="block text-sm leading-[1.5] text-muted-foreground [overflow-wrap:anywhere]"
             >
               {line}
             </span>
@@ -264,7 +264,7 @@ function ListPanel({
     >
       <div className="px-3.5 pb-2.5 pt-2">
         {count === 0 ? (
-          <p className="py-2 text-[11.5px] text-muted-foreground">{empty}</p>
+          <p className="py-2 text-sm text-muted-foreground">{empty}</p>
         ) : (
           <ul className="flex flex-col">{children}</ul>
         )}
@@ -639,7 +639,7 @@ const DIFF_ROW: Record<DiffLine["kind"], string> = {
 
 function Diff({ patch }: { patch: string }) {
   return (
-    <div className="mb-2.5 max-h-[360px] overflow-auto rounded-[9px] border border-border bg-void font-mono text-[11.5px] leading-[1.6]">
+    <div className="mb-2.5 max-h-[360px] overflow-auto rounded-[9px] border border-border bg-void font-mono text-sm leading-[1.6]">
       {diffLines(patch).map((line, i) => (
         <div
           // A patch's lines are positional.
@@ -666,7 +666,7 @@ function Diff({ patch }: { patch: string }) {
 function Stat({ added, removed }: { added: number; removed: number }) {
   const locale = useLocale();
   return (
-    <span className="flex-none whitespace-nowrap font-mono text-[11px]">
+    <span className="flex-none whitespace-nowrap font-mono text-sm">
       <b className={ADDED}>+{formatCount(added, locale)}</b>{" "}
       <b className={REMOVED}>−{formatCount(removed, locale)}</b>
     </span>
@@ -711,7 +711,7 @@ function FilesChanged({
       flush
       aside={
         files.length === 0 ? undefined : (
-          <span className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
+          <span className="flex items-center gap-2 font-mono text-sm text-muted-foreground">
             <Stat added={added} removed={removed} />
             <span
               aria-hidden="true"
@@ -740,11 +740,11 @@ function FilesChanged({
             const patch = patches.get(node.name) ?? null;
             const summary = (
               <>
-                <span className="min-w-0 truncate font-mono text-[11.5px] text-foreground">
+                <span className="min-w-0 truncate font-mono text-sm text-foreground">
                   {node.name}
                 </span>
                 {patch === null ? (
-                  <span className="flex-none text-[11px] text-dim">
+                  <span className="flex-none text-sm text-dim">
                     {t("noPatch")}
                   </span>
                 ) : null}
@@ -761,7 +761,7 @@ function FilesChanged({
               <div
                 key={key}
                 data-testid="run-linked-file"
-                className="flex min-w-0 items-center gap-2.5 border-t border-border py-2 pl-[18px] text-[12.5px] first:border-t-0"
+                className="flex min-w-0 items-center gap-2.5 border-t border-border py-2 pl-[18px] text-sm first:border-t-0"
               >
                 {summary}
               </div>
@@ -772,7 +772,7 @@ function FilesChanged({
                 className="group border-t border-border first:border-t-0"
               >
                 {/* `.lw-files summary::before { content:"▸" }`, `▾` when open. */}
-                <summary className="flex min-w-0 cursor-pointer list-none items-center gap-2.5 py-2 text-[12.5px] before:flex-none before:text-dim before:content-['▸'] group-open:before:content-['▾'] [&::-webkit-details-marker]:hidden">
+                <summary className="flex min-w-0 cursor-pointer list-none items-center gap-2.5 py-2 text-sm before:flex-none before:text-dim before:content-['▸'] group-open:before:content-['▾'] [&::-webkit-details-marker]:hidden">
                   {summary}
                 </summary>
                 <Diff patch={patch} />
@@ -789,14 +789,14 @@ function FilesChanged({
               <li
                 key={`${diff.checkoutRef}:${diff.seq}`}
                 data-testid="run-linked-captured"
-                className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border py-1.5 text-[11.5px] text-muted-foreground first:border-t-0"
+                className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border py-1.5 text-sm text-muted-foreground first:border-t-0"
               >
                 <FrameChip frame={{ seq: diff.seq }} place={place} />
                 <span>{t(`capture.${diff.completeness}`)}</span>
                 {diff.digest === null ? null : (
                   <code
                     data-truncate={diff.digest}
-                    className={`${mono} min-w-0 break-all text-[11px] text-dim`}
+                    className={`${mono} min-w-0 break-all text-sm text-dim`}
                   >
                     {`${diff.digest.slice(0, "sha256:".length + 12)}…`}
                   </code>
@@ -807,7 +807,7 @@ function FilesChanged({
               </li>
             ))}
           </ul>
-          <p className="mt-1.5 text-[11px] text-dim">
+          <p className="mt-1.5 text-sm text-dim">
             {t("capturedBasis", {
               count: formatCount(work.diffs.length, locale),
             })}
@@ -856,7 +856,7 @@ function Legend({ edges }: { edges: readonly Edge[] }) {
   if (edges.includes("branch")) shown.push("branch");
   const inferred = edges.filter((edge) => edge === "inferred").length;
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[11px] text-dim">
+    <div className="mb-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-sm text-dim">
       <p className={`${eyebrowQuiet} m-0`}>{t("title")}</p>
       {shown.map((edge) => (
         <span key={edge} className="inline-flex items-center gap-1.5">

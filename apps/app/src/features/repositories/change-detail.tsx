@@ -192,14 +192,14 @@ export function ChangeDetail({
         </button>
         <h2
           id="change-title"
-          className="min-w-0 flex-1 break-all text-[13.5px] font-semibold text-foreground"
+          className="min-w-0 flex-1 break-all text-sm font-semibold text-foreground"
         >
           {title}
         </h2>
         <span className="inline-flex items-center gap-2">
           <CiLight status={status} />
           {passed === undefined || total === undefined ? null : (
-            <span className={`${mono} text-[11.5px] text-muted-foreground`}>
+            <span className={`${mono} text-sm text-muted-foreground`}>
               {passed} / {total}
             </span>
           )}
@@ -213,7 +213,7 @@ export function ChangeDetail({
         <p
           role="status"
           data-testid="change-loading"
-          className="px-4 py-3.5 text-[13px] text-muted-foreground"
+          className="px-4 py-3.5 text-sm text-muted-foreground"
         >
           {t("loading")}
         </p>
@@ -304,7 +304,7 @@ function Loaded({
                 ? changes("kinds.steering_pr")
                 : changes("kinds.steering_record")}
             </Badge>
-            <span className={`${mono} text-[11.5px] text-dim`}>
+            <span className={`${mono} text-sm text-dim`}>
               {isSteeringPrKind(pr.kind)
                 ? pr.onMerge.path
                 : changes("kindPaths.steering_record")}
@@ -365,7 +365,7 @@ function Loaded({
         <ul
           aria-labelledby="change-files"
           data-testid="change-files"
-          className="text-[12.5px]"
+          className="text-sm"
         >
           <li className={`${mono} text-foreground`}>{pr.onMerge.path}</li>
         </ul>
@@ -377,7 +377,7 @@ function Loaded({
           <table
             aria-label={t("checksLabel")}
             data-testid="change-checks"
-            className="w-full min-w-[520px] border-collapse text-[13px]"
+            className="w-full min-w-[520px] border-collapse text-sm"
           >
             <thead>
               <tr className="border-b border-border">
@@ -422,7 +422,7 @@ function Loaded({
         {failed === null ? null : (
           <p
             data-testid="change-stopped"
-            className="mt-3 border-l-2 border-error py-0.5 pl-3 text-[12.5px] leading-relaxed text-muted-foreground"
+            className="mt-3 border-l-2 border-error py-0.5 pl-3 text-sm leading-relaxed text-muted-foreground"
           >
             {t.rich("stopped", {
               check: failed.name,
@@ -440,7 +440,7 @@ function Loaded({
         <ol
           aria-labelledby="change-merge"
           data-testid="change-merge-steps"
-          className="overflow-hidden rounded-[10px] border border-border text-[13px]"
+          className="overflow-hidden rounded-[10px] border border-border text-sm"
         >
           {(
             ["squash", "deleteBranch", "reindex", "ledger", "audit"] as const
@@ -470,7 +470,7 @@ function Loaded({
           <p
             role="status"
             data-testid="change-done"
-            className="mt-3 text-[13px] text-foreground"
+            className="mt-3 text-sm text-foreground"
           >
             {done}
           </p>
@@ -593,7 +593,7 @@ function ClosePullRequestDialog({
           data-testid="closepr-submit"
           data-touch-target=""
           disabled={pending}
-          className="inline-flex min-h-9 items-center justify-center rounded-[9px] border border-error bg-error px-[13px] py-1.5 text-[13px] font-medium text-error-foreground hover:bg-error/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-45"
+          className="inline-flex min-h-9 items-center justify-center rounded-[9px] border border-error bg-error px-[13px] py-1.5 text-sm font-medium text-error-foreground hover:bg-error/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-45"
           onClick={() => {
             void submit();
           }}
@@ -609,7 +609,7 @@ function ClosePullRequestDialog({
         <p className="text-sm leading-relaxed text-foreground">{t("lead")}</p>
         <div
           data-testid="closepr-comment"
-          className="rounded-[10px] border border-border bg-hl px-3.5 py-3 text-[13px] text-foreground"
+          className="rounded-[10px] border border-border bg-hl px-3.5 py-3 text-sm text-foreground"
         >
           <p>{closedBy}</p>
           <hr className="my-2.5 border-border" />

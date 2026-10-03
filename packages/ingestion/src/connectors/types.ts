@@ -96,6 +96,12 @@ export interface RawRecord {
   externalId: string;
   raw: unknown;
   receivedAt: string; // ISO-8601
+  /**
+   * True when the poll read this record with no saved cursor, on its first
+   * read after a connection. Such a record mostly predates the connection, so
+   * the pipeline sends no trigger change event for it.
+   */
+  backfill?: boolean;
 }
 
 // One ingestable record extracted from a raw webhook delivery. `record` is the

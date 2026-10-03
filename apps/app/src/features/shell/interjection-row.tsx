@@ -72,10 +72,10 @@ export function InterjectionRow({
         />
       )}
       <span className="min-w-0 flex-1">
-        <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <span className="block text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           {t("interjection.kind")}
         </span>
-        <b className="block text-[13px] font-semibold">
+        <b className="block text-sm font-semibold">
           {agent === null
             ? t("interjection.pausedUnknown")
             : t("interjection.paused", { agent })}
@@ -95,7 +95,7 @@ export function InterjectionRow({
       <span
         data-countdown={item.id}
         data-warn={warn ? "" : undefined}
-        className={`flex-none font-mono text-[13px] font-semibold ${
+        className={`flex-none font-mono text-sm font-semibold ${
           warn ? "text-critical" : "text-info"
         }`}
       >

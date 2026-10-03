@@ -150,7 +150,7 @@ function Figures({
           <dt className={statTerm}>{t(`unit.${card.unit}`)}</dt>
           <dd
             data-figure="unit"
-            className="text-[15px] font-semibold leading-tight"
+            className="text-base font-semibold leading-tight"
           >
             <MoneyFigure money={unitPrice(finding)} />
           </dd>
@@ -336,24 +336,24 @@ function FindingText({
   const values = valuesOf(finding);
   if (card.text === "figures" && finding.kind === "duplicate_tool_calls")
     return (
-      <p data-finding-text="catalogue" className="text-[13px]">
+      <p data-finding-text="catalogue" className="text-sm">
         {t("duplicate_tool_calls", { who, runs, calls, amount })}
       </p>
     );
   if (card.text === "figures" && finding.kind === "repeated_shell_commands")
     return (
-      <p data-finding-text="catalogue" className="text-[13px]">
+      <p data-finding-text="catalogue" className="text-sm">
         {t("repeated_shell_commands", { runs, calls, amount })}
       </p>
     );
   if (card.text === "values" && values !== null)
     return (
-      <p data-finding-text="catalogue" className="text-[13px]">
+      <p data-finding-text="catalogue" className="text-sm">
         {fromValues(values)}
       </p>
     );
   return (
-    <p data-finding-text="detector" className="text-[13px]">
+    <p data-finding-text="detector" className="text-sm">
       {finding.why}
     </p>
   );
@@ -395,19 +395,19 @@ export function FindingCard({
       data-level={finding.level}
       className={`${panel} grid gap-4 p-4 md:grid-cols-[2rem_minmax(0,1fr)_auto]`}
     >
-      <span className={`${mono} text-[12px] text-muted-foreground`}>
+      <span className={`${mono} text-sm text-muted-foreground`}>
         {formatCount(rank, locale)}
       </span>
       <div className="flex min-w-0 flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-[15px] font-semibold">
+          <h3 className="text-base font-semibold">
             {t(`findings.kind.${finding.kind}`)}
           </h3>
-          <span className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground">
+          <span className="rounded-md border border-border px-1.5 py-0.5 text-sm text-muted-foreground">
             {t(`findings.level.${finding.level}`)}
           </span>
           <span
-            className={`rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${finding.confidence === "high" ? "border-success/45 text-success" : "border-link/45 text-link"}`}
+            className={`rounded-md border px-1.5 py-0.5 text-sm font-semibold ${finding.confidence === "high" ? "border-success/45 text-success" : "border-link/45 text-link"}`}
           >
             {t(`findings.confidence.${finding.confidence}`)}
           </span>
@@ -425,7 +425,7 @@ export function FindingCard({
         <Figures finding={finding} spend={spend} card={card} />
         <FindingText finding={finding} who={who} card={card} />
         {finding.level === "agent" ? (
-          <p className="flex min-w-0 items-center gap-2 text-[12.5px] text-muted-foreground">
+          <p className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
             <AgentMark
               agentKey={finding.subject}
               harness={harnessIn(harnesses, finding.subject)}
@@ -435,15 +435,15 @@ export function FindingCard({
           </p>
         ) : (
           <p
-            className={`text-[12.5px] text-muted-foreground ${finding.level === "operator" ? "" : mono}`}
+            className={`text-sm text-muted-foreground ${finding.level === "operator" ? "" : mono}`}
           >
             {who}
           </p>
         )}
-        <p className="text-[12px] text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {t(`findings.kindDefinition.${finding.kind}`)}
         </p>
-        <p className={`${mono} text-[11px] text-muted-foreground`}>
+        <p className={`${mono} text-sm text-muted-foreground`}>
           {t("findings.evidenceLine", {
             runs: formatCount(finding.runs, locale),
             calls: formatCount(finding.calls, locale),

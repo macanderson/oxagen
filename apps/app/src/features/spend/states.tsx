@@ -263,7 +263,7 @@ export function SpendSectionFailure({
               ? t("pending.title")
               : t("error.title"))}
       </h2>
-      <p className="text-[13px] text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         {read.reason === "denied" ? (
           t("section.denied", { permission: read.permission })
         ) : read.reason === "pending_approval" ? (

@@ -51,8 +51,8 @@ type FactKey =
   | "licence"
   | "nextBundle";
 
-const term = "text-[12.5px] text-muted-foreground";
-const value = "text-[13px] text-foreground";
+const term = "text-sm text-muted-foreground";
+const value = "text-sm text-foreground";
 
 function Facts({ rows }: { rows: readonly [string, ReactNode][] }) {
   return (
@@ -94,7 +94,7 @@ function useDetails(plane: DataPlane): Record<PlaneMode, ReactNode> {
     <span className="inline-flex flex-wrap items-center gap-1.5">
       <StatusBadge plane={plane} />
       <span className={mono}>{t(`modes.${plane.mode}`)}</span>
-      <span className="text-[12px] text-dim">
+      <span className="text-sm text-dim">
         {plane.lastVerifiedAt === null ? (
           t("neverVerified")
         ) : (
@@ -112,7 +112,7 @@ function useDetails(plane: DataPlane): Record<PlaneMode, ReactNode> {
     </span>
   );
   const about = (mode: PlaneMode) => (
-    <p className="mb-3 text-[12.5px] text-muted-foreground">
+    <p className="mb-3 text-sm text-muted-foreground">
       {t(`about.${mode}`)}
     </p>
   );
@@ -187,7 +187,7 @@ function useDetails(plane: DataPlane): Record<PlaneMode, ReactNode> {
             [f("nextBundle"), nr],
           ]}
         />
-        <p className="mb-2 mt-4 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-dim">
+        <p className="mb-2 mt-4 text-sm font-semibold uppercase tracking-[0.09em] text-dim">
           {t("outbound.title")}
         </p>
         <Table

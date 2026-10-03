@@ -83,7 +83,7 @@ function factCells(
       <span
         key={key}
         data-facts-withheld={facts.reason}
-        className="text-[11.5px] text-dim"
+        className="text-sm text-dim"
       >
         {facts.label}
       </span>
@@ -104,7 +104,7 @@ function factCells(
       <span
         key={key}
         data-facts-unread={reason}
-        className="text-[11.5px] text-dim"
+        className="text-sm text-dim"
       >
         {unread}
       </span>
@@ -126,29 +126,29 @@ function factCells(
   return {
     cells: [
       main === undefined ? (
-        <span key="main" className="text-[11.5px] text-dim">
+        <span key="main" className="text-sm text-dim">
           {none}
         </span>
       ) : (
-        <span key="main" className={`${mono} text-[11.5px]`}>
+        <span key="main" className={`${mono} text-sm`}>
           {main.fullName}
         </span>
       ),
       main === undefined ? (
-        <span key="branch" className="text-[11.5px] text-dim">
+        <span key="branch" className="text-sm text-dim">
           {none}
         </span>
       ) : (
-        <span key="branch" className={`${mono} text-[11.5px]`}>
+        <span key="branch" className={`${mono} text-sm`}>
           {main.defaultRef}
         </span>
       ),
       linked.length === 0 ? (
-        <span key="linked" className="text-[11.5px] text-dim">
+        <span key="linked" className="text-sm text-dim">
           {none}
         </span>
       ) : (
-        <span key="linked" className={`${mono} text-[11.5px]`}>
+        <span key="linked" className={`${mono} text-sm`}>
           {linked.map((repo) => repo.fullName).join(", ")}
         </span>
       ),
@@ -176,7 +176,7 @@ function WorkspaceCell({ workspace }: { workspace: Workspace }) {
         <div className="font-semibold text-foreground md:truncate">
           {workspace.name}
         </div>
-        <div className={`${mono} text-[11px] text-dim md:truncate`}>
+        <div className={`${mono} text-sm text-dim md:truncate`}>
           {workspace.slug}
         </div>
         {workspace.archivedAt === null ? null : (
@@ -207,10 +207,10 @@ function GovernanceCell({ workspace }: { workspace: Workspace }) {
       >
         {t("governanceNotRecorded")}
       </Badge>
-      <div className="text-[11px] text-dim md:truncate" data-issue="3933">
+      <div className="text-sm text-dim md:truncate" data-issue="3933">
         {t("retentionNotRecorded")}
       </div>
-      <div className={`${mono} text-[11px] text-dim md:truncate`}>
+      <div className={`${mono} text-sm text-dim md:truncate`}>
         {t("namespace", { namespace: workspace.namespace })}
       </div>
     </>
@@ -322,7 +322,7 @@ export function WorkspacesTab({
           <h2 id="org-workspaces" className={panelTitle}>
             {t("title")}
           </h2>
-          <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-dim">
+          <div className="flex min-w-0 items-center gap-1.5 text-sm text-dim">
             <span>{t("orgId")}</span>
             <CopyId value={workspaces.orgId} label={t("copyOrgId")} />
           </div>

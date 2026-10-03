@@ -38,7 +38,7 @@ export function DataPlaneModes({
             onClick={() => {
               setShown(mode);
             }}
-            className="min-h-8 rounded-md px-3 text-[13px] text-muted-foreground aria-pressed:bg-card aria-pressed:text-foreground aria-pressed:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11"
+            className="min-h-8 rounded-md px-3 text-sm text-muted-foreground aria-pressed:bg-card aria-pressed:text-foreground aria-pressed:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11"
           >
             {t(`modes.${mode}`)}
             {mode === current ? ` · ${t("current")}` : null}
@@ -48,7 +48,7 @@ export function DataPlaneModes({
       {shown === current ? null : (
         <p
           data-plane-preview={shown}
-          className="border-l-2 border-gold pl-3 text-[12.5px] text-muted-foreground"
+          className="border-l-2 border-gold pl-3 text-sm text-muted-foreground"
         >
           {t("preview", {
             mode: t(`modes.${current}`),

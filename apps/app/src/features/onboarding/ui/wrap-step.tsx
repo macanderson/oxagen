@@ -147,7 +147,7 @@ function TabList<T extends string>({
 }
 
 const segmented =
-  "flex rounded-lg border border-border bg-hl p-0.5 text-[12.5px] [&>button]:rounded-md [&>button]:px-2 [&>button]:text-muted-foreground [&>button[aria-selected=true]]:bg-card [&>button[aria-selected=true]]:text-foreground [&>button[aria-selected=true]]:shadow-sm";
+  "flex rounded-lg border border-border bg-hl p-0.5 text-sm [&>button]:rounded-md [&>button]:px-2 [&>button]:text-muted-foreground [&>button[aria-selected=true]]:bg-card [&>button[aria-selected=true]]:text-foreground [&>button[aria-selected=true]]:shadow-sm";
 
 function Ladder({ observe }: { observe: boolean }) {
   const t = useTranslations("onboarding.welcome.wrap.ladder");
@@ -159,7 +159,7 @@ function Ladder({ observe }: { observe: boolean }) {
   return (
     <dl
       data-testid="tier-ladder"
-      className="overflow-hidden rounded-lg border border-border text-[13px]"
+      className="overflow-hidden rounded-lg border border-border text-sm"
     >
       {rows.map(([label, tier, orObserve]) => (
         <div
@@ -201,7 +201,7 @@ function TokenBox({
   return (
     <div
       data-testid="enrollment-token"
-      className="rounded-lg border border-dashed border-border bg-hl px-3 py-2.5 font-mono text-[11.5px] leading-relaxed"
+      className="rounded-lg border border-dashed border-border bg-hl px-3 py-2.5 font-mono text-sm leading-relaxed"
     >
       <span className="text-foreground">{t("tokenEmbedded")}</span>
       <br />
@@ -358,7 +358,7 @@ export function WrapStep({
     agent === null ? (
       <div
         data-testid="wrap-no-agent"
-        className="flex flex-col gap-2 rounded-lg border border-dashed border-border px-3 py-2.5 text-[13px]"
+        className="flex flex-col gap-2 rounded-lg border border-dashed border-border px-3 py-2.5 text-sm"
       >
         <p className="font-semibold text-foreground">{t("noAgentTitle")}</p>
         <p className="text-muted-foreground">{t("noAgentBody")}</p>
@@ -374,7 +374,7 @@ export function WrapStep({
 
   const downloadColumn = (profile: boolean) => (
     <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-border p-3.5">
-      <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      <p className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         {t("download")}
       </p>
       <TabList
@@ -398,7 +398,7 @@ export function WrapStep({
       </button>
       <p
         data-testid="wrap-package-not-backed"
-        className="font-mono text-[11px] leading-relaxed text-muted-foreground"
+        className="font-mono text-sm leading-relaxed text-muted-foreground"
       >
         {t("packageNotBacked")}
         {profile ? (
@@ -424,7 +424,7 @@ export function WrapStep({
           <span className="text-xs text-muted-foreground">{t("orRun")}</span>
           <pre
             data-testid="wrap-enroll-command"
-            className="overflow-x-auto rounded-lg border border-border bg-hl px-3 py-2.5 font-mono text-[12px]"
+            className="overflow-x-auto rounded-lg border border-border bg-hl px-3 py-2.5 font-mono text-sm"
           >
             {command}
           </pre>
@@ -438,17 +438,17 @@ export function WrapStep({
     body = (
       <>
         <div className="flex min-w-0 flex-col gap-3">
-          <h3 className="flex items-center gap-2 text-[15px] font-semibold">
+          <h3 className="flex items-center gap-2 text-base font-semibold">
             {t("tabs.cc.name")}{" "}
             <Badge tone="allowed" dot={false}>
               {t("recommended")}
             </Badge>
           </h3>
-          <p className="text-[13px] leading-relaxed text-muted-foreground">
+          <p className="text-sm leading-relaxed text-muted-foreground">
             {t.rich("ccBody", { mono: monoChunk })}
           </p>
           <Ladder observe={false} />
-          <p className="text-[13px] leading-relaxed text-muted-foreground">
+          <p className="text-sm leading-relaxed text-muted-foreground">
             {t("ccTier")}
           </p>
         </div>
@@ -459,12 +459,12 @@ export function WrapStep({
     body = (
       <>
         <div className="flex min-w-0 flex-col gap-3">
-          <h3 className="text-[15px] font-semibold">{t("tabs.codex.name")}</h3>
-          <p className="text-[13px] leading-relaxed text-muted-foreground">
+          <h3 className="text-base font-semibold">{t("tabs.codex.name")}</h3>
+          <p className="text-sm leading-relaxed text-muted-foreground">
             {t.rich("codexBody", { mono: monoChunk })}
           </p>
           <Ladder observe />
-          <p className="text-[13px] leading-relaxed text-muted-foreground">
+          <p className="text-sm leading-relaxed text-muted-foreground">
             {t("codexTier")}
           </p>
         </div>
@@ -476,20 +476,20 @@ export function WrapStep({
     body = (
       <>
         <div className="flex min-w-0 flex-col gap-3">
-          <h3 className="text-[15px] font-semibold">{t("tabs.sdk.name")}</h3>
-          <p className="text-[13px] leading-relaxed text-muted-foreground">
+          <h3 className="text-base font-semibold">{t("tabs.sdk.name")}</h3>
+          <p className="text-sm leading-relaxed text-muted-foreground">
             {t.rich("sdkBody", { mono: monoChunk })}
           </p>
           <Ladder observe={false} />
         </div>
         <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-border p-3.5">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <p className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             {t("credential")}
           </p>
           {noAgent ?? (
             <div
               data-testid="wrap-credential"
-              className="rounded-lg border border-dashed border-border bg-hl px-3 py-2.5 font-mono text-[11.5px] leading-relaxed"
+              className="rounded-lg border border-dashed border-border bg-hl px-3 py-2.5 font-mono text-sm leading-relaxed"
             >
               {t("credentialIssued")}
               <br />
@@ -507,7 +507,7 @@ export function WrapStep({
           <p className="text-xs text-muted-foreground">
             {t.rich("credentialBody", { mono: monoChunk })}
           </p>
-          <pre className="overflow-x-auto rounded-lg border border-border bg-hl px-3 py-2.5 font-mono text-[12px]">
+          <pre className="overflow-x-auto rounded-lg border border-border bg-hl px-3 py-2.5 font-mono text-sm">
             <span className="text-muted-foreground">$ </span>
             {INSTALL[lang]}
           </pre>
@@ -533,7 +533,7 @@ export function WrapStep({
           </div>
           <pre
             data-testid="wrap-five-lines"
-            className="overflow-x-auto rounded-lg border border-border bg-hl px-3 py-2.5 font-mono text-[12px]"
+            className="overflow-x-auto rounded-lg border border-border bg-hl px-3 py-2.5 font-mono text-sm"
           >
             {lines}
           </pre>
@@ -560,10 +560,10 @@ export function WrapStep({
           onChange={setTab}
           render={(item) => (
             <span className="flex flex-col items-start gap-0.5 px-3.5 py-3 text-left">
-              <span className="text-[14px] font-semibold text-foreground">
+              <span className="text-sm font-semibold text-foreground">
                 {t(`tabs.${item}.name`)}
               </span>
-              <span className="font-mono text-[11px] text-muted-foreground">
+              <span className="font-mono text-sm text-muted-foreground">
                 {t(`tabs.${item}.sub`)}
               </span>
             </span>

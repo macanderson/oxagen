@@ -29,7 +29,7 @@ import type { RepositoriesFailure } from "./failure";
 import { REPOSITORY_GAPS } from "./gaps";
 
 const inline = (chunks: ReactNode) => (
-  <code className="rounded bg-hl px-1 font-mono text-[0.92em] text-foreground">
+  <code className="rounded bg-hl px-1 font-mono text-foreground">
     {chunks}
   </code>
 );
@@ -78,7 +78,7 @@ function StateWrap({
       >
         {title}
       </h2>
-      <p className="mx-auto mb-4 max-w-[52ch] text-[13px] leading-relaxed text-muted-foreground">
+      <p className="mx-auto mb-4 max-w-[52ch] text-sm leading-relaxed text-muted-foreground">
         {children}
       </p>
       <div className="flex flex-wrap justify-center gap-[9px] max-sm:w-full max-sm:flex-col">
@@ -175,7 +175,7 @@ export function ErrorBody({
           </p>
           <p
             data-testid="repositories-error-trace"
-            className="mt-4 font-mono text-[11.5px] text-dim"
+            className="mt-4 font-mono text-sm text-dim"
           >
             {t("trace", { at: readAt })}
           </p>
@@ -241,7 +241,7 @@ export function DeniedBody({
           >
             {t("requestNotRecorded", { needed })}
           </p>
-          <dl className="mt-5 grid max-w-[420px] grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-left text-[13px] [&>dd]:text-foreground [&>dt]:text-muted-foreground">
+          <dl className="mt-5 grid max-w-[420px] grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-left text-sm [&>dd]:text-foreground [&>dt]:text-muted-foreground">
             <dt>{t("signedInTerm")}</dt>
             <dd data-testid="repositories-denied-roles">
               {t.rich("signedIn", {

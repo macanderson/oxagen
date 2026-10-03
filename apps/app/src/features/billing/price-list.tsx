@@ -35,12 +35,12 @@ function Price({
     <tr data-price={name}>
       <th
         scope="row"
-        className={`${cell} w-[42%] text-left align-top text-[12.5px] font-normal`}
+        className={`${cell} w-[42%] text-left align-top text-sm font-normal`}
       >
         {term}
       </th>
       <td
-        className={`${cell} text-right align-top font-mono text-[11.5px] tabular-nums text-muted-foreground`}
+        className={`${cell} text-right align-top font-mono text-sm tabular-nums text-muted-foreground`}
       >
         {children}
       </td>
@@ -66,7 +66,7 @@ export function PriceList({
     <Section id="billing-price-list" title={title} flush>
       <table
         aria-label={title}
-        className="w-full table-fixed border-collapse text-[13px]"
+        className="w-full table-fixed border-collapse text-sm"
       >
         <tbody className="divide-y divide-border">
           <Price name="free" term={t("priceList.free")}>

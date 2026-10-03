@@ -408,7 +408,7 @@ export function AssistantChartBlock({
     return (
       <div data-testid="assistant-chart-unreadable" className="grid gap-1.5">
         <p className="text-muted-foreground">{t("unreadable")}</p>
-        <pre className="max-h-48 overflow-auto rounded-lg bg-muted/40 p-2 font-mono text-[12px]">
+        <pre className="max-h-48 overflow-auto rounded-lg bg-muted/40 p-2 font-mono text-sm">
           <code>{code}</code>
         </pre>
       </div>
@@ -417,10 +417,10 @@ export function AssistantChartBlock({
   return (
     <figure
       data-testid="assistant-chart"
-      className="@container my-3 grid min-w-0 gap-3 rounded-xl border border-border p-3 text-[12.5px]"
+      className="@container my-3 grid min-w-0 gap-3 rounded-xl border border-border p-3 text-sm"
     >
       {spec.title ? (
-        <figcaption className="text-[13px] font-medium text-foreground">
+        <figcaption className="text-sm font-medium text-foreground">
           {spec.title}
         </figcaption>
       ) : null}
@@ -433,11 +433,11 @@ export function AssistantChartBlock({
               className="grid content-start gap-0.5 rounded-lg bg-muted/40 px-3 py-2"
             >
               <dt className="text-muted-foreground">{tile.label}</dt>
-              <dd className="text-[17px] leading-6 text-foreground">
+              <dd className="text-lg leading-6 text-foreground">
                 <Figure value={tile.value} format={tile.format} />
               </dd>
               {tile.note ? (
-                <dd className="text-[11.5px] text-muted-foreground">
+                <dd className="text-sm text-muted-foreground">
                   {tile.note}
                 </dd>
               ) : null}
@@ -453,7 +453,7 @@ export function AssistantChartBlock({
           ))}
         </div>
       ) : null}
-      <p className="text-[11.5px] text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         {t("source", { source: spec.source })}
       </p>
     </figure>

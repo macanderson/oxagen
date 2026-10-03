@@ -575,9 +575,51 @@ describe("listChangedSince", () => {
     serve(on("GET", "/user/repos", jsonResponse([{ full_name: "acme/web", has_issues: true }])));
     const error = await failure(githubCollector.listChangedSince(null, conn, { repos: ["acme/web", "acme/billing"] }));
     expect(error.message).toBe(
-      "The GitHub connection cannot read acme/billing. Give the Oxagen GitHub App access to each repository the collector names, or reconnect GitHub.",
+      "The GitHub connection cannot read acme/billing. Give the Oxagen GitHub App access to acme/billing.",
     );
     expect(requests()).toEqual(["GET /user/repos"]);
+  });
+
+  // The GTM workspace's collector failed this way: its connection held the
+  // installation on a person's account after the repositories moved to an
+  // organization. Granting access cannot fix that, so the message must not say so.
+  it("names the account it reaches when it reaches nothing the scope's owner holds (negative)", async () => {
+    serve(
+      on("GET", "/user/repos", jsonResponse([
+        { full_name: "Mac/arena", has_issues: true },
+        { full_name: "mac/harness", has_issues: true },
+      ])),
+    );
+    const error = await failure(githubCollector.listChangedSince(null, conn, { repos: ["acme/web", "Acme/api"] }));
+    expect(error.message).toBe(
+      "The GitHub connection cannot read acme/web, Acme/api. It reaches repositories owned by Mac only. " +
+        "Attach the Oxagen GitHub App installation on acme to this workspace, or install the App on acme first.",
+    );
+    expect(error.message).not.toContain("Give the Oxagen GitHub App access");
+  });
+
+  it("counts the accounts past the third it reaches", async () => {
+    const owners = ["a", "b", "c", "d", "e"];
+    serve(on("GET", "/user/repos", jsonResponse(owners.map((owner) => ({ full_name: `${owner}/repo`, has_issues: true })))));
+    const error = await failure(githubCollector.listChangedSince(null, conn, { repos: ["acme/web"] }));
+    expect(error.message).toContain("It reaches repositories owned by a, b, c and 2 other accounts only.");
+  });
+
+  it("says when the connection reaches no repositories at all", async () => {
+    serve(on("GET", "/user/repos", jsonResponse([])));
+    const error = await failure(githubCollector.listChangedSince(null, conn, { repos: ["acme/web"] }));
+    expect(error.message).toBe(
+      "The GitHub connection cannot read acme/web. It reaches no repositories. " +
+        "Attach the Oxagen GitHub App installation on acme to this workspace, or install the App on acme first.",
+    );
+  });
+
+  it("says issues are off rather than asking for access the connection already has (negative)", async () => {
+    serve(on("GET", "/user/repos", jsonResponse([{ full_name: "acme/web", has_issues: false }])));
+    const error = await failure(githubCollector.listChangedSince(null, conn, { repos: ["acme/web"] }));
+    expect(error.message).toBe(
+      "The GitHub connection cannot read acme/web. Issues are turned off on acme/web. Turn them on in the repository settings on GitHub.",
+    );
   });
 
   beforeEach(() => {

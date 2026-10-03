@@ -313,7 +313,7 @@ function CommandPalette({
                       )}
                     </span>
                     {"shortcut" in c && c.shortcut !== undefined ? (
-                      <kbd className="flex-none font-mono text-[11px] text-muted-foreground">
+                      <kbd className="flex-none font-mono text-sm text-muted-foreground">
                         {t("commands.shortcut", { n: c.shortcut })}
                       </kbd>
                     ) : null}
@@ -344,7 +344,7 @@ function CommandPalette({
           {t("commands.search.failed")}
         </p>
       ) : null}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-4 py-2 text-sm text-muted-foreground">
         <span>
           <kbd className="font-mono">↑↓</kbd> {t("commands.footer.move")}
         </span>

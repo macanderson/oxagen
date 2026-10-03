@@ -143,7 +143,7 @@ export function CredentialForm({
             {KINDS.map((option) => (
               <label
                 key={option}
-                className="flex items-center gap-1.5 text-[13px] text-foreground"
+                className="flex items-center gap-1.5 text-sm text-foreground"
               >
                 <input
                   type="radio"
@@ -218,7 +218,7 @@ export function CredentialForm({
         <p
           role="status"
           data-testid="studio-credential-saved"
-          className="text-[13px] text-foreground"
+          className="text-sm text-foreground"
         >
           {t("saved", { reference: outcome.reference })}
         </p>

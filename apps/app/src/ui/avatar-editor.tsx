@@ -360,7 +360,7 @@ function AvatarEditor({
               shape={shape}
             />
           </div>
-          <p className="break-words text-center font-mono text-[10.5px] leading-snug text-muted-foreground">
+          <p className="break-words text-center font-mono text-sm leading-snug text-muted-foreground">
             {describe}
           </p>
         </div>

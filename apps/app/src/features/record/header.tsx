@@ -31,7 +31,7 @@ import { KindBadge, KindTile } from "./kind";
 
 /** `.btn.danger`: the red outline a destructive action takes. */
 export const buttonDanger =
-  "inline-flex min-h-8 max-md:min-h-11 items-center justify-center gap-1.5 rounded-[9px] border border-error/45 bg-card px-[13px] py-1.5 text-[13px] font-medium text-error-ink transition-colors hover:bg-error/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45";
+  "inline-flex min-h-8 max-md:min-h-11 items-center justify-center gap-1.5 rounded-[9px] border border-error/45 bg-card px-[13px] py-1.5 text-sm font-medium text-error-ink transition-colors hover:bg-error/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45";
 
 const code = (chunks: ReactNode) => <span className={mono}>{chunks}</span>;
 
@@ -39,7 +39,7 @@ const code = (chunks: ReactNode) => <span className={mono}>{chunks}</span>;
 function Property({ name, children }: { name: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <dt className="text-[11.5px] text-muted-foreground">{name}</dt>
+      <dt className="text-sm text-muted-foreground">{name}</dt>
       <dd className="flex min-h-6 items-center">{children}</dd>
     </div>
   );
@@ -84,13 +84,13 @@ export function Header({
         <div className="flex items-start gap-3">
           {record.kind === null ? null : <KindTile kind={record.kind} />}
           <div className="min-w-0">
-            <h1 className="min-w-0 max-w-[62ch] text-lg font-semibold leading-[1.35] text-foreground md:text-[21px]">
+            <h1 className="min-w-0 max-w-[62ch] text-lg font-semibold leading-[1.35] text-foreground md:text-2xl">
               {label}
             </h1>
             <p
               data-testid="record-slug"
               title={t("slugTitle")}
-              className={`${mono} mt-0.5 break-all text-[12.5px] text-muted-foreground`}
+              className={`${mono} mt-0.5 break-all text-sm text-muted-foreground`}
             >
               {record.lineage}
             </p>
@@ -113,7 +113,7 @@ export function Header({
             {record.force === null ? (
               <span
                 data-state="not-recorded"
-                className="text-[13px] text-muted-foreground"
+                className="text-sm text-muted-foreground"
               >
                 {t("notRecorded")}
               </span>
@@ -158,7 +158,7 @@ export function Header({
           </Property>
           {record.version === null ? null : (
             <Property name={t("props.version")}>
-              <span data-term="version" className={`${mono} text-[13px]`}>
+              <span data-term="version" className={`${mono} text-sm`}>
                 {t("versionValue", { version: record.version })}
               </span>
             </Property>
@@ -176,7 +176,7 @@ export function Header({
             request will merge. */}
         <p
           data-testid="record-in-force"
-          className="mt-2.5 max-w-[70ch] text-[13px] text-muted-foreground"
+          className="mt-2.5 max-w-[70ch] text-sm text-muted-foreground"
         >
           {commit === null
             ? t("inForceNoCommit", { kindLine })

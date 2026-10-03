@@ -168,7 +168,7 @@ function Owner({ row }: { row: AgentRow }) {
 
 function Sub({ children }: { children: ReactNode }) {
   return (
-    <span className="block font-mono text-[10px] text-muted-foreground md:truncate">
+    <span className="block font-mono text-sm text-muted-foreground md:truncate">
       {children}
     </span>
   );
@@ -328,10 +328,10 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
                 {row.runtime.name}
               </span>
             )}
-            <span className={`${mono} block text-[11.5px] md:truncate`}>
+            <span className={`${mono} block text-sm md:truncate`}>
               {row.host ?? t("list.cells.none")}
             </span>
-            <span className="block text-[10px] text-muted-foreground md:truncate">
+            <span className="block text-sm text-muted-foreground md:truncate">
               {/* With no host there is no runtime to have a kind, so the
                   line is the tier alone, as the design draws it. */}
               {row.host === null ? null : (
@@ -354,7 +354,7 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
         label: t("list.columns.principal"),
         sort: (row) => row.principalId,
         render: (row) => (
-          <span className={`${mono} text-[11px] text-muted-foreground`}>
+          <span className={`${mono} text-sm text-muted-foreground`}>
             {row.principalId ?? t("list.cells.principalPending")}
           </span>
         ),
@@ -758,7 +758,7 @@ export function AgentsTable({
         <table
           aria-label={t("list.tableLabel", { workspace })}
           data-column-set={set}
-          className="w-full min-w-[560px] border-collapse text-[13px]"
+          className="w-full min-w-[560px] border-collapse text-sm"
         >
           <thead>
             <tr className="border-b border-border">
@@ -915,7 +915,7 @@ export function AgentsTable({
       )}
 
       <div className="border-t border-border px-4 py-3.5">
-        <p className="border-l-2 border-gold pl-3 text-[12.5px] text-muted-foreground">
+        <p className="border-l-2 border-gold pl-3 text-sm text-muted-foreground">
           {t("list.footer")}
         </p>
       </div>

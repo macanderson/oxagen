@@ -50,7 +50,7 @@ import { useNavigate } from "@/ui/navigation";
 const CLASSES = ["OBSERVATION", "RULE", "FACT"] as const;
 
 const note =
-  "border-l-2 border-gold py-0.5 pl-3 text-[12.5px] text-muted-foreground";
+  "border-l-2 border-gold py-0.5 pl-3 text-sm text-muted-foreground";
 const buttonDanger = `${buttonSecondary} border-error/40 text-error-ink hover:border-error`;
 
 /** The assembler's budget unit over the line a memory would be delivered as. */
@@ -156,7 +156,7 @@ function MemoryDialog({
         </>
       }
     >
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[13px]">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
         <dt className="text-muted-foreground">{t("dialog.class")}</dt>
         <dd data-term="class">
           <ClassBadge memoryClass={memory.memoryClass} />{" "}
@@ -169,7 +169,7 @@ function MemoryDialog({
           <NotRecordedCell gap={STEERING_GAPS.memory} />
         </dd>
         <dt className="text-muted-foreground">{t("dialog.origin")}</dt>
-        <dd className="font-mono text-[11.5px]" data-term="origin">
+        <dd className="font-mono text-sm" data-term="origin">
           {t("provenance", {
             ref: memory.publicRef,
             source: memory.source,
@@ -185,7 +185,7 @@ function MemoryDialog({
           {t("dialog.costValue", { count: formatCount(tokens, locale) })}
         </dd>
         <dt className="text-muted-foreground">{t("dialog.since")}</dt>
-        <dd className="font-mono text-[12px]" data-term="since">
+        <dd className="font-mono text-sm" data-term="since">
           {date(memory.createdAt)}
         </dd>
       </dl>
@@ -239,7 +239,7 @@ function ForgetDialog({
         </button>
       }
     >
-      <div className="flex flex-col gap-3 text-[13px]">
+      <div className="flex flex-col gap-3 text-sm">
         <p className={note}>{t("forget.body")}</p>
         <p className={note}>{t("forget.other")}</p>
         {error === null ? null : (
@@ -273,7 +273,7 @@ export function MemoryShelfBody({
   const selected =
     open === null ? null : (memories.find((m) => m.ref === open.ref) ?? null);
   const notRecorded = (
-    <span className="text-[15px] font-medium text-muted-foreground">
+    <span className="text-base font-medium text-muted-foreground">
       {t("notRecorded")}
     </span>
   );
@@ -305,7 +305,7 @@ export function MemoryShelfBody({
           testId="tile-by-class"
           term={t("tiles.byClass")}
           value={
-            <span className="block pt-1.5 text-[15px] font-bold">
+            <span className="block pt-1.5 text-base font-bold">
               {strip.byClass.map(([cls, count], index) => (
                 <span key={cls} data-class-count={cls}>
                   {index === 0 ? null : " · "}
@@ -324,12 +324,12 @@ export function MemoryShelfBody({
             <b className="font-semibold text-foreground">{chunks}</b>
           ),
           code: (chunks) => (
-            <code className="font-mono text-[12px]">{chunks}</code>
+            <code className="font-mono text-sm">{chunks}</code>
           ),
         })}
       </p>
       {forgotten === null ? null : (
-        <p role="status" className="text-[13px] text-foreground">
+        <p role="status" className="text-sm text-foreground">
           {t("forgotten", { ref: forgotten })}
         </p>
       )}
@@ -380,7 +380,7 @@ export function MemoryShelfBody({
                 >
                   {memory.body}
                 </button>
-                <span className="mt-0.5 block font-mono text-[11px] text-dim md:truncate">
+                <span className="mt-0.5 block font-mono text-sm text-dim md:truncate">
                   {t("provenance", {
                     ref: memory.publicRef,
                     source: memory.source,
@@ -420,12 +420,12 @@ export function MemoryShelfBody({
           >
             {t("compiler")}
           </SafeLink>
-          <span className="flex-1 text-[12px]">{t("compilerNote")}</span>
+          <span className="flex-1 text-sm">{t("compilerNote")}</span>
         </div>
         {memories.length < total ? (
           <p
             data-testid="memory-truncated"
-            className="border-t border-border px-4 py-2.5 text-[12px] text-muted-foreground"
+            className="border-t border-border px-4 py-2.5 text-sm text-muted-foreground"
           >
             {t("truncated", {
               read: formatCount(memories.length, locale),

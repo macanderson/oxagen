@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { github } from "../github/index";
+import { changeEventKind } from "../../sync/change-event";
 import type { AuthCredential, RawRecord } from "../types";
 
 const bearer: AuthCredential = { scheme: "bearer_token", token: "gh-token" };
@@ -15,6 +16,33 @@ function jsonResponse(body: unknown, ok = true, status = 200) {
     status,
     json: () => Promise.resolve(body),
   } as unknown as Response;
+}
+
+/**
+ * Answer a repository read (`/repos/<owner>/<repo>`) with `defaultBranch`,
+ * and every list read with `rows`.
+ */
+function repoAndList(defaultBranch: string, rows: unknown[] = []) {
+  return (url: string) =>
+    Promise.resolve(
+      /\/repos\/[^/]+\/[^/?]+$/.test(url)
+        ? jsonResponse({ id: 1, default_branch: defaultBranch })
+        : jsonResponse(rows),
+    );
+}
+
+/** One commit as GitHub's list-commits endpoint returns it. */
+function restCommit(sha: string, date = "2026-09-27T11:30:00Z") {
+  return {
+    sha,
+    html_url: `https://github.com/oxageninc/oxagen-platform/commit/${sha}`,
+    commit: {
+      message: "Add x\n\nBody",
+      author: { name: "Dev", email: "dev@example.com", date },
+      committer: { name: "Dev", email: "dev@example.com", date },
+    },
+    author: { login: "dev" },
+  };
 }
 
 async function collect(iter: AsyncIterable<RawRecord>): Promise<RawRecord[]> {
@@ -54,19 +82,20 @@ describe("github.poll — auth + request shape", () => {
   });
 
   it("passes the cursor as a `since` query param for commits", async () => {
-    fetchMock.mockResolvedValue(jsonResponse([]));
+    fetchMock.mockImplementation(repoAndList("main"));
     await collect(
       github.poll!(bearer, config, "commit", "2026-01-01T00:00:00.000Z"),
     );
-    const [url] = fetchMock.mock.calls[0] as [string];
-    expect(url).toContain("/commits?");
+    const url = fetchMock.mock.calls
+      .map((c) => c[0] as string)
+      .find((u) => u.includes("/commits?"));
     expect(url).toContain(
       `since=${encodeURIComponent("2026-01-01T00:00:00.000Z")}`,
     );
   });
 
   it("accepts owner/repo pairs from the repositories[] config shape", async () => {
-    fetchMock.mockResolvedValue(jsonResponse([]));
+    fetchMock.mockImplementation(repoAndList("main"));
     await collect(
       github.poll!(
         bearer,
@@ -214,6 +243,8 @@ describe("GitHub organization polling", () => {
   });
 
   it("reads beyond the first hundred records", async () => {
+    // A saved cursor older than every record: the first read after a
+    // connection reads one page, and any later read pages to the end.
     fetchMock
       .mockResolvedValueOnce(
         jsonResponse(
@@ -221,7 +252,9 @@ describe("GitHub organization polling", () => {
         ),
       )
       .mockResolvedValueOnce(jsonResponse([{ id: 101, number: 101 }]));
-    const rows = await collect(github.poll!(bearer, config, "issue", null));
+    const rows = await collect(
+      github.poll!(bearer, config, "issue", "2000-01-01T00:00:00Z"),
+    );
     expect(rows).toHaveLength(101);
     expect(fetchMock.mock.calls[1]?.[0]).toContain("&page=2");
   });
@@ -235,7 +268,12 @@ describe("GitHub organization polling", () => {
     const yielded: RawRecord[] = [];
     await expect(
       (async () => {
-        for await (const row of github.poll!(bearer, config, "issue", null))
+        for await (const row of github.poll!(
+          bearer,
+          config,
+          "issue",
+          "2000-01-01T00:00:00Z",
+        ))
           yielded.push(row);
       })(),
     ).rejects.toThrow("404");
@@ -313,5 +351,220 @@ describe("incremental GitHub pagination", () => {
       await collect(github.poll!(bearer, config, "issue", cursor)),
     ).toEqual([]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("github.poll — commits carry the default branch (#5263)", () => {
+  const cursor = "2026-09-27T00:00:00Z";
+
+  it("stamps every polled commit with the default branch GitHub reports", async () => {
+    // The stored config says main; the repository says trunk. The poll
+    // believes the repository.
+    fetchMock.mockImplementation(
+      repoAndList("trunk", [restCommit("a".repeat(40)), restCommit("b".repeat(40))]),
+    );
+    const rows = await collect(
+      github.poll!(bearer, { ...config, defaultBranch: "main" }, "commit", cursor),
+    );
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.raw).toMatchObject({ git_branch: "trunk" });
+      expect(
+        github.normalizeRecord("commit", row.raw).properties["git_branch"],
+      ).toBe("trunk");
+    }
+    // The list names the branch the poll stamps, so the two cannot disagree.
+    const list = fetchMock.mock.calls
+      .map((c) => c[0] as string)
+      .find((u) => u.includes("/commits?"));
+    expect(list).toContain("sha=trunk");
+  });
+
+  it("reads the default branch of each repository it polls", async () => {
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.endsWith("/repos/a/b")
+          ? jsonResponse({ default_branch: "main" })
+          : url.endsWith("/repos/c/d")
+            ? jsonResponse({ default_branch: "develop" })
+            : jsonResponse([restCommit(url.includes("/a/b/") ? "a".repeat(40) : "c".repeat(40))]),
+      ),
+    );
+    const rows = await collect(
+      github.poll!(
+        bearer,
+        { repositories: ["a/b", "c/d"], syncDepthDays: 90 },
+        "commit",
+        cursor,
+      ),
+    );
+    expect(rows.map((r) => (r.raw as { git_branch?: string }).git_branch)).toEqual([
+      "main",
+      "develop",
+    ]);
+  });
+
+  it("skips a repository GitHub no longer shows", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({}, false, 404));
+    expect(await collect(github.poll!(bearer, config, "commit", cursor))).toEqual(
+      [],
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails the poll rather than guess a branch when GitHub reports none", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 1 }));
+    await expect(
+      collect(github.poll!(bearer, config, "commit", cursor)),
+    ).rejects.toThrow(/no default branch/);
+  });
+
+  it("fails the poll when the repository read fails, so it retries", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({}, false, 502));
+    await expect(
+      collect(github.poll!(bearer, config, "commit", cursor)),
+    ).rejects.toThrow(/502/);
+  });
+});
+
+describe("github.poll — the first read after a connection", () => {
+  const page = (n: number) =>
+    Array.from({ length: n }, (_, i) =>
+      restCommit(i.toString(16).padStart(40, "0")),
+    );
+
+  it("reads one page of commits and marks each one backfill", async () => {
+    fetchMock.mockImplementation(repoAndList("main", page(100)));
+    const rows = await collect(github.poll!(bearer, config, "commit", null));
+    expect(rows).toHaveLength(100);
+    expect(rows.every((r) => r.backfill === true)).toBe(true);
+    const lists = fetchMock.mock.calls.filter((c) =>
+      (c[0] as string).includes("/commits?"),
+    );
+    expect(lists).toHaveLength(1);
+  });
+
+  it("pages past one hundred commits once a cursor exists, and marks none backfill", async () => {
+    let listed = 0;
+    fetchMock.mockImplementation((url: string) => {
+      if (!url.includes("/commits?"))
+        return Promise.resolve(jsonResponse({ default_branch: "main" }));
+      listed += 1;
+      return Promise.resolve(jsonResponse(listed === 1 ? page(100) : page(1)));
+    });
+    const rows = await collect(
+      github.poll!(bearer, config, "commit", "2026-09-01T00:00:00Z"),
+    );
+    expect(rows).toHaveLength(101);
+    expect(rows.some((r) => r.backfill !== undefined)).toBe(false);
+  });
+
+  it.each(["issue", "pull_request", "release"])(
+    "reads one page of %s records and marks each one backfill",
+    async (kind) => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(
+          Array.from({ length: 100 }, (_, i) => ({ id: i + 1, number: i + 1 })),
+        ),
+      );
+      const rows = await collect(github.poll!(bearer, config, kind, null));
+      expect(rows).toHaveLength(100);
+      expect(rows.every((r) => r.backfill === true)).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("fires no branch trigger for a commit it backfills", async () => {
+    fetchMock.mockImplementation(repoAndList("main", [restCommit("d".repeat(40))]));
+    const [first] = await collect(github.poll!(bearer, config, "commit", null));
+    const properties = github.normalizeRecord("commit", first!.raw).properties;
+    // The commit matches `git_branch = 'main'`, and its node is new to the
+    // graph, but a backfill write sends no change event to fire the trigger.
+    expect(properties["git_branch"]).toBe("main");
+    expect(
+      changeEventKind({
+        created: true,
+        backfill: first!.backfill === true,
+        properties,
+        previousProperties: null,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("a commit the webhook delivered and the poll reads again (#5263)", () => {
+  const sha = "1".repeat(40);
+  const url = `https://github.com/oxageninc/oxagen-platform/commit/${sha}`;
+  const pushOn = (ref: string) =>
+    github.parseWebhookEvent!("push", {
+      ref,
+      commits: [
+        {
+          id: sha,
+          message: "Add x\n\nBody",
+          url,
+          // The same instant as the REST date below, with an offset.
+          timestamp: "2026-09-27T07:30:00-04:00",
+          author: { name: "Dev", email: "dev@example.com", username: "dev" },
+          committer: { name: "Dev", email: "dev@example.com", username: "dev" },
+        },
+      ],
+    })[0]!.record;
+
+  async function pollOnce() {
+    fetchMock.mockImplementation(repoAndList("trunk", [restCommit(sha)]));
+    const [polled] = await collect(
+      github.poll!(bearer, config, "commit", "2026-09-27T00:00:00Z"),
+    );
+    return polled!;
+  }
+
+  it("gets the same properties from both paths, so the poll fires no trigger again", async () => {
+    const fromWebhook = github.normalizeRecord("commit", pushOn("refs/heads/trunk"));
+    const polled = await pollOnce();
+    const fromPoll = github.normalizeRecord("commit", polled.raw);
+    expect(fromPoll.externalId).toBe(fromWebhook.externalId);
+    expect(fromPoll.properties).toEqual(fromWebhook.properties);
+
+    // The webhook's write creates the node and fires the trigger once.
+    expect(
+      changeEventKind({
+        created: true,
+        backfill: false,
+        properties: fromWebhook.properties,
+        previousProperties: null,
+      }),
+    ).toBe("created");
+    // The poll's write finds the node holding the JSON the webhook stored.
+    const stored = JSON.parse(JSON.stringify(fromWebhook.properties)) as Record<
+      string,
+      unknown
+    >;
+    expect(
+      changeEventKind({
+        created: false,
+        backfill: polled.backfill === true,
+        properties: fromPoll.properties,
+        previousProperties: stored,
+      }),
+    ).toBeNull();
+  });
+
+  it("still fires when the poll finds the commit on the default branch after a push to another branch", async () => {
+    const fromWebhook = github.normalizeRecord(
+      "commit",
+      pushOn("refs/heads/feat/x"),
+    );
+    const fromPoll = github.normalizeRecord("commit", (await pollOnce()).raw);
+    expect(
+      changeEventKind({
+        created: false,
+        backfill: false,
+        properties: fromPoll.properties,
+        previousProperties: JSON.parse(
+          JSON.stringify(fromWebhook.properties),
+        ) as Record<string, unknown>,
+      }),
+    ).toBe("updated");
   });
 });

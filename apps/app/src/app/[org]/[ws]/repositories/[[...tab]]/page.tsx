@@ -50,7 +50,7 @@ export default async function RepositoriesPage({
         steering={
           <Suspense
             fallback={
-              <p role="status" className="text-[13px] text-muted-foreground">
+              <p role="status" className="text-sm text-muted-foreground">
                 {t("loading")}
               </p>
             }

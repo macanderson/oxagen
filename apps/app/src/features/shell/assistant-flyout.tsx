@@ -1251,7 +1251,7 @@ export function AssistantFlyout({
       <p
         role="status"
         data-testid="assistant-thread-status"
-        className="flex-none px-4 pb-2 text-[12px] text-muted-foreground empty:pb-0"
+        className="flex-none px-4 pb-2 text-sm text-muted-foreground empty:pb-0"
       >
         {status === "loading"
           ? t("thread.loading")
@@ -1306,10 +1306,10 @@ export function AssistantFlyout({
                         className="flex flex-col gap-2 py-6"
                         data-testid="assistant-intro"
                       >
-                        <h3 className="text-[13px] leading-5 font-semibold">
+                        <h3 className="text-sm leading-5 font-semibold">
                           {t("intro.title")}
                         </h3>
-                        <p className="text-[13px] leading-5 text-muted-foreground">
+                        <p className="text-sm leading-5 text-muted-foreground">
                           {t("intro.body")}
                         </p>
                         <AssistantSuggestions />
@@ -1324,7 +1324,7 @@ export function AssistantFlyout({
                     >
                       {entry.kind === "asked" ? (
                         <div className="ml-auto flex w-fit max-w-[85%] flex-col items-end gap-1">
-                          <p className="w-fit max-w-full rounded-lg bg-secondary px-3 py-2 text-[13px] leading-5 text-secondary-foreground">
+                          <p className="w-fit max-w-full rounded-lg bg-secondary px-3 py-2 text-sm leading-5 text-secondary-foreground">
                             {entry.text}
                           </p>
                           {entry.files === undefined ? null : (
@@ -1377,14 +1377,14 @@ export function AssistantFlyout({
                           {entry.stopped === true ? (
                             <p
                               data-testid="assistant-stopped"
-                              className="mt-1 text-[12px] text-muted-foreground"
+                              className="mt-1 text-sm text-muted-foreground"
                             >
                               {t("stopped")}
                             </p>
                           ) : null}
                           <p
                             data-testid="assistant-recorded-as"
-                            className="mt-1 font-mono text-[11px] text-muted-foreground"
+                            className="mt-1 font-mono text-sm text-muted-foreground"
                           >
                             {t("recordedAs")}{" "}
                             {org !== null && ws !== null ? (
@@ -1409,7 +1409,7 @@ export function AssistantFlyout({
                           {entry.parked.length === 0 ? null : (
                             <p
                               data-testid="assistant-parked"
-                              className="mt-1.5 rounded-md border border-border px-2 py-1.5 text-[12px] text-muted-foreground"
+                              className="mt-1.5 rounded-md border border-border px-2 py-1.5 text-sm text-muted-foreground"
                             >
                               {t("parked", { count: entry.parked.length })}
                             </p>
@@ -1454,7 +1454,7 @@ export function AssistantFlyout({
                           <p
                             role="alert"
                             data-testid={`assistant-${entry.code}`}
-                            className="flex items-start gap-2 text-[13px] leading-5 text-error-ink"
+                            className="flex items-start gap-2 text-sm leading-5 text-error-ink"
                           >
                             <WarningCircleIcon
                               aria-hidden="true"
@@ -1467,7 +1467,7 @@ export function AssistantFlyout({
                           {entry.detail === null ? null : (
                             <p
                               data-testid="assistant-refusal-code"
-                              className="mt-1 ml-6 font-mono text-[11px] text-muted-foreground"
+                              className="mt-1 ml-6 font-mono text-sm text-muted-foreground"
                             >
                               {entry.detail}
                             </p>
@@ -1480,7 +1480,7 @@ export function AssistantFlyout({
                               onClick={() => {
                                 void send(entry.question, { fromDraft: false });
                               }}
-                              className={`mt-1.5 ml-6 text-[12px] ${linkText} disabled:opacity-60`}
+                              className={`mt-1.5 ml-6 text-sm ${linkText} disabled:opacity-60`}
                             >
                               {t("retry")}
                             </button>
@@ -1577,7 +1577,7 @@ export function AssistantFlyout({
                       e.preventDefault();
                       e.currentTarget.form?.requestSubmit();
                     }}
-                    className="min-h-10 flex-1 resize-none bg-transparent text-[13px] leading-5 text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
+                    className="min-h-10 flex-1 resize-none bg-transparent text-sm leading-5 text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
                   />
                   <AssistantSendOrStop
                     stop={
@@ -1609,7 +1609,7 @@ export function AssistantFlyout({
                 <p
                   id={`${ASSISTANT_PANEL_ID}-send-hint`}
                   data-testid="assistant-send-hint"
-                  className="mt-1.5 px-1 text-[11px] text-muted-foreground"
+                  className="mt-1.5 px-1 text-sm text-muted-foreground"
                 >
                   {enterToSubmit
                     ? t("composer.sendHintEnter")
@@ -1619,7 +1619,7 @@ export function AssistantFlyout({
                   <p
                     role="alert"
                     data-testid="assistant-stop-failed"
-                    className="mt-2 text-[13px] leading-5 text-muted-foreground"
+                    className="mt-2 text-sm leading-5 text-muted-foreground"
                   >
                     {t("composer.stopFailed")}
                   </p>
@@ -1627,7 +1627,7 @@ export function AssistantFlyout({
                 {attachments.failed ? (
                   <p
                     data-testid="assistant-attachments-blocked"
-                    className="mt-2 text-[13px] leading-5 text-muted-foreground"
+                    className="mt-2 text-sm leading-5 text-muted-foreground"
                   >
                     {t("attachments.blocked")}
                   </p>
@@ -1635,7 +1635,7 @@ export function AssistantFlyout({
                 {thread.draftTooLong ? (
                   <p
                     role="alert"
-                    className="mt-2 text-[13px] leading-5 text-muted-foreground"
+                    className="mt-2 text-sm leading-5 text-muted-foreground"
                   >
                     {t("composer.draftTooLong")}
                   </p>
@@ -1644,7 +1644,7 @@ export function AssistantFlyout({
             ) : (
               <p
                 data-testid="assistant-needs-workspace"
-                className="flex items-start gap-2 text-[13px] text-muted-foreground"
+                className="flex items-start gap-2 text-sm text-muted-foreground"
               >
                 <StellaIcon className="mt-0.5 size-4 flex-none" />
                 <span>{t("needsWorkspace")}</span>

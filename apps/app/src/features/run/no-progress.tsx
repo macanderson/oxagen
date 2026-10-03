@@ -31,7 +31,7 @@ function HitLine({ hit }: { hit: RunNoProgressHit }) {
       data-testid="no-progress-hit"
       data-mode={hit.mode}
       data-outcome={hit.outcome}
-      className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-[13px]"
+      className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-sm"
     >
       <Badge
         tone={hit.outcome === "paused" ? "denied" : "quiet"}

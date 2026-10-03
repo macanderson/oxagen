@@ -82,7 +82,7 @@ function FileDiff({ file }: { file: SteeringPrDiff["files"][number] }) {
       </div>
       <table
         aria-label={t("fileLabel", { path: file.path })}
-        className={`${mono} w-full border-collapse text-[11.5px]`}
+        className={`${mono} w-full border-collapse text-sm`}
       >
         <tbody>
           {rows.map((row) =>

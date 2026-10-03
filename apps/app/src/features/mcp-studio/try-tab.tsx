@@ -247,7 +247,7 @@ export function TryTab({
           {live ? (
             <p
               data-testid="studio-try-live"
-              className="flex items-center gap-2 text-[12.5px] text-foreground"
+              className="flex items-center gap-2 text-sm text-foreground"
             >
               <Badge tone="denied">{t("liveBadge")}</Badge>
               {t("live")}
@@ -303,7 +303,7 @@ export function TryTab({
               {t("notBuilt")}
             </PendingNote>
           )}
-          <p className="text-[12.5px] text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t("credentialNote")}
           </p>
         </form>
@@ -366,7 +366,7 @@ export function TryTab({
                 <span
                   role="status"
                   data-testid="studio-try-saved"
-                  className="text-[12.5px] text-muted-foreground"
+                  className="text-sm text-muted-foreground"
                 >
                   {t("saved")}
                 </span>
@@ -386,7 +386,7 @@ export function TryTab({
           {saved.kind === "saved" && saved.stripped.length > 0 ? (
             <p
               data-testid="studio-try-stripped"
-              className="text-[12.5px] text-muted-foreground"
+              className="text-sm text-muted-foreground"
             >
               {t("stripped", {
                 count: saved.stripped.length,

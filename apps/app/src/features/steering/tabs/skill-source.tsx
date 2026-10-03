@@ -13,7 +13,7 @@ export function SkillSourceShelf({ skill }: { skill: string }) {
     <section
       data-testid="skill-source"
       data-skill={skill}
-      className={`${panel} ${panelBody} text-[13px] text-muted-foreground`}
+      className={`${panel} ${panelBody} text-sm text-muted-foreground`}
     >
       {t.rich("pending", {
         skill,

@@ -55,7 +55,7 @@ function PersonCell({ member }: { member: Member }) {
         <div className="font-semibold text-foreground md:truncate">
           {member.name ?? member.email}
         </div>
-        <div className={`${mono} text-[11px] text-dim md:truncate`}>
+        <div className={`${mono} text-sm text-dim md:truncate`}>
           {member.email}
         </div>
       </div>
@@ -75,7 +75,7 @@ function MemberFacts({ member }: { member: Member }) {
   const tRole = useTranslations("organization.roles");
   const term = "text-muted-foreground";
   const sectionTitle =
-    "mt-4 mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-dim";
+    "mt-4 mb-1.5 text-sm font-semibold uppercase tracking-[0.09em] text-dim";
   return (
     <div data-issue="3932">
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
@@ -99,7 +99,7 @@ function MemberFacts({ member }: { member: Member }) {
         <dd className={`${mono} select-all`}>{member.id}</dd>
       </dl>
       <h3 className={sectionTitle}>{t("perWorkspace")}</h3>
-      <table aria-label={t("perWorkspace")} className="w-full text-[13px]">
+      <table aria-label={t("perWorkspace")} className="w-full text-sm">
         <thead>
           <tr>
             <th scope="col" className={`${headCell} text-left`}>
@@ -170,7 +170,7 @@ export function PeopleTab({
     values: { status: "active" },
     cells: [
       <PersonCell key="person" member={member} />,
-      <span key="role" className={`${mono} text-[11.5px]`}>
+      <span key="role" className={`${mono} text-sm`}>
         {tRole(member.role)}
       </span>,
       <NotRecordedValue key="workspaces" />,
@@ -285,7 +285,7 @@ function RolesInUse({
           {t("manage")}
         </SafeLink>
       </div>
-      <table aria-label={t("tableLabel")} className="w-full text-[13px]">
+      <table aria-label={t("tableLabel")} className="w-full text-sm">
         <thead className="sr-only">
           <tr>
             <th scope="col">{t("role")}</th>
@@ -296,16 +296,16 @@ function RolesInUse({
         <tbody className="divide-y divide-border">
           {[...held.entries()].map(([role, count]) => (
             <tr key={role} data-role-in-use={role}>
-              <td className={`${cell} ${mono} text-[11.5px]`}>{tRole(role)}</td>
+              <td className={`${cell} ${mono} text-sm`}>{tRole(role)}</td>
               <td className={numericCell}>{count}</td>
-              <td className={`${cell} text-[11.5px] text-dim`}>
+              <td className={`${cell} text-sm text-dim`}>
                 {describe(role) ?? t("noDescription")}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <p className={`${panelBody} text-[11.5px] text-dim`}>
+      <p className={`${panelBody} text-sm text-dim`}>
         {t("footer", { agents: agentRoles })}
       </p>
     </section>
@@ -355,7 +355,7 @@ export function InvitationsTab({
         <span key="email" className={`${mono} text-xs`}>
           {invitation.email}
         </span>,
-        <span key="role" className={`${mono} text-[11.5px]`}>
+        <span key="role" className={`${mono} text-sm`}>
           {tRole(invitation.role)}
         </span>,
         <NotRecordedValue key="by" />,

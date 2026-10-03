@@ -63,7 +63,7 @@ export function FleetEmpty({
         // the sessions of the agent that already runs on it.
         <p
           data-testid="fleet-empty-enroll"
-          className="mx-auto mt-4 max-w-[52ch] text-[13px] text-muted-foreground"
+          className="mx-auto mt-4 max-w-[52ch] text-sm text-muted-foreground"
         >
           {t.rich("enroll", { code: codeTag })}
         </p>

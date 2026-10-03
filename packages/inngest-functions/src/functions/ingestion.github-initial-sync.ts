@@ -174,7 +174,10 @@ export const [ingestionGithubInitialSync] = createFunction(
         ? (repoMeta["default_branch"] as string)
         : "main";
 
-    // Helper: build an entity.received event for one raw GitHub record.
+    // Helper: build an entity.received event for one raw GitHub record. Every
+    // record this sync reads is history from before the connection, so each
+    // is marked backfill: the pipeline writes it and fires no trigger for it
+    // (#5263).
     const entityEvent = (sourceRecordType: string, payload: unknown) => ({
       name: "ingestion/entity.received" as const,
       data: {
@@ -184,6 +187,7 @@ export const [ingestionGithubInitialSync] = createFunction(
         connectorType: "github",
         sourceRecordType,
         payload,
+        backfill: true,
       },
     });
 
@@ -245,8 +249,8 @@ export const [ingestionGithubInitialSync] = createFunction(
     //            whole loop lives in one step.run so the `since` window and the
     //            accumulated pages are memoized together — a retry refetches at
     //            most 5 list pages, and replays reuse the same result. The
-    //            branch is injected so trigger conditions can match on
-    //            git_branch. ─────────────────────────────────────────────────
+    //            branch is injected as git_branch, the field a push delivery
+    //            and the poll also set. ─────────────────────────────────────
     const commitBackfill = await step.run("fetch-commits", async () => {
       const since = new Date(
         Date.now() - syncDepthDays * 24 * 60 * 60 * 1000,

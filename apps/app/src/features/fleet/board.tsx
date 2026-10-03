@@ -397,7 +397,7 @@ function ColumnPicker({
             <label
               key={column}
               data-touch-target=""
-              className="flex min-h-9 cursor-pointer items-center gap-2.5 rounded-lg px-2 text-[13px] hover:bg-hl max-md:min-h-11"
+              className="flex min-h-9 cursor-pointer items-center gap-2.5 rounded-lg px-2 text-sm hover:bg-hl max-md:min-h-11"
             >
               <input
                 type="checkbox"
@@ -480,13 +480,13 @@ function RunRowView({
               }}
               data-touch-target=""
               title={title ?? undefined}
-              className="block truncate text-[12.5px] text-foreground hover:underline max-md:leading-[44px]"
+              className="block truncate text-sm text-foreground hover:underline max-md:leading-[44px]"
             >
               {title ?? t("untitled")}
             </SafeLink>
             <span
               data-testid="row-id"
-              className={`${mono} block truncate text-[11px] text-dim`}
+              className={`${mono} block truncate text-sm text-dim`}
             >
               {run.id}
             </span>
@@ -546,7 +546,7 @@ function RunRowView({
         );
       case "pullRequests":
         return (
-          <td key={column} className={`${cell} text-[12px]`}>
+          <td key={column} className={`${cell} text-sm`}>
             <PullRequestsCell run={run} />
           </td>
         );
@@ -595,7 +595,7 @@ function RunRowView({
             ) : (
               <>
                 <Money value={cost.value} />
-                <span className="block text-[10px] text-muted-foreground md:truncate">
+                <span className="block text-sm text-muted-foreground md:truncate">
                   {cost.estimate ? (
                     // A running rollup, or before any rollup the agent's own
                     // figure, which Spend shown counts as an estimate too.
@@ -626,7 +626,7 @@ function RunRowView({
         return (
           <td
             key={column}
-            className={`${cell} whitespace-nowrap font-mono text-[11px] text-muted-foreground`}
+            className={`${cell} whitespace-nowrap font-mono text-sm text-muted-foreground`}
           >
             <Started at={run.startedAt} now={now} />
           </td>
@@ -969,7 +969,7 @@ function PauseDialog({
         <p
           role="status"
           data-testid="ledger-applied"
-          className="text-[12.5px] text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           {applied}
         </p>
@@ -987,17 +987,17 @@ function PauseDialog({
           ) : null}
           {ledger ? (
             <>
-              <p className="text-[12.5px] text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {command("ledgerPause.body")}
               </p>
-              <p className="text-[12.5px] text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {command("ledgerCancel.body")}
               </p>
             </>
           ) : (
-            <p className="text-[12.5px] text-muted-foreground">{t("body")}</p>
+            <p className="text-sm text-muted-foreground">{t("body")}</p>
           )}
-          <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-[7px] text-[12.5px]">
+          <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-[7px] text-sm">
             <dt className="text-dim">{t("run")}</dt>
             <dd className={mono}>{run.id}</dd>
             <dt className="text-dim">{t("position")}</dt>
@@ -1248,7 +1248,7 @@ export function FleetBoard({
             aria-labelledby="fleet-runs"
             aria-busy={reading}
             data-testid="runs-table"
-            className={`w-full min-w-[560px] border-collapse text-[13px] ${reading ? "opacity-60" : ""}`}
+            className={`w-full min-w-[560px] border-collapse text-sm ${reading ? "opacity-60" : ""}`}
           >
             <thead>
               <tr className="border-b border-border">
