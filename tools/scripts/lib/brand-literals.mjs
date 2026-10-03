@@ -83,8 +83,6 @@ export const GUARDED = [
  * @type {Readonly<Record<string, readonly { prop: string, values: readonly string[], why: string }[]>>}
  */
 export const KEEP = {
-  "apps/app/src/app/globals.css": [
-  ],
   "apps/docs/src/app/global.css": [
     {
       prop: "box-shadow",
