@@ -13,8 +13,8 @@
  * ## What counts as a lost runner
  *
  * A failed job whose last `##[error]` log line is the runner's shutdown or
- * lost-communication message, or whose check run carries that message as an
- * annotation. The job API cannot tell: the step that was running can read
+ * lost-communication message, or a failed pull of a service container's
+ * image, or whose check run carries that message as an annotation. The job API cannot tell: the step that was running can read
  * `success`, and the job has no annotation for a spot reclaim. Only the
  * last error line counts, so a test that prints the phrase and then fails on
  * its own is not mistaken for a loss. A trailing "The operation was
@@ -54,6 +54,12 @@ export const MAX_RUN_ATTEMPT = 3;
 const LOSS_MESSAGES = [
   /The runner has received a shutdown signal/,
   /lost communication with the server/,
+  // A service container's image pull, which runs before any step of the job.
+  // ECR Public throttles anonymous pulls, and on 2026-10-03 seven pull
+  // requests marked ready together failed unit and e2e jobs this way with
+  // "toomanyrequests: Rate exceeded". Nothing of the job ran, so a rerun is
+  // safe, and MAX_RUN_ATTEMPT still bounds it.
+  /Docker pull failed with exit code \d+/,
 ];
 
 /** Is this text the runner's own message that it stopped mid-job? */

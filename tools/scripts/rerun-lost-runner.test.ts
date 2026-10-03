@@ -29,6 +29,15 @@ const OWN_FAILURE_LOG = [
   "2026-10-02T16:13:02.0000000Z ##[error]Process completed with exit code 1.",
 ].join("\n");
 
+// The tail of e2e job 111154069277 on #5337: ECR Public refused the postgres
+// service container's image three times, before any step of the job ran.
+const IMAGE_PULL_LOG = [
+  "##[command]/usr/bin/docker pull public.ecr.aws/z5z6u7g2/mirror/postgres:16-alpine",
+  "Error response from daemon: toomanyrequests: Rate exceeded",
+  "##[error]Docker pull failed with exit code 1",
+  "##[group]Run ps -eo pid,pgid,sid,ppid,etime,args || ls -l /proc/[0-9]*/exe",
+].join("\n");
+
 const LOST_COMMUNICATION =
   "The self-hosted runner: oxagen-large-x64-i-0abc lost communication with the server. Verify the machine is running and has a healthy network connection. Anything in your workflow that terminates the runner process, starves it for CPU/Memory, or blocks its network access can cause this error.";
 
@@ -48,6 +57,12 @@ describe("isRunnerLossMessage", () => {
   it("knows the shutdown and lost-communication messages", () => {
     expect(isRunnerLossMessage(SPOT_RECLAIM_LOG.split("\n")[2])).toBe(true);
     expect(isRunnerLossMessage(LOST_COMMUNICATION)).toBe(true);
+  });
+
+  it("knows a service container's failed image pull", () => {
+    expect(
+      isRunnerLossMessage("##[error]Docker pull failed with exit code 1"),
+    ).toBe(true);
   });
 
   it("does not match an ordinary failure, or nothing", () => {
@@ -103,6 +118,10 @@ describe("lostRunner", () => {
 
   it("does not call a job that failed on its own a lost runner", () => {
     expect(lostRunner({ log: OWN_FAILURE_LOG })).toBe(false);
+  });
+
+  it("reruns a job whose service container image could not be pulled", () => {
+    expect(lostRunner({ log: IMAGE_PULL_LOG })).toBe(true);
   });
 
   it("does not trust the phrase when a later error ended the job", () => {
