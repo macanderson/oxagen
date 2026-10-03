@@ -8039,7 +8039,8 @@
         "schema": true,
         "api": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -8054,7 +8055,8 @@
         "schema": true,
         "api": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -8069,12 +8071,29 @@
         "schema": true,
         "api": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
       "name": "sync_work_collector",
       "file": "work.collector.sync.ts",
+      "domain": "work",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "list_work_collectors",
+      "file": "work.collectors.list.ts",
       "domain": "work",
       "mode": "sync",
       "surfaces": [
@@ -8086,12 +8105,13 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
-      "name": "list_work_collectors",
-      "file": "work.collectors.list.ts",
+      "name": "claim_work_criterion",
+      "file": "work.criterion.claim.ts",
       "domain": "work",
       "mode": "sync",
       "surfaces": [
@@ -8118,7 +8138,8 @@
         "schema": true,
         "api": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -8135,7 +8156,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -8166,7 +8188,8 @@
         "schema": true,
         "api": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -8197,7 +8220,8 @@
         "schema": true,
         "api": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -8212,7 +8236,8 @@
         "schema": true,
         "api": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -8227,7 +8252,8 @@
         "schema": true,
         "api": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -8272,7 +8298,8 @@
         "schema": true,
         "api": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -8287,7 +8314,8 @@
         "schema": true,
         "api": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -8302,7 +8330,8 @@
         "schema": true,
         "api": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -8335,7 +8364,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -8360,15 +8390,14 @@
       "domain": "work",
       "mode": "sync",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -8385,7 +8414,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {

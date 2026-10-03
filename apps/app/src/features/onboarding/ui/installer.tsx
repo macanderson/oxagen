@@ -141,7 +141,7 @@ export function InstallerScreens({
         <p className="text-sm leading-relaxed text-muted-foreground">
           {t.rich("downloadBody", { org, workspace, b: bold })}
         </p>
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm max-sm:grid-cols-1 max-sm:gap-y-0.5 max-sm:[&>dd]:mb-2">
+        <dl className="grid grid-cols-dl-max gap-x-4 gap-y-2 text-sm max-sm:grid-cols-1 max-sm:gap-y-0.5 max-sm:[&>dd]:mb-2">
           <dt className="text-muted-foreground">{t("facts.package")}</dt>
           <dd data-testid="installer-package">{notPublished}</dd>
           <dt className="text-muted-foreground">{t("facts.size")}</dt>
@@ -189,7 +189,7 @@ export function InstallerScreens({
           className="h-1.5 overflow-hidden rounded-full bg-hl"
         >
           <i
-            className="block h-full bg-accent-text transition-[width]"
+            className="block h-full bg-accent-text transition-all"
             style={{
               width: `${String(Math.round((done / STEPS.length) * 100))}%`,
             }}

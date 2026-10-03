@@ -1,4 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// The handler's role gate (#3458) runs for real against a role fixture, and
+// the default caller is an org Owner. The refusals are tested in
+// role-enforcement.member-grant.regression.test.ts.
+vi.mock("@oxagen/iam/org-role", async () =>
+  (await import("./test-utils/org-role-gate")).orgRoleModule(),
+);
 import { makeCTX } from "./test-utils/fixtures";
 
 const mocks = vi.hoisted(() => ({

@@ -24,7 +24,7 @@ export const workOrderSend = registerCapability({
     "Send a work item's approved brief to an agent you operate. The agent's runtime claims the work order before any run starts.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

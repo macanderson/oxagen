@@ -298,7 +298,7 @@ function CategoriesDialog() {
       testId="tools-categories"
     >
       <p className="text-sm text-foreground">{t("lead")}</p>
-      <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+      <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-rail">
         {(
           [
             "moves_money",

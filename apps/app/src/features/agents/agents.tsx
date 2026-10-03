@@ -294,7 +294,7 @@ function Denied({
             mono: (chunks) => <span className={mono}>{chunks}</span>,
           })}
         </span>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-left text-sm">
+        <dl className="grid grid-cols-dl gap-x-4 gap-y-1 text-left text-sm">
           {facts.map(([term, value]) => (
             <div key={term} className="contents">
               <dt>{term}</dt>

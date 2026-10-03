@@ -121,7 +121,7 @@ export function Facts({
   rows: readonly { term: string; value: ReactNode; testId: string }[];
 }) {
   return (
-    <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-[minmax(8rem,auto)_1fr]">
+    <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-form">
       {rows.map((row) => (
         <Fragment key={row.term}>
           <dt className="text-muted-foreground">{row.term}</dt>

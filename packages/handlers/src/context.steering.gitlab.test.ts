@@ -1000,6 +1000,56 @@ describe("the GitLab seam's merge-queue calls", () => {
     expect(api.rebases).toEqual([]);
   });
 
+  // #4504: GitLab's rebase takes no expected head, so before the fix a push
+  // between Oxagen's branch read and the rebase came back as the new head.
+  it("refuses head_moved when a push lands between the branch read and the rebase, and keeps the push", async () => {
+    const { api, seam, repo, head, mr } = await onBranch();
+    const main = api.commit("main", "z", "1");
+    api.onRebase = () => {
+      api.commit("b", "c", "pushed by the author");
+    };
+    await expect(
+      seam.updateBranch(repo, {
+        number: mr.number,
+        branch: "b",
+        expectedHead: head,
+        base: main,
+      }),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "head_moved",
+      message: expect.stringContaining("Someone pushed to b"),
+    });
+    expect(api.rebases).toEqual([mr.number]);
+    // GitLab rebased the push with the checked commit, and Oxagen left it.
+    const tip = api.branches.get("b")!;
+    expect(api.commits.get(tip)).toMatchObject({ message: "edit c" });
+    expect(Object.fromEntries(api.tree(tip))).toEqual({
+      a: "1",
+      c: "pushed by the author",
+      z: "1",
+    });
+  });
+
+  it("accepts a rebase of a branch with several commits, which GitLab replays one by one", async () => {
+    const { api, seam, repo, mr } = await onBranch();
+    const second = api.commit("b", "c", "2");
+    const main = api.commit("main", "z", "1");
+    const out = await seam.updateBranch(repo, {
+      number: mr.number,
+      branch: "b",
+      expectedHead: second,
+      base: main,
+    });
+    expect(out.headSha).toBe(api.branches.get("b"));
+    expect(api.range(main, out.headSha)).toHaveLength(2);
+    expect(Object.fromEntries(api.tree(out.headSha))).toEqual({
+      a: "1",
+      c: "2",
+      z: "1",
+    });
+  });
+
   it("refuses a rebase that conflicts as update_conflict with GitLab's reason", async () => {
     const { api, seam, repo, head, mr } = await onBranch();
     api.commit("main", "a", "2");

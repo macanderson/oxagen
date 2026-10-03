@@ -93,7 +93,7 @@ describe("work/intake-collect", () => {
   it("fetches each item in its own step, closes the delivery, and reports each change", async () => {
     runner.openDelivery.mockResolvedValue({ kind: "ready", collectorId: "col-1", refs: [{ providerId: "a" }, { providerId: "b" }] });
     runner.collectRef
-      .mockResolvedValueOnce({ publicId: "wi_a", change: "new", digest: "d1" })
+      .mockResolvedValueOnce({ publicId: "wi_a", change: "new", digest: "d1", revision: 1 })
       .mockResolvedValueOnce(null);
     const out = await job("work/intake-collect").handler({ event: { data: { ...SCOPE, inbound_event_id: "ie-1" } }, step });
 
@@ -105,7 +105,7 @@ describe("work/intake-collect", () => {
       {
         name: "work/item.received",
         id: "work-item-wi_a-new-d1",
-        data: { org_id: "org-1", workspace_id: "ws-1", item_id: "wi_a", change: "new" },
+        data: { org_id: "org-1", workspace_id: "ws-1", item_id: "wi_a", change: "new", revision: 1 },
       },
     ]);
   });
@@ -132,6 +132,27 @@ describe("work/intake-collect", () => {
       message: "work/intake-collect: the event has no workspace_id, so there is nothing to act on.",
     });
     await expect(handler({ event: { data: { ...SCOPE } }, step })).rejects.toMatchObject({ isNonRetriable: true });
+  });
+});
+
+describe("itemReceivedEvents", () => {
+  const scope = { orgId: "org-1", workspaceId: "ws-1" };
+
+  // The id dedupes a repeat of the same change, so the revision stays out of it.
+  it("puts the revision in the data and keeps it out of the id", () => {
+    const [event] = intake.itemReceivedEvents(scope, [{ publicId: "wi_a", change: "updated", digest: "d2", revision: 2 }]);
+    expect(event).toEqual({
+      name: "work/item.received",
+      id: "work-item-wi_a-updated-d2",
+      data: { org_id: "org-1", workspace_id: "ws-1", item_id: "wi_a", change: "updated", revision: 2 },
+    });
+  });
+
+  it("sends no revision for a change that names none", () => {
+    const [event] = intake.itemReceivedEvents(scope, [{ publicId: "wi_a", change: "new", digest: "d1" }]);
+    expect(event?.id).toBe("work-item-wi_a-new-d1");
+    expect(event?.data).toEqual({ org_id: "org-1", workspace_id: "ws-1", item_id: "wi_a", change: "new" });
+    expect(event?.data).not.toHaveProperty("revision");
   });
 });
 
@@ -271,13 +292,13 @@ describe("work/intake-triage", () => {
     expect(runner.triage).toHaveBeenNthCalledWith(2, { orgId: "org-1", workspaceId: "ws-1" }, "wi_a", true);
   });
 
-  it("records the failure on the item when the retries run out", async () => {
+  it("records the failure on the item when the retries run out, with the revision the event was about", async () => {
     const onFailure = job("work/intake-triage").config.onFailure as Handler;
     const out = await onFailure({
       event: {
         data: {
           error: { message: "The gateway refused the call" },
-          event: { data: { ...SCOPE, item_id: "wi_a", change: "new" } },
+          event: { data: { ...SCOPE, item_id: "wi_a", change: "new", revision: 2 } },
         },
       },
       step,
@@ -287,7 +308,34 @@ describe("work/intake-triage", () => {
       { orgId: "org-1", workspaceId: "ws-1" },
       "wi_a",
       "Triage could not run: The gateway refused the call. Retry triage, or set the priority yourself.",
+      { revision: 2, retry: false },
     );
+  });
+
+  it("says when the failed run was a person's retry", async () => {
+    const onFailure = job("work/intake-triage").config.onFailure as Handler;
+    await onFailure({ event: { data: { event: { data: { ...SCOPE, item_id: "wi_a", change: "retry", revision: 3 } } } }, step });
+    expect(runner.recordTriageFailure).toHaveBeenCalledWith(
+      { orgId: "org-1", workspaceId: "ws-1" },
+      "wi_a",
+      expect.any(String),
+      { revision: 3, retry: true },
+    );
+  });
+
+  // An event sent before events carried a revision, or one whose revision is
+  // not a whole number from 1, passes none.
+  it("passes no revision when the failed event carries none or a malformed one", async () => {
+    const onFailure = job("work/intake-triage").config.onFailure as Handler;
+    for (const revision of [undefined, 0, -1, 1.5, "2", null]) {
+      runner.recordTriageFailure.mockClear();
+      const data: Record<string, unknown> = { ...SCOPE, item_id: "wi_a", change: "new" };
+      if (revision !== undefined) data.revision = revision;
+      await onFailure({ event: { data: { event: { data } } }, step });
+      const run = runner.recordTriageFailure.mock.calls[0]?.[3] as Record<string, unknown> | undefined;
+      expect(run).toEqual({ retry: false });
+      expect(run).not.toHaveProperty("revision");
+    }
   });
 
   it("names an unknown error, and records nothing when the failed event names no item", async () => {
@@ -297,6 +345,7 @@ describe("work/intake-triage", () => {
       { orgId: "org-1", workspaceId: "ws-1" },
       "wi_b",
       "Triage could not run: an unknown error. Retry triage, or set the priority yourself.",
+      { retry: false },
     );
     expect(await onFailure({ event: { data: { event: { data: { org_id: "org-1" } } } }, step })).toEqual({ recorded: false });
     expect(await onFailure({ event: { data: {} }, step })).toEqual({ recorded: false });

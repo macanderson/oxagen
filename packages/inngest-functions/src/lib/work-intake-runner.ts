@@ -27,6 +27,16 @@ export interface WorkIntakeChange {
   change: "new" | "updated";
   /** A short digest of what changed, so a repeat sends the same event id. */
   digest: string;
+  /** The item revision the change left the item on. Absent when the store did not say. */
+  revision?: number;
+}
+
+/** What the event of a failed triage run said about the item. */
+export interface WorkTriageFailedRun {
+  /** The item revision the event was about. Absent on an event sent before events carried it. */
+  revision?: number;
+  /** True when a person asked for the run (retry_work_triage). */
+  retry: boolean;
 }
 
 /** What opening a stored delivery found. */
@@ -78,8 +88,13 @@ export interface WorkIntakeRunner {
   count(scope: WorkIntakeScope, collectorId: string): Promise<{ outcome: string } | null>;
   /** Draft one triage suggestion for a work item. A model or store error throws, so the step retries. */
   triage(scope: WorkIntakeScope, itemPublicId: string, retry: boolean): Promise<WorkTriageOutcome>;
-  /** Record that triage could not run at all, after its retries ran out. */
-  recordTriageFailure(scope: WorkIntakeScope, itemPublicId: string, reason: string): Promise<void>;
+  /**
+   * Record that triage could not run at all, after its retries ran out. It
+   * records nothing when the item moved past the run's revision, or when
+   * triage already recorded a result on the current revision and the run was
+   * not a person's retry.
+   */
+  recordTriageFailure(scope: WorkIntakeScope, itemPublicId: string, reason: string, run: WorkTriageFailedRun): Promise<void>;
   /** Delete stored deliveries and result rows past the retention window. Returns how many. */
   prune(now: Date): Promise<number>;
 }

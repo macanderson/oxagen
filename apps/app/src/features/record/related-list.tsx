@@ -90,7 +90,7 @@ function RelatedCard({ item }: { item: RelatedItem }) {
   return (
     <article
       data-kind={item.kind}
-      className={`grid grid-cols-[34px_minmax(0,1fr)] gap-3.5 border-b border-l-3 border-b-border px-4 py-3.5 max-sm:grid-cols-1 ${KIND_FACE[item.kind].rule}`}
+      className={`grid grid-cols-icon gap-3.5 border-b border-l-3 border-b-border px-4 py-3.5 max-sm:grid-cols-1 ${KIND_FACE[item.kind].rule}`}
     >
       <span className="max-sm:hidden">
         <KindTile kind={item.kind} size="sm" />

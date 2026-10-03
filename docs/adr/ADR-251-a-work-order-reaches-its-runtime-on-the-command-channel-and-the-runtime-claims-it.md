@@ -2,6 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-02
+- **Amended:** 2026-10-03, the agent claims a criterion with
+  `claim_work_criterion`.
 - **Owners:** work
 - **Related:** issue #5100 (lane P1-04), `agent-work-phase-1.html` in
   `oxageninc/roadmap` (Work lifecycle, Data contract, Delivery and review),
@@ -206,7 +208,8 @@ agent tools on work orders takes other names. `check:naming` gains the verbs
 - The `pull_request` webhook carries no delivery id here. Each fact's dedupe
   key names what it says, so a redelivery records nothing new.
 - A criterion claim from the agent has no capability yet. The review shows "no
-  claim" until one is added.
+  claim" until one is added. (2026-10-03: `claim_work_criterion` records the
+  claim now. See the amendment at the end.)
 
 ## Alternatives considered
 
@@ -223,3 +226,44 @@ agent tools on work orders takes other names. `check:naming` gains the verbs
   list opens Accept on ticks alone.
 - **Let an API key accept.** Rejected: it would let an agent accept its own
   work with its operator's key.
+
+## Amendment 2026-10-03: the agent claims a criterion
+
+`claim_work_criterion` records the agent's claim that it met one criterion of
+the brief. It writes one `criterion_claimed` fact with source `agent`, which
+ADR-244 lets the agent record and which never moves the item's state. A claim
+accepts nothing: a person still ticks every criterion and accepts the head.
+
+- **The claim is bound to the send's linked run.** Only the agent working the
+  send may claim, and the run linked to the send is that agent's run. No
+  context field names a Tacho-watched run by itself, so the handler takes the
+  narrowest one each caller has. An agent run's context names its run, and
+  that run must be the linked run. A host key names its host, and that host
+  must be the one that claimed the send. Ingest links only a run of the
+  claiming host, so the claim is filed as the linked run, and a host whose
+  send has no run yet is refused.
+- **A person and any other key are refused.** The handler refuses a signed-in
+  person and every API key that is not a host key before it reads anything. A
+  person reads the claim on the work item and decides. The key's creator must
+  still hold a role the contract grants, as for `claim_work_order`.
+- **The claim fits the send as it stands.** The send is open, the item is
+  still at the revision the send went out on, the head commit is the pull
+  request's current head (`stale_head` otherwise), and the criterion is in the
+  brief the send carries (`invalid_input` otherwise). Each check reads the
+  item under its row lock.
+- **A retry records nothing.** The fact's dedupe key names the send, the
+  criterion, and the head commit, so the same claim again answers as a repeat
+  and the first text stands. A new head leaves earlier claims on the old head,
+  and the agent claims again on the new one.
+- **Surfaces.** The capability is on the `api` and `mcp` surfaces. The host
+  key's mandate (`MACHINE_KEY_CAPABILITIES` in `@oxagen/iam`) lists it beside
+  the claim and the rejection of a work order. The local MCP gateway's key
+  still serves only tools that change nothing, so the gateway does not carry
+  it.
+- **How the agent calls it.** The host's control client posts the claim to
+  `POST /v1/tacho/work-orders/criteria/claim`, under the same per-host limit as
+  the claim and the rejection of a work order. Inside the run, the agent runs
+  `oxagen work claim <criterion> --text <how>`: it reads the work order from
+  `OXAGEN_WORK_ORDER_ID`, the item from the mark `oxagen work start` keeps
+  while the harness runs, and the head from `git rev-parse HEAD`. The first
+  prompt tells the agent to claim each criterion after it pushes.

@@ -193,7 +193,7 @@ export function HistoryPanel({ detail }: { detail: WorkItemDetail }) {
               <time dateTime={entry.at} className="shrink-0 text-sm text-muted-foreground sm:w-36">
                 {when(entry.at)}
               </time>
-              <span className="min-w-0 text-foreground [overflow-wrap:anywhere]">
+              <span className="min-w-0 text-foreground wrap-anywhere">
                 <HistoryLine entry={entry} />
               </span>
             </li>

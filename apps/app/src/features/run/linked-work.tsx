@@ -225,7 +225,7 @@ function Item({
           line === null ? null : (
             <span
               key={name}
-              className="block text-xs leading-normal text-muted-foreground [overflow-wrap:anywhere]"
+              className="block text-xs leading-normal text-muted-foreground wrap-anywhere"
             >
               {line}
             </span>
@@ -701,7 +701,7 @@ function FilesChanged({
                 className="group border-t border-border first:border-t-0"
               >
                 {/* `.lw-files summary::before { content:"▸" }`, `▾` when open. */}
-                <summary className="flex min-w-0 cursor-pointer list-none items-center gap-2.5 py-2 text-sm before:flex-none before:text-dim before:content-['▸'] group-open:before:content-['▾'] [&::-webkit-details-marker]:hidden">
+                <summary className="flex min-w-0 cursor-pointer list-none items-center gap-2.5 py-2 text-sm before:flex-none before:text-dim before:content-(--glyph-disclosure) group-open:before:content-(--glyph-disclosure-open) [&::-webkit-details-marker]:hidden">
                   {summary}
                 </summary>
                 <PatchLines patch={patch} />
@@ -833,7 +833,7 @@ function LinkedWorkBody({
       className="flex flex-col"
     >
       <Legend edges={rowEdges(work.value, outputs)} />
-      <div className="mb-3.5 grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
+      <div className="mb-3.5 grid gap-3.5 grid-cols-cards-sm">
         <Repositories work={work.value} place={place} />
         <Artifacts work={work.value} outputs={outputs} place={place} />
       </div>

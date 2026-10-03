@@ -371,13 +371,13 @@ const HEADER_BUTTON =
  * motion the two only fade.
  */
 const PANE_SHOWN =
-  "absolute inset-0 flex flex-col transition-[translate,opacity,visibility] duration-200 ease-out motion-reduce:translate-x-0 visible translate-x-0 opacity-100";
+  "absolute inset-0 flex flex-col transition-all duration-(--motion-overlay) ease-out motion-reduce:translate-x-0 visible translate-x-0 opacity-100";
 /** The thread while the list shows: out to the left. */
 const THREAD_AWAY =
-  "absolute inset-0 flex flex-col transition-[translate,opacity,visibility] duration-200 ease-out motion-reduce:translate-x-0 pointer-events-none invisible -translate-x-6 opacity-0";
+  "absolute inset-0 flex flex-col transition-all duration-(--motion-overlay) ease-out motion-reduce:translate-x-0 pointer-events-none invisible -translate-x-6 opacity-0";
 /** The list while the thread shows: out to the right. */
 const SESSIONS_AWAY =
-  "absolute inset-0 flex flex-col transition-[translate,opacity,visibility] duration-200 ease-out motion-reduce:translate-x-0 pointer-events-none invisible translate-x-6 opacity-0";
+  "absolute inset-0 flex flex-col transition-all duration-(--motion-overlay) ease-out motion-reduce:translate-x-0 pointer-events-none invisible translate-x-6 opacity-0";
 
 /** Focus the composer, or `fallback` while a turn in flight disables it. */
 function focusComposerOr(
@@ -1158,12 +1158,12 @@ export function AssistantFlyout({
       onKeyDown={(e) => {
         if (e.key === "Escape") setAssistantOpen(false);
       }}
-      className={`fixed inset-y-0 left-0 z-50 flex w-full flex-col border-r border-border bg-app-raised-bg pb-safe-bottom text-app-raised-fg shadow-pop duration-300 ease-[cubic-bezier(.32,.72,0,1)] motion-reduce:translate-x-0 motion-reduce:duration-100 md:left-(--sidebar-width) md:w-(--assistant-width) md:max-w-(--assistant-max-w) ${
+      className={`fixed inset-y-0 left-0 z-50 flex w-full flex-col border-r border-border bg-app-raised-bg pb-safe-bottom text-app-raised-fg shadow-pop duration-(--motion-entry) ease-(--ease-entry) motion-reduce:translate-x-0 motion-reduce:duration-(--motion-micro) md:left-(--sidebar-width) md:w-(--assistant-width) md:max-w-(--assistant-max-w) ${
         assistantOpen
           ? // Visible at once, so the close button can take focus on open…
-            "visible translate-x-0 opacity-100 transition-[translate,opacity]"
+            "visible translate-x-0 opacity-100 transition"
           : // …and hidden only once the fly-back has finished.
-            "invisible -translate-x-full opacity-0 transition-[translate,opacity,visibility]"
+            "invisible -translate-x-full opacity-0 transition-all"
       }`}
     >
       <div className="flex flex-none items-center gap-1 px-4 py-3">
@@ -1733,7 +1733,7 @@ export function AssistantFlyout({
           dragRef.current = null;
           keepWidth(shownWidth);
         }}
-        className={`absolute inset-y-0 -right-1 z-10 hidden w-2 touch-none select-none before:absolute before:inset-y-0 before:left-1/2 before:w-0.5 before:-translate-x-1/2 before:content-[''] hover:before:bg-rule focus-visible:outline-none focus-visible:before:bg-ring md:block ${
+        className={`absolute inset-y-0 -right-1 z-10 hidden w-2 touch-none select-none before:absolute before:inset-y-0 before:left-1/2 before:w-0.5 before:-translate-x-1/2 hover:before:bg-rule focus-visible:outline-none focus-visible:before:bg-ring md:block ${
           shownWidth <= ASSISTANT_MIN_WIDTH
             ? "cursor-e-resize"
             : "cursor-ew-resize"

@@ -257,6 +257,16 @@ registerHandlersOnce("@oxagen/handlers", () => {
       const { recordRunPullRequest } = await import("./lib/work-records/results");
       return recordRunPullRequest({ orgId: request.orgId, workspaceId: request.workspaceId }, request.rootSessionUuid, request.url);
     },
+    // The hourly sweep for a run end or a pull request delivery that never
+    // arrived (work/order-results-sweep).
+    async sweepScopes() {
+      const { listWorkOrderSweepScopes } = await import("./lib/work-records/sweep");
+      return listWorkOrderSweepScopes();
+    },
+    async sweep(scope) {
+      const { sweepWorkOrderResults } = await import("./lib/work-records/sweep");
+      return sweepWorkOrderResults(scope);
+    },
   });
   // The hourly run outcome refresh (#4491) reads GitHub through this package
   // too. It runs in the workspace's tenant scope, and is loaded on its first
@@ -358,7 +368,7 @@ registerHandlersOnce("@oxagen/handlers", () => {
     finishReconcile: async (scope, collectorId, summary) => (await workIntake()).finishReconcile(scope, collectorId, summary),
     count: async (scope, collectorId) => (await workIntake()).count(scope, collectorId),
     triage: async (scope, item, retry) => (await workIntake()).triage(scope, item, retry),
-    recordTriageFailure: async (scope, item, reason) => (await workIntake()).recordTriageFailure(scope, item, reason),
+    recordTriageFailure: async (scope, item, reason, run) => (await workIntake()).recordTriageFailure(scope, item, reason, run),
     prune: async (now) => (await workIntake()).prune(now),
   });
   registerHandler("create_work_item", () =>
@@ -1442,6 +1452,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "reject_work_order",
     async () =>
       (await import("./work.order.reject")).workOrderRejectHandler as CapabilityHandlerFn,
+  );
+  // The agent working a send claims a criterion of its brief (ADR-244). Only
+  // the run linked to the send, or the key of the host that claimed it.
+  registerHandler(
+    "claim_work_criterion",
+    async () =>
+      (await import("./work.criterion.claim")).workCriterionClaimHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "list_memory_pr_records",

@@ -259,7 +259,7 @@ function ResolvedCard({
       <p className={`${mono} break-all font-semibold`}>{item.tool}</p>
       <dl
         aria-label={t("chain")}
-        className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm"
+        className="grid grid-cols-dl gap-x-3 gap-y-1 text-sm"
       >
         <dt className="text-muted-foreground">{t("who")}</dt>
         {recorded(item.requester)}

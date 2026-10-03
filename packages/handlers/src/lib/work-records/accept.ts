@@ -26,13 +26,20 @@
 //
 // A read of the required checks, or of the check results, that failed or came
 // back cut short blocks the acceptance outright, even when an older read of
-// the same head is on record: the rule is a read at the press.
+// the same head is on record: the rule is a read at the press. So does a pull
+// request Oxagen could not read, or read with no head commit.
+//
+// The acceptance names the head commit the person reviewed, and the server
+// checks it against the head GitHub reports at the press (oxagen-roadmap#279).
+// A head the record still shows but GitHub has left is refused as stale, even
+// when the record cannot move to GitHub's head, such as a read that reports an
+// earlier commit under an older update time.
 import type { Tx } from "@oxagen/database";
 import type { Sha256Digest } from "@oxagen/run-evidence";
-import { WorkRecordError } from "@oxagen/work/records";
+import { type OrderProjection, WorkRecordError } from "@oxagen/work/records";
 import { itemAfter, orderAfter, resolveItemId, resolveOrder } from "./actions";
 import type { WorkActor } from "./actor";
-import { type EvidenceReader, type EvidenceSummary, evidenceFacts, readEvidence } from "./evidence";
+import { type EvidenceRead, type EvidenceReader, type EvidenceSummary, evidenceFacts, readEvidence } from "./evidence";
 import { appendFacts, readWorkItem, type WorkScope, type WorkWrite } from "./store";
 
 /** Opens one tenant transaction. Handlers pass `withTenantDb`. */
@@ -63,13 +70,24 @@ async function locate(deps: ReviewDeps, scope: WorkScope, itemPublicId: string, 
   });
 }
 
+/** What one read of GitHub for a send found and recorded. */
+interface RecordedEvidence {
+  located: Located;
+  /** The send as the record held it before this read. */
+  projected: OrderProjection;
+  /** What GitHub answered now. */
+  read: EvidenceRead;
+  write: WorkWrite;
+  summary: EvidenceSummary;
+}
+
 /** Read GitHub for one send and record what it found. */
-async function recordEvidence(deps: ReviewDeps, scope: WorkScope, itemPublicId: string, orderPublicId: string): Promise<{ located: Located; write: WorkWrite; summary: EvidenceSummary }> {
+async function recordEvidence(deps: ReviewDeps, scope: WorkScope, itemPublicId: string, orderPublicId: string): Promise<RecordedEvidence> {
   const { located, projected } = await locate(deps, scope, itemPublicId, orderPublicId);
   const read = await readEvidence(deps.reader, scope, projected);
   const { facts, summary } = evidenceFacts(projected, read, deps.now().toISOString());
   const write = await deps.db((tx) => appendFacts(tx, scope, { itemId: located.itemId, facts }));
-  return { located, write, summary };
+  return { located, projected, read, write, summary };
 }
 
 export interface RefreshChecksAction {
@@ -100,19 +118,38 @@ export interface AcceptAction {
 
 /** Accept a send's result on its head commit, after reading GitHub at the press. */
 export async function acceptWork(deps: ReviewDeps, scope: WorkScope, actor: WorkActor, input: AcceptAction) {
-  const { located, write: evidence, summary } = await recordEvidence(deps, scope, input.item_id, input.work_order_id);
+  const { located, projected, read, write: evidence, summary } = await recordEvidence(deps, scope, input.item_id, input.work_order_id);
   const before = evidence.repeat ? evidence.version : evidence.version - 1;
   const already = evidence.projection.orders.find((entry) => entry.orderId === located.orderId)?.acceptance;
   const repeatOfThis = already !== null && already !== undefined && already.headSha === input.head_sha && already.briefDigest === input.brief_digest;
+  // The head binding: the head GitHub reports now must be the head the person
+  // reviewed, whatever the record shows.
+  const githubHead = read.pull?.headSha ?? null;
+  if (!repeatOfThis && githubHead !== null && githubHead !== input.head_sha) {
+    throw new WorkRecordError(
+      "stale_head",
+      `You reviewed ${input.head_sha.slice(0, 7)}, and the pull request's head on GitHub is now ${githubHead.slice(0, 7)}. Review the new head.`,
+    );
+  }
   if (!repeatOfThis && before !== input.version) {
     throw new WorkRecordError(
       "stale_version",
       `You read version ${input.version} of the work item, and it is now at version ${before}. Read it again.`,
     );
   }
-  // With no pull request or no head yet, the store's own gate refuses below
-  // with the reason (no_pull_request, no_head). With one, an unread required
-  // list refuses here, whatever an older read of the head recorded.
+  // With no pull request yet, the store's own gate refuses below with the
+  // reason (no_pull_request). With one, a read at the press that could not
+  // name the head refuses here, even when an older read recorded one.
+  if (!repeatOfThis && projected.pullRequest !== null && githubHead === null) {
+    throw new WorkRecordError(
+      "not_allowed",
+      read.pull === null
+        ? "Oxagen could not read this pull request on GitHub. Accept stays blocked until it can."
+        : "GitHub reports no head commit for this pull request. Accept stays blocked until it does.",
+    );
+  }
+  // An unread required list or check results refuse here, whatever an older
+  // read of the head recorded.
   if (!repeatOfThis && summary.head !== null && (summary.requiredChecks === null || !summary.checksRead)) {
     const why = summary.unreadReason ?? "the read failed";
     throw new WorkRecordError(

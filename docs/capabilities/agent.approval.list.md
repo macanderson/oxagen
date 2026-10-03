@@ -64,11 +64,11 @@ Only public ids leave the handler.
   write time. It is a public id because both kinds of run this product tracks
   have to be representable, and no one table holds both. Every approval writer
   in the agent runtime records the run: the chat approval gate, an external
-  tool rule that asks for a person, the in-app assistant's per-turn budget
-  pause, and both MCP consent paths (a person's first use of a server tool,
-  and an agent rule that asks). Each reads the run when the call parks, so an
-  approval raised inside an in-app assistant turn names the run that turn
-  opened, although the run opens after the turn's tools are built.
+  tool rule that asks for a person, and both MCP consent paths (a person's
+  first use of a server tool, and an agent rule that asks). Each reads the run
+  when the call parks, so an approval raised inside an in-app assistant turn
+  names the run that turn opened, although the run opens after the turn's
+  tools are built.
 - **Mandate gate:** a call a mandate parks records the run it was made in,
   read from the gate's run id the way an auto-approval receipt reads it
   (#3478). A call made outside any run records null.

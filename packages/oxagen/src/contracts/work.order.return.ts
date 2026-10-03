@@ -20,7 +20,7 @@ export const workOrderReturn = registerCapability({
     "Return a send's result to the agent with a reason. By default the item goes out again to the same agent as a new send.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

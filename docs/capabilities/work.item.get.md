@@ -53,7 +53,7 @@ Each send:
 | `stopped_at` | `string` or `null` | When the runtime confirmed the stop |
 | `runs` | `{ id, cost, basis, tier }[]` | Each run, with its cost, how it was measured, and its tier. `cost` is null when the run reported no usage or has not been rolled up |
 | `cost` | `{ runs, known_runs, total }` | As in a list row, over this send's runs |
-| `pull_request` | object or `null` | The repository, number, link, head, when the head was seen, the merge, and when it closed without merging, from the send's facts. `url` is the forge store's link when the store holds the same pull request |
+| `pull_request` | object or `null` | The repository, number, link, head, when the head was seen, the merge, and when it closed without merging, from the send's facts. The merge is `{ at, merge_commit, merged_by }`. `url` is the forge store's link when the store holds the same pull request |
 | `pull_requests` | pull request[] | Every pull request the send has in the forge store, newest first, as in a list row's send |
 | `required_checks` | `string[]` or `null` | The checks the base branch requires on the head. Null until Oxagen reads them |
 | `checks` | `{ name, conclusion, required }[]` | Each check's latest result on the head |
@@ -78,6 +78,8 @@ The brief's `state` is:
 - `draft`: a saved revision waits for approval on the current item revision.
 - `approved`: the current item revision has an approved brief.
 - `out_of_date`: the item changed after approval, or a running send went out on an earlier revision.
+
+`merged_by` is the account GitHub says merged the pull request: `{ login, type, oxagen_app }`, or `null` when no merger is on record, as for a merge recorded before Oxagen read one. `oxagen_app` is true when the Oxagen GitHub App merged it. The push token Oxagen issues an agent is that app's installation token, so such a merge is the agent merging its own work. That send is not done: the item stays in review, its wait reads `merged_by_app`, and the gate names the same block. A person returns the work or closes the item. A merge by any other account counts, such as GitHub's merge queue or a team's merge bot. Which login is the app's depends on a deployment setting, [`GITHUB_APP_SLUG`](../../packages/config/src/registry.ts).
 
 `next_send` is set when the current revision has an approved brief, no send is open, and the item is neither done nor closed. Send it with [send_work_order](work.order.send.md). Its key stays the same on a retry.
 

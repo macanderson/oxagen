@@ -91,6 +91,7 @@ import {
   AUTHOR,
   ctx,
   harness,
+  landStampOnHost,
   MemorySyncStore,
   REPO,
   REVIEWER,
@@ -947,7 +948,7 @@ describe("merge_steering_pr on a governance proposal", () => {
     const deps = steeringMode("team");
     const proposalId = await proposeSolo(deps);
     deps.store.proposals[0]!.mergeClaimedAt = new Date("2026-09-15T09:00:00.000Z");
-    const mergeSha = deps.github.mergeOnHost(deps.github.pulls[0]!.number);
+    const mergeSha = await landStampOnHost(deps, deps.store.proposals[0]!);
     const verify = vi.fn(async () => {
       throw new Error("The governance merge has no authenticated provenance.");
     });
@@ -976,10 +977,10 @@ describe("merge_steering_pr on a governance proposal", () => {
   it("answers the version an earlier call published when it resumes a merged PR", async () => {
     const deps = steeringMode("team");
     const proposalId = await proposeSolo(deps);
-    // An earlier call claimed the row, merged and published the PR, then
-    // failed before its record landed.
+    // An earlier call claimed the row, merged its stamp and published the
+    // PR, then failed before its record landed.
     deps.store.proposals[0]!.mergeClaimedAt = new Date("2026-09-15T09:00:00.000Z");
-    const mergeSha = deps.github.mergeOnHost(deps.github.pulls[0]!.number);
+    const mergeSha = await landStampOnHost(deps, deps.store.proposals[0]!);
     const seams = doubles();
     const published: SteeringPublisher = {
       ...fakePublisher(seams.published),
@@ -1018,6 +1019,29 @@ describe("merge_steering_pr on a governance proposal", () => {
     // Nobody is credited with the merge, and no governance event claims a
     // review. The sync records it as a change made outside Oxagen.
     expect(deps.store.proposals[0]).toMatchObject({ status: "checks_passed", mergedByUserId: null });
+    expect(deps.events).toEqual([]);
+    expect(deps.requestSync).toHaveBeenCalledOnce();
+  });
+
+  // #4504: a call that crashed before its stamp leaves a claim behind, so the
+  // claim alone does not prove Oxagen merged the PR.
+  it("refuses a claimed PR someone merged on the host at the checked head, with no stamp of Oxagen's", async () => {
+    const deps = steeringMode("team");
+    const proposalId = await proposeSolo(deps);
+    deps.store.proposals[0]!.mergeClaimedAt = new Date("2026-09-15T09:00:00.000Z");
+    deps.github.mergeOnHost(deps.github.pulls[0]!.number);
+    deps.requestSync = vi.fn(async () => undefined);
+    const seams = doubles();
+
+    await expect(
+      createMergeSteeringPrHandler(deps, mergeSeams(seams))({ proposalId }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "merged_outside_oxagen",
+      message: expect.stringContaining("was merged outside Oxagen"),
+    });
+    expect(deps.store.proposals[0]).toMatchObject({ status: "checks_passed", mergedByUserId: null });
+    expect(seams.published).toEqual([]);
     expect(deps.events).toEqual([]);
     expect(deps.requestSync).toHaveBeenCalledOnce();
   });

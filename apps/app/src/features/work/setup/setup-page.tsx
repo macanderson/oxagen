@@ -4,10 +4,13 @@
 //
 // Each tab makes only its own reads. Collectors reads the collectors with the
 // repositories linked to the workspace, which are the only ones a collector
-// may read, and the work items for what the viewer's roles admit. A failed
+// may read, and whether the viewer may change a collector, from the role
+// check set_work_collector makes. It also reads the work items for what the
+// viewer's roles admit, which decides Read now (sync_work_collector).
+// Priorities reads the priorities record, and the work items for the same
+// roles, which decide whether the viewer may open its pull request. A failed
 // roles read leaves the buttons on and lets the server's refusal speak.
-// Priorities reads the priorities record. Runtimes reads which agents can
-// take a send.
+// Runtimes reads which agents can take a send.
 //
 // Phase 1 draws no Workflows, Autonomy or Training tab, and no write-back
 // switch.
@@ -86,14 +89,20 @@ async function tabBody({
         />
       );
     }
-    case "priorities":
+    case "priorities": {
+      const [priorities, list] = await Promise.all([
+        source.work.priorities(ctx),
+        source.work.list(ctx),
+      ]);
       return (
         <PrioritiesTab
           org={org}
           ws={ws}
-          read={await source.work.priorities(ctx)}
+          read={priorities}
+          canControl={list.ok ? list.value.viewer.canControl : true}
         />
       );
+    }
     case "runtimes":
       return (
         <RuntimesTab org={org} ws={ws} read={await source.work.targets(ctx)} />

@@ -120,7 +120,7 @@ function ReadyExport({ status }: { status: RunExportStatus }) {
           {t("download")}
         </RunExportDownloadLink>
       )}
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
+      <dl className="grid grid-cols-dl gap-x-3 gap-y-2 text-sm">
         <dt className="text-muted-foreground">{t("size")}</dt>
         <dd data-testid="export-size">
           {size === null ? t("sizeUnknown") : size}

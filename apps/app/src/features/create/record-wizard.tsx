@@ -532,7 +532,7 @@ function ChecksStep({ api, ctx }: StepProps<RecordDraft>) {
         {CHECKS.map((c) => (
           <li
             key={c}
-            className="flex flex-col gap-0.5 sm:grid sm:grid-cols-[12rem_1fr] sm:gap-3"
+            className="flex flex-col gap-0.5 sm:grid sm:grid-cols-rail sm:gap-3"
           >
             <span className="font-medium text-foreground">
               {t(`items.${c}.name`)}
@@ -705,7 +705,7 @@ function Opened({ record, ctx }: { record: OpenedRecord; ctx: CreateContext }) {
                 <li
                   key={c.name}
                   data-status={status}
-                  className="flex flex-col gap-0.5 sm:grid sm:grid-cols-[14rem_6rem_1fr] sm:gap-3"
+                  className="flex flex-col gap-0.5 sm:grid sm:grid-cols-rail-lg-pair sm:gap-3"
                 >
                   <span className="text-foreground">
                     {name === undefined ? c.name : t(`names.${name}`)}

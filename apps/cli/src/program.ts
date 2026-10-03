@@ -2155,12 +2155,13 @@ export function buildProgram(): Command {
   // A person sends an approved brief to an agent in the app. The agent's
   // host keeps the work order until the person at the machine starts it
   // here. `start` claims the order first, so nothing runs for an order the
-  // server refuses.
+  // server refuses. Inside the run, the agent records each criterion it met
+  // with `claim`.
 
   const work = program
     .command("work")
     .description(
-      "See and start the work orders Oxagen sent to the agents on this machine",
+      "See and start the work orders Oxagen sent to the agents on this machine, and claim a criterion from inside a run",
     );
   work
     .command("list")
@@ -2178,6 +2179,17 @@ export function buildProgram(): Command {
     .action(async (workOrderId: string) => {
       const { handleWorkStart } = await import("./commands/tacho.js");
       process.exitCode = await handleWorkStart(workOrderId);
+    });
+  work
+    .command("claim")
+    .description(
+      "From inside a work order's run, claim that the pushed head commit meets one criterion of the brief. A person still decides.",
+    )
+    .argument("<criterion>", "The criterion's id from the brief, such as c1")
+    .requiredOption("--text <text>", "How the commit meets the criterion")
+    .action(async (criterionId: string, opts: { text: string }) => {
+      const { handleWorkClaim } = await import("./commands/tacho.js");
+      process.exitCode = await handleWorkClaim(criterionId, opts);
     });
 
   // ── env: workspace environments ─────────────────────────────────────────────

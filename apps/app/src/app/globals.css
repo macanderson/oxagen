@@ -87,6 +87,60 @@
      tab (#5283). */
   --shadow-rail: inset 2px 0 0 var(--gold);
   --shadow-tab-underline: inset 0 -2px 0 var(--accent-text);
+  /* Grid templates (#5283): grid-cols-<name>. A description list sets a
+     term, then its value: dl lets a long term wrap, dl-max never wraps a
+     term, and dl-clip lets a long value wrap inside its column. A rail is a
+     label column beside its content. */
+  --grid-template-columns-dl: auto 1fr;
+  --grid-template-columns-dl-max: max-content 1fr;
+  --grid-template-columns-dl-clip: max-content minmax(0, 1fr);
+  --grid-template-columns-lead: auto minmax(0, 1fr);
+  --grid-template-columns-form: minmax(calc(var(--spacing) * 32), auto) 1fr;
+  --grid-template-columns-rail-xs: minmax(0, calc(var(--spacing) * 24))
+    minmax(0, 1fr);
+  --grid-template-columns-rail-sm: minmax(0, calc(var(--spacing) * 36))
+    minmax(0, 1fr);
+  --grid-template-columns-rail: minmax(0, calc(var(--spacing) * 48))
+    minmax(0, 1fr);
+  --grid-template-columns-rail-lg: minmax(0, calc(var(--spacing) * 56))
+    minmax(0, 1fr);
+  --grid-template-columns-rail-lg-pair: calc(var(--spacing) * 56)
+    calc(var(--spacing) * 24) 1fr;
+  --grid-template-columns-split: minmax(0, 3fr) minmax(0, 2fr);
+  --grid-template-columns-split-end: minmax(0, 2fr) minmax(0, 3fr);
+  --grid-template-columns-main: minmax(0, 2fr) minmax(0, 1fr);
+  --grid-template-columns-main-end: minmax(0, 1fr) minmax(0, 2fr);
+  --grid-template-columns-aside: minmax(0, 1fr) calc(var(--spacing) * 85);
+  --grid-template-columns-shell: var(--sidebar-width) minmax(0, 1fr);
+  --grid-template-rows-shell: auto 1fr;
+  --grid-template-columns-icon: calc(var(--spacing) * 8) minmax(0, 1fr);
+  --grid-template-columns-icon-end: calc(var(--spacing) * 8) minmax(0, 1fr)
+    auto;
+  --grid-template-columns-diff: calc(var(--spacing) * 8.5)
+    calc(var(--spacing) * 8.5) minmax(0, 1fr);
+  --grid-template-columns-diff-sign: calc(var(--spacing) * 10)
+    calc(var(--spacing) * 10) calc(var(--spacing) * 4) minmax(0, 1fr);
+  --grid-template-columns-meter: calc(var(--spacing) * 5) minmax(0, 1fr) 34%
+    auto;
+  --grid-template-columns-label-row: minmax(0, 22ch) 1fr auto;
+  --grid-template-columns-count-row: 8ch minmax(0, 1fr) auto;
+  --grid-template-columns-row-end: minmax(0, 1fr) max-content max-content;
+  --grid-template-columns-swatches: repeat(
+    auto-fill,
+    minmax(calc(var(--spacing) * 9), 1fr)
+  );
+  --grid-template-columns-tiles: repeat(
+    auto-fit,
+    minmax(calc(var(--spacing) * 44), 1fr)
+  );
+  --grid-template-columns-cards: repeat(
+    auto-fit,
+    minmax(min(100%, calc(var(--spacing) * 80)), 1fr)
+  );
+  --grid-template-columns-cards-sm: repeat(
+    auto-fit,
+    minmax(min(100%, calc(var(--spacing) * 60)), 1fr)
+  );
   /* The corner scale is @oxagen/ui's, which reads the kit's --ox-radius-<step>
      tokens: the theme's corner base (0.45rem, shadcn's base-maia preset) times
      each step's multiplier. `rounded-4xl` is the pill a maia button and input
@@ -192,6 +246,28 @@
       calc(100vw - var(--spacing) * 4)
     );
     --editor-max-h: calc(100vh - var(--spacing) * 75);
+    /* Glyphs a pseudo-element draws (#5283): the disclosure caret and the
+       sort arrows. */
+    --glyph-disclosure: "▸";
+    --glyph-disclosure-open: "▾";
+    --glyph-sort: "↕";
+    --glyph-sort-asc: "↑";
+    --glyph-sort-desc: "↓";
+    /* Ambient loops: the skeleton shimmer, the stella mark's turn, the
+       launcher's glow, and the transcript's cursor and pulse (#5283). The
+       kit's --motion-* steps time a single change, so the app names its loop
+       lengths and easings here. */
+    --motion-blink: 1s;
+    --motion-pulse: 1.2s;
+    --motion-shimmer: 1.5s;
+    --motion-glow: 2.4s;
+    --motion-turn: 3.2s;
+    --ease-linear: linear;
+    --ease-pulse: ease-in-out;
+    --ease-turn: cubic-bezier(0.6, 0, 0.2, 1);
+    --ease-sweep: cubic-bezier(0.45, 0, 0.2, 1);
+    --ease-blink: steps(2, start);
+    --ease-step: steps(1);
     /* An agent avatar's corner, as a share of its size (#5283). */
     --agent-corner: 27%;
     --sidebar-bg: var(--void);
@@ -335,8 +411,8 @@
 /* The mockup's workspace frame and data density, shared by every app page. */
 [data-shell-page] main#main {
   /* The app's workspace frame, wider than the website's --ox-wrap on purpose. */
-  max-width: 1500px;
-  padding: 22px 24px 80px;
+  max-width: calc(var(--spacing) * 375);
+  padding: calc(var(--spacing) * 5.5) calc(var(--spacing) * 6) calc(var(--spacing) * 20);
 }
 
 /* The mockup sets a 13px cell and a 10.5px header. Each takes the app
@@ -351,7 +427,7 @@
    background:var(--panel) }` — the header is flat on the panel; the caps and
    the tracking mark it, not a band of grey. */
 [data-shell-page] table thead th {
-  padding: 9px 12px;
+  padding: calc(var(--spacing) * 2.25) calc(var(--spacing) * 3);
   white-space: nowrap;
   background: var(--panel);
   font-size: var(--ox-a-2xs);
@@ -364,7 +440,7 @@
 /* `:where` keeps this rule under the phone's card padding in src/ui/phone.css,
    which it used to outrank. */
 :where([data-shell-page]) table tbody :is(td, th) {
-  padding: 9px 12px;
+  padding: calc(var(--spacing) * 2.25) calc(var(--spacing) * 3);
   vertical-align: middle;
 }
 
@@ -385,7 +461,7 @@
   }
 
   table tbody :is(td, th):not([colspan]) {
-    max-width: var(--cell-max, 20rem);
+    max-width: var(--cell-max, calc(var(--spacing) * 80));
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -422,7 +498,7 @@
 
 @media (width < 48rem) {
   [data-shell-page] main#main {
-    padding: 16px 16px 88px;
+    padding: calc(var(--spacing) * 4) calc(var(--spacing) * 4) calc(var(--spacing) * 22);
   }
 }
 
@@ -449,16 +525,16 @@
   animation: ox-rise var(--motion-entry) var(--ease-entry) both;
 }
 [data-shell-page] main#main > :nth-child(2) {
-  animation-delay: 40ms;
+  animation-delay: calc(var(--motion-micro) * 0.25);
 }
 [data-shell-page] main#main > :nth-child(3) {
-  animation-delay: 80ms;
+  animation-delay: calc(var(--motion-micro) * 0.5);
 }
 [data-shell-page] main#main > :nth-child(4) {
-  animation-delay: 120ms;
+  animation-delay: calc(var(--motion-micro) * 0.75);
 }
 [data-shell-page] main#main > :nth-child(n + 5) {
-  animation-delay: 160ms;
+  animation-delay: var(--motion-micro);
 }
 
 /*
@@ -487,7 +563,7 @@
     var(--hl) 75%
   );
   background-size: 220% 100%;
-  animation: skeleton-shimmer 1.5s linear infinite;
+  animation: skeleton-shimmer var(--motion-shimmer) var(--ease-linear) infinite;
 
   @media (prefers-reduced-motion: reduce) {
     animation: none;
@@ -522,10 +598,10 @@
 }
 .ox-stella-turn {
   transform-origin: 35.225px -62.82px;
-  animation: ox-stella-turn 3.2s cubic-bezier(0.6, 0, 0.2, 1) infinite;
+  animation: ox-stella-turn var(--motion-turn) var(--ease-turn) infinite;
 }
 .ox-stella-sweep {
-  animation: ox-stella-sweep 3.2s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  animation: ox-stella-sweep var(--motion-turn) var(--ease-sweep) infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .ox-stella-turn {
@@ -570,18 +646,18 @@
     box-shadow: 0 0 0 0 transparent;
   }
   50% {
-    box-shadow: 0 0 14px 1px color-mix(in oklab, var(--gold) 45%, transparent);
+    box-shadow: 0 0 calc(var(--spacing) * 3.5) calc(var(--spacing) * 0.25) color-mix(in oklab, var(--gold) 45%, transparent);
   }
 }
 .ox-launcher-unread {
   position: relative;
-  animation: ox-shine-glow 2.4s ease-in-out infinite;
+  animation: ox-shine-glow var(--motion-glow) var(--ease-pulse) infinite;
 }
 .ox-launcher-unread::before {
   content: "";
   position: absolute;
-  inset: -1px;
-  padding: 1.5px;
+  inset: calc(var(--spacing) * -0.25);
+  padding: calc(var(--spacing) * 0.375);
   border-radius: inherit;
   background: conic-gradient(
     from var(--ox-shine-angle),
@@ -596,8 +672,8 @@
     linear-gradient(#000 0 0);
   pointer-events: none;
   animation:
-    ox-shine-turn 2.4s linear infinite,
-    ox-shine-fade 2.4s ease-in-out infinite;
+    ox-shine-turn var(--motion-glow) var(--ease-linear) infinite,
+    ox-shine-fade var(--motion-glow) var(--ease-pulse) infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .ox-launcher-unread {
@@ -635,4 +711,98 @@
    is a utility over --agent-corner. */
 @utility rounded-agent {
   border-radius: var(--agent-corner);
+}
+
+/* Named utilities for values no stock utility sets (#5283). */
+@utility truncate-start {
+  /* Truncate from the start, so a path keeps its end: the text runs right to
+     left inside the box and a <bdi> keeps its own order. */
+  direction: rtl;
+  text-align: left;
+}
+@utility lazy-render {
+  content-visibility: auto;
+  contain-intrinsic-size: auto calc(var(--spacing) * 40);
+}
+@utility cell-max-wide {
+  --cell-max: calc(var(--spacing) * 128);
+}
+@utility auth-grid {
+  /* The sign-in page's backdrop: a 48px grid of hairlines that fades out
+     toward the bottom. */
+  --auth-grid-step: calc(var(--spacing) * 12);
+  --auth-grid-line: calc(var(--auth-grid-step) - 1px);
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 var(--auth-grid-line),
+      var(--border) var(--auth-grid-line) var(--auth-grid-step)
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 var(--auth-grid-line),
+      var(--border) var(--auth-grid-line) var(--auth-grid-step)
+    );
+  mask-image: linear-gradient(180deg, #000 0%, transparent 78%);
+}
+
+@layer components {
+/* The toast stack, Base UI's stacking recipe (#5283). Base UI sets each
+   toast's index, heights, offset and swipe movement as custom properties at
+   runtime; these rules turn them into the stack's transform. Collapsed, each
+   toast behind the front one peeks out by --peek and shrinks by a tenth.
+   Expanded, the toasts stand apart by --gap. */
+[data-toast] {
+  --gap: calc(var(--spacing) * 3);
+  --peek: calc(var(--spacing) * 3);
+  --height: var(--toast-frontmost-height, var(--toast-height));
+  --offset-y: calc(
+    var(--toast-offset-y) * -1 + var(--toast-index) * var(--gap) * -1 +
+      var(--toast-swipe-movement-y)
+  );
+  --scale: max(0, 1 - var(--toast-index) * 0.1);
+  --shrink: calc(1 - var(--scale));
+  z-index: calc(1000 - var(--toast-index));
+  transform: translateX(var(--toast-swipe-movement-x))
+    translateY(
+      calc(
+        var(--toast-swipe-movement-y) - var(--toast-index) * var(--peek) -
+          var(--shrink) * var(--height)
+      )
+    )
+    scale(var(--scale));
+  transition:
+    transform var(--motion-entry) var(--ease-hover),
+    opacity var(--motion-entry) var(--ease-hover),
+    height var(--motion-micro) var(--ease-hover);
+}
+/* The gap under each toast holds the hover, so the stack stays open while
+   the pointer crosses from one toast to the next. */
+[data-toast]::after {
+  height: calc(var(--gap) + var(--spacing) * 0.25);
+}
+[data-toast][data-expanded] {
+  transform: translateX(var(--toast-swipe-movement-x))
+    translateY(var(--offset-y));
+}
+[data-toast][data-starting-style],
+[data-toast][data-ending-style]:not([data-limited]):not(
+    [data-swipe-direction]
+  ) {
+  transform: translateY(150%);
+}
+[data-toast][data-ending-style][data-swipe-direction="down"] {
+  transform: translateY(calc(var(--toast-swipe-movement-y) + 150%));
+}
+[data-toast][data-ending-style][data-swipe-direction="left"] {
+  transform: translateX(calc(var(--toast-swipe-movement-x) - 150%))
+    translateY(var(--offset-y));
+}
+[data-toast][data-ending-style][data-swipe-direction="right"] {
+  transform: translateX(calc(var(--toast-swipe-movement-x) + 150%))
+    translateY(var(--offset-y));
+}
+[data-toast][data-ending-style][data-swipe-direction="up"] {
+  transform: translateY(calc(var(--toast-swipe-movement-y) - 150%));
+}
 }

@@ -101,6 +101,21 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 const { orgMemberRemoveHandler } = await import("./org.member.remove");
+const { schema } = await import("@oxagen/database");
+
+/** Whether a drizzle condition names `target` anywhere in its tree. */
+function mentions(
+  node: unknown,
+  target: unknown,
+  seen = new Set<unknown>(),
+): boolean {
+  if (node === target) return true;
+  if (typeof node !== "object" || node === null || seen.has(node)) return false;
+  seen.add(node);
+  if (Array.isArray(node)) return node.some((n) => mentions(n, target, seen));
+  if ("queryChunks" in node) return mentions(node.queryChunks, target, seen);
+  return false;
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -228,6 +243,61 @@ describe("orgMemberRemoveHandler", () => {
       "forbidden",
       "insufficient_role",
     );
+  });
+
+  // #3458: the actor gate took the first assignment row Postgres returned, so
+  // an Admin who also held Billing was refused whenever Billing came first.
+  it("an Admin who also holds Billing passes the actor gate", async () => {
+    let callCount = 0;
+    mockTx.select = vi.fn().mockImplementation(() => {
+      callCount++;
+      const buildChain = (result: unknown[]) => {
+        const limit = vi.fn().mockResolvedValue(result);
+        const where = vi.fn().mockReturnValue({ limit });
+        const innerJoin = vi.fn().mockReturnValue({ where });
+        const from = vi.fn().mockReturnValue({ where, innerJoin });
+        return { from };
+      };
+      if (callCount === 1) return buildChain([{ id: "actor-principal-id" }]);
+      if (callCount === 2) {
+        return buildChain([{ roleName: "Billing" }, { roleName: "Admin" }]);
+      }
+      return buildChain([]); // target orgUser not found
+    });
+
+    await expectHandlerError(
+      orgMemberRemoveHandler({ targetUserId: "target-user" }, makeCtx()),
+      "not_found",
+      "target_not_member",
+    );
+  });
+
+  // #3458: an assignment past its expiry still passed the actor gate.
+  it("reads only unexpired role assignments for the actor", async () => {
+    const conditions: unknown[] = [];
+    let callCount = 0;
+    mockTx.select = vi.fn().mockImplementation(() => {
+      callCount++;
+      const result = callCount === 1 ? [{ id: "actor-principal-id" }] : [];
+      const limit = vi.fn().mockResolvedValue(result);
+      const where = vi.fn().mockImplementation((condition: unknown) => {
+        if (callCount === 2) conditions.push(condition);
+        return { limit };
+      });
+      const innerJoin = vi.fn().mockReturnValue({ where });
+      const from = vi.fn().mockReturnValue({ where, innerJoin });
+      return { from };
+    });
+
+    await expectHandlerError(
+      orgMemberRemoveHandler({ targetUserId: "target-user" }, makeCtx()),
+      "forbidden",
+      "insufficient_role",
+    );
+    expect(conditions).toHaveLength(1);
+    expect(
+      mentions(conditions[0], schema.principalRoleAssignments.expiresAt),
+    ).toBe(true);
   });
 
   it("target not a member of the org → not_found (IDOR guard)", async () => {

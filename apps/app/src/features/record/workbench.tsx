@@ -72,7 +72,7 @@ export function RecordWorkbench({
           setProposing(true);
         }}
       />
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,1fr)]">
+      <div className="grid items-start gap-4 lg:grid-cols-split">
         <div className="flex min-w-0 flex-col gap-3.5">
           <StatementEditor
             path={t("path", { path: shownPath })}

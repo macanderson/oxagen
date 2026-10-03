@@ -156,7 +156,7 @@ function MemoryDialog({
         </>
       }
     >
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+      <dl className="grid grid-cols-dl gap-x-4 gap-y-2 text-sm">
         <dt className="text-muted-foreground">{t("dialog.class")}</dt>
         <dd data-term="class">
           <ClassBadge memoryClass={memory.memoryClass} />{" "}
@@ -367,7 +367,7 @@ export function MemoryShelfBody({
                 setOpen({ ref: memory.ref, step: "memory" });
               }}
             >
-              <td className={`${cell} [--cell-max:32rem]`}>
+              <td className={`${cell} cell-max-wide`}>
                 {/* The row's keyboard way in: a button answers Enter and Space. */}
                 <button
                   type="button"

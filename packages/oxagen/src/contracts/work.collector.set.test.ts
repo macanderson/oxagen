@@ -22,6 +22,11 @@ describe("set_work_collector contract", () => {
     expect(contract.input.safeParse(input).success).toBe(false);
   });
 
+  it("is on the API surface only: no MCP tool changes a collector (#5181)", () => {
+    expect(contract.surfaces).toEqual(["api"]);
+    expect(contract.layers).not.toContain("mcp");
+  });
+
   it("is a setup action for a workspace owner or an org admin", () => {
     expect(contract.sensitivity).toBe("high");
     expect(contract.defaultRoles.workspace).toEqual({ Owner: "allow" });

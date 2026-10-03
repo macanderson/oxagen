@@ -2398,6 +2398,114 @@ describe("merge_steering_pr", () => {
     expect(s5.publish).toHaveBeenCalledWith(REPO, out.mergedCommit);
   });
 
+  // #4504: in a steering repo every merge from Oxagen lands its stamp commit.
+  // Before the fix, a PR someone merged on the host at the checked head was
+  // published as this caller's merge, with no ledger line and no approval.
+  it("in a steering repo, refuses merged_outside_oxagen for a PR merged on the host at the checked head, on the merge and on a re-run", async () => {
+    const h = steeringHarness();
+    const { id, head } = await steeringPrPassed(h);
+    const requestSync = vi.fn(
+      async (_scope: { orgId: string; workspaceId: string }) => undefined,
+    );
+    h.requestSync = requestSync;
+    await h.github.mergePullRequest(REPO, {
+      number: 519,
+      commitTitle: "Merged on GitHub (#519)",
+      sha: head,
+    });
+    const s5 = s5Publisher();
+    const refusal = {
+      code: "conflict",
+      reason: "merged_outside_oxagen",
+      message: expect.stringContaining(head),
+    };
+
+    await expect(
+      createMergeSteeringPrHandler(h, { publisher: () => s5.publisher })(
+        { proposalId: id },
+        ctx({ userId: REVIEWER }),
+      ),
+    ).rejects.toMatchObject(refusal);
+    await expect(
+      createOpenSteeringPrHandler(h)({ proposalId: id }, ctx()),
+    ).rejects.toMatchObject(refusal);
+
+    expect(requestSync).toHaveBeenCalledWith(SCOPE);
+    expect(h.github.stamps).toEqual([]);
+    expect(h.store.records).toEqual([]);
+    expect(h.store.ledger).toEqual([]);
+    expect(s5.publish).not.toHaveBeenCalled();
+    expect(h.store.proposals[0]).toMatchObject({
+      status: "checks_passed",
+      headSha: head,
+    });
+  });
+
+  it("in a steering repo, resumes Oxagen's own stamp merge, and a re-run refuses until that merge publishes", async () => {
+    const h = steeringHarness();
+    const { id } = await steeringPrPassed(h);
+    const s5 = s5Publisher();
+    failFirstRegistryWrite(h);
+    const merge = createMergeSteeringPrHandler(h, {
+      publisher: () => s5.publisher,
+    });
+    await expect(
+      merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+    ).rejects.toThrow("connection reset");
+    const stamp = h.github.stamps[0]!.sha;
+    expect(h.store.proposals[0]!.headSha).toBe(stamp);
+    const checkRuns = h.github.checkRuns.length;
+
+    lapseMergeClaims(h);
+    await expect(
+      createOpenSteeringPrHandler(h)({ proposalId: id }, ctx()),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "merge_in_progress",
+      message: expect.stringContaining("has not published it yet"),
+    });
+    // No check ran on the merged stamp, so the row still passes.
+    expect(h.github.checkRuns).toHaveLength(checkRuns);
+    expect(h.store.proposals[0]!.status).toBe("checks_passed");
+
+    const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
+    expect(out.status).toBe("merged");
+    expect(h.github.merges).toHaveLength(1);
+    expect(h.store.ledger).toHaveLength(1);
+  });
+
+  // #4504: a merge that gave up after it brought the branch up to date left
+  // the row at the update it made. GitHub pins a review to the head the
+  // author pushed, so before the fix the retry refused approval_required
+  // though nothing the reviewer saw had changed.
+  it("in a steering repo, a retry after main kept moving still counts the approval of the head the author pushed", async () => {
+    const h = steeringHarness();
+    const { id, head } = await steeringPrPassed(h);
+    let moves = 0;
+    h.github.onCommitFiles = () => {
+      moves += 1;
+      h.github.commit(REPO.defaultBranch, "README.md", `moved ${moves}\n`);
+    };
+    const merge = createMergeSteeringPrHandler(h, {
+      publisher: () => s5Publisher().publisher,
+    });
+    await expect(
+      merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({ reason: "production_branch_moving" });
+    const updated = h.store.proposals[0]!.headSha;
+    expect(updated).not.toBe(head);
+    expect(h.github.updates.at(-1)?.to).toBe(updated);
+    expect(h.github.merges).toEqual([]);
+
+    h.github.onCommitFiles = null;
+    const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
+    expect(out.status).toBe("merged");
+    expect(h.github.merges).toHaveLength(1);
+    expect(h.github.merges[0]!.commitMessage).toMatch(
+      new RegExp(`^Oxagen-Approved-By: ${REVIEWER}\\n`),
+    );
+  });
+
   it("in a steering repo, stamps the version S5's publish() assigns into the Oxagen-Version trailer", async () => {
     const h = steeringHarness();
     const { id } = await steeringPrPassed(h);

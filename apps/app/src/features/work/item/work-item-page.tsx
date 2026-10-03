@@ -65,7 +65,7 @@ function Loaded({
         ws={at.ws}
         dialog={dialog}
       />
-      <div className="grid border-t border-border pt-4.5 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] md:gap-x-7">
+      <div className="grid border-t border-border pt-4.5 md:grid-cols-split md:gap-x-7">
         <SourcePanel detail={detail} />
         <TriagePanel detail={detail} at={at} />
       </div>

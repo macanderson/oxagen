@@ -307,7 +307,7 @@ function Denied({ ctx, viewer }: { ctx: WsCtx; viewer: string }) {
           {t("back")}
         </SafeLink>
       </div>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 pt-3 text-left text-sm">
+      <dl className="grid grid-cols-dl gap-x-5 gap-y-1.5 pt-3 text-left text-sm">
         <dt className="text-muted-foreground">{t("signedIn")}</dt>
         <dd>
           {viewer} · <span className={mono}>{ctx.orgRole}</span> ·{" "}

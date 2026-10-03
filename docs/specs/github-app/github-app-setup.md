@@ -395,19 +395,30 @@ payload, and fires the same ingestion pipeline the initial sync uses.
 How it works:
 
 1. **Verify** the raw body's `x-hub-signature-256` (HMAC-SHA256, constant-time) against the App's
-   single webhook secret `GITHUB_APP_WEBHOOK_SECRET`. Missing secret → **503**; bad signature → **401**.
+   single webhook secret `GITHUB_APP_WEBHOOK_SECRET`. Missing secret → **200** with nothing dispatched,
+   logged as an error, because GitHub retries every other answer; bad signature → **401**.
    A verified delivery that can change a steering repo's settings also asks for a health read. See
    [Health webhooks](#health-webhooks). A failure there is logged and never fails the delivery.
 2. **Lifecycle** events (`ping`, `installation`, `installation_repositories`) are acked. On
    `installation` `deleted`/`suspend`, the matching connections are set to `paused`.
-3. **Resolve** target connection(s): `connector_id = 'github'`, `status = 'connected'`, matching
+3. **Work records** (ADR-250, ADR-251). Each step below writes only the workspaces connected to the
+   delivering installation. A failure is logged and never fails the delivery.
+   - `issues` and `issue_comment` reach work intake: every collector that reads the repository
+     stores the delivery once (`routeGithubWorkDelivery`).
+   - `pull_request` records a new head, a merge, or a close on every work order whose run linked the
+     pull request (`recordWorkOrderPullRequest`).
+   - `check_run`, `check_suite`, and `status` reach every open work order whose pull request's
+     current head is the delivery's commit. The work order reads its required checks and every
+     check's result from GitHub again (`recordWorkOrderChecks`). A request to run checks again
+     records nothing.
+4. **Resolve** target connection(s): `connector_id = 'github'`, `status = 'connected'`, matching
    `delivery_config->>'installationId'` and `delivery_config.owner/repo` against the payload's
    `repository.full_name`.
-4. **Extract** ingestable records via the connector's `parseWebhookEvent()`, which both translates
+5. **Extract** ingestable records via the connector's `parseWebhookEvent()`, which both translates
    GitHub's event name to the connector's record type and unwraps the payload (e.g. `issues` →
    `issue` from `payload.issue`; a `push` fans out to one `commit` per commit, reshaped for
    `normalizeRecord`).
-5. **Fan out** one `ingestion/entity.received` per (connection × record). The 6-step pipeline then
+6. **Fan out** one `ingestion/entity.received` per (connection × record). The 6-step pipeline then
    maps/dedups/embeds, as the initial sync does.
 
 > **Mapping still governs ingestion.** A webhook record is only persisted if the connection has an
@@ -433,19 +444,19 @@ code reads yet costs the API a signature check and one connection lookup, and di
 | GitHub event | What reads it |
 | --- | --- |
 | `push` | Ingestion: `commit`, one per commit. Steering health: a push to `main`. |
-| `pull_request` | Ingestion: `pull_request`. Steering health: posts the steering check. |
+| `pull_request` | Ingestion: `pull_request`. Steering health: posts the steering check. Work orders: a new head, a merge, or a close (`recordWorkOrderPullRequest`). |
 | `pull_request_review` | Ingestion: `code_review`. |
 | `pull_request_review_comment` | Ingestion: `comment`. |
 | `pull_request_review_thread` | Nothing yet. PR verification will read thread resolution. |
-| `issues` | Ingestion: `issue`. |
-| `issue_comment` | Ingestion: `comment`. |
+| `issues` | Ingestion: `issue`. Work intake: each collector that reads the repository (`routeGithubWorkDelivery`). |
+| `issue_comment` | Ingestion: `comment`. Work intake: each collector that reads the repository (`routeGithubWorkDelivery`). |
 | `release` | Ingestion: `release`. |
 | `repository` | Ingestion: `repository`. Steering health read. |
 | `repository_ruleset` | Steering health read. |
 | `branch_protection_configuration` | Steering health read. |
-| `check_run` | Nothing yet. A re-run request on Oxagen's check arrives as this event. |
-| `check_suite` | Nothing yet. A re-run request on the whole suite arrives as this event. |
-| `status` | Nothing yet. PR verification will read other CI results. |
+| `check_run` | Work orders: the checks on the commit (`recordWorkOrderChecks`). A re-run request on Oxagen's check also arrives as this event, and nothing reads that request yet. |
+| `check_suite` | Work orders: the checks on the commit (`recordWorkOrderChecks`). A re-run request on the whole suite also arrives as this event, and nothing reads that request yet. |
+| `status` | Work orders: the checks on the commit (`recordWorkOrderChecks`). |
 | `workflow_run` | Nothing yet. PR verification will read other CI results. |
 
 `installation` and `installation_repositories` are delivered automatically (no subscription needed)

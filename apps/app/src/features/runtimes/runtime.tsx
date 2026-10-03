@@ -287,7 +287,7 @@ function agentRow({
           key="agent"
           to={routes.agent(org, ws, agent.slug)}
           data-touch-target=""
-          className="inline-flex items-center rounded-sm after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring"
+          className="inline-flex items-center rounded-sm after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-ring"
         >
           {card}
         </SafeLink>

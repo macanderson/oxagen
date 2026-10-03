@@ -59,7 +59,7 @@ Open the run with `get_run` by `turn.runId`. Each round's verdict is on it as a 
 | `validation_error` | 400 | the rule names one source twice, a name breaks its pattern, the note is blank or too long, or the body carries another field |
 | (none) | 400 | the body is not JSON |
 | `forbidden` (reason `no_principal`, `org_role_required`) | 403 | the caller carries no person to ask as, or the person holds none of the contract's roles |
-| `engine_aborted` | 409 | the goal was still unmet after the last round, or a per-turn budget stop ended the turn. The verdicts stay on the run |
+| `engine_aborted` | 409 | the goal was still unmet after the last round. The verdicts stay on the run |
 | `engine_unavailable`, `assistant_run_not_recorded` | 503 | as for `ask_assistant` |
 | `insufficient_credits`, `billing_suspended`, `assistant_spend_cap` | 402 | the turn's credit gate refused it |
 

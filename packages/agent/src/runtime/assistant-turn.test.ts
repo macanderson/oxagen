@@ -106,8 +106,6 @@ function wireIdFor(s: Selector): string {
 vi.mock("@oxagen/billing", () => ({
   evaluateTurnCreditGate: mocks.evaluateTurnCreditGate,
   createTurnBudgetGuard: mocks.createTurnBudgetGuard,
-  formatBudgetUsd: (n: number) => `$${n}`,
-  TURN_BUDGET_OFF: { enabled: false, limitUsd: 0 },
 }));
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();

@@ -155,7 +155,7 @@ function RuntimeLink({
       to={routes.runtime(org, ws, id)}
       aria-label={t("open", { runtime: name })}
       data-touch-target=""
-      className="inline-flex max-w-full items-center rounded-sm font-medium after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring"
+      className="inline-flex max-w-full items-center rounded-sm font-medium after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-ring"
     >
       <span className="min-w-0 md:truncate">{name}</span>
     </SafeLink>

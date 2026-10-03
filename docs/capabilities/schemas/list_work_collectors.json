@@ -179,10 +179,23 @@
           ],
           "additionalProperties": false
         }
+      },
+      "viewer": {
+        "type": "object",
+        "properties": {
+          "can_change_collectors": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "can_change_collectors"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [
-      "collectors"
+      "collectors",
+      "viewer"
     ],
     "additionalProperties": false
   }

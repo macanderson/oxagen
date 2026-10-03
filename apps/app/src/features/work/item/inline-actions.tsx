@@ -7,7 +7,9 @@
 //
 // Read the checks again asks GitHub for the pull request's required checks
 // now (refresh_work_order_checks). When GitHub could not be read, the reason
-// is said beside the button, and the review keeps what it last recorded.
+// is said beside the button, and the review keeps what it last recorded. It
+// takes the role that accepts work (work.approve), as its handler checks, so
+// the button follows the viewer's approve flag, not the control flag.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
 import {
@@ -24,7 +26,7 @@ import { UNANSWERED, useActionFailure } from "./action-failure";
 import { useBlockText } from "./phrases";
 import { formText } from "./work-dialog";
 
-type Place = { org: string; ws: string; itemId: string; canControl: boolean };
+type Place = { org: string; ws: string; itemId: string };
 
 export function RecordAnswer({
   org,
@@ -32,7 +34,7 @@ export function RecordAnswer({
   itemId,
   version,
   canControl,
-}: Place & { version: number }) {
+}: Place & { version: number; canControl: boolean }) {
   const t = useTranslations("workItem.answer");
   const blockText = useBlockText();
   const failureText = useActionFailure();
@@ -123,8 +125,12 @@ export function RefreshChecks({
   ws,
   itemId,
   orderId,
-  canControl,
-}: Place & { orderId: string }) {
+  canApprove,
+}: Place & {
+  orderId: string;
+  /** Whether the viewer holds the role that accepts work, which refresh_work_order_checks takes. */
+  canApprove: boolean;
+}) {
   const t = useTranslations("workItem.refresh");
   const blockText = useBlockText();
   const failureText = useActionFailure();
@@ -133,7 +139,7 @@ export function RefreshChecks({
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [unread, setUnread] = useState<string | null>(null);
-  const blocked = canControl ? null : blockText({ kind: "control" });
+  const blocked = canApprove ? null : blockText({ kind: "approve" });
 
   async function press() {
     if (pending || blocked !== null) return;

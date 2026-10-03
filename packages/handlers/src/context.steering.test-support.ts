@@ -43,7 +43,11 @@ import {
   type SyncStateWrite,
   type SyncStore,
 } from "./context.steering.sync.store";
-import { setSharedMergeLockForTests } from "./steering-repo/merge-queue";
+import {
+  readSteeringLayout,
+  setSharedMergeLockForTests,
+  stampHead,
+} from "./steering-repo/merge-queue";
 
 // The merge queue's lock across processes is a Postgres advisory lock, and
 // these doubles run without a database. Every suite that imports them merges
@@ -1420,6 +1424,45 @@ export function lapseMergeClaims(h: { store: MemoryStore; now: () => Date }): vo
   for (const proposal of h.store.proposals)
     if (proposal.mergeClaimedAt !== null)
       Object.assign(proposal, { mergeClaimedAt: lapsed });
+}
+
+/**
+ * Leave a steering repo PR the way a merge from Oxagen leaves it when it stops
+ * after the host merged: Oxagen's stamp commit on the checked head, merged on
+ * the host, and the row moved to the stamp. Answers the merge commit. A
+ * resume test starts from here, because every merge from Oxagen in a steering
+ * repo lands a stamp, and a PR merged at any other head is someone else's
+ * (#4504).
+ */
+export async function landStampOnHost(
+  h: { github: FakeGitHub; now: () => Date },
+  row: ProposalRow,
+): Promise<string> {
+  const layout = await readSteeringLayout(h.github, REPO);
+  const main = await h.github.branchHead(REPO, REPO.defaultBranch);
+  const { prNumber, branch, headSha } = row;
+  if (
+    layout.layout !== "steering" ||
+    main === null ||
+    prNumber === null ||
+    branch === null ||
+    headSha === null
+  )
+    throw new Error("landStampOnHost needs an open steering repo PR");
+  const stamp = await stampHead({
+    host: h.github,
+    repo: REPO,
+    number: prNumber,
+    branch,
+    head: headSha,
+    main,
+    settings: layout.settings,
+    at: h.now(),
+    approval: { approvedBy: [REVIEWER], withoutReview: false },
+    mergedBy: REVIEWER,
+  });
+  Object.assign(row, { headSha: stamp.sha });
+  return h.github.mergeOnHost(prNumber);
 }
 
 export interface Harness extends SteeringDeps {

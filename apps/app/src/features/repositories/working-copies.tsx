@@ -127,7 +127,7 @@ export function WorkingCopies({
           title={t("syncTitle")}
         >
           <PanelBody>
-            <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-sm leading-relaxed max-sm:grid-cols-1">
+            <dl className="grid grid-cols-dl-clip gap-x-4 gap-y-2.5 text-sm leading-relaxed max-sm:grid-cols-1">
               {SYNC.map(({ key, command }) => (
                 <div key={key} className="contents" data-command={command}>
                   <dt className={`${mono} text-dim`}>{command}</dt>

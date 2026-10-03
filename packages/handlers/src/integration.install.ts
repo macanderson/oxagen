@@ -4,6 +4,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { getConnector } from "@oxagen/ingestion/connectors";
 import { HTTPException } from "hono/http-exception";
 import type { ConnectorDefinition } from "@oxagen/ingestion/connectors";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 /**
@@ -37,6 +38,9 @@ export const integrationInstallHandler: CapabilityHandler<
       message: "integration.install requires an authenticated user",
     });
   }
+  // The kernel allows every call below Enterprise, so the handler checks the
+  // contract's roles itself: a workspace Viewer may not install (#3458).
+  await assertContractRole(integrationInstall, ctx);
 
   let connector: ConnectorDefinition;
   try {

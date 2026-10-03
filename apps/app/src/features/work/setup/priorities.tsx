@@ -10,7 +10,9 @@
 // record in place the tab says why, in the server's words, and offers the
 // editor that writes one (priorities-editor.tsx). With more than one record
 // in place it offers no editor, because a third record would not help: the
-// person retires all but one.
+// person retires all but one. A Viewer sees the editor with its submit turned
+// off, because proposing the record and opening its pull request take a
+// workspace Owner or Member.
 import { useLocale, useTranslations } from "next-intl";
 import type { WorkPriorities } from "@/data/contracts/work";
 import type { Read } from "@/data/read";
@@ -80,10 +82,13 @@ export function PrioritiesTab({
   org,
   ws,
   read,
+  canControl,
 }: {
   org: string;
   ws: string;
   read: Read<WorkPriorities>;
+  /** Whether the viewer may propose the record and open its pull request; unknown reads as allowed and the server decides. */
+  canControl: boolean;
 }) {
   const t = useTranslations("work.setup");
   const page = useTranslations("work.page");
@@ -108,7 +113,7 @@ export function PrioritiesTab({
             problem === null ? undefined : (
               <p
                 data-testid="work-priorities-problem"
-                className="mx-auto max-w-measure-narrow text-base text-muted-foreground [overflow-wrap:anywhere]"
+                className="mx-auto max-w-measure-narrow text-base text-muted-foreground wrap-anywhere"
               >
                 {problem}
               </p>
@@ -118,14 +123,14 @@ export function PrioritiesTab({
           {page("descriptionNoRecord")}
         </StateWrap>
         {problem?.startsWith(AMBIGUOUS) === true ? null : (
-          <PrioritiesEditor org={org} ws={ws} />
+          <PrioritiesEditor org={org} ws={ws} canControl={canControl} />
         )}
         <TriagePanel last30Days={last30Days} />
       </div>
     );
   const rules = [...record.rules].sort((a, b) => a.number - b.number);
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+    <div className="grid gap-4 lg:grid-cols-split">
       <section
         aria-labelledby="work-priorities-title"
         data-testid="work-priorities-record"
@@ -187,7 +192,7 @@ export function PrioritiesTab({
                   <span className={`${mono} flex-none text-dim`}>
                     {t("priorities.rule", { number: String(rule.number) })}
                   </span>
-                  <span className="min-w-0 [overflow-wrap:anywhere]">
+                  <span className="min-w-0 wrap-anywhere">
                     {rule.text}
                   </span>
                 </li>

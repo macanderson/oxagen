@@ -406,7 +406,7 @@ function Loaded({
                     </Badge>
                   </td>
                   <td
-                    className={`${cell} text-muted-foreground [--cell-max:32rem]`}
+                    className={`${cell} text-muted-foreground cell-max-wide`}
                   >
                     {check.summary.trim() !== ""
                       ? check.summary
@@ -447,7 +447,7 @@ function Loaded({
           ).map((step, index) => (
             <li
               key={step}
-              className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3 border-b border-border px-3.5 py-2.5 last:border-b-0"
+              className="grid grid-cols-icon gap-3 border-b border-border px-3.5 py-2.5 last:border-b-0"
             >
               <b className="font-semibold text-foreground">{index + 1}</b>
               <span className="text-muted-foreground">

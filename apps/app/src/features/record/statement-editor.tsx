@@ -40,9 +40,9 @@ const TOKEN_CLASS: Record<MarkdownTokenKind, string | null> = {
 const LINE = 20;
 const PAD = 12;
 const codeText =
-  "font-mono text-sm leading-5 [font-feature-settings:var(--ox-font-mono-features)]";
+  "font-mono text-sm leading-5 font-features-(--ox-font-mono-features)";
 const layer =
-  "m-0 whitespace-pre-wrap break-words px-4.5 py-3 [overflow-wrap:break-word] [tab-size:2]";
+  "m-0 whitespace-pre-wrap break-words px-4.5 py-3 wrap-break-word tab-2";
 
 /**
  * Ln and Col of an offset, 1-based, as the status line prints them.
@@ -331,7 +331,7 @@ export function StatementEditor({
         </label>
       </div>
       <div
-        className={`${codeText} grid max-h-(--editor-max-h) min-h-45 grid-cols-[max-content_minmax(0,1fr)] overflow-auto bg-code-bg`}
+        className={`${codeText} grid max-h-(--editor-max-h) min-h-45 grid-cols-dl-clip overflow-auto bg-code-bg`}
       >
         <div
           aria-hidden="true"

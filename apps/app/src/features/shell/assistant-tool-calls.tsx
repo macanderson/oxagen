@@ -71,7 +71,7 @@ export function AssistantToolCalls({
           >
             <details className="group rounded-md border border-border bg-app-raised-bg px-2 py-1 text-app-raised-fg">
               {/* A flex summary loses the native marker, so it draws its own: `▸`, `▾` when open. */}
-              <summary className="flex cursor-pointer list-none items-baseline gap-2 before:flex-none before:text-muted-foreground before:content-['▸'] group-open:before:content-['▾'] [&::-webkit-details-marker]:hidden">
+              <summary className="flex cursor-pointer list-none items-baseline gap-2 before:flex-none before:text-muted-foreground before:content-(--glyph-disclosure) group-open:before:content-(--glyph-disclosure-open) [&::-webkit-details-marker]:hidden">
                 <span className="min-w-0 flex-1 truncate">
                   {toolLabel(call.toolName)}
                 </span>
@@ -89,7 +89,7 @@ export function AssistantToolCalls({
                   {formatDuration(call.durationMs, locale)}
                 </span>
               </summary>
-              <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+              <dl className="mt-1 grid grid-cols-lead gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                 <dt>{t("toolCalls.tool")}</dt>
                 <dd className={copyable}>{call.toolName}</dd>
                 <dt>{t("toolCalls.callId")}</dt>

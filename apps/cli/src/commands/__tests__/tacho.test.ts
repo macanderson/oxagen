@@ -121,6 +121,10 @@ vi.mock("@oxagen/recorder/cli", () => ({
     calls.push({ name: "workStart", args });
     return outcomes.work;
   },
+  workClaim: async (...args: unknown[]) => {
+    calls.push({ name: "workClaim", args });
+    return outcomes.work;
+  },
   enroll: async (...args: unknown[]) => {
     calls.push({ name: "enroll", args });
     return outcomes.enroll;
@@ -164,6 +168,7 @@ import {
   handleTachoStatus,
   handleTachoUnenroll,
   handleTachoVerify,
+  handleWorkClaim,
   handleWorkList,
   handleWorkStart,
   tachoCredentials,
@@ -536,6 +541,20 @@ describe("oxagen tacho", () => {
     expect(await handleWorkList(writer)).toBe(0);
     const listDeps = lastCall("workList")?.args[0] as { cwd: string };
     expect(listDeps.cwd).toBe(process.cwd());
+  });
+
+  it("work claim hands the recorder the criterion, the text, and this directory", async () => {
+    const { writer } = captureWriter();
+    outcomes.work = 1;
+    expect(
+      await handleWorkClaim("c2", { text: "The invite test passes." }, writer),
+    ).toBe(1);
+    const call = lastCall("workClaim");
+    expect(call?.args[0]).toBe("c2");
+    expect(call?.args[1]).toEqual({ text: "The invite test passes." });
+    const deps = call?.args[2] as { runtime: unknown; cwd: string };
+    expect(deps.runtime).toBe(OXAGEN_RUNTIME);
+    expect(deps.cwd).toBe(process.cwd());
   });
 
   it("status, unenroll, export, and verify report their outcome as the exit status", async () => {

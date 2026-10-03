@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 // The Work page over a fake DataSource: one item on each tab with every status
 // word, each tab's columns and order, the empty tabs, a refused and a failed
-// item read, a failing collector, a viewer whose roles cannot send, and the
-// Send link. Each state runs the axe check (INV-26). The New work item dialog
-// is proven in new-item.test.tsx.
+// item read, a failing collector, a viewer whose roles cannot send, the Send
+// link, and the busy skeleton the Work pages draw while their reads run. Each
+// state runs the axe check (INV-26). The New work item dialog is proven in
+// new-item.test.tsx.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -43,6 +44,7 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { WorkPage } = await import("./work-page");
+const { WorkLoading } = await import("./loading");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "usr_marcusbell",
@@ -719,5 +721,22 @@ describe("Work › a failing collector", () => {
   it("raises no banner while every collector reads", async () => {
     await renderWork({ list: workList(ALL) });
     expect(screen.queryByTestId("work-collector-banner")).toBeNull();
+  });
+});
+
+describe("Work › loading", () => {
+  it("draws the busy skeleton while reads run, says Loading Work, and shows no figure", () => {
+    render(
+      <IntlProvider>
+        <WorkLoading />
+      </IntlProvider>,
+    );
+    const busy = screen.getByRole("status");
+    expect(busy).toHaveAttribute("aria-busy", "true");
+    expect(busy).toHaveAttribute("data-testid", "work-loading");
+    expect(busy.querySelectorAll("[data-skeleton-tile]")).toHaveLength(3);
+    expect(busy.querySelectorAll("[data-skeleton-row]")).toHaveLength(7);
+    expect(busy.textContent).toBe("Loading Work");
+    expect(document.querySelector("main")).toBeNull();
   });
 });

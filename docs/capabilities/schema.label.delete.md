@@ -39,7 +39,7 @@ DELETE /v1/schemas/crm/labels/LegacyAccount
 ```
 
 ## Notes
-- **Access:** Org: Owner/Admin; Workspace: Owner/Member.
+- **Access:** Org: Owner/Admin; Workspace: Owner/Member. The handler checks these roles on every plan, and a workspace's Owner or Admin also passes (#5228).
 - Sensitivity: high — removes the label and all its properties from the draft.
 - **Agent requires approval** before executing this action.
 - Deletion is staged in the **draft version only**. Call `schema.version.create` to publish the deletion.

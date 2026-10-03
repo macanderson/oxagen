@@ -266,6 +266,9 @@ export function WaitLine({ wait }: { wait: WorkWait }) {
     case "merged_before_review":
       text = t("merged_before_review", { at: when(wait.at) });
       break;
+    case "merged_by_app":
+      text = t("merged_by_app", { login: wait.login, at: when(wait.at) });
+      break;
     case "brief_out_of_date":
       text = t("brief_out_of_date");
       break;

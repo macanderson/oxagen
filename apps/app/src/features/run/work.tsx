@@ -163,7 +163,7 @@ function ChangesBody({
     ) : undefined;
   return (
     <Panel title={t("changes")} aside={head} testId="run-changes">
-      <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1.75">
+      <dl className="grid grid-cols-dl items-baseline gap-x-4 gap-y-1.75">
         <Row label={t("pullRequest")}>
           {!work.ok ? (
             <ReadFailure read={work} section={t("pullRequest")} />

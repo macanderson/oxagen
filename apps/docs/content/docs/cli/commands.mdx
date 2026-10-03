@@ -364,6 +364,7 @@ The command exits with the agent's own exit code. It exits 1 when the machine is
 ```bash
 oxagen work list
 oxagen work start <work order>
+oxagen work claim <criterion> --text "<how the commit meets it>"
 ```
 
 A person sends work to an agent from [Work](/docs/work) in the app. The work order waits on the agent's host until someone at that machine starts it.
@@ -372,14 +373,17 @@ A person sends work to an agent from [Work](/docs/work) in the app. The work ord
 |---|---|
 | `list` | Lists each work order waiting on this machine, with its work item, when it arrived, and its key. |
 | `start <work order>` | Claims the work order, then starts the agent's harness in the current directory with the brief as its first prompt. Run it in a checkout of the brief's repository. A work order id starts with `wo_`. |
+| `claim <criterion> --text <text>` | The agent runs this inside the work order's run. It claims that the head commit in the current directory meets one criterion of the brief, such as `c1`, and says how. Push the commit to the pull request first. |
 
 `start` claims the work order before anything runs. When Oxagen refuses the claim, nothing starts, and the message says why: the send ended, it went to another machine, or a run already started for it. `start` never claims again on its own. When this machine does not wrap the agent's harness, or the harness command is not installed, `start` tells Oxagen, and Oxagen ends the send so the item can be sent again. The work order stays in `list` until the harness starts.
 
+`claim` works only inside a run that `start` started, because it reads the work order from the `OXAGEN_WORK_ORDER_ID` variable `start` sets for the harness. Oxagen records the claim beside the criterion on the work item. A claim is the agent's word: a person still checks every criterion and decides. Oxagen refuses a claim on a commit that is not the pull request's head, and the message says to push first. The same claim on the same commit again records nothing new.
+
 | Exit code | Meaning |
 |---|---|
-| `0` | `list` finished. For `start`, the harness ran and exited 0. |
-| `1` | No agent is enrolled on this machine, the work order is not waiting here, Oxagen refused the claim, or the harness could not start. |
-| `2` | The id is not a work order id. |
+| `0` | `list` finished. For `start`, the harness ran and exited 0. For `claim`, Oxagen recorded the claim or already had it. |
+| `1` | No agent is enrolled on this machine, the work order is not waiting here, Oxagen refused the claim, or the harness could not start. For `claim`, the command ran outside a work order's run, the directory has no commit, or Oxagen refused the claim or could not be reached. |
+| `2` | The id is not a work order id or a criterion id, or the `--text` is empty or longer than 2000 characters. |
 
 After a successful claim, `start` exits with the harness's own exit code.
 

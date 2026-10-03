@@ -22,7 +22,9 @@ const OUTPUT = {
     truncated: false,
   },
   truncated: false,
-  weeks: [{ week: "2026-09-28", accepted_merged: 2, returned: 0, median_lead_hours: 5, entered: 6, sent: 3, full_flow: true }],
+  weeks: [
+    { week: "2026-09-28", accepted_merged: 2, returned: 0, median_lead_hours: 5, entered: 6, sent: 3, full_flow: true, complete: true },
+  ],
 };
 
 // get_work_outcomes (P1-05, #5163; the pilot measures, P1-06, #5241).
@@ -60,7 +62,9 @@ describe("get_work_outcomes contract", () => {
         claim_minutes: { median: null, p90: null, sample: 0 },
         truncated: false,
       },
-      weeks: [{ week: "2026-09-28", accepted_merged: 0, returned: 0, median_lead_hours: null, entered: 0, sent: 0, full_flow: false }],
+      weeks: [
+        { week: "2026-09-28", accepted_merged: 0, returned: 0, median_lead_hours: null, entered: 0, sent: 0, full_flow: false, complete: false },
+      ],
     };
     expect(contract.output.safeParse(empty).success).toBe(true);
   });
@@ -80,6 +84,13 @@ describe("get_work_outcomes contract", () => {
     expect(contract.output.safeParse({ ...OUTPUT, weeks: [{ ...OUTPUT.weeks[0], full_flow: "yes" }] }).success).toBe(false);
     expect(contract.output.safeParse({ ...OUTPUT, delivery: { ...OUTPUT.delivery, claim_rate: 0.6 } }).success).toBe(false);
     expect(contract.output.safeParse({ ...OUTPUT, pilot_passed: true }).success).toBe(false);
+  });
+
+  it("says whether the window covers each whole week, and refuses a week that does not say", () => {
+    const unsaid = { week: "2026-09-28", accepted_merged: 2, returned: 0, median_lead_hours: 5, entered: 6, sent: 3, full_flow: true };
+    expect(contract.output.safeParse({ ...OUTPUT, weeks: [unsaid] }).success).toBe(false);
+    expect(contract.output.safeParse({ ...OUTPUT, weeks: [{ ...OUTPUT.weeks[0], complete: "partly" }] }).success).toBe(false);
+    expect(contract.output.parse({ ...OUTPUT, weeks: [{ ...OUTPUT.weeks[0], complete: false }] }).weeks[0]?.complete).toBe(false);
   });
 
   // #5244: reverts over the reopen cohort, with the items that wait to count.

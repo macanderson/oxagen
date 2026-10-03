@@ -394,14 +394,15 @@ describe("run show", () => {
 
 // ADR-251: a work order waits on the agent's host until the person at the
 // machine starts it, so `oxagen work` lists the waiting orders and starts one
-// by its id.
+// by its id. Inside the run, the agent claims each criterion it met.
 describe("work", () => {
   const program = buildProgram();
   const work = program.commands.find((c) => c.name() === "work");
 
-  it("carries list and start, and start takes one required work order id", () => {
+  it("carries list, start, and claim, and start takes one required work order id", () => {
     expect(work, "work must be registered").toBeDefined();
     expect(work?.commands.map((c) => c.name()).sort()).toEqual([
+      "claim",
       "list",
       "start",
     ]);
@@ -409,6 +410,16 @@ describe("work", () => {
     const args = start?.registeredArguments ?? [];
     expect(args.map((a) => a.name())).toEqual(["work-order"]);
     expect(args[0]?.required).toBe(true);
+  });
+
+  it("claim takes one required criterion id and a required --text", () => {
+    const claim = work?.commands.find((c) => c.name() === "claim");
+    const args = claim?.registeredArguments ?? [];
+    expect(args.map((a) => a.name())).toEqual(["criterion"]);
+    expect(args[0]?.required).toBe(true);
+    const text = claim?.options.find((o) => o.long === "--text");
+    expect(text?.mandatory).toBe(true);
+    expect(text?.required).toBe(true);
   });
 
   it("is listed in the top-level help", () => {

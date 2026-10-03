@@ -14,7 +14,9 @@
 // - work/intake-triage: draft one triage suggestion. At most 60 start per
 //   workspace per minute (TRIAGE_DECISIONS_PER_MINUTE in @oxagen/work), and
 //   the rest wait in the queue. When the retries run out, the on-failure
-//   companion records the failure on the item, so it stays visible.
+//   companion records the failure on the item, so it stays visible. The
+//   event carries the item revision it is about, so a late failure does not
+//   land on a newer revision or after a result.
 // - work/intake-prune: once a day, delete stored deliveries and result rows
 //   past the retention window.
 //
@@ -26,6 +28,7 @@ import {
   type WorkIntakeChange,
   type WorkIntakeScope,
   type WorkReconcileSummary,
+  type WorkTriageFailedRun,
   workIntakeRunner,
 } from "../lib/work-intake-runner";
 
@@ -58,7 +61,11 @@ function scopeOf(data: Record<string, unknown>, job: string): WorkIntakeScope {
   return { orgId: text(data, "org_id", job), workspaceId: text(data, "workspace_id", job) };
 }
 
-/** One work/item.received event per change. The id dedupes a repeat of the same change. */
+/**
+ * One work/item.received event per change. The id dedupes a repeat of the
+ * same change, so the revision stays out of it. The data carries the revision
+ * when the change knows it.
+ */
 export function itemReceivedEvents(scope: WorkIntakeScope, changes: readonly WorkIntakeChange[]) {
   return changes.map((change) => ({
     name: "work/item.received",
@@ -68,6 +75,7 @@ export function itemReceivedEvents(scope: WorkIntakeScope, changes: readonly Wor
       workspace_id: scope.workspaceId,
       item_id: change.publicId,
       change: change.change,
+      ...(change.revision === undefined ? {} : { revision: change.revision }),
     },
   }));
 }
@@ -195,8 +203,19 @@ export const [workIntakeCheck] = createFunction(
   },
 );
 
-/** The item an inngest/function.failed event's original event named. */
-function failedItem(data: Record<string, unknown>): { scope: WorkIntakeScope; item: string; reason: string } | null {
+/** True for an item revision: a whole number from 1. */
+function isRevision(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+/**
+ * The item an inngest/function.failed event's original event named, the
+ * revision it was about, and whether a person asked for the run. An event
+ * sent before events carried a revision names none.
+ */
+function failedItem(
+  data: Record<string, unknown>,
+): { scope: WorkIntakeScope; item: string; reason: string; run: WorkTriageFailedRun } | null {
   const original = (data.event ?? null) as { data?: Record<string, unknown> } | null;
   const inner = original?.data;
   if (!inner || typeof inner.org_id !== "string" || typeof inner.workspace_id !== "string" || typeof inner.item_id !== "string") {
@@ -208,6 +227,10 @@ function failedItem(data: Record<string, unknown>): { scope: WorkIntakeScope; it
     scope: { orgId: inner.org_id, workspaceId: inner.workspace_id },
     item: inner.item_id,
     reason: `Triage could not run: ${message.slice(0, 500)}. Retry triage, or set the priority yourself.`,
+    run: {
+      ...(isRevision(inner.revision) ? { revision: inner.revision } : {}),
+      retry: inner.change === "retry",
+    },
   };
 }
 
@@ -221,7 +244,7 @@ export const [workIntakeTriage, workIntakeTriageOnFailure] = createFunction(
       const failed = failedItem(event.data);
       if (failed === null) return { recorded: false };
       await step.run("record-failure", () =>
-        workIntakeRunner().recordTriageFailure(failed.scope, failed.item, failed.reason),
+        workIntakeRunner().recordTriageFailure(failed.scope, failed.item, failed.reason, failed.run),
       );
       return { recorded: true };
     },

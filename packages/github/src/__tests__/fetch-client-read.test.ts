@@ -204,6 +204,8 @@ describe("getPullRequest", () => {
       headSha: "abc123",
       mergeCommitSha: null,
       mergedAt: null,
+      // The fixture is not merged, so it names no merger.
+      mergedBy: null,
       // The fixture names no base commit, base repository, or close time.
       closedAt: null,
       baseSha: null,
@@ -247,6 +249,55 @@ describe("getPullRequest", () => {
     expect(pr.headSha).toBeNull();
     // A payload with no labels array reads as no labels.
     expect(pr.labels).toEqual([]);
+  });
+
+  async function mergedBy(merger: unknown) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(
+        makeResponse({
+          number: 3,
+          title: "t",
+          html_url: "u",
+          state: "closed",
+          merged: true,
+          merge_commit_sha: "9".repeat(40),
+          merged_at: "2026-10-02T10:00:00Z",
+          merged_by: merger,
+          user: null,
+          created_at: "2026-10-02T09:00:00Z",
+          updated_at: "2026-10-02T10:00:00Z",
+          body: null,
+          base: { ref: "main" },
+          head: { ref: "f", sha: "1".repeat(40) },
+        }),
+      ),
+    );
+    const pr = await createGitHubClient({ token: "tok" }).getPullRequest({
+      owner: "a",
+      repo: "b",
+      number: 3,
+    });
+    return pr.mergedBy;
+  }
+
+  it("names the account that merged it and the account's type", async () => {
+    expect(await mergedBy({ login: "amara", type: "User", id: 7 })).toEqual({
+      login: "amara",
+      type: "User",
+    });
+    // An app that merges with its installation token reads as a bot.
+    expect(await mergedBy({ login: "oxagen[bot]", type: "Bot" })).toEqual({
+      login: "oxagen[bot]",
+      type: "Bot",
+    });
+  });
+
+  it("reads no merger when GitHub names none or leaves out its login or type", async () => {
+    expect(await mergedBy(null)).toBeNull();
+    expect(await mergedBy({ login: "amara" })).toBeNull();
+    expect(await mergedBy({ type: "Bot" })).toBeNull();
+    expect(await mergedBy({ login: "", type: "User" })).toBeNull();
   });
 });
 

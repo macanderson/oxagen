@@ -19,7 +19,7 @@ export const workBriefApprove = registerCapability({
     "Approve the latest acceptance brief for a work item's current revision, so the item can be sent to an agent.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

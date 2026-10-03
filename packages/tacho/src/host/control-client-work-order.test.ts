@@ -1,11 +1,14 @@
 /**
- * The host's two work order calls (P1-04, ADR-251): `claimWorkOrder` and
- * `rejectWorkOrder`, against a fake control plane.
+ * The host's work order calls (P1-04, ADR-251): `claimWorkOrder`,
+ * `rejectWorkOrder`, and the agent's `claimWorkCriterion`, against a fake
+ * control plane.
  */
 import { describe, expect, it } from "vitest";
 import {
   ControlError,
   controlErrorMessage,
+  controlErrorReason,
+  ControlUnreachable,
   createControlClient,
   type FetchLike,
   workOrderEndpointsFor,
@@ -65,10 +68,12 @@ function rig(answer: { status: number; body: unknown }) {
 }
 
 describe("workOrderEndpointsFor", () => {
-  it("joins the two paths to the API URL, with or without a trailing slash", () => {
+  it("joins the three paths to the API URL, with or without a trailing slash", () => {
     const expected = {
       workOrderClaim: "https://api.example.test/v1/tacho/work-orders/claim",
       workOrderReject: "https://api.example.test/v1/tacho/work-orders/reject",
+      workCriterionClaim:
+        "https://api.example.test/v1/tacho/work-orders/criteria/claim",
     };
     expect(workOrderEndpointsFor("https://api.example.test")).toEqual(
       expected,
@@ -168,6 +173,134 @@ describe("rejectWorkOrder", () => {
       work_order_id: "wo_01j9k2m3n4",
       reason: "The claude command is not installed on this machine.",
     });
+  });
+});
+
+const CRITERION_CLAIM = {
+  item_id: "wi_7f3a",
+  work_order_id: "wo_01j9k2m3n4",
+  criterion_id: "c2",
+  head_sha: "0123456789abcdef0123456789abcdef01234567",
+  text: "The invite test covers an expired link.",
+};
+
+const CRITERION_ANSWER = {
+  item: { id: "wi_7f3a", state: "running", revision: 2, version: 7 },
+  repeat: false,
+  order: { id: "wo_01j9k2m3n4", send: 1, key: "wi_7f3a:r2:s1", delivery: "running" },
+  claim: {
+    criterion_id: "c2",
+    head_sha: "0123456789abcdef0123456789abcdef01234567",
+    run_id: "tse_01j9",
+  },
+};
+
+describe("claimWorkCriterion", () => {
+  it("posts the claim's five fields with the host key and reads the answer", async () => {
+    const { client, calls } = rig({ status: 200, body: CRITERION_ANSWER });
+    const answer = await client.claimWorkCriterion(CRITERION_CLAIM);
+    expect(answer.repeat).toBe(false);
+    expect(answer.claim.run_id).toBe("tse_01j9");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe(
+      "https://api.example.test/v1/tacho/work-orders/criteria/claim",
+    );
+    expect(calls[0]?.headers["Authorization"]).toBe("Bearer oxk_test_secret");
+    // The contract is strict, so the body carries no enrollment id.
+    expect(calls[0]?.body).toEqual(CRITERION_CLAIM);
+  });
+
+  it("sends only the contract's fields, whatever else the caller passes", async () => {
+    const { client, calls } = rig({ status: 200, body: CRITERION_ANSWER });
+    await client.claimWorkCriterion({
+      ...CRITERION_CLAIM,
+      extra: "not sent",
+    } as typeof CRITERION_CLAIM);
+    expect(calls[0]?.body).toEqual(CRITERION_CLAIM);
+  });
+
+  it("throws the server's refusal as a ControlError with its reason (negative)", async () => {
+    const { client } = rig({
+      status: 409,
+      body: {
+        error: {
+          code: "conflict",
+          reason: "stale_head",
+          message:
+            "You named 0123456, and the pull request's head is now 89abcde. Claim on the current head.",
+        },
+      },
+    });
+    const error = await client
+      .claimWorkCriterion(CRITERION_CLAIM)
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ControlError);
+    expect((error as ControlError).status).toBe(409);
+    expect(controlErrorReason(error as ControlError)).toBe("stale_head");
+    expect(controlErrorMessage(error as ControlError)).toMatch(
+      /Claim on the current head\.$/,
+    );
+  });
+
+  it("reports an unreachable control plane as ControlUnreachable (negative)", async () => {
+    const client = createControlClient({
+      endpoints: {
+        ingest: "https://api.example.test/v1/tacho/events",
+        bundle: "https://api.example.test/v1/tacho/bundle",
+        commands: "https://api.example.test/v1/tacho/commands",
+        ...workOrderEndpointsFor("https://api.example.test"),
+      },
+      apiKey: "k",
+      hostEnrollmentId: HOST,
+      fetch: async () => {
+        throw new Error("ECONNREFUSED");
+      },
+    });
+    await expect(client.claimWorkCriterion(CRITERION_CLAIM)).rejects.toThrow(
+      ControlUnreachable,
+    );
+  });
+
+  it("refuses an answer with no claim (negative)", async () => {
+    const { client } = rig({ status: 200, body: { repeat: false } });
+    await expect(client.claimWorkCriterion(CRITERION_CLAIM)).rejects.toThrow();
+  });
+
+  it("throws when the client has no criterion claim endpoint (negative)", async () => {
+    const client = createControlClient({
+      endpoints: {
+        ingest: "https://api.example.test/v1/tacho/events",
+        bundle: "https://api.example.test/v1/tacho/bundle",
+        commands: "https://api.example.test/v1/tacho/commands",
+      },
+      apiKey: "k",
+      hostEnrollmentId: HOST,
+      fetch: async () => {
+        throw new Error("no request should be sent");
+      },
+    });
+    await expect(client.claimWorkCriterion(CRITERION_CLAIM)).rejects.toThrow(
+      /no criterion claim endpoint/,
+    );
+  });
+});
+
+describe("controlErrorReason", () => {
+  it("is undefined when the body names no reason (negative)", () => {
+    expect(controlErrorReason(new ControlError(502, "<html>bad gateway"))).toBe(
+      undefined,
+    );
+    expect(
+      controlErrorReason(
+        new ControlError(
+          400,
+          JSON.stringify({ error: { code: "bad_request", message: "No." } }),
+        ),
+      ),
+    ).toBe(undefined);
+    expect(
+      controlErrorReason(new ControlError(403, JSON.stringify({ error: "x" }))),
+    ).toBe(undefined);
   });
 });
 
