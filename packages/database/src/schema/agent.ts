@@ -1552,20 +1552,16 @@ export const steeringRecords = agentSchema.table(
       mode: "date",
     }),
     // The six kinds of a v0.1 record file (Stella's file surface). Every
-    // write path has required one since #3302, enforced today at the
-    // application layer (contracts/steering.record.publish.ts,
-    // context.steering.store.ts). The DB-level NOT NULL is a deliberate
-    // follow-up migration (see migration `20260920150000`'s comment,
-    // Codex round 3 on #3486): db-migrate.yml runs on no ordering guarantee
-    // against the deploy that ships this requirement, so a hard constraint
-    // here today could reject a write from an old container still in a
-    // rolling deploy.
-    kind: text("kind"),
+    // write path has required one since #3302
+    // (contracts/steering.record.publish.ts, context.steering.store.ts,
+    // context.steering.sync.store.ts), and migration `20261004000000` makes
+    // the column NOT NULL (#3296).
+    kind: text("kind").notNull(),
     // How hard the record steers: must | should | may | info. Every write
-    // path has required one since #3302; a record with no force can never
-    // reach an agent. See `kind`'s comment for why this stays nullable at
-    // the DB layer for now.
-    force: text("force"),
+    // path has required one since #3302, and migration `20261004000000`
+    // makes the column NOT NULL. Only must and should reach an agent's
+    // session prefix.
+    force: text("force").notNull(),
     // require | forbid on a constraint; NULL on every other kind. `allow` is
     // unrepresentable: a record never grants authority (spec §10.3).
     constraintEffect: text("constraint_effect"),

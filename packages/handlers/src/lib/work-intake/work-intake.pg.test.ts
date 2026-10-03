@@ -258,7 +258,7 @@ describe.skipIf(!enabled)("work intake and triage against Postgres", () => {
     await inScope(s, async (tx) => {
       const [record] = await tx
         .insert(schema.steeringRecords)
-        .values({ orgId: s.orgId, workspaceId: s.workspaceId, slug, title: "Work priorities", status: "active" })
+        .values({ orgId: s.orgId, workspaceId: s.workspaceId, slug, title: "Work priorities", status: "active", kind: "rule", force: "must" })
         .returning({ id: schema.steeringRecords.id });
       const [version] = await tx
         .insert(schema.steeringRecordVersions)
