@@ -45,8 +45,8 @@ import { SsoGroupRoles } from "./sso-group-roles";
 /** Permissions shown as chips before the rest collapse into "+N more". */
 const CHIPS = 4;
 
-const lead = "text-sm text-muted-foreground";
-const sectionTitle = "text-base font-semibold text-foreground";
+const lead = "text-base text-muted-foreground";
+const sectionTitle = "text-lg font-semibold text-foreground";
 
 function Permissions({ role }: { role: Role }) {
   const t = useTranslations("organization.roleCatalog");
@@ -62,7 +62,7 @@ function Permissions({ role }: { role: Role }) {
         </Badge>
       ))}
       {rest > 0 ? (
-        <span className="text-sm text-dim">
+        <span className="text-xs text-dim">
           {t("more", { count: rest })}
         </span>
       ) : null}
@@ -109,7 +109,7 @@ function Origin({ role, origin }: { role: Role; origin: string }) {
       </Badge>
     );
   }
-  return <span className="text-sm text-dim">{origin}</span>;
+  return <span className="text-xs text-dim">{origin}</span>;
 }
 
 export function RolesTab({
@@ -159,7 +159,7 @@ export function RolesTab({
           {role.name}
         </span>
         {role.description === null ? null : (
-          <span className="block text-sm text-dim md:truncate">
+          <span className="block text-xs text-dim md:truncate">
             {role.description}
           </span>
         )}
@@ -171,7 +171,7 @@ export function RolesTab({
       >
         {t(`kind.${role.kind}`)}
       </Badge>,
-      <span key="scope" className={`${mono} text-sm`}>
+      <span key="scope" className={`${mono} text-xs`}>
         {t(`scope.${role.scope}`)}
       </span>,
       <Permissions key="permissions" role={role} />,
@@ -306,7 +306,7 @@ function GroupMappings({
             its settings are reached from here, where its group mappings live. */}
         <SafeLink
           to={routes.sso(org)}
-          className={`${linkText} text-sm`}
+          className={`${linkText} text-base`}
           data-testid="sso-settings-link"
         >
           {t("ssoSettings")}
@@ -332,7 +332,7 @@ function GroupMappings({
           )}
           {read.value.providers.map((provider) => (
             <div key={provider.providerRef} className="flex flex-col gap-2">
-              <h3 className="text-sm font-semibold text-foreground">
+              <h3 className="text-base font-semibold text-foreground">
                 {t("provider", {
                   name: provider.displayName,
                   domain: provider.domain,

@@ -42,7 +42,7 @@ export function EdgeDetailPanel({
               {edge.inferred ? "Inferred" : "Confirmed"}
             </Badge>
           </div>
-          <h2 className="mt-1 break-words font-mono text-sm font-semibold leading-snug text-foreground">
+          <h2 className="mt-1 break-words font-mono text-base font-semibold leading-snug text-foreground">
             {edge.type}
           </h2>
         </div>
@@ -59,7 +59,7 @@ export function EdgeDetailPanel({
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
         {edge.inferred && typeof edge.confidence === "number" && (
           <section>
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Confidence
             </h3>
             <ConfidenceMeter confidence={edge.confidence} />
@@ -67,7 +67,7 @@ export function EdgeDetailPanel({
         )}
 
         <section>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Endpoints
           </h3>
           <div className="flex flex-col items-stretch gap-2">
@@ -110,7 +110,7 @@ function EndpointRow({
   return (
     <div className="rounded-lg border border-border bg-card p-2.5">
       <div className="mb-1 flex items-center gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {role}
         </span>
         {node && (
@@ -127,7 +127,7 @@ function EndpointRow({
       <button
         type="button"
         onClick={onSelect}
-        className="block w-full truncate text-left text-sm font-medium text-foreground hover:text-primary"
+        className="block w-full truncate text-left text-base font-medium text-foreground hover:text-primary"
         title={node?.displayName ?? nodeId}
       >
         {node?.displayName ?? nodeId}

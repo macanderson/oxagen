@@ -247,7 +247,7 @@ export const skillPropose = registerCapability({
       version: z.string(),
       /** The version merged today when this replaces a skill; null for a new one. */
       replaces: z.string().nullable(),
-      /** `sha256:<hex>` of the canonical SKILL.md bytes as committed; the checks take it again at merge. */
+      /** `sha256:<hex>` of the canonical SKILL.md bytes as committed. The checks ran on these bytes and do not run again at merge. */
       digest: z.string().regex(/^sha256:[0-9a-f]{64}$/),
       /** Estimated load cost in tokens, and the budget it was held against. */
       tokens: z.number().int().nonnegative(),

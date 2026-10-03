@@ -210,7 +210,7 @@ function Tiles({
           liveRuns === null ? (
             <span
               data-testid="live-not-counted"
-              className="text-base font-medium text-muted-foreground"
+              className="text-lg font-medium text-muted-foreground"
             >
               {t("live.notCounted")}
             </span>
@@ -235,7 +235,7 @@ function Tiles({
           spend.total !== null ? (
             <Money value={spend.total} />
           ) : (
-            <span className="text-base font-medium text-muted-foreground">
+            <span className="text-lg font-medium text-muted-foreground">
               {spend.mixedCurrency ? t("spend.mixed") : t("spend.notRecorded")}
             </span>
           )
@@ -341,7 +341,7 @@ function Chips({
           onClick={() => {
             onChip(name);
           }}
-          className={`${buttonSecondary} px-2.5 py-1 text-xs ${chip === name ? "border-rule bg-hl font-semibold text-foreground" : ""}`}
+          className={`${buttonSecondary} px-2.5 py-1 text-sm ${chip === name ? "border-rule bg-hl font-semibold text-foreground" : ""}`}
         >
           {t(`chips.${name}`)}
         </button>
@@ -412,7 +412,7 @@ function ColumnPicker({
               />
               <span>{t(`columns.${column}`)}</span>
               {fixed ? (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   {t("columnsPicker.fixed")}
                 </span>
               ) : null}
@@ -491,7 +491,7 @@ function RunRowView({
             </SafeLink>
             <span
               data-testid="row-id"
-              className={`${mono} block truncate text-sm text-dim`}
+              className={`${mono} block truncate text-xs text-dim`}
             >
               {run.id}
             </span>
@@ -598,7 +598,7 @@ function RunRowView({
             ) : (
               <>
                 <Money value={cost.value} />
-                <span className="block text-sm text-muted-foreground md:truncate">
+                <span className="block text-xs text-muted-foreground md:truncate">
                   {cost.estimate ? (
                     // A running rollup, or before any rollup the agent's own
                     // figure, which Spend shown counts as an estimate too.
@@ -629,7 +629,7 @@ function RunRowView({
         return (
           <td
             key={column}
-            className={`${cell} whitespace-nowrap font-mono text-sm text-muted-foreground`}
+            className={`${cell} whitespace-nowrap font-mono text-xs text-muted-foreground`}
           >
             <Started at={run.startedAt} now={now} />
           </td>
@@ -659,7 +659,7 @@ function RunRowView({
             data-testid={`row-${action}`}
             data-touch-target=""
             aria-label={t("rowAction", { action: t(action), run: run.id })}
-            className={`${buttonSecondary} px-2.5 py-1 text-xs`}
+            className={`${buttonSecondary} px-2.5 py-1 text-sm`}
           >
             {t(action)}
           </SafeLink>
@@ -677,7 +677,7 @@ function RunRowView({
               if (action === "pause") onPause(run);
               else onExport(run);
             }}
-            className={`${buttonSecondary} px-2.5 py-1 text-xs`}
+            className={`${buttonSecondary} px-2.5 py-1 text-sm`}
           >
             {t(action)}
           </button>
@@ -983,7 +983,7 @@ function PauseDialog({
               id={warningId}
               role="alert"
               data-testid="pause-cancel-warning"
-              className="rounded-lg border border-border bg-hl px-3 py-2 text-xs font-medium"
+              className="rounded-lg border border-border bg-hl px-3 py-2 text-sm font-medium"
             >
               {t("ledgerCancelWarning")}
             </p>
@@ -1025,12 +1025,12 @@ function PauseDialog({
           {refusal === null ? null : (
             <p
               data-testid="pause-refusal"
-              className="rounded-lg border border-border bg-hl px-3 py-2 text-xs text-muted-foreground"
+              className="rounded-lg border border-border bg-hl px-3 py-2 text-sm text-muted-foreground"
             >
               {command(refusal)}
             </p>
           )}
-          <label htmlFor={fieldId} className="text-xs font-medium">
+          <label htmlFor={fieldId} className="text-sm font-medium">
             {ledger ? command("reasonLabel") : t("reason")}
           </label>
           <textarea
@@ -1042,9 +1042,9 @@ function PauseDialog({
             onChange={(event) => {
               setReason(event.target.value);
             }}
-            className={`${textareaBase} resize-y max-md:text-base`}
+            className={`${textareaBase} resize-y max-md:text-input-touch`}
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {ledger ? command("ledgerReasonHelp") : t("note")}
           </p>
           {failure === null ? null : (
@@ -1241,7 +1241,7 @@ export function FleetBoard({
           <p
             role="status"
             data-testid="prs-unread"
-            className="border-b border-border px-3 py-2 text-xs text-muted-foreground"
+            className="border-b border-border px-3 py-2 text-sm text-muted-foreground"
           >
             {t("prs.unread")}
           </p>

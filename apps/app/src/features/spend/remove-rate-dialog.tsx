@@ -216,13 +216,13 @@ export function RemoveRateDialog({
             }}
             className="flex flex-col gap-3"
           >
-            <p className="text-sm text-foreground">
+            <p className="text-base text-foreground">
               {entry.cancellationToken === undefined
                 ? t("remove.body", { model: entry.model, class: tokenClass })
                 : t("remove.cancelScheduled")}
             </p>
             {entry.cancellationToken === undefined ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-base text-muted-foreground">
                 {t("remove.kept")}
               </p>
             ) : null}

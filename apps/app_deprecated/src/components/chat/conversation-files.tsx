@@ -203,7 +203,7 @@ function AssetRow({
   const thumbnail = isImageMime(item.mimeType);
 
   const nameCls = cn(
-    "block break-words text-left text-sm font-medium leading-snug text-foreground",
+    "block break-words text-left text-base font-medium leading-snug text-foreground",
     "hover:text-primary hover:underline underline-offset-2",
     "focus-visible:outline-none focus-visible:text-primary focus-visible:underline",
   );
@@ -270,7 +270,7 @@ function AssetRow({
             {item.name}
           </a>
         )}
-        <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+        <p className="mt-0.5 text-sm text-muted-foreground tabular-nums">
           {item.sizeBytes !== null ? `${formatBytes(item.sizeBytes)} · ` : null}
           {formatTimestamp(item.createdAt)}
         </p>
@@ -331,7 +331,7 @@ function AssetPreviewDialog({
         {item ? (
           <>
             <DialogHeader>
-              <DialogTitle className="break-words pr-8 text-base">
+              <DialogTitle className="break-words pr-8 text-lg">
                 {item.name}
               </DialogTitle>
             </DialogHeader>
@@ -349,7 +349,7 @@ function AssetPreviewDialog({
               download={item.name}
               className={cn(
                 "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2",
-                "bg-primary text-sm font-medium text-primary-foreground",
+                "bg-primary text-base font-medium text-primary-foreground",
                 "hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 "transition-opacity",
               )}
@@ -451,7 +451,7 @@ export function ConversationFilesList({
   return (
     <>
       {loading ? (
-        <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+        <div className="flex items-center justify-center gap-2 py-12 text-base text-muted-foreground">
           <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
           <span>Loading files…</span>
         </div>
@@ -463,7 +463,7 @@ export function ConversationFilesList({
             <button
               type="button"
               onClick={() => setRetryKey((k) => k + 1)}
-              className="text-xs font-medium text-foreground underline underline-offset-2 hover:opacity-80"
+              className="text-sm font-medium text-foreground underline underline-offset-2 hover:opacity-80"
             >
               Retry
             </button>
@@ -488,7 +488,7 @@ export function ConversationFilesList({
               row downloads on its own. */}
           {total > 1 ? (
             <div className="flex items-center gap-2 px-3 pb-1 pt-1.5">
-              <span className="text-xs font-medium text-muted-foreground tabular-nums">
+              <span className="text-sm font-medium text-muted-foreground tabular-nums">
                 {total} files
               </span>
             </div>

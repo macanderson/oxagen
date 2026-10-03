@@ -6,7 +6,9 @@ import { chInsert, chSelect } from "./tenant";
 // The served tools in apps/mcp write one row per call through
 // recordServedToolCall, next to the governed-action meter. MCP Studio's tool
 // panel reads readServedToolFeedback for one server: per tool, the calls, the
-// schema rejections, the error results, and the retries.
+// schema rejections, the error results, and the retries. The served call path
+// reads readServedToolCallRate before it decides a call, for the policy's
+// `rate` fact.
 //
 // org_id and workspace_id are stamped by chInsert from the active tenant
 // scope, and chSelect filters every read on both, so one workspace never reads
@@ -48,6 +50,76 @@ export interface ServedToolCallRow {
 /** Append one call. Throws when ClickHouse refuses the insert; the caller decides whether that stops anything. */
 export async function recordServedToolCall(row: ServedToolCallRow): Promise<void> {
   await chInsert(SERVED_TOOL_CALLS_TABLE, [row as unknown as Record<string, unknown>]);
+}
+
+/** How many calls to one tool left Oxagen in the hour and the minute before a moment. */
+export interface ServedToolCallRate {
+  lastHour: number;
+  lastMinute: number;
+}
+
+export interface ReadServedToolCallRateArgs {
+  /** The server's name in the published manifest. */
+  server: string;
+  /** The full tool name: billing__create_refund. */
+  tool: string;
+  /** The decision's clock, as epoch ms. Both windows end here. */
+  now: number;
+}
+
+/** Raw JSON shape. ClickHouse answers UInt64 as a string. */
+interface RawCallRate {
+  last_hour: string | number;
+  last_minute: string | number;
+}
+
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
+
+/**
+ * The calls to one tool in the active workspace that left Oxagen in the hour
+ * and the minute before `now`. A policy reads them as its `rate` fact
+ * (#4666).
+ *
+ * A call left Oxagen when the gateway metered it `allowed`, or `failed` with
+ * the problem `error_result`: the tool ran and answered with an error. No
+ * other call reached the tool. A denied or parked call was never sent, and
+ * neither was any other failed call, such as a missing credential, a lost
+ * approval, a route that refused, or arguments the tool's schema refused.
+ *
+ * The count covers every agent and run in the workspace, because the table
+ * records no agent.
+ */
+export async function readServedToolCallRate(
+  args: ReadServedToolCallRateArgs,
+): Promise<ServedToolCallRate> {
+  const now = Math.floor(args.now);
+  const result = await chSelect<RawCallRate>({
+    query: `
+      SELECT
+        count()                                                                AS last_hour,
+        countIf(created_at >= fromUnixTimestamp64Milli({minuteStart:Int64}))   AS last_minute
+      FROM ${SERVED_TOOL_CALLS_TABLE}
+        WHERE org_id = {orgId:UUID}
+          AND workspace_id = {workspaceId:UUID}
+          AND server = {server:String}
+          AND tool = {tool:String}
+          AND (outcome = 'allowed' OR problem = 'error_result')
+          AND created_at >= fromUnixTimestamp64Milli({hourStart:Int64})
+    `,
+    params: {
+      server: args.server,
+      tool: args.tool,
+      hourStart: now - HOUR_MS,
+      minuteStart: now - MINUTE_MS,
+    },
+  });
+  // count() with no GROUP BY answers one row, even when nothing matches.
+  const row = result.data[0];
+  return {
+    lastHour: Number(row?.last_hour ?? 0),
+    lastMinute: Number(row?.last_minute ?? 0),
+  };
 }
 
 /** What agents' calls said about one tool over the window. */

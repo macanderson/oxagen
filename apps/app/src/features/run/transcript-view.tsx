@@ -197,7 +197,7 @@ const txTools = "flex flex-wrap items-center gap-2 pb-2.5";
  * phone gets the 16px input the house sheets use.
  */
 const txSearch =
-  "w-[220px] max-w-full max-md:w-full rounded-lg border border-border bg-void px-2.5 py-1.5 font-mono text-xs text-foreground placeholder:text-dim focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ring max-md:text-base";
+  "w-[220px] max-w-full max-md:w-full rounded-lg border border-border bg-void px-2.5 py-1.5 font-mono text-sm text-foreground placeholder:text-dim focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ring max-md:text-input-touch";
 /** `.tx-kinds { display:flex; flex-wrap:wrap; gap:3px }` */
 const txKinds = "flex flex-wrap gap-[3px]";
 /**
@@ -209,14 +209,14 @@ const txKinds = "flex flex-wrap gap-[3px]";
  * color:var(--st-failed) }`.
  */
 const kindShape =
-  "inline-flex items-center gap-1.5 rounded-md py-[3px] pr-2 font-mono text-sm focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-9";
+  "inline-flex items-center gap-1.5 rounded-md py-[3px] pr-2 font-mono text-xs focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-9";
 const kindPressed =
   "aria-pressed:bg-hl aria-pressed:shadow-[inset_0_0_0_1px_var(--rule)] aria-[pressed=false]:text-dim aria-[pressed=false]:[&>span:not([data-dot])]:line-through";
 const txKind = `${kindShape} ${kindPressed} pl-1.5 text-muted-foreground aria-pressed:text-foreground`;
 const txKindAll = `${kindShape} pl-2 text-muted-foreground hover:text-foreground`;
 const txKindErrors = `${kindShape} ${kindPressed} pl-1.5 text-muted-foreground aria-pressed:text-error`;
 /** `.tx-kind .n { font-size:10px; color:var(--dim) }` */
-const txKindCount = "text-sm tabular-nums text-dim";
+const txKindCount = "text-xs tabular-nums text-dim";
 /**
  * `.tx-kind .d { width:8px; height:8px; border-radius:2px; background:var(--c);
  * box-shadow:0 0 0 1px <c 40%> }`, and released `{ background:transparent;
@@ -262,7 +262,7 @@ const DOT: Record<FeedGroup, { on: string; off: string }> = {
  * fill, and the play button is `min-width:74px`.
  */
 const buttonShape =
-  "inline-flex items-center justify-center gap-[7px] rounded-[7px] border border-border px-2 py-[3px] font-mono text-sm font-medium text-foreground transition-colors hover:border-rule hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45 max-md:min-h-9";
+  "inline-flex items-center justify-center gap-[7px] rounded-[7px] border border-border px-2 py-[3px] font-mono text-xs font-medium text-foreground transition-colors hover:border-rule hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45 max-md:min-h-9";
 const txButton = `${buttonShape} min-w-[30px] bg-card`;
 const txGhost = `${buttonShape} min-w-[30px] bg-transparent`;
 const txPlayButton = `${buttonShape} min-w-[74px] bg-card`;
@@ -275,16 +275,16 @@ const txPlayButton = `${buttonShape} min-w-[74px] bg-card`;
 const txSeg =
   "ml-1 inline-flex gap-0.5 rounded-lg border border-border bg-void p-0.5";
 const txSegButton =
-  "inline-flex min-w-[30px] items-center justify-center rounded-[7px] border border-transparent bg-transparent px-2 py-[3px] font-mono text-sm font-medium text-foreground hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl max-md:min-h-9";
+  "inline-flex min-w-[30px] items-center justify-center rounded-[7px] border border-transparent bg-transparent px-2 py-[3px] font-mono text-xs font-medium text-foreground hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl max-md:min-h-9";
 /** `.tx-play .cnt { font-size:10.5px; color:var(--dim); margin-left:4px }` */
-const txCount = "ml-1 whitespace-nowrap text-sm tabular-nums text-dim";
+const txCount = "ml-1 whitespace-nowrap text-xs tabular-nums text-dim";
 /**
  * `.tx-burn { display:flex; gap:8px; font-size:10.5px; color:var(--muted) }`,
  * `.bar { width:120px; height:4px; border-radius:2px; background:var(--hl) }`,
  * `.bar i { background:var(--st-approval) }`.
  */
 const txBurn =
-  "flex items-center gap-2 whitespace-nowrap text-sm tabular-nums text-muted-foreground max-md:flex-wrap max-md:whitespace-normal";
+  "flex items-center gap-2 whitespace-nowrap text-xs tabular-nums text-muted-foreground max-md:flex-wrap max-md:whitespace-normal";
 /**
  * A prose line: every line as it was written once the row opens, and one
  * line cut with an ellipsis while it is closed. The ink is the skin's.
@@ -302,7 +302,7 @@ const txProseLine = "min-w-0 truncate";
  * no chip carries two inks.
  */
 const chipShape =
-  "whitespace-nowrap rounded-[5px] border bg-card px-1.5 font-mono text-sm leading-[1.6] tabular-nums";
+  "whitespace-nowrap rounded-[5px] border bg-card px-1.5 font-mono text-xs leading-[1.6] tabular-nums";
 const CHIP = {
   plain: `${chipShape} border-border text-muted-foreground`,
   ok: `${chipShape} border-border text-success`,
@@ -2277,7 +2277,7 @@ export function TranscriptView({
         {wanted === "" ? null : (
           <span
             data-testid="tx-matches"
-            className="font-mono text-sm text-dim"
+            className="font-mono text-xs text-dim"
           >
             {searchFailed
               ? t("searchFailed")
@@ -2294,7 +2294,7 @@ export function TranscriptView({
         {searching && (found.search?.unsearched ?? 0) > 0 ? (
           <span
             data-testid="tx-unsearched"
-            className="font-mono text-sm text-dim"
+            className="font-mono text-xs text-dim"
           >
             {t("unsearched", {
               count: found.search?.unsearched ?? 0,
@@ -2572,7 +2572,7 @@ export function TranscriptView({
         </div>
       </div>
       {footer === null && pageFailure === null ? null : (
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           {footer === null ? null : (
             <span data-testid="transcript-count">{footer}</span>
           )}

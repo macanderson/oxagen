@@ -83,7 +83,7 @@ export function AgentBottomBar() {
     <div
       className={cn(
         "flex h-10 shrink-0 items-center gap-2 border-t border-border bg-background px-3",
-        "text-sm text-muted-foreground",
+        "text-base text-muted-foreground",
       )}
       role="toolbar"
       aria-label="Agent toolbar"
@@ -95,7 +95,7 @@ export function AgentBottomBar() {
             type="button"
             onClick={open}
             className={cn(
-              "flex items-center gap-2 rounded-md px-2 py-1 text-xs font-medium",
+              "flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium",
               "truncate transition-colors",
               "hover:bg-muted hover:text-foreground",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -116,7 +116,7 @@ export function AgentBottomBar() {
         onClick={open}
         className={cn(
           "flex items-center gap-2 rounded-md px-3 py-1.5",
-          "text-xs font-medium text-muted-foreground",
+          "text-sm font-medium text-muted-foreground",
           "transition-colors hover:text-foreground",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         )}

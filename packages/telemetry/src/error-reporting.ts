@@ -1,5 +1,8 @@
 // error-reporting.ts — vendor-neutral, fire-and-forget error capture for the
 // server runtimes (apps/api, apps/app server side, apps/mcp, inngest functions).
+// `source: "runner"` is a background job that calls a capability on its own
+// behalf, under the kernel's `runner` surface, and handles the failure itself
+// rather than letting it reach inngest's terminal failure capture.
 //
 // Two sinks, both best-effort and non-throwing:
 //   1. ClickHouse `error_events` — the durable, append-only runtime error

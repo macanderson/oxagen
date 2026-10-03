@@ -120,7 +120,7 @@ export function CompositionBar({ recorded }: { recorded: ContextWindow }) {
           />
         ))}
       </div>
-      <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0 text-sm text-muted-foreground">
+      <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0 text-xs text-muted-foreground">
         {drawn.map((block) => (
           <li
             key={block.kind}
@@ -185,7 +185,7 @@ function Section({
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className={`${eyebrowQuiet} m-0`}>{title}</p>
         {aside === undefined ? null : (
-          <span className="text-sm text-dim">{aside}</span>
+          <span className="text-xs text-dim">{aside}</span>
         )}
       </div>
       {children}
@@ -293,7 +293,7 @@ export function RequestWindow({
               key={block.kind}
               data-testid="window-stack-row"
               data-kind={block.kind}
-              className="flex min-w-0 items-center gap-2 rounded-lg border border-border border-l-[3px] border-l-rule bg-background px-[11px] py-2 text-sm"
+              className="flex min-w-0 items-center gap-2 rounded-lg border border-border border-l-[3px] border-l-rule bg-background px-[11px] py-2 text-xs"
             >
               <b className={`${mono} text-foreground`}>
                 {t(`block.${block.kind}`)}

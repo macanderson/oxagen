@@ -79,7 +79,7 @@ export function BackfillCostNote() {
   return (
     <p
       data-testid="cost-backfill"
-      className="max-w-prose text-sm text-muted-foreground"
+      className="max-w-prose text-base text-muted-foreground"
     >
       {t("costNote")}
     </p>

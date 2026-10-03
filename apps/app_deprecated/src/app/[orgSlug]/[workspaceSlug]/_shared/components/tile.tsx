@@ -39,10 +39,10 @@ export function Tile({
         </div>
       )}
       {title && (
-        <div className="text-sm font-medium text-foreground">{title}</div>
+        <div className="text-base font-medium text-foreground">{title}</div>
       )}
       {description && (
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        <p className="mt-1 text-base text-muted-foreground">{description}</p>
       )}
       {children && (
         <div className={cn(title || description ? "mt-3" : undefined)}>

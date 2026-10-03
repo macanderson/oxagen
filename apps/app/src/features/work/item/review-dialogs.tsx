@@ -71,17 +71,17 @@ export function ReturnDialog({ org, ws, detail, send, ...control }: Props) {
       pendingLabel={t("pending")}
       submit={submit}
     >
-      <p className="text-sm text-muted-foreground">{t("body", { send: next })}</p>
+      <p className="text-base text-muted-foreground">{t("body", { send: next })}</p>
       <ReasonField id="work-return-reason" label={t("reason")} hint={t("reasonHint")} />
       {pr === null ? (
-        <p className="text-xs text-muted-foreground">{t("noPullRequest")}</p>
+        <p className="text-sm text-muted-foreground">{t("noPullRequest")}</p>
       ) : pr.merged !== null ? (
-        <p className="text-xs text-muted-foreground">{t("merged")}</p>
+        <p className="text-sm text-muted-foreground">{t("merged")}</p>
       ) : pr.closedAt !== null ? (
-        <p className="text-xs text-muted-foreground">{t("closed")}</p>
+        <p className="text-sm text-muted-foreground">{t("closed")}</p>
       ) : null}
       <div className="flex flex-col">
-        <label className="flex items-center gap-2 text-sm text-foreground">
+        <label className="flex items-center gap-2 text-base text-foreground">
           <input
             type="checkbox"
             name="resend"
@@ -160,14 +160,14 @@ export function AcceptDialog({ org, ws, detail, send, ...control }: Props) {
       {block !== null || head === null ? (
         <p
           data-testid="work-accept-blocked"
-          className="rounded-lg border border-error/40 bg-error/10 px-3 py-2.5 text-sm text-foreground"
+          className="rounded-lg border border-error/40 bg-error/10 px-3 py-2.5 text-base text-foreground"
         >
           <span className="font-semibold">{t("blocked")}</span>{" "}
           {blockText(block ?? { kind: "gate", block: "no_head", detail: null })}
         </p>
       ) : (
         <>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             {t("tickEach", { head: shortSha(head) })}
             {send.checksWord === "none_required" ? ` ${t("ticksOnly")}` : null}
           </p>
@@ -193,13 +193,13 @@ export function AcceptDialog({ org, ws, detail, send, ...control }: Props) {
                     className="mt-1 size-4 flex-none accent-gold"
                   />
                   <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className="text-sm text-foreground">
+                    <span className="text-base text-foreground">
                       <span className="mr-1.5 font-mono text-dim">
                         {criterion.criterion}
                       </span>
                       {criterion.text}
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-sm text-muted-foreground">
                       {claim === undefined
                         ? t("noClaim")
                         : claim.current || claim.head === null
@@ -214,7 +214,7 @@ export function AcceptDialog({ org, ws, detail, send, ...control }: Props) {
               );
             })}
           </fieldset>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t("mergesNothing")} {merged ? t("doneOnAccept") : t("doneOnMerge")}{" "}
             {t("newCommit")}
           </p>

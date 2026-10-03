@@ -14,7 +14,7 @@ export function NotRecorded({ section }: { section: UnrecordedKey }) {
       data-testid="not-recorded"
       data-section={section}
       {...(gap === null ? {} : { "data-gap": gap })}
-      className="max-w-prose text-sm text-muted-foreground"
+      className="max-w-prose text-base text-muted-foreground"
     >
       {t(section)}
     </p>

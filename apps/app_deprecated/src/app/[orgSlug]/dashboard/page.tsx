@@ -274,7 +274,7 @@ export default async function OrgDashboardPage({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h1 className="text-lg font-semibold text-foreground">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             Usage across all workspaces · last{" "}
             {rangeLabel(rangeKey).toLowerCase()}
           </p>
@@ -284,16 +284,16 @@ export default async function OrgDashboardPage({
 
       {workspaceCount === 0 ? (
         <Panel className="flex flex-col items-start gap-2 p-6">
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-base font-medium text-foreground">
             No workspaces yet
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             Usage appears here once a workspace has activity. Create your first
             workspace to get started.
           </p>
           <Link
             href={`/${orgSlug}/new-workspace`}
-            className="mt-1 inline-flex items-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+            className="mt-1 inline-flex items-center rounded-md bg-primary px-3 py-1.5 text-base font-medium text-primary-foreground hover:opacity-90"
           >
             Create a workspace
           </Link>
@@ -301,7 +301,7 @@ export default async function OrgDashboardPage({
       ) : null}
 
       {queryFailed ? (
-        <p className="text-xs text-destructive">
+        <p className="text-sm text-destructive">
           Usage data is temporarily unavailable — the analytics query failed.
           Showing zeros.
         </p>
@@ -375,7 +375,7 @@ export default async function OrgDashboardPage({
       {/* Capability-pack strip — distinct capabilities, counts derived */}
       {capRollup.length > 0 ? (
         <Panel className="flex flex-col gap-3 p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
             Capability usage
           </p>
           <div className="overflow-x-auto">
@@ -397,7 +397,7 @@ export default async function OrgDashboardPage({
                       {CAP_LABELS[r.key] ? (
                         <span>
                           {CAP_LABELS[r.key]}{" "}
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-sm text-muted-foreground">
                             {r.key}
                           </span>
                         </span>
@@ -437,7 +437,7 @@ export default async function OrgDashboardPage({
       {breakdown.byUser.filter((r) => r.userId && r.userId !== ORG_ONLY_WS)
         .length > 0 ? (
         <Panel className="flex flex-col gap-3 p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
             By user
           </p>
           <div className="overflow-x-auto">

@@ -1384,7 +1384,7 @@ export function AssistantFlyout({
                           ) : null}
                           <p
                             data-testid="assistant-recorded-as"
-                            className="mt-1 font-mono text-sm text-muted-foreground"
+                            className="mt-1 font-mono text-xs text-muted-foreground"
                           >
                             {t("recordedAs")}{" "}
                             {org !== null && ws !== null ? (
@@ -1467,7 +1467,7 @@ export function AssistantFlyout({
                           {entry.detail === null ? null : (
                             <p
                               data-testid="assistant-refusal-code"
-                              className="mt-1 ml-6 font-mono text-sm text-muted-foreground"
+                              className="mt-1 ml-6 font-mono text-xs text-muted-foreground"
                             >
                               {entry.detail}
                             </p>
@@ -1609,7 +1609,7 @@ export function AssistantFlyout({
                 <p
                   id={`${ASSISTANT_PANEL_ID}-send-hint`}
                   data-testid="assistant-send-hint"
-                  className="mt-1.5 px-1 text-sm text-muted-foreground"
+                  className="mt-1.5 px-1 text-xs text-muted-foreground"
                 >
                   {enterToSubmit
                     ? t("composer.sendHintEnter")

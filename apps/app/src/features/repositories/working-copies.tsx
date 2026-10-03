@@ -244,7 +244,7 @@ function CopiesBody({
       {rows.length >= WORKING_COPY_LIMIT ? (
         <p
           data-testid="working-copies-truncated"
-          className="px-4 pb-3 pt-2 text-xs text-dim"
+          className="px-4 pb-3 pt-2 text-sm text-dim"
         >
           {t("truncated", { limit: WORKING_COPY_LIMIT })}
         </p>
@@ -284,7 +284,7 @@ function CopyRow({ row, readAt }: { row: WorkingCopy; readAt: Date | null }) {
           <span className={mono}>{row.branch}</span>
         )}
         {row.headCommit === null ? null : (
-          <span className={`${mono} block text-sm text-dim md:truncate`}>
+          <span className={`${mono} block text-xs text-dim md:truncate`}>
             {t("head", { commit: short(row.headCommit) })}
           </span>
         )}
@@ -342,7 +342,7 @@ function CopyRow({ row, readAt }: { row: WorkingCopy; readAt: Date | null }) {
             ? format.dateTime(seen, { dateStyle: "medium", timeStyle: "short" })
             : format.relativeTime(seen, readAt)}
         </time>
-        <span className="block text-sm text-dim">
+        <span className="block text-xs text-dim">
           {row.reportedBy === null
             ? t("reportedByKey")
             : row.reportedBy.name === null
@@ -416,7 +416,7 @@ export function ConnectDirectoryDialog({
       }
     >
       <div className="flex flex-col gap-3.5">
-        <p className="text-sm leading-relaxed text-foreground">
+        <p className="text-base leading-relaxed text-foreground">
           {t.rich("lead", { code })}
         </p>
         <section aria-labelledby="linkdir-command">
@@ -436,12 +436,12 @@ export function ConnectDirectoryDialog({
           </pre>
           <p
             data-testid="linkdir-hint"
-            className="mt-1.5 text-xs text-muted-foreground"
+            className="mt-1.5 text-sm text-muted-foreground"
           >
             {t.rich("hint", { code })}
           </p>
           {copied === "failed" ? (
-            <p role="alert" className="mt-1.5 text-xs text-error-ink">
+            <p role="alert" className="mt-1.5 text-sm text-error-ink">
               {t("copyFailed")}
             </p>
           ) : null}

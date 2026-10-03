@@ -103,7 +103,7 @@ export function SourceFilename({
           <span
             id={`${id}-hint`}
             role={invalid ? "alert" : undefined}
-            className="text-xs text-muted-foreground"
+            className="text-sm text-muted-foreground"
           >
             {invalid ? t("invalid") : t("hint")}
           </span>

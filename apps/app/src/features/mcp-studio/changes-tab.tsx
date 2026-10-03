@@ -292,7 +292,7 @@ function Findings({
               <td className={`${cell} ${mono}`}>
                 {finding.tool ?? t("server")}
                 {finding.field === null ? null : (
-                  <span className="block text-sm text-muted-foreground">
+                  <span className="block text-xs text-muted-foreground">
                     {finding.field}
                   </span>
                 )}

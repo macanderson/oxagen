@@ -102,7 +102,7 @@ const SliderValue = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SliderPrimitive.Value
     ref={ref}
-    className={cn("text-sm tabular-nums text-muted-foreground", className)}
+    className={cn("text-base tabular-nums text-muted-foreground", className)}
     {...props}
   />
 ));

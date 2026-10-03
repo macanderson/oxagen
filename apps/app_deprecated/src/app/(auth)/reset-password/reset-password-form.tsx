@@ -65,10 +65,10 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
   if (status === "invalid-token") {
     return (
       <div role="alert" className="flex flex-col gap-3">
-        <p className="text-sm text-destructive">
+        <p className="text-base text-destructive">
           {errorMsg ?? "This reset link is invalid or has expired."}
         </p>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           Reset links are single-use and expire after 1 hour.
         </p>
         <Button
@@ -85,8 +85,8 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
   if (status === "success") {
     return (
       <div role="status" className="flex flex-col gap-2">
-        <p className="text-sm text-foreground font-medium">Password updated.</p>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-foreground font-medium">Password updated.</p>
+        <p className="text-base text-muted-foreground">
           Redirecting to sign in&hellip;
         </p>
       </div>
@@ -135,7 +135,7 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
       </div>
 
       {status === "error" && errorMsg ? (
-        <p className="text-sm text-destructive" role="alert">
+        <p className="text-base text-destructive" role="alert">
           {errorMsg}
         </p>
       ) : null}

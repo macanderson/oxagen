@@ -121,12 +121,12 @@ export function GateDenied({
             testId="request-access"
             closeLabel={t("close")}
           >
-            <p className="text-sm text-foreground">
+            <p className="text-base text-foreground">
               {t("dialogBody", { permission })}
             </p>
             <p
               data-testid="request-access-not-backed"
-              className="mt-3 text-sm text-muted-foreground"
+              className="mt-3 text-base text-muted-foreground"
             >
               {t("dialogNotBacked")}
             </p>

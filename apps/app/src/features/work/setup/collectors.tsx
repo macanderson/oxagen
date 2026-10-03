@@ -75,7 +75,7 @@ function CollectorRows({
         <td className={cell}>
           <span className="flex flex-col">
             <span className="font-medium">{collector.name}</span>
-            <span className="text-sm text-muted-foreground">{t("github")}</span>
+            <span className="text-base text-muted-foreground">{t("github")}</span>
           </span>
         </td>
         <td className={cell}>
@@ -113,7 +113,7 @@ function CollectorRows({
           ) : (
             <span className="flex flex-col">
               <span className="whitespace-nowrap">{when(last.at)}</span>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-base text-muted-foreground">
                 {last.ok
                   ? t("readOk", { count: last.handled })
                   : t("readFailed")}
@@ -130,7 +130,7 @@ function CollectorRows({
       {failing || lastFailed ? (
         <tr data-collector-failure={collector.name}>
           <td colSpan={5} className={cell}>
-            <div className="flex min-w-0 flex-col gap-1 text-sm text-muted-foreground">
+            <div className="flex min-w-0 flex-col gap-1 text-base text-muted-foreground">
               {failing ? (
                 <p>
                   {collector.lastSuccessAt === null
@@ -201,7 +201,7 @@ export function CollectorsTab({
       {collectors.length === 0 ? (
         <p
           data-testid="work-collectors-empty"
-          className={`${panelBody} text-sm text-muted-foreground`}
+          className={`${panelBody} text-base text-muted-foreground`}
         >
           {t("collectors.empty")}
         </p>
@@ -241,7 +241,7 @@ export function CollectorsTab({
       <div className={`${panelBody} border-t border-border`}>
         <p
           data-testid="work-write-back"
-          className="text-sm text-muted-foreground"
+          className="text-base text-muted-foreground"
         >
           {t("collectors.writeBack")}
         </p>

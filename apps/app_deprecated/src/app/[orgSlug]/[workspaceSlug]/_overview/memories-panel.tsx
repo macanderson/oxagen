@@ -117,10 +117,10 @@ export async function MemoriesPanel({
     <div data-testid="overview-memories-panel">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
-          <CardTitle className="text-base">Memory captured</CardTitle>
+          <CardTitle className="text-lg">Memory captured</CardTitle>
           <Link
             href={memoryHref}
-            className="text-sm font-medium text-primary hover:underline"
+            className="text-base font-medium text-primary hover:underline"
           >
             Review memory →
           </Link>
@@ -139,7 +139,7 @@ export async function MemoriesPanel({
               action={
                 <Link
                   href={memoryHref}
-                  className="text-sm font-medium text-primary hover:underline"
+                  className="text-base font-medium text-primary hover:underline"
                 >
                   Open memory →
                 </Link>
@@ -151,7 +151,7 @@ export async function MemoriesPanel({
                 <span className="text-2xl font-semibold leading-none tabular-nums text-foreground">
                   {sampleSaturated ? `${last7d}+` : last7d}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   memories · last 7 days
                 </span>
                 {sampleSaturated ? null : (
@@ -165,7 +165,7 @@ export async function MemoriesPanel({
               </div>
               <ul className="flex flex-col divide-y divide-border">
                 {recent.map((m) => (
-                  <li key={m.id} className="flex flex-col gap-1 py-2 text-sm">
+                  <li key={m.id} className="flex flex-col gap-1 py-2 text-base">
                     <div className="flex items-start justify-between gap-2">
                       <span className="min-w-0 text-foreground">
                         {truncate(m.lesson, LESSON_TRUNCATE)}
@@ -174,7 +174,7 @@ export async function MemoriesPanel({
                         {m.memoryClass}
                       </Badge>
                     </div>
-                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-2 text-sm text-muted-foreground">
                       <span>{timeAgo(m.createdAt)}</span>
                       {m.citationCount > 0 ? (
                         <span>

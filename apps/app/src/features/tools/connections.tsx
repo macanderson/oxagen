@@ -81,10 +81,10 @@ function Row({ grant }: { grant: CredentialGrant }) {
     <tr data-grant={grant.id}>
       <td className={cell}>
         <span className="flex flex-col gap-0.5">
-          <span className={`${mono} text-xs text-foreground md:truncate`}>
+          <span className={`${mono} text-sm text-foreground md:truncate`}>
             {grant.id}
           </span>
-          <span className="text-xs text-muted-foreground md:truncate">
+          <span className="text-sm text-muted-foreground md:truncate">
             {date(grant.issuedAt)}
           </span>
         </span>
@@ -92,7 +92,7 @@ function Row({ grant }: { grant: CredentialGrant }) {
       <td className={cell}>
         <span className="flex flex-col gap-0.5">
           <NotBackedValue gap="grants" />
-          <span className="text-xs text-muted-foreground md:truncate">
+          <span className="text-sm text-muted-foreground md:truncate">
             {t("fromProvider", { provider: grant.serverName })}
           </span>
         </span>
@@ -101,24 +101,24 @@ function Row({ grant }: { grant: CredentialGrant }) {
         <span className="flex flex-col gap-0.5">
           <NotBackedValue gap="grants" />
           {grant.runId === null ? (
-            <span className="text-xs text-muted-foreground md:truncate">
+            <span className="text-sm text-muted-foreground md:truncate">
               {t("noRun")}
             </span>
           ) : (
-            <span className={`${mono} text-xs text-foreground md:truncate`}>
+            <span className={`${mono} text-sm text-foreground md:truncate`}>
               {grant.runId}
             </span>
           )}
         </span>
       </td>
       <td className={cell}>
-        <span className={`${mono} text-xs text-foreground`}>
+        <span className={`${mono} text-sm text-foreground`}>
           {grant.connectionId}
         </span>
       </td>
       <td className={cell}>
         <span className="flex flex-col gap-1">
-          <span className={`${mono} text-xs text-foreground md:truncate`}>
+          <span className={`${mono} text-sm text-foreground md:truncate`}>
             {grant.scope.endpointUrl}
           </span>
           <span className="flex gap-1 max-md:flex-wrap">
@@ -128,7 +128,7 @@ function Row({ grant }: { grant: CredentialGrant }) {
         </span>
       </td>
       <td className={cell}>
-        <span className={`${mono} text-xs text-foreground`}>
+        <span className={`${mono} text-sm text-foreground`}>
           {ttl === null ? "—" : t("ttl", { minutes: ttl })}
         </span>
       </td>
@@ -223,10 +223,10 @@ export function GrantsLog({
         }
         className="px-0"
       />
-      <p className="max-w-prose text-xs text-muted-foreground">
+      <p className="max-w-prose text-sm text-muted-foreground">
         {t("brokerNote")}
       </p>
-      <p className="max-w-prose text-xs text-muted-foreground">
+      <p className="max-w-prose text-sm text-muted-foreground">
         {t("notCarriedNote")}
       </p>
     </Section>
@@ -249,7 +249,7 @@ function ConnectionRow({ at, item }: { at: ToolsAt; item: Connection }) {
               {item.displayName}
             </span>
             <span
-              className={`${mono} text-xs text-muted-foreground md:truncate`}
+              className={`${mono} text-sm text-muted-foreground md:truncate`}
             >
               {item.id}
             </span>
@@ -273,7 +273,7 @@ function ConnectionRow({ at, item }: { at: ToolsAt; item: Connection }) {
         />
       </td>
       <td className={cell}>
-        <span className="text-xs tabular-nums text-foreground">
+        <span className="text-sm tabular-nums text-foreground">
           {item.entityCount}
         </span>
       </td>
@@ -281,7 +281,7 @@ function ConnectionRow({ at, item }: { at: ToolsAt; item: Connection }) {
         {item.lastSyncAt === null ? (
           <NotCarried />
         ) : (
-          <span className="text-xs text-foreground">
+          <span className="text-sm text-foreground">
             {date(item.lastSyncAt)}
           </span>
         )}
@@ -375,7 +375,7 @@ export function ConnectionsTable({
           <ConnectionRow key={item.id} at={at} item={item} />
         ))}
       </Table>
-      <p className="max-w-prose text-xs text-muted-foreground">
+      <p className="max-w-prose text-sm text-muted-foreground">
         {t("notCarriedNote")}
       </p>
     </Section>

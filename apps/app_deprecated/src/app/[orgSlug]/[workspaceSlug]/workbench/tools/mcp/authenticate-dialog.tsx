@@ -68,7 +68,7 @@ export function AuthenticateDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             You&apos;ll be sent to {serverTitle} to sign in and choose exactly
             which permissions Oxagen&apos;s agents get. When you finish,
             you&apos;ll come back here and the server will show as connected.

@@ -51,7 +51,7 @@ function MemoryInfluenceBars({ memory }: { memory: CitedMemoryStat }) {
     memory.consideredCount +
     memory.ignoredCount;
   if (total === 0) {
-    return <span className="text-xs text-muted-foreground">—</span>;
+    return <span className="text-sm text-muted-foreground">—</span>;
   }
   const segments = [
     { key: "decisive", count: memory.decisiveCount, label: "decisive" },
@@ -112,7 +112,7 @@ export function CitedMemoriesTable({
         <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <h3
           id={`${heading.replace(/\s+/g, "-").toLowerCase()}-heading`}
-          className="text-sm font-semibold text-foreground"
+          className="text-base font-semibold text-foreground"
         >
           {heading}
         </h3>
@@ -154,7 +154,7 @@ export function CitedMemoriesTable({
                     {memory.memoryClass}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
+                <TableCell className="text-sm text-muted-foreground">
                   {memory.memoryKind}
                 </TableCell>
                 <TableCell className="tabular-nums">

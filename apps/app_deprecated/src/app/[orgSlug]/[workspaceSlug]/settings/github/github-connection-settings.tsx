@@ -116,8 +116,8 @@ export function GithubConnectionSettings({
           aria-hidden="true"
         />
         <div className="flex flex-col gap-1">
-          <p className="text-sm font-semibold text-foreground">GitHub</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-base font-semibold text-foreground">GitHub</p>
+          <p className="text-sm text-muted-foreground">
             Connect this workspace to GitHub with the Oxagen GitHub App. One
             install per workspace gives every agent here access to the
             repositories you choose to ingest. After connecting, pick
@@ -132,7 +132,7 @@ export function GithubConnectionSettings({
 
       {justConnected && (
         <div
-          className="flex items-center gap-2 rounded-md bg-success/10 px-3 py-2 text-xs font-medium text-success"
+          className="flex items-center gap-2 rounded-md bg-success/10 px-3 py-2 text-sm font-medium text-success"
           data-testid="github-connected-banner"
         >
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
@@ -155,13 +155,13 @@ export function GithubConnectionSettings({
           className="flex flex-col items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3"
           data-testid="github-settings-error"
         >
-          <p className="flex items-center gap-2 text-xs font-medium text-destructive">
+          <p className="flex items-center gap-2 text-sm font-medium text-destructive">
             <AlertTriangle className="h-4 w-4" aria-hidden="true" />
             {state.message}
           </p>
           <button
             type="button"
-            className="max-md:min-h-11 rounded-md border border-border/60 bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+            className="max-md:min-h-11 rounded-md border border-border/60 bg-card px-2.5 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
             onClick={() => void load("refresh")}
           >
             Retry
@@ -200,10 +200,10 @@ function DisconnectedView({
         <GithubIcon className="h-6 w-6 text-foreground" aria-hidden="true" />
       </div>
       <div className="flex flex-col gap-1">
-        <p className="text-sm font-semibold text-foreground">
+        <p className="text-base font-semibold text-foreground">
           GitHub is not connected
         </p>
-        <p className="max-w-sm text-xs text-muted-foreground">
+        <p className="max-w-sm text-sm text-muted-foreground">
           Install the Oxagen GitHub App to grant this workspace access to your
           repositories. You choose exactly which orgs and repos the App can
           read.
@@ -212,7 +212,7 @@ function DisconnectedView({
       {canManage ? (
         <button
           type="button"
-          className="flex max-md:min-h-11 items-center gap-2 rounded-md bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition-colors hover:bg-foreground/90"
+          className="flex max-md:min-h-11 items-center gap-2 rounded-md bg-foreground px-4 py-2.5 text-base font-semibold text-background transition-colors hover:bg-foreground/90"
           onClick={onConnect}
           data-testid="github-connect-btn"
         >
@@ -220,7 +220,7 @@ function DisconnectedView({
           Connect GitHub
         </button>
       ) : (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Ask a workspace owner or admin to connect GitHub.
         </p>
       )}
@@ -246,13 +246,13 @@ function ConnectedView({
   return (
     <div className="flex flex-col gap-4" data-testid="github-connected">
       <div className="flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-xs font-medium text-success">
+        <span className="flex items-center gap-1.5 text-sm font-medium text-success">
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
           Connected
         </span>
         <button
           type="button"
-          className="flex max-md:min-h-11 items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          className="flex max-md:min-h-11 items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
           onClick={onRefresh}
           disabled={refreshing}
           data-testid="github-refresh-btn"
@@ -267,11 +267,11 @@ function ConnectedView({
 
       {/* Installations the connection grants access to */}
       <div className="flex flex-col gap-1.5">
-        <p className="text-xs font-medium text-muted-foreground">
+        <p className="text-sm font-medium text-muted-foreground">
           Installed organizations
         </p>
         {status.installations.length === 0 ? (
-          <p className="rounded-md border border-border/60 px-3 py-2 text-xs text-muted-foreground">
+          <p className="rounded-md border border-border/60 px-3 py-2 text-sm text-muted-foreground">
             The App is connected but not installed on any organization yet. Add
             it to an organization below.
           </p>
@@ -296,7 +296,7 @@ function ConnectedView({
         {canManage && (
           <a
             href={status.installUrl}
-            className="flex items-center gap-1 text-[11px] text-primary hover:underline"
+            className="flex items-center gap-1 text-xs text-primary hover:underline"
             data-testid="github-add-org-link"
           >
             <ExternalLinkIcon className="h-3 w-3" aria-hidden="true" />
@@ -307,7 +307,7 @@ function ConnectedView({
           href={status.manageUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1 text-[11px] text-primary hover:underline"
+          className="flex items-center gap-1 text-xs text-primary hover:underline"
           data-testid="github-manage-link"
         >
           <ExternalLinkIcon className="h-3 w-3" aria-hidden="true" />
@@ -316,7 +316,7 @@ function ConnectedView({
         {canManage && (
           <button
             type="button"
-            className="inline-flex max-md:min-h-11 items-center text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+            className="inline-flex max-md:min-h-11 items-center text-xs text-muted-foreground hover:text-foreground hover:underline"
             onClick={onReconnect}
             data-testid="github-reconnect-btn"
           >
@@ -350,10 +350,10 @@ function InstallationRow({
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm font-medium text-foreground">
+        <span className="truncate text-base font-medium text-foreground">
           {installation.accountLogin}
         </span>
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {installation.accountType} ·{" "}
           {installation.repositorySelection === "all"
             ? "all repositories"
@@ -365,7 +365,7 @@ function InstallationRow({
           href={installation.htmlUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex flex-shrink-0 items-center gap-1 text-[11px] text-primary hover:underline"
+          className="flex flex-shrink-0 items-center gap-1 text-xs text-primary hover:underline"
           data-testid={`github-configure-${installation.id}`}
         >
           <ExternalLinkIcon className="h-3 w-3" aria-hidden="true" />

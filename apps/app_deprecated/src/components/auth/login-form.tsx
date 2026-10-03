@@ -107,7 +107,7 @@ export function LoginForm({
           {mode === "signin" ? (
             <Link
               href="/forgot-password"
-              className="text-xs text-muted-foreground hover:underline"
+              className="text-sm text-muted-foreground hover:underline"
             >
               Forgot password?
             </Link>
@@ -125,7 +125,7 @@ export function LoginForm({
       {/* role="alert" so a failed sign-in is announced — without it the only
           signal is a colour change a screen-reader user never hears. */}
       {error ? (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="text-base text-destructive">
           {error}
         </p>
       ) : null}

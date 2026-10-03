@@ -198,9 +198,9 @@ function AddCardDialog({
         </DialogHeader>
         <DialogPanel>
           {loadError ? (
-            <p className="text-sm text-destructive">{loadError}</p>
+            <p className="text-base text-destructive">{loadError}</p>
           ) : !clientSecret ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
+            <p className="text-base text-muted-foreground">Loading…</p>
           ) : (
             <StripeElementsProvider
               publishableKey={publishableKey}
@@ -296,12 +296,12 @@ function PaymentMethodRow({
       <div className="flex items-center gap-3">
         <CreditCard className="h-5 w-5 shrink-0 text-muted-foreground" />
         <div className="flex flex-col gap-0.5">
-          <span className="text-sm font-medium">
+          <span className="text-base font-medium">
             {formatBrand(method.brand)}{" "}
             {method.last4 ? `•• ${method.last4}` : ""}
           </span>
           {(method.expMonth || method.expYear) && (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               {formatExpiry(method.expMonth, method.expYear)}
             </span>
           )}
@@ -389,7 +389,7 @@ export function PaymentMethods({
       }
     >
       {methods.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           No payment method on file.
         </p>
       ) : (

@@ -73,10 +73,10 @@ function OutcomeText({ outcome }: { outcome: Outcome }) {
       className="flex flex-col gap-2"
       data-testid={outcome.already ? "invitation-already" : "invitation-sent"}
     >
-      <p className="text-sm font-medium text-foreground">
+      <p className="text-base font-medium text-foreground">
         {t(`${block}.title`)}
       </p>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-base text-muted-foreground">
         {t(`${block}.body`, {
           email: outcome.email,
           role: roleName(outcome.role),
@@ -117,7 +117,7 @@ export function InviteDialog({
 
   if (!allowed) {
     return (
-      <p data-testid="invite-denied" className="text-sm text-muted-foreground">
+      <p data-testid="invite-denied" className="text-base text-muted-foreground">
         {t("denied")}
       </p>
     );
@@ -223,7 +223,7 @@ export function InviteDialog({
             <div className="flex min-w-0 flex-col gap-1.5">
               <label
                 htmlFor="invite-role"
-                className="text-sm font-medium text-foreground"
+                className="text-base font-medium text-foreground"
               >
                 {t("role")}
               </label>
@@ -246,7 +246,7 @@ export function InviteDialog({
                 ))}
               </select>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               {twoFactorRequired ? t("bodyTwoFactor") : t("body")}
             </p>
             {failure === null ? null : (

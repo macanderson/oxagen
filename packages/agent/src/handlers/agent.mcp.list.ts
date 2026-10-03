@@ -4,7 +4,7 @@ import {
   STANDING_CONTEXT_WEEK_DAYS,
   type WeeklyContextPrice,
 } from "@oxagen/billing";
-import { redactUrlCredentials } from "@oxagen/config/public-url";
+import { redactUrlSecrets } from "@oxagen/config/public-url";
 import { withTenantDb, schema } from "@oxagen/database";
 import { selectToolProviderTokens } from "@oxagen/telemetry";
 import { and, eq, isNull, sql } from "drizzle-orm";
@@ -265,10 +265,11 @@ function serverView(
       r.transportType,
     ),
     // The register guard refuses an address with userinfo, but a row
-    // written before that guard can still hold one. The list is a read
+    // written before that guard can still hold one, and the guard does not
+    // read the query, where some servers take their key. The list is a read
     // surface, so it never returns the password or key in the clear.
     // agent.mcp.resolve still reads the raw column for the connection.
-    endpointUrl: redactUrlCredentials(r.endpointUrl),
+    endpointUrl: redactUrlSecrets(r.endpointUrl),
     healthStatus: narrow(
       mcpServerHealthStatus,
       r.publicId,

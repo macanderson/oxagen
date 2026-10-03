@@ -78,7 +78,7 @@ export function AuthColumn({
 
 export function AuthFooter({ children }: { children: ReactNode }) {
   return (
-    <p className="text-center text-sm text-muted-foreground">{children}</p>
+    <p className="text-center text-base text-muted-foreground">{children}</p>
   );
 }
 

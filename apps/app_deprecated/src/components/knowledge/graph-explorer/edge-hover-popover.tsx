@@ -45,7 +45,7 @@ export function EdgeHoverPopover({
   return (
     <div
       style={style}
-      className="max-h-80 w-72 overflow-y-auto rounded-lg border border-border bg-card/95 p-3 text-xs shadow-lg backdrop-blur"
+      className="max-h-80 w-72 overflow-y-auto rounded-lg border border-border bg-card/95 p-3 text-sm shadow-lg backdrop-blur"
       role="tooltip"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -66,7 +66,7 @@ export function EdgeHoverPopover({
             {sourceNode?.displayName ?? truncate(edge.source, 24)}
           </p>
           {sourceNode?.label && (
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {sourceNode.label}
             </p>
           )}
@@ -80,7 +80,7 @@ export function EdgeHoverPopover({
             {targetNode?.displayName ?? truncate(edge.target, 24)}
           </p>
           {targetNode?.label && (
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {targetNode.label}
             </p>
           )}
@@ -95,7 +95,7 @@ export function EdgeHoverPopover({
         )}
       </div>
       {(sourceNode?.properties || targetNode?.properties) && (
-        <div className="space-y-1 text-[10px]">
+        <div className="space-y-1 text-xs">
           {sourceNode?.properties &&
             Object.keys(sourceNode.properties).length > 0 && (
               <div>

@@ -101,7 +101,7 @@ export function ConversationItem({
     <>
       <div
         className={cn(
-          "group/item relative flex items-center rounded-md text-sm transition-all border",
+          "group/item relative flex items-center rounded-md text-base transition-all border",
           isActive
             ? "bg-accent border-border text-foreground"
             : "border-transparent hover:bg-muted",
@@ -130,7 +130,7 @@ export function ConversationItem({
           className="flex min-w-0 flex-1 flex-col gap-0.5 rounded-md px-2.5 py-2 pr-8 outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className="truncate font-medium leading-tight">{title}</span>
-          <span className="truncate text-xs text-muted-foreground">
+          <span className="truncate text-sm text-muted-foreground">
             {formatRelative(conversation.updatedAt)}
           </span>
         </Link>

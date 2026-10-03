@@ -18,7 +18,7 @@ import { readKeyScope, TACHO_GATEWAY_PURPOSE } from "@oxagen/iam/machine-key-sco
 import { createCloudTransport, type CredentialSource, type Transport } from "@oxagen/mcp-studio";
 import { parseCredentialRef } from "@oxagen/oxagen/steering-repo/names";
 import type { CedarRuntime } from "@oxagen/policy";
-import { recordServedToolCall } from "@oxagen/telemetry";
+import { readServedToolCallRate, recordServedToolCall } from "@oxagen/telemetry";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNotNull, isNull, ne } from "drizzle-orm";
 import { productionLocalTransport } from "../local-servers";
@@ -28,13 +28,15 @@ import { asCedarRuntime } from "./cedar";
 import { lazyCredentialSource } from "./credentials";
 import { servedRanker } from "./embeddings";
 import { servedEmergencyDenies, type SwitchTargets } from "./kill-switch";
-import { METER_LABEL, meterEntry, servedCallRow } from "./meter";
+import { filesCalls, METER_LABEL, meterEntry, servedCallRow } from "./meter";
 import type { PublishedSources } from "./published";
 import type { RunSources, ServedHost } from "./run";
 import {
   type Admission,
+  type CallRate,
   type MeterEvent,
   type OffSwitches,
+  type RatedCall,
   type ServedCallRecord,
   type ServedLog,
   type ServedPorts,
@@ -213,6 +215,19 @@ export async function recordServedCall(call: ServedCallRecord): Promise<void> {
   await runInTenantScope(scopeOf(call.run), () => recordServedToolCall(row));
 }
 
+/**
+ * The `rate` fact for one call, from served_tool_calls in the run's
+ * workspace (#4666). A run with no workspace records no call, so it counts
+ * none.
+ */
+export async function readServedCallRate(run: ServedRun, call: RatedCall, now: number): Promise<CallRate> {
+  if (!filesCalls(run)) return { calls_last_hour: 0, calls_last_minute: 0 };
+  const rate = await runInTenantScope(scopeOf(run), () =>
+    readServedToolCallRate({ server: call.server, tool: call.tool, now }),
+  );
+  return { calls_last_hour: rate.lastHour, calls_last_minute: rate.lastMinute };
+}
+
 let cedar: Promise<CedarRuntime | null> | undefined;
 
 /**
@@ -238,6 +253,7 @@ export function createServedPorts(run: ServedRun): ServedPorts {
     withheld: (served) => readWorkspaceWithheldTools(scopeOf(served)),
     admit: admitServed,
     emergencyDeny: servedEmergencyDenies(run, { gate: postgresKillSwitchReads, targets: readSwitchTargets }),
+    callRate: readServedCallRate,
     approvals: postgresApprovals(),
     credentials: servedCredentials(run),
     transport: transportFor,

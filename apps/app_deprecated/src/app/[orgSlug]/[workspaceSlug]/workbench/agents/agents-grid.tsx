@@ -231,7 +231,7 @@ export function AgentsGrid({ agents }: { agents: AgentGridRow[] }) {
                     >
                       {agent.name}
                     </Link>
-                    <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+                    <div className="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
                       <span className="truncate font-mono">{agent.slug}</span>
                       {agent.latestVersion !== null ? (
                         <span className="shrink-0 tabular-nums">
@@ -242,7 +242,7 @@ export function AgentsGrid({ agents }: { agents: AgentGridRow[] }) {
                         <Badge
                           variant="outline"
                           size="sm"
-                          className="shrink-0 text-[10px]"
+                          className="shrink-0 text-xs"
                         >
                           Managed
                         </Badge>
@@ -254,7 +254,7 @@ export function AgentsGrid({ agents }: { agents: AgentGridRow[] }) {
                 {/* LLM-inferred summary (≤256 chars server-side); clamped so
                     cards stay even in the grid. */}
                 <p
-                  className="line-clamp-2 min-h-8 text-sm text-muted-foreground"
+                  className="line-clamp-2 min-h-8 text-base text-muted-foreground"
                   data-testid={`agent-blurb-${agent.slug}`}
                 >
                   {blurbOf(agent)}
@@ -276,7 +276,7 @@ export function AgentsGrid({ agents }: { agents: AgentGridRow[] }) {
                       <Badge
                         variant="outline"
                         size="sm"
-                        className="shrink-0 text-[10px]"
+                        className="shrink-0 text-xs"
                         data-testid={`agent-role-${agent.slug}`}
                       >
                         <ShieldCheck
@@ -291,7 +291,7 @@ export function AgentsGrid({ agents }: { agents: AgentGridRow[] }) {
                       pulse={deployed}
                       size="sm"
                       label={deployed ? "Deployed" : "Not deployed"}
-                      className="text-xs text-muted-foreground"
+                      className="text-sm text-muted-foreground"
                     />
                   </div>
                   {agent.launchHref ? (
@@ -338,7 +338,7 @@ export function AgentsGrid({ agents }: { agents: AgentGridRow[] }) {
       )}
 
       <div className="flex items-center justify-between gap-4">
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {controls.filteredTotal === controls.total
             ? `${controls.total} agent${controls.total === 1 ? "" : "s"}`
             : `${controls.filteredTotal} of ${controls.total} agents`}

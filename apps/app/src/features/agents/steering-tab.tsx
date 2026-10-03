@@ -56,7 +56,7 @@ function Meter({
         <h2 id={id} className="text-sm font-semibold">
           {label}
         </h2>
-        <p className="text-xs text-muted-foreground">{sub}</p>
+        <p className="text-sm text-muted-foreground">{sub}</p>
       </div>
       {children}
     </section>
@@ -151,7 +151,7 @@ export function SteeringSection({
           sub={t("volatile.sub")}
         >
           <p className="flex justify-between gap-3 text-sm">
-            <span className={`${mono} text-xs text-muted-foreground`}>
+            <span className={`${mono} text-sm text-muted-foreground`}>
               {manifest.ts}
             </span>
             <b className={mono} data-testid="steering-budget">
@@ -174,7 +174,7 @@ export function SteeringSection({
               }}
             />
           </span>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t("volatile.note", {
               included: n(manifest.recordsIncluded),
               cut: n(manifest.recordsCut),

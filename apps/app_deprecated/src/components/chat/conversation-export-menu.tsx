@@ -165,7 +165,7 @@ export function ConversationExportMenu({
           <div className="mt-2 flex flex-col gap-1">
             <button
               type="button"
-              className="flex min-h-11 items-center gap-3 rounded-md px-3 text-left text-sm hover:bg-accent disabled:opacity-50"
+              className="flex min-h-11 items-center gap-3 rounded-md px-3 text-left text-base hover:bg-accent disabled:opacity-50"
               disabled={exporting !== null}
               onClick={() => void runExport("markdown")}
             >
@@ -173,7 +173,7 @@ export function ConversationExportMenu({
             </button>
             <button
               type="button"
-              className="flex min-h-11 items-center gap-3 rounded-md px-3 text-left text-sm hover:bg-accent disabled:opacity-50"
+              className="flex min-h-11 items-center gap-3 rounded-md px-3 text-left text-base hover:bg-accent disabled:opacity-50"
               disabled={exporting !== null}
               onClick={() => void runExport("pdf")}
             >

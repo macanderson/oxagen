@@ -36,8 +36,8 @@ import {
   SSO_PROTOCOLS,
 } from "./sso-rules";
 
-const fieldLabel = "text-sm font-medium text-foreground";
-const hintText = "text-xs text-muted-foreground";
+const fieldLabel = "text-base font-medium text-foreground";
+const hintText = "text-sm text-muted-foreground";
 
 /** A labelled textarea with its hint and error wired like `Field`. */
 function TextAreaField({
@@ -66,11 +66,11 @@ function TextAreaField({
         spellCheck={false}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
-        className={`${textareaBase} font-mono text-xs`}
+        className={`${textareaBase} font-mono text-sm`}
         {...area}
       />
       {error ? (
-        <p id={errorId} className="text-sm text-error-ink">
+        <p id={errorId} className="text-base text-error-ink">
           {error}
         </p>
       ) : null}
@@ -231,7 +231,7 @@ export function SsoProviderDialog({
               <legend className={fieldLabel}>{t("protocol")}</legend>
               <div className="flex flex-wrap gap-4">
                 {SSO_PROTOCOLS.map((p) => (
-                  <label key={p} className="flex items-center gap-2 text-sm">
+                  <label key={p} className="flex items-center gap-2 text-base">
                     <input
                       type="radio"
                       name="protocol"

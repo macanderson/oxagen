@@ -45,7 +45,7 @@ export function CostPanel({ detail, at }: { detail: WorkItemDetail; at: At }) {
         <h2 id="work-cost-heading" className={panelTitle}>
           {t("heading")}
         </h2>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           {t.rich("triageSpend", {
             link: (chunks) => (
               <SafeLink to={routes.billing(at.org)} className={linkText}>
@@ -71,7 +71,7 @@ export function CostPanel({ detail, at }: { detail: WorkItemDetail; at: At }) {
                 <span className="text-foreground">{t("sendNumber", { send: String(send.send) })}</span>
                 <SafeLink
                   to={routes.run(at.org, at.ws, run.id)}
-                  className={`${linkText} block text-xs`}
+                  className={`${linkText} block text-sm`}
                 >
                   {t("openRun")}
                 </SafeLink>
@@ -87,7 +87,7 @@ export function CostPanel({ detail, at }: { detail: WorkItemDetail; at: At }) {
                 {run.cost === null ? (
                   <span className="flex flex-col items-end font-sans">
                     <span className="text-muted-foreground">{t("unknown")}</span>
-                    <span className="text-xs text-muted-foreground">{t("noUsage")}</span>
+                    <span className="text-sm text-muted-foreground">{t("noUsage")}</span>
                   </span>
                 ) : (
                   <Money value={run.cost} />
@@ -99,7 +99,7 @@ export function CostPanel({ detail, at }: { detail: WorkItemDetail; at: At }) {
         <tr data-testid="work-cost-total" className="border-t border-border">
           <td className={cell}>
             <span className="font-semibold text-foreground">{t("recorded")}</span>
-            <span className="block text-xs text-muted-foreground">
+            <span className="block text-sm text-muted-foreground">
               {t("coverage", { known: coverage.knownRuns, runs: coverage.runs })}
             </span>
           </td>
@@ -175,7 +175,7 @@ export function HistoryPanel({ detail }: { detail: WorkItemDetail }) {
         <h2 id="work-history-heading" className={panelTitle}>
           {t("heading")}
         </h2>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           {t("count", { count: entries.length })}
         </span>
       </div>
@@ -190,7 +190,7 @@ export function HistoryPanel({ detail }: { detail: WorkItemDetail }) {
               data-kind={entry.kind}
               className="flex flex-col gap-0.5 px-4 py-2.5 text-sm sm:flex-row sm:gap-4"
             >
-              <time dateTime={entry.at} className="shrink-0 text-xs text-muted-foreground sm:w-36">
+              <time dateTime={entry.at} className="shrink-0 text-sm text-muted-foreground sm:w-36">
                 {when(entry.at)}
               </time>
               <span className="min-w-0 text-foreground [overflow-wrap:anywhere]">

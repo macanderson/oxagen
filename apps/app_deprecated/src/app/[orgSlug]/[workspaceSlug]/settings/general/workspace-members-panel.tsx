@@ -109,10 +109,10 @@ export async function WorkspaceMembersPanel({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold text-foreground">
+        <h2 className="text-lg font-semibold text-foreground">
           Workspace members
         </h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           Members with access to <strong>{workspaceName}</strong>. To manage
           org-level membership and roles, visit{" "}
           <a
@@ -126,7 +126,7 @@ export async function WorkspaceMembersPanel({
       </div>
 
       {members.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           No members in this workspace yet.
         </p>
       ) : (
@@ -140,25 +140,25 @@ export async function WorkspaceMembersPanel({
                 className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex flex-col">
-                  <span className="font-medium text-sm">
+                  <span className="font-medium text-base">
                     {m.displayName ?? m.email}
                     {isSelf ? (
-                      <span className="ml-1.5 text-xs text-muted-foreground">
+                      <span className="ml-1.5 text-sm text-muted-foreground">
                         (you)
                       </span>
                     ) : null}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-sm text-muted-foreground">
                     {m.email}
                   </span>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                   {orgRole ? (
-                    <span className="rounded border border-border/60 px-1.5 py-0.5 text-xs font-medium">
+                    <span className="rounded border border-border/60 px-1.5 py-0.5 text-sm font-medium">
                       org: {orgRole}
                     </span>
                   ) : null}
-                  <span className="rounded border border-border/60 px-1.5 py-0.5 text-xs font-medium">
+                  <span className="rounded border border-border/60 px-1.5 py-0.5 text-sm font-medium">
                     ws: {m.wsRole}
                   </span>
                 </div>

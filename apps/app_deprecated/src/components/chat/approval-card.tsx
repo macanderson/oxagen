@@ -80,8 +80,8 @@ export function ApprovalCard({
         <ShieldAlert className="h-4 w-4 text-warning" />
         <span className="font-semibold">Approval required</span>
         <RiskBadge risk={riskLevel} />
-        <span className="text-xs text-muted-foreground">{capability}</span>
-        <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+        <span className="text-sm text-muted-foreground">{capability}</span>
+        <span className="ml-auto text-sm tabular-nums text-muted-foreground">
           {expired || settled
             ? null
             : `Expires in ${formatRemaining(remaining)}`}
@@ -90,15 +90,15 @@ export function ApprovalCard({
 
       <StructuredField label="Proposed input" value={inputPreview} />
 
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <div className="flex items-center justify-end gap-2">
         {settled ? (
           <span
             className={
               optimistic === "approved"
-                ? "inline-flex items-center gap-1 text-xs font-medium text-success"
-                : "inline-flex items-center gap-1 text-xs font-medium text-destructive"
+                ? "inline-flex items-center gap-1 text-sm font-medium text-success"
+                : "inline-flex items-center gap-1 text-sm font-medium text-destructive"
             }
           >
             {optimistic === "approved" ? (
@@ -109,7 +109,7 @@ export function ApprovalCard({
             {optimistic}
           </span>
         ) : expired ? (
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+          <span className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground">
             Expired
           </span>
         ) : (

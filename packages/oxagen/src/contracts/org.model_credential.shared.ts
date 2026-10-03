@@ -61,9 +61,15 @@ export const modelCredentialApiKeySchema = z.string().min(8).max(512);
  * range check that keeps it off loopback, RFC1918 and the cloud metadata
  * address lives in `@oxagen/config/public-url` and runs in the handler — a
  * regex cannot do it, because `http://2130706433/` is loopback too.
+ *
+ * Trimmed first, so the value checked is the value stored. A pasted
+ * `https://example.com/v1 ` passes `.url()` either way, because URL parsing
+ * drops the space. Kept, the space reaches every request as `/v1%20/models`
+ * (#3317).
  */
 export const modelCredentialBaseUrlSchema = z
   .string()
+  .trim()
   .url()
   .max(2048)
   .startsWith("https://", { message: "the endpoint must use https" });

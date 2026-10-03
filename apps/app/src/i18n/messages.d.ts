@@ -4830,6 +4830,7 @@ type Messages = {
         baseUrlRequired: string;
         balancedRequired: string;
         invalid: string;
+        modelTooLong: string;
         refused: string;
         pendingApproval: string;
         unavailable: string;

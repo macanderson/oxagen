@@ -29,7 +29,7 @@ export function MostViolatedRulesList({
         />
         <h3
           id="most-violated-rules-heading"
-          className="text-sm font-semibold text-foreground"
+          className="text-base font-semibold text-foreground"
         >
           Most Violated Rules
         </h3>
@@ -59,7 +59,7 @@ export function MostViolatedRulesList({
                     markdown={false}
                   />
                 </Link>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   {rule.memoryClass} · {rule.citationCount.toLocaleString()}{" "}
                   total citations
                 </p>

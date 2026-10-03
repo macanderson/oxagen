@@ -221,7 +221,7 @@ function PanelHeader({
   return (
     <header className="flex h-11 shrink-0 items-center gap-1 border-b border-border bg-background px-3">
       {/* Title */}
-      <h2 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+      <h2 className="min-w-0 flex-1 truncate text-base font-medium text-foreground">
         {title}
       </h2>
 

@@ -62,8 +62,8 @@ describe("Button", () => {
 describe("cn", () => {
   it("drops falsy parts and lets a later class win over one on the same property", () => {
     expect(cn("px-3", false, undefined, "px-4")).toBe("px-4");
-    expect(cn("text-sm text-muted-foreground", "text-foreground")).toBe(
-      "text-sm text-foreground",
+    expect(cn("text-base text-muted-foreground", "text-foreground")).toBe(
+      "text-base text-foreground",
     );
   });
 });

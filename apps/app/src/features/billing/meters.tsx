@@ -74,7 +74,7 @@ export function Meters({
           { label: t("meters.columns.thisPeriod"), numeric: true },
           {
             label: t("meters.columns.note"),
-            className: `${cell} text-sm text-muted-foreground`,
+            className: `${cell} text-xs text-muted-foreground`,
           },
         ]}
         rows={[

@@ -26,7 +26,7 @@ export function AgentVersions({
       testId="agent-versions"
     >
       {versions.length === 0 ? (
-        <p className="px-4 py-3.5 text-sm text-muted-foreground">{t("none")}</p>
+        <p className="px-4 py-3.5 text-base text-muted-foreground">{t("none")}</p>
       ) : (
         <Table
           label={t("title")}
@@ -61,7 +61,7 @@ export function AgentVersions({
                   ) : (
                     <>
                       {version.runtime.name}{" "}
-                      <span className={`${mono} text-xs text-muted-foreground`}>
+                      <span className={`${mono} text-sm text-muted-foreground`}>
                         {version.runtime.slug}
                       </span>
                     </>

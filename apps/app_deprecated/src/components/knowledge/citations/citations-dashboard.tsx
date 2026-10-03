@@ -43,13 +43,13 @@ export function CitationsDashboard({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-border/60 p-4">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="mb-3 text-sm font-medium uppercase tracking-wide text-muted-foreground">
             Citation usefulness
           </p>
           <CitationInfluenceChart byInfluence={data.byInfluence} />
         </div>
         <div className="rounded-lg border border-border/60 p-4">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="mb-3 text-sm font-medium uppercase tracking-wide text-muted-foreground">
             Compliance outcomes
           </p>
           <CitationComplianceSummary byCompliance={data.byCompliance} />
@@ -57,7 +57,7 @@ export function CitationsDashboard({
       </div>
 
       <div className="rounded-lg border border-border/60 p-4">
-        <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <p className="mb-3 text-sm font-medium uppercase tracking-wide text-muted-foreground">
           Citations over time
         </p>
         <CitationDailyChart daily={data.daily} />

@@ -60,7 +60,7 @@ function CostEstimate() {
   return (
     <p
       data-testid="cost-estimate"
-      className="max-w-prose text-sm text-muted-foreground"
+      className="max-w-prose text-base text-muted-foreground"
     >
       {t("estimate")}
     </p>

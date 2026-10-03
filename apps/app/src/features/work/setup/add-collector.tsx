@@ -210,7 +210,7 @@ export function AddCollector({
       <p
         role="status"
         data-testid="work-add-collector-status"
-        className="max-w-[48ch] text-right text-sm text-muted-foreground"
+        className="max-w-[48ch] text-right text-base text-muted-foreground"
       >
         {notice}
       </p>
@@ -228,7 +228,7 @@ export function AddCollector({
           onSubmit={(event) => void submit(event)}
           className="flex flex-col gap-4"
         >
-          <p className="text-sm text-muted-foreground">{t("body")}</p>
+          <p className="text-base text-muted-foreground">{t("body")}</p>
           <FieldRow id="work-collector-name" label={t("name")} hint={t("nameHint")}>
             <input
               id="work-collector-name"
@@ -253,7 +253,7 @@ export function AddCollector({
             {repos.map((repo) => (
               <label
                 key={repo}
-                className="flex min-h-11 items-center gap-2.5 text-sm"
+                className="flex min-h-11 items-center gap-2.5 text-base"
               >
                 <input
                   type="checkbox"
@@ -288,9 +288,9 @@ export function AddCollector({
             </p>
           </fieldset>
           {existing ? (
-            <p className="text-sm text-muted-foreground">{t("existing")}</p>
+            <p className="text-base text-muted-foreground">{t("existing")}</p>
           ) : null}
-          <p className="text-sm text-muted-foreground">{t("writeBack")}</p>
+          <p className="text-base text-muted-foreground">{t("writeBack")}</p>
           {failure === null ? null : (
             <FormAlert testId="work-action-failure">{failure}</FormAlert>
           )}

@@ -666,7 +666,7 @@ export function AgentBuilder({
               key={s.key}
               type="button"
               onClick={() => setStepIdx(i)}
-              className={`flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors max-lg:min-h-11 max-lg:flex-shrink-0 ${
+              className={`flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-base transition-colors max-lg:min-h-11 max-lg:flex-shrink-0 ${
                 active
                   ? "bg-muted font-medium text-foreground"
                   : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
@@ -675,7 +675,7 @@ export function AgentBuilder({
               data-testid={`builder-step-${s.key}`}
             >
               <span
-                className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold tabular-nums transition-colors ${
+                className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border text-xs font-semibold tabular-nums transition-colors ${
                   active
                     ? "border-primary bg-primary text-primary-foreground"
                     : filled
@@ -706,7 +706,7 @@ export function AgentBuilder({
             className="mb-4 flex flex-wrap items-center gap-2"
             data-testid="agent-key-header"
           >
-            <span className="text-xs font-medium text-muted-foreground">
+            <span className="text-sm font-medium text-muted-foreground">
               Agent key
             </span>
             <CopyableId value={agentKey} label="key" max={64} />
@@ -715,7 +715,7 @@ export function AgentBuilder({
 
         {readOnly ? (
           <div
-            className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground"
+            className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-foreground"
             role="status"
           >
             {initialAgent?.status === "archived"
@@ -738,7 +738,7 @@ export function AgentBuilder({
                 aria-hidden="true"
               />
               <div className="min-w-0 flex-1 space-y-2">
-                <p className="text-sm font-medium text-foreground">
+                <p className="text-base font-medium text-foreground">
                   Configuration generated from your description — review and
                   edit anything before saving.
                 </p>
@@ -747,7 +747,7 @@ export function AgentBuilder({
                     <button
                       type="button"
                       onClick={() => setRationaleOpen((o) => !o)}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                      className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
                       aria-expanded={rationaleOpen}
                       data-testid="agent-prefill-rationale-toggle"
                     >
@@ -760,7 +760,7 @@ export function AgentBuilder({
                     </button>
                     {rationaleOpen ? (
                       <p
-                        className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground"
+                        className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground"
                         data-testid="agent-prefill-rationale"
                       >
                         {prefillMeta.rationale}
@@ -770,7 +770,7 @@ export function AgentBuilder({
                 ) : null}
                 {prefillMeta.warnings.length > 0 ? (
                   <ul
-                    className="list-inside list-disc space-y-0.5 text-xs text-warning"
+                    className="list-inside list-disc space-y-0.5 text-sm text-warning"
                     data-testid="agent-prefill-warnings"
                   >
                     {prefillMeta.warnings.map((w, i) => (
@@ -832,7 +832,7 @@ export function AgentBuilder({
                   onChange={(e) => setDescribeText(e.target.value)}
                   data-testid="agent-describe-input"
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   Oxagen drafts a complete configuration — identity, prompt,
                   tools, and graph access — grounded in this workspace&rsquo;s
                   real capabilities and ontologies. You review and edit every
@@ -842,7 +842,7 @@ export function AgentBuilder({
 
               {suggestError ? (
                 <div
-                  className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                  className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-base text-destructive"
                   role="alert"
                   data-testid="agent-describe-error"
                 >
@@ -923,7 +923,7 @@ export function AgentBuilder({
                   className="font-mono"
                   data-testid="agent-slug-input"
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   Lowercase kebab-case. Used in URLs and A2A routing.
                 </p>
               </div>
@@ -939,7 +939,7 @@ export function AgentBuilder({
                   data-testid="agent-description-input"
                 />
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 The model is resolved by the platform gateway at run time — no
                 per-agent model pin in Phase 1.
               </p>
@@ -959,9 +959,9 @@ export function AgentBuilder({
                   placeholder="You are a precise, citation-grounded agent. Ground every claim in the workspace knowledge graph…"
                   onChange={(e) => setInstructions(e.target.value)}
                   data-testid="agent-instructions-input"
-                  className="font-mono text-sm"
+                  className="font-mono text-base"
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   Baked into the agent definition. Optional — leave blank to use
                   the platform default.
                 </p>
@@ -972,7 +972,7 @@ export function AgentBuilder({
           {/* ── Equip ────────────────────────────────────────────────────── */}
           {step.key === "equip" ? (
             <div className="flex flex-col gap-3" data-testid="step-equip">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-base text-muted-foreground">
                 The allowlist this agent may call — capabilities and MCP servers
                 — as one uniform list.
               </p>
@@ -1011,7 +1011,7 @@ export function AgentBuilder({
           {/* ── Ground ───────────────────────────────────────────────────── */}
           {step.key === "ground" ? (
             <div className="flex flex-col gap-5" data-testid="step-ground">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-base text-muted-foreground">
                 Bind the agent to an ontology and bound its scoped graph
                 queries. Defaults are safe — you can skip this.
               </p>
@@ -1028,8 +1028,8 @@ export function AgentBuilder({
                 />
               </div>
               <fieldset className="space-y-2" disabled={disabled}>
-                <legend className="text-sm font-medium">Access mode</legend>
-                <label className="flex items-start gap-2 text-sm">
+                <legend className="text-base font-medium">Access mode</legend>
+                <label className="flex items-start gap-2 text-base">
                   <input
                     type="radio"
                     name="agent-graph-mode"
@@ -1040,12 +1040,12 @@ export function AgentBuilder({
                   />
                   <span>
                     <span className="font-medium text-foreground">Read</span>
-                    <span className="block text-xs text-muted-foreground">
+                    <span className="block text-sm text-muted-foreground">
                       Query-only. The agent never proposes new nodes or edges.
                     </span>
                   </span>
                 </label>
-                <label className="flex items-start gap-2 text-sm">
+                <label className="flex items-start gap-2 text-base">
                   <input
                     type="radio"
                     name="agent-graph-mode"
@@ -1056,7 +1056,7 @@ export function AgentBuilder({
                   />
                   <span>
                     <span className="font-medium text-foreground">Extend</span>
-                    <span className="block text-xs text-muted-foreground">
+                    <span className="block text-sm text-muted-foreground">
                       May propose new nodes and edges into the ontology.
                     </span>
                   </span>
@@ -1134,7 +1134,7 @@ export function AgentBuilder({
             <div className="flex flex-col gap-4" data-testid="step-access">
               {roleActionError ? (
                 <div
-                  className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                  className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-base text-destructive"
                   role="alert"
                   data-testid="agent-role-action-error"
                 >
@@ -1151,7 +1151,7 @@ export function AgentBuilder({
                     className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary"
                     aria-hidden="true"
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm text-muted-foreground">
                     <span className="font-medium text-foreground">
                       {selectedRoleName}
                     </span>{" "}
@@ -1181,7 +1181,7 @@ export function AgentBuilder({
           {/* ── Review ───────────────────────────────────────────────────── */}
           {step.key === "review" ? (
             <div className="flex flex-col gap-5" data-testid="step-review">
-              <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+              <dl className="grid grid-cols-1 gap-3 text-base sm:grid-cols-2">
                 <SummaryItem label="Name" value={name.trim() || "—"} />
                 <SummaryItem label="Slug" value={slug.trim() || "—"} mono />
                 <SummaryItem
@@ -1219,20 +1219,20 @@ export function AgentBuilder({
                 className="rounded-md border bg-muted/20 px-3 py-2"
                 data-testid="agent-key-review"
               >
-                <div className="mb-1 text-xs text-muted-foreground">
+                <div className="mb-1 text-sm text-muted-foreground">
                   Agent key
                 </div>
                 {mode === "edit" && agentKey ? (
                   <CopyableId value={agentKey} label="key" max={64} />
                 ) : (
                   <>
-                    <div className="font-mono text-xs text-foreground">
+                    <div className="font-mono text-sm text-foreground">
                       <span className="text-muted-foreground/60">
                         org.workspace.
                       </span>
                       {slug.trim() || "<slug>"}
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-1 text-sm text-muted-foreground">
                       The full globally-unique key — your org and workspace
                       namespaces prepended to the slug — is assigned when the
                       agent is saved.
@@ -1247,7 +1247,7 @@ export function AgentBuilder({
                     <Badge
                       key={`${t.type}:${t.ref}`}
                       variant="secondary"
-                      className="text-[10px]"
+                      className="text-xs"
                     >
                       {t.type}: {t.ref}
                     </Badge>
@@ -1321,7 +1321,7 @@ export function AgentBuilder({
                   {deployed && agentId ? (
                     <a
                       href={`${workspace.sessions(routeCtx)}?agent=${encodeURIComponent(agentId)}`}
-                      className="inline-flex items-center gap-1 text-sm text-primary underline-offset-4 hover:underline"
+                      className="inline-flex items-center gap-1 text-base text-primary underline-offset-4 hover:underline"
                       data-testid="agent-launch-link"
                     >
                       Launch{" "}
@@ -1331,7 +1331,7 @@ export function AgentBuilder({
                 </div>
               ) : null}
               {!canSaveIdentity && !readOnly ? (
-                <p className="text-xs text-destructive">
+                <p className="text-sm text-destructive">
                   A name and a valid kebab-case slug are required before saving.
                 </p>
               ) : null}
@@ -1366,7 +1366,7 @@ export function AgentBuilder({
             Back
           </Button>
           <span
-            className="text-xs tabular-nums text-muted-foreground md:hidden"
+            className="text-sm tabular-nums text-muted-foreground md:hidden"
             aria-label={`Step ${stepIdx + 1} of ${steps.length}`}
           >
             {stepIdx + 1} / {steps.length}
@@ -1388,7 +1388,7 @@ export function AgentBuilder({
               Next
             </Button>
           ) : (
-            <span className="text-xs text-muted-foreground max-md:flex-1 max-md:text-right">
+            <span className="text-sm text-muted-foreground max-md:flex-1 max-md:text-right">
               {mode === "edit" && initialAgent
                 ? `Editing ${initialAgent.slug} · v${initialAgent.version ?? "—"}`
                 : "New agent"}
@@ -1411,8 +1411,8 @@ function SummaryItem({
 }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className={`text-foreground ${mono ? "font-mono text-xs" : ""}`}>
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className={`text-foreground ${mono ? "font-mono text-sm" : ""}`}>
         {value}
       </dd>
     </div>

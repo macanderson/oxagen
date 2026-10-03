@@ -218,9 +218,9 @@ function DeliveryPicker({
   const t = useTranslations("run.commands.delivery");
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="pb-1 text-sm font-medium">{t("legend")}</legend>
+      <legend className="pb-1 text-base font-medium">{t("legend")}</legend>
       {DELIVERY_MODES.map((mode) => (
-        <label key={mode} className="flex items-start gap-2 text-sm">
+        <label key={mode} className="flex items-start gap-2 text-base">
           <input
             type="radio"
             name="requestedMode"
@@ -236,13 +236,13 @@ function DeliveryPicker({
             <span className="font-medium">
               {t(`${DELIVERY_COPY[mode]}.label`)}
             </span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               {t(`${DELIVERY_COPY[mode]}.help`)}
             </span>
           </span>
         </label>
       ))}
-      <p className="text-xs text-muted-foreground">{t("ceiling")}</p>
+      <p className="text-sm text-muted-foreground">{t("ceiling")}</p>
     </fieldset>
   );
 }
@@ -345,10 +345,10 @@ function CommandDialog({
             onSubmit={(e) => void submit(e)}
             className="flex flex-col gap-3"
           >
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               {t(ledgerControl ? `${ledgerCopy}.body` : `${command}.body`)}
             </p>
-            <label htmlFor={fieldId} className="text-sm font-medium">
+            <label htmlFor={fieldId} className="text-base font-medium">
               {t(steering ? "steerLabel" : "reasonLabel")}
             </label>
             <textarea
@@ -362,7 +362,7 @@ function CommandDialog({
               }}
               className={`${textareaBase} resize-y`}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {t(
                 ledgerControl
                   ? "ledgerReasonHelp"
@@ -386,12 +386,12 @@ function CommandDialog({
             />
           </form>
         ) : (
-          <div role="status" className="flex flex-col gap-3 text-sm">
+          <div role="status" className="flex flex-col gap-3 text-base">
             <p>
               {t(ledgerControl ? `${ledgerCopy}.applied` : `${command}.queued`)}
             </p>
             {queued.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {t("noRecipient")}
               </p>
             ) : (
@@ -400,7 +400,7 @@ function CommandDialog({
                   <li
                     key={id}
                     data-testid="queued-command"
-                    className={`${mono} break-all text-xs`}
+                    className={`${mono} break-all text-sm`}
                   >
                     {id}
                   </li>
@@ -452,7 +452,7 @@ function DisabledControls({
       </div>
       <p
         data-testid={testId}
-        className="max-w-prose text-xs text-muted-foreground lg:text-right"
+        className="max-w-prose text-sm text-muted-foreground lg:text-right"
       >
         {reason}
       </p>
@@ -567,7 +567,7 @@ export function RunControls({
         </div>
         <p
           data-testid="ledger-control-limit"
-          className="max-w-prose text-xs text-muted-foreground"
+          className="max-w-prose text-sm text-muted-foreground"
         >
           {t(ingressPaused ? "ledgerPaused" : "ledgerReason")}
         </p>
@@ -614,7 +614,7 @@ export function RunControls({
       {controls}
       <p
         data-testid="steer-no-control"
-        className="max-w-prose text-xs text-muted-foreground lg:text-right"
+        className="max-w-prose text-sm text-muted-foreground lg:text-right"
       >
         {t(`steerBlocked.${STEER_BLOCK_COPY[steerBlock]}`)}
       </p>

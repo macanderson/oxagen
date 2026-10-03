@@ -60,7 +60,7 @@ function StubDialog({
         <div
           data-not-backed=""
           data-gap={gap}
-          className="flex flex-col gap-3 text-sm"
+          className="flex flex-col gap-3 text-base"
         >
           {children}
         </div>

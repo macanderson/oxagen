@@ -276,7 +276,7 @@ export function CropSurface({
       {/* Zoom slider */}
       <div className="flex flex-col gap-1.5">
         <label
-          className="text-xs text-muted-foreground"
+          className="text-sm text-muted-foreground"
           htmlFor="avatar-zoom-slider"
         >
           Zoom
@@ -298,7 +298,7 @@ export function CropSurface({
       {/* Inline error — shown inside the dialog, not as a toast, so the user
           can retry without re-selecting the file. */}
       {error && (
-        <p className="text-sm text-destructive" role="alert">
+        <p className="text-base text-destructive" role="alert">
           {error}
         </p>
       )}

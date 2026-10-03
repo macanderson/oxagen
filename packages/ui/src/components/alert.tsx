@@ -8,7 +8,7 @@ import { cn } from "../lib/utils";
 // --warning/--destructive tokens (same set Badge uses); the tinted background +
 // semantic icon keep the body text on the readable --foreground colour.
 const alertVariants = cva(
-  "relative w-full rounded-xl border px-4 py-3 text-sm [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:size-4 [&>svg+div]:pl-7 [&>svg~*]:pl-7",
+  "relative w-full rounded-xl border px-4 py-3 text-base [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:size-4 [&>svg+div]:pl-7 [&>svg~*]:pl-7",
   {
     variants: {
       variant: {
@@ -62,7 +62,7 @@ const AlertDescription = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "text-sm text-muted-foreground [&_p]:leading-relaxed",
+      "text-base text-muted-foreground [&_p]:leading-relaxed",
       className,
     )}
     {...props}

@@ -152,13 +152,13 @@ function SealDialog({
             onSubmit={(e) => void submit(e)}
             className="flex flex-col gap-3"
           >
-            <p className="text-sm text-muted-foreground">{t("body")}</p>
-            <p data-testid="run-seal-kill" className="text-sm">
+            <p className="text-base text-muted-foreground">{t("body")}</p>
+            <p data-testid="run-seal-kill" className="text-base">
               {commandBlock === null
                 ? t("killBody")
                 : t(`killBlocked.${COMMAND_BLOCK_COPY[commandBlock]}`)}
             </p>
-            <label htmlFor={fieldId} className="text-sm font-medium">
+            <label htmlFor={fieldId} className="text-base font-medium">
               {t("reasonLabel")}
             </label>
             <textarea
@@ -171,7 +171,7 @@ function SealDialog({
               }}
               className={`${textareaBase} resize-y`}
             />
-            <p className="text-xs text-muted-foreground">{t("reasonHelp")}</p>
+            <p className="text-sm text-muted-foreground">{t("reasonHelp")}</p>
             {failure === null ? null : (
               <FormAlert testId="run-seal-failure">{failure}</FormAlert>
             )}
@@ -182,12 +182,12 @@ function SealDialog({
             />
           </form>
         ) : (
-          <div role="status" className="flex flex-col gap-3 text-sm">
+          <div role="status" className="flex flex-col gap-3 text-base">
             <p>{t("sealed")}</p>
             {sealed.kill.status === "queued" ? (
               <p data-testid="run-seal-kill-queued">
                 {t("killQueued")}{" "}
-                <span className={`${mono} break-all text-xs`}>
+                <span className={`${mono} break-all text-sm`}>
                   {sealed.kill.commandId}
                 </span>
               </p>

@@ -34,14 +34,14 @@ export function ConfirmStep({
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-card p-4">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold text-foreground">
+          <span className="text-base font-semibold text-foreground">
             {connectionDisplayName}
           </span>
-          <Badge variant="outline" className="text-[10px]">
+          <Badge variant="outline" className="text-xs">
             {connectorDisplayName}
           </Badge>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Confirming will save {mappings.length} entity-type mapping
           {mappings.length === 1 ? "" : "s"}, activate this connection, and
           start ingestion into the knowledge graph.
@@ -55,7 +55,7 @@ export function ConfirmStep({
         {mappings.map((m) => (
           <li
             key={m.sourceRecordType}
-            className="flex items-center justify-between gap-2 rounded-md border border-border/40 px-3 py-2 text-xs"
+            className="flex items-center justify-between gap-2 rounded-md border border-border/40 px-3 py-2 text-sm"
           >
             <span className="text-muted-foreground">{m.sourceRecordType}</span>
             <span className="font-medium text-foreground">
@@ -68,7 +68,7 @@ export function ConfirmStep({
       {error && (
         <div
           role="alert"
-          className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
+          className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-base text-destructive"
         >
           <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
           {error}

@@ -130,7 +130,7 @@ export function ConversationNav(props: ConversationNavProps) {
             }
           >
             <MessagesSquare className="size-4" />
-            <span className="text-xs font-medium">Conversations</span>
+            <span className="text-sm font-medium">Conversations</span>
           </SheetTrigger>
           <SheetPopup side="left" className="flex w-80 flex-col p-0">
             <SheetHeader className="border-b border-border px-4 py-3">
@@ -179,7 +179,7 @@ export function ConversationNav(props: ConversationNavProps) {
         ) : (
           <>
             <header className="flex shrink-0 items-center justify-between gap-2 px-4 py-3">
-              <h2 className="text-sm font-semibold">Conversations</h2>
+              <h2 className="text-base font-semibold">Conversations</h2>
               <Tooltip>
                 <TooltipTrigger
                   render={

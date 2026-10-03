@@ -3,10 +3,10 @@
  * oxagen-roadmap, mockups/v3/src/v3.css and replay.js). One set of rows takes
  * four skins: Claude Code (`cc`), Codex (`cx`), Cursor (`cu`) and stella
  * (`st`). Each skin's palette copies its own terminal, so it is the one place
- * in the app with raw colours. The sizes are not copied. Every line reads the
- * app's body token, because no text in the app is under 14px (Mac,
- * 2026-10-02). A row is a three-column grid: the clock in the
- * gutter (`.tg`), the line (`.tc`), and Oxagen's margin (`.tm`) for cost,
+ * in the app with raw colours. The sizes are not copied. Each line takes the
+ * app scale's step at or below the mockup's size: 10px to 11.5px takes the
+ * 2xs step and 12px to 13px the micro step. A row is a three-column grid:
+ * the clock in the gutter (`.tg`), the line (`.tc`), and Oxagen's margin (`.tm`) for cost,
  * gaps, and decisions. The rules sit in the components layer, so a utility on
  * the same element wins.
  */
@@ -117,7 +117,7 @@
     align-items: flex-end;
     min-width: 64px;
     font-family: var(--mono);
-    font-size: var(--ox-a-body);
+    font-size: var(--ox-a-2xs);
     line-height: 1.3;
     font-variant-numeric: tabular-nums;
     color: var(--muted);
@@ -153,7 +153,7 @@
     border: 1px solid var(--t-line);
     border-radius: 10px 10px 0 0;
     background: var(--t-bar);
-    font-size: var(--ox-a-body);
+    font-size: var(--ox-a-micro);
     color: var(--t-dim);
   }
   .term-dots {
@@ -188,7 +188,7 @@
     align-items: center;
     gap: 5px;
     font-family: var(--mono);
-    font-size: var(--ox-a-body);
+    font-size: var(--ox-a-2xs);
   }
   .rp-body {
     max-height: clamp(440px, calc(100vh - 262px), 1000px);
@@ -200,7 +200,7 @@
     overflow: hidden;
     padding: 8px 10px 0 0;
     font-family: var(--mono);
-    font-size: var(--ox-a-body);
+    font-size: var(--ox-a-2xs);
     font-variant-numeric: tabular-nums;
     text-align: right;
     white-space: nowrap;
@@ -211,7 +211,7 @@
     padding: 6px 16px 2px calc(16px + var(--depth, 0) * 2ch);
     border-inline: 1px solid var(--t-line);
     background: var(--t-bg);
-    font-size: var(--ox-a-body);
+    font-size: var(--ox-a-micro);
     line-height: var(--t-lh, 1.5);
     overflow-wrap: anywhere;
     color: var(--t-fg);
@@ -231,7 +231,7 @@
     min-width: 0;
     padding: 7px 0 4px 12px;
     font-family: var(--font);
-    font-size: var(--ox-a-body);
+    font-size: var(--ox-a-2xs);
     color: var(--muted);
   }
   .tm > * {
@@ -255,7 +255,7 @@
     border-radius: 6px;
     background: var(--panel);
     font-family: var(--mono);
-    font-size: var(--ox-a-body);
+    font-size: var(--ox-a-2xs);
     color: var(--fg);
   }
   .mg-note {
@@ -331,7 +331,7 @@
     color: var(--t-err);
   }
   .tx-quiet {
-    font-size: var(--ox-a-body);
+    font-size: var(--ox-a-2xs);
     color: var(--t-dim);
   }
   .tx-err {
@@ -372,7 +372,7 @@
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 2px 12px;
-    font-size: var(--ox-a-body);
+    font-size: var(--ox-a-2xs);
     color: var(--t-dim);
   }
   .tx-fold {
@@ -380,7 +380,7 @@
     border: 0;
     background: none;
     font: inherit;
-    font-size: var(--ox-a-body);
+    font-size: var(--ox-a-2xs);
     color: var(--t-dim);
     cursor: pointer;
   }
@@ -479,7 +479,7 @@
     margin: 0;
     overflow: visible;
     font-family: var(--mono);
-    font-size: var(--ox-a-body);
+    font-size: var(--ox-a-micro);
     line-height: 1.12;
     color: var(--t-acc);
   }
@@ -637,10 +637,10 @@
   }
   .term.cu .tx-think {
     --g-w: 1em;
-    font-size: var(--ox-a-body);
+    font-size: var(--ox-a-micro);
   }
   .term.cu .tx-call {
-    font-size: var(--ox-a-body);
+    font-size: var(--ox-a-micro);
     color: var(--t-dim);
   }
   .term.cu .tx-name {
@@ -654,7 +654,7 @@
     border-radius: 8px;
     background: light-dark(#fff, #1f1f1f);
     font-family: var(--mono);
-    font-size: var(--ox-a-body);
+    font-size: var(--ox-a-micro);
   }
   .term.cu .tx-res + .tx-res {
     margin-top: 0;
@@ -803,7 +803,7 @@
     }
     .term .tc {
       padding-inline: calc(12px + var(--depth, 0) * 1.5ch) 12px;
-      font-size: var(--ox-a-body);
+      font-size: var(--ox-a-2xs);
     }
     .rp-body {
       max-height: 68vh;

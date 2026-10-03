@@ -70,6 +70,7 @@ manifest describing how it runs:
 | `env` | no | Non-secret environment. This file ships inside a public CI artifact. `package-for-node.sh` adds the registry's static values that Parameter Store does not hold (`build-env.ts --runtime-out`). If you later add one of those keys to Parameter Store, redeploy the service, because the container would otherwise start with both. |
 | `config_prefix` | no | Parameter Store prefix; every parameter under it becomes an environment variable named after its last path segment. |
 | `smoke` | no | A request down the service's real path: `method`, `path`, and optional string `headers`, `body`, and `expect`. It is sent once the health path answers. A status below 500 counts as served, the reply must contain `expect` when one is set, and the health path must still answer 10 seconds later. Otherwise the deploy rolls back. mcp sends an MCP `tools/list` and expects `"inputSchema"`, because an MCP error arrives inside a 200 (#4829). |
+| `drain_seconds` | no (`120`) | How long the replaced container may keep serving the requests it already holds, from 0 to 300. See Swap below. |
 
 A release that fails its health check or its smoke request is removed after the
 rollback. Otherwise it counts toward the three releases the node keeps. On
@@ -82,6 +83,25 @@ Terraform apply every time an application changed how it starts, and it would
 widen the document's arguments from one validated identifier to a set of
 strings that reach a command line.
 
+## Swap
+
+A deploy no longer stops the current container with `docker rm -f` (#5318).
+It sets the container's restart policy to `no`, renames it
+`oxagen-<service>-draining-<release>`, and sends SIGTERM. A Next server closes
+its port at once and finishes the requests it holds, so the new container
+starts on the same port straight away. A service that keeps the port 10
+seconds after SIGTERM, such as node running as PID 1 with no handler, gets
+SIGKILL, as every service did before.
+
+Once the new release is healthy, or the rollback has run, deployment releases
+the node lock and waits up to `drain_seconds` for the old container to exit,
+then removes it. The next deploy removes any draining container a failed run
+left behind. Once `infra/tools/install-node-scripts.sh` installs the
+Caddyfile, Caddy retries a refused connection for 30 seconds on
+`app.oxagen.sh` and `api.oxagen.sh`, so a request that arrives while the new
+container starts waits instead of failing with a 502. That retry keeps a POST
+body intact only on Caddy 2.11.4 or later.
+
 ## Memory budget
 
 Before replacing a container, deployment takes `/opt/oxagen/service-deploy.lock`
@@ -91,8 +111,11 @@ shrink it while its measured usage exceeds 192 MiB.
 
 `memory-budget.py` adds the incoming limit to every other running or restarting
 container's limit, plus 1,024 MiB for the kernel, Docker, SSM, CloudWatch, and
-other host processes. The replaced service's current and migration-era names
-are excluded because deployment removes both before starting the replacement.
+other host processes. The migration-era name is excluded because deployment
+removes it before starting the replacement. The current container is counted
+with `--overlap`, because it keeps running beside the new one while it drains.
+When that total does not fit, deployment checks again without the current
+container and stops it before the new one starts, as it did before #5318.
 Caddy is counted as a container. Swap contributes no capacity.
 
 An unlimited container or a total above physical `MemTotal` refuses deployment

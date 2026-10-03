@@ -91,7 +91,7 @@ export default async function FleetPage({
     <div className="space-y-6" data-testid="fleet-page">
       <div>
         <h1 className="text-2xl font-semibold text-app-panel-fg">Fleet</h1>
-        <p className="mt-1 text-sm text-app-link-fg">
+        <p className="mt-1 text-base text-app-link-fg">
           The machines reporting to this workspace, and what Oxagen records for
           each app on them. A <strong>wrapped</strong> app runs an Oxagen hook;
           a <strong>connected</strong> app is served its tools through the
@@ -101,13 +101,13 @@ export default async function FleetPage({
 
       {!result.ok ? (
         <Panel>
-          <p className="text-sm text-destructive" data-testid="fleet-error">
+          <p className="text-base text-destructive" data-testid="fleet-error">
             {result.error}
           </p>
         </Panel>
       ) : result.hosts.length === 0 ? (
         <Panel>
-          <p className="text-sm text-app-link-fg" data-testid="fleet-empty">
+          <p className="text-base text-app-link-fg" data-testid="fleet-empty">
             No machines are enrolled in this workspace yet. Install the Oxagen
             desktop app on a machine and sign in to put its AI apps under this
             workspace.
@@ -118,7 +118,7 @@ export default async function FleetPage({
           {result.nextCursor !== null ? (
             <Panel>
               <p
-                className="text-sm text-app-link-fg"
+                className="text-base text-app-link-fg"
                 data-testid="fleet-partial"
               >
                 This workspace has more machines than fit in one listing. These
@@ -137,7 +137,7 @@ export default async function FleetPage({
                 >
                   {host.status}
                 </Badge>
-                <span className="text-xs text-app-link-fg">
+                <span className="text-sm text-app-link-fg">
                   {host.platform} · {host.osUser} · last seen {lastSeen(host)}
                 </span>
                 {host.incidentsOpen > 0 ? (
@@ -161,7 +161,7 @@ export default async function FleetPage({
                       data-testid={`fleet-harness-${harness}`}
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-app-panel-fg">
+                        <span className="text-base font-medium text-app-panel-fg">
                           {harness}
                         </span>
                         <Badge
@@ -175,10 +175,10 @@ export default async function FleetPage({
                         Both lines, always. A row that shows only what a tier
                         records reads as coverage it does not have.
                       */}
-                      <p className="mt-1 text-xs text-app-link-fg">
+                      <p className="mt-1 text-sm text-app-link-fg">
                         Records: {copy.records}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm text-muted-foreground">
                         {copy.omits}
                       </p>
                     </li>
@@ -186,7 +186,7 @@ export default async function FleetPage({
                 })}
               </ul>
 
-              <p className="mt-3 text-xs text-app-link-fg">
+              <p className="mt-3 text-sm text-app-link-fg">
                 {host.sessionsCount} session
                 {host.sessionsCount === 1 ? "" : "s"} recorded
                 {host.unobservedSessionsCount > 0

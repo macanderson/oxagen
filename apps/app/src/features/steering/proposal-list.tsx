@@ -48,7 +48,7 @@ function PullRequestCell({ pr }: { pr: Proposal["pr"] }) {
           ? t("openOnGitLab", { pr: label })
           : t("openOnGitHub", { pr: label })
       }
-      className={`${linkText} whitespace-nowrap font-mono text-sm`}
+      className={`${linkText} whitespace-nowrap font-mono text-xs`}
     >
       {label}
     </PullRequestLink>
@@ -88,11 +88,11 @@ function ProposalRow({
           to={to}
           aria-label={t("open", { lineage: proposal.lineage })}
           data-touch-target=""
-          className={`${mono} inline-flex max-w-full items-center rounded-sm text-xs font-medium text-foreground after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring`}
+          className={`${mono} inline-flex max-w-full items-center rounded-sm text-sm font-medium text-foreground after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring`}
         >
           <span className="min-w-0 md:truncate">{proposal.lineage}</span>
         </SafeLink>
-        <div className="max-w-prose text-xs text-muted-foreground md:truncate">
+        <div className="max-w-prose text-sm text-muted-foreground md:truncate">
           {proposal.statement}
         </div>
       </td>
@@ -100,7 +100,7 @@ function ProposalRow({
       <td className={lifted}>
         <PullRequestCell pr={proposal.pr} />
       </td>
-      <td className={`${cell} whitespace-nowrap text-xs`}>
+      <td className={`${cell} whitespace-nowrap text-sm`}>
         {proposal.checks === null
           ? t("checksNotRun")
           : t("checks", {
@@ -111,7 +111,7 @@ function ProposalRow({
       <td className={cell}>
         <ProposalStatusBadge status={proposal.status} />
       </td>
-      <td className={`${cell} whitespace-nowrap text-xs text-muted-foreground`}>
+      <td className={`${cell} whitespace-nowrap text-sm text-muted-foreground`}>
         {date(proposal.updatedAt)}
       </td>
     </tr>
@@ -145,7 +145,7 @@ export function ProposalList({
   if (total === 0 && offset === 0) {
     return (
       <Section id="steering-proposals" title={t(`empty.${state}.title`)}>
-        <p data-state="empty" className="max-w-prose text-sm text-foreground">
+        <p data-state="empty" className="max-w-prose text-base text-foreground">
           {t(`empty.${state}.body`)}
         </p>
       </Section>

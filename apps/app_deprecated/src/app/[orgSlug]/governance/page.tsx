@@ -263,10 +263,10 @@ export default async function GovernancePage({
             href={card.href}
             footer={
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   {card.metric}
                 </span>
-                <span className="text-xs font-medium text-foreground">
+                <span className="text-sm font-medium text-foreground">
                   {card.linkLabel} →
                 </span>
               </div>
@@ -278,7 +278,7 @@ export default async function GovernancePage({
       {/* Recent denied invocations */}
       <Panel title="Recent denied invocations">
         {denied === null ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             Unable to load the denied-invocation feed. Open the{" "}
             <a className="underline" href={org.security.audit(ctx)}>
               audit log
@@ -287,7 +287,7 @@ export default async function GovernancePage({
           </p>
         ) : deniedEvents.length === 0 ? (
           <p
-            className="text-sm text-muted-foreground"
+            className="text-base text-muted-foreground"
             data-testid="denied-all-clear"
           >
             No denied invocations in the last 30 days — all clear.
@@ -302,15 +302,15 @@ export default async function GovernancePage({
                 <Badge variant="error-soft" size="sm">
                   deny
                 </Badge>
-                <span className="font-mono text-xs text-foreground">
+                <span className="font-mono text-sm text-foreground">
                   {e.capability ?? e.eventType}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   {e.actorUserId
                     ? (actorNames.get(e.actorUserId) ?? "Unknown actor")
                     : "System"}
                 </span>
-                <span className="ml-auto text-xs text-muted-foreground">
+                <span className="ml-auto text-sm text-muted-foreground">
                   {formatWhen(e.occurredAt)}
                 </span>
               </li>

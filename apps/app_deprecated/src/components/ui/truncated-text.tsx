@@ -115,7 +115,7 @@ export function TruncatedText({
             {markdown ? (
               <MarkdownContent>{text}</MarkdownContent>
             ) : (
-              <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+              <p className="whitespace-pre-wrap break-words text-base leading-relaxed">
                 {text}
               </p>
             )}

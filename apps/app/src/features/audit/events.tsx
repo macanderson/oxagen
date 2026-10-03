@@ -181,9 +181,9 @@ const ACTOR_KIND_NOTE = "audit-actor-kind-note";
  * house input is about 38 px tall, and 16 px keeps the browser from zooming
  * the page when the field takes focus.
  */
-const control = `${inputBase} max-md:min-h-11 max-md:text-base`;
+const control = `${inputBase} max-md:min-h-11 max-md:text-input-touch`;
 /** A filter's trigger at the same phone size. It wears the input's colours. */
-const select = "max-md:min-h-11 max-md:text-base";
+const select = "max-md:min-h-11 max-md:text-input-touch";
 
 function Filters({ org, query }: { org: string; query: AuditQuery }) {
   const t = useTranslations("audit.events");
@@ -256,7 +256,7 @@ function Filters({ org, query }: { org: string; query: AuditQuery }) {
       <span
         data-testid="audit-not-recorded"
         data-issue={AUDIT_GAPS.events.issue}
-        className="flex flex-col gap-0.5 text-xs text-muted-foreground"
+        className="flex flex-col gap-0.5 text-sm text-muted-foreground"
       >
         <span id={ACTOR_KIND_NOTE}>{t("actorKindNotRecorded")}</span>
         <span id={searchNote}>{t("searchNotRecorded")}</span>
@@ -390,7 +390,7 @@ function EventsTable({
                   )}
                 </span>
               )}
-              <span className="text-xs text-muted-foreground md:truncate">
+              <span className="text-sm text-muted-foreground md:truncate">
                 {t("kindNotRecorded")}
               </span>
             </span>
@@ -402,7 +402,7 @@ function EventsTable({
             {event.detail == null ? null : (
               // The stored evidence the event carries (#3554): approval-rule
               // invalidation facts and the SSO and governance details.
-              <details className="pt-1 text-xs">
+              <details className="pt-1 text-sm">
                 <summary className="cursor-pointer text-muted-foreground max-md:inline-flex max-md:min-h-11 max-md:items-center">
                   {t("detail")}
                 </summary>

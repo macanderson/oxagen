@@ -53,8 +53,8 @@ export default async function KnowledgeReposPage({
             aria-hidden="true"
           />
           <div>
-            <p className="text-sm font-semibold text-foreground">Repos</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-base font-semibold text-foreground">Repos</p>
+            <p className="text-sm text-muted-foreground">
               Authenticated data connections and ingest pipelines. Connect a
               source and your agents gain access to the data within their
               knowledge graph.

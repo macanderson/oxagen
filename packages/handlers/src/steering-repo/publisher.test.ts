@@ -33,6 +33,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
+const log = vi.hoisted(() => ({ warn: vi.fn(), info: vi.fn(), error: vi.fn() }));
+vi.mock("../logger", () => ({ logger: log }));
+
 import {
   steeringBundleIdentity,
   steeringPublishDeps,
@@ -108,6 +111,7 @@ const now = () => new Date("2026-09-27T08:00:00Z");
 beforeEach(() => {
   db.rows = [{ organization: "a-intel", workspace: "core-platform" }];
   db.calls = 0;
+  log.warn.mockClear();
 });
 
 describe("steeringRepositoryKey", () => {
@@ -311,6 +315,45 @@ describe("steeringPublisher", () => {
       status: "current",
       version: 1,
     });
+  });
+
+  // #5344: publish left every gRPC server out with a warning nothing logged,
+  // so production showed no trace of why agents lost its tools.
+  it("logs the servers a published version left out", async () => {
+    const { host } = fakeHost();
+    const publisher = steeringPublisher({
+      scope: SCOPE,
+      host,
+      store: memoryVersionStore(),
+      extend: noCompiler,
+      now,
+    });
+
+    const result = await publisher.publish(REPO, HEAD);
+    expect(result.status).toBe("published");
+    const warnings = result.status === "published" ? result.warnings : [];
+    expect(warnings).toEqual(
+      expect.arrayContaining([
+        "tools/servers/billing is left out: the publisher tests compile no tools",
+        "tools/servers/stripe is left out: the publisher tests compile no tools",
+      ]),
+    );
+
+    expect(log.warn).toHaveBeenCalledTimes(1);
+    expect(log.warn).toHaveBeenCalledWith(
+      {
+        repository: KEY,
+        workspaceId: SCOPE.workspaceId,
+        version: 1,
+        commit: HEAD,
+        warnings,
+      },
+      "steering-repo: the published version left something out",
+    );
+
+    // A version already published logs nothing again.
+    await publisher.publish(REPO, HEAD);
+    expect(log.warn).toHaveBeenCalledTimes(1);
   });
 
   it("publishes nothing while the repository is not healthy", async () => {

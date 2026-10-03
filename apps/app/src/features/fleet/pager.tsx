@@ -108,7 +108,7 @@ export function RunsPager({
   );
   const frame = "flex flex-wrap items-center justify-between gap-4 px-3 py-2";
   const nav =
-    "flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm text-muted-foreground";
+    "flex min-w-0 flex-1 flex-wrap items-center gap-2 text-xs text-muted-foreground";
 
   // A page read by cursor has no position in the counted list, even when a
   // count came back with it: the cursor page after page 3 is not rows 1 to 10,

@@ -77,7 +77,7 @@ export function CorrectTriageDialog({
       pendingLabel={t("pending")}
       submit={submit}
     >
-      <p className="text-sm text-muted-foreground">
+      <p className="text-base text-muted-foreground">
         {failed ? t("failedBody", { number }) : t("body", { number })}
       </p>
       <div className="flex flex-col">
@@ -160,7 +160,7 @@ export function KeepDialog({
       pendingLabel={t("pending")}
       submit={submit}
     >
-      <p className="text-sm text-muted-foreground">
+      <p className="text-base text-muted-foreground">
         {separate ? t("separateBody", { number }) : t("inScopeBody", { number })}
       </p>
       <ReasonField

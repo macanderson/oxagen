@@ -14,18 +14,18 @@ export default function VerifyPage(_props: {
           <h1 className="text-2xl font-semibold tracking-tight">
             Verify your email
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             We sent you a verification link. Open it to finish signing in.
           </p>
         </div>
 
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           Once you&rsquo;ve verified, you&rsquo;ll be redirected to your
           workspace.
         </p>
       </div>
 
-      <p className="text-center text-xs text-muted-foreground">
+      <p className="text-center text-sm text-muted-foreground">
         SOC 2 Type II · SSO/SCIM · RBAC-enforced retrieval
       </p>
     </div>

@@ -17,7 +17,7 @@ import { cn } from "../lib/utils";
  * `data-[indeterminate]`, `data-[disabled]`.
  *
  *   <Checkbox checked={v} onCheckedChange={setV} />
- *   <label className="flex items-center gap-2 text-sm">
+ *   <label className="flex items-center gap-2 text-base">
  *     <Checkbox defaultChecked /> Remember me
  *   </label>
  */

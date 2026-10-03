@@ -128,7 +128,7 @@ function WriteDialog({
         testId={testId}
       >
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">{copy.body}</p>
+          <p className="text-base text-muted-foreground">{copy.body}</p>
           {fields}
           {failure === null ? null : (
             <FormAlert testId={`${testId}-failure`}>{failure}</FormAlert>
@@ -202,7 +202,7 @@ export function ProposalWrites({
             pending: t("dismiss.pending"),
           }}
           fields={
-            <label className="flex flex-col gap-1 text-sm text-foreground">
+            <label className="flex flex-col gap-1 text-base text-foreground">
               <span>{t("dismiss.reason")}</span>
               <textarea
                 name="reason"
@@ -264,7 +264,7 @@ export function MergeSteeringPr({
         after={routes.steeringProposal(org, ws, proposalId)}
       />
       {blocked ? (
-        <p className="text-xs text-muted-foreground">{t("blocked")}</p>
+        <p className="text-sm text-muted-foreground">{t("blocked")}</p>
       ) : null}
     </div>
   );
@@ -383,7 +383,7 @@ export function RevertSteeringPr({ org, ws, proposalId }: Target) {
     const number = String(opened.number);
     const url = parsePullRequestUrl(opened.url);
     return (
-      <div data-reverted={number} className="flex flex-col gap-1 text-sm">
+      <div data-reverted={number} className="flex flex-col gap-1 text-base">
         <p className="text-foreground">{t("opened", { number })}</p>
         {url === null ? null : (
           <PullRequestLink to={url} className={linkText}>
@@ -427,7 +427,7 @@ export function RevertSteeringPr({ org, ws, proposalId }: Target) {
         testId="revert-steering-pr"
       >
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">{t("body")}</p>
+          <p className="text-base text-muted-foreground">{t("body")}</p>
           {failure === null ? null : (
             <FormAlert testId="revert-steering-pr-failure">{failure}</FormAlert>
           )}
@@ -510,7 +510,7 @@ export function DropMemoryRecord({
 
   if (droppedIn !== null) {
     return (
-      <p data-dropped="" className="text-xs text-muted-foreground">
+      <p data-dropped="" className="text-sm text-muted-foreground">
         {t("dropped", { commit: droppedIn.slice(0, 7) })}
       </p>
     );

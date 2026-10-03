@@ -141,7 +141,7 @@ export function NotificationsBell() {
               aria-hidden="true"
               className={cn(
                 "absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center",
-                "rounded-full bg-primary text-[10px] font-semibold text-primary-foreground",
+                "rounded-full bg-primary text-xs font-semibold text-primary-foreground",
               )}
             >
               {unreadCount > 99 ? "99+" : unreadCount}
@@ -154,10 +154,10 @@ export function NotificationsBell() {
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetPopup side="right" className="flex w-80 flex-col p-0 sm:w-80">
           <SheetHeader className="border-b border-border/40 px-4 py-3">
-            <SheetTitle className="text-sm font-medium">
+            <SheetTitle className="text-base font-medium">
               Notifications
               {unreadCount > 0 && (
-                <span className="ml-2 inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">
+                <span className="ml-2 inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-xs font-semibold text-primary">
                   {unreadCount}
                 </span>
               )}
@@ -167,7 +167,7 @@ export function NotificationsBell() {
           <div className="flex-1 overflow-y-auto">
             {loading && notifications.length === 0 ? (
               <div className="flex items-center justify-center py-12">
-                <span className="text-xs text-muted-foreground">Loading…</span>
+                <span className="text-sm text-muted-foreground">Loading…</span>
               </div>
             ) : notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
@@ -175,10 +175,10 @@ export function NotificationsBell() {
                   className="h-8 w-8 text-muted-foreground/30"
                   aria-hidden="true"
                 />
-                <p className="text-sm text-muted-foreground">
+                <p className="text-base text-muted-foreground">
                   No notifications yet
                 </p>
-                <p className="text-xs text-muted-foreground/60">
+                <p className="text-sm text-muted-foreground/60">
                   Agent completions, approvals, and alerts will appear here.
                 </p>
               </div>
@@ -207,7 +207,7 @@ export function NotificationsBell() {
                     >
                       <p
                         className={cn(
-                          "text-xs leading-snug",
+                          "text-sm leading-snug",
                           n.unread
                             ? "font-medium text-foreground"
                             : "text-muted-foreground",
@@ -216,11 +216,11 @@ export function NotificationsBell() {
                         {n.title}
                       </p>
                       {n.body && (
-                        <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground/80">
+                        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground/80">
                           {n.body}
                         </p>
                       )}
-                      <p className="mt-1 text-[10px] text-muted-foreground/50">
+                      <p className="mt-1 text-xs text-muted-foreground/50">
                         {new Date(n.createdAt).toLocaleDateString()}
                       </p>
                     </button>

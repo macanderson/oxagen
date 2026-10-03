@@ -174,7 +174,7 @@ export function ScopeBudgetCard({
     <Card data-testid={`${testBase}-card`}>
       <CardHeader className="flex flex-row items-center justify-between gap-3">
         <div>
-          <CardTitle className="text-base">{SCOPE_LABEL[scope]}</CardTitle>
+          <CardTitle className="text-lg">{SCOPE_LABEL[scope]}</CardTitle>
           <CardDescription>{SCOPE_DESCRIPTION[scope]}</CardDescription>
         </div>
         {budget ? (
@@ -236,7 +236,7 @@ export function ScopeBudgetCard({
                 </Button>
               ) : (
                 <p
-                  className="text-xs text-muted-foreground"
+                  className="text-sm text-muted-foreground"
                   data-testid={`${testBase}-readonly-note`}
                 >
                   {MANAGE_DENIED_NOTE}
@@ -248,27 +248,27 @@ export function ScopeBudgetCard({
 
         {budget && !isEditing ? (
           <div className="flex flex-col gap-3">
-            <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 text-base sm:grid-cols-4">
               <div>
-                <p className="text-xs text-muted-foreground">Limit</p>
+                <p className="text-sm text-muted-foreground">Limit</p>
                 <p className="font-medium text-foreground">
                   {budget.limit != null ? formatMoney(budget.limit) : "—"}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Spent</p>
+                <p className="text-sm text-muted-foreground">Spent</p>
                 <p className="font-medium text-foreground">
                   {formatMoney(budget.spent)}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Projected</p>
+                <p className="text-sm text-muted-foreground">Projected</p>
                 <p className="font-medium text-foreground">
                   {formatMoney(budget.projected)}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Window</p>
+                <p className="text-sm text-muted-foreground">Window</p>
                 <p className="font-medium text-foreground">
                   {formatWindow(budget.windowStart, budget.windowEnd)}
                 </p>
@@ -276,7 +276,7 @@ export function ScopeBudgetCard({
             </div>
 
             <div className="flex flex-col gap-1">
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>{Math.round(budget.ratio * 100)}% of ceiling</span>
                 <span>
                   {budget.period === "rolling"
@@ -316,14 +316,14 @@ export function ScopeBudgetCard({
                 </Button>
               ) : (
                 <p
-                  className="text-xs text-muted-foreground"
+                  className="text-sm text-muted-foreground"
                   data-testid={`${testBase}-readonly-note`}
                 >
                   {MANAGE_DENIED_NOTE}
                 </p>
               )}
               {savedAt !== null ? (
-                <span className="ml-3 text-xs text-muted-foreground">
+                <span className="ml-3 text-sm text-muted-foreground">
                   Saved at{" "}
                   {savedAt.toLocaleTimeString(undefined, {
                     hour: "2-digit",
@@ -347,11 +347,11 @@ export function ScopeBudgetCard({
               <div>
                 <Label
                   htmlFor={`${testBase}-enabled`}
-                  className="text-sm font-medium"
+                  className="text-base font-medium"
                 >
                   Enforce this ceiling
                 </Label>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   Off keeps the saved values but stops gating agent runs on this
                   scope.
                 </p>
@@ -367,7 +367,7 @@ export function ScopeBudgetCard({
             <div className="space-y-1">
               <Label
                 htmlFor={`${testBase}-limit`}
-                className="text-xs text-muted-foreground"
+                className="text-sm text-muted-foreground"
               >
                 Limit (USD)
               </Label>
@@ -395,7 +395,7 @@ export function ScopeBudgetCard({
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Period</Label>
+              <Label className="text-sm text-muted-foreground">Period</Label>
               <Select
                 value={period}
                 onValueChange={(v) => {
@@ -422,7 +422,7 @@ export function ScopeBudgetCard({
               <div className="space-y-1">
                 <Label
                   htmlFor={`${testBase}-window-days`}
-                  className="text-xs text-muted-foreground"
+                  className="text-sm text-muted-foreground"
                 >
                   Rolling window (days)
                 </Label>
@@ -455,7 +455,7 @@ export function ScopeBudgetCard({
             {formError !== null ? (
               <p
                 role="alert"
-                className="text-sm text-destructive"
+                className="text-base text-destructive"
                 data-testid={`${testBase}-form-error`}
               >
                 {formError}

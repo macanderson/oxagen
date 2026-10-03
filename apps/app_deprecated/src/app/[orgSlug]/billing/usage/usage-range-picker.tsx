@@ -28,7 +28,7 @@ export function UsageRangePicker({
             href={`${basePath}?range=${r.key}`}
             aria-current={selected ? "true" : undefined}
             className={cn(
-              "rounded-[5px] px-3 py-1 text-xs font-medium transition-colors",
+              "rounded-[5px] px-3 py-1 text-sm font-medium transition-colors",
               selected
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",

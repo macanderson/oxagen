@@ -279,7 +279,7 @@ export function StatementEditor({
       data-testid="record-editor"
       className={`${panel} flex flex-col`}
     >
-      <div className="flex flex-wrap items-center gap-2.5 border-b border-border px-3.5 py-2 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-2.5 border-b border-border px-3.5 py-2 text-sm text-muted-foreground">
         <span className={`${mono} min-w-0 break-all text-foreground`}>
           {path}
         </span>
@@ -319,7 +319,7 @@ export function StatementEditor({
                 areaRef.current?.focus();
               }
             }}
-            className="w-[170px] max-w-full rounded-[7px] border border-border bg-input-bg px-2 py-1 font-mono text-base text-foreground outline-none focus-visible:border-input-border-focus sm:text-xs"
+            className="w-[170px] max-w-full rounded-[7px] border border-border bg-input-bg px-2 py-1 font-mono text-lg text-foreground outline-none focus-visible:border-input-border-focus sm:text-sm"
           />
           <span
             data-testid="record-find-count"
@@ -409,11 +409,11 @@ export function StatementEditor({
             onKeyUp={track}
             onClick={track}
             onKeyDown={keyDown}
-            className={`${codeText} ${layer} absolute inset-0 z-[3] block size-full resize-none overflow-hidden border-0 bg-transparent text-base text-transparent caret-foreground outline-none [-webkit-text-fill-color:transparent] focus-visible:outline-2 focus-visible:outline-ring sm:text-sm`}
+            className={`${codeText} ${layer} absolute inset-0 z-[3] block size-full resize-none overflow-hidden border-0 bg-transparent text-lg text-transparent caret-foreground outline-none [-webkit-text-fill-color:transparent] focus-visible:outline-2 focus-visible:outline-ring sm:text-sm`}
           />
         </div>
       </div>
-      <div className="flex flex-wrap gap-3.5 border-t border-border px-3.5 py-1.5 text-sm text-muted-foreground">
+      <div className="flex flex-wrap gap-3.5 border-t border-border px-3.5 py-1.5 text-xs text-muted-foreground">
         <span data-testid="record-caret">
           {t("caret", caret)}
           {selected > 0 ? ` ${t("selected", { count: selected })}` : ""}

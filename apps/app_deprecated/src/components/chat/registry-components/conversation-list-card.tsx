@@ -73,13 +73,13 @@ export default function ConversationListCard(
           className="size-4 shrink-0 text-primary"
           aria-hidden="true"
         />
-        <span className="text-sm font-semibold">
+        <span className="text-base font-semibold">
           {rows.length} conversation{rows.length === 1 ? "" : "s"}
         </span>
       </div>
 
       {rows.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-muted-foreground">
+        <p className="px-4 py-3 text-base text-muted-foreground">
           No conversations.
         </p>
       ) : (
@@ -90,7 +90,7 @@ export default function ConversationListCard(
             const inner = (
               <div className="flex items-center gap-3 px-4 py-2.5">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium" title={row.title}>
+                  <p className="truncate text-base font-medium" title={row.title}>
                     {row.title}
                   </p>
                 </div>
@@ -101,7 +101,7 @@ export default function ConversationListCard(
                   />
                 ) : null}
                 {when ? (
-                  <span className="shrink-0 text-xs text-muted-foreground">
+                  <span className="shrink-0 text-sm text-muted-foreground">
                     {when}
                   </span>
                 ) : null}

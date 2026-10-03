@@ -129,7 +129,7 @@ export function MentionChip({
             className={cn("size-3.5 shrink-0", meta.iconClassName)}
             aria-hidden="true"
           />
-          <span className="truncate text-sm font-medium text-foreground">
+          <span className="truncate text-base font-medium text-foreground">
             {truncate(mention.label, 40)}
           </span>
         </PopoverTrigger>
@@ -147,16 +147,16 @@ export function MentionChip({
               <Badge variant="outline" size="sm">
                 {typeInfo.label}
               </Badge>
-              <p className="mt-1 break-words text-sm font-semibold text-foreground">
+              <p className="mt-1 break-words text-base font-semibold text-foreground">
                 {mention.label}
               </p>
               {resolvedDescription ? (
-                <p className="mt-0.5 break-words text-xs text-muted-foreground">
+                <p className="mt-0.5 break-words text-sm text-muted-foreground">
                   {resolvedDescription}
                 </p>
               ) : null}
               {mention.location ? (
-                <p className="mt-1 break-all font-mono text-[11px] text-muted-foreground">
+                <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
                   {mention.location}
                 </p>
               ) : null}
@@ -170,11 +170,11 @@ export function MentionChip({
             Object.keys(resolvedProperties).length > 0 ? (
               <PropertyList properties={resolvedProperties} dense />
             ) : hydration.status === "loading" ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Loading properties…
               </p>
             ) : (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {typeInfo.summary}
               </p>
             )}
