@@ -576,7 +576,7 @@ export function WrapStep({
               </span>
             </span>
           )}
-          className="flex border-b border-border max-sm:flex-col [&>button]:border-border [&>button:not(:last-child)]:border-r max-sm:[&>button:not(:last-child)]:border-r-0 max-sm:[&>button:not(:last-child)]:border-b [&>button[aria-selected=true]]:bg-hl [&>button[aria-selected=true]]:shadow-[inset_0_-2px_0_var(--accent-text)]"
+          className="flex border-b border-border max-sm:flex-col [&>button]:border-border [&>button:not(:last-child)]:border-r max-sm:[&>button:not(:last-child)]:border-r-0 max-sm:[&>button:not(:last-child)]:border-b [&>button[aria-selected=true]]:bg-hl [&>button[aria-selected=true]]:shadow-tab-underline"
         />
         <section
           role="tabpanel"

@@ -43,7 +43,7 @@ export function AgentAvatar({
       {harness ? (
         <span
           data-harness-badge={harness}
-          className={`absolute -bottom-0.75 -left-0.75 grid place-items-center rounded-full ring-[1.5px] ${surface === "background" ? "bg-background ring-background" : "bg-app-panel-bg ring-app-panel-bg"}`}
+          className={`absolute -bottom-0.75 -left-0.75 grid place-items-center rounded-full ring-2 ${surface === "background" ? "bg-background ring-background" : "bg-app-panel-bg ring-app-panel-bg"}`}
           style={{ width: badgeSize, height: badgeSize }}
         >
           <HarnessIcon harness={harness} size={badgeSize - 3} />
