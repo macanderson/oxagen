@@ -20,7 +20,14 @@ export type DiffFilePart = {
   binary: boolean;
 };
 
-const HEADER = /^diff --git a\/(.+?) b\/(.+)$/;
+// Git writes each side as `a/<path>`, or as `"a/<path>"` in C-style quotes
+// when the path holds a character it escapes. Either side may be quoted.
+const QUOTED_SIDE = String.raw`"[ab]\/(?:[^"\\]|\\.)*"`;
+const PLAIN_OLD = String.raw`a\/.+?`;
+const PLAIN_NEW = String.raw`b\/.+`;
+const HEADER = new RegExp(
+  `^diff --git (${QUOTED_SIDE}|${PLAIN_OLD}) (${QUOTED_SIDE}|${PLAIN_NEW})$`,
+);
 
 /** Unquote a path git wrote in C-style quotes, or answer it as written. */
 function unquote(path: string): string {
@@ -30,6 +37,11 @@ function unquote(path: string): string {
   } catch {
     return path.slice(1, -1);
   }
+}
+
+/** One header side's path, without its quotes and its `a/` or `b/`. */
+function sidePath(side: string): string {
+  return unquote(side).replace(/^[ab]\//, "");
 }
 
 /** The files a unified diff holds, in its order. */
@@ -62,8 +74,8 @@ export function splitUnifiedDiff(text: string): DiffFilePart[] {
     if (header !== null) {
       flush();
       current = {
-        oldPath: unquote(header[1] ?? ""),
-        newPath: unquote(header[2] ?? ""),
+        oldPath: sidePath(header[1] ?? ""),
+        newPath: sidePath(header[2] ?? ""),
         deleted: false,
         renamed: false,
         body: [],
@@ -82,10 +94,10 @@ export function splitUnifiedDiff(text: string): DiffFilePart[] {
         line.startsWith("GIT binary patch")
       )
         current.binary = true;
-      else if (line.startsWith("+++ b/"))
-        current.newPath = unquote(line.slice("+++ b/".length));
-      else if (line.startsWith("--- a/"))
-        current.oldPath = unquote(line.slice("--- a/".length));
+      else if (line.startsWith("+++ ") && line !== "+++ /dev/null")
+        current.newPath = sidePath(line.slice("+++ ".length));
+      else if (line.startsWith("--- ") && line !== "--- /dev/null")
+        current.oldPath = sidePath(line.slice("--- ".length));
       if (line.startsWith("@@")) {
         current.inHunks = true;
         current.body.push(line);
