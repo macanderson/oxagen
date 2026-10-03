@@ -299,3 +299,44 @@ describe("recordObserved", () => {
     expect(d.record).toHaveBeenCalledWith(SCOPE, "pr-1", TARGET, capture, NOW);
   });
 });
+
+describe("closing issues (ADR-292)", () => {
+  const ISSUE = {
+    nodeId: "I_kwDOABCD",
+    repository: "acme/api",
+    number: 7,
+    url: "https://github.com/acme/api/issues/7",
+    title: "Tags drop on save",
+    state: "open" as const,
+  };
+
+  it("reads the head's closing issues with the capture and links them with the record", async () => {
+    const linkIssues = vi.fn(async () => 1);
+    const d = deps({
+      readClosingIssues: vi.fn(async () => [ISSUE]),
+      linkIssues,
+    });
+    const capture = await captureObserved(d, REQUEST, TARGET);
+    expect(capture.closingIssues).toEqual([ISSUE]);
+    await recordObserved(d, REQUEST, "pr-1", TARGET, capture);
+    expect(linkIssues).toHaveBeenCalledWith(SCOPE, "pr-1", [ISSUE]);
+  });
+
+  it("clears the links when the head names no issue", async () => {
+    const linkIssues = vi.fn(async () => 0);
+    const d = deps({ readClosingIssues: vi.fn(async () => []), linkIssues });
+    const capture = await captureObserved(d, REQUEST, TARGET);
+    await recordObserved(d, REQUEST, "pr-1", TARGET, capture);
+    expect(linkIssues).toHaveBeenCalledWith(SCOPE, "pr-1", []);
+  });
+
+  it("leaves the links as they were when the forge could not be asked (negative)", async () => {
+    const linkIssues = vi.fn(async () => 0);
+    const d = deps({ readClosingIssues: vi.fn(async () => null), linkIssues });
+    const capture = await captureObserved(d, REQUEST, TARGET);
+    expect(capture.closingIssues).toBeNull();
+    await recordObserved(d, REQUEST, "pr-1", TARGET, capture);
+    expect(linkIssues).not.toHaveBeenCalled();
+  });
+});
+
