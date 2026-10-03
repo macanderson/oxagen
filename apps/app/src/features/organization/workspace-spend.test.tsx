@@ -32,6 +32,14 @@ vi.mock("./actions", () => ({
   setOrgAvatar: vi.fn(),
   setWorkspaceAvatar: vi.fn(),
 }));
+// workspace-actions also draws a new workspace's provisioning steps, whose
+// retry and import are server actions.
+vi.mock("@/features/steering-repo/actions", () => ({
+  importWorkspaceSteering: vi.fn(),
+  readSteeringRepoDestinations: vi.fn(),
+  repairSteeringRepo: vi.fn(),
+  retrySteeringRepoProvision: vi.fn(),
+}));
 
 const { editWorkspace } = await import("./actions");
 const { workspaceFacts } = await import("./organization.builders");

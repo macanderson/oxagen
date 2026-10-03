@@ -1,14 +1,16 @@
 // @vitest-environment jsdom
 // The Workspaces section's writes: create a workspace from the form this lane
 // adds, rename one, and archive one. Each reloads the page it changed; a
-// refusal is named and nothing navigates. Create asks for a name and for the
-// steering repo's place and name (#5196), then holds the dialog open to say
-// where the new workspace's steering repo stands and to link to its
-// Repositories page.
+// refusal is named and nothing navigates. Create asks for a label, a name
+// (the slug), a cost center, and the steering repo's place and name (#5196).
+// It then holds the dialog open on the steering repo's provisioning steps,
+// says when the repo is ready, and opens repository selection in the new
+// workspace.
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { renderToaster } from "@/test/toaster";
@@ -19,12 +21,14 @@ const {
   createWorkspace,
   editWorkspace,
   readSteeringRepoDestinations,
+  readWorkspaceSteeringRepo,
 } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
   archiveWorkspace: vi.fn(),
   createWorkspace: vi.fn(),
   editWorkspace: vi.fn(),
   readSteeringRepoDestinations: vi.fn(),
+  readWorkspaceSteeringRepo: vi.fn(),
 }));
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { href: string; children: ReactNode }) => (
@@ -37,7 +41,53 @@ vi.mock("./actions", () => ({
   createWorkspace,
   editWorkspace,
   readSteeringRepoDestinations,
+  readWorkspaceSteeringRepo,
 }));
+// The provisioning steps' own retry and import, which these tests never press.
+vi.mock("@/features/steering-repo/actions", () => ({
+  importWorkspaceSteering: vi.fn(),
+  readSteeringRepoDestinations: vi.fn(),
+  repairSteeringRepo: vi.fn(),
+  retrySteeringRepoProvision: vi.fn(),
+}));
+
+/** The new workspace's steering repo while the job runs, and once it is done. */
+const PROVISIONING = {
+  status: "provisioning",
+  step: "create_repository",
+  failedStep: null,
+  error: null,
+  provider: "github",
+  repository: null,
+  publishedVersion: null,
+  health: null,
+  differences: [],
+  legacySource: null,
+  connection: { provider: "github", id: 12, name: "acme", kind: "organization" },
+  requestedName: null,
+  connectionChoices: [],
+  importRun: null,
+};
+const READY = {
+  ...PROVISIONING,
+  status: "ready",
+  step: "bind_repository",
+  repository: {
+    fullName: "acme/oxagen-research",
+    url: "https://github.com/acme/oxagen-research",
+  },
+  publishedVersion: 1,
+  health: "healthy",
+};
+
+/** What `createWorkspace` answers for Research, charged to `research`. */
+const CREATED = {
+  publicId: "wrk_research",
+  slug: "research",
+  name: "Research",
+  steeringRepo: "provisioning",
+  costCenter: { ok: true, code: "research" },
+};
 
 const NO_PLACES = {
   destinations: [],
@@ -64,6 +114,9 @@ beforeEach(() => {
   readSteeringRepoDestinations
     .mockReset()
     .mockResolvedValue({ ok: true, value: NO_PLACES });
+  readWorkspaceSteeringRepo
+    .mockReset()
+    .mockResolvedValue({ ok: true, value: PROVISIONING });
 });
 
 afterEach(async () => {
@@ -76,21 +129,21 @@ async function open(name: string, testId: string) {
   return screen.getByTestId(testId);
 }
 
-/** Opens Create a workspace, types the name, and presses Create. */
-async function create(name = "Research") {
+/** Opens Create a workspace, types the label, and presses Create. */
+async function create(label = "Research") {
   render(
     <IntlProvider>
       <CreateWorkspace org="acme" />
     </IntlProvider>,
   );
   const dialog = await open("Create a workspace", "create-workspace");
-  await userEvent.type(within(dialog).getByLabelText("Name"), name);
+  await userEvent.type(within(dialog).getByLabelText("Label"), label);
   await userEvent.click(within(dialog).getByRole("button", { name: "Create" }));
   return dialog;
 }
 
 describe("CreateWorkspace", () => {
-  it("asks for the name and the steering repo's name, and offers no code repository", async () => {
+  it("asks for a label, a name, the cost center, and the steering repo's name, and offers no code repository", async () => {
     render(
       <IntlProvider>
         <CreateWorkspace org="acme" primary />
@@ -100,55 +153,126 @@ describe("CreateWorkspace", () => {
       screen.getByRole("button", { name: "Create a workspace" }),
     ).toHaveClass("bg-button-primary-bg");
     const dialog = await open("Create a workspace", "create-workspace");
-    expect(within(dialog).getByLabelText("Name")).toBeRequired();
+    expect(within(dialog).getByLabelText("Label")).toBeRequired();
+    expect(within(dialog).getByLabelText("Name")).toBeInTheDocument();
     // The places load when the dialog opens. With nothing connected there is
     // no Organization select.
     expect(readSteeringRepoDestinations).toHaveBeenCalledWith("acme");
     await within(dialog).findByTestId("create-workspace-steering-connection-none");
-    // Oxagen makes the steering repo, so the form offers no code repository,
-    // and the action makes the slug from the name.
-    expect(within(dialog).getAllByRole("textbox")).toHaveLength(2);
+    // The cost center is the name until the box is unticked.
+    expect(
+      within(dialog).getByRole("checkbox", {
+        name: "Use name as the workspace's cost center code",
+      }),
+    ).toBeChecked();
+    expect(
+      within(dialog).queryByLabelText("Workspace cost center code"),
+    ).toBeNull();
+    // Oxagen makes the steering repo, so the form offers no code repository.
+    expect(within(dialog).getAllByRole("textbox")).toHaveLength(3);
     expect(within(dialog).getByLabelText("Repository name")).not.toBeRequired();
     expect(within(dialog).queryByRole("combobox")).toBeNull();
-    expect(within(dialog).queryByRole("checkbox")).toBeNull();
     for (const gone of [
       "Main repository",
       "Production branch",
       "Governance mode",
       "Retention mode",
       "Namespace",
-      "Slug",
     ]) {
       expect(within(dialog).queryByLabelText(gone)).toBeNull();
     }
   });
 
+  it("draws each field's help as a gold button that says the name is the slug", async () => {
+    render(
+      <IntlProvider>
+        <CreateWorkspace org="acme" />
+      </IntlProvider>,
+    );
+    const dialog = await open("Create a workspace", "create-workspace");
+    const label = within(dialog).getByRole("button", { name: "Help for Label" });
+    const name = within(dialog).getByRole("button", { name: "Help for Name" });
+    for (const help of [label, name]) {
+      expect(help).toHaveClass("bg-button-primary-bg");
+      expect(help).toHaveClass("text-button-primary-fg");
+    }
+    await userEvent.click(name);
+    expect(
+      await screen.findByTestId("create-workspace-slug-help-note"),
+    ).toHaveTextContent("Oxagen uses the name as the workspace's slug");
+  });
+
+  it("fills the name in from the label as a slug, and keeps a name the person types", async () => {
+    render(
+      <IntlProvider>
+        <CreateWorkspace org="acme" />
+      </IntlProvider>,
+    );
+    const dialog = await open("Create a workspace", "create-workspace");
+    const label = within(dialog).getByLabelText("Label");
+    const name = within(dialog).getByLabelText("Name");
+    const repo = within(dialog).getByLabelText("Repository name");
+    await userEvent.type(label, "Mac's R&D Team");
+    expect(label).toHaveValue("Mac's R&D Team");
+    expect(name).toHaveValue("macs-rd-team");
+    expect(repo).toHaveValue("oxagen-macs-rd-team");
+    // A typed name keeps lowercase letters, digits and hyphens only.
+    await userEvent.clear(name);
+    await userEvent.type(name, "Research Lab!");
+    expect(name).toHaveValue("research-lab");
+    expect(repo).toHaveValue("oxagen-research-lab");
+    // The label no longer moves it.
+    await userEvent.type(label, " two");
+    expect(name).toHaveValue("research-lab");
+  });
+
+  it("names a slug the contract would refuse under the name (negative)", async () => {
+    render(
+      <IntlProvider>
+        <CreateWorkspace org="acme" />
+      </IntlProvider>,
+    );
+    const dialog = await open("Create a workspace", "create-workspace");
+    await userEvent.type(within(dialog).getByLabelText("Label"), "X");
+    await userEvent.tab();
+    const name = within(dialog).getByLabelText("Name");
+    expect(name).toHaveValue("x");
+    expect(name).toHaveAttribute("aria-invalid", "true");
+    expect(name).toHaveAccessibleDescription("Use at least 2 characters.");
+    if (!(name instanceof HTMLInputElement))
+      throw new Error("the name is not an input");
+    expect(name.validity.valid).toBe(false);
+  });
+
   // WL-62: the write answers with the new workspace's slug, and closing the
-  // panel lands the operator in it.
-  it("sends the name and the repository name, holds the dialog open on the result, and opens the new workspace's Fleet on Done", async () => {
+  // panel before setup finishes lands the operator in it.
+  it("sends the label, the name, the cost center and the repository name, then shows the setup steps in place of the form", async () => {
     // The root layout's toaster, where the receipt lands (ADR-221).
     renderToaster();
-    createWorkspace.mockResolvedValue({
-      ok: true,
-      value: { slug: "research", name: "Research", steeringRepo: "provisioning" },
-    });
+    createWorkspace.mockResolvedValue({ ok: true, value: CREATED });
     const dialog = await create();
     expect(createWorkspace).toHaveBeenCalledWith("acme", {
       name: "Research",
+      slug: "research",
+      costCenter: "research",
       steeringRepo: { name: "oxagen-research" },
     });
     const done = await within(dialog).findByTestId("create-workspace-done");
     expect(within(done).getByTestId("create-workspace-done-name")).toHaveTextContent(
-      "Research",
+      "Research research",
     );
-    expect(done).toHaveTextContent("Steering repo");
-    expect(
-      within(done).getByRole("link", { name: "Open repositories" }),
-    ).toHaveAttribute("href", "/acme/research/repositories");
+    expect(within(done).getByTestId("create-workspace-cost-center")).toHaveTextContent(
+      "research",
+    );
+    // The steps the Repositories page's setup dialog draws, read in the new
+    // workspace.
+    const steps = await within(done).findByTestId("steering-repo-provisioning");
+    expect(steps).toHaveAttribute("data-status", "provisioning");
+    expect(readWorkspaceSteeringRepo).toHaveBeenCalledWith("acme", "research");
+    expect(within(done).queryByTestId("create-workspace-ready")).toBeNull();
     // The form gave way to the result: no Create is left to press twice.
     expect(within(dialog).queryByRole("button", { name: "Create" })).toBeNull();
     expect(router.replace).not.toHaveBeenCalled();
-    // The write leaves its receipt in the app's toast region.
     await waitFor(() => {
       expect(screen.getByTestId("toasts")).toHaveTextContent(
         "The workspace was created. Recorded in the audit record.",
@@ -158,43 +282,150 @@ describe("CreateWorkspace", () => {
     expect(router.replace).toHaveBeenCalledWith("/acme/research");
   });
 
-  it.each([
-    ["provisioning", "Oxagen is creating the private repository now."],
-    [
-      "ready",
-      "The private repository is created and bound to this workspace.",
-    ],
-    ["failed", "A step stopped before the repository was ready."],
-    [
-      "blocked",
-      "An organization owner has to act first, such as authorizing Oxagen again.",
-    ],
-  ])(
-    "reads a steering repo that is %s in one sentence, with the Repositories link",
-    async (status, sentence) => {
-      createWorkspace.mockResolvedValue({
-        ok: true,
-        value: { slug: "research", name: "Research", steeringRepo: status },
-      });
-      const dialog = await create();
-      const done = await within(dialog).findByTestId("create-workspace-done");
-      expect(
-        within(done).getByTestId("create-workspace-steering-status"),
-      ).toHaveTextContent(sentence);
-      expect(
-        within(done).getByTestId("create-workspace-open-repositories"),
-      ).toHaveAttribute("href", "/acme/research/repositories");
-    },
-  );
+  it("reads the steps again until the repo is ready, then says so", async () => {
+    createWorkspace.mockResolvedValue({ ok: true, value: CREATED });
+    readWorkspaceSteeringRepo
+      .mockResolvedValueOnce({ ok: true, value: PROVISIONING })
+      .mockResolvedValue({ ok: true, value: READY });
+    const dialog = await create();
+    const ready = await within(dialog).findByTestId(
+      "create-workspace-ready",
+      {},
+      { timeout: 6_000 },
+    );
+    expect(ready).toHaveTextContent(
+      "Your workspace is ready. Next, pick the repositories it steers.",
+    );
+    expect(readWorkspaceSteeringRepo).toHaveBeenCalledTimes(2);
+  }, 12_000);
 
-  // A name that makes no valid slug is refused as invalid, and the generic
-  // sentence is the one shown.
-  it("keeps the generic invalid sentence for a name that makes no slug (negative)", async () => {
+  it("opens repository selection in the new workspace once the repo is ready", async () => {
+    createWorkspace.mockResolvedValue({ ok: true, value: CREATED });
+    readWorkspaceSteeringRepo.mockResolvedValue({ ok: true, value: READY });
+    const dialog = await create();
+    await within(dialog).findByTestId("create-workspace-ready");
+    await waitFor(
+      () => {
+        expect(router.replace).toHaveBeenCalledWith(
+          routes.addRepository("acme", "research"),
+        );
+      },
+      { timeout: 4_000 },
+    );
+    expect(routes.addRepository("acme", "research")).toBe(
+      "/acme/research/repositories?add=repository",
+    );
+    // Leaving is not closing: the Fleet is not opened on top of it.
+    expect(router.replace).not.toHaveBeenCalledWith("/acme/research");
+    await waitFor(() => {
+      expect(screen.queryByTestId("create-workspace")).toBeNull();
+    });
+  }, 10_000);
+
+  it("opens repository selection at once from Pick repositories", async () => {
+    createWorkspace.mockResolvedValue({ ok: true, value: CREATED });
+    readWorkspaceSteeringRepo.mockResolvedValue({ ok: true, value: READY });
+    const dialog = await create();
+    await userEvent.click(
+      await within(dialog).findByRole("button", { name: "Pick repositories" }),
+    );
+    expect(router.replace).toHaveBeenCalledWith(
+      routes.addRepository("acme", "research"),
+    );
+  });
+
+  it("says a setup read that failed and keeps the dialog open (negative)", async () => {
+    createWorkspace.mockResolvedValue({ ok: true, value: CREATED });
+    readWorkspaceSteeringRepo.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "get_steering_repo",
+    });
+    const dialog = await create();
+    expect(
+      await within(dialog).findByTestId("create-workspace-steering-reading"),
+    ).toHaveTextContent("Oxagen could not read the setup (get_steering_repo)");
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("charges a code the person types when the box is unticked", async () => {
+    createWorkspace.mockResolvedValue({
+      ok: true,
+      value: { ...CREATED, costCenter: { ok: true, code: "ENG-1001" } },
+    });
+    render(
+      <IntlProvider>
+        <CreateWorkspace org="acme" />
+      </IntlProvider>,
+    );
+    const dialog = await open("Create a workspace", "create-workspace");
+    await userEvent.type(within(dialog).getByLabelText("Label"), "Research");
+    await userEvent.click(
+      within(dialog).getByRole("checkbox", {
+        name: "Use name as the workspace's cost center code",
+      }),
+    );
+    const code = within(dialog).getByLabelText("Workspace cost center code");
+    expect(code).toHaveValue("");
+    expect(
+      within(dialog).getByRole("button", {
+        name: "Help for Workspace cost center code",
+      }),
+    ).toBeInTheDocument();
+    await userEvent.type(code, "ENG-1001");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Create" }));
+    expect(createWorkspace).toHaveBeenCalledWith(
+      "acme",
+      expect.objectContaining({ costCenter: "ENG-1001" }),
+    );
+  });
+
+  it("names a cost-center code the list would refuse under the field (negative)", async () => {
+    render(
+      <IntlProvider>
+        <CreateWorkspace org="acme" />
+      </IntlProvider>,
+    );
+    const dialog = await open("Create a workspace", "create-workspace");
+    await userEvent.click(
+      within(dialog).getByRole("checkbox", {
+        name: "Use name as the workspace's cost center code",
+      }),
+    );
+    const code = within(dialog).getByLabelText("Workspace cost center code");
+    await userEvent.type(code, "-eng");
+    expect(code).toHaveAttribute("aria-invalid", "true");
+    expect(code).toHaveAccessibleDescription(/Use up to 64 letters/);
+    if (!(code instanceof HTMLInputElement))
+      throw new Error("the cost center code is not an input");
+    expect(code.validity.valid).toBe(false);
+  });
+
+  it("says a cost center that was not set beside the workspace that was made (negative)", async () => {
+    createWorkspace.mockResolvedValue({
+      ok: true,
+      value: {
+        ...CREATED,
+        costCenter: { ok: false, code: "research", reason: "denied" },
+      },
+    });
+    const dialog = await create();
+    expect(
+      await within(dialog).findByTestId("create-workspace-cost-center"),
+    ).toHaveTextContent("Not set to research. Oxagen answered denied.");
+    expect(within(dialog).getByTestId("create-workspace-done-name")).toHaveTextContent(
+      "Research",
+    );
+  });
+
+  // A slug the contract refuses for a reason the form cannot see is refused
+  // as invalid, and the generic sentence is the one shown.
+  it("keeps the generic invalid sentence for a refusal the form cannot name (negative)", async () => {
     createWorkspace.mockResolvedValue({
       ok: false,
       reason: "invalid",
       code: "invalid_input",
-      field: "name",
+      field: "slug",
     });
     await create();
     expect(
@@ -204,7 +435,7 @@ describe("CreateWorkspace", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
-  it("names an address already taken, as the name's, and creates nothing (negative)", async () => {
+  it("names an address already taken, and creates nothing (negative)", async () => {
     createWorkspace.mockResolvedValue({
       ok: false,
       reason: "conflict",
@@ -233,10 +464,7 @@ describe("CreateWorkspace", () => {
         reauthorize: [],
       },
     });
-    createWorkspace.mockResolvedValue({
-      ok: true,
-      value: { slug: "research", name: "Research", steeringRepo: "provisioning" },
-    });
+    createWorkspace.mockResolvedValue({ ok: true, value: CREATED });
     render(
       <IntlProvider>
         <CreateWorkspace org="acme" />
@@ -248,17 +476,19 @@ describe("CreateWorkspace", () => {
     );
     expect(select).toHaveValue("github:12");
     await userEvent.selectOptions(select, "github:22");
-    const name = within(dialog).getByLabelText("Name");
+    const label = within(dialog).getByLabelText("Label");
     const repo = within(dialog).getByLabelText("Repository name");
-    await userEvent.type(name, "Research");
+    await userEvent.type(label, "Research");
     expect(repo).toHaveValue("oxagen-research");
     await userEvent.clear(repo);
     await userEvent.type(repo, "research-steering");
-    await userEvent.type(name, " lab");
+    await userEvent.type(label, " lab");
     expect(repo).toHaveValue("research-steering");
     await userEvent.click(within(dialog).getByRole("button", { name: "Create" }));
     expect(createWorkspace).toHaveBeenCalledWith("acme", {
       name: "Research lab",
+      slug: "research-lab",
+      costCenter: "research-lab",
       steeringRepo: {
         name: "research-steering",
         connection: { provider: "github", id: 22 },
@@ -272,10 +502,7 @@ describe("CreateWorkspace", () => {
       reason: "denied",
       code: "list_steering_repo_destinations",
     });
-    createWorkspace.mockResolvedValue({
-      ok: true,
-      value: { slug: "research", name: "Research", steeringRepo: "provisioning" },
-    });
+    createWorkspace.mockResolvedValue({ ok: true, value: CREATED });
     render(
       <IntlProvider>
         <CreateWorkspace org="acme" />
@@ -287,10 +514,12 @@ describe("CreateWorkspace", () => {
         "create-workspace-steering-connection-failed",
       ),
     ).toHaveTextContent("The organizations did not load");
-    await userEvent.type(within(dialog).getByLabelText("Name"), "Research");
+    await userEvent.type(within(dialog).getByLabelText("Label"), "Research");
     await userEvent.click(within(dialog).getByRole("button", { name: "Create" }));
     expect(createWorkspace).toHaveBeenCalledWith("acme", {
       name: "Research",
+      slug: "research",
+      costCenter: "research",
       steeringRepo: { name: "oxagen-research" },
     });
   });
@@ -302,7 +531,7 @@ describe("CreateWorkspace", () => {
       </IntlProvider>,
     );
     const dialog = await open("Create a workspace", "create-workspace");
-    await userEvent.type(within(dialog).getByLabelText("Name"), "Research");
+    await userEvent.type(within(dialog).getByLabelText("Label"), "Research");
     const repo = within(dialog).getByLabelText("Repository name");
     await userEvent.clear(repo);
     await userEvent.type(repo, "-research");

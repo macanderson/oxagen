@@ -274,6 +274,41 @@ describe("Tone", () => {
   });
 });
 
+describe("Colours", () => {
+  // The mockup's `.acc-ic`, `.acc-tone` and `.seg .btn`: the controls sit on
+  // the panel, the picked one takes the row wash, and a picked tile the gold
+  // border. Only the preview card sits on the ink (`.acc-prev`).
+  it("draws the controls on the panel and the preview on the ink", async () => {
+    const { dialog, preview } = await openEditor(
+      "workspace",
+      'avatar:v1:{"kind":"icon","icon":"bot","tone":"gold"}',
+    );
+    expect(preview.className).toContain("bg-input-bg");
+    for (const testId of [
+      "avatar-icon-bot",
+      "avatar-tone-gold",
+      "avatar-kind-icon",
+    ]) {
+      const control = within(dialog).getByTestId(testId);
+      expect(control.className).toContain("bg-card");
+      expect(control.className).toContain("aria-pressed:bg-hl");
+      expect(control.className).not.toContain("bg-input-bg");
+    }
+    for (const testId of ["avatar-icon-bot", "avatar-tone-gold"]) {
+      expect(within(dialog).getByTestId(testId).className).toContain(
+        "aria-pressed:border-gold",
+      );
+    }
+  });
+
+  it("names each tone under its swatch", async () => {
+    const { dialog } = await openEditor("organization");
+    expect(within(dialog).getByTestId("avatar-tone-gold-deep")).toHaveTextContent(
+      "Dark gold",
+    );
+  });
+});
+
 describe("Save", () => {
   it("sends one write while one is in flight, even across a reopen", async () => {
     let finish: ((result: AvatarSaveResult) => void) | undefined;

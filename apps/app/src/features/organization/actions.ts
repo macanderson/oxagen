@@ -26,6 +26,9 @@ import { INVITABLE_ROLES, type InvitableRole } from "./invitation-roles";
 // malformed slug is refused without a capability being invoked. The one check
 // made here is the role scope, which arrives from a select a client controls
 // and reaches a contract field with two legal values.
+import { costCenterCreate } from "@oxagen/oxagen/contracts/cost_center.create";
+import { costCenterSet } from "@oxagen/oxagen/contracts/cost_center.set";
+import { costCenterLabelSchema } from "@oxagen/oxagen/contracts/cost_center.shared";
 import { iamRoleCreate } from "@oxagen/oxagen/contracts/iam.role.create";
 import { iamRoleDelete } from "@oxagen/oxagen/contracts/iam.role.delete";
 import { iamRoleGrantsSet } from "@oxagen/oxagen/contracts/iam.role.grants.set";
@@ -40,6 +43,10 @@ import {
   steeringRepoDestinationsList,
 } from "@oxagen/oxagen/contracts/steering_repo.destinations.list";
 import {
+  type SteeringRepoGetOutput,
+  steeringRepoGet,
+} from "@oxagen/oxagen/contracts/steering_repo.get";
+import {
   type SteeringRepoProvisionStatus,
   type WorkspaceCreateInput,
   workspaceCreate,
@@ -49,7 +56,7 @@ import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.setti
 import { GrantableOrgRole } from "@/data/contracts/org";
 import type { ActionResult } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
-import { requireViewer } from "@/server/viewer";
+import { type OrgCtx, requireViewer } from "@/server/viewer";
 import type { DailyBudgetUsdPatch } from "./workspace-budget-form";
 import { slugFromName } from "./workspace-slug";
 
@@ -124,36 +131,85 @@ export async function deleteRole(
 type WorkspaceDraft = { name: string; slug: string };
 
 /**
- * A new workspace's draft: its name, and where its steering repo goes and what
- * it is called (#5196). `create_workspace` makes the private steering repo
- * itself (lane S1, #4450), so the person picks no code repository. `mainRepo`
- * is deprecated in the contract and this action never sends it.
+ * A new workspace's draft: its name, its slug, where its steering repo goes
+ * and what it is called (#5196), and the cost center it is charged to.
+ * `create_workspace` makes the private steering repo itself (lane S1, #4450),
+ * so the person picks no code repository. `mainRepo` is deprecated in the
+ * contract and this action never sends it.
  *
- * The design's form has no slug field, so the slug is made from the name
- * (`slugFromName`) unless a caller names one.
+ * The form calls the contract's `name` the Label, the name people see, and its
+ * `slug` the Name. A caller that names no slug gets one made from the name
+ * (`slugFromName`).
  */
 export type NewWorkspaceDraft = {
   name: string;
   slug?: string;
   /** Left out, the job takes the organization's default place and `oxagen-<slug>`. */
   steeringRepo?: WorkspaceCreateInput["steeringRepo"];
+  /** The cost-center code to charge the workspace to. Left out or blank, none. */
+  costCenter?: string;
 };
 
 /**
- * What the create dialog shows once the write answered: the workspace's name
- * and slug, and where its steering repo stood when the call returned. The
+ * How charging a new workspace to its cost center ended. The workspace is
+ * made either way, so a refusal here is carried beside it, not returned as the
+ * create's own refusal: that would claim no workspace was made.
+ */
+type CostCenterCharged =
+  | { ok: true; code: string }
+  | { ok: false; code: string; reason: string };
+
+/**
+ * What the create dialog shows once the write answered: the workspace, where
+ * its steering repo stood when the call returned, and its cost center. The
  * repository is made by a durable job, so `provisioning` is the usual answer.
  */
 export type WorkspaceCreated = {
+  publicId: string;
   slug: string;
   name: string;
   steeringRepo: SteeringRepoProvisionStatus;
+  /** Null when the draft named no cost center. */
+  costCenter: CostCenterCharged | null;
 };
+
+/** The code a refused write names, or its reason when it names none. */
+function refusalOf(
+  result: Exclude<ActionResult<unknown>, { ok: true }>,
+): string {
+  return "code" in result ? result.code : result.reason;
+}
+
+/**
+ * Charges a new workspace to a cost-center code. The code goes on the
+ * organization's list first when it is not there yet (`create_cost_center`
+ * answers `cost_center_exists` when it is), because `set_cost_center` takes
+ * only a code the list holds.
+ */
+async function chargeNewWorkspace(
+  ctx: OrgCtx,
+  workspaceId: string,
+  code: string,
+): Promise<CostCenterCharged> {
+  const listed = await kernelWrite(ctx, costCenterCreate, { label: code });
+  if (!listed.ok && refusalOf(listed) !== "cost_center_exists") {
+    return { ok: false, code, reason: refusalOf(listed) };
+  }
+  const charged = await kernelWrite(ctx, costCenterSet, {
+    target: "workspace",
+    workspaceId,
+    costCenter: code,
+  });
+  return charged.ok
+    ? { ok: true, code }
+    : { ok: false, code, reason: refusalOf(charged) };
+}
 
 /**
  * A workspace in this organization: the in-app path to a second one (#2964).
- * The action sends the name and the slug only. The handler starts the steering
- * repo job and answers before the repository exists.
+ * The handler starts the steering repo job and answers before the repository
+ * exists. A cost center, when the draft names one, is charged after the
+ * workspace is made.
  */
 export async function createWorkspace(
   org: string,
@@ -161,6 +217,17 @@ export async function createWorkspace(
 ): Promise<ActionResult<WorkspaceCreated>> {
   const ctx = await requireViewer(org);
   const named = draft.slug?.trim() ?? "";
+  const code = draft.costCenter?.trim() ?? "";
+  // A code the list would refuse is refused here, before anything is written,
+  // so it never leaves a workspace behind with no charge on it.
+  if (code !== "" && !costCenterLabelSchema.safeParse(code).success) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "costCenter",
+    };
+  }
   const result = await kernelWrite(ctx, workspaceCreate, {
     name: draft.name.trim(),
     slug: named === "" ? slugFromName(draft.name) : named,
@@ -172,16 +239,41 @@ export async function createWorkspace(
     return {
       ok: true,
       value: {
+        publicId: result.value.publicId,
         slug: result.value.slug,
         name: result.value.name,
         steeringRepo: result.value.steering_repo.status,
+        costCenter:
+          code === ""
+            ? null
+            : await chargeNewWorkspace(ctx, result.value.publicId, code),
       },
     };
   }
-  // The form has no slug field: a slug the name made is the name's to fix.
+  // A caller that named no slug had it made from the name, so a slug refusal
+  // is the name's to fix.
   if (named === "" && "field" in result && result.field === "slug")
     return { ...result, field: "name" };
   return result;
+}
+
+/**
+ * Where a new workspace's steering repo stands, for the Create a workspace
+ * dialog to follow while the job runs. It reads inside the workspace, which
+ * the creator joined as its Owner when `create_workspace` answered.
+ */
+export async function readWorkspaceSteeringRepo(
+  org: string,
+  ws: string,
+): Promise<ActionResult<SteeringRepoGetOutput>> {
+  const ctx = await requireViewer(org, ws);
+  return readToActionResult(
+    await kernelRead(ctx, {
+      contract: steeringRepoGet,
+      input: {},
+      page: "repositories",
+    }),
+  );
 }
 
 /**

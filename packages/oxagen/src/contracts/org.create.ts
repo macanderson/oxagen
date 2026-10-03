@@ -64,6 +64,8 @@ export const RESERVED_ORG_SLUGS: ReadonlySet<string> = new Set([
  */
 export {
   RESERVED_WORKSPACE_SLUGS,
+  WORKSPACE_SLUG_MAX,
+  WORKSPACE_SLUG_MIN,
   WORKSPACE_SLUG_PATTERN,
   slugFromName,
 } from "../workspace-slug";

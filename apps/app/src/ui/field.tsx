@@ -1,7 +1,12 @@
 "use client";
 // A labelled input with its hint and error wired for assistive technology:
 // the error is announced through aria-describedby and marks the input invalid.
-import { type InputHTMLAttributes, type ReactNode, useState } from "react";
+import {
+  type InputHTMLAttributes,
+  type ReactNode,
+  type Ref,
+  useState,
+} from "react";
 import { Button } from "./button";
 import { inputBase } from "./control-styles";
 
@@ -11,12 +16,19 @@ export type FieldProps = Omit<
 > & {
   id: string;
   name: string;
+  /** The input itself, such as for `setCustomValidity`. */
+  ref?: Ref<HTMLInputElement> | undefined;
   label: ReactNode;
   hint?: ReactNode;
   /** Already-translated error text; renders under the input and marks it invalid. */
   error?: string | undefined;
   /** Rendered on the label row's far side (e.g. "Reset password"). */
   labelAside?: ReactNode;
+  /**
+   * Rendered right after the label, outside the `<label>` element so a button
+   * there is not part of the field's name (e.g. a `HelpTip`).
+   */
+  help?: ReactNode;
   /** Rendered inside the input's box, on its trailing edge (e.g. a show/hide toggle). */
   trailing?: ReactNode;
 };
@@ -28,6 +40,7 @@ export function Field({
   hint,
   error,
   labelAside,
+  help,
   trailing,
   className,
   ...input
@@ -35,12 +48,22 @@ export function Field({
   const hintId = hint ? `${id}-hint` : undefined;
   const errorId = error ? `${id}-error` : undefined;
   const describedBy = [errorId, hintId].filter(Boolean).join(" ") || undefined;
+  const labelEl = (
+    <label htmlFor={id} className="text-base font-medium text-foreground">
+      {label}
+    </label>
+  );
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <div className="flex items-center justify-between gap-3">
-        <label htmlFor={id} className="text-base font-medium text-foreground">
-          {label}
-        </label>
+        {help === undefined ? (
+          labelEl
+        ) : (
+          <span className="flex items-center gap-1.5">
+            {labelEl}
+            {help}
+          </span>
+        )}
         {labelAside}
       </div>
       <div className="relative">
