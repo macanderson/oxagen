@@ -146,7 +146,7 @@ function Conditions() {
     >
       <h2
         id="tools-policy-conditions"
-        className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+        className="text-sm font-semibold uppercase tracking-widest text-muted-foreground"
       >
         {t("title")}
       </h2>
@@ -173,7 +173,7 @@ function SequenceRule() {
     >
       <h2
         id="tools-policy-sequence"
-        className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+        className="text-sm font-semibold uppercase tracking-widest text-muted-foreground"
       >
         {t("title")}
       </h2>

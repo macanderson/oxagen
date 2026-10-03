@@ -316,7 +316,7 @@ function ResolvedCard({
 }
 
 const eyebrow =
-  "mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground";
+  "mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground";
 
 export function ApprovalsDrawer({
   data,

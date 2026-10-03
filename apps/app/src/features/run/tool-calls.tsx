@@ -48,7 +48,7 @@ const histRow =
 const histKey = "font-mono text-xs";
 const histValue = "font-mono text-xs tabular-nums text-foreground";
 /** `.spec .sv { font-size:22px; font-weight:700; letter-spacing:-.02em; margin-bottom:7px }` */
-const specValue = "mb-1.75 text-xl font-bold tracking-[-0.02em]";
+const specValue = "mb-1.75 text-xl font-bold tracking-display";
 /** `.stk { height:8px; border-radius:4px }` drawn as an empty track: no prefetch was recorded to fill it. */
 const emptyTrack = "block h-2 rounded-sm bg-hl";
 
@@ -91,7 +91,7 @@ function FamilyTable({ families }: { families: readonly Family[] }) {
                   <span className={familyIcon}>
                     <ToolIcon group={family.group} size="md" />
                   </span>
-                  <span className="grid min-w-0 leading-[1.3]">
+                  <span className="grid min-w-0 leading-tight">
                     <b className={familyName}>
                       {t(`families.${family.group}`)}
                     </b>

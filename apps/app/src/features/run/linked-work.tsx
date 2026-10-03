@@ -49,7 +49,7 @@ type Edge = "observed" | "stated" | "inferred" | "commit" | "branch";
  * line-height:1.7 }`: the provenance chip, and the `fr N` chip beside it.
  */
 const edgeChip =
-  "inline-flex items-center gap-1 whitespace-nowrap rounded-sm border px-1.5 font-mono text-xs leading-[1.7]";
+  "inline-flex items-center gap-1 whitespace-nowrap rounded-sm border px-1.5 font-mono text-xs leading-relaxed";
 
 /**
  * `.edge.observed { color:var(--st-proven) }`, `.edge.stated { color:
@@ -225,7 +225,7 @@ function Item({
           line === null ? null : (
             <span
               key={name}
-              className="block text-xs leading-[1.5] text-muted-foreground [overflow-wrap:anywhere]"
+              className="block text-xs leading-normal text-muted-foreground [overflow-wrap:anywhere]"
             >
               {line}
             </span>

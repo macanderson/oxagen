@@ -227,7 +227,7 @@ function PromptPanel({
           </p>
           <p
             data-testid="run-context-first-prompt"
-            className="m-0 max-w-measure-narrow text-base leading-[1.55] text-foreground [overflow-wrap:anywhere]"
+            className="m-0 max-w-measure-narrow text-base leading-normal text-foreground [overflow-wrap:anywhere]"
           >
             {prompt === null
               ? t("noPrompt")
@@ -336,7 +336,7 @@ function SpineNode({ item }: { item: TranscriptRecallItem }) {
           )}
         </div>
         {why === null ? null : (
-          <p className="mb-0 mt-0.75 text-xs leading-[1.5] text-muted-foreground">
+          <p className="mb-0 mt-0.75 text-xs leading-normal text-muted-foreground">
             {why}
           </p>
         )}

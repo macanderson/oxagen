@@ -375,7 +375,7 @@ export function WrapStep({
 
   const downloadColumn = (profile: boolean) => (
     <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-border p-3.5">
-      <p className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
         {t("download")}
       </p>
       <TabList
@@ -484,7 +484,7 @@ export function WrapStep({
           <Ladder observe={false} />
         </div>
         <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-border p-3.5">
-          <p className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
             {t("credential")}
           </p>
           {noAgent ?? (

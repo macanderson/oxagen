@@ -84,7 +84,7 @@ export function Header({
         <div className="flex items-start gap-3">
           {record.kind === null ? null : <KindTile kind={record.kind} />}
           <div className="min-w-0">
-            <h1 className="min-w-0 max-w-measure text-lg font-semibold leading-[1.35] text-foreground md:text-xl">
+            <h1 className="min-w-0 max-w-measure text-lg font-semibold leading-snug text-foreground md:text-xl">
               {label}
             </h1>
             <p

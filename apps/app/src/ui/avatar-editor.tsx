@@ -427,7 +427,7 @@ function AvatarEditor({
                 <input
                   id={lettersId}
                   data-testid="avatar-letters"
-                  className={`${inputBase} w-30 text-lg tracking-[0.08em] ${FONT_FACE[draft.font]}`}
+                  className={`${inputBase} w-30 text-lg tracking-widest ${FONT_FACE[draft.font]}`}
                   value={draft.text}
                   maxLength={INITIALS_MAX}
                   autoCapitalize="characters"

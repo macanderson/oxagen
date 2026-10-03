@@ -54,7 +54,7 @@ export function SidebarNav({
         <div key={section.key} className="mb-3">
           <p
             id={`${labelId}-${section.key}`}
-            className="px-2 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-[0.13em] text-sidebar-nav-label-fg"
+            className="px-2 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-widest text-sidebar-nav-label-fg"
           >
             {t(`sidebar.sections.${section.key}`)}
           </p>

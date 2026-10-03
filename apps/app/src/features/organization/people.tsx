@@ -75,7 +75,7 @@ function MemberFacts({ member }: { member: Member }) {
   const tRole = useTranslations("organization.roles");
   const term = "text-muted-foreground";
   const sectionTitle =
-    "mt-4 mb-1.5 text-xs font-semibold uppercase tracking-[0.09em] text-dim";
+    "mt-4 mb-1.5 text-xs font-semibold uppercase tracking-widest text-dim";
   return (
     <div data-issue="3932">
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-base">
