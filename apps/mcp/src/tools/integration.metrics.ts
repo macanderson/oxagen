@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { integrationMetrics } from "@oxagen/oxagen/contracts/integration.metrics";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...integrationMetrics.input.shape,
@@ -28,5 +29,5 @@ export default async function integrationMetricsTool(
   const output = await invoke(integrationMetrics.name, args, ctx, {
     surface: "mcp",
   });
-  return integrationMetrics.output.parse(output);
+  return toolResult(integrationMetrics.output.parse(output));
 }

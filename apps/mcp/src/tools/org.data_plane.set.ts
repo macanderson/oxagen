@@ -6,6 +6,7 @@ import {
 } from "@oxagen/oxagen/contracts/org.data_plane.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 // Derived from the contract's base object (the refined `input` has no `.shape`).
 // invoke() re-parses the full refined contract input, so the mode↔config rules
@@ -42,5 +43,5 @@ export default async function orgDataPlaneSetTool(
   const output = await invoke(orgDataPlaneSet.name, args, ctx, {
     surface: "mcp",
   });
-  return orgDataPlaneSet.output.parse(output);
+  return toolResult(orgDataPlaneSet.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { mandateList } from "@oxagen/oxagen/contracts/mandate.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 export const schema = {
   ...mandateList.input.shape,
 };
@@ -22,5 +23,5 @@ export default async function mandateListTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(mandateList.name, args, ctx, { surface: "mcp" });
-  return mandateList.output.parse(output);
+  return toolResult(mandateList.output.parse(output));
 }

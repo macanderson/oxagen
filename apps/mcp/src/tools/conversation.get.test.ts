@@ -76,7 +76,7 @@ describe("get_conversation tool", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(out).toEqual({ conversation: CONVERSATION });
+    expect(out.structuredContent).toEqual({ conversation: CONVERSATION });
   });
 
   it("propagates a not_found refusal (negative)", async () => {

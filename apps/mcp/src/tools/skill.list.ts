@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { skillList } from "@oxagen/oxagen/contracts/skill.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...skillList.input.shape,
@@ -32,5 +33,5 @@ export default async function skillListTool(args: InferSchema<typeof schema>) {
   const output = await invoke(skillList.name, args, ctx, {
     surface: "mcp",
   });
-  return skillList.output.parse(output);
+  return toolResult(skillList.output.parse(output));
 }

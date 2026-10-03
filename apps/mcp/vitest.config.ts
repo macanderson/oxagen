@@ -30,6 +30,7 @@ export default defineConfig({
       include: [
         "src/context.ts",
         "src/http-app.ts",
+        "src/tool-result.ts",
         // agent tools
         "src/tools/agent.approval.resolve.ts",
         "src/tools/agent.mcp.list.ts",

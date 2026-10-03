@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { connectionPause } from "@oxagen/oxagen/contracts/connection.pause";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...connectionPause.input.shape,
@@ -25,5 +26,5 @@ export default async function connectionPauseTool(
   const output = await invoke(connectionPause.name, args, ctx, {
     surface: "mcp",
   });
-  return connectionPause.output.parse(output);
+  return toolResult(connectionPause.output.parse(output));
 }

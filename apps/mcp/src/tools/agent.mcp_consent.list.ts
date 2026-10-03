@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMcpConsentList } from "@oxagen/oxagen/contracts/agent.mcp_consent.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentMcpConsentList.input.shape,
@@ -28,5 +29,5 @@ export default async function agentMcpConsentListTool(
   const output = await invoke(agentMcpConsentList.name, args, ctx, {
     surface: "mcp",
   });
-  return agentMcpConsentList.output.parse(output);
+  return toolResult(agentMcpConsentList.output.parse(output));
 }

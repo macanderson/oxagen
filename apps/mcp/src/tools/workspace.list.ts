@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...workspaceList.input.shape,
@@ -28,5 +29,5 @@ export default async function workspaceListTool(
   const output = await invoke(workspaceList.name, args, ctx, {
     surface: "mcp",
   });
-  return workspaceList.output.parse(output);
+  return toolResult(workspaceList.output.parse(output));
 }

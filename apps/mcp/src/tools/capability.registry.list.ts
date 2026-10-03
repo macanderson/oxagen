@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { capabilityRegistryList } from "@oxagen/oxagen/contracts/capability.registry.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...capabilityRegistryList.input.shape,
@@ -25,5 +26,5 @@ export default async function capabilityRegistryListTool(
   const output = await invoke(capabilityRegistryList.name, args, ctx, {
     surface: "mcp",
   });
-  return capabilityRegistryList.output.parse(output);
+  return toolResult(capabilityRegistryList.output.parse(output));
 }

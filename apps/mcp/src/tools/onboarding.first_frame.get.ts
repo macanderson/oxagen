@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { onboardingFirstFrameGet } from "@oxagen/oxagen/contracts/onboarding.first_frame.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...onboardingFirstFrameGet.input.shape,
@@ -31,5 +32,5 @@ export default async function onboardingFirstFrameGetTool(
   const output = await invoke(onboardingFirstFrameGet.name, args, ctx, {
     surface: "mcp",
   });
-  return onboardingFirstFrameGet.output.parse(output);
+  return toolResult(onboardingFirstFrameGet.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { pluginVersionList } from "@oxagen/oxagen/contracts/plugin.version.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...pluginVersionList.input.shape,
@@ -34,5 +35,5 @@ export default async function pluginVersionListTool(
   const output = await invoke(pluginVersionList.name, args, ctx, {
     surface: "mcp",
   });
-  return pluginVersionList.output.parse(output);
+  return toolResult(pluginVersionList.output.parse(output));
 }

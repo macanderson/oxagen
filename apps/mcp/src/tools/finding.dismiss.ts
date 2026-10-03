@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   findingId: findingDismiss.input.shape.findingId.describe(
@@ -28,5 +29,5 @@ export default async function findingDismissTool(
   const output = await invoke(findingDismiss.name, input, ctx, {
     surface: "mcp",
   });
-  return findingDismiss.output.parse(output);
+  return toolResult(findingDismiss.output.parse(output));
 }

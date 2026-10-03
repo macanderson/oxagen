@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { steeringMemoriesDismiss } from "@oxagen/oxagen/contracts/steering.memories.dismiss";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...steeringMemoriesDismiss.input.shape };
 
@@ -21,5 +22,5 @@ export default async function dismissMemoriesTool(args: InferSchema<typeof schem
   const output = await invoke(steeringMemoriesDismiss.name, args, ctx, {
     surface: "mcp",
   });
-  return steeringMemoriesDismiss.output.parse(output);
+  return toolResult(steeringMemoriesDismiss.output.parse(output));
 }

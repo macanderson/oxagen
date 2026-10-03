@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { orgSsoVerifyDomain } from "@oxagen/oxagen/contracts/org.sso.verify_domain";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   providerId: orgSsoVerifyDomain.input.shape.providerId.describe(
@@ -28,5 +29,5 @@ export default async function orgSsoVerifyDomainTool(
   const output = await invoke(orgSsoVerifyDomain.name, args, ctx, {
     surface: "mcp",
   });
-  return orgSsoVerifyDomain.output.parse(output);
+  return toolResult(orgSsoVerifyDomain.output.parse(output));
 }

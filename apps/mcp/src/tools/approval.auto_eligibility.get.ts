@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { approvalAutoEligibilityGet } from "@oxagen/oxagen/contracts/approval.auto_eligibility.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...approvalAutoEligibilityGet.input.shape,
@@ -25,5 +26,5 @@ export default async function approvalAutoEligibilityGetTool(
   const output = await invoke(approvalAutoEligibilityGet.name, args, ctx, {
     surface: "mcp",
   });
-  return approvalAutoEligibilityGet.output.parse(output);
+  return toolResult(approvalAutoEligibilityGet.output.parse(output));
 }

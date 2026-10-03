@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...spendWasteList.input.shape,
@@ -28,5 +29,5 @@ export default async function spendWasteListTool(
   const output = await invoke(spendWasteList.name, args, ctx, {
     surface: "mcp",
   });
-  return spendWasteList.output.parse(output);
+  return toolResult(spendWasteList.output.parse(output));
 }

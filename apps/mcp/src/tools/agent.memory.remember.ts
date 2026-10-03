@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMemoryRemember } from "@oxagen/oxagen/contracts/agent.memory.remember";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentMemoryRemember.input.shape,
@@ -43,5 +44,5 @@ export default async function agentMemoryRememberTool(
   const output = await invoke(agentMemoryRemember.name, args, ctx, {
     surface: "mcp",
   });
-  return agentMemoryRemember.output.parse(output);
+  return toolResult(agentMemoryRemember.output.parse(output));
 }

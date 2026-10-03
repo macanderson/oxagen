@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { tachoHostList } from "@oxagen/oxagen/contracts/tacho.host.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...tachoHostList.input.shape,
@@ -36,5 +37,5 @@ export default async function tachoHostListTool(
   const output = await invoke(tachoHostList.name, args, ctx, {
     surface: "mcp",
   });
-  return tachoHostList.output.parse(output);
+  return toolResult(tachoHostList.output.parse(output));
 }

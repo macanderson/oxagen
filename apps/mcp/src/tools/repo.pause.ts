@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { repoPause } from "@oxagen/oxagen/contracts/repo.pause";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...repoPause.input.shape,
@@ -24,5 +25,5 @@ export const metadata: ToolMetadata = {
 export default async function repoPauseTool(args: InferSchema<typeof schema>) {
   const ctx = await buildContext(headers());
   const output = await invoke(repoPause.name, args, ctx, { surface: "mcp" });
-  return repoPause.output.parse(output);
+  return toolResult(repoPause.output.parse(output));
 }

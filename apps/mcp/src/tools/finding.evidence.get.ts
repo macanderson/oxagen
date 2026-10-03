@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   findingId: findingEvidenceGet.input.shape.findingId.describe(
@@ -28,5 +29,5 @@ export default async function findingEvidenceGetTool(
   const output = await invoke(findingEvidenceGet.name, input, ctx, {
     surface: "mcp",
   });
-  return findingEvidenceGet.output.parse(output);
+  return toolResult(findingEvidenceGet.output.parse(output));
 }

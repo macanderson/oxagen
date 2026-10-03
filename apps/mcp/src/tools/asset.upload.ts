@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { assetUpload } from "@oxagen/oxagen/contracts/asset.upload";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...assetUpload.input.shape,
@@ -35,5 +36,5 @@ export default async function assetUploadTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(assetUpload.name, args, ctx, { surface: "mcp" });
-  return assetUpload.output.parse(output);
+  return toolResult(assetUpload.output.parse(output));
 }

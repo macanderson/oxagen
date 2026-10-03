@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentRoleList } from "@oxagen/oxagen/contracts/agent.role.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentRoleList.input.shape,
@@ -25,5 +26,5 @@ export default async function agentRoleListTool(
   const output = await invoke(agentRoleList.name, args, ctx, {
     surface: "mcp",
   });
-  return agentRoleList.output.parse(output);
+  return toolResult(agentRoleList.output.parse(output));
 }

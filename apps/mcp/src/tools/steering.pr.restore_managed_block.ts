@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { steeringPrRestoreManagedBlock } from "@oxagen/oxagen/contracts/steering.pr.restore_managed_block";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...steeringPrRestoreManagedBlock.input.shape };
 
@@ -26,5 +27,5 @@ export default async function restoreManagedBlockTool(
   const output = await invoke(steeringPrRestoreManagedBlock.name, args, ctx, {
     surface: "mcp",
   });
-  return steeringPrRestoreManagedBlock.output.parse(output);
+  return toolResult(steeringPrRestoreManagedBlock.output.parse(output));
 }

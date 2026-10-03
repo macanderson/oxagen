@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { orgMemberInviteAccept } from "@oxagen/oxagen/contracts/org.member_invite.accept";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...orgMemberInviteAccept.input.shape,
@@ -29,5 +30,5 @@ export default async function orgMemberInviteAcceptTool(
   const output = await invoke(orgMemberInviteAccept.name, args, ctx, {
     surface: "mcp",
   });
-  return orgMemberInviteAccept.output.parse(output);
+  return toolResult(orgMemberInviteAccept.output.parse(output));
 }

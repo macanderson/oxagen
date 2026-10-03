@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { repoSync } from "@oxagen/oxagen/contracts/repo.sync";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...repoSync.input.shape,
@@ -28,5 +29,5 @@ export const metadata: ToolMetadata = {
 export default async function repoSyncTool(args: InferSchema<typeof schema>) {
   const ctx = await buildContext(headers());
   const output = await invoke(repoSync.name, args, ctx, { surface: "mcp" });
-  return repoSync.output.parse(output);
+  return toolResult(repoSync.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { graphRuleAuthor } from "@oxagen/oxagen/contracts/graph.rule.author";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...graphRuleAuthor.input.shape,
@@ -31,5 +32,5 @@ export default async function authorGraphRuleTool(
   const output = await invoke(graphRuleAuthor.name, args, ctx, {
     surface: "mcp",
   });
-  return graphRuleAuthor.output.parse(output);
+  return toolResult(graphRuleAuthor.output.parse(output));
 }

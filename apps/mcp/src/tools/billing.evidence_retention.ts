@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { billingEvidenceRetention } from "@oxagen/oxagen/contracts/billing.evidence_retention";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {};
 
@@ -23,5 +24,5 @@ export default async function billingEvidenceRetentionTool(
   const output = await invoke(billingEvidenceRetention.name, {}, ctx, {
     surface: "mcp",
   });
-  return billingEvidenceRetention.output.parse(output);
+  return toolResult(billingEvidenceRetention.output.parse(output));
 }

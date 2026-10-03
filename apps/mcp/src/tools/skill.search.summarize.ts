@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { skillSearchSummarize } from "@oxagen/oxagen/contracts/skill.search.summarize";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 export const schema = { ...skillSearchSummarize.input.shape };
 export const metadata: ToolMetadata = {
   name: skillSearchSummarize.name,
@@ -20,5 +21,5 @@ export default async function tool(args: InferSchema<typeof schema>) {
     await buildContext(headers()),
     { surface: "mcp" },
   );
-  return skillSearchSummarize.output.parse(output);
+  return toolResult(skillSearchSummarize.output.parse(output));
 }

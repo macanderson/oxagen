@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { orgSettingsWrite } from "@oxagen/oxagen/contracts/org.settings.write";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...orgSettingsWrite.input.shape,
@@ -25,5 +26,5 @@ export default async function orgSettingsWriteTool(
   const output = await invoke(orgSettingsWrite.name, args, ctx, {
     surface: "mcp",
   });
-  return orgSettingsWrite.output.parse(output);
+  return toolResult(orgSettingsWrite.output.parse(output));
 }

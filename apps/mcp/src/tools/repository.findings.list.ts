@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { codeRepositoryFindingsList } from "@oxagen/oxagen/contracts/repository.findings.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...codeRepositoryFindingsList.input.shape };
 
@@ -23,5 +24,5 @@ export default async function listCodeRepositoryFindingsTool(
   const output = await invoke(codeRepositoryFindingsList.name, args, ctx, {
     surface: "mcp",
   });
-  return codeRepositoryFindingsList.output.parse(output);
+  return toolResult(codeRepositoryFindingsList.output.parse(output));
 }

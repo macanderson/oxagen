@@ -6,6 +6,7 @@ import {
 } from "@oxagen/oxagen/contracts/spend.drill";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 // Built from the contract's base object (the refined `input` has no `.shape`);
 // invoke() parses the refined input, so the operator-key rule holds here too.
@@ -35,5 +36,5 @@ export const metadata: ToolMetadata = {
 export default async function spendDrillTool(args: InferSchema<typeof schema>) {
   const ctx = await buildContext(headers());
   const output = await invoke(spendDrill.name, args, ctx, { surface: "mcp" });
-  return spendDrill.output.parse(output);
+  return toolResult(spendDrill.output.parse(output));
 }

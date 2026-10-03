@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { steeringRepoRepair } from "@oxagen/oxagen/contracts/steering_repo.repair";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = steeringRepoRepair.input.shape;
 
@@ -25,5 +26,5 @@ export default async function repairSteeringRepoTool(
   const output = await invoke(steeringRepoRepair.name, {}, ctx, {
     surface: "mcp",
   });
-  return steeringRepoRepair.output.parse(output);
+  return toolResult(steeringRepoRepair.output.parse(output));
 }

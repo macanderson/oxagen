@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { skillConfigGet } from "@oxagen/oxagen/contracts/skill.config.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 export const schema = { ...skillConfigGet.input.shape };
 export const metadata: ToolMetadata = {
   name: skillConfigGet.name,
@@ -20,5 +21,5 @@ export default async function tool(args: InferSchema<typeof schema>) {
     await buildContext(headers()),
     { surface: "mcp" },
   );
-  return skillConfigGet.output.parse(output);
+  return toolResult(skillConfigGet.output.parse(output));
 }

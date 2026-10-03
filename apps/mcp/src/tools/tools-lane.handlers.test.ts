@@ -135,7 +135,7 @@ describe("set_kill_switch", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toEqual(output);
+    expect(result.structuredContent).toEqual(output);
   });
 
   it("refuses an output outside the contract", async () => {
@@ -161,7 +161,7 @@ describe("list_kill_switches", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toEqual(output);
+    expect(result.structuredContent).toEqual(output);
   });
 });
 
@@ -286,7 +286,7 @@ describe("save_studio_draft, get_studio_draft, open_studio_review", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toEqual(draft);
+    expect(result.structuredContent).toEqual(draft);
   });
 
   it("get_studio_draft invokes with the contract name and passes a missing draft through", async () => {
@@ -298,7 +298,7 @@ describe("save_studio_draft, get_studio_draft, open_studio_review", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toEqual({ draft: null });
+    expect(result.structuredContent).toEqual({ draft: null });
   });
 
   it("open_studio_review invokes with the contract name and forwards the steering PR", async () => {
@@ -321,7 +321,7 @@ describe("save_studio_draft, get_studio_draft, open_studio_review", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toEqual(output);
+    expect(result.structuredContent).toEqual(output);
   });
 
   it("refuses an output outside the contract", async () => {

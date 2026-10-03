@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMcpRegistrySearch } from "@oxagen/oxagen/contracts/agent.mcp.registry.search";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   query: agentMcpRegistrySearch.input.shape.query.describe(
@@ -34,5 +35,5 @@ export default async function agentMcpRegistrySearchTool(
   const output = await invoke(agentMcpRegistrySearch.name, args, ctx, {
     surface: "mcp",
   });
-  return agentMcpRegistrySearch.output.parse(output);
+  return toolResult(agentMcpRegistrySearch.output.parse(output));
 }

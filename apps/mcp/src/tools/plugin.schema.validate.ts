@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { pluginSchemaValidate } from "@oxagen/oxagen/contracts/plugin.schema.validate";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...pluginSchemaValidate.input.shape,
@@ -34,5 +35,5 @@ export default async function pluginSchemaValidateTool(
   const output = await invoke(pluginSchemaValidate.name, args, ctx, {
     surface: "mcp",
   });
-  return pluginSchemaValidate.output.parse(output);
+  return toolResult(pluginSchemaValidate.output.parse(output));
 }

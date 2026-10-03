@@ -6,6 +6,7 @@ import {
 } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...dispatchCommandFieldsSchema.shape,
@@ -44,5 +45,5 @@ export default async function dispatchCommandTool(
   const output = await invoke(tachoCommandDispatch.name, input, ctx, {
     surface: "mcp",
   });
-  return tachoCommandDispatch.output.parse(output);
+  return toolResult(tachoCommandDispatch.output.parse(output));
 }

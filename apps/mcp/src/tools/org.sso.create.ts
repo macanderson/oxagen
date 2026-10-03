@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { orgSsoCreate } from "@oxagen/oxagen/contracts/org.sso.create";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 const shape = orgSsoCreate.input.shape;
 
@@ -41,5 +42,5 @@ export default async function orgSsoCreateTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(orgSsoCreate.name, args, ctx, { surface: "mcp" });
-  return orgSsoCreate.output.parse(output);
+  return toolResult(orgSsoCreate.output.parse(output));
 }

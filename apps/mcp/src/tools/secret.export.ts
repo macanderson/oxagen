@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { secretExport } from "@oxagen/oxagen/contracts/secret.export";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...secretExport.input.shape,
@@ -23,5 +24,5 @@ export default async function secretExportTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(secretExport.name, args, ctx, { surface: "mcp" });
-  return secretExport.output.parse(output);
+  return toolResult(secretExport.output.parse(output));
 }

@@ -165,7 +165,7 @@ describe("start_studio_discovery", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toEqual({ discovery: QUEUED });
+    expect(result.structuredContent).toEqual({ discovery: QUEUED });
   });
 
   it("refuses a missing discovery, which start never returns", async () => {
@@ -184,12 +184,14 @@ describe("get_studio_discovery", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toEqual({ discovery: QUEUED });
+    expect(result.structuredContent).toEqual({ discovery: QUEUED });
   });
 
   it("passes a server never discovered through as null", async () => {
     mocks.invoke.mockResolvedValue({ discovery: null });
-    await expect(getStudioDiscovery({ server: "ledger" })).resolves.toEqual({
+    await expect(
+      getStudioDiscovery({ server: "ledger" }),
+    ).resolves.toHaveProperty("structuredContent", {
       discovery: null,
     });
   });
@@ -210,7 +212,7 @@ describe("list_studio_tools", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toEqual(TOOLS);
+    expect(result.structuredContent).toEqual(TOOLS);
   });
 
   it("refuses an output outside the contract", async () => {
@@ -273,7 +275,7 @@ describe("get_studio_server", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toEqual(SERVER);
+    expect(result.structuredContent).toEqual(SERVER);
   });
 
   it("refuses an output with the catalog alone", async () => {

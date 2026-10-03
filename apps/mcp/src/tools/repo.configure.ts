@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { repoConfigure } from "@oxagen/oxagen/contracts/repo.configure";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...repoConfigure.input.shape,
@@ -47,5 +48,5 @@ export default async function repoConfigureTool(
   const output = await invoke(repoConfigure.name, args, ctx, {
     surface: "mcp",
   });
-  return repoConfigure.output.parse(output);
+  return toolResult(repoConfigure.output.parse(output));
 }

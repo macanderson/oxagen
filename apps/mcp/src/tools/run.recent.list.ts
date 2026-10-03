@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { runRecentList } from "@oxagen/oxagen/contracts/run.recent.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...runRecentList.input.shape };
 
@@ -23,5 +24,5 @@ export default async function listRecentRunsTool(
   const output = await invoke(runRecentList.name, args, ctx, {
     surface: "mcp",
   });
-  return runRecentList.output.parse(output);
+  return toolResult(runRecentList.output.parse(output));
 }

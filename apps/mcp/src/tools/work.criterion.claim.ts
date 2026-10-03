@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { workCriterionClaim } from "@oxagen/oxagen/contracts/work.criterion.claim";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...workCriterionClaim.input.shape };
 
@@ -21,5 +22,5 @@ export default async function claimWorkCriterionTool(args: InferSchema<typeof sc
   const output = await invoke(workCriterionClaim.name, args, ctx, {
     surface: "mcp",
   });
-  return workCriterionClaim.output.parse(output);
+  return toolResult(workCriterionClaim.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { schemaVersionCreate } from "@oxagen/oxagen/contracts/schema.version.create";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...schemaVersionCreate.input.shape,
@@ -25,5 +26,5 @@ export default async function schemaVersionCreateTool(
   const output = await invoke(schemaVersionCreate.name, args, ctx, {
     surface: "mcp",
   });
-  return schemaVersionCreate.output.parse(output);
+  return toolResult(schemaVersionCreate.output.parse(output));
 }

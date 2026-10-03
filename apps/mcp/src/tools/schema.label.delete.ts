@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { schemaLabelDelete } from "@oxagen/oxagen/contracts/schema.label.delete";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...schemaLabelDelete.input.shape,
@@ -25,5 +26,5 @@ export default async function schemaLabelDeleteTool(
   const output = await invoke(schemaLabelDelete.name, args, ctx, {
     surface: "mcp",
   });
-  return schemaLabelDelete.output.parse(output);
+  return toolResult(schemaLabelDelete.output.parse(output));
 }

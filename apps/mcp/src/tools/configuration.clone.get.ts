@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { configurationCloneGet } from "@oxagen/oxagen/contracts/configuration.clone.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 export const schema = { ...configurationCloneGet.input.shape };
 export const metadata: ToolMetadata = {
   name: configurationCloneGet.name,
@@ -20,5 +21,5 @@ export default async function tool(args: InferSchema<typeof schema>) {
     await buildContext(headers()),
     { surface: "mcp" },
   );
-  return configurationCloneGet.output.parse(output);
+  return toolResult(configurationCloneGet.output.parse(output));
 }

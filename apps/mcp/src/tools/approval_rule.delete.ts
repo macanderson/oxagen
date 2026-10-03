@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { approvalRuleDelete } from "@oxagen/oxagen/contracts/approval_rule.delete";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...approvalRuleDelete.input.shape,
@@ -25,5 +26,5 @@ export default async function approvalRuleDeleteTool(
   const output = await invoke(approvalRuleDelete.name, args, ctx, {
     surface: "mcp",
   });
-  return approvalRuleDelete.output.parse(output);
+  return toolResult(approvalRuleDelete.output.parse(output));
 }

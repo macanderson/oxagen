@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { schemaLabelUpsert } from "@oxagen/oxagen/contracts/schema.label.upsert";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...schemaLabelUpsert.input.shape,
@@ -25,5 +26,5 @@ export default async function schemaLabelUpsertTool(
   const output = await invoke(schemaLabelUpsert.name, args, ctx, {
     surface: "mcp",
   });
-  return schemaLabelUpsert.output.parse(output);
+  return toolResult(schemaLabelUpsert.output.parse(output));
 }

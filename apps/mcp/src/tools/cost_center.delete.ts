@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { costCenterDelete } from "@oxagen/oxagen/contracts/cost_center.delete";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...costCenterDelete.input.shape,
@@ -29,5 +30,5 @@ export default async function costCenterDeleteTool(
   const output = await invoke(costCenterDelete.name, args, ctx, {
     surface: "mcp",
   });
-  return costCenterDelete.output.parse(output);
+  return toolResult(costCenterDelete.output.parse(output));
 }

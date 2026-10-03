@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { graphNodeSearch } from "@oxagen/oxagen/contracts/graph.node.search";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...graphNodeSearch.input.shape,
@@ -34,5 +35,5 @@ export default async function graphNodeSearchTool(
   const output = await invoke(graphNodeSearch.name, args, ctx, {
     surface: "mcp",
   });
-  return graphNodeSearch.output.parse(output);
+  return toolResult(graphNodeSearch.output.parse(output));
 }

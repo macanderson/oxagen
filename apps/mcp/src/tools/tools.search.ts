@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { toolsSearch } from "@oxagen/oxagen/contracts/tools.search";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...toolsSearch.input.shape };
 
@@ -21,5 +22,5 @@ export default async function searchToolsTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(toolsSearch.name, args, ctx, { surface: "mcp" });
-  return toolsSearch.output.parse(output);
+  return toolResult(toolsSearch.output.parse(output));
 }

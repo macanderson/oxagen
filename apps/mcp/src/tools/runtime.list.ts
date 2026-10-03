@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { runtimeList } from "@oxagen/oxagen/contracts/runtime.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   id: runtimeList.input.shape.id.describe(
@@ -27,5 +28,5 @@ export default async function runtimeListTool(
   const output = await invoke(runtimeList.name, args, ctx, {
     surface: "mcp",
   });
-  return runtimeList.output.parse(output);
+  return toolResult(runtimeList.output.parse(output));
 }

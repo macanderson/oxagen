@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { privacyDataExportStatus } from "@oxagen/oxagen/contracts/privacy.data.export.status";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = privacyDataExportStatus.input.shape;
 
@@ -23,5 +24,5 @@ export default async function privacyDataExportStatusTool(
   const output = await invoke(privacyDataExportStatus.name, args, ctx, {
     surface: "mcp",
   });
-  return privacyDataExportStatus.output.parse(output);
+  return toolResult(privacyDataExportStatus.output.parse(output));
 }

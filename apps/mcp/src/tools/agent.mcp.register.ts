@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMcpRegister } from "@oxagen/oxagen/contracts/agent.mcp.register";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentMcpRegister.input.shape,
@@ -39,5 +40,5 @@ export default async function agentMcpRegisterTool(
   const output = await invoke(agentMcpRegister.name, args, ctx, {
     surface: "mcp",
   });
-  return agentMcpRegister.output.parse(output);
+  return toolResult(agentMcpRegister.output.parse(output));
 }

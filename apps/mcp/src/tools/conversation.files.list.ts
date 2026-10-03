@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { conversationFilesList } from "@oxagen/oxagen/contracts/conversation.files.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   conversationId: conversationFilesList.input.shape.conversationId.describe(
@@ -36,5 +37,5 @@ export default async function conversationFilesListTool(
   const output = await invoke(conversationFilesList.name, args, ctx, {
     surface: "mcp",
   });
-  return conversationFilesList.output.parse(output);
+  return toolResult(conversationFilesList.output.parse(output));
 }

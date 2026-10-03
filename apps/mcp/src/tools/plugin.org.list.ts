@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { pluginOrgList } from "@oxagen/oxagen/contracts/plugin.org.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...pluginOrgList.input.shape,
@@ -25,5 +26,5 @@ export default async function pluginOrgListTool(
   const output = await invoke(pluginOrgList.name, args, ctx, {
     surface: "mcp",
   });
-  return pluginOrgList.output.parse(output);
+  return toolResult(pluginOrgList.output.parse(output));
 }

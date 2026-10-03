@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentRoleRevoke } from "@oxagen/oxagen/contracts/agent.role.revoke";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentRoleRevoke.input.shape,
@@ -25,5 +26,5 @@ export default async function agentRoleRevokeTool(
   const output = await invoke(agentRoleRevoke.name, args, ctx, {
     surface: "mcp",
   });
-  return agentRoleRevoke.output.parse(output);
+  return toolResult(agentRoleRevoke.output.parse(output));
 }

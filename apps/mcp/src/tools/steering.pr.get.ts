@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { steeringPrGet } from "@oxagen/oxagen/contracts/steering.pr.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...steeringPrGet.input.shape };
 
@@ -21,5 +22,5 @@ export default async function steeringPrGetTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(steeringPrGet.name, args, ctx, { surface: "mcp" });
-  return steeringPrGet.output.parse(output);
+  return toolResult(steeringPrGet.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMemoryDelete } from "@oxagen/oxagen/contracts/agent.memory.delete";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentMemoryDelete.input.shape,
@@ -28,5 +29,5 @@ export default async function agentMemoryDeleteTool(
   const output = await invoke(agentMemoryDelete.name, args, ctx, {
     surface: "mcp",
   });
-  return agentMemoryDelete.output.parse(output);
+  return toolResult(agentMemoryDelete.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { killSwitchSet } from "@oxagen/oxagen/contracts/kill_switch.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...killSwitchSet.input.shape,
@@ -34,5 +35,5 @@ export default async function killSwitchSetTool(
   const output = await invoke(killSwitchSet.name, args, ctx, {
     surface: "mcp",
   });
-  return killSwitchSet.output.parse(output);
+  return toolResult(killSwitchSet.output.parse(output));
 }

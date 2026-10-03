@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { connectionUpdate } from "@oxagen/oxagen/contracts/connection.update";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...connectionUpdate.input.shape,
@@ -25,5 +26,5 @@ export default async function connectionUpdateTool(
   const output = await invoke(connectionUpdate.name, args, ctx, {
     surface: "mcp",
   });
-  return connectionUpdate.output.parse(output);
+  return toolResult(connectionUpdate.output.parse(output));
 }

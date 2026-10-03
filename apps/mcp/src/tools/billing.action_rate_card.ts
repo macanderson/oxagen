@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { billingActionRateCard } from "@oxagen/oxagen/contracts/billing.action_rate_card";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {};
 
@@ -23,5 +24,5 @@ export default async function billingActionRateCardTool(
   const output = await invoke(billingActionRateCard.name, {}, ctx, {
     surface: "mcp",
   });
-  return billingActionRateCard.output.parse(output);
+  return toolResult(billingActionRateCard.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { repoMetrics } from "@oxagen/oxagen/contracts/repo.metrics";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...repoMetrics.input.shape,
@@ -24,5 +25,5 @@ export default async function repoMetricsTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(repoMetrics.name, args, ctx, { surface: "mcp" });
-  return repoMetrics.output.parse(output);
+  return toolResult(repoMetrics.output.parse(output));
 }

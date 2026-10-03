@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...toolVersionList.input.shape,
@@ -37,5 +38,5 @@ export default async function toolVersionListTool(
   const output = await invoke(toolVersionList.name, args, ctx, {
     surface: "mcp",
   });
-  return toolVersionList.output.parse(output);
+  return toolResult(toolVersionList.output.parse(output));
 }

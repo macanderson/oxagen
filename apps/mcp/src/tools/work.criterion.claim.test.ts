@@ -54,7 +54,9 @@ describe("claim_work_criterion MCP tool", () => {
 
   it("invokes claim_work_criterion on the mcp surface and returns its checked output", async () => {
     mocks.invoke.mockResolvedValue(ANSWER);
-    await expect(claimWorkCriterion(ARGS)).resolves.toEqual(ANSWER);
+    await expect(
+      claimWorkCriterion(ARGS),
+    ).resolves.toHaveProperty("structuredContent", ANSWER);
     expect(mocks.invoke).toHaveBeenCalledWith("claim_work_criterion", ARGS, fakeCtx, { surface: "mcp" });
   });
 

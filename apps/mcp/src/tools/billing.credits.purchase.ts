@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { billingCreditsPurchase } from "@oxagen/oxagen/contracts/billing.credits.purchase";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...billingCreditsPurchase.input.shape,
@@ -28,5 +29,5 @@ export default async function billingCreditsPurchaseTool(
   const output = await invoke(billingCreditsPurchase.name, args, ctx, {
     surface: "mcp",
   });
-  return billingCreditsPurchase.output.parse(output);
+  return toolResult(billingCreditsPurchase.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { findingFixRecord } from "@oxagen/oxagen/contracts/finding.fix.record";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   findingId: findingFixRecord.input.shape.findingId.describe(
@@ -28,5 +29,5 @@ export default async function findingFixRecordTool(
   const output = await invoke(findingFixRecord.name, input, ctx, {
     surface: "mcp",
   });
-  return findingFixRecord.output.parse(output);
+  return toolResult(findingFixRecord.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { integrationGet } from "@oxagen/oxagen/contracts/integration.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...integrationGet.input.shape,
@@ -28,5 +29,5 @@ export default async function integrationGetTool(
   const output = await invoke(integrationGet.name, args, ctx, {
     surface: "mcp",
   });
-  return integrationGet.output.parse(output);
+  return toolResult(integrationGet.output.parse(output));
 }

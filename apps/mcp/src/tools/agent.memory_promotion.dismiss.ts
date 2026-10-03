@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMemoryPromotionDismiss } from "@oxagen/oxagen/contracts/agent.memory_promotion.dismiss";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentMemoryPromotionDismiss.input.shape,
@@ -31,5 +32,5 @@ export default async function agentMemoryPromotionDismissTool(
   const output = await invoke(agentMemoryPromotionDismiss.name, args, ctx, {
     surface: "mcp",
   });
-  return agentMemoryPromotionDismiss.output.parse(output);
+  return toolResult(agentMemoryPromotionDismiss.output.parse(output));
 }

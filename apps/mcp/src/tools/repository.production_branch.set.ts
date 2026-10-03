@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { repositoryProductionBranchSet } from "@oxagen/oxagen/contracts/repository.production_branch.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   bindingId: repositoryProductionBranchSet.input.shape.bindingId.describe(
@@ -30,5 +31,5 @@ export default async function repositoryProductionBranchSetTool(
   const output = await invoke(repositoryProductionBranchSet.name, args, ctx, {
     surface: "mcp",
   });
-  return repositoryProductionBranchSet.output.parse(output);
+  return toolResult(repositoryProductionBranchSet.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { steeringPrRevert } from "@oxagen/oxagen/contracts/steering.pr.revert";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   proposalId: steeringPrRevert.input.shape.proposalId.describe(
@@ -30,5 +31,5 @@ export default async function steeringPrRevertTool(
   const output = await invoke(steeringPrRevert.name, args, ctx, {
     surface: "mcp",
   });
-  return steeringPrRevert.output.parse(output);
+  return toolResult(steeringPrRevert.output.parse(output));
 }

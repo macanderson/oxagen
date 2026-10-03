@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { runtimeCreate } from "@oxagen/oxagen/contracts/runtime.create";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   name: runtimeCreate.input.shape.name.describe(
@@ -33,5 +34,5 @@ export default async function runtimeCreateTool(
   const output = await invoke(runtimeCreate.name, args, ctx, {
     surface: "mcp",
   });
-  return runtimeCreate.output.parse(output);
+  return toolResult(runtimeCreate.output.parse(output));
 }

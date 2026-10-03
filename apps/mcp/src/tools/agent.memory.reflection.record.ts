@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMemoryReflectionRecord } from "@oxagen/oxagen/contracts/agent.memory.reflection.record";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = agentMemoryReflectionRecord.input.shape;
 
@@ -23,5 +24,5 @@ export default async function agentMemoryReflectionRecordTool(
   const output = await invoke(agentMemoryReflectionRecord.name, args, ctx, {
     surface: "mcp",
   });
-  return agentMemoryReflectionRecord.output.parse(output);
+  return toolResult(agentMemoryReflectionRecord.output.parse(output));
 }

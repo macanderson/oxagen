@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { runChainGet } from "@oxagen/oxagen/contracts/run.chain.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   runId: runChainGet.input.shape.runId.describe(
@@ -25,5 +26,5 @@ export default async function runChainGetTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(runChainGet.name, args, ctx, { surface: "mcp" });
-  return runChainGet.output.parse(output);
+  return toolResult(runChainGet.output.parse(output));
 }

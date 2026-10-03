@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { schemaRelationshipDelete } from "@oxagen/oxagen/contracts/schema.relationship.delete";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...schemaRelationshipDelete.input.shape,
@@ -25,5 +26,5 @@ export default async function schemaRelationshipDeleteTool(
   const output = await invoke(schemaRelationshipDelete.name, args, ctx, {
     surface: "mcp",
   });
-  return schemaRelationshipDelete.output.parse(output);
+  return toolResult(schemaRelationshipDelete.output.parse(output));
 }

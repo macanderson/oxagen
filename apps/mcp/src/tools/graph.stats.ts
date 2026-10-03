@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { graphStats } from "@oxagen/oxagen/contracts/graph.stats";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...graphStats.input.shape,
@@ -27,5 +28,5 @@ export const metadata: ToolMetadata = {
 export default async function graphStatsTool(args: InferSchema<typeof schema>) {
   const ctx = await buildContext(headers());
   const output = await invoke(graphStats.name, args, ctx, { surface: "mcp" });
-  return graphStats.output.parse(output);
+  return toolResult(graphStats.output.parse(output));
 }

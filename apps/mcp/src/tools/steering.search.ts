@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { steeringSearch } from "@oxagen/oxagen/contracts/steering.search";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 /**
  * The tool an agent calls to find steering its index did not list. Cursor
@@ -29,5 +30,5 @@ export default async function searchSteeringTool(
   const output = await invoke(steeringSearch.name, args, ctx, {
     surface: "mcp",
   });
-  return steeringSearch.output.parse(output);
+  return toolResult(steeringSearch.output.parse(output));
 }

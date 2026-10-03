@@ -6,6 +6,7 @@ import {
 } from "@oxagen/oxagen/contracts/tool.import";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...toolImportInputObject.shape,
@@ -33,5 +34,5 @@ export const metadata: ToolMetadata = {
 export default async function toolImportTool(args: InferSchema<typeof schema>) {
   const ctx = await buildContext(headers());
   const output = await invoke(toolImport.name, args, ctx, { surface: "mcp" });
-  return toolImport.output.parse(output);
+  return toolResult(toolImport.output.parse(output));
 }

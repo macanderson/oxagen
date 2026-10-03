@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { toolStudioSelectionRun } from "@oxagen/oxagen/contracts/tool.studio.selection.run";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   server: toolStudioSelectionRun.input.shape.server.describe(
@@ -28,5 +29,5 @@ export default async function toolStudioSelectionRunTool(
   const output = await invoke(toolStudioSelectionRun.name, args, ctx, {
     surface: "mcp",
   });
-  return toolStudioSelectionRun.output.parse(output);
+  return toolResult(toolStudioSelectionRun.output.parse(output));
 }

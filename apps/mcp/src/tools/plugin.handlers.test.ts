@@ -69,7 +69,7 @@ describe("plugin.catalog.browse handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({ servers: [], total: 0 });
+    expect(result.structuredContent).toMatchObject({ servers: [], total: 0 });
   });
 
   it("propagates invoke errors", async () => {
@@ -198,7 +198,7 @@ describe("plugin.credential.revoke handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toEqual({ revoked: true });
+    expect(result.structuredContent).toEqual({ revoked: true });
   });
 });
 

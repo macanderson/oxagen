@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { integrationSync } from "@oxagen/oxagen/contracts/integration.sync";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...integrationSync.input.shape,
@@ -31,5 +32,5 @@ export default async function integrationSyncTool(
   const output = await invoke(integrationSync.name, args, ctx, {
     surface: "mcp",
   });
-  return integrationSync.output.parse(output);
+  return toolResult(integrationSync.output.parse(output));
 }

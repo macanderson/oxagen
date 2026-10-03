@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMcpList } from "@oxagen/oxagen/contracts/agent.mcp.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {};
 
@@ -21,5 +22,5 @@ export default async function agentMcpListTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(agentMcpList.name, {}, ctx, { surface: "mcp" });
-  return agentMcpList.output.parse(output);
+  return toolResult(agentMcpList.output.parse(output));
 }

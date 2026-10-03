@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { tachoIncidentList } from "@oxagen/oxagen/contracts/tacho.incident.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...tachoIncidentList.input.shape,
@@ -37,5 +38,5 @@ export default async function tachoIncidentListTool(
   const output = await invoke(tachoIncidentList.name, args, ctx, {
     surface: "mcp",
   });
-  return tachoIncidentList.output.parse(output);
+  return toolResult(tachoIncidentList.output.parse(output));
 }

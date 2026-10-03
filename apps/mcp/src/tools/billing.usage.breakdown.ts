@@ -6,6 +6,7 @@ import {
 } from "@oxagen/oxagen/contracts/billing.usage.breakdown";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = billingUsageBreakdownFields;
 
@@ -26,5 +27,5 @@ export default async function billingUsageBreakdownTool(
   const output = await invoke(billingUsageBreakdown.name, args, ctx, {
     surface: "mcp",
   });
-  return billingUsageBreakdown.output.parse(output);
+  return toolResult(billingUsageBreakdown.output.parse(output));
 }

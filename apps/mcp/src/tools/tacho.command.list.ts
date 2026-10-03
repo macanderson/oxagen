@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...tachoCommandList.input.shape,
@@ -34,5 +35,5 @@ export default async function listCommandsTool(
   const output = await invoke(tachoCommandList.name, args, ctx, {
     surface: "mcp",
   });
-  return tachoCommandList.output.parse(output);
+  return toolResult(tachoCommandList.output.parse(output));
 }

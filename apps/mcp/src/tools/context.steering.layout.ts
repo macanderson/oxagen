@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { contextSteeringLayout } from "@oxagen/oxagen/contracts/context.steering.layout";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 /**
  * The tool an agent calls to learn which layout the workspace's bound
@@ -29,5 +30,5 @@ export default async function getSteeringLayoutTool(
   const output = await invoke(contextSteeringLayout.name, args, ctx, {
     surface: "mcp",
   });
-  return contextSteeringLayout.output.parse(output);
+  return toolResult(contextSteeringLayout.output.parse(output));
 }

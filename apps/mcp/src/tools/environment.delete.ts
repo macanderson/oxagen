@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { environmentDelete } from "@oxagen/oxagen/contracts/environment.delete";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...environmentDelete.input.shape,
@@ -25,5 +26,5 @@ export default async function environmentDeleteTool(
   const output = await invoke(environmentDelete.name, args, ctx, {
     surface: "mcp",
   });
-  return environmentDelete.output.parse(output);
+  return toolResult(environmentDelete.output.parse(output));
 }

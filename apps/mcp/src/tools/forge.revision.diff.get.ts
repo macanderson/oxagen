@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { revisionDiffGet } from "@oxagen/oxagen/contracts/forge.revision.diff.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...revisionDiffGet.input.shape };
 
@@ -21,5 +22,5 @@ export default async function revisionDiffGetTool(args: InferSchema<typeof schem
   const output = await invoke(revisionDiffGet.name, args, ctx, {
     surface: "mcp",
   });
-  return revisionDiffGet.output.parse(output);
+  return toolResult(revisionDiffGet.output.parse(output));
 }

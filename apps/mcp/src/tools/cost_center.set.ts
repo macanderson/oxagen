@@ -6,6 +6,7 @@ import {
 } from "@oxagen/oxagen/contracts/cost_center.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 // Built from the contract's base object (the refined `input` has no `.shape`).
 // invoke() parses the refined input, so an agent target still has to name
@@ -43,5 +44,5 @@ export default async function costCenterSetTool(
   const output = await invoke(costCenterSet.name, args, ctx, {
     surface: "mcp",
   });
-  return costCenterSet.output.parse(output);
+  return toolResult(costCenterSet.output.parse(output));
 }

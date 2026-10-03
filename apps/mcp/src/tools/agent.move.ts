@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMove } from "@oxagen/oxagen/contracts/agent.move";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   agentId: agentMove.input.shape.agentId.describe(
@@ -29,5 +30,5 @@ export default async function agentMoveTool(args: InferSchema<typeof schema>) {
   const output = await invoke(agentMove.name, args, ctx, {
     surface: "mcp",
   });
-  return agentMove.output.parse(output);
+  return toolResult(agentMove.output.parse(output));
 }

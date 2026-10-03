@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentEnvironmentList } from "@oxagen/oxagen/contracts/agent.environment.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentEnvironmentList.input.shape,
@@ -25,5 +26,5 @@ export default async function agentEnvironmentListTool(
   const output = await invoke(agentEnvironmentList.name, args, ctx, {
     surface: "mcp",
   });
-  return agentEnvironmentList.output.parse(output);
+  return toolResult(agentEnvironmentList.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { schemaValidateNode } from "@oxagen/oxagen/contracts/schema.validate.node";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...schemaValidateNode.input.shape,
@@ -25,5 +26,5 @@ export default async function schemaValidateNodeTool(
   const output = await invoke(schemaValidateNode.name, args, ctx, {
     surface: "mcp",
   });
-  return schemaValidateNode.output.parse(output);
+  return toolResult(schemaValidateNode.output.parse(output));
 }

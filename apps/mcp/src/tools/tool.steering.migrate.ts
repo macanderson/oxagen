@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { toolSteeringMigrate } from "@oxagen/oxagen/contracts/tool.steering.migrate";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = toolSteeringMigrate.input.shape;
 
@@ -25,5 +26,5 @@ export default async function migrateToolsToSteeringTool(
   const output = await invoke(toolSteeringMigrate.name, {}, ctx, {
     surface: "mcp",
   });
-  return toolSteeringMigrate.output.parse(output);
+  return toolResult(toolSteeringMigrate.output.parse(output));
 }

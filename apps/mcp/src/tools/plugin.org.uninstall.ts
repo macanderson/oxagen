@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { pluginOrgUninstall } from "@oxagen/oxagen/contracts/plugin.org.uninstall";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...pluginOrgUninstall.input.shape,
@@ -25,5 +26,5 @@ export default async function pluginOrgUninstallTool(
   const output = await invoke(pluginOrgUninstall.name, args, ctx, {
     surface: "mcp",
   });
-  return pluginOrgUninstall.output.parse(output);
+  return toolResult(pluginOrgUninstall.output.parse(output));
 }

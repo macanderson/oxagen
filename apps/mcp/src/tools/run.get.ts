@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { runGet } from "@oxagen/oxagen/contracts/run.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...runGet.input.shape,
@@ -39,5 +40,5 @@ export const metadata: ToolMetadata = {
 export default async function runGetTool(args: InferSchema<typeof schema>) {
   const ctx = await buildContext(headers());
   const output = await invoke(runGet.name, args, ctx, { surface: "mcp" });
-  return runGet.output.parse(output);
+  return toolResult(runGet.output.parse(output));
 }

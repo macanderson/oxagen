@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { workspaceInviteSend } from "@oxagen/oxagen/contracts/workspace.invite.send";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 // Derived from the contract shape (the contract carries no field descriptions,
 // so the agent-facing text is layered on here) rather than re-declaring the
@@ -37,5 +38,5 @@ export default async function workspaceInviteSendTool(
   const output = await invoke(workspaceInviteSend.name, args, ctx, {
     surface: "mcp",
   });
-  return workspaceInviteSend.output.parse(output);
+  return toolResult(workspaceInviteSend.output.parse(output));
 }

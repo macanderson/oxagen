@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { pluginCredentialSetSecret } from "@oxagen/oxagen/contracts/plugin.credential.set_secret";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...pluginCredentialSetSecret.input.shape,
@@ -25,5 +26,5 @@ export default async function pluginCredentialSetSecretTool(
   const output = await invoke(pluginCredentialSetSecret.name, args, ctx, {
     surface: "mcp",
   });
-  return pluginCredentialSetSecret.output.parse(output);
+  return toolResult(pluginCredentialSetSecret.output.parse(output));
 }

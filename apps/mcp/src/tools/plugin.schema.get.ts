@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { pluginSchemaGet } from "@oxagen/oxagen/contracts/plugin.schema.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...pluginSchemaGet.input.shape,
@@ -28,5 +29,5 @@ export default async function pluginSchemaGetTool(
   const output = await invoke(pluginSchemaGet.name, args, ctx, {
     surface: "mcp",
   });
-  return pluginSchemaGet.output.parse(output);
+  return toolResult(pluginSchemaGet.output.parse(output));
 }

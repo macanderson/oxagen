@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { notificationsList } from "@oxagen/oxagen/contracts/notification.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...notificationsList.input.shape,
@@ -25,5 +26,5 @@ export default async function notificationsListTool(
   const output = await invoke(notificationsList.name, args, ctx, {
     surface: "mcp",
   });
-  return notificationsList.output.parse(output);
+  return toolResult(notificationsList.output.parse(output));
 }

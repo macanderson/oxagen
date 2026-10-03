@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { orgModelCredentialDelete } from "@oxagen/oxagen/contracts/org.model_credential.delete";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 // The contract takes no input: the credential is the caller's organisation's.
 export const schema = {
@@ -30,5 +31,5 @@ export default async function orgModelCredentialDeleteTool(
   const output = await invoke(orgModelCredentialDelete.name, args, ctx, {
     surface: "mcp",
   });
-  return orgModelCredentialDelete.output.parse(output);
+  return toolResult(orgModelCredentialDelete.output.parse(output));
 }

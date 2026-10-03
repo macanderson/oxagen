@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { mandateRequest } from "@oxagen/oxagen/contracts/mandate.request";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 import { mandateBodyFields } from "@oxagen/oxagen/mandates/schemas";
 
 // The contract input wraps the fields in `.refine()` (validTo after
@@ -27,5 +28,5 @@ export default async function mandateRequestTool(
   const output = await invoke(mandateRequest.name, args, ctx, {
     surface: "mcp",
   });
-  return mandateRequest.output.parse(output);
+  return toolResult(mandateRequest.output.parse(output));
 }

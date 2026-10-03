@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { runtimeUpdate } from "@oxagen/oxagen/contracts/runtime.update";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   runtimeId: runtimeUpdate.input.shape.runtimeId.describe(
@@ -33,5 +34,5 @@ export default async function runtimeUpdateTool(
   const output = await invoke(runtimeUpdate.name, args, ctx, {
     surface: "mcp",
   });
-  return runtimeUpdate.output.parse(output);
+  return toolResult(runtimeUpdate.output.parse(output));
 }

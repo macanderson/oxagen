@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentGet } from "@oxagen/oxagen/contracts/agent.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentGet.input.shape,
@@ -24,5 +25,5 @@ export const metadata: ToolMetadata = {
 export default async function agentGetTool(args: InferSchema<typeof schema>) {
   const ctx = await buildContext(headers());
   const output = await invoke(agentGet.name, args, ctx, { surface: "mcp" });
-  return agentGet.output.parse(output);
+  return toolResult(agentGet.output.parse(output));
 }

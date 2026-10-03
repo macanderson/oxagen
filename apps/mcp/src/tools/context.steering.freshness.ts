@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 /**
  * The tool an agent calls to find out whether the records it is steering on
@@ -36,5 +37,5 @@ export default async function getSteeringFreshnessTool(
   const output = await invoke(contextSteeringFreshness.name, args, ctx, {
     surface: "mcp",
   });
-  return contextSteeringFreshness.output.parse(output);
+  return toolResult(contextSteeringFreshness.output.parse(output));
 }

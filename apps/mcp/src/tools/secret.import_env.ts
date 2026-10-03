@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { secretImportEnv } from "@oxagen/oxagen/contracts/secret.import_env";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...secretImportEnv.input.shape,
@@ -25,5 +26,5 @@ export default async function secretImportEnvTool(
   const output = await invoke(secretImportEnv.name, args, ctx, {
     surface: "mcp",
   });
-  return secretImportEnv.output.parse(output);
+  return toolResult(secretImportEnv.output.parse(output));
 }

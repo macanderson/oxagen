@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { orgDataPlaneGet } from "@oxagen/oxagen/contracts/org.data_plane.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...orgDataPlaneGet.input.shape,
@@ -28,5 +29,5 @@ export default async function orgDataPlaneGetTool(
   const output = await invoke(orgDataPlaneGet.name, args, ctx, {
     surface: "mcp",
   });
-  return orgDataPlaneGet.output.parse(output);
+  return toolResult(orgDataPlaneGet.output.parse(output));
 }

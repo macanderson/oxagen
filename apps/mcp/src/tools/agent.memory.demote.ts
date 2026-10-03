@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMemoryDemote } from "@oxagen/oxagen/contracts/agent.memory.demote";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentMemoryDemote.input.shape,
@@ -37,5 +38,5 @@ export default async function agentMemoryDemoteTool(
   const output = await invoke(agentMemoryDemote.name, args, ctx, {
     surface: "mcp",
   });
-  return agentMemoryDemote.output.parse(output);
+  return toolResult(agentMemoryDemote.output.parse(output));
 }

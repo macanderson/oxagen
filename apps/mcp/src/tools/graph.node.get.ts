@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { graphNodeGet } from "@oxagen/oxagen/contracts/graph.node.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   nodeId: graphNodeGet.input.shape.nodeId.describe(
@@ -25,5 +26,5 @@ export default async function graphNodeGetTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(graphNodeGet.name, args, ctx, { surface: "mcp" });
-  return graphNodeGet.output.parse(output);
+  return toolResult(graphNodeGet.output.parse(output));
 }

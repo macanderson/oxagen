@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMemoryLessonRemember } from "@oxagen/oxagen/contracts/agent.memory.lesson.remember";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = agentMemoryLessonRemember.input.shape;
 
@@ -23,5 +24,5 @@ export default async function agentMemoryLessonRememberTool(
   const output = await invoke(agentMemoryLessonRemember.name, args, ctx, {
     surface: "mcp",
   });
-  return agentMemoryLessonRemember.output.parse(output);
+  return toolResult(agentMemoryLessonRemember.output.parse(output));
 }

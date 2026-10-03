@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { steeringMemoryPrRecordDrop } from "@oxagen/oxagen/contracts/steering.memory_pr_records.drop";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...steeringMemoryPrRecordDrop.input.shape };
 
@@ -24,5 +25,5 @@ export default async function dropMemoryRecordTool(args: InferSchema<typeof sche
   const output = await invoke(steeringMemoryPrRecordDrop.name, args, ctx, {
     surface: "mcp",
   });
-  return steeringMemoryPrRecordDrop.output.parse(output);
+  return toolResult(steeringMemoryPrRecordDrop.output.parse(output));
 }

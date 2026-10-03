@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { changeSetGet } from "@oxagen/oxagen/contracts/forge.changes.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...changeSetGet.input.shape };
 
@@ -21,5 +22,5 @@ export default async function changeSetGetTool(args: InferSchema<typeof schema>)
   const output = await invoke(changeSetGet.name, args, ctx, {
     surface: "mcp",
   });
-  return changeSetGet.output.parse(output);
+  return toolResult(changeSetGet.output.parse(output));
 }

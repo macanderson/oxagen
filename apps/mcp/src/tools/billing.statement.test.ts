@@ -88,7 +88,9 @@ describe("billing statement MCP tools", () => {
       limit: 10,
       cursor: undefined,
     };
-    await expect(exportTool(args)).resolves.toEqual(out);
+    await expect(
+      exportTool(args),
+    ).resolves.toHaveProperty("structuredContent", out);
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
       "export_billing_statement",

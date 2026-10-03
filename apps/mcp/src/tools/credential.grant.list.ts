@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...credentialGrantList.input.shape,
@@ -34,5 +35,5 @@ export default async function credentialGrantListTool(
   const output = await invoke(credentialGrantList.name, args, ctx, {
     surface: "mcp",
   });
-  return credentialGrantList.output.parse(output);
+  return toolResult(credentialGrantList.output.parse(output));
 }

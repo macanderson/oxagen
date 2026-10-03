@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { schemaVersionDiff } from "@oxagen/oxagen/contracts/schema.version.diff";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...schemaVersionDiff.input.shape,
@@ -25,5 +26,5 @@ export default async function schemaVersionDiffTool(
   const output = await invoke(schemaVersionDiff.name, args, ctx, {
     surface: "mcp",
   });
-  return schemaVersionDiff.output.parse(output);
+  return toolResult(schemaVersionDiff.output.parse(output));
 }

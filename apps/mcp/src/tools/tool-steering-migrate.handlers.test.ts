@@ -60,7 +60,9 @@ describe("migrate_tools_to_steering", () => {
   ])("invokes with the contract name and forwards $state", async (output) => {
     mocks.invoke.mockResolvedValue(output);
 
-    await expect(migrateToolsToSteering({})).resolves.toEqual(output);
+    await expect(
+      migrateToolsToSteering({}),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith("migrate_tools_to_steering", {}, fakeCtx, {
       surface: "mcp",

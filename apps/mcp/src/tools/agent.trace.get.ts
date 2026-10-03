@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentTraceGet } from "@oxagen/oxagen/contracts/agent.trace.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentTraceGet.input.shape,
@@ -28,5 +29,5 @@ export default async function agentTraceGetTool(
   const output = await invoke(agentTraceGet.name, args, ctx, {
     surface: "mcp",
   });
-  return agentTraceGet.output.parse(output);
+  return toolResult(agentTraceGet.output.parse(output));
 }

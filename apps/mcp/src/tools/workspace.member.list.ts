@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...listMembers.input.shape,
@@ -23,5 +24,5 @@ export default async function listMembersTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(listMembers.name, args, ctx, { surface: "mcp" });
-  return listMembers.output.parse(output);
+  return toolResult(listMembers.output.parse(output));
 }

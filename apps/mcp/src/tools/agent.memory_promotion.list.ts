@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMemoryPromotionCandidates } from "@oxagen/oxagen/contracts/agent.memory_promotion.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentMemoryPromotionCandidates.input.shape,
@@ -28,5 +29,5 @@ export default async function agentMemoryPromotionCandidatesTool(
   const output = await invoke(agentMemoryPromotionCandidates.name, args, ctx, {
     surface: "mcp",
   });
-  return agentMemoryPromotionCandidates.output.parse(output);
+  return toolResult(agentMemoryPromotionCandidates.output.parse(output));
 }

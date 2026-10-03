@@ -6,6 +6,7 @@ import {
 } from "@oxagen/oxagen/contracts/tool.studio.credential.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 // The contract input is refined, so it has no `.shape`. The base object
 // carries the fields, and invoke() re-parses the refined input on the call.
@@ -46,5 +47,5 @@ export default async function toolStudioCredentialSetTool(
   const output = await invoke(toolStudioCredentialSet.name, args, ctx, {
     surface: "mcp",
   });
-  return toolStudioCredentialSet.output.parse(output);
+  return toolResult(toolStudioCredentialSet.output.parse(output));
 }

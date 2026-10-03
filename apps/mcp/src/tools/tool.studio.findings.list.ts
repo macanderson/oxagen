@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { toolStudioFindingsList } from "@oxagen/oxagen/contracts/tool.studio.findings.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   server: toolStudioFindingsList.input.shape.server.describe(
@@ -27,5 +28,5 @@ export default async function toolStudioFindingsListTool(
   const output = await invoke(toolStudioFindingsList.name, args, ctx, {
     surface: "mcp",
   });
-  return toolStudioFindingsList.output.parse(output);
+  return toolResult(toolStudioFindingsList.output.parse(output));
 }

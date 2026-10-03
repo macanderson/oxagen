@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { workItemCreate } from "@oxagen/oxagen/contracts/work.item.create";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...workItemCreate.input.shape };
 
@@ -21,5 +22,5 @@ export default async function createWorkItemTool(args: InferSchema<typeof schema
   const output = await invoke(workItemCreate.name, args, ctx, {
     surface: "mcp",
   });
-  return workItemCreate.output.parse(output);
+  return toolResult(workItemCreate.output.parse(output));
 }

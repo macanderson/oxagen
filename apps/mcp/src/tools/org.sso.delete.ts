@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { orgSsoDelete } from "@oxagen/oxagen/contracts/org.sso.delete";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   providerId: orgSsoDelete.input.shape.providerId.describe(
@@ -28,5 +29,5 @@ export default async function orgSsoDeleteTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(orgSsoDelete.name, args, ctx, { surface: "mcp" });
-  return orgSsoDelete.output.parse(output);
+  return toolResult(orgSsoDelete.output.parse(output));
 }

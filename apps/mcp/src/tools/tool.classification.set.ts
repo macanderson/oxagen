@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { toolClassificationSet } from "@oxagen/oxagen/contracts/tool.classification.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...toolClassificationSet.input.shape,
@@ -37,5 +38,5 @@ export default async function toolClassificationSetTool(
   const output = await invoke(toolClassificationSet.name, args, ctx, {
     surface: "mcp",
   });
-  return toolClassificationSet.output.parse(output);
+  return toolResult(toolClassificationSet.output.parse(output));
 }

@@ -127,7 +127,9 @@ describe("list_workspace_memories", () => {
       limit: 50,
       offset: 0,
     };
-    await expect(listWorkspaceMemories(args)).resolves.toEqual(output);
+    await expect(
+      listWorkspaceMemories(args),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith(
       "list_workspace_memories",
       args,
@@ -176,7 +178,9 @@ describe("get_workspace_memory", () => {
       memory_pr: null,
     };
     mocks.invoke.mockResolvedValue(output);
-    await expect(getWorkspaceMemory({ memory_id: "mem_0a1b2c" })).resolves.toEqual(output);
+    await expect(
+      getWorkspaceMemory({ memory_id: "mem_0a1b2c" }),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith(
       "get_workspace_memory",
       { memory_id: "mem_0a1b2c" },
@@ -209,7 +213,9 @@ describe("promote_memories", () => {
     };
     mocks.invoke.mockResolvedValue(output);
     const args = { drafts: [{ memory_ids: ["mem_0a1b2c"] }], same_text: true };
-    await expect(promoteMemories(args)).resolves.toEqual(output);
+    await expect(
+      promoteMemories(args),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith("promote_memories", args, fakeCtx, {
       surface: "mcp",
     });
@@ -225,7 +231,9 @@ describe("dismiss_memories", () => {
     };
     mocks.invoke.mockResolvedValue(output);
     const args = { memory_ids: ["mem_0a1b2c", "mem_9z8y7x"], restore: false };
-    await expect(dismissMemories(args)).resolves.toEqual(output);
+    await expect(
+      dismissMemories(args),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith("dismiss_memories", args, fakeCtx, {
       surface: "mcp",
     });
@@ -269,7 +277,9 @@ describe("list_memory_pr_records", () => {
       ],
     };
     mocks.invoke.mockResolvedValue(output);
-    await expect(listMemoryPrRecords({ number: 7 })).resolves.toEqual(output);
+    await expect(
+      listMemoryPrRecords({ number: 7 }),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith(
       "list_memory_pr_records",
       { number: 7 },
@@ -294,7 +304,9 @@ describe("drop_memory_record", () => {
     };
     mocks.invoke.mockResolvedValueOnce(output);
     const args = { number: 7, path: "steering/memory/workspace/general/use-pnpm.md" };
-    await expect(dropMemoryRecord(args)).resolves.toEqual(output);
+    await expect(
+      dropMemoryRecord(args),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith("drop_memory_record", args, fakeCtx, {
       surface: "mcp",
     });

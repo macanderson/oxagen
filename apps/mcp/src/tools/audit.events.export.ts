@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { auditEventsExport } from "@oxagen/oxagen/contracts/audit.events.export";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...auditEventsExport.input.shape,
@@ -34,5 +35,5 @@ export default async function auditEventsExportTool(
   const output = await invoke(auditEventsExport.name, args, ctx, {
     surface: "mcp",
   });
-  return auditEventsExport.output.parse(output);
+  return toolResult(auditEventsExport.output.parse(output));
 }

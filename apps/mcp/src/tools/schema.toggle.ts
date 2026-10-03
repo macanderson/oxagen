@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { schemaToggle } from "@oxagen/oxagen/contracts/schema.toggle";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...schemaToggle.input.shape,
@@ -23,5 +24,5 @@ export default async function schemaToggleTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(schemaToggle.name, args, ctx, { surface: "mcp" });
-  return schemaToggle.output.parse(output);
+  return toolResult(schemaToggle.output.parse(output));
 }

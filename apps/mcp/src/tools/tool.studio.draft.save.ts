@@ -6,6 +6,7 @@ import {
 } from "@oxagen/oxagen/contracts/tool.studio.draft.save";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 // The contract input is refined, so it has no `.shape`. The base object
 // carries the fields, and invoke() re-parses the refined input on the call.
@@ -48,5 +49,5 @@ export default async function toolStudioDraftSaveTool(
   const output = await invoke(toolStudioDraftSave.name, args, ctx, {
     surface: "mcp",
   });
-  return toolStudioDraftSave.output.parse(output);
+  return toolResult(toolStudioDraftSave.output.parse(output));
 }

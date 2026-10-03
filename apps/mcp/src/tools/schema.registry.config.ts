@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { schemaRegistryConfig } from "@oxagen/oxagen/contracts/schema.registry.config";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...schemaRegistryConfig.input.shape,
@@ -25,5 +26,5 @@ export default async function schemaRegistryConfigTool(
   const output = await invoke(schemaRegistryConfig.name, args, ctx, {
     surface: "mcp",
   });
-  return schemaRegistryConfig.output.parse(output);
+  return toolResult(schemaRegistryConfig.output.parse(output));
 }

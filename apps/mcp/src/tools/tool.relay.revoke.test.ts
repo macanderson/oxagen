@@ -72,7 +72,7 @@ describe("revoke_relay MCP tool", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(out).toEqual(REVOKED);
+    expect(out.structuredContent).toEqual(REVOKED);
   });
 
   it("refuses a call with no name before the kernel runs (negative)", async () => {

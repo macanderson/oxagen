@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { userPreferencesSet } from "@oxagen/oxagen/contracts/user.preferences.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...userPreferencesSet.input.shape };
 
@@ -23,5 +24,5 @@ export default async function setPreferencesTool(
   const output = await invoke(userPreferencesSet.name, args, ctx, {
     surface: "mcp",
   });
-  return userPreferencesSet.output.parse(output);
+  return toolResult(userPreferencesSet.output.parse(output));
 }

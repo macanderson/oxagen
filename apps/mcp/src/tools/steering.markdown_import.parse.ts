@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { steeringMarkdownImportParse } from "@oxagen/oxagen/contracts/steering.markdown_import.parse";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = steeringMarkdownImportParse.input.shape;
 
@@ -25,5 +26,5 @@ export default async function parseMarkdownImportTool(
   const output = await invoke(steeringMarkdownImportParse.name, args, ctx, {
     surface: "mcp",
   });
-  return steeringMarkdownImportParse.output.parse(output);
+  return toolResult(steeringMarkdownImportParse.output.parse(output));
 }

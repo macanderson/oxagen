@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { toolStudioDescriptionDraft } from "@oxagen/oxagen/contracts/tool.studio.description.draft";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   server: toolStudioDescriptionDraft.input.shape.server.describe(
@@ -31,5 +32,5 @@ export default async function toolStudioDescriptionDraftTool(
   const output = await invoke(toolStudioDescriptionDraft.name, args, ctx, {
     surface: "mcp",
   });
-  return toolStudioDescriptionDraft.output.parse(output);
+  return toolResult(toolStudioDescriptionDraft.output.parse(output));
 }

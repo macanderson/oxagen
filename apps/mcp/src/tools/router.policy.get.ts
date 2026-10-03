@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { routerPolicyGet } from "@oxagen/oxagen/contracts/router.policy.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...routerPolicyGet.input.shape,
@@ -25,5 +26,5 @@ export default async function routerPolicyGetTool(
   const output = await invoke(routerPolicyGet.name, args, ctx, {
     surface: "mcp",
   });
-  return routerPolicyGet.output.parse(output);
+  return toolResult(routerPolicyGet.output.parse(output));
 }

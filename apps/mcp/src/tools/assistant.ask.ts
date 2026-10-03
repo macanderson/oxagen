@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { assistantAsk } from "@oxagen/oxagen/contracts/assistant.ask";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...assistantAsk.input.shape };
 
@@ -21,5 +22,5 @@ export default async function askAssistantTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(assistantAsk.name, args, ctx, { surface: "mcp" });
-  return assistantAsk.output.parse(output);
+  return toolResult(assistantAsk.output.parse(output));
 }

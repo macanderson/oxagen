@@ -41,6 +41,7 @@ capability contract as an MCP tool and calls the kernel's `invoke()` with
 | `setSecurityEventEmitter` | injection | `apps/mcp/src/middleware.ts` | Module load. Also captures `error` outcomes to the error stream |
 | `apiKeyAuthMiddleware` (bearer pre-filter) | boundary | `apps/mcp/src/middleware.ts` | `xmcp`, before any tool is dispatched |
 | `buildContext(headers())` | adapter | `apps/mcp/src/context.ts` | Every tool in `apps/mcp/src/tools/` |
+| `toolResult()` | adapter | `apps/mcp/src/tool-result.ts` | Every tool in `apps/mcp/src/tools/` |
 | Tool directory | registry | `apps/mcp/src/tools/<dotted-stem>.ts` | `xmcp` discovers each file's `schema`, `metadata`, and default export |
 
 The capabilities exposed here are the contracts whose `surfaces` include
@@ -68,6 +69,11 @@ it declares the surface and a tool file exists.
   other key carries `userId: null`. A handler that checks an org role acts as
   the key's creator, through `resolveActingUserId` in
   `packages/iam/src/org-role.ts`.
+- Every tool returns its output through `toolResult()` in
+  `src/tool-result.ts`. The client gets the output as JSON text in `content`,
+  and as `structuredContent` when it is an object. xmcp refuses a plain object
+  from a tool with no `outputSchema`, which failed every tool call (#5463).
+  `src/tools.result-shape.test.ts` fails on a tool that skips the helper.
 - Keep heavy packages external in `xmcp.config.ts`. `pnpm check:mcp-externals`
   checks the list.
 
@@ -79,4 +85,5 @@ pnpm --filter @oxagen/mcp test:unit src/context.test.ts
 
 Never put `--` before the filename. Tests sit beside their sources:
 `src/context.test.ts`, `src/middleware.bootstrap.test.ts`,
-`src/tools.auth-gate.test.ts`, and per-tool tests in `src/tools/`.
+`src/tools.auth-gate.test.ts`, `src/tools.result-shape.test.ts`,
+`src/tool-result.test.ts`, and per-tool tests in `src/tools/`.

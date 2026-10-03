@@ -106,7 +106,7 @@ describe("author_graph_rule tool", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(out).toEqual(OUTPUT);
+    expect(out.structuredContent).toEqual(OUTPUT);
   });
 
   it("refuses an output that drifts from the contract (negative)", async () => {

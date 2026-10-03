@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { pluginCredentialReauth } from "@oxagen/oxagen/contracts/plugin.credential.reauth";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...pluginCredentialReauth.input.shape,
@@ -25,5 +26,5 @@ export default async function pluginCredentialReauthTool(
   const output = await invoke(pluginCredentialReauth.name, args, ctx, {
     surface: "mcp",
   });
-  return pluginCredentialReauth.output.parse(output);
+  return toolResult(pluginCredentialReauth.output.parse(output));
 }

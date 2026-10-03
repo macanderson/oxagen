@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { routerStatsList } from "@oxagen/oxagen/contracts/router.stats.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...routerStatsList.input.shape,
@@ -25,5 +26,5 @@ export default async function routerStatsListTool(
   const output = await invoke(routerStatsList.name, args, ctx, {
     surface: "mcp",
   });
-  return routerStatsList.output.parse(output);
+  return toolResult(routerStatsList.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { conversationRename } from "@oxagen/oxagen/contracts/conversation.rename";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...conversationRename.input.shape,
@@ -31,5 +32,5 @@ export default async function conversationRenameTool(
   const output = await invoke(conversationRename.name, args, ctx, {
     surface: "mcp",
   });
-  return conversationRename.output.parse(output);
+  return toolResult(conversationRename.output.parse(output));
 }

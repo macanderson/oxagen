@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { pluginSettingsGetAuthAlerts } from "@oxagen/oxagen/contracts/plugin.settings.get_auth_alerts";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...pluginSettingsGetAuthAlerts.input.shape,
@@ -25,5 +26,5 @@ export default async function pluginSettingsGetAuthAlertsTool(
   const output = await invoke(pluginSettingsGetAuthAlerts.name, args, ctx, {
     surface: "mcp",
   });
-  return pluginSettingsGetAuthAlerts.output.parse(output);
+  return toolResult(pluginSettingsGetAuthAlerts.output.parse(output));
 }

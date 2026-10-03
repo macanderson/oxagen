@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { secretReveal } from "@oxagen/oxagen/contracts/secret.reveal";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...secretReveal.input.shape,
@@ -23,5 +24,5 @@ export default async function secretRevealTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(secretReveal.name, args, ctx, { surface: "mcp" });
-  return secretReveal.output.parse(output);
+  return toolResult(secretReveal.output.parse(output));
 }

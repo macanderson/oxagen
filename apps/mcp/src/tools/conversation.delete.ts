@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { conversationDelete } from "@oxagen/oxagen/contracts/conversation.delete";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...conversationDelete.input.shape,
@@ -28,5 +29,5 @@ export default async function conversationDeleteTool(
   const output = await invoke(conversationDelete.name, args, ctx, {
     surface: "mcp",
   });
-  return conversationDelete.output.parse(output);
+  return toolResult(conversationDelete.output.parse(output));
 }

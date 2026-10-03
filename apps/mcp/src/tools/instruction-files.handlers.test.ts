@@ -101,7 +101,9 @@ describe("list_code_repository_findings", () => {
   it("invokes with the contract name and forwards the findings", async () => {
     const output = { repositories: [REPOSITORY] };
     mocks.invoke.mockResolvedValue(output);
-    await expect(listCodeRepositoryFindings({})).resolves.toEqual(output);
+    await expect(
+      listCodeRepositoryFindings({}),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith(
       "list_code_repository_findings",
       {},
@@ -131,7 +133,9 @@ describe("promote_instruction_to_steering", () => {
     };
     mocks.invoke.mockResolvedValue(output);
     const args = { finding_id: "crf_0a1b2c" };
-    await expect(promoteInstruction(args)).resolves.toEqual(output);
+    await expect(
+      promoteInstruction(args),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith(
       "promote_instruction_to_steering",
       args,
@@ -164,7 +168,9 @@ describe("restore_managed_block", () => {
     };
     mocks.invoke.mockResolvedValue(output);
     const args = { proposalId: "prp_0a1b2c", path: "AGENTS.md" as const };
-    await expect(restoreManagedBlock(args)).resolves.toEqual(output);
+    await expect(
+      restoreManagedBlock(args),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith(
       "restore_managed_block",
       args,

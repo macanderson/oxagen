@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { userPreferencesRead } from "@oxagen/oxagen/contracts/user.preferences.read";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {};
 
@@ -23,5 +24,5 @@ export default async function userPreferencesReadTool(
   const output = await invoke(userPreferencesRead.name, {}, ctx, {
     surface: "mcp",
   });
-  return userPreferencesRead.output.parse(output);
+  return toolResult(userPreferencesRead.output.parse(output));
 }

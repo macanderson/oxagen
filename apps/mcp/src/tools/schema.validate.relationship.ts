@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { schemaValidateRelationship } from "@oxagen/oxagen/contracts/schema.validate.relationship";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...schemaValidateRelationship.input.shape,
@@ -25,5 +26,5 @@ export default async function schemaValidateRelationshipTool(
   const output = await invoke(schemaValidateRelationship.name, args, ctx, {
     surface: "mcp",
   });
-  return schemaValidateRelationship.output.parse(output);
+  return toolResult(schemaValidateRelationship.output.parse(output));
 }

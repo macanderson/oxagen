@@ -86,7 +86,7 @@ describe("set_mcp_credential", () => {
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith("set_mcp_credential", args, fakeCtx, { surface: "mcp" });
-    expect(result).toEqual(output);
+    expect(result.structuredContent).toEqual(output);
   });
 
   it("refuses an output outside the contract", async () => {
@@ -139,7 +139,7 @@ describe("list_studio_findings", () => {
     expect(mocks.invoke).toHaveBeenCalledWith("list_studio_findings", { server: "billing" }, fakeCtx, {
       surface: "mcp",
     });
-    expect(result).toEqual(output);
+    expect(result.structuredContent).toEqual(output);
   });
 
   it("refuses an output outside the contract", async () => {
@@ -176,7 +176,7 @@ describe("draft_studio_description", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toEqual(output);
+    expect(result.structuredContent).toEqual(output);
   });
 
   it("refuses an empty suggestion", async () => {
@@ -232,7 +232,7 @@ describe("run_studio_selection", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toEqual(output);
+    expect(result.structuredContent).toEqual(output);
   });
 
   it("refuses an output outside the contract", async () => {

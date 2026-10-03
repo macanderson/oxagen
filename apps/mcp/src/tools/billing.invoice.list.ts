@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { billingInvoiceList } from "@oxagen/oxagen/contracts/billing.invoice.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...billingInvoiceList.input.shape,
@@ -31,5 +32,5 @@ export default async function billingInvoiceListTool(
   const output = await invoke(billingInvoiceList.name, args, ctx, {
     surface: "mcp",
   });
-  return billingInvoiceList.output.parse(output);
+  return toolResult(billingInvoiceList.output.parse(output));
 }
