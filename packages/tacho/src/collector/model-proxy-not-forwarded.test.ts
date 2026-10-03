@@ -18,6 +18,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { TachoEvent } from "../envelope";
 import { TEST_ENROLLMENT, unsignedBundle } from "../host/test-support";
 import type { PolicyBundle } from "../wire";
+import type { SessionExclusive } from "./chain-write";
 import {
   createModelProxy,
   type ModelProxy,
@@ -39,6 +40,43 @@ const until = async (condition: () => boolean, ms = 3000) => {
     await new Promise((resolve) => setTimeout(resolve, 5));
   expect(condition()).toBe(true);
 };
+
+/**
+ * A session queue a test holds, the way a hook holds it between its seal and
+ * its write. Work queued while it is held runs, in order, on `release`.
+ */
+function holdingQueue(): {
+  exclusive: SessionExclusive;
+  held: () => number;
+  release: () => void;
+} {
+  const held: Array<() => void> = [];
+  let holding = true;
+  function exclusive<T>(
+    _session: { readonly harnessSessionId: string },
+    apply: () => T,
+  ): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const run = (): void => {
+        try {
+          resolve(apply());
+        } catch (error) {
+          reject(error);
+        }
+      };
+      if (holding) held.push(run);
+      else run();
+    });
+  }
+  return {
+    exclusive,
+    held: () => held.length,
+    release: () => {
+      holding = false;
+      for (const run of held.splice(0)) run();
+    },
+  };
+}
 
 /** POST a whole body to the proxy and read the answer. */
 function call(
@@ -154,7 +192,7 @@ describe("a call the proxy does not forward", () => {
         .sessionUuid;
     const frames = (uuid: string, kind: string) =>
       events.filter((e) => e.session_uuid === uuid && e.kind === kind);
-    return { proxy, port, session, frames, log, events, host };
+    return { proxy, port, session, frames, log, events, host, registry };
   }
 
   const upstreamsAt = (url: string) => (): ModelUpstreams => ({
@@ -290,5 +328,174 @@ describe("a call the proxy does not forward", () => {
     expect(answer.status).toBe(200);
     await until(() => frames(uuid, "llm_call").length === 1);
     expect(events.filter((e) => e.kind === "error")).toHaveLength(0);
+  });
+});
+
+describe("frames of a call the proxy answers itself, on the session's queue", () => {
+  const cleanups: Array<() => Promise<void> | void> = [];
+  afterEach(async () => {
+    for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
+  });
+
+  async function proxyWith(deps: Partial<ModelProxyDeps>) {
+    const registry = new SessionRegistry({
+      scope: TEST_ENROLLMENT,
+      now: Date.now,
+      context: {
+        agent: {
+          agent_key: "acme.core.cc-laptop",
+          fleet_id: "wrk_1",
+          runtime: "claude-code",
+          harness: "claude-code",
+          wrapper_version: "2.1.1",
+          host_enrollment_id: TEST_ENROLLMENT,
+        },
+      },
+    });
+    const host = registry.ensure("tachod-session-queue", {
+      harness: "claude-code",
+    }).record;
+    const events: TachoEvent[] = [];
+    const log: string[] = [];
+    const bundle = unsignedBundle() as PolicyBundle;
+    let calls = 0;
+    // A vendor no call here should reach.
+    const vendor = createServer((req, res) => {
+      calls += 1;
+      req.resume();
+      res.writeHead(500);
+      res.end();
+    });
+    const vendorPort = await listen(vendor);
+    const vendorUrl = `http://127.0.0.1:${vendorPort}`;
+    let port = 0;
+    const proxy = createModelProxy({
+      registry,
+      hostRecorder: () => host.recorder,
+      record: (sealed) => events.push(...sealed),
+      policy: () => ({ bundle, hostStatus: "active" }),
+      upstreams: () => ({
+        anthropic: vendorUrl,
+        openai: `${vendorUrl}/v1`,
+        chatgpt: `${vendorUrl}/backend-api/codex`,
+      }),
+      port: () => port,
+      log: (line) => log.push(line),
+      now: Date.now,
+      ...deps,
+    });
+    const server = createServer((req, res) => proxy.handle(req, res));
+    port = await listen(server);
+    cleanups.push(() => {
+      proxy.close();
+      return Promise.all(
+        [server, vendor].map(
+          (open) =>
+            new Promise<void>((resolve) => {
+              open.closeAllConnections();
+              open.close(() => resolve());
+            }),
+        ),
+      ).then(() => undefined);
+    });
+    /** A session, and a frame a hook on its queue sealed and has not written. */
+    const sessionWithHook = (id: string) => {
+      const record = registry.ensure(id, { harness: "claude-code" }).record;
+      const hookFrame = record.recorder.sealCollectorEvent(
+        "oxagen:command_applied",
+        { policy_decision: "allow", policy_source: "human" },
+      );
+      return { record, hookFrame };
+    };
+    return { port, events, log, sessionWithHook, calls: () => calls };
+  }
+
+  it("seals a refused call's frame after a hook there writes what it sealed", async () => {
+    const queue = holdingQueue();
+    const t = await proxyWith({ exclusive: queue.exclusive });
+    const { record, hookFrame } = t.sessionWithHook("sess-refused");
+    record.control.paused = "reviewing the run";
+    const answer = call(
+      t.port,
+      { [SESSION_HEADER]: "sess-refused" },
+      JSON.stringify({ model: "claude-sonnet-5" }),
+    );
+    // The refusal waits on the queue the hook holds.
+    await until(() => queue.held() === 1);
+    expect(t.events).toEqual([]);
+    // The hook writes its frame and leaves the queue.
+    t.events.push(hookFrame);
+    queue.release();
+    expect((await answer).status).toBe(403);
+    // Sealed beside the hook, the refusal took the hook's seq + 1 and
+    // reached the WAL first, and the hook's own write was refused.
+    expect(t.events.map((event) => [event.kind, event.seq])).toEqual([
+      ["oxagen:command_applied", hookFrame.seq],
+      ["policy_decision", hookFrame.seq + 1],
+    ]);
+    expect(t.events[1]?.prev_hash).toBe(hookFrame.hash);
+    expect(t.events[1]?.body).toMatchObject({
+      policy_reason_code: "session_paused",
+    });
+    expect(t.calls()).toBe(0);
+  });
+
+  it("answers a refused call once the queue stays held past the wait, and seals its frame when the queue frees", async () => {
+    const queue = holdingQueue();
+    const t = await proxyWith({
+      exclusive: queue.exclusive,
+      refusalFrameWaitMs: 50,
+    });
+    const { record } = t.sessionWithHook("sess-held");
+    record.control.paused = "reviewing the run";
+    // A hook that runs long does not hold the model call with it.
+    const answer = await call(
+      t.port,
+      { [SESSION_HEADER]: "sess-held" },
+      JSON.stringify({ model: "claude-sonnet-5" }),
+    );
+    expect(answer.status).toBe(403);
+    expect(answer.headers["x-oxagen-refusal"]).toBe("session_paused");
+    expect(queue.held()).toBe(1);
+    expect(t.events).toEqual([]);
+    expect(
+      t.log.some((line) =>
+        line.includes("answered a refused call before its frame could land"),
+      ),
+    ).toBe(true);
+    queue.release();
+    expect(t.events.map((event) => event.kind)).toEqual(["policy_decision"]);
+    expect(t.events[0]?.session_uuid).toBe(record.recorder.sessionUuid);
+    expect(t.calls()).toBe(0);
+  });
+
+  it("seals the frame of a call it did not forward after a hook there writes what it sealed", async () => {
+    const queue = holdingQueue();
+    const t = await proxyWith({
+      exclusive: queue.exclusive,
+      maxRequestBytes: 1024,
+    });
+    const { hookFrame } = t.sessionWithHook("sess-too-large");
+    // The harness is answered while the hook holds the queue.
+    const answer = await call(
+      t.port,
+      { [SESSION_HEADER]: "sess-too-large" },
+      JSON.stringify({ model: "claude-sonnet-5", pad: "x".repeat(4096) }),
+    );
+    expect(answer.status).toBe(413);
+    expect(queue.held()).toBe(1);
+    expect(t.events).toEqual([]);
+    t.events.push(hookFrame);
+    queue.release();
+    // Sealed beside the hook, the error frame took the hook's seq + 1 and
+    // reached the WAL first, and the hook's own write was refused.
+    expect(t.events.map((event) => [event.kind, event.seq])).toEqual([
+      ["oxagen:command_applied", hookFrame.seq],
+      ["error", hookFrame.seq + 1],
+    ]);
+    expect(t.events[1]?.attrs["oxagen.not_forwarded"]).toBe(
+      "request_too_large",
+    );
+    expect(t.calls()).toBe(0);
   });
 });

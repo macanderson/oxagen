@@ -6,6 +6,13 @@
  * went back behind frames the WAL held, and every later seal on it was
  * refused. A SessionEnd restored after a restart keeps its `hook_id`, so the
  * client's spooled copy of the same hook is recognized as a repeat.
+ *
+ * An operator's command writes each frame in the stretch that seals it, a
+ * session's on that session's queue. Sealed beside a hook that was waiting
+ * between its seal and its write, the command took the seq after the hook's
+ * frame and reached the WAL first. Sealed and written across an await, its
+ * frame on the daemon's chain lost its seq to a writer that ran in between.
+ * Either way the WAL refused the later write, and the chain broke.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { verifyChain } from "../chain";
@@ -276,6 +283,125 @@ describe("the daemon's writers outside a hook", () => {
     expect(
       verifyChain(handle.wal.read(uuid), { expectGenesis: true }),
     ).toMatchObject({ ok: true });
+    expectHostChainOnTheWal(handle);
+  });
+
+  it("applies an operator's command to a session after a hook there writes what it sealed", async () => {
+    const plane = fakePlane();
+    const handle = await boot({
+      fetch: plane.fetch,
+      etag: plane.announce,
+      timers: { commandsPollMs: 0 },
+    });
+    await handle.api.handleHook(hook("SessionStart"));
+    const recorder = handle.registry.get(SESSION)!.recorder;
+    const uuid = recorder.sessionUuid;
+    const hostUuid = handle.hostRecorder.sessionUuid;
+
+    // The `refresh_bundle` fetches before anything in the batch seals. The
+    // test holds the fetch, so the hook below starts before the batch seals.
+    plane.queue(command({ id: "cmd_refresh" }));
+    plane.queue(
+      command({ id: "cmd_pause", command: "pause", session_uuid: uuid }),
+    );
+    const release = plane.holdBundle();
+    const ticking = handle.tick();
+    await vi.waitFor(() => expect(plane.bundleRequestsHeld()).toBe(1));
+
+    // A hook on the session's queue seals a frame and waits on its recalled
+    // memories before it writes it.
+    let recalled: () => void = () => {};
+    const recall = new Promise<void>((resolve) => {
+      recalled = resolve;
+    });
+    let hookFrame: TachoEvent | undefined;
+    const hookWrite = handle.queues
+      .session(SESSION, async () => {
+        const sealed = recorder.sealCollectorEvent("oxagen:command_applied", {
+          policy_decision: "allow",
+          policy_source: "human",
+        });
+        hookFrame = sealed;
+        await recall;
+        handle.wal.append([sealed], recorder.takeBodies());
+      })
+      .then(
+        () => "written",
+        (error: unknown) =>
+          error instanceof Error ? error.message : String(error),
+      );
+    await vi.waitFor(() => expect(hookFrame).toBeDefined());
+    release();
+    // The batch's frame on the daemon's chain lands, and the pause waits for
+    // the hook.
+    await vi.waitFor(() =>
+      expect(
+        handle.wal
+          .read(hostUuid)
+          .some((event) => event.attrs["command.id"] === "cmd_refresh"),
+      ).toBe(true),
+    );
+    recalled();
+
+    // Sealed beside the hook, the pause took the hook's seq + 1 and reached
+    // the WAL first, and the hook's own write was refused.
+    expect(await hookWrite).toBe("written");
+    await ticking;
+    const pause = handle.wal
+      .read(uuid)
+      .find((event) => event.attrs["command.id"] === "cmd_pause");
+    expect(pause?.seq).toBe((hookFrame?.seq ?? -2) + 1);
+    expect(pause?.prev_hash).toBe(hookFrame?.hash);
+    expect(
+      verifyChain(handle.wal.read(uuid), { expectGenesis: true }),
+    ).toMatchObject({ ok: true });
+    expect(handle.registry.get(SESSION)?.control.paused).not.toBeNull();
+  });
+
+  it("writes a command's frame on the daemon's chain in the stretch that seals it, so another writer there cannot take its seq", async () => {
+    const plane = fakePlane();
+    const handle = await boot({
+      fetch: plane.fetch,
+      etag: plane.announce,
+      timers: { commandsPollMs: 0 },
+    });
+    const host = handle.hostRecorder;
+    // Another writer of the daemon's chain, such as the model proxy refusing
+    // a call no session was found for, seals and writes in one stretch. This
+    // one runs at the first turn the event loop gives after the command's
+    // seal.
+    const seal = host.sealCollectorEvent.bind(host);
+    const other: TachoEvent[] = [];
+    vi.spyOn(host, "sealCollectorEvent").mockImplementation(
+      (kind, body, fields) => {
+        const event = seal(kind, body, fields);
+        if (kind === "oxagen:command_applied" && other.length === 0)
+          queueMicrotask(() => {
+            const frame = seal("oxagen:hook_health", {
+              hook_count: 0,
+              hook_success: 0,
+            });
+            other.push(frame);
+            handle.wal.append([frame]);
+          });
+        return event;
+      },
+    );
+    plane.queue(command({ id: "cmd_refresh" }));
+    await handle.tick();
+    expect(other).toHaveLength(1);
+
+    // Sealed, then written once `applyCommands` returned, the command's frame
+    // came after the other writer's in the WAL, which refused it. The chain
+    // went back behind the frame the other writer wrote.
+    const written = handle.wal.read(host.sessionUuid);
+    expect(
+      written.some((event) => event.attrs["command.id"] === "cmd_refresh"),
+    ).toBe(true);
+    expect(written.at(-1)?.kind).toBe("oxagen:hook_health");
+    expect(verifyChain(written, { expectGenesis: true })).toMatchObject({
+      ok: true,
+    });
     expectHostChainOnTheWal(handle);
   });
 

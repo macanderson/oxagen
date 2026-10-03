@@ -64,6 +64,7 @@ import {
   readHostFileLenient,
   mcpEndpointFor,
   modelProxyPortFor,
+  recordedHarnessHomes,
   sessionScopeOf,
   withRecordedHarnessFiles,
   writeHostFile,
@@ -155,8 +156,6 @@ import {
 import {
   applyCommands as applyDeliveredCommands,
   HandledCommands,
-  type InboxDeps,
-  type InboxResult,
 } from "./inbox";
 import {
   createMcpGateway,
@@ -648,7 +647,21 @@ async function initializeDaemon(
   port: number | undefined,
   ready: (api: CollectorApi) => void,
 ): Promise<DaemonHandle> {
-  const paths = options.paths;
+  const loaded = options.host ?? readHostFile(options.paths.hostFile);
+  if (loaded === undefined) {
+    throw new Error(
+      `no enrollment at ${options.paths.hostFile}; run \`oxagen agent enroll\` first`,
+    );
+  }
+  // One service runs every agent's collector, and its environment is the
+  // shell of whichever enroll or unenroll installed it last. That shell need
+  // not carry the CLAUDE_CONFIG_DIR or CODEX_HOME this agent enrolled with,
+  // so the harness files are read where host.json recorded them at enroll.
+  // Read from the service's environment, the detector found no hooks in the
+  // wrong settings.json and sealed a false `hooks_removed`. An agent
+  // enrolled before the record existed keeps the paths the environment
+  // gives.
+  const paths = withRecordedHarnessFiles(options.paths, loaded);
   const now = options.now ?? (() => Date.now());
   const log =
     options.log ??
@@ -704,12 +717,6 @@ async function initializeDaemon(
     injectedStarts ??
     ((pids: readonly number[]) =>
       readProcessStartsNoWait(pids, execAsync, platform));
-  const loaded = options.host ?? readHostFile(paths.hostFile);
-  if (loaded === undefined) {
-    throw new Error(
-      `no enrollment at ${paths.hostFile}; run \`oxagen agent enroll\` first`,
-    );
-  }
   // host.json records the version that enrolled, and an upgrade in place runs
   // newer code against the same file (#5365). Every event, the health report
   // and the user agent read the version from `host`, so it names the code
@@ -748,10 +755,11 @@ async function initializeDaemon(
           now,
         })
       : undefined;
-  // The harnesses' memory folders. Claude Code's follow `CLAUDE_CONFIG_DIR`,
-  // as the transcript tailer's do: its project memories, its user subagents'
-  // memories, and the project subagents' memories of each folder a Claude
-  // Code session the registry holds started or worked in. The registry keeps
+  // The harnesses' memory folders. Claude Code's sit in the config directory
+  // this agent enrolled with, beside its transcripts: its project memories,
+  // its user subagents' memories, and the project subagents' memories of
+  // each folder a Claude Code session the registry holds started or worked
+  // in. The registry keeps
   // a sealed session for a week, and a subagent writes its memories in a
   // session, so a scan reads a project's folders while they can change. The
   // memory scan reads them, and the hook path checks each tool call's paths
@@ -1114,8 +1122,12 @@ async function initializeDaemon(
    * - the OTLP records that name it, one task per session a post names;
    * - the tailer's seals of its transcripts, read outside any queue;
    * - the gateway frame of a call it waits on (ADR-189);
-   * - the frame of a model call it made, once the answer is piped;
+   * - the frames of a model call it made: the refusal, the call once the
+   *   answer is piped, a call the proxy did not forward, and a cache
+   *   keep-alive sent for it;
    * - the frames of a Git custody request it made;
+   * - an operator's command for it, or the part of a host-level command
+   *   that reaches it (`onControl`);
    * - the git lane's facts and reconciliation for it, read outside any queue.
    *
    * The host queue:
@@ -1140,16 +1152,15 @@ async function initializeDaemon(
    *   write.
    * - The detector seals only on the host chain, outside any queue, and
    *   writes each seal in the stretch that makes it.
-   * - The operator's commands (`onControl`) seal in one stretch after their
-   *   bundle fetch, outside any queue, and mark only the chains a batch can
-   *   seal on, right before the seals.
+   * - An operator's command (`onControl`) writes its frame on the host chain
+   *   in the stretch that seals it.
    */
   const queues = new HookQueues();
   /**
-   * Run `apply` on a session's queue. The transcript tailer, the model proxy
-   * and the Git custody proxy seal on a session's chain through this, so a
-   * frame of theirs never lands between a hook's seal and its write
-   * (`chain-write.ts`).
+   * Run `apply` on a session's queue. The transcript tailer, the model
+   * proxy, the Git custody proxy and the operator's commands seal on a
+   * session's chain through this, so a frame of theirs never lands between a
+   * hook's seal and its write (`chain-write.ts`).
    */
   const sessionExclusive: SessionExclusive = (session, apply) =>
     queues.session(session.harnessSessionId, async () => apply());
@@ -1515,86 +1526,6 @@ async function initializeDaemon(
       );
       if (session.control.resumeOwed === undefined && resumeOwed !== undefined)
         session.control.resumeOwed = resumeOwed;
-    }
-  }
-
-  /** Host commands that seal only on the host chain, or on nothing. */
-  const HOST_ONLY_COMMANDS: ReadonlySet<string> = new Set([
-    "refresh_bundle",
-    "revoke",
-    "work_order",
-  ]);
-
-  /**
-   * The chains a batch of operator commands can seal on, each with its mark:
-   * the host chain, each session a command names, and every live session
-   * when a command for the whole host fans out to them.
-   */
-  function markCommandChains(
-    commands: ControlEnvelope["commands"],
-  ): Array<{ session: SessionRecord; mark: ChainMark }> {
-    const sessions = new Set<SessionRecord>([hostRecord]);
-    for (const command of commands) {
-      if (command.session_uuid !== null) {
-        const named = registry.byUuid(command.session_uuid);
-        if (named !== undefined) sessions.add(named);
-      } else if (!HOST_ONLY_COMMANDS.has(command.command)) {
-        for (const session of registry.live()) sessions.add(session);
-      }
-    }
-    return [...sessions].map((session) => ({
-      session,
-      mark: session.recorder.markChain(),
-    }));
-  }
-
-  /**
-   * Apply a batch of operator commands, write what they sealed, and take
-   * back the chains they sealed on if the write throws.
-   *
-   * A seal moves a recorder's cursor in memory before the WAL write that
-   * follows it confirms the event landed. Without the marks, a write failure
-   * (a full disk, a stale seq `Wal.append` refuses, a body write that throws)
-   * left the cursor on an event the log never held, and the next seal on
-   * that chain opened a gap no verifier could close. See `rollbackChain` in
-   * `recorder.ts` for the fuller account.
-   *
-   * The marks cover only the chains the batch can seal on
-   * (`markCommandChains`), and they are taken right before the seals.
-   * `applyCommands` seals in one stretch, after the bundle fetch a
-   * `refresh_bundle` asks for, so the marks are taken again once that fetch
-   * returns. The fetch can take 15 s, and hooks, the gateway and the model
-   * proxy write these chains meanwhile. Marked before it, a failed write took
-   * every chain back behind frames the WAL already held, and every later
-   * seal on those chains was refused.
-   */
-  async function applyCommandsRecorded(
-    commands: ControlEnvelope["commands"],
-    deps: InboxDeps,
-  ): Promise<InboxResult> {
-    let marks = markCommandChains(commands);
-    let result: InboxResult | undefined;
-    try {
-      result = await applyCommands(commands, {
-        ...deps,
-        refreshBundle: async () => {
-          // Nothing is sealed before the fetch, so a fetch that fails takes
-          // nothing back.
-          marks = [];
-          await deps.refreshBundle();
-          marks = markCommandChains(commands);
-        },
-      });
-      record(result.events);
-      return result;
-    } catch (error) {
-      for (const { session, mark } of [...marks].reverse())
-        session.recorder.rollbackChain(mark);
-      // A failed write puts back each question an answer released and each
-      // message the batch queued, and forgets their acknowledgements, so the
-      // redelivered commands apply again (#3941).
-      result?.restore();
-      throw error;
     }
   }
 
@@ -2081,7 +2012,11 @@ async function initializeDaemon(
       mandateConfirmedAt = now();
     } else await refreshBundle();
     if (control.commands.length > 0) {
-      const result = await applyCommandsRecorded(control.commands, {
+      // The inbox writes each command's frames in the stretch that seals
+      // them, a session's on that session's queue (`inbox.ts`). A command
+      // whose frames could not be written takes back only its own chain,
+      // and is left unacknowledged for the control plane to deliver again.
+      const result = await applyCommands(control.commands, {
         registry,
         hostRecorder: () => hostRecorder,
         kill,
@@ -2106,6 +2041,9 @@ async function initializeDaemon(
           );
         },
         now,
+        record,
+        exclusive: sessionExclusive,
+        log,
       });
       try {
         // Written before the acknowledgements leave. A queued message or
@@ -3933,10 +3871,13 @@ async function initializeDaemon(
   let displacedUpstreams: Partial<ModelUpstreams> = {};
   async function refreshUpstreams(): Promise<void> {
     try {
+      // The homes this agent enrolled with, so the displaced base URLs are
+      // read from the files enroll wrote them into.
       const state = await readModelBaseUrlState({
         home: options.home ?? homedir(),
+        ...recordedHarnessHomes(host),
         port: modelProxyPortFor(host),
-        stellaHome: dirname(options.paths.stellaToml),
+        stellaHome: dirname(paths.stellaToml),
         harnesses: ["claude-code", "codex", "stella"],
       });
       const next: Partial<ModelUpstreams> = {};
@@ -5039,10 +4980,20 @@ async function initializeDaemon(
     lastStaticRenewalAt = now();
     if (host.host_status !== "active" || !inCustody("openai")) return;
     const home = options.home ?? homedir();
+    // The `auth.json` in the CODEX_HOME this agent enrolled with, which is
+    // where enroll wrote the token. The service's environment can name
+    // another, and a token that is never renewed refuses every Codex call
+    // once it expires.
+    const homes = recordedHarnessHomes(host);
     let state: ModelCredentialHarnessState | undefined;
     try {
-      state = (await readModelCredentialState({ home, harnesses: ["codex"] }))
-        .harnesses[0];
+      state = (
+        await readModelCredentialState({
+          home,
+          ...homes,
+          harnesses: ["codex"],
+        })
+      ).harnesses[0];
     } catch (error) {
       log(
         `static token renewal: cannot read Codex's auth file: ${error instanceof Error ? error.message : String(error)}`,
@@ -5050,7 +5001,7 @@ async function initializeDaemon(
       return;
     }
     if (state === undefined || !state.brokered) return;
-    const current = readCodexApiKeyMember(home);
+    const current = readCodexApiKeyMember(home, homes);
     if (staticTokenStillGood(current, host, paths.runTokenKey, now())) return;
     const issued = api.issueRunToken?.({
       harness: "codex",
@@ -5065,6 +5016,7 @@ async function initializeDaemon(
     try {
       await applyModelCredentials({
         home,
+        ...homes,
         harnesses: ["codex"],
         staticTokens: { codex: issued.body.token },
       });

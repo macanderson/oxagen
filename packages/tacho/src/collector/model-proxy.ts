@@ -339,6 +339,11 @@ export interface ModelProxyDeps {
   credentials?: CredentialBroker;
   /** How long `beforeForward` may take before the original is sent. */
   beforeForwardTimeoutMs?: number;
+  /**
+   * How long a refused call waits for its frame on the session's queue
+   * before it is answered anyway (`DEFAULT_REFUSAL_FRAME_WAIT_MS`).
+   */
+  refusalFrameWaitMs?: number;
   /** The most request bytes held for one call. */
   maxRequestBytes?: number;
   /** Abort an upstream that sends nothing for this long. */
@@ -419,8 +424,12 @@ interface CallAttempt {
   request?: Buffer;
   /** The model the request asked for, once read. */
   model?: string;
-  /** The chain the call was attributed to, how, and its frame attrs. */
+  /**
+   * The session the call was attributed to, when one was, the chain its
+   * frame lands on, how, and its frame attrs.
+   */
   attribution?: {
+    record?: SessionRecord;
     recorder: SessionRecorder;
     how: string;
     attrs: Record<string, string>;
@@ -450,6 +459,36 @@ interface CallMetering {
 const DEFAULT_UPSTREAM_IDLE_MS = 10 * 60_000;
 const DEFAULT_BEFORE_FORWARD_TIMEOUT_MS = 250;
 const DEFAULT_UPSTREAM_CONNECT_MS = 30_000;
+/**
+ * How long a refused call waits for its frame on the session's queue. A hook
+ * holds that queue between its seal and its write, usually for less than the
+ * 500 ms a prompt gives its recalled memories. Past this the refusal is
+ * answered anyway and the frame lands when the queue frees, so a hook that
+ * runs long never holds a model call with it.
+ */
+const DEFAULT_REFUSAL_FRAME_WAIT_MS = 1_000;
+
+/**
+ * Whether `landing` settled within `ms`: true when it did, false when the
+ * time ran out first. A rejection within the time is thrown. Past it the
+ * landing goes on, and its rejection is the caller's to catch.
+ */
+async function landedWithin(
+  landing: Promise<unknown>,
+  ms: number,
+): Promise<boolean> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      landing.then(() => true),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), ms);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
 /**
  * How long a pooled upstream connection may sit idle before the proxy closes
  * it. Below the vendors' own keep-alive windows, so the proxy retires a
@@ -842,6 +881,8 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
   const upstreamIdleMs = deps.upstreamIdleMs ?? DEFAULT_UPSTREAM_IDLE_MS;
   const hookTimeoutMs =
     deps.beforeForwardTimeoutMs ?? DEFAULT_BEFORE_FORWARD_TIMEOUT_MS;
+  const refusalWaitMs =
+    deps.refusalFrameWaitMs ?? DEFAULT_REFUSAL_FRAME_WAIT_MS;
   // Unbounded: a per-origin cap here queues a session's own concurrent
   // streams against each other, which a proxy in the critical path must not
   // do. `keepAlive` still reuses connections; nothing here limits how many
@@ -1319,9 +1360,37 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       found = { how: "unattributed" };
     }
     return {
+      ...(found.record !== undefined ? { record: found.record } : {}),
       recorder: found.record?.recorder ?? deps.hostRecorder(),
       how: found.how,
       attrs: attrsFor(route, found.how),
+    };
+  }
+
+  /**
+   * The chain a frame of this call lands on once its turn on the session's
+   * queue comes, with the attrs that turn adds. The session can end while
+   * the frame waits there. Its chain is then sealed, or its terminal is on
+   * the way to the WAL, so the frame goes to the host's own chain and names
+   * the session, as `sealCall` files a call that outlived its session. The
+   * record is looked up again, because a task queued ahead of this one can
+   * replace it (`SessionRegistry.restore`).
+   */
+  function landingChain(
+    record: SessionRecord | undefined,
+    how: string,
+  ): { chain: SessionRecorder; attrs: Record<string, string> } {
+    if (record === undefined) return { chain: deps.hostRecorder(), attrs: {} };
+    const owner = deps.registry.byUuid(record.recorder.sessionUuid);
+    if (owner !== undefined && !owner.sealed && owner.pendingTerminal !== true)
+      return { chain: owner.recorder, attrs: {} };
+    return {
+      chain: deps.hostRecorder(),
+      attrs: {
+        "oxagen.correlation": "session_closed",
+        "oxagen.session_correlation": how,
+        "oxagen.session_uuid": record.recorder.sessionUuid,
+      },
     };
   }
 
@@ -1332,9 +1401,11 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
    * reached the vendor, so it carries no usage and owes no body, and the
    * control plane counts it as an API error, not as a model call.
    *
-   * It seals at most once per call, and never for a call `settle` owns. A
-   * frame that cannot be written is rolled back and logged, because this runs
-   * where a throw has nothing above it to catch it.
+   * It seals at most once per call, and never for a call `settle` owns. On
+   * a session's chain it seals on the session's queue, for the reason
+   * `settle` gives, and the answer never waits for it. A frame that cannot
+   * be written is rolled back and logged, because this runs where a throw has
+   * nothing above it to catch it.
    */
   function sealNotForwarded(
     req: IncomingMessage,
@@ -1348,54 +1419,53 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     // A call on a path the proxy does not meter seals no frame when it is
     // forwarded either.
     if (route.api === "other") return;
-    let recorder: SessionRecorder | undefined;
-    let mark: ReturnType<SessionRecorder["markChain"]> | undefined;
-    try {
-      const attribution = attempt.attribution ?? attributeByHeaders(req, route);
-      const chain = attribution.recorder;
-      recorder = chain;
-      mark = chain.markChain();
-      const at = deps.now();
-      deps.record([
-        chain.sealCollectorEvent(
-          "error",
-          {
-            provider: route.provider,
-            ...(attempt.model !== undefined
-              ? { model: attempt.model.slice(0, 512) }
-              : {}),
-            ...(status !== undefined ? { api_status_code: status } : {}),
-            api_error_class: reason,
-            api_duration_ms: Math.max(0, at - attempt.startedAt),
-          },
-          {
-            ts: toProtocolTimestamp(at),
-            fidelity: "proxy",
-            attrs: {
-              ...attribution.attrs,
-              [NOT_FORWARDED_ATTR]: reason,
-              "oxagen.provider": route.provider,
-              "oxagen.request_bytes_read": String(attempt.bytesRead),
-              ...(attempt.request !== undefined
-                ? { "oxagen.request_digest": digestBytes(attempt.request) }
-                : {}),
-            },
-          },
-        ),
-      ]);
-    } catch (error) {
-      if (recorder !== undefined && mark !== undefined) {
-        try {
-          recorder.rollbackChain(mark);
-        } catch (rollbackError) {
-          deps.log(
-            `model proxy: rolling the chain back after a failed frame failed too: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
-          );
-        }
-      }
+    const lost = (error: unknown): void => {
       deps.log(
         `model proxy: sealing the frame of a call it did not forward (${reason}) failed: ${error instanceof Error ? error.message : String(error)}`,
       );
+    };
+    try {
+      const attribution = attempt.attribution ?? attributeByHeaders(req, route);
+      const at = deps.now();
+      const body: Record<string, unknown> = {
+        provider: route.provider,
+        ...(attempt.model !== undefined
+          ? { model: attempt.model.slice(0, 512) }
+          : {}),
+        ...(status !== undefined ? { api_status_code: status } : {}),
+        api_error_class: reason,
+        api_duration_ms: Math.max(0, at - attempt.startedAt),
+      };
+      const attrs: Record<string, string> = {
+        ...attribution.attrs,
+        [NOT_FORWARDED_ATTR]: reason,
+        "oxagen.provider": route.provider,
+        "oxagen.request_bytes_read": String(attempt.bytesRead),
+        ...(attempt.request !== undefined
+          ? { "oxagen.request_digest": digestBytes(attempt.request) }
+          : {}),
+      };
+      const land = (): void => {
+        const landing = landingChain(attribution.record, attribution.how);
+        recordOnChain(
+          landing.chain,
+          (chain) => [
+            chain.sealCollectorEvent("error", body, {
+              ts: toProtocolTimestamp(at),
+              fidelity: "proxy",
+              attrs: { ...attrs, ...landing.attrs },
+            }),
+          ],
+          deps.record,
+        );
+      };
+      if (attribution.record === undefined) land();
+      else
+        void onSessionQueue(deps.exclusive, attribution.record, land).catch(
+          lost,
+        );
+    } catch (error) {
+      lost(error);
     }
   }
 
@@ -1683,58 +1753,9 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     }
     callsObserved += 1;
     observed.set(sessionKey, (observed.get(sessionKey) ?? 0) + 1);
-    // A session that ended while its keep-alive was out has its frame on the
-    // host's own chain, as `sealCall` does for a call.
-    const closed = record.sealed || record.pendingTerminal === true;
-    // The request is stored against the parent's when the parent's frame
-    // stored that request: the messages, system prompt and tools are the
-    // parent's, so only the changed members ship. On the host's chain it is
-    // stored whole. The parent's request is on the session's chain, so a
-    // reader of the host's chain could not resolve a fold against it.
-    const requestText = payload.body.toString("utf8");
-    const memory = new RequestPrefixMemory();
-    if (payload.priorShape !== undefined && !closed)
-      memory.remember("parent", {
-        text: "",
-        fullDigest: payload.priorShape.requestDigest,
-        fullBytes: 0,
-        storedBytes: 0,
-        prior: undefined,
-        shape: payload.priorShape,
-        priorPayload: undefined,
-      });
-    const fold = memory.fold("parent", requestText);
-    let requestContent =
-      fold.storedBytes > TACHO_MAX_BODY_BYTES ? undefined : fold.text;
-    let responseContent = answer.responseText;
-    // The same shared cap `sealCall` holds an exchange to: the response
-    // is dropped first, then the request if it alone is still too large.
-    if (requestContent !== undefined && responseContent !== undefined) {
-      const both = Buffer.byteLength(
-        jcs({ request: requestContent, response: responseContent }),
-        "utf8",
-      );
-      if (both > TACHO_MAX_BODY_BYTES) {
-        responseContent = undefined;
-        const alone = Buffer.byteLength(
-          jcs({ request: requestContent, response: undefined }),
-          "utf8",
-        );
-        if (alone > TACHO_MAX_BODY_BYTES) requestContent = undefined;
-      }
-    }
-    const responseOmitted = answer.responseTooLarge
-      ? "too_large"
-      : answer.responseText === undefined && answer.responseBytes > 0
-        ? "not_decoded"
-        : responseContent === undefined && answer.responseText !== undefined
-          ? "too_large"
-          : undefined;
-    const exchange = exchangeContent(requestContent, responseContent);
     const failed =
       answer.errorClass ??
       (answer.status >= 400 ? `http_${answer.status}` : undefined);
-    const chain = closed ? deps.hostRecorder() : record.recorder;
     const callBody: Record<string, unknown> = {
       provider: "anthropic",
       model,
@@ -1781,10 +1802,67 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         ? { message_id: usage.responseId }
         : {}),
     };
-    const mark = chain.markChain();
-    try {
-      deps.record(
-        [
+    // Counted above, as the keep-alive settles. Its frame is sealed on the
+    // session's queue, for the reason `settle` gives: a hook there can stand
+    // between its seal and its write. The keep-alive reached the vendor, so
+    // its outcome stands whether or not the frame is written.
+    const land = (): void => {
+      // A session that ended while its keep-alive was out, or while this
+      // frame waited on its queue, has its frame on the host's own chain, as
+      // `sealCall` does for a call. The record is looked up again, because a
+      // task queued ahead of this one can replace it.
+      const owner = deps.registry.byUuid(record.recorder.sessionUuid);
+      const closed =
+        owner === undefined || owner.sealed || owner.pendingTerminal === true;
+      // The request is stored against the parent's when the parent's frame
+      // stored that request: the messages, system prompt and tools are the
+      // parent's, so only the changed members ship. On the host's chain it is
+      // stored whole. The parent's request is on the session's chain, so a
+      // reader of the host's chain could not resolve a fold against it.
+      const requestText = payload.body.toString("utf8");
+      const memory = new RequestPrefixMemory();
+      if (payload.priorShape !== undefined && !closed)
+        memory.remember("parent", {
+          text: "",
+          fullDigest: payload.priorShape.requestDigest,
+          fullBytes: 0,
+          storedBytes: 0,
+          prior: undefined,
+          shape: payload.priorShape,
+          priorPayload: undefined,
+        });
+      const fold = memory.fold("parent", requestText);
+      let requestContent =
+        fold.storedBytes > TACHO_MAX_BODY_BYTES ? undefined : fold.text;
+      let responseContent = answer.responseText;
+      // The same shared cap `sealCall` holds an exchange to: the response
+      // is dropped first, then the request if it alone is still too large.
+      if (requestContent !== undefined && responseContent !== undefined) {
+        const both = Buffer.byteLength(
+          jcs({ request: requestContent, response: responseContent }),
+          "utf8",
+        );
+        if (both > TACHO_MAX_BODY_BYTES) {
+          responseContent = undefined;
+          const alone = Buffer.byteLength(
+            jcs({ request: requestContent, response: undefined }),
+            "utf8",
+          );
+          if (alone > TACHO_MAX_BODY_BYTES) requestContent = undefined;
+        }
+      }
+      const responseOmitted = answer.responseTooLarge
+        ? "too_large"
+        : answer.responseText === undefined && answer.responseBytes > 0
+          ? "not_decoded"
+          : responseContent === undefined && answer.responseText !== undefined
+            ? "too_large"
+            : undefined;
+      const exchange = exchangeContent(requestContent, responseContent);
+      // As in `settle`: a write that fails takes the frame's seq back with it.
+      recordOnChain(
+        owner !== undefined && !closed ? owner.recorder : deps.hostRecorder(),
+        (chain) => [
           chain.sealCollectorEvent("llm_call", callBody, {
             ts: toProtocolTimestamp(settledAt),
             fidelity: "proxy",
@@ -1835,22 +1913,16 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
             },
           }),
         ],
-        chain.takeBodies(),
+        deps.record,
       );
-    } catch (error) {
-      // As in `settle`: a write that fails takes the frame's seq back with
-      // it. The keep-alive itself reached the vendor, so its outcome stands.
-      try {
-        chain.rollbackChain(mark);
-      } catch (rollbackError) {
+    };
+    void onSessionQueue(deps.exclusive, record, land).catch(
+      (error: unknown) => {
         deps.log(
-          `model proxy: rolling the chain back after a failed keep-alive frame failed too: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+          `model proxy: sealing a cache keep-alive's frame failed: ${error instanceof Error ? error.message : String(error)}`,
         );
-      }
-      deps.log(
-        `model proxy: sealing a cache keep-alive's frame failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
+      },
+    );
     return usage.cacheReadTokens ?? 0;
   }
 
@@ -1902,7 +1974,12 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     const sessionKey = record?.recorder.sessionUuid ?? HOST_KEY;
     const credential = resolveCredential(req, route);
     const attrs = attrsFor(route, how, credential);
-    attempt.attribution = { recorder, how, attrs };
+    attempt.attribution = {
+      ...(record !== undefined ? { record } : {}),
+      recorder,
+      how,
+      attrs,
+    };
     const metered = route.api !== "other";
 
     // The model the harness asked for, read before the refusal decision so the
@@ -1930,50 +2007,69 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     if (refusal !== undefined) {
       refused += 1;
       const view = deps.policy();
+      const decision: Record<string, unknown> = {
+        policy_decision: "deny",
+        policy_source: refusal.source,
+        policy_reason_code: refusal.code,
+        policy_reason_digest: digestText(refusal.message),
+        bundle_version: view.bundle.version,
+        bundle_mode: view.bundle.mode,
+      };
+      const decisionAttrs: Record<string, string> = {
+        ...attrs,
+        "oxagen.refused": "model_call",
+        "oxagen.provider": route.provider,
+        "oxagen.request_digest": digestBytes(body),
+        // The model the refusal was about, when the proxy could read one. A
+        // `model_not_permitted` frame that does not name the model leaves the
+        // operator guessing which entry to add.
+        ...(askedModel !== undefined
+          ? { "oxagen.model": askedModel.slice(0, 512) }
+          : {}),
+        ...(modelAmbiguous ? { "oxagen.model_ambiguous": "true" } : {}),
+        ...(record !== undefined
+          ? {
+              "oxagen.session_spend_usd_micros": String(spendFor(sessionKey)),
+            }
+          : {}),
+        ...("attrs" in refusal ? refusal.attrs : {}),
+      };
       // A write that fails takes the frame's seq back with it, for the reason
-      // `settle` gives. The caller answers this call 502.
-      const mark = recorder.markChain();
-      try {
-        deps.record([
-          recorder.sealCollectorEvent(
-            "policy_decision",
-            {
-              policy_decision: "deny",
-              policy_source: refusal.source,
-              policy_reason_code: refusal.code,
-              policy_reason_digest: digestText(refusal.message),
-              bundle_version: view.bundle.version,
-              bundle_mode: view.bundle.mode,
-            },
-            {
+      // `settle` gives, and the caller answers this call 502.
+      const land = (): void => {
+        const landing = landingChain(record, how);
+        recordOnChain(
+          landing.chain,
+          (chain) => [
+            chain.sealCollectorEvent("policy_decision", decision, {
               fidelity: "proxy",
-              attrs: {
-                ...attrs,
-                "oxagen.refused": "model_call",
-                "oxagen.provider": route.provider,
-                "oxagen.request_digest": digestBytes(body),
-                // The model the refusal was about, when the proxy could read
-                // one. A `model_not_permitted` frame that does not name the
-                // model leaves the operator guessing which entry to add.
-                ...(askedModel !== undefined
-                  ? { "oxagen.model": askedModel.slice(0, 512) }
-                  : {}),
-                ...(modelAmbiguous ? { "oxagen.model_ambiguous": "true" } : {}),
-                ...(record !== undefined
-                  ? {
-                      "oxagen.session_spend_usd_micros": String(
-                        spendFor(sessionKey),
-                      ),
-                    }
-                  : {}),
-                ...("attrs" in refusal ? refusal.attrs : {}),
-              },
-            },
-          ),
-        ]);
-      } catch (error) {
-        recorder.rollbackChain(mark);
-        throw error;
+              attrs: { ...decisionAttrs, ...landing.attrs },
+            }),
+          ],
+          deps.record,
+        );
+      };
+      if (record === undefined) land();
+      else {
+        // On the session's queue, for the reason `settle` gives. The refusal
+        // waits for its frame there, so a frame that cannot be written is
+        // still answered 502. A queue held past `refusalWaitMs` does not hold
+        // the call: the refusal is answered, and the frame lands, or is
+        // logged as lost, when the queue frees.
+        let answered = false;
+        const written = onSessionQueue(deps.exclusive, record, land);
+        void written.catch((error: unknown) => {
+          if (answered)
+            deps.log(
+              `model proxy: the frame of a refusal already answered was not written: ${error instanceof Error ? error.message : String(error)}`,
+            );
+        });
+        if (!(await landedWithin(written, refusalWaitMs))) {
+          answered = true;
+          deps.log(
+            `model proxy: answered a refused call before its frame could land: session ${record.harnessSessionId}'s queue was busy for ${refusalWaitMs} ms`,
+          );
+        }
       }
       // The refusal is the call's frame.
       attempt.done = true;

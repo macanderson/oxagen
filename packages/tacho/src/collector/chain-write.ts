@@ -48,11 +48,30 @@ export function recordOnChain(
   seal: (chain: SessionRecorder) => readonly TachoEvent[],
   record: RecordSink,
 ): readonly TachoEvent[] {
+  return recordOutcomeOnChain(
+    chain,
+    (sealing) => ({ events: seal(sealing) }),
+    record,
+  ).events;
+}
+
+/**
+ * `recordOnChain` for a seal that decides more than its frames, such as an
+ * operator command's acknowledgement. `seal` returns its events with what it
+ * decided, and that comes back once the events are written.
+ */
+export function recordOutcomeOnChain<
+  T extends { readonly events: readonly TachoEvent[] },
+>(
+  chain: SessionRecorder,
+  seal: (chain: SessionRecorder) => T,
+  record: RecordSink,
+): T {
   const mark = chain.markChain();
   try {
-    const events = seal(chain);
-    record(events, chain.takeBodies());
-    return events;
+    const outcome = seal(chain);
+    record(outcome.events, chain.takeBodies());
+    return outcome;
   } catch (error) {
     chain.rollbackChain(mark);
     throw error;

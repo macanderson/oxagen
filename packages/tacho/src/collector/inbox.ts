@@ -26,6 +26,12 @@ import {
   type DeliveredCommand,
   workOrderCommandPayloadSchema,
 } from "../wire";
+import {
+  onSessionQueue,
+  type RecordSink,
+  recordOutcomeOnChain,
+  type SessionExclusive,
+} from "./chain-write";
 import { applyInterjectionAnswer, interjectionAnswerOf } from "./interjection";
 import {
   isInternalSession,
@@ -61,6 +67,21 @@ export interface InboxDeps {
    * to keep it.
    */
   keepWorkOrder?: (order: PendingWorkOrder) => void;
+  /**
+   * Write sealed frames, and their bodies, to the WAL: the daemon's
+   * `record`. Given, each command's frames are written in the stretch that
+   * seals them, and `events` holds the frames that landed. Absent, nothing
+   * is written here: the caller writes `events`, and runs `restore` when
+   * that write fails.
+   */
+  record?: RecordSink;
+  /**
+   * Run a command's seals on its session's queue, where the session's hooks
+   * run (`chain-write.ts`). Absent, they run as the command is applied.
+   */
+  exclusive?: SessionExclusive;
+  /** Where a command whose frames could not be written is reported. */
+  log?: (line: string) => void;
 }
 
 /** The most command ids `HandledCommands` remembers; the oldest goes first. */
@@ -133,6 +154,10 @@ export class HandledCommands {
 }
 
 export interface InboxResult {
+  /**
+   * The frames the commands sealed. With `record` in the deps they are on
+   * the WAL already.
+   */
   events: TachoEvent[];
   acknowledgements: CommandAcknowledgement[];
   /**
@@ -152,6 +177,10 @@ export interface InboxResult {
    * answered from the ledger or found no question held, and the chain never
    * recorded the answer (#3941). A question something else settled or raised
    * since is left as it is.
+   *
+   * With `record` in the deps this does nothing. The inbox wrote each
+   * command's frames itself and put back each command whose frames did not
+   * land, and undoing the rest would unwind commands the WAL holds.
    */
   restore: () => void;
 }
@@ -475,12 +504,18 @@ function expiredAt(command: DeliveredCommand, now: number): boolean {
  * Apply every delivered command; returns the chained events, the acks and
  * the commands that took effect.
  *
- * The caller writes the returned events to the WAL only once this returns.
- * An event sealed before an await would sit outside the log while a hook or
- * a model call sealed and wrote the next seq on the same chain, and the WAL
- * would hold that chain out of order. So a host-level `refresh_bundle`
- * fetches first, before anything is sealed, and every seal after it runs in
- * one synchronous stretch.
+ * A host-level `refresh_bundle` fetches first, before anything is sealed.
+ * Then the commands apply in delivery order. With `record` in the deps, each
+ * command's frames are written in the stretch that seals them: a session's
+ * on that session's queue (`exclusive`), because a hook there can seal,
+ * await, and write later, and the daemon's own chain right where it seals,
+ * because that chain has no queue and every writer seals and writes it in
+ * one synchronous stretch. A frame sealed and written later, across an
+ * await, could lose its seq to a hook or a model call that sealed and wrote
+ * the same chain in between, and the WAL would refuse it.
+ *
+ * Without `record`, the caller writes the returned events once this returns,
+ * and runs `restore` when that write fails.
  */
 export async function applyCommands(
   commands: readonly DeliveredCommand[],
@@ -509,12 +544,13 @@ export async function applyCommands(
     )
   )
     await deps.refreshBundle();
-  const result = sealCommands(fresh, deps, now);
+  const result = await sealCommands(fresh, deps, now);
   for (const ack of result.acknowledgements) deps.handled?.remember(ack);
   for (const id of repeated) {
     const ack = deps.handled?.get(id);
     if (ack !== undefined) result.acknowledgements.push(ack);
   }
+  if (deps.record !== undefined) return { ...result, restore: () => {} };
   const restoreSessions = result.restore;
   return {
     ...result,
@@ -527,11 +563,116 @@ export async function applyCommands(
   };
 }
 
-function sealCommands(
+/**
+ * Seal on one chain, and with `record` in the deps write what was sealed in
+ * the same stretch (`recordOutcomeOnChain`). A write that fails takes that
+ * chain back and throws. Without `record` the caller writes the events.
+ */
+function sealOn<T extends { readonly events: readonly TachoEvent[] }>(
+  chain: SessionRecorder,
+  seal: () => T,
+  deps: InboxDeps,
+): T {
+  return deps.record === undefined
+    ? seal()
+    : recordOutcomeOnChain(chain, () => seal(), deps.record);
+}
+
+/**
+ * Leave a command whose frames could not be written unacknowledged, and so
+ * unremembered: the control plane delivers it again, and it applies then.
+ */
+function unwritten(
+  command: DeliveredCommand,
+  error: unknown,
+  deps: InboxDeps,
+): void {
+  deps.log?.(
+    `operator command ${command.id} (${command.command}) is not acknowledged: its frames could not be written (${error instanceof Error ? error.message : String(error)}). The control plane delivers it again.`,
+  );
+}
+
+/** What one command did on one session. */
+type SessionOutcome =
+  | { kind: "refused"; detail: string }
+  | {
+      kind: "applied";
+      record: SessionRecord;
+      events: readonly TachoEvent[];
+      status: CommandAcknowledgement["status"];
+      detail?: string;
+      /** What puts back the command's changes in memory. */
+      undo: Array<() => void>;
+    }
+  | { kind: "unwritten"; record: SessionRecord; error: unknown };
+
+/**
+ * Apply one command to one session on that session's queue, and write what
+ * it sealed in the same stretch. The record is looked up again there,
+ * because the session can end, or its record be replaced
+ * (`SessionRegistry.restore`), while the command waits. A write that fails
+ * takes back this session's chain alone and puts back what the command
+ * changed in memory.
+ */
+function onSession(
+  found: SessionRecord,
+  command: DeliveredCommand,
+  deps: InboxDeps,
+): Promise<SessionOutcome> {
+  return onSessionQueue(deps.exclusive, found, (): SessionOutcome => {
+    const record = deps.registry.byUuid(found.recorder.sessionUuid);
+    if (record === undefined)
+      return { kind: "refused", detail: "session not on this host" };
+    const refusal = sessionRefusal(record);
+    if (refusal !== undefined) return { kind: "refused", detail: refusal };
+    const undo: Array<() => void> = [];
+    try {
+      const result = sealOn(
+        record.recorder,
+        () => applyToSession(record, command, deps, undo),
+        deps,
+      );
+      return { kind: "applied", record, ...result, undo };
+    } catch (error) {
+      for (const step of [...undo].reverse()) step();
+      if (deps.record === undefined) throw error;
+      return { kind: "unwritten", record, error };
+    }
+  });
+}
+
+/**
+ * Seal one frame on the daemon's own chain, and write it in the same stretch.
+ * Undefined when the write failed: the chain is taken back, and the command
+ * is left for the control plane to deliver again.
+ */
+function onHost(
+  command: DeliveredCommand,
+  deps: InboxDeps,
+  seal: (host: SessionRecorder) => TachoEvent,
+): TachoEvent | undefined {
+  const host = deps.hostRecorder();
+  try {
+    return sealOn(
+      host,
+      () => {
+        const event = seal(host);
+        return { events: [event], event };
+      },
+      deps,
+    ).event;
+  } catch (error) {
+    if (deps.record === undefined) throw error;
+    unwritten(command, error, deps);
+    return undefined;
+  }
+}
+
+async function sealCommands(
   commands: readonly DeliveredCommand[],
   deps: InboxDeps,
   now: number,
-): InboxResult {
+): Promise<InboxResult> {
   const events: TachoEvent[] = [];
   const acknowledgements: CommandAcknowledgement[] = [];
   const tookEffect: DeliveredCommand[] = [];
@@ -548,8 +689,8 @@ function sealCommands(
       continue;
     }
     if (command.session_uuid !== null) {
-      const record = deps.registry.byUuid(command.session_uuid);
-      if (record === undefined) {
+      const found = deps.registry.byUuid(command.session_uuid);
+      if (found === undefined) {
         acknowledgements.push({
           command_id: command.id,
           status: "failed",
@@ -557,25 +698,29 @@ function sealCommands(
         });
         continue;
       }
-      const refusal = sessionRefusal(record);
-      if (refusal !== undefined) {
+      const outcome = await onSession(found, command, deps);
+      if (outcome.kind === "refused") {
         acknowledgements.push({
           command_id: command.id,
           status: "failed",
-          detail: refusal,
+          detail: outcome.detail,
         });
         continue;
       }
-      const result = applyToSession(record, command, deps, undo);
-      events.push(...result.events);
-      if (changedSession(result)) tookEffect.push(command);
-      const last = result.events[result.events.length - 1];
+      if (outcome.kind === "unwritten") {
+        unwritten(command, outcome.error, deps);
+        continue;
+      }
+      events.push(...outcome.events);
+      undo.push(...outcome.undo);
+      if (changedSession(outcome)) tookEffect.push(command);
+      const last = outcome.events[outcome.events.length - 1];
       acknowledgements.push({
         command_id: command.id,
-        status: result.status,
-        session_uuid: record.recorder.sessionUuid,
+        status: outcome.status,
+        session_uuid: outcome.record.recorder.sessionUuid,
         ...(last !== undefined ? { applied_at_seq: last.seq } : {}),
-        ...(result.detail !== undefined ? { detail: result.detail } : {}),
+        ...(outcome.detail !== undefined ? { detail: outcome.detail } : {}),
       });
       continue;
     }
@@ -583,7 +728,10 @@ function sealCommands(
     switch (command.command) {
       case "refresh_bundle": {
         // Fetched above, before anything in this batch was sealed.
-        const event = applied(deps.hostRecorder(), command, "bundle_refreshed");
+        const event = onHost(command, deps, (host) =>
+          applied(host, command, "bundle_refreshed"),
+        );
+        if (event === undefined) break;
         events.push(event);
         tookEffect.push(command);
         acknowledgements.push({
@@ -595,7 +743,10 @@ function sealCommands(
       }
       case "revoke": {
         deps.onHostSuspended(reasonOf(command));
-        const event = applied(deps.hostRecorder(), command, "host_suspended");
+        const event = onHost(command, deps, (host) =>
+          applied(host, command, "host_suspended"),
+        );
+        if (event === undefined) break;
         events.push(event);
         tookEffect.push(command);
         acknowledgements.push({
@@ -622,20 +773,41 @@ function sealCommands(
         const details: string[] = [];
         let changedAny = false;
         let reached = 0;
-        for (const record of deps.registry.live()) {
-          // Agent sessions only: the daemon's own chain is here too, and a
-          // host-level cancel must not make the daemon signal itself.
-          if (sessionRefusal(record) !== undefined) continue;
+        // Agent sessions only: the daemon's own chain is here too, and a
+        // host-level cancel must not make the daemon signal itself. Each
+        // session applies on its own queue, so the sessions wait on one
+        // another only through this command.
+        const outcomes = await Promise.all(
+          deps.registry
+            .live()
+            .filter((record) => sessionRefusal(record) === undefined)
+            .map((record) => onSession(record, command, deps)),
+        );
+        for (const outcome of outcomes) {
+          // A session that ended while the command waited on its queue.
+          if (outcome.kind === "refused") continue;
           reached += 1;
-          const result = applyToSession(record, command, deps, undo);
-          events.push(...result.events);
-          if (changedSession(result)) changedAny = true;
-          last = result.events[result.events.length - 1] ?? last;
-          if (result.status === "received" && status === "applied")
-            status = "received";
-          if (result.status === "failed") {
+          if (outcome.kind === "unwritten") {
+            // What landed on the other sessions stands, so the command is
+            // answered, and this session's part of it failed.
             status = "failed";
-            if (result.detail !== undefined) details.push(result.detail);
+            details.push(
+              `frames not written on session ${outcome.record.recorder.sessionUuid}`,
+            );
+            deps.log?.(
+              `operator command ${command.id} (${command.command}) did not apply to session ${outcome.record.harnessSessionId}: its frames could not be written (${outcome.error instanceof Error ? outcome.error.message : String(outcome.error)})`,
+            );
+            continue;
+          }
+          events.push(...outcome.events);
+          undo.push(...outcome.undo);
+          if (changedSession(outcome)) changedAny = true;
+          last = outcome.events[outcome.events.length - 1] ?? last;
+          if (outcome.status === "received" && status === "applied")
+            status = "received";
+          if (outcome.status === "failed") {
+            status = "failed";
+            if (outcome.detail !== undefined) details.push(outcome.detail);
           }
         }
         // A fan-out that reached no agent session changed nothing, so it is
@@ -651,18 +823,21 @@ function sealCommands(
           });
           break;
         }
-        const hostEvent = applied(
-          deps.hostRecorder(),
-          command,
-          `host_${command.command}`,
-        );
-        events.push(hostEvent);
+        // The sessions it changed stay changed whether or not the daemon's
+        // chain records it, and cutting their model calls is the rest of it.
         if (changedAny) tookEffect.push(command);
+        const hostEvent = onHost(command, deps, (host) =>
+          applied(host, command, `host_${command.command}`),
+        );
+        if (hostEvent === undefined) break;
+        events.push(hostEvent);
         acknowledgements.push({
           command_id: command.id,
           status,
           applied_at_seq: (last ?? hostEvent).seq,
-          ...(details.length > 0 ? { detail: details.join("; ") } : {}),
+          ...(details.length > 0
+            ? { detail: details.join("; ").slice(0, 512) }
+            : {}),
         });
         break;
       }

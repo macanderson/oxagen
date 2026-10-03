@@ -350,6 +350,26 @@ export function withRecordedHarnessFiles(
   };
 }
 
+/**
+ * The Claude Code and Codex homes host.json recorded at enroll, for the
+ * readers that take a directory: the model credential and base URL files sit
+ * beside the settings and hooks enroll wrote. A home the record does not name
+ * is left out, and the reader resolves it from its own environment.
+ */
+export function recordedHarnessHomes(
+  host: Partial<Pick<HostFile, "harness_files">> | undefined,
+): { claudeConfigDir?: string; codexHome?: string } {
+  const record = host?.harness_files;
+  return {
+    ...(record?.claude_settings !== undefined
+      ? { claudeConfigDir: dirname(record.claude_settings) }
+      : {}),
+    ...(record?.codex_hooks !== undefined
+      ? { codexHome: dirname(record.codex_hooks) }
+      : {}),
+  };
+}
+
 /** What `TACHO_MCP_ENDPOINT` asked for, and whether it can be honoured. */
 export interface McpEndpointOverrideRequest {
   /** The value to write into `host.json`, or undefined to pin nothing. */
