@@ -51,8 +51,8 @@ export function createPriceEntrySetHandler(
     // ── The write and the read must land on the same Postgres ─────────────
     //
     // `setNegotiatedPriceEntry` is a tenant write and runs on `withTenantDb`,
-    // which resolves the organisation's plane. `loadPriceBook` — the read the
-    // rollup prices every frame through — runs on `withSystemDb`, which is
+    // which resolves the organisation's plane. `loadPriceBookSlice`, the read
+    // the rollup prices every frame through, runs on `withSystemDb`, which is
     // shared-plane by construction. For an organisation bound to a dedicated
     // plane those are two different databases: the negotiated rate would be
     // accepted, stored, listed back to the customer, and then never applied to
@@ -76,7 +76,7 @@ export function createPriceEntrySetHandler(
       throw new Error(
         "set_price_entry cannot write a negotiated rate for an organisation on a dedicated " +
           "Postgres plane: cost.price_entries is written through withTenantDb but read by " +
-          "loadPriceBook through withSystemDb, so the rate would be stored where the cost " +
+          "loadPriceBookSlice through withSystemDb, so the rate would be stored where the cost " +
           "rollup never looks and every run would stay list-priced.",
       );
     }

@@ -195,8 +195,8 @@ describe("set_price_entry", () => {
     expect(h.setNegotiatedPriceEntry).not.toHaveBeenCalled();
   });
 
-  // The write is `withTenantDb` (the org's plane) and `loadPriceBook` is
-  // `withSystemDb` (always shared). On a dedicated plane those are different
+  // The write is `withTenantDb` (the org's plane) and `loadPriceBookSlice`
+  // is `withSystemDb` (always shared). On a dedicated plane those are different
   // databases, so the rate would be stored where the rollup never looks.
   it("refuses to write a rate the price book could never read", async () => {
     const h = harness();

@@ -44,6 +44,7 @@ import {
   TACHO_METERING_ATTR,
   TACHO_METERING_OBSERVED,
 } from "@oxagen/recorder";
+import { sessionBatches } from "./array-params";
 import { TACHO_EVENTS_TABLE } from "./tacho-events-ddl";
 import { chSelect } from "./tenant";
 
@@ -80,11 +81,25 @@ interface RawChainFacts {
 /**
  * Per chain of `sessionUuids`, where its turns open and where the proxy began
  * observing its model calls. A chain with no frames is absent.
+ *
+ * Each row is one chain's, so the read takes the list in batches of up to
+ * 1,000 chains ({@link sessionBatches}) and joins the answers. A run with
+ * thousands of subagent chains named more than one URL field holds, and
+ * ClickHouse refused the read (#5311). This read names no root, so it cannot
+ * read the family by its root instead, and the fence admits no subquery.
  */
 export async function selectTachoTurnFacts(args: {
   sessionUuids: readonly string[];
 }): Promise<TachoChainTurnFacts[]> {
-  if (args.sessionUuids.length === 0) return [];
+  const out: TachoChainTurnFacts[] = [];
+  for (const batch of sessionBatches(args.sessionUuids))
+    out.push(...(await selectTurnFactsBatch(batch)));
+  return out;
+}
+
+async function selectTurnFactsBatch(
+  sessionUuids: readonly string[],
+): Promise<TachoChainTurnFacts[]> {
   const res = await chSelect<RawChainFacts>({
     query: `
       SELECT
@@ -99,7 +114,7 @@ export async function selectTachoTurnFacts(args: {
       GROUP BY chain
     `,
     params: {
-      sessionUuids: [...args.sessionUuids],
+      sessionUuids: [...sessionUuids],
       meteringAttr: TACHO_METERING_ATTR,
       observed: TACHO_METERING_OBSERVED,
     },
@@ -272,16 +287,45 @@ const LETTER = `multiIf(
  * seq; one before the first falls in none. `observedFrom` is each chain's
  * first proxy-observed model call, from {@link selectTachoTurnFacts}.
  * `pairing` is the fold's rule 3 vocabulary (`UNKEYED_TOOL_PAIRING`).
+ *
+ * Every group is one chain's, so the read takes the chains in batches of up
+ * to 1,000 ({@link sessionBatches}) and joins the answers, as
+ * {@link selectTachoTurnFacts} does (#5311). Each batch carries only its own
+ * chains' `observedFrom`, which is a list of chains too.
  */
-export async function selectTachoTurnGroups(args: {
+export async function selectTachoTurnGroups(
+  args: TurnGroupsArgs,
+): Promise<TachoTurnGroup[]> {
+  if (args.sessionUuids.length === 0 || args.turnStarts.length === 0) return [];
+  const out: TachoTurnGroup[] = [];
+  for (const batch of sessionBatches(args.sessionUuids)) {
+    const inBatch = new Set(batch.map((s) => s.toLowerCase()));
+    out.push(
+      ...(await selectTurnGroupsBatch({
+        ...args,
+        sessionUuids: batch,
+        observedFrom: args.observedFrom.filter((o) =>
+          inBatch.has(o.sessionUuid.toLowerCase()),
+        ),
+      })),
+    );
+  }
+  return out;
+}
+
+/** What {@link selectTachoTurnGroups} reads. */
+export interface TurnGroupsArgs {
   rootSessionUuid: string;
   /** The run's chains, its own included. */
   sessionUuids: readonly string[];
   turnStarts: readonly number[];
   observedFrom: readonly { sessionUuid: string; seq: number }[];
   pairing: UnkeyedToolPairing;
-}): Promise<TachoTurnGroup[]> {
-  if (args.sessionUuids.length === 0 || args.turnStarts.length === 0) return [];
+}
+
+async function selectTurnGroupsBatch(
+  args: TurnGroupsArgs,
+): Promise<TachoTurnGroup[]> {
   const pattern = unkeyedToolPattern(args.pairing);
   const toolRequests = args.pairing.closes.map(([request]) => request);
   const toolReceipts = args.pairing.closes.map(([, receipt]) => receipt);

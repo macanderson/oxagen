@@ -7,19 +7,27 @@ import {
   GUARDED_MARKUP,
   GUARDED_PAGES,
   KEEP,
+  MARKUP_KEEP,
+  SEMANTIC_KEEP,
+  colorLiteral,
   customProperties,
   declarations,
   groupOf,
   headingsOf,
+  isButton,
   isDisplayFace,
   isLiteral,
   layers,
   literalDrift,
   markupDrift,
+  markupSemanticDrift,
   pageCss,
+  rawColorTokens,
   rules,
   shorthandFamily,
+  semanticDrift,
   shorthandSize,
+  spacingLiteral,
   stripComments,
   stripMarkupComments,
   suggestion,
@@ -234,12 +242,14 @@ describe("naming the token", () => {
     expect(sizes.get("--ox-radius-card")).toBeCloseTo(12.96);
   });
 
-  it("reads a type step written as its scale's base times a ratio", () => {
-    const scale = tokenSizes(
-      "--ox-a-base: 0.875rem;\n--ox-a-body: var(--ox-a-base);\n--ox-a-micro: calc(var(--ox-a-base) * 0.857143);",
+  it("reads a type step written as a multiple of its scale's base (oxageninc/brand#85)", () => {
+    const steps = tokenSizes(
+      "--ox-a-base: 0.875rem;\n--ox-a-body: var(--ox-a-base);\n--ox-a-micro: calc(var(--ox-a-base) * 0.857143);\n--ox-a-2xs: calc(var(--ox-a-base) * 0.714286);",
     );
-    expect(scale.get("--ox-a-body")).toBe(14);
-    expect(scale.get("--ox-a-micro")).toBeCloseTo(12, 4);
+    expect(steps.get("--ox-a-body")).toBe(14);
+    expect(steps.get("--ox-a-micro")).toBeCloseTo(12);
+    expect(steps.get("--ox-a-2xs")).toBeCloseTo(10);
+    expect(suggestion("font-size", "10px", "a", steps)).toBe("var(--ox-a-2xs) (10px)");
   });
 
   it("reads no step without the base it multiplies, and no alias of an unknown token", () => {
@@ -632,6 +642,148 @@ describe("the type rule on the customer sites", () => {
     for (const g of GUARDED.filter((x) => x.site)) {
       const sizes = (KEEP[g.path] ?? []).filter((entry) => entry.prop === "font-size");
       expect(sizes, g.path).toEqual([]);
+    }
+  });
+});
+
+describe("the semantic rule: reading a value", () => {
+  it.each([
+    ["#09090B", true],
+    ["1px solid #fff", true],
+    ["rgba(0, 0, 0, 0.4)", true],
+    ["oklch(0.7 0.16 25)", true],
+    ["white", true],
+    ["var(--panel)", false],
+    ["color-mix(in oklch, var(--gold) 60%, transparent)", false],
+    ["transparent", false],
+    ["currentColor", false],
+    ["var(--x, #fff)", false],
+    ["url(\"data:image/svg+xml;utf8,<svg stroke='%23FFFFFF'/>\")", false],
+    ["1px solid var(--line)", false],
+  ])("reads %s as a colour by hand: %s", (value, literal) => {
+    expect(colorLiteral(value)).toBe(literal);
+  });
+
+  it("names the raw colour tokens a value reads, and passes the raw scales", () => {
+    expect(rawColorTokens("var(--ox-ink)")).toEqual(["--ox-ink"]);
+    expect(rawColorTokens("0 0 0 1px var(--ox-gold), var(--ox-shadow-pop)")).toEqual([
+      "--ox-gold",
+      "--ox-shadow-pop",
+    ]);
+    expect(
+      rawColorTokens(
+        "calc(var(--ox-space) * 3) var(--ox-radius-lg) var(--ox-m-body) var(--ox-font-mono) var(--ox-wrap)",
+      ),
+    ).toEqual([]);
+  });
+
+  it.each([
+    ["12px 22px", true],
+    ["0.5rem", true],
+    ["-12px", true],
+    ["calc(100% - 40px)", true],
+    ["0", false],
+    ["1px", false],
+    ["auto", false],
+    ["2em 5%", false],
+    ["calc(var(--ox-space) * 3) calc(var(--ox-space) * 5.5)", false],
+  ])("reads the spacing %s as a length by hand: %s", (value, literal) => {
+    expect(spacingLiteral(value)).toBe(literal);
+  });
+
+  it("finds a button by its class", () => {
+    expect(isButton(".btn")).toBe(true);
+    expect(isButton(".btn-primary:hover")).toBe(true);
+    expect(isButton(".nav .btn .arr")).toBe(true);
+    expect(isButton(".btns, .button-row")).toBe(false);
+  });
+});
+
+describe("the semantic rule on the customer sites", () => {
+  const guarded = [
+    { path: "site.css", scale: "m" as const, site: "web" as const },
+    { path: "app.css", scale: "a" as const },
+  ];
+  const pages = [{ path: "page.html", scale: "m" as const, site: "web" as const }];
+
+  it("lists colours, raw tokens, spacing, and button colours by hand, and passes the mapping layer", () => {
+    const files = new Map([
+      [
+        "site.css",
+        [
+          ":root { --panel: var(--ox-panel); --button-primary-bg: var(--gold); --bad: #fff; }",
+          ".card { background: var(--panel); color: var(--ox-text); padding: 12px 22px; }",
+          ".btn-primary { background-color: var(--button-primary-bg); color: var(--ox-ink); border-color: transparent; }",
+          ".btn-ghost { color: var(--ink); margin: calc(var(--ox-space) * 2); }",
+          ".x { border: 1px solid rgba(0, 0, 0, 0.4); gap: 0; }",
+        ].join("\n"),
+      ],
+      ["app.css", ".x { color: #fff; padding: 13px; }\n"],
+      [
+        "page.html",
+        [
+          '<svg><style>:root{color:#09090B}</style></svg>',
+          "<style>",
+          ".a { border-radius: 6px; box-shadow: 0 1px 2px var(--ink); }",
+          "</style>",
+          '<p style="color:white">x</p>',
+        ].join("\n"),
+      ],
+    ]);
+    const { hits, stale } = semanticDrift(files, { guarded, pages, keep: {} });
+    expect(hits.map((h) => `${h.path}:${h.line} ${h.prop}`)).toEqual([
+      "site.css:1 --bad",
+      "site.css:2 color",
+      "site.css:2 padding",
+      "site.css:3 color",
+      "site.css:4 color",
+      "site.css:5 border",
+      "page.html:3 border-radius",
+      "page.html:3 box-shadow",
+      "page.html:5 color",
+    ]);
+    expect(stale).toEqual([]);
+  });
+
+  it("passes a value its file keeps, and lists a kept value the file no longer writes", () => {
+    const files = new Map([["site.css", ".x { padding: 13px; }\n"]]);
+    const keep = {
+      "site.css": [
+        { group: "spacing" as const, values: ["13px", "7px"], why: "a reason long enough" },
+      ],
+    };
+    expect(semanticDrift(files, { guarded, pages: [], keep })).toEqual({
+      hits: [],
+      stale: [{ path: "site.css", group: "spacing", value: "7px" }],
+    });
+  });
+
+  it("lists palette classes, colours in brackets, and spacing in brackets in the docs markup", () => {
+    const src =
+      'const a = "text-white/40 hover:bg-zinc-800 bg-[#C0453C] text-[var(--_ember-b,#D4AF37)] p-[13px] gap-[0.5em] text-[var(--ember-ink)] bg-primary p-4";';
+    const { hits } = markupSemanticDrift(new Map([["page.tsx", src]]), {
+      guarded: [{ path: "page.tsx", scale: "a" }],
+      keep: {},
+    });
+    expect(hits.map((h) => h.value)).toEqual([
+      "text-white/40",
+      "hover:bg-zinc-800",
+      "bg-[#C0453C]",
+      "text-[var(--_ember-b,#D4AF37)]",
+      "p-[13px]",
+    ]);
+  });
+
+  it("keeps every allowlisted value on a guarded file, with a reason", () => {
+    const sheets = new Set([...GUARDED.filter((g) => g.site), ...GUARDED_PAGES].map((g) => g.path));
+    for (const [path, entries] of Object.entries(SEMANTIC_KEEP)) {
+      expect(sheets.has(path), path).toBe(true);
+      for (const e of entries) expect(e.why.length, `${path} ${e.group}`).toBeGreaterThan(10);
+    }
+    const markup = new Set(GUARDED_MARKUP.map((g) => g.path));
+    for (const [path, entries] of Object.entries(MARKUP_KEEP)) {
+      expect(markup.has(path), path).toBe(true);
+      for (const e of entries) expect(e.why.length, path).toBeGreaterThan(10);
     }
   });
 });

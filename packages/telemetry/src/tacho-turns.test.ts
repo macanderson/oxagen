@@ -363,4 +363,62 @@ describe("selectTachoTurnGroups", () => {
       { seq: 9, toolUseId: null, subagentId: null },
     ]);
   });
+
+  // #5311: the whole list in one parameter passed ClickHouse's URL field
+  // limit for a run with thousands of subagent chains.
+  it("reads a long list in batches, each with only its own chains' observed calls", async () => {
+    const chains = manyChains(1_001);
+    chSelect
+      .mockResolvedValueOnce({ data: [group({ chain: chains[0] })] })
+      .mockResolvedValueOnce({ data: [group({ chain: chains[1_000] })] });
+    const groups = await selectTachoTurnGroups({
+      ...args,
+      sessionUuids: chains,
+      observedFrom: [
+        { sessionUuid: chains[5]!, seq: 3 },
+        { sessionUuid: chains[1_000]!, seq: 7 },
+      ],
+    });
+    const params = chSelect.mock.calls.map(([q]) => q.params ?? {});
+    expect(params.map((p) => (p["sessionUuids"] as string[]).length)).toEqual([
+      1_000, 1,
+    ]);
+    expect(params.map((p) => [p["observedChains"], p["observedSeqs"]])).toEqual([
+      [[chains[5]], [3]],
+      [[chains[1_000]], [7]],
+    ]);
+    expect(groups.map((g) => g.sessionUuid)).toEqual([chains[0], chains[1_000]]);
+  });
+});
+
+/** `n` distinct chain uuids. */
+function manyChains(n: number): string[] {
+  return Array.from(
+    { length: n },
+    (_, i) => `0b0e0000-0000-4000-8000-${i.toString(16).padStart(12, "0")}`,
+  );
+}
+
+describe("selectTachoTurnFacts with more chains than one parameter holds", () => {
+  // #5311: the whole list in one parameter passed ClickHouse's URL field
+  // limit for a run with thousands of subagent chains.
+  it("reads the list in batches of 1,000 chains and joins the answers", async () => {
+    const chains = manyChains(1_001);
+    const row = (chain: string) => ({
+      chain,
+      starts: ["0"],
+      index_starts: null,
+      first_seq: "0",
+      observed: "0",
+      first_observed: "0",
+    });
+    chSelect
+      .mockResolvedValueOnce({ data: [row(chains[0]!)] })
+      .mockResolvedValueOnce({ data: [row(chains[1_000]!)] });
+    const facts = await selectTachoTurnFacts({ sessionUuids: chains });
+    expect(
+      chSelect.mock.calls.map(([q]) => q.params?.["sessionUuids"]),
+    ).toEqual([chains.slice(0, 1_000), [chains[1_000]]]);
+    expect(facts.map((f) => f.sessionUuid)).toEqual([chains[0], chains[1_000]]);
+  });
 });

@@ -165,6 +165,15 @@ Mac set this on 2026-10-03 (#5283). Every value in the app reads a token: a Tail
 - In a stylesheet, a custom property definition may hold a raw value, because that is where a value becomes a token. A rule's radius, shadow, spacing, size, and motion read tokens.
 - `apps/app/src/test/arch/hardcoded-values.test.ts` (INV-37) fails on a new value. Values written before the rule wait in `apps/app/hardcoded-values-baseline.json`, which only shrinks. After you replace values, run `pnpm --filter @oxagen/app gen:hardcoded-values` and commit the smaller baseline.
 
+## Tokens on the customer sites
+
+Mac set this on 2026-10-03: every colour, corner, shadow, spacing value, and button on oxagen.sh and docs.oxagen.sh reads a semantic token (#5289).
+
+- Raw kit colours (`--ox-*`) appear only on the right of a custom property, the token-mapping layer. A rule reads the role, such as `var(--panel)` or `var(--success)`.
+- No hex, `rgb()`, `hsl()`, or `oklch()` colour and no named colour, except inside a data URI. Spacing reads `calc(var(--ox-space) * n)`. Corners and shadows read the kit's scale.
+- oxagen.sh's `.btn` classes read only the `--button-*` roles, which `assets/oxagen.css` maps with the names `packages/ui` uses. The read page maps its own.
+- The brand check's semantic pass holds both sites to this. `SEMANTIC_KEEP` and `MARKUP_KEEP` in `tools/scripts/lib/brand-literals.mjs` name each value kept by hand, with its reason: the print stylesheets and the story's chart hues.
+
 ## Runtime checks that matter
 
 - Register handlers before calling `invoke()`. A missing handler throws `CapabilityError` with code `no_handler`. Handler registration does not install IAM, billing, or entitlement gates. Bootstrap those at the surface entry point.

@@ -25,7 +25,7 @@ export function CopyCommand({ command }: { command: string }) {
       type="button"
       onClick={copy}
       aria-label={`Copy: ${command}`}
-      className="group inline-flex items-center gap-3 rounded-lg border border-border bg-card/60 px-4 py-2.5 font-mono text-sm text-foreground backdrop-blur transition-colors hover:border-[var(--_ember-b,#D4AF37)]/60"
+      className="group inline-flex items-center gap-3 rounded-lg border border-border bg-card/60 px-4 py-2.5 font-mono text-sm text-foreground backdrop-blur transition-colors hover:border-brand/60"
     >
       <span className="select-none text-[var(--ember-ink)]">$</span>
       <span>{command}</span>
@@ -40,7 +40,7 @@ export function CopyCommand({ command }: { command: string }) {
           >
             <path
               d="M20 6 9 17l-5-5"
-              stroke="#38d39f"
+              stroke="var(--success)"
               strokeWidth="2.2"
               strokeLinecap="round"
               strokeLinejoin="round"

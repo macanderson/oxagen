@@ -4,12 +4,14 @@ const mocks = vi.hoisted(() => ({
   runFindingsPass: vi.fn(),
   listWorkspacesForFindings: vi.fn(),
   createFunction: vi.fn(),
+  captureError: vi.fn(),
 }));
 
 vi.mock("@oxagen/billing", () => ({
   runFindingsPass: mocks.runFindingsPass,
   listWorkspacesForFindings: mocks.listWorkspacesForFindings,
 }));
+vi.mock("@oxagen/telemetry", () => ({ captureError: mocks.captureError }));
 vi.mock("../logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -94,6 +96,7 @@ describe("cost.findings", () => {
 describe("cost.findings-nightly", () => {
   beforeEach(() => {
     mocks.runFindingsPass.mockReset();
+    mocks.captureError.mockReset();
     mocks.listWorkspacesForFindings.mockReset().mockResolvedValue([WS_A, WS_B]);
   });
 
@@ -109,5 +112,36 @@ describe("cost.findings-nightly", () => {
       WS_B,
     ]);
     expect(out).toEqual({ workspaces: 2, passed: 1 });
+  });
+
+  // The sweep catches a failed pass, so Inngest never marks the run failed
+  // and the global failure capture never fires. A warn line alone left five
+  // nights of failed passes unseen (#5311).
+  it("captures each failed workspace pass as an error for that workspace", async () => {
+    const failure = new Error(
+      "There is no supertype for types UUID, String because some of them are String/FixedString/Enum and some of them are not.",
+    );
+    mocks.runFindingsPass
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce({ findings: 1 });
+    await registered.get("cost.findings-nightly")!.handler({ step });
+    expect(mocks.captureError).toHaveBeenCalledTimes(1);
+    expect(mocks.captureError).toHaveBeenCalledWith({
+      error: failure,
+      source: "inngest",
+      severity: "error",
+      orgId: WS_A.orgId,
+      workspaceId: WS_A.workspaceId,
+      context: "cost.findings-nightly: findings pass failed",
+    });
+  });
+
+  it("captures nothing on a night every pass finishes", async () => {
+    mocks.runFindingsPass.mockResolvedValue({ findings: 0 });
+    const out = await registered
+      .get("cost.findings-nightly")!
+      .handler({ step });
+    expect(out).toEqual({ workspaces: 2, passed: 2 });
+    expect(mocks.captureError).not.toHaveBeenCalled();
   });
 });

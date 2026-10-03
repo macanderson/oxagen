@@ -93,9 +93,9 @@ export function ContextWindow() {
             className="size-2.5 rounded-full transition-colors duration-500"
             style={{
               background: governed
-                ? "var(--success, #57A97C)"
-                : "var(--_ember-b, #D4AF37)",
-              boxShadow: `0 0 10px ${governed ? "rgba(123,201,138,.8)" : "rgba(239,197,63,.8)"}`,
+                ? "var(--success)"
+                : "var(--brand)",
+              boxShadow: `0 0 10px color-mix(in oklch, ${governed ? "var(--success)" : "var(--brand)"} 80%, transparent)`,
             }}
           />
           <span className="font-mono text-xs font-medium tracking-wide text-muted-foreground">
@@ -107,8 +107,8 @@ export function ContextWindow() {
             className="text-2xl font-semibold tabular-nums transition-colors duration-500"
             style={{
               color: governed
-                ? "var(--success, #57A97C)"
-                : "var(--_ember-b, #D4AF37)",
+                ? "var(--success)"
+                : "var(--brand)",
             }}
           >
             {used}%
@@ -124,8 +124,8 @@ export function ContextWindow() {
           style={{
             width: `${used}%`,
             background: governed
-              ? "var(--success, #57A97C)"
-              : "linear-gradient(90deg, var(--_ember-a,#8A7223), var(--_ember-b,#D4AF37), var(--_ember-c,#F1CE65))",
+              ? "var(--success)"
+              : "var(--brand-gradient)",
           }}
         />
       </div>
@@ -141,8 +141,8 @@ export function ContextWindow() {
           const bg = !lit
             ? "color-mix(in oklch, var(--foreground) 7%, transparent)"
             : governed
-              ? "var(--success, #57A97C)"
-              : "var(--_ember-b, #D4AF37)";
+              ? "var(--success)"
+              : "var(--brand)";
           return (
             <span
               key={i}
@@ -150,7 +150,7 @@ export function ContextWindow() {
               style={{
                 background: bg,
                 boxShadow: lit
-                  ? `0 0 8px ${governed ? "rgba(123,201,138,.55)" : "rgba(239,197,63,.6)"}`
+                  ? `0 0 8px color-mix(in oklch, ${governed ? "var(--success)" : "var(--brand)"} 60%, transparent)`
                   : "none",
                 transition: "background-color .55s ease, box-shadow .55s ease",
                 transitionDelay: `${(i % COLS) * 9}ms`,

@@ -478,7 +478,13 @@ function clientOver(api: FakeGitLabApi): GitLabClient {
         }
         if (JSON.stringify([...files]) === before)
           throw new GitLabApiError(400, "No changes to commit");
-        return { sha: api.addCommit(branch, files, message) };
+        // GitLab writes on the branch's tip at the moment of the write and
+        // answers the parent it used.
+        const tip = api.branches.get(branch);
+        return {
+          sha: api.addCommit(branch, files, message),
+          parentIds: tip ? [tip] : [],
+        };
       },
       async compare({ project, from, to }) {
         api.guard(project);

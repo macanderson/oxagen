@@ -16,6 +16,7 @@ import {
   type TachoEvent,
 } from "@oxagen/recorder";
 import type { ClickHouseSettings } from "@clickhouse/client";
+import { sessionBatches, sessionListFilter } from "./array-params";
 import { TACHO_EVENTS_TABLE, tachoEventsColumns } from "./tacho-events-ddl";
 import { chInsert, chSelect } from "./tenant";
 
@@ -343,6 +344,12 @@ export async function selectTachoSubagentEvents(args: {
    * range, so ClickHouse reads those chains alone. Without it the read filters
    * on `root_session_uuid`, which no index covers, and scans every chain in
    * the workspace: 855,000 rows for 500 frames on the benchmark table.
+   *
+   * A long list is split across array parameters so no URL field passes
+   * ClickHouse's limit (#5311). A list too long for the URL is not sent, and
+   * the read filters on the root as it does without a list. The read pages
+   * by `(session_uuid, seq)` under one limit, so it cannot read the list in
+   * batches, and the fence admits no subquery that would name the chains.
    */
   sessionUuids?: readonly string[];
   after: TachoChainPosition | null;
@@ -354,6 +361,10 @@ export async function selectTachoSubagentEvents(args: {
   throughSeq?: number;
   limit: number;
 }): Promise<TachoFrameRow[]> {
+  const listed =
+    args.sessionUuids === undefined
+      ? null
+      : sessionListFilter(args.sessionUuids);
   const res = await chSelect<RawTachoChainFrameRow>({
     query: `
       SELECT${FRAME_COLUMNS},
@@ -362,11 +373,7 @@ export async function selectTachoSubagentEvents(args: {
       FROM ${TACHO_EVENTS_TABLE} FINAL
       WHERE org_id = {orgId:UUID}
         AND workspace_id = {workspaceId:UUID}
-        ${
-          args.sessionUuids === undefined
-            ? ""
-            : "AND session_uuid IN {sessionUuids:Array(UUID)}"
-        }
+        ${listed === null ? "" : `AND ${listed.sql}`}
         AND root_session_uuid = {rootSessionUuid:UUID}
         AND session_uuid != {rootSessionUuid:UUID}
         ${
@@ -380,9 +387,7 @@ export async function selectTachoSubagentEvents(args: {
     `,
     params: {
       rootSessionUuid: args.rootSessionUuid,
-      ...(args.sessionUuids === undefined
-        ? {}
-        : { sessionUuids: args.sessionUuids }),
+      ...(listed === null ? {} : listed.params),
       ...(args.after === null
         ? {}
         : { afterSession: args.after.sessionUuid, afterSeq: args.after.seq }),
@@ -425,12 +430,26 @@ export interface TachoChainHead {
  * distinct count are unchanged.
  * The list puts `session_uuid` in the primary key's range. Tenant-filtered
  * by the ambient scope through chSelect.
+ *
+ * Each row is one chain's, so the read takes the list in batches of up to
+ * 1,000 chains ({@link sessionBatches}) and joins the answers, each batch
+ * in chain order. A run with thousands of subagent chains named more than
+ * one URL field holds, and ClickHouse refused the read (#5311).
  */
 export async function selectTachoChainHeads(args: {
   rootSessionUuid: string;
   sessionUuids: readonly string[];
 }): Promise<TachoChainHead[]> {
-  if (args.sessionUuids.length === 0) return [];
+  const out: TachoChainHead[] = [];
+  for (const batch of sessionBatches(args.sessionUuids))
+    out.push(...(await selectChainHeadsBatch(args.rootSessionUuid, batch)));
+  return out;
+}
+
+async function selectChainHeadsBatch(
+  rootSessionUuid: string,
+  sessionUuids: readonly string[],
+): Promise<TachoChainHead[]> {
   const res = await chSelect<{
     session_uuid: string;
     last_seq: string | number;
@@ -447,8 +466,8 @@ export async function selectTachoChainHeads(args: {
       ORDER BY session_uuid ASC
     `,
     params: {
-      rootSessionUuid: args.rootSessionUuid,
-      sessionUuids: [...args.sessionUuids],
+      rootSessionUuid,
+      sessionUuids: [...sessionUuids],
     },
   });
   return res.data.map((r) => ({

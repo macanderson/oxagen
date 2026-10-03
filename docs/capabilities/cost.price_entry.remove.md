@@ -70,7 +70,7 @@ Emits `billing.plan_changed` (SOC 2 CC6.3), whether or not a row was open: the r
 
 ## Tenancy
 
-The write runs through `withTenantDb` in the caller's scope and reads only the caller's rows; a list row (`org_id` null) is never read or updated. The handler refuses an organization on a dedicated Postgres plane before the store is called, because `loadPriceBook` and the rollup read the price book from the shared plane (ADR-042).
+The write runs through `withTenantDb` in the caller's scope and reads only the caller's rows; a list row (`org_id` null) is never read or updated. The handler refuses an organization on a dedicated Postgres plane before the store is called, because the handler and the rollup read the price book from the shared plane (ADR-042). Each of the handler's reads loads only the rows that price the named model at the instant it checks, never the whole book (#4202).
 
 ## Cancel one scheduled rate
 
