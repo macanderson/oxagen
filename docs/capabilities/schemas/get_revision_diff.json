@@ -1,0 +1,187 @@
+{
+  "name": "get_revision_diff",
+  "domain": "run",
+  "description": "Get one pull request revision's diff from Oxagen's own store, split into files, checked against the digest recorded when it was captured. A revision whose diff is not kept answers its file list and the reason.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "revisionId": {
+        "type": "string"
+      },
+      "paths": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "maxItems": 100
+      }
+    },
+    "required": [
+      "revisionId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "revisionId": {
+        "type": "string"
+      },
+      "pullRequestId": {
+        "type": "string"
+      },
+      "headSha": {
+        "type": "string"
+      },
+      "mergeBaseSha": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "diffStatus": {
+        "type": "string",
+        "enum": [
+          "stored",
+          "too_large",
+          "unreadable",
+          "unconfigured"
+        ]
+      },
+      "complete": {
+        "type": "boolean"
+      },
+      "limitations": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "diffSha256": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "previousPath": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "added",
+                "modified",
+                "removed",
+                "renamed",
+                "copied",
+                "changed"
+              ]
+            },
+            "additions": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "deletions": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "patch": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "binary": {
+              "type": "boolean"
+            },
+            "truncated": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "path",
+            "status",
+            "additions",
+            "deletions",
+            "patch",
+            "binary",
+            "truncated"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "truncated": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "revisionId",
+      "pullRequestId",
+      "headSha",
+      "mergeBaseSha",
+      "diffStatus",
+      "complete",
+      "limitations",
+      "diffSha256",
+      "files",
+      "truncated"
+    ],
+    "additionalProperties": false
+  }
+}
