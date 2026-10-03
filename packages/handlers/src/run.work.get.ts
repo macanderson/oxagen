@@ -26,6 +26,8 @@ import {
   WORK_SUBAGENT_CAP,
 } from "./lib/run-work";
 import { readRunCommandRefFrames } from "./lib/run-command-refs";
+import { unlinkedRepositoryResolver } from "./lib/run-pr-link-repository";
+import { githubConnectionFor } from "./lib/run-pull-request-backfill";
 import {
   readLedgerPrReceipts,
   readWorkPullRequests,
@@ -44,6 +46,13 @@ export type RunWorkDeps = RunReadDeps & {
   commandFrames: typeof readRunCommandRefFrames;
   /** The releases those frames created, with GitHub's state for each. */
   releases: typeof readWorkReleases;
+  /**
+   * The id of the workspace's own GitHub connection that reads an owner's
+   * repositories, or null when none does. A PR the run's record names in a
+   * repository the workspace does not link is read through it, as the
+   * ADR-192 backfill reads that PR's state.
+   */
+  githubConnection: typeof githubConnectionFor;
 };
 export function createRunWorkGetHandler(
   deps: RunWorkDeps,
@@ -105,6 +114,16 @@ export function createRunWorkGetHandler(
     // rather than listing it twice (ADR-292).
     const prLinks: { owner: string; name: string; number: number }[] = [];
     const linkWarnings = new Set<string>();
+    // A PR in a repository the workspace does not link lists from the forge
+    // store like any other, and its checks are read through the workspace's
+    // own GitHub connection for its owner. Before #5296 every such link was
+    // dropped, and the section said "No pull request" for a run that opened
+    // several.
+    const unlinkedRepository = unlinkedRepositoryResolver(
+      scope,
+      deps.githubConnection,
+      "get_run_work",
+    );
     for (const row of links.slice(0, WORK_PR_LINK_CAP)) {
       const link = prLinkOf(row);
       if (link === null) {
@@ -118,7 +137,12 @@ export function createRunWorkGetHandler(
     const [prs, releases] = await Promise.all([
       deps.pullRequests(
         scope,
-        { runId: input.runId, checkouts, links: prLinks },
+        {
+          runId: input.runId,
+          checkouts,
+          links: prLinks,
+          unlinked: unlinkedRepository,
+        },
         repositories,
       ),
       deps.releases(scope, frames, checkouts, repositories),
@@ -165,4 +189,5 @@ export const runWorkGetHandler = createRunWorkGetHandler({
   pullRequests: readWorkPullRequests,
   commandFrames: readRunCommandRefFrames,
   releases: readWorkReleases,
+  githubConnection: githubConnectionFor,
 });

@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   assemblyOf,
   ledgerContextWindows,
+  type RecordedWindow,
   tachoContextWindow,
   type TachoModelCallRow,
+  windowComposition,
 } from "./context-windows";
 import { NO_BODY } from "./frame-body";
 import type { AttemptEventReadRecord } from "./run-store";
@@ -194,5 +196,136 @@ describe("assemblyOf", () => {
   it("reads nothing from a manifest that leaves a member out", () => {
     expect(assemblyOf("3", { budget_tokens: 2000, spent_tokens: 10 })).toBeNull();
     expect(assemblyOf("3", null)).toBeNull();
+  });
+});
+
+/** A measured window whose blocks carry the tokens given, in block order. */
+function measured(
+  seq: number,
+  blocks: readonly [RecordedWindow["blocks"][number]["kind"], number, number][],
+  promptTokens: number | null = blocks.reduce((sum, [, , t]) => sum + t, 0),
+): RecordedWindow {
+  return {
+    seq: String(seq),
+    responseSeq: String(seq),
+    modelCallId: `req_${String(seq)}`,
+    provider: "anthropic",
+    model: "claude-opus-5",
+    promptTokens,
+    bytes: blocks.reduce((sum, [, , t]) => sum + t, 0),
+    blocks: blocks.map(([kind, items, tokens]) => ({
+      kind,
+      bytes: tokens,
+      items,
+      tokens: promptTokens === null ? null : tokens,
+    })),
+  };
+}
+
+describe("windowComposition", () => {
+  it("sums each block over every window, and the blocks sum to the prompt total", () => {
+    const composition = windowComposition([
+      measured(1, [
+        ["system", 1, 100],
+        ["tools", 4, 300],
+        ["conversation", 2, 50],
+      ]),
+      measured(2, [
+        ["system", 1, 100],
+        ["tools", 4, 300],
+        ["conversation", 5, 400],
+      ]),
+    ]);
+    expect(composition).toEqual({
+      requests: 2,
+      requestsWithoutTokens: 0,
+      promptTokens: 1250,
+      blocks: {
+        system: 200,
+        steering: null,
+        tools: 600,
+        context: null,
+        conversation: 450,
+      },
+      initialConversationTokens: 50,
+    });
+  });
+
+  it("leaves a block no window carried null, never zero (negative)", () => {
+    // A wrapped window has no context block (ADR-200 section 2).
+    const composition = windowComposition([
+      measured(1, [
+        ["system", 1, 10],
+        ["conversation", 1, 90],
+      ]),
+    ]);
+    expect(composition?.blocks.context).toBeNull();
+    expect(composition?.blocks.steering).toBeNull();
+    expect(composition?.blocks.tools).toBeNull();
+  });
+
+  it("takes the first window that declared tools as the first request, past a side call", () => {
+    const composition = windowComposition([
+      // A title call: a short prompt and no tools.
+      measured(1, [
+        ["system", 1, 20],
+        ["conversation", 1, 30],
+      ]),
+      measured(2, [
+        ["system", 1, 100],
+        ["tools", 4, 300],
+        ["conversation", 1, 70],
+      ]),
+      measured(3, [
+        ["system", 1, 100],
+        ["tools", 4, 300],
+        ["conversation", 3, 500],
+      ]),
+    ]);
+    expect(composition?.initialConversationTokens).toBe(70);
+    expect(composition?.blocks.conversation).toBe(600);
+  });
+
+  it("takes the first window when none declared tools", () => {
+    const composition = windowComposition([
+      measured(1, [["conversation", 1, 30]]),
+      measured(2, [
+        ["tools", 0, 0],
+        ["conversation", 2, 80],
+      ]),
+    ]);
+    expect(composition?.initialConversationTokens).toBe(30);
+  });
+
+  it("counts a window with no prompt total apart, and sums none of its blocks", () => {
+    const composition = windowComposition([
+      measured(
+        1,
+        [
+          ["tools", 4, 300],
+          ["conversation", 1, 70],
+        ],
+        null,
+      ),
+      measured(2, [
+        ["tools", 4, 300],
+        ["conversation", 3, 500],
+      ]),
+    ]);
+    expect(composition).toMatchObject({
+      requests: 1,
+      requestsWithoutTokens: 1,
+      promptTokens: 800,
+      // The first request reported no total, so its prompt is not known.
+      initialConversationTokens: null,
+    });
+    expect(composition?.blocks.conversation).toBe(500);
+  });
+
+  it("answers null when no window reported a prompt total (negative)", () => {
+    expect(windowComposition([])).toBeNull();
+    expect(
+      windowComposition([measured(1, [["conversation", 1, 30]], null)]),
+    ).toBeNull();
   });
 });

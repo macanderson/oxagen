@@ -607,6 +607,139 @@ describe("get_spend day series and top runs", () => {
   });
 });
 
+describe("get_spend prompt sources (#5295)", () => {
+  /** A priced run with the token sources the rollup stores beside its record. */
+  const measuredRun = (
+    sources: {
+      toolDefinitionTokens: number | null;
+      contextFrameTokens: number | null;
+      steeringTokens: number | null;
+    },
+    resultTokens: (number | null)[] = [],
+    over: Parameters<typeof pricedRun>[1] = {},
+  ): SpendRunRecord => {
+    const base = pricedRun(500n, over);
+    return Object.assign(
+      {
+        ...base,
+        breakdown: {
+          ...base.breakdown,
+          tools: resultTokens.map((tokens, i) => ({
+            name: `Tool${String(i)}`,
+            calls: 1,
+            resultTokens: tokens,
+            costMicros: null,
+          })),
+        },
+      },
+      sources,
+    );
+  };
+
+  it("sums an agent's runs' tool definitions, context frames, steering and tool results, and keeps a source no run measured null", async () => {
+    const h = harness({
+      daily: [daily({ groupKind: "agent", groupKey: "acme.core.cc" })],
+      runs: [
+        measuredRun(
+          {
+            toolDefinitionTokens: 12_000,
+            contextFrameTokens: null,
+            steeringTokens: 400,
+          },
+          [800, null],
+        ),
+        measuredRun(
+          {
+            toolDefinitionTokens: 6_000,
+            contextFrameTokens: null,
+            steeringTokens: null,
+          },
+          [1_200],
+        ),
+      ],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
+    expect(out.rows[0]?.tokenSources).toEqual({
+      toolDefinitionTokens: 18_000,
+      // No run measured context frames, so the sum is null, not zero.
+      contextFrameTokens: null,
+      steeringTokens: 400,
+      toolResultTokens: 2_000,
+    });
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers every source null for a row whose runs measured none (negative)", async () => {
+    const h = harness({
+      daily: [daily({ groupKind: "agent", groupKey: "acme.core.cc" })],
+      runs: [pricedRun(500n)],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
+    expect(out.rows[0]?.tokenSources).toEqual({
+      toolDefinitionTokens: null,
+      contextFrameTokens: null,
+      steeringTokens: null,
+      toolResultTokens: null,
+    });
+  });
+
+  it("carries no sources on a model row, which holds part of a run (negative)", async () => {
+    const h = harness({
+      daily: [
+        daily({
+          groupKind: "model",
+          groupKey: "claude-sonnet-5",
+          costMicros: 500n,
+          costBasis: "client_attested",
+        }),
+      ],
+      runs: [
+        measuredRun({
+          toolDefinitionTokens: 12_000,
+          contextFrameTokens: null,
+          steeringTokens: 400,
+        }),
+      ],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "model" }, ctx());
+    expect(out.rows[0]).not.toHaveProperty("tokenSources");
+  });
+
+  it("gives the assistant row its own runs' sources, and leaves them out of the operator's row", async () => {
+    const assistant: SpendRunRecord = {
+      ...measuredRun({
+        toolDefinitionTokens: 9_000,
+        contextFrameTokens: null,
+        steeringTokens: null,
+      }),
+      inApp: true,
+    };
+    const external = measuredRun({
+      toolDefinitionTokens: 1_000,
+      contextFrameTokens: null,
+      steeringTokens: null,
+    });
+    const h = harness({
+      daily: [
+        daily({
+          groupKind: "operator",
+          groupKey: OPERATOR,
+          runs: 2,
+          costMicros: 1000n,
+          costBasis: "client_attested",
+        }),
+      ],
+      runs: [assistant, external],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "operator" }, ctx());
+    expect(out.rows.map((r) => [r.key, r.tokenSources?.toolDefinitionTokens]))
+      .toEqual([
+        [OPERATOR, 1_000],
+        [ASSISTANT_SPEND_KEY, 9_000],
+      ]);
+  });
+});
+
 describe("get_spend reported spend", () => {
   it("sums the models the harness reported and leaves gateway and mixed models out", () => {
     const reported = pricedRun(300n);

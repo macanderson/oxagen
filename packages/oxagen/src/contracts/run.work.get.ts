@@ -83,6 +83,12 @@ const runPrClosingIssuesSchema = z
   .strict();
 export const runWorkPrSchema = z
   .object({
+    /**
+     * The repository the pull request is in. `connected` is false when the
+     * workspace does not link it: the run's record named the pull request,
+     * and the workspace's own GitHub connection for the owner read it
+     * (#5296).
+     */
     repository: runRepositorySchema,
     number: z.number().int(),
     url: z.string().url(),

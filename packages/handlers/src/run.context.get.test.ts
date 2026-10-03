@@ -334,6 +334,69 @@ describe("get_run_context — bounds and scope", () => {
     expect(out.complete).toBe(false);
   });
 
+  it("sums the composition over every window it read, the ones past the list's cap included (#5295)", async () => {
+    const rows = Array.from({ length: 501 }, (_, i) => llmCall(i));
+    const { handler } = harness({ rows });
+
+    const out = await handler({ runId: TACHO_ID }, ctx());
+
+    // Each call's total is 42,000 tokens, split 2,000 : 6,000 : 12,000 by
+    // bytes, which is 4,200, 12,600 and 25,200 tokens.
+    const perCall = 1_311 + 40_022 + 667;
+    expect(out.composition).toEqual({
+      requests: 501,
+      requestsWithoutTokens: 0,
+      promptTokens: perCall * 501,
+      blocks: {
+        system: 4_200 * 501,
+        steering: null,
+        tools: 12_600 * 501,
+        // A wrapped window has no context block, so it is null, not zero.
+        context: null,
+        conversation: 25_200 * 501,
+      },
+      initialConversationTokens: 25_200,
+      basis: "apportioned",
+    });
+  });
+
+  it("sums an in-app run's five blocks, its context block included (#5295)", async () => {
+    const { handler } = harness({
+      events: [
+        started(2, "prov-1-0"),
+        completed(3, "prov-1-0", 12_000),
+        started(4, "prov-1-1"),
+        completed(5, "prov-1-1", 24_000),
+      ],
+    });
+
+    const out = await handler({ runId: LEDGER_ID }, ctx());
+
+    expect(out.composition?.requests).toBe(2);
+    expect(out.composition?.promptTokens).toBe(36_000);
+    expect(out.composition?.blocks.context).not.toBeNull();
+    const blocks = out.composition?.blocks;
+    expect(
+      sum([
+        blocks?.system ?? null,
+        blocks?.steering ?? null,
+        blocks?.tools ?? null,
+        blocks?.context ?? null,
+        blocks?.conversation ?? null,
+      ]),
+    ).toBe(36_000);
+  });
+
+  it("answers no composition for a run that recorded no window (negative)", async () => {
+    const { handler } = harness({
+      rows: [llmCall(3, { attrs: {} })],
+    });
+
+    const out = await handler({ runId: TACHO_ID }, ctx());
+
+    expect(out.composition).toBeNull();
+  });
+
   it("does not find a run in another workspace", async () => {
     const { handler } = harness({ rows: [llmCall(1)] });
 

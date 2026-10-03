@@ -21,7 +21,8 @@
  * than a guess.
  *
  * `warnings` is a closed vocabulary of the limits the read hit:
- * `closing_issue_limit`, `closing_issues_not_read`, `pull_request_not_stored`,
+ * `closing_issue_limit`, `closing_issues_not_read`,
+ * `closing_issues_read_failed`, `pull_request_not_stored`,
  * `recorded_repository_not_connected`, `issue_frame_limit`,
  * `tracker_read_limit`, `pull_request_ref_skipped`, `chain_break` and
  * `ledger_event_limit`. `complete` is false when any of them cut the list.

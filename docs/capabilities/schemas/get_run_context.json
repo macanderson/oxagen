@@ -1,7 +1,7 @@
 {
   "name": "get_run_context",
   "domain": "run",
-  "description": "Read what one run's model requests carried: each request's window as system, steering, tools, context and conversation blocks with their bytes and their share of the prompt tokens the vendor reported, the model calls recorded with no window, and the steering assembler's budget, spend, and included and cut counts.",
+  "description": "Read what one run's model requests carried: each request's window as system, steering, tools, context and conversation blocks with their bytes and their share of the prompt tokens the vendor reported, each block's tokens summed over every window the run recorded, the model calls recorded with no window, and the steering assembler's budget, spend, and included and cut counts.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -233,6 +233,122 @@
       },
       "complete": {
         "type": "boolean"
+      },
+      "composition": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "requests": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "requestsWithoutTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "promptTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "blocks": {
+                "type": "object",
+                "properties": {
+                  "system": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "steering": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "tools": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "context": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "conversation": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "system",
+                  "steering",
+                  "tools",
+                  "context",
+                  "conversation"
+                ],
+                "additionalProperties": false
+              },
+              "initialConversationTokens": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "basis": {
+                "const": "apportioned"
+              }
+            },
+            "required": [
+              "requests",
+              "requestsWithoutTokens",
+              "promptTokens",
+              "blocks",
+              "initialConversationTokens",
+              "basis"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
       }
     },
     "required": [

@@ -18,6 +18,7 @@ import type { RunStore } from "@oxagen/run-ledger";
 import type { RunScope } from "../run.list";
 import { logger } from "../logger";
 import { buildCiSummary } from "./ci-status";
+import type { UnlinkedRepositoryResolver } from "./run-pr-link-repository";
 import { type DiffStore, diffStore } from "./forge-pull-requests/diff-store";
 import type { PullKey } from "./forge-pull-requests/read";
 import {
@@ -145,6 +146,12 @@ export interface WorkPrSources {
   receipts?: readonly RecordedRunPr[];
   /** The GitHub pull requests a wrapped run's link frames name. */
   links?: readonly { owner: string; name: string; number: number }[];
+  /**
+   * Finds the workspace's own GitHub connection for the owner of a
+   * repository it does not link (#5296), so that pull request's checks are
+   * read through it. Without it, such a pull request lists with no checks.
+   */
+  unlinked?: UnlinkedRepositoryResolver;
 }
 
 type PullRow = RunPullRequest["pull"];
@@ -327,11 +334,39 @@ async function diffOf(
   };
 }
 
+/**
+ * The repository a pull request's checks are read through: the linked one,
+ * or the workspace's own connection for an unlinked repository's owner.
+ * Null when neither reaches it, and the warning says why.
+ */
+async function checksRepositoryOf(
+  pull: PullRow,
+  connected: ConnectedRunRepository | null,
+  unlinked: UnlinkedRepositoryResolver | undefined,
+  warnings: Set<string>,
+): Promise<ConnectedRunRepository | null> {
+  if (connected !== null) return connected;
+  const found =
+    unlinked === undefined
+      ? "not_connected"
+      : await unlinked(repositoryOf(pull, null));
+  if (found === "lookup_failed") {
+    warnings.add("ci_read_failed");
+    return null;
+  }
+  if (found === "not_connected") {
+    warnings.add("repository_not_connected");
+    return null;
+  }
+  return found;
+}
+
 /** The pull request's checks at its stored head, read live from GitHub. */
 async function ciOf(
   scope: RunScope,
   pull: PullRow,
   connected: ConnectedRunRepository | null,
+  unlinked: UnlinkedRepositoryResolver | undefined,
   deps: WorkPrDeps,
   warnings: Set<string>,
 ): Promise<{ ci: RunWorkPr["ci"]; headMatches: boolean }> {
@@ -339,15 +374,13 @@ async function ciOf(
     warnings.add("gitlab_checks_not_read");
     return { ci: null, headMatches: true };
   }
-  if (connected === null) {
-    warnings.add("repository_not_connected");
-    return { ci: null, headMatches: true };
-  }
+  const reader = await checksRepositoryOf(pull, connected, unlinked, warnings);
+  if (reader === null) return { ci: null, headMatches: true };
   try {
-    const gh = await deps.client(scope, connected);
+    const gh = await deps.client(scope, reader);
     const value = await gh.listCiChecks({
-      owner: connected.owner,
-      repo: connected.name,
+      owner: reader.owner,
+      repo: reader.name,
       ref: pull.headSha,
     });
     const complete =
@@ -442,7 +475,7 @@ export async function readWorkPullRequests(
         checkoutMatches(checkout, pull),
       );
       const [checks, diff] = await Promise.all([
-        ciOf(scope, pull, connected, deps, warnings),
+        ciOf(scope, pull, connected, sources.unlinked, deps, warnings),
         revision === null
           ? Promise.resolve(null)
           : diffOf(pull, revision, store, fetches[index] === true, warnings),

@@ -16,6 +16,7 @@ import {
   readWorkPullRequests,
   type WorkPrDeps,
 } from "./run-work-prs";
+import type { UnlinkedRepositoryResolver } from "./run-pr-link-repository";
 
 const HEAD = "a".repeat(40);
 const OLD_HEAD = "c".repeat(40);
@@ -544,6 +545,118 @@ describe("run pull requests from the forge store", () => {
     );
     expect(out.pullRequests[0]?.current).toBe(false);
     expect(out.warnings).toContain("ci_head_mismatch");
+  });
+});
+
+// #5296: a run's pull request in a repository the workspace does not link
+// lists from the forge store like any other. Its checks are read through the
+// workspace's own GitHub connection for the repository's owner.
+describe("run pull requests in a repository the workspace does not link", () => {
+  const owners = {
+    host: "github.com",
+    owner: "acme",
+    name: "repo",
+    url: "https://github.com/acme/repo",
+    connected: false,
+    connectionId: "owner-connection",
+  };
+
+  it("reads the checks through the owner's connection", async () => {
+    const { deps, github } = setup();
+    const unlinked = vi
+      .fn<UnlinkedRepositoryResolver>()
+      .mockResolvedValue(owners);
+    const out = await readWorkPullRequests(
+      scope,
+      { runId: RUN, checkouts: [], unlinked },
+      [],
+      deps,
+    );
+    expect(unlinked).toHaveBeenCalledWith(
+      expect.objectContaining({
+        owner: "acme",
+        name: "repo",
+        url: "https://github.com/acme/repo",
+      }),
+    );
+    expect(deps.client).toHaveBeenCalledWith(scope, owners);
+    expect(github.listCiChecks).toHaveBeenCalledWith({
+      owner: "acme",
+      repo: "repo",
+      ref: HEAD,
+    });
+    expect(out.pullRequests[0]).toMatchObject({
+      repository: { owner: "acme", name: "repo", connected: false },
+      association: "recorded",
+      ci: { overall: "failing", complete: true },
+    });
+    expect(out.warnings).not.toContain("repository_not_connected");
+  });
+
+  it("lists the pull request with no checks when no connection reaches the owner (negative)", async () => {
+    const { deps } = setup();
+    const out = await readWorkPullRequests(
+      scope,
+      {
+        runId: RUN,
+        checkouts: [],
+        unlinked: vi
+          .fn<UnlinkedRepositoryResolver>()
+          .mockResolvedValue("not_connected"),
+      },
+      [],
+      deps,
+    );
+    expect(deps.client).not.toHaveBeenCalled();
+    expect(out.pullRequests[0]).toMatchObject({
+      ci: null,
+      repository: { connected: false },
+    });
+    expect(out.warnings).toContain("repository_not_connected");
+  });
+
+  it("names a failed connection lookup as a failed checks read (negative)", async () => {
+    const { deps } = setup();
+    const out = await readWorkPullRequests(
+      scope,
+      {
+        runId: RUN,
+        checkouts: [],
+        unlinked: vi
+          .fn<UnlinkedRepositoryResolver>()
+          .mockResolvedValue("lookup_failed"),
+      },
+      [],
+      deps,
+    );
+    expect(deps.client).not.toHaveBeenCalled();
+    expect(out.pullRequests[0]?.ci).toBeNull();
+    expect(out.warnings).toContain("ci_read_failed");
+    expect(out.warnings).not.toContain("repository_not_connected");
+  });
+
+  it("never asks a GitHub connection about a GitLab merge request (negative)", async () => {
+    const { deps } = setup({
+      pullRequests: [
+        entry({
+          pull: pull({
+            provider: "gitlab",
+            host: "gitlab.com",
+            repository: "acme/repo",
+            url: "https://gitlab.com/acme/repo/-/merge_requests/2",
+          }),
+        }),
+      ],
+    });
+    const unlinked = vi.fn<UnlinkedRepositoryResolver>();
+    const out = await readWorkPullRequests(
+      scope,
+      { runId: RUN, checkouts: [], unlinked },
+      [],
+      deps,
+    );
+    expect(unlinked).not.toHaveBeenCalled();
+    expect(out.warnings).toContain("gitlab_checks_not_read");
   });
 });
 

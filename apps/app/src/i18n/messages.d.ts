@@ -6994,6 +6994,7 @@ type Messages = {
         };
         allAdvanced: string;
         retries: string;
+        resultTokens: string;
       };
       families: {
         shell: string;
@@ -7030,10 +7031,13 @@ type Messages = {
         byCost: string;
         resultsTitle: string;
         standingTitle: string;
+        windowsTitle: string;
+        windowsSplitTitle: string;
         sources: {
           toolDefinitions: string;
           steering: string;
           contextFrames: string;
+          contextBlock: string;
         };
         noTools: string;
         toolsNotRead: string;
@@ -7041,6 +7045,7 @@ type Messages = {
         note: string;
         noteWithResults: string;
         noteWithStanding: string;
+        noteWithWindows: string;
         noteNotRolledUp: string;
       };
       calls: {
@@ -7106,7 +7111,11 @@ type Messages = {
           steering: string;
           system: string;
         };
+        tok: string;
+        tokShare: string;
         partsNote: string;
+        windowsNote: string;
+        sourcesNote: string;
         effectivePrice: string;
         effectiveValue: string;
         cacheWriteShare: string;

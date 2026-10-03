@@ -367,11 +367,13 @@ export interface DataSource {
      */
     findings(ctx: WsCtx, runId: string): Promise<Read<RunFindings>>;
     /**
-     * `get_run_context`, each model request's window block by block and the
-     * assembler's manifests (ADR-200, #3894). Read by the Governed actions
-     * tab when the open frame is a model request or a manifest, callers
-     * features/run/actions-tab.tsx, and by the Context tab,
-     * features/run/context-tab.tsx.
+     * `get_run_context`, each model request's window block by block, the
+     * run's composition summed over every window, and the assembler's
+     * manifests (ADR-200, #3894, #5295). Read by the Governed actions tab
+     * when the open frame is a model request or a manifest, callers
+     * features/run/actions-tab.tsx, by the Context tab,
+     * features/run/context-tab.tsx, and by the Cost tab for its prompt
+     * composition, features/run/cost.tsx.
      */
     context(ctx: WsCtx, runId: string): Promise<Read<RunContext>>;
   };
