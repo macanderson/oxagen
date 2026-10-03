@@ -188,7 +188,14 @@ export const AGENT_FILES: Record<
   workOrders: "work-orders",
 };
 
-/** Claude Code's config directory: `$CLAUDE_CONFIG_DIR`, else `~/.claude`. */
+/**
+ * Claude Code's config directory: `$CLAUDE_CONFIG_DIR`, else `~/.claude`.
+ * An empty value is kept rather than read as unset. Claude Code 2.1.288
+ * resolves this directory as `CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude")`,
+ * so it too reads `settings.json` from the working directory then. Falling
+ * back to `~/.claude` here would put the hooks in a file Claude Code never
+ * reads.
+ */
 export function claudeConfigDirFor(
   env: Record<string, string | undefined>,
   home: string,
@@ -200,7 +207,8 @@ export function claudeConfigDirFor(
  * Claude Code's user config file: `.claude.json` in `$CLAUDE_CONFIG_DIR`,
  * else `~/.claude.json`. Not inside `~/.claude` when the variable is unset.
  * Read from Claude Code 2.1.288, which joins `CLAUDE_CONFIG_DIR || homedir()`
- * with `.claude.json` for its production login. Claude Code still prefers a
+ * with `.claude.json` for its production login, so an empty value means the
+ * home directory here, unlike `claudeConfigDirFor`. Claude Code still prefers a
  * legacy `.config.json` inside its config directory when one exists; Oxagen
  * does not write that file.
  */
@@ -208,7 +216,8 @@ export function claudeUserConfigFor(
   env: Record<string, string | undefined>,
   home: string,
 ): string {
-  return join(env["CLAUDE_CONFIG_DIR"] ?? home, ".claude.json");
+  const dir = env["CLAUDE_CONFIG_DIR"];
+  return join(dir === undefined || dir === "" ? home : dir, ".claude.json");
 }
 
 /** Codex's home directory: `$CODEX_HOME`, else `~/.codex`. */

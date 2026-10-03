@@ -327,4 +327,30 @@ describe("issuing a run token", () => {
       ),
     ]);
   });
+
+  it("puts the daemon's chain back when the frame cannot be written, so the next frame takes its seq", () => {
+    holdAnthropic();
+    const hostRecorder = recorder();
+    const before = { ...hostRecorder.chainCursor };
+    let full = true;
+    const shared = deps({
+      hostRecorder: () => hostRecorder,
+      record: (events) => {
+        if (full) throw new Error("ENOSPC: no space left on device");
+        recorded.push(...events);
+      },
+    });
+    expect(issueRunToken({ harness: "claude-code" }, shared).status).toBe(200);
+    // Left one seq ahead, the next frame on the daemon's chain sealed past an
+    // event the WAL never held, and the chain was refused from that gap on.
+    expect(hostRecorder.chainCursor).toEqual(before);
+    full = false;
+    expect(issueRunToken({ harness: "claude-code" }, shared).status).toBe(200);
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({
+      kind: "token_issued",
+      seq: before.seq,
+      prev_hash: before.prevHash,
+    });
+  });
 });

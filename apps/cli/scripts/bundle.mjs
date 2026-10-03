@@ -11,7 +11,7 @@
  * `npm i -g @oxagen/cli` fails in a clean container.
  *
  * Container installs (bench harnesses, clean CI) use this bundle as the
- * portable artifact: one `.mjs` file + Node 22, nothing else.
+ * portable artifact: one `.mjs` file + Node 22.15 or later, nothing else.
  *
  * Output: apps/cli/dist-standalone/oxagen.mjs  (runnable: `node oxagen.mjs "…"`)
  */
@@ -67,7 +67,11 @@ await build({
   bundle: true,
   platform: "node",
   format: "esm",
-  target: "node20",
+  // The oldest Node the bundle runs on. The recorder's daemon, which
+  // `oxagen daemon` runs, imports zstd from `node:zlib` statically, and Node
+  // added it in 22.15 (and 23.8). The manifest's `engines` in
+  // prepare-standalone-publish.mjs states the same floor.
+  target: "node22.15",
   // A real `require`, `__filename`, and `__dirname` for bundled CJS code
   // reached under ESM: any bundled dep with a runtime (non-static) require()
   // esbuild can't hoist to a static import in ESM output, and Node-flavored

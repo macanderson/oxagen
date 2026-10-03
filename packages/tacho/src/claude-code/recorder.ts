@@ -157,11 +157,33 @@ export const PROMPT_DUPLICATE_OF_ATTR = "oxagen.prompt_duplicate_of";
 export const AFTER_STOP_ATTR = "oxagen.after_stop";
 
 /**
- * The attr on an OTel record that names a subagent type more than one
- * subagent of this session could have been, sealed on the session's own
- * chain rather than guessed onto one of them.
+ * The attr on an OTel record, or on a subagent stop that names no subagent,
+ * whose subagent type more than one subagent of this session could have
+ * been. It is sealed on the session's own chain rather than guessed onto one
+ * of them.
  */
 export const SUBAGENT_TYPE_AMBIGUOUS_ATTR = "oxagen.subagent_type_ambiguous";
+
+/**
+ * The kinds of hook frame only an agent at work in a turn produces: a tool
+ * call's request, refusal, permission check or result. A message or a
+ * notification is not among them, because one can reach the daemon after the
+ * turn's `Stop`. See `SessionRecorder.continuesStoppedTurn`.
+ */
+const WORKING_KINDS: ReadonlySet<TachoKind> = new Set<TachoKind>([
+  "tool_requested",
+  "token_denied",
+  "approval_request",
+  "harness_permission",
+  "tool_call",
+]);
+
+/** A text member of a hook payload, for one `normalizeHook` does not keep. */
+function payloadText(raw: unknown, key: string): string | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const value = (raw as Record<string, unknown>)[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
 
 /** Where a backfilled frame's git facts came from: the transcript's own lines. */
 const GIT_BASIS_ATTR = "oxagen.git_basis";
@@ -251,6 +273,8 @@ export interface RecorderState {
   promptId?: string;
   /** The latest turn's `prompt_digest`; see `SessionRecorder.promptDigest`. */
   promptDigest?: string;
+  /** When a `Stop` closed the latest turn; see `continuesStoppedTurn`. */
+  turnStoppedAt?: string;
   started: boolean;
   stopped: boolean;
   context: Context;
@@ -315,6 +339,7 @@ export interface ChainMark {
   turnOpen: boolean;
   promptId: string | undefined;
   promptDigest: string | undefined;
+  turnStoppedAt: string | undefined;
   started: boolean;
   stopped: boolean;
   /** The open turn's reply at mark time; see `RecorderState.turnReply`. */
@@ -492,6 +517,14 @@ export class SessionRecorder {
    */
   private promptDigest: string | undefined;
   /**
+   * When a `Stop` hook closed the latest turn, until another turn starts or
+   * the session stops. The daemon seals a `Stop` before it decides its
+   * answer, and a `decision: "block"` keeps the agent working in the same
+   * turn under the same `prompt_id`, so a later hook can open the turn again
+   * (`continuesStoppedTurn`).
+   */
+  private turnStoppedAt: string | undefined;
+  /**
    * The agent's last message in the open turn, as a harness that reports it
    * separately from the turn's end handed it over (Cursor's
    * `afterAgentResponse`). The turn's `turn_end` carries it when the stop
@@ -620,6 +653,7 @@ export class SessionRecorder {
     this.turnOpen = state.turnOpen;
     this.promptId = state.promptId;
     this.promptDigest = state.promptDigest;
+    this.turnStoppedAt = state.turnStoppedAt;
     this.started = state.started;
     this.stopped = state.stopped;
     // Clamped on restore too, not only on the way in: a state file a
@@ -716,6 +750,9 @@ export class SessionRecorder {
       ...(this.promptDigest !== undefined
         ? { promptDigest: this.promptDigest }
         : {}),
+      ...(this.turnStoppedAt !== undefined
+        ? { turnStoppedAt: this.turnStoppedAt }
+        : {}),
       started: this.started,
       stopped: this.stopped,
       context: { ...this.context },
@@ -767,6 +804,7 @@ export class SessionRecorder {
       turnOpen: this.turnOpen,
       promptId: this.promptId,
       promptDigest: this.promptDigest,
+      turnStoppedAt: this.turnStoppedAt,
       started: this.started,
       stopped: this.stopped,
       turnReply: this.turnReply,
@@ -827,6 +865,7 @@ export class SessionRecorder {
     this.turnOpen = mark.turnOpen;
     this.promptId = mark.promptId;
     this.promptDigest = mark.promptDigest;
+    this.turnStoppedAt = mark.turnStoppedAt;
     this.turnReply = mark.turnReply;
     this.started = mark.started;
     this.stopped = mark.stopped;
@@ -948,7 +987,10 @@ export class SessionRecorder {
     if (kind === "agent_start") this.started = true;
     // `stopped` is set once the stop has sealed, so the stop itself is not
     // stamped as a frame that arrived after one.
-    if (kind === "agent_stop") this.turnOpen = false;
+    if (kind === "agent_stop") {
+      this.turnOpen = false;
+      this.turnStoppedAt = undefined;
+    }
     // A proxy frame is the first sighting of its call by construction (it
     // is sealed as the response ends); noting it is what lets the transcript
     // and OTel sightings that follow be stamped as its duplicates.
@@ -1603,9 +1645,20 @@ export class SessionRecorder {
     }).map((draft) => (rewrite ? rewrite(draft) : draft));
     const first = drafts[0];
     const ts = at ?? this.now();
-    if (first?.subagent && !this.options.parent) {
-      const { subagent_id: subagentId, subagent_type: subagentType } =
-        first.subagent;
+    const stopping = this.stoppingSubagent(first, raw);
+    if (stopping === "ambiguous" && first !== undefined)
+      drafts[0] = {
+        ...first,
+        attrs: { ...first.attrs, [SUBAGENT_TYPE_AMBIGUOUS_ATTR]: "1" },
+      };
+    const subagent =
+      first?.subagent ?? (stopping === "ambiguous" ? undefined : stopping);
+    if (
+      subagent !== undefined &&
+      first !== undefined &&
+      !this.options.parent
+    ) {
+      const { subagent_id: subagentId, subagent_type: subagentType } = subagent;
       const spawnToolUseId =
         typeof first.body["tool_use_id"] === "string"
           ? first.body["tool_use_id"]
@@ -1656,11 +1709,22 @@ export class SessionRecorder {
       }
       out.push(...child.ingestHook(raw, env, ts, rewrite));
       if (first.hook_event_name === "SubagentStop") {
-        out.push(...child.finalize("completed", ts));
+        // A stop that says the subagent failed or was stopped (Cursor's
+        // `status`) ends its chain `aborted`. A backfill keeps `completed`:
+        // its status is the spawning call's result, and a second pass under
+        // the same normalizer version must seal the same frames (ADR-161).
+        const status = first.body["tool_status"];
+        const outcome =
+          this.options.backfill === undefined &&
+          (status === "error" || status === "cancelled")
+            ? "aborted"
+            : "completed";
+        out.push(...child.finalize(outcome, ts));
         const link = this.children.get(subagentId);
         if (link) link.open = false;
-        // `ok` unless the draft names a status: a live `SubagentStop` always
-        // reads `ok`, and a backfill names the status its tool result had.
+        // `ok` unless the draft names a status: Claude Code's live
+        // `SubagentStop` reads `ok`, Cursor's names how the subagent ended,
+        // and a backfill names the status its tool result had.
         out.push(
           this.seal(
             "subagent_stop",
@@ -1684,11 +1748,81 @@ export class SessionRecorder {
       }
       return out;
     }
+    if (this.continuesStoppedTurn(drafts, ts)) this.turnOpen = true;
     const out: TachoEvent[] = [];
     for (const draft of drafts) {
       out.push(...this.sealHookDraft(draft, env, ts));
     }
     return out;
+  }
+
+  /**
+   * The open subagent a `SubagentStop` that names no subagent ends, or
+   * "ambiguous" when more than one could be it. Cursor's `subagentStop`
+   * carries the subagent's type and no id, so it ends the one open subagent
+   * of that type. Sealed on this chain instead, the subagent stayed open
+   * until the session ended and was sealed `aborted` there. A stop that two
+   * open subagents could end stays on this chain, and both close when the
+   * session ends.
+   */
+  private stoppingSubagent(
+    first: HookDraft | undefined,
+    raw: unknown,
+  ): { subagent_id: string; subagent_type: string } | "ambiguous" | undefined {
+    if (
+      this.options.parent !== undefined ||
+      first === undefined ||
+      first.subagent !== undefined ||
+      first.hook_event_name !== "SubagentStop"
+    )
+      return undefined;
+    const type = payloadText(raw, "agent_type");
+    if (type === undefined) return undefined;
+    let found: string | undefined;
+    for (const [subagentId, link] of this.children) {
+      if (link.type !== type || !link.open) continue;
+      if (found !== undefined) return "ambiguous";
+      found = subagentId;
+    }
+    return found === undefined
+      ? undefined
+      : { subagent_id: found, subagent_type: type };
+  }
+
+  /**
+   * Whether this hook shows the agent still at work in the turn a `Stop`
+   * closed. The daemon seals a `Stop` before it decides its answer, and a
+   * `decision: "block"` (a queued steer, a resume's continuation, the
+   * reflection ask) sends the agent on in the same turn under the same
+   * `prompt_id`. Left closed, every frame after it sealed with no turn, and
+   * the trace dropped the work. All three must hold, so a stray hook cannot
+   * open a turn that really ended:
+   *
+   * - The hook names the closed turn's prompt.
+   * - It is one only a working agent sends: a tool call's frame, a second
+   *   `Stop` that says a stop hook already sent the agent on, or a
+   *   `StopFailure` that ends the work. A message or a notification can
+   *   reach the daemon after the `Stop` and does not count.
+   * - It happened at or after the `Stop`. A spool replay carries the time
+   *   the hook first arrived, which is earlier.
+   */
+  private continuesStoppedTurn(
+    drafts: readonly HookDraft[],
+    ts: string,
+  ): boolean {
+    const stoppedAt = this.turnStoppedAt;
+    const promptId = this.promptId;
+    if (this.turnOpen || stoppedAt === undefined || promptId === undefined)
+      return false;
+    if (Date.parse(ts) < Date.parse(stoppedAt)) return false;
+    return drafts.some(
+      (draft) =>
+        draft.turn?.prompt_id === promptId &&
+        (WORKING_KINDS.has(draft.kind) ||
+          (draft.kind === "turn_end" &&
+            (draft.body["stop_hook_active"] === true ||
+              draft.hook_event_name === "StopFailure"))),
+    );
   }
 
   /**
@@ -1721,8 +1855,12 @@ export class SessionRecorder {
       body = { ...this.sessionTotals(), ...body };
     }
     if (draft.kind === "agent_start") {
-      if (this.started) {
-        // A second SessionStart on a live chain is a resume or fork.
+      const source = body["session_start_source"];
+      // A second SessionStart on a live chain is a resume or fork. Claude
+      // Code also sends one after every compaction, on the same session and
+      // often in the middle of a turn that goes on. That is no resume, and a
+      // trace that read it as one ended the turn there.
+      if (this.started && source !== "compact") {
         body = {
           ...body,
           resume_of_session_id: this.harnessSessionId,
@@ -1736,7 +1874,6 @@ export class SessionRecorder {
       // A compaction swaps the conversation for a summary, and a `/clear`
       // empties it, so the text Oxagen's hooks handed the agent is gone from
       // every call after this start (#5339).
-      const source = body["session_start_source"];
       if (source === "compact" || source === "clear")
         this.systemContext.clearInjectedContext(ts);
     }
@@ -1759,6 +1896,7 @@ export class SessionRecorder {
       this.turnReply = undefined;
       this.turnSeq += 1;
       this.turnOpen = true;
+      this.turnStoppedAt = undefined;
       this.promptId = draft.turn?.prompt_id;
       this.promptDigest =
         typeof body["prompt_digest"] === "string"
@@ -1815,6 +1953,10 @@ export class SessionRecorder {
         this.options.parent?.subagentId,
       );
     if (draft.kind === "turn_end") {
+      // Only a `Stop` that closes an open turn can be continued. A replayed
+      // stop on a closed turn leaves the record of the last one alone.
+      if (this.turnOpen)
+        this.turnStoppedAt = draft.hook_event_name === "Stop" ? ts : undefined;
       this.turnOpen = false;
       this.turnReply = undefined;
     }
@@ -1822,6 +1964,7 @@ export class SessionRecorder {
       this.stopped = true;
       this.turnOpen = false;
       this.turnReply = undefined;
+      this.turnStoppedAt = undefined;
     }
     out.push(event);
     return out;
@@ -2297,6 +2440,8 @@ export class SessionRecorder {
       },
     );
     this.turnOpen = false;
+    // A turn the person stopped is not continued by a hook still in flight.
+    this.turnStoppedAt = undefined;
     return [event];
   }
 
@@ -2398,6 +2543,7 @@ export class SessionRecorder {
     }
     if (this.started && !this.stopped) {
       this.turnOpen = false;
+      this.turnStoppedAt = undefined;
       out.push(
         this.seal(
           "agent_stop",

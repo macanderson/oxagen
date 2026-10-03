@@ -121,6 +121,8 @@ function runner(
     fetch?: FetchLike;
     recorded?: boolean;
     genesis?: string | undefined;
+    /** What the daemon answers the start hook. */
+    startAnswer?: Record<string, unknown>;
   } = {},
 ) {
   const signer = bundleSigner();
@@ -151,12 +153,16 @@ function runner(
     handle: vi.fn(async () => undefined),
     release: vi.fn(),
   };
-  const hook = vi.fn(async (envelope: HookEnvelope) => {
-    hooks.push(envelope);
-    const id = (envelope.payload as { session_id: string }).session_id;
-    seenLaunched.push(contained.launched(id));
-    return {};
-  });
+  const hook = vi.fn(
+    async (envelope: HookEnvelope): Promise<Record<string, unknown>> => {
+      hooks.push(envelope);
+      const id = (envelope.payload as { session_id: string }).session_id;
+      seenLaunched.push(contained.launched(id));
+      return eventName(envelope) === "SessionStart"
+        ? (overrides.startAnswer ?? {})
+        : {};
+    },
+  );
   const contained = createContainedRunner({
     host: () => host,
     registry,
@@ -356,8 +362,11 @@ describe("a contained run's lifecycle", () => {
     // lets a mandate that requires containment admit it.
     expect(hooks.map(eventName)).toEqual(["SessionStart", "SessionEnd"]);
     expect(seenLaunched[0]).toBe(true);
+    // The env names, as a host path, where the harness inside the container
+    // reads its skills, so the daemon places them there.
     expect(hooks[0]).toEqual({
       harness: "claude-code",
+      env: { CLAUDE_CONFIG_DIR: "/work/repo/.oxagen-contained/home/.claude" },
       payload: {
         hook_event_name: "SessionStart",
         session_id: "contained-0123",
@@ -368,28 +377,77 @@ describe("a contained run's lifecycle", () => {
     expect(hooks[1]?.payload).toMatchObject({
       hook_event_name: "SessionEnd",
       session_id: "contained-0123",
+      reason: "other",
       exit_code: 3,
+    });
+    expect(hooks[1]?.env).toEqual({
+      CLAUDE_CONFIG_DIR: "/work/repo/.oxagen-contained/home/.claude",
     });
     expect(contained.launched("contained-0123")).toBe(false);
   });
 
-  it("clears the launched mark when the launch throws", async () => {
+  it("ends the session and clears the launched mark when the launch throws after the start", async () => {
     mocks.launch.mockImplementation(launcherWalks("prepare"));
-    const { contained, seenLaunched } = runner();
+    const { contained, hooks, seenLaunched } = runner();
     await expect(contained.run(REQUEST, vi.fn())).rejects.toThrow(
       "prepare stopped here",
     );
-    expect(seenLaunched).toEqual([true]);
+    // The end goes out while the session is still marked launched, as a
+    // normal end does. Left open, the session would be swept as crashed.
+    expect(hooks.map(eventName)).toEqual(["SessionStart", "SessionEnd"]);
+    expect(hooks[1]).toEqual({
+      harness: "claude-code",
+      env: { CLAUDE_CONFIG_DIR: "/work/repo/.oxagen-contained/home/.claude" },
+      payload: {
+        hook_event_name: "SessionEnd",
+        session_id: "contained-0123",
+        cwd: "/work/repo",
+        reason: "contained_launch_failed",
+      },
+    });
+    expect(seenLaunched).toEqual([true, true]);
+    expect(contained.launched("contained-0123")).toBe(false);
+  });
+
+  it("ends the session when the bridge fails to start", async () => {
+    mocks.launch.mockImplementation(launcherWalks());
+    mocks.bridge.mockRejectedValue(new Error("EADDRINUSE"));
+    const { contained, hooks } = runner();
+    await expect(contained.run(REQUEST, vi.fn())).rejects.toThrow(
+      "EADDRINUSE",
+    );
+    expect(hooks.map(eventName)).toEqual(["SessionStart", "SessionEnd"]);
+    expect(hooks[1]?.payload).toMatchObject({
+      reason: "contained_launch_failed",
+    });
+  });
+
+  it("logs an end that fails and still reports why the launch failed", async () => {
+    mocks.launch.mockImplementation(launcherWalks("prepare"));
+    const { contained, hook, log } = runner();
+    hook.mockImplementation(async (envelope: HookEnvelope) => {
+      if (eventName(envelope) === "SessionEnd")
+        throw new Error("daemon stopping");
+      return {};
+    });
+    await expect(contained.run(REQUEST, vi.fn())).rejects.toThrow(
+      "prepare stopped here",
+    );
+    expect(log).toHaveBeenCalledWith(
+      "contained: session contained-0123 stays open after its launch failed, because ending it failed: daemon stopping",
+    );
     expect(contained.launched("contained-0123")).toBe(false);
   });
 
   it("refuses to continue when the start hook recorded no session", async () => {
     mocks.launch.mockImplementation(launcherWalks());
-    const { contained } = runner({ recorded: false });
+    const { contained, hooks } = runner({ recorded: false });
     await expect(contained.run(REQUEST, vi.fn())).rejects.toThrow(
       "Contained session was not recorded",
     );
     expect(mocks.bridge).not.toHaveBeenCalled();
+    // No record to end: an end would make the daemon open one.
+    expect(hooks.map(eventName)).toEqual(["SessionStart"]);
     expect(contained.launched("contained-0123")).toBe(false);
   });
 
@@ -435,8 +493,15 @@ describe("a contained run's lifecycle", () => {
       expect.objectContaining({ kind: "policy_decision" }),
     );
     // The launcher double never reached `sealed`, as the real one would not
-    // for a run that was never admitted.
-    expect(hooks.map(eventName)).toEqual(["SessionStart"]);
+    // for a run that was never admitted. The runner ends the session itself,
+    // so a refused launch reads as aborted, not crashed.
+    expect(hooks.map(eventName)).toEqual(["SessionStart", "SessionEnd"]);
+    expect(hooks[1]?.payload).toMatchObject({
+      hook_event_name: "SessionEnd",
+      session_id: "contained-0123",
+      reason: "contained_launch_failed",
+    });
+    expect(hooks[1]?.payload).not.toHaveProperty("exit_code");
   });
 
   it("stops the launch when the session has no recorded genesis", async () => {
@@ -471,6 +536,33 @@ describe("a contained run's lifecycle", () => {
       "Credential custody unavailable",
     );
   });
+
+  it.each([
+    [
+      "claude-code",
+      { CLAUDE_CONFIG_DIR: "/work/repo/.oxagen-contained/home/.claude" },
+    ],
+    ["codex", { CODEX_HOME: "/work/repo/.oxagen-contained/home/.codex" }],
+  ])(
+    "hands the %s bridge the start's answer and the skills env",
+    async (harness, env) => {
+      mocks.launch.mockImplementation(launcherWalks());
+      const answer = {
+        hookSpecificOutput: {
+          hookEventName: "SessionStart",
+          additionalContext: "Follow the workspace's steering.",
+        },
+      };
+      const { contained, hooks } = runner({ startAnswer: answer });
+      await contained.run({ ...REQUEST, harness }, vi.fn());
+      const options = mocks.bridge.mock.calls[0]?.[0] as ContainedBridgeOptions;
+      // The harness's own first start gets this answer, so the run records
+      // one start, not a start and then a resume.
+      expect(options.opening).toEqual(answer);
+      expect(options.env).toEqual(env);
+      expect(hooks[0]?.env).toEqual(env);
+    },
+  );
 
   it("records what the bridge refused", async () => {
     mocks.launch.mockImplementation(launcherWalks());

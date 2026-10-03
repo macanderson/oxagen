@@ -13,7 +13,10 @@
  *
  * 1. A session is stalled when it has events past its shipped cursor and the
  *    cursor has not moved for `stallGraceMs`. A session that is shipping moves
- *    its cursor every few seconds, so it never counts.
+ *    its cursor every few seconds, so it never counts. Time the daemon was not
+ *    running does not count either: a gap between two checks longer than
+ *    `sleepGapMs` (a laptop asleep) counts as one `checkEveryMs`, because the
+ *    shipper did not run in it and had no chance to move the cursor.
  * 2. The ceiling is the smaller of `ceilingBytes` and half the space the disk
  *    would have free without the stalled sessions.
  * 3. When the stalled sessions' files hold more than the ceiling, the session
@@ -42,6 +45,12 @@ export interface WalCeilingPolicy {
   stallGraceMs: number;
   /** How often the daemon checks. */
   checkEveryMs: number;
+  /**
+   * A gap between two checks longer than this is time the daemon did not
+   * run, such as a laptop asleep. It counts toward a stall as one
+   * `checkEveryMs`. Left out, every gap counts in full.
+   */
+  sleepGapMs?: number;
   /** Bytes free on the disk that holds `dir`, or undefined when unreadable. */
   freeBytes: (dir: string) => number | undefined;
 }
@@ -56,11 +65,15 @@ export interface WalCeilingPolicy {
  * - One hour without a moved cursor is far past a healthy drain, which ships
  *   a live session within seconds.
  * - A minute between checks costs a `stat` of each waiting session's files.
+ * - Five minutes without a check, added after ADR-261 (#5390), is five
+ *   checks missed, which is what a daemon that is not running, as on a
+ *   laptop asleep, looks like. A gap counted short only puts a drop off.
  */
 export const DEFAULT_WAL_CEILING: WalCeilingPolicy = {
   ceilingBytes: 8 * 1024 ** 3,
   stallGraceMs: 60 * 60_000,
   checkEveryMs: 60_000,
+  sleepGapMs: 5 * 60_000,
   freeBytes: freeBytesOn,
 };
 
@@ -89,7 +102,10 @@ export interface WalCeilingDrop {
   shipped_through: number;
   /** The last event on disk. Events after `shipped_through` ship without bodies. */
   last_seq: number;
-  /** When the session's shipped cursor last moved, or when it was first seen waiting. */
+  /**
+   * When the session's shipped cursor last moved, or when it was first seen
+   * waiting, moved later by any time the daemon did not run since.
+   */
   stalled_since: string;
   dropped_at: string;
   /** What every stalled session held just before this drop. */
@@ -100,7 +116,7 @@ export interface WalCeilingDrop {
 
 /**
  * One session's stall clock: where its shipped cursor stands, and when a
- * check first saw it there.
+ * check first saw it there, moved later by any time the daemon did not run.
  */
 export interface WalStallClock {
   shipped_through: number;
@@ -315,6 +331,7 @@ export class WalCeiling {
     now: number,
     onDrop: (drop: WalCeilingDrop) => void,
   ): WalCeilingDrop[] {
+    this.pauseClocksOverGap(now);
     this.lastCheckAt = now;
     const holdings = this.wal.holdings();
     const waiting = new Set<string>();
@@ -394,6 +411,24 @@ export class WalCeiling {
     }
     this.remember(now, ceiling, held, stalled.length, drops, clocks);
     return drops;
+  }
+
+  /**
+   * Move every clock later by the time since the last check that the daemon
+   * did not run. A laptop that slept for two hours used to wake with every
+   * waiting session past its grace, and the first check dropped bodies the
+   * shipper would have sent once the network came back. A gap of
+   * `sleepGapMs` or less counts in full, and a longer one counts as one
+   * `checkEveryMs`. The first check after a restart has no last check, so a
+   * resumed clock keeps its time.
+   */
+  private pauseClocksOverGap(now: number): void {
+    const { sleepGapMs, checkEveryMs } = this.policy;
+    const gap = now - this.lastCheckAt;
+    if (sleepGapMs === undefined || !Number.isFinite(gap) || gap <= sleepGapMs)
+      return;
+    const unwatched = Math.max(0, gap - checkEveryMs);
+    for (const clock of this.progress.values()) clock.since += unwatched;
   }
 
   /**

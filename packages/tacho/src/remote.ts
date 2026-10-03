@@ -22,19 +22,28 @@
  * rotation, produced different digests for the same repository and nothing
  * downstream could correlate them.
  *
- * So the userinfo, the query, and the fragment go, the scheme and the `.git`
- * suffix go, `scp` syntax (`git@host:acme/repo.git`) is folded onto the same
- * shape as its URL form, and the host is lowercased. The path is not, because a repository name is
+ * So the userinfo, the query, and the fragment go, the scheme, the port and
+ * the `.git` suffix go, `scp` syntax (`git@host:acme/repo.git`, with or
+ * without the user) is folded onto the same shape as its URL form, and the
+ * host is lowercased. The path is not, because a repository name is
  * case sensitive on most forges. None of this is reversible and none of it
  * needs to be: nothing reads the digest back, it is only compared.
  */
 export function canonicalRemote(remote: string): string {
   let value = remote.trim();
   // `git@host:acme/repo.git` is the same repository as
-  // `ssh://git@host/acme/repo.git`.
-  const scp = /^([^/@]+)@([^/:]+):(.+)$/.exec(value);
-  if (scp !== null && !value.includes("://"))
-    value = `ssh://${scp[2] ?? ""}/${scp[3] ?? ""}`;
+  // `ssh://git@host/acme/repo.git`. Git reads text with no `://` and no slash
+  // before its first colon this way with no user too, so
+  // `github.com:acme/repo.git` names the same repository. A one-letter host
+  // is a Windows drive (`C:/src/repo`), which git reads as a local path, and
+  // a user-less form with an `@` in it is left alone, so a token never moves
+  // into the path.
+  if (!value.includes("://")) {
+    const scp =
+      /^[^/@]+@([^/:]+):(.+)$/.exec(value) ??
+      /^([^/:@]{2,}):([^@]+)$/.exec(value);
+    if (scp !== null) value = `ssh://${scp[1] ?? ""}/${scp[2] ?? ""}`;
+  }
   value = value.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, "");
   // Userinfo, which is where a token rides.
   const at = value.indexOf("@");
@@ -50,8 +59,13 @@ export function canonicalRemote(remote: string): string {
   // it, so the other order left `repo.git/` carrying its suffix.
   value = value.replace(/\/+$/, "").replace(/\.git$/, "");
   const slash = value.indexOf("/");
-  if (slash === -1) return value.toLowerCase();
-  return `${value.slice(0, slash).toLowerCase()}${value.slice(slash)}`;
+  // The port says how the host was reached, not which repository it serves:
+  // `ssh://git@github.com:22/acme/repo.git` is the `github.com/acme/repo` a
+  // workspace binds. The `scp` form has no port, so it is never cut there.
+  const host = (slash === -1 ? value : value.slice(0, slash))
+    .replace(/:\d+$/, "")
+    .toLowerCase();
+  return slash === -1 ? host : `${host}${value.slice(slash)}`;
 }
 
 /**

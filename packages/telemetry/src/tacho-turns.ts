@@ -260,13 +260,15 @@ const nullableCount = (
 const UNKEYED = `tool_use_id = ''`;
 
 /**
- * A decision about a call, as the fold reads it. An OTel adapter once sealed
- * Claude Code's own permission check as `policy_decision` with a policy
- * source of `harness`, and the fold reads that row as `harness_permission`
- * (`tachoKind`), which is not a gate.
+ * A decision about a call, as the fold reads it. The OTel adapter and the
+ * `PermissionDenied` and `PostToolBatch` hooks once sealed Claude Code's own
+ * permission check as `policy_decision` with a policy source of `harness`,
+ * and the fold reads that row as `harness_permission` (`tachoKind`), which is
+ * not a gate.
  */
 const GATE = `has({gates:Array(String)}, kind)
-  AND NOT (kind = 'policy_decision' AND startsWith(source, 'otel')
+  AND NOT (kind = 'policy_decision'
+    AND (startsWith(source, 'otel') OR source = 'hook')
     AND JSONExtractString(body, 'policy_source') = 'harness')`;
 
 /** Each frame's letter in the rule 3 pattern (`unkeyedToolPattern`). */

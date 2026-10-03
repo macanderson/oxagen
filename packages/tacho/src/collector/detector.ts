@@ -30,7 +30,12 @@ import type { SessionRegistry } from "./registry";
 export interface DetectorDeps {
   registry: SessionRegistry;
   hostRecorder: () => SessionRecorder;
-  listProcesses: () => ClaudeProcess[];
+  /**
+   * The `claude` processes on the host, which an `oxagen:unobserved_session`
+   * incident names. A tick reads them only when it is about to report a
+   * sighting, and before its sealing stretch, so the answer may be async.
+   */
+  listProcesses: () => ClaudeProcess[] | Promise<ClaudeProcess[]>;
   /** Directories holding `<project>/<session uuid>.jsonl` transcripts. */
   transcriptRoots: string[];
   readSettings: () => unknown;
@@ -430,6 +435,27 @@ export class Detector {
     return events;
   }
 
+  /**
+   * Will this pass report the transcript as an unobserved session? It asks
+   * what the loop in `checkTranscripts` decides, at the same clock reading,
+   * without changing any sighting.
+   */
+  private due(
+    transcript: TranscriptEntry,
+    now: number,
+    grace: number,
+  ): boolean {
+    if (this.deps.registry.get(transcript.sessionId) !== undefined)
+      return false;
+    const seen = this.sightings.get(transcript.sessionId);
+    return (
+      seen !== undefined &&
+      !seen.reported &&
+      transcript.mtimeMs > seen.lastMtimeMs &&
+      now - seen.firstSeenAt >= grace
+    );
+  }
+
   private async checkTranscripts(record: RecordSink): Promise<TachoEvent[]> {
     // One daemon process serves every enrollment on the machine (ADR-203),
     // and only one of them watches the transcripts, so the others skip the
@@ -439,11 +465,18 @@ export class Detector {
       [...this.sightings.values()].map((sighting) => sighting.path),
     );
     const transcripts = await this.scanner.tick(watched);
-    // Everything from here is synchronous: the seals below must not
-    // interleave with a hook sealing on another chain mid-decision.
     const now = this.deps.now();
     const grace = this.deps.graceMs ?? 30_000;
-    const processes = this.deps.listProcesses();
+    // Listing processes spawns `ps`, and only an incident reads the list, so
+    // a tick lists them only when it will report a sighting. The read comes
+    // before the sealing stretch below, so it may wait.
+    const processes = transcripts.some((transcript) =>
+      this.due(transcript, now, grace),
+    )
+      ? await this.deps.listProcesses()
+      : [];
+    // Everything from here is synchronous: the seals below must not
+    // interleave with a hook sealing on another chain mid-decision.
     const events: TachoEvent[] = [];
     for (const transcript of transcripts) {
       if (this.deps.registry.get(transcript.sessionId) !== undefined) {

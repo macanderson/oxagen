@@ -316,18 +316,33 @@ export function isProcessAlive(pid: number): boolean {
  * executable it runs. A pid alone cannot tell the daemon from an unrelated
  * process given the same pid after the daemon died (Windows reuses pids
  * quickly), and stopping by that pid then kills a process tree that has
- * nothing to do with Oxagen. The executable is what a reader checks before
- * it acts on the pid.
+ * nothing to do with Oxagen. A reader checks the executable and the start
+ * before it acts on the pid: the executable alone matches every other
+ * program run by the same `node`.
  */
 export interface DaemonPidRecord {
   pid: number;
-  /** Absent in the plain pid an older daemon wrote. */
+  /**
+   * When the daemon wrote the record. Absent in the plain pid an older
+   * daemon wrote. A process the OS gave the pid to after the daemon died was
+   * created after this (`createdAfterRecord`).
+   */
   started_at?: string;
   /** `process.execPath`; absent in the plain pid an older daemon wrote. */
   exe?: string;
+  /**
+   * The process's start as `/proc` counts it on Linux (`readProcessStarts`),
+   * compared only with another read of the same pid. Absent elsewhere and
+   * in what an older daemon wrote.
+   */
+  start?: string;
 }
 
-export function formatDaemonPid(record: Required<DaemonPidRecord>): string {
+/** The record a daemon writes, which always names its start and executable. */
+export type WrittenDaemonPid = DaemonPidRecord &
+  Required<Pick<DaemonPidRecord, "started_at" | "exe">>;
+
+export function formatDaemonPid(record: WrittenDaemonPid): string {
   return `${JSON.stringify(record)}\n`;
 }
 
@@ -355,6 +370,7 @@ export function parseDaemonPid(text: string): DaemonPidRecord | undefined {
       ? { started_at: record["started_at"] }
       : {}),
     ...(typeof record["exe"] === "string" ? { exe: record["exe"] } : {}),
+    ...(typeof record["start"] === "string" ? { start: record["start"] } : {}),
   };
 }
 
@@ -367,14 +383,47 @@ const DAEMON_IMAGES = ["tacho", "node"];
 
 /**
  * Whether the process image (a Windows image name such as `tacho.exe`, or an
- * executable path) is the one `record` says the daemon runs.
+ * executable path) is the one `record` says the daemon runs. Linux reads the
+ * whole path from `/proc`, so the whole path is compared there: a `node`
+ * from another install is not the daemon's. Windows lists only the image
+ * name.
  */
 export function isDaemonImage(record: DaemonPidRecord, image: string): boolean {
+  if (record.exe?.startsWith("/") === true && image.startsWith("/"))
+    return image === record.exe;
   const name = win32.basename(image).toLowerCase();
   if (record.exe !== undefined)
     return name === win32.basename(record.exe).toLowerCase();
   return DAEMON_IMAGES.some(
     (daemon) => name === daemon || name === `${daemon}.exe`,
+  );
+}
+
+/**
+ * How far after its own record a daemon's creation time may read. The OS
+ * stores the creation time when the process starts. A time sync that steps
+ * the clock back before the daemon writes `started_at`, as one can at logon
+ * when the task starts the daemon, puts the record before the creation. A
+ * process given the pid within this long of the record is still killed.
+ */
+const CLOCK_STEP_SLACK_MS = 60_000;
+
+/**
+ * Whether a process created at `createdMs` (the OS's creation time, in ms
+ * since the epoch) is too new to have written `record`. The daemon writes
+ * `started_at` while it runs, so its own process was created before then,
+ * give or take a clock step (`CLOCK_STEP_SLACK_MS`). A process the OS gave
+ * the pid to after the daemon died was created after it. False when either
+ * time is unknown, so the image check decides alone.
+ */
+export function createdAfterRecord(
+  record: DaemonPidRecord,
+  createdMs: number | undefined,
+): boolean {
+  if (createdMs === undefined || record.started_at === undefined) return false;
+  const written = Date.parse(record.started_at);
+  return (
+    Number.isFinite(written) && createdMs > written + CLOCK_STEP_SLACK_MS
   );
 }
 

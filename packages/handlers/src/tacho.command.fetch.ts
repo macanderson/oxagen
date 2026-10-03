@@ -22,11 +22,13 @@
 // (`COMMAND_ACK_GRACE_MS`), so an acknowledgement that arrives after the clock
 // passed still lands (`expireCommands` in ./lib/tacho-host.ts). `applied`
 // writes the timestamps a report reads (`acknowledged_at`, `applied_at`) and
-// the frame sequence (`applied_at_seq`) that proves it.
+// the frame sequence (`applied_at_seq`) that proves it. `acknowledged_at`
+// keeps the time of the first acknowledgement that set it, so neither a
+// re-sent `acknowledged` nor the `applied` after it moves it later.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { tachoCommandFetch } from "@oxagen/oxagen/contracts/tacho.command.fetch";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import {
   controlEnvelope,
   resolveEnrolledHost,
@@ -64,11 +66,27 @@ export function ackableOutcomes(status: Ack["status"]): string[] {
   return at === -1 ? [...OPEN_OUTCOMES] : OPEN_OUTCOMES.slice(0, at + 1);
 }
 
+/**
+ * The columns one acknowledgement sets. `acknowledged_at` is an expression
+ * over the row (`firstAcknowledgedAt`), not a value.
+ */
+export type AckPatch = Partial<
+  Omit<typeof schema.tachoControlCommands.$inferInsert, "acknowledgedAt">
+> & { acknowledgedAt?: SQL };
+
+/**
+ * `acknowledged_at` as the row holds it, or `now` when it holds none. A host
+ * re-sends its acknowledgements after a poll whose answer it never read, and
+ * `applied` follows `acknowledged`. Writing `now` each time moved the time
+ * later on every repeat, and the report showed a steer acknowledged and
+ * applied at the same instant.
+ */
+function firstAcknowledgedAt(now: Date): SQL {
+  return sql`coalesce(${schema.tachoControlCommands.acknowledgedAt}, ${now.toISOString()}::timestamptz)`;
+}
+
 /** The columns one acknowledgement sets, by the status the host asserts. */
-export function ackPatch(
-  ack: Ack,
-  now: Date,
-): Partial<typeof schema.tachoControlCommands.$inferInsert> {
+export function ackPatch(ack: Ack, now: Date): AckPatch {
   const base = {
     outcome: ack.status,
     outcomeDetail: ack.detail ?? null,
@@ -78,11 +96,11 @@ export function ackPatch(
     case "received":
       return base;
     case "acknowledged":
-      return { ...base, acknowledgedAt: now };
+      return { ...base, acknowledgedAt: firstAcknowledgedAt(now) };
     case "applied":
       return {
         ...base,
-        acknowledgedAt: now,
+        acknowledgedAt: firstAcknowledgedAt(now),
         appliedAt: now,
         appliedAtSeq: ack.applied_at_seq ?? null,
       };
