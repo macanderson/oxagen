@@ -101,6 +101,23 @@ function expectDisarmed(rig: Rig): void {
   expect(codexConfig(rig)).not.toContain("openai_base_url");
 }
 
+/**
+ * The rig's service manager, reporting the service not running. Enroll takes
+ * the base URL out only when the daemon is silent and the service manager
+ * says the service is gone (#5413), so a daemon that does not come back is
+ * silent and stopped. A silent daemon under a running service keeps routing.
+ */
+function stopped(rig: Rig): CliDeps["serviceManager"] {
+  const manager = rig.deps.serviceManager;
+  return {
+    kind: manager.kind,
+    unitPath: manager.unitPath,
+    install: (spec) => manager.install(spec),
+    uninstall: () => manager.uninstall(),
+    status: () => ({ ...manager.status(), running: false }),
+  };
+}
+
 /** The rig's control plane with one route answering `status` instead. */
 function refusing(rig: Rig, suffix: string, status: number): FetchLike {
   return async (url, init) =>
@@ -169,7 +186,11 @@ describe("a failed reassign", () => {
 describe("a re-enroll whose daemon does not come back", () => {
   it("takes the previous base URL and helper out and exits non-zero", async () => {
     const rig = await brokeredRig();
-    const d: CliDeps = { ...rig.deps, daemonGet: async () => undefined };
+    const d: CliDeps = {
+      ...rig.deps,
+      daemonGet: async () => undefined,
+      serviceManager: stopped(rig),
+    };
     const result = await enroll({}, d);
     // `oxagen agent enroll` exits 1 on a host that is not reporting (`main.ts`).
     expect(result.shipping).toMatchObject({ healthy: false });
@@ -184,7 +205,11 @@ describe("a re-enroll whose daemon does not come back", () => {
 
   it("fails a reassign whose new daemon never answers", async () => {
     const rig = await brokeredRig();
-    const d: CliDeps = { ...rig.deps, daemonGet: async () => undefined };
+    const d: CliDeps = {
+      ...rig.deps,
+      daemonGet: async () => undefined,
+      serviceManager: stopped(rig),
+    };
     const result = await reassign({ workspace: "edge" }, d);
     expect(result.ok).toBe(false);
     expect(result.to?.workspace).toBe("edge");
