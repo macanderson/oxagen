@@ -40,7 +40,6 @@ import {
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import { type RunFrame, tachoFrame } from "@oxagen/run-ledger";
 import {
-  type CompletenessGapKind,
   explainReplayGrade,
   frameOwesBody,
   isReplayGrade,
@@ -52,6 +51,7 @@ import {
   ledgerAllSealsQuery,
   publishedGaps,
   publishedTier,
+  recordedGaps,
   runScope,
   type LedgerSeal,
   type RunScope,
@@ -461,9 +461,10 @@ interface SubagentWalk {
    * The gaps each chain's session row recorded when it sealed, in one set,
    * the chains past the list among them. A gap no frame read can show, such
    * as `unobserved_tail`, caps the whole run's ladder whichever chain it was
-   * recorded on.
+   * recorded on. Words outside the vocabulary stay in, because the seal
+   * graded them `inspect` and the ladder must not read stronger.
    */
-  recorded: CompletenessGapKind[];
+  recorded: string[];
   /** False when a chain was cut short or the run has more chains than listed. */
   complete: boolean;
 }
@@ -561,9 +562,9 @@ async function walkSubagentChains(
       complete,
     };
   });
-  const recorded = new Set<CompletenessGapKind>(publishedGaps(everyGap));
+  const recorded = new Set<string>(recordedGaps(everyGap));
   for (const row of rows) {
-    for (const gap of publishedGaps(row.completenessGaps)) recorded.add(gap);
+    for (const gap of recordedGaps(row.completenessGaps)) recorded.add(gap);
   }
   return {
     chains,
@@ -624,10 +625,11 @@ export function createRunChainGetHandler(
       start: startsAtZero ? "0" : null,
       end: read.complete ? expectedEnd : null,
     });
-    const recorded =
+    const sealGaps =
       run.source === "ledger"
-        ? publishedGaps(run.record.seal?.completenessGaps)
-        : publishedGaps(run.row.session.completenessGaps);
+        ? run.record.seal?.completenessGaps
+        : run.row.session.completenessGaps;
+    const recorded = publishedGaps(sealGaps);
     const enforcementTier =
       run.source === "ledger"
         ? publishedTier(run.record.seal?.enforcementTier)
@@ -636,10 +638,13 @@ export function createRunChainGetHandler(
     // The ladder is computed from what this read can see: the gaps the seal
     // recorded, the gaps each subagent chain's seal recorded, plus a chain
     // break the walk found that no seal named, on the run's own chain or on
-    // any subagent's (#3823).
+    // any subagent's (#3823). It reads every word the seals recorded, not
+    // only the published ones: the seal graded a word outside the vocabulary
+    // (a backfilled session's `backfill`) `inspect`, and a ladder without it
+    // would show a rung the recorded grade does not reach.
     const children = subagents?.chains ?? [];
     const observed = new Set<string>([
-      ...recorded,
+      ...recordedGaps(sealGaps),
       ...(subagents?.recorded ?? []),
     ]);
     if (
