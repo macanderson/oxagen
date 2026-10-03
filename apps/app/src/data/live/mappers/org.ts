@@ -136,7 +136,7 @@ const INTERACTIVE_AGENT_SLUG = "qa-chat";
  * stored bag reads it (packages/oxagen/src/run-enrichment.ts and
  * workspace-budgets.ts): enrichment on, and no limit on any lane.
  */
-export function toWorkspaceSpendSettings(
+function toWorkspaceSpendSettings(
   out: ContractOutput<typeof workspaceSettingsRead>,
 ): z.input<typeof WorkspaceSpendSettings> {
   return {

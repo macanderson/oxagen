@@ -14,7 +14,9 @@ export const BUDGET_FIELDS = {
 
 export type BudgetLane = keyof typeof BUDGET_FIELDS;
 
-export const BUDGET_LANES = Object.keys(BUDGET_FIELDS) as BudgetLane[];
+export const BUDGET_LANES: BudgetLane[] = Object.keys(BUDGET_FIELDS).filter(
+  (key): key is BudgetLane => key in BUDGET_FIELDS,
+);
 
 /**
  * The patch `update_workspace_settings` takes for `dailyBudgetUsd`: a number

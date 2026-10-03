@@ -91,6 +91,53 @@
       },
       "runEnrichmentEnabled": {
         "type": "boolean"
+      },
+      "dailyBudgetUsd": {
+        "type": "object",
+        "properties": {
+          "runEnrichment": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "assistant": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "work": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "runEnrichment",
+          "assistant",
+          "work"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [
