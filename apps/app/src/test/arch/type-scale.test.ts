@@ -172,6 +172,30 @@ function stylesheets(): string[] {
   );
 }
 
+/**
+ * The size in px that a kit token resolves to, or null. Since kit 2.7.0 a
+ * step reads its scale's base, as `var(--ox-a-base)` or
+ * `calc(var(--ox-a-base) * 0.857143)`, so the value can be a chain.
+ */
+function tokenPx(kit: string, name: string): number | null {
+  const tokens = new Map<string, string>();
+  for (const [, token, value] of kit.matchAll(/(--[\w-]+):\s*([^;]+);/g)) {
+    if (token && value && !tokens.has(token)) tokens.set(token, value.trim());
+  }
+  const resolve = (token: string): number | null => {
+    const value = tokens.get(token) ?? "";
+    const length = value.match(/^(\d*\.?\d+)(rem|px)$/);
+    if (length) return Number(length[1]) * (length[2] === "rem" ? 16 : 1);
+    const ref = value.match(
+      /^(?:calc\()?var\((--[\w-]+)\)(?:\s*\*\s*(\d*\.?\d+)\))?$/,
+    );
+    if (!ref?.[1]) return null;
+    const base = resolve(ref[1]);
+    return base === null ? null : base * Number(ref[2] ?? 1);
+  };
+  return resolve(name);
+}
+
 describe("type scale: the 14px floor and token-only sizes", () => {
   it("globals.css maps text-xs and text-sm to the body token, and the body token is at least 14px", () => {
     const css = read("src/app/globals.css");
@@ -186,9 +210,8 @@ describe("type scale: the 14px floor and token-only sizes", () => {
       path.join(APP_DIR, "../../packages/ui/src/styles/house-tokens.css"),
       "utf8",
     );
-    const body = kit.match(/--ox-a-body:\s*(\d*\.?\d+)(rem|px)\s*;/);
-    expect(body).not.toBeNull();
-    const px = Number(body?.[1]) * (body?.[2] === "rem" ? 16 : 1);
+    const px = tokenPx(kit, "--ox-a-body");
+    expect(px).not.toBeNull();
     expect(px).toBeGreaterThanOrEqual(FLOOR_PX);
   });
 
