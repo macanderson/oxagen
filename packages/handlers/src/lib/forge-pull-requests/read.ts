@@ -419,6 +419,24 @@ export function pullRequestEntry(
   };
 }
 
+/** One path's totals across the pull requests in a repository's roll-up. */
+type FileTotals = {
+  pullRequestIds: string[];
+  additions: number | null;
+  deletions: number | null;
+};
+
+/** One repository's running totals while the roll-up is built. */
+type RepoTotals = {
+  provider: ChangeSetPullRequest["provider"];
+  repository: string;
+  pullRequests: number;
+  additions: number | null;
+  deletions: number | null;
+  files: Map<string, FileTotals>;
+  moreFiles: boolean;
+};
+
 function add(a: number | null, b: number | null): number | null {
   return a === null || b === null ? null : a + b;
 }
@@ -432,31 +450,17 @@ function add(a: number | null, b: number | null): number | null {
 export function rollUp(
   entries: readonly ChangeSetPullRequest[],
 ): ChangeSetGetOutput["repositories"] {
-  const repos = new Map<
-    string,
-    {
-      provider: ChangeSetPullRequest["provider"];
-      repository: string;
-      pullRequests: number;
-      additions: number | null;
-      deletions: number | null;
-      files: Map<
-        string,
-        { pullRequestIds: string[]; additions: number | null; deletions: number | null }
-      >;
-      moreFiles: boolean;
-    }
-  >();
+  const repos = new Map<string, RepoTotals>();
   for (const entry of entries) {
     if (entry.state === "closed") continue;
     const key = `${entry.provider}:${entry.repository}`;
-    const repo = repos.get(key) ?? {
+    const repo: RepoTotals = repos.get(key) ?? {
       provider: entry.provider,
       repository: entry.repository,
       pullRequests: 0,
       additions: 0,
       deletions: 0,
-      files: new Map(),
+      files: new Map<string, FileTotals>(),
       moreFiles: false,
     };
     repo.pullRequests += 1;
@@ -464,7 +468,7 @@ export function rollUp(
     repo.deletions = add(repo.deletions, entry.revision?.deletions ?? null);
     repo.moreFiles ||= entry.moreFiles;
     for (const file of entry.files) {
-      const held = repo.files.get(file.path);
+      const held: FileTotals | undefined = repo.files.get(file.path);
       repo.files.set(
         file.path,
         held === undefined
