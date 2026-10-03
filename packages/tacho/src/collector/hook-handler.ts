@@ -197,6 +197,15 @@ export interface HookHandlerDeps {
     },
     run: { sessionUuid: string; at: string },
   ) => void;
+  /**
+   * Whether this Claude Code session can reach Oxagen's `record_reflection`
+   * tool: the enrollment wrote the `oxagen` MCP server into Claude Code's
+   * user config before the session started, and holds the gateway key that
+   * serves it (#5287). The daemon reads the files only when a Stop would
+   * otherwise ask. Absent, no Stop asks for a reflection, so a hook never
+   * blocks a stop for a tool the session does not have.
+   */
+  reflectionToolRegistered?: (session: { startedAt: string }) => boolean;
 }
 
 export interface HookReplay {
@@ -1718,7 +1727,9 @@ async function routeHook(
         return { events, response: {}, record };
       // A run that showed trouble is asked once to record a reflection
       // (`memory-capture/reflection-ask.ts`). A custom agent speaks Claude
-      // Code's hooks but may have no Oxagen MCP server, so it is not asked.
+      // Code's hooks but may have no Oxagen MCP server, so it is not asked,
+      // and neither is a session on a host whose enrollment did not give
+      // Claude Code that server (#5287).
       // A subagent's hook is not the session's turn end, as in
       // `drainMidTurn`, so it leaves the ask for the main agent's Stop.
       const ask =
@@ -1731,6 +1742,10 @@ async function routeHook(
                   : (record.harness ?? "claude-code"),
               stopHookActive: input["stop_hook_active"] === true,
               replayed: replay !== undefined,
+              toolRegistered: () =>
+                deps.reflectionToolRegistered?.({
+                  startedAt: record.startedAt,
+                }) ?? false,
             });
       // A queued steer, or a resume's continuation, keeps the turn going:
       // `decision: "block"` hands the reason to the model as what to do next.
