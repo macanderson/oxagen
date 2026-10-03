@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   assemblyOf,
+  createWindowComposition,
   ledgerContextWindows,
   type RecordedWindow,
   tachoContextWindow,
   type TachoModelCallRow,
+  walkLedgerContextWindows,
   windowComposition,
+  wrappedContextWindows,
 } from "./context-windows";
 import { NO_BODY } from "./frame-body";
 import type { AttemptEventReadRecord } from "./run-store";
@@ -327,5 +330,118 @@ describe("windowComposition", () => {
     expect(
       windowComposition([measured(1, [["conversation", 1, 30]], null)]),
     ).toBeNull();
+  });
+});
+
+describe("createWindowComposition", () => {
+  it("sums one window at a time to what windowComposition answers for the list", () => {
+    const windows = [
+      measured(1, [
+        ["system", 1, 20],
+        ["conversation", 1, 30],
+      ]),
+      measured(2, [
+        ["system", 1, 100],
+        ["tools", 4, 300],
+        ["conversation", 1, 70],
+      ]),
+      measured(3, [["conversation", 2, 90]], null),
+    ];
+    const composition = createWindowComposition();
+    for (const window of windows) composition.add(window);
+    expect(composition.finish()).toEqual(windowComposition(windows));
+    expect(composition.finish()).toMatchObject({
+      requests: 2,
+      requestsWithoutTokens: 1,
+      promptTokens: 520,
+      initialConversationTokens: 70,
+    });
+  });
+
+  it("answers null before any window reported a prompt total (negative)", () => {
+    const composition = createWindowComposition();
+    expect(composition.finish()).toBeNull();
+    composition.add(measured(1, [["conversation", 1, 30]], null));
+    expect(composition.finish()).toBeNull();
+  });
+});
+
+describe("walkLedgerContextWindows", () => {
+  const EVENTS = [
+    event(1, "run.admitted", {}),
+    started(2, "prov-1-0"),
+    completed(3, "prov-1-0", 10_000),
+    event(4, "tool.engine_call_completed", {}),
+    started(5, "prov-1-1"),
+    completed(6, "prov-1-1", 20_000),
+  ];
+
+  /** The store's page read over EVENTS, recording each cursor it was asked for. */
+  function pages() {
+    const asked: string[] = [];
+    const readPage = async (after: string, limit: number) => {
+      asked.push(after);
+      return EVENTS.filter((e) => Number(e.runSeq) > Number(after)).slice(
+        0,
+        limit,
+      );
+    };
+    return { asked, readPage };
+  }
+
+  it("pages through every event and reads the windows across the pages", async () => {
+    const { asked, readPage } = pages();
+    const reading = await walkLedgerContextWindows(readPage, {
+      cap: 100,
+      page: 2,
+    });
+    expect(asked).toEqual(["0", "2", "4", "6"]);
+    expect(reading.walked).toBe(true);
+    expect(reading.windows.map((w) => w.promptTokens)).toEqual([
+      10_000, 20_000,
+    ]);
+    expect(reading.unmeasured).toBe(0);
+  });
+
+  it("says the walk is a prefix when it stops at its cap (negative)", async () => {
+    const { readPage } = pages();
+    const reading = await walkLedgerContextWindows(readPage, {
+      cap: 4,
+      page: 2,
+    });
+    expect(reading.walked).toBe(false);
+    // The cap admits four events, so only the first call's window was reached.
+    expect(reading.windows.map((w) => w.modelCallId)).toEqual(["prov-1-0"]);
+  });
+});
+
+describe("wrappedContextWindows", () => {
+  it("reads windows and manifests, and counts a call with no window once", () => {
+    const reading = wrappedContextWindows([
+      llmCall({
+        seq: 1,
+        kind: "steering.manifest",
+        attrs: undefined,
+        body: JSON.stringify({
+          budget_tokens: 2000,
+          spent_tokens: 400,
+          included: 3,
+          cut: 1,
+        }),
+      }),
+      // The transcript's sighting of req_01, which the proxy measured later.
+      llmCall({ seq: 2, attrs: {}, requestId: "req_01" }),
+      llmCall({ seq: 3 }),
+      // A call nobody measured, and a later sighting of it.
+      llmCall({ seq: 4, attrs: {}, requestId: "req_02" }),
+      llmCall({
+        seq: 5,
+        attrs: { "oxagen.llm_call_duplicate_of": "transcript" },
+        requestId: "req_02",
+      }),
+    ]);
+    expect(reading.windows.map((w) => w.seq)).toEqual(["3"]);
+    expect(reading.assemblies.map((a) => a.seq)).toEqual(["1"]);
+    expect(reading.unmeasured).toBe(1);
   });
 });

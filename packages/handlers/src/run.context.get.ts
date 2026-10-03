@@ -29,16 +29,11 @@ import {
   type RunContextGetOutput,
 } from "@oxagen/oxagen/contracts/run.context.get";
 import {
-  type AttemptEventReadRecord,
-  assemblyOf,
-  isContextWindowEvent,
-  isLaterLlmCallSighting,
-  ledgerContextWindows,
-  type RecordedAssembly,
-  type RecordedWindow,
-  tachoContextWindow,
+  type ContextWindowReading,
   type TachoModelCallRow,
+  walkLedgerContextWindows,
   windowComposition,
+  wrappedContextWindows,
 } from "@oxagen/run-ledger";
 import { readTachoModelCalls } from "./lib/run-context";
 import {
@@ -61,80 +56,29 @@ export type RunContextGetDeps = RunReadDeps & {
   ) => Promise<TachoModelCallRow[]>;
 };
 
-type Reading = {
-  windows: RecordedWindow[];
-  assemblies: RecordedAssembly[];
-  unmeasured: number;
-  /** False when the walk stopped at its cap. */
-  walked: boolean;
-};
-
-/** A ledger run's windows, from its model-call and manifest events. */
-async function ledgerReading(
+/**
+ * A ledger run's windows, from its model-call and manifest events. The walk
+ * is the one the cost rollup reads a run's composition through (#5341).
+ */
+function ledgerReading(
   deps: RunContextGetDeps,
   runId: string,
-): Promise<Reading> {
-  const kept: AttemptEventReadRecord[] = [];
-  let after = "0";
-  let walked = 0;
-  for (;;) {
-    const want = Math.min(LEDGER_PAGE, LEDGER_EVENT_CAP - walked);
-    if (want <= 0) return { ...ledgerContextWindows(kept), walked: false };
-    const page = await deps.store.readAttemptEventsSince(runId, after, want);
-    walked += page.length;
-    for (const event of page)
-      if (isContextWindowEvent(event.eventType)) kept.push(event);
-    const last = page.at(-1);
-    if (!last || page.length < want)
-      return { ...ledgerContextWindows(kept), walked: true };
-    after = last.runSeq;
-  }
-}
-
-function manifestBody(body: string): unknown {
-  try {
-    return JSON.parse(body) as unknown;
-  } catch {
-    return null;
-  }
+): Promise<ContextWindowReading> {
+  return walkLedgerContextWindows(
+    (after, limit) => deps.store.readAttemptEventsSince(runId, after, limit),
+    { cap: LEDGER_EVENT_CAP, page: LEDGER_PAGE },
+  );
 }
 
 /** A wrapped session's windows, from its `llm_call` and manifest rows. */
 async function wrappedReading(
   deps: RunContextGetDeps,
   sessionUuid: string,
-): Promise<Reading> {
+): Promise<ContextWindowReading> {
   // One over the cap, so a full read is told apart from a cut one.
   const rows = await deps.modelCalls(sessionUuid, TACHO_ROW_CAP + 1);
-  const read = rows.slice(0, TACHO_ROW_CAP);
-  const windows: RecordedWindow[] = [];
-  const assemblies: RecordedAssembly[] = [];
-  const unmeasuredCalls: TachoModelCallRow[] = [];
-  for (const row of read) {
-    if (row.kind === "steering.manifest") {
-      const assembly = assemblyOf(String(row.seq), manifestBody(row.body));
-      if (assembly !== null) assemblies.push(assembly);
-      continue;
-    }
-    const recorded = tachoContextWindow(row);
-    if (recorded !== null) windows.push(recorded);
-    else if (!isLaterLlmCallSighting(row)) unmeasuredCalls.push(row);
-  }
-  // A call the transcript reported first and the proxy measured second is
-  // one call with a window, not an unmeasured one beside it. The two are
-  // joined on the vendor's request id, so a first sighting that recorded
-  // none stays counted as unmeasured: the read cannot show it is the same
-  // call, and it does not guess.
-  const measured = new Set(
-    windows.flatMap((w) => (w.modelCallId === null ? [] : [w.modelCallId])),
-  );
-  const unmeasured = unmeasuredCalls.filter(
-    (row) => row.requestId === "" || !measured.has(row.requestId),
-  ).length;
   return {
-    windows,
-    assemblies,
-    unmeasured,
+    ...wrappedContextWindows(rows.slice(0, TACHO_ROW_CAP)),
     walked: rows.length <= TACHO_ROW_CAP,
   };
 }
