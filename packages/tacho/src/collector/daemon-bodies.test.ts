@@ -20,6 +20,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { digestBytes, digestJcs } from "../digest";
 import type { TachoEvent } from "../envelope";
+import { jsonContent } from "../evidence/frame-body";
 import type { FetchLike } from "../host/control-client";
 import { writeSensitiveFileAtomic } from "../host/fs";
 import { readHostFile, writeHostFile } from "../host/host-file";
@@ -33,6 +34,7 @@ import {
 } from "../host/test-support";
 import type { PolicyBundle, TachoBody } from "../wire";
 import { type DaemonHandle, startDaemon } from "./daemon";
+import { worktreeReconciledBody } from "./git-facts";
 
 interface Batch {
   events: TachoEvent[];
@@ -261,6 +263,51 @@ describe("tachod and frame bodies", () => {
         (b) => events.get(b.event_id_idem)?.kind === "tool_requested",
       ),
     ).toBe(true);
+  });
+
+  it("logs a body handed over without its event, and writes none of it (negative)", async () => {
+    const { fetch } = plane();
+    const { handle, log } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["model_call", "tool_call"],
+    });
+    const id = "sess-orphan-body";
+    await handle.api.handleHook({
+      payload: { session_id: id, hook_event_name: "SessionStart", cwd: "/repo" },
+      env: {},
+    });
+    const prompt = {
+      payload: {
+        session_id: id,
+        hook_event_name: "UserPromptSubmit",
+        prompt: "Read README.md, then stop.",
+      },
+      env: {},
+      hook_id: "hook_prompt",
+    };
+    await handle.api.handleHook(prompt);
+    const recorder = handle.registry.get(id)?.recorder;
+    expect(recorder).toBeDefined();
+    if (recorder === undefined) return;
+    // What the git lane did before #5381: write a content frame's event and
+    // leave its body on the recorder for the next caller to drain.
+    const orphaned = recorder.sealCollectorEvent(
+      "oxagen:worktree_reconciled",
+      worktreeReconciledBody([]),
+      { content: jsonContent('{"version":1}') },
+    );
+    handle.wal.append([orphaned]);
+    // A second delivery of a hook already recorded seals nothing, and its
+    // write drains the body with no event.
+    await handle.api.handleHook(prompt);
+    const dropped = log.filter((line) =>
+      line.includes("handed over without an event"),
+    );
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0]).toContain(
+      `session ${recorder.sessionUuid} seq ${orphaned.seq}`,
+    );
+    expect(handle.wal.bodiesFor([orphaned])).toEqual([]);
   });
 
   it("ships no body under digest_only retention, and none of a class the bundle leaves out", async () => {

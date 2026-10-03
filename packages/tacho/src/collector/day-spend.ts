@@ -8,9 +8,10 @@
  *
  * The day's total has three parts:
  *
- *   - This host's calls, read back from its own WAL the first time a day is
- *     asked about. The WAL keeps a week of frames, shipped or not, so a daemon
- *     that restarts at noon still counts its morning.
+ *   - This host's calls before this process counted any, read back from its
+ *     own WAL once, the first time any day is asked about. The WAL keeps a
+ *     week of frames, shipped or not, so a daemon that restarts at noon still
+ *     counts its morning. A later day starts at zero with no read.
  *   - Calls this proxy priced since that read, added as they settle.
  *   - What the control plane recorded for the agent that day: its other
  *     hosts' total, and this host's shipped total. The second covers a host
@@ -45,7 +46,10 @@ export interface RecordedDaySpend {
 }
 
 export interface DaySpendDeps {
-  /** This host's observed spend on `day`, read from its WAL. */
+  /**
+   * This host's observed spend on `day`, read from its WAL. Asked once per
+   * process, for the first day the counter is asked about.
+   */
   priorDaySpendMicros?: (day: string) => number;
   /** The control plane's latest figures, when it has sent any. */
   recordedDaySpend?: () => RecordedDaySpend | undefined;
@@ -70,6 +74,19 @@ export function createDaySpend(deps: DaySpendDeps): DaySpend {
 
   function own(day: string): number {
     if (held !== undefined && held.day >= day) return held.ownMicros;
+    // A later day than the one held starts at zero, with no WAL read. This
+    // process has counted every priced call since it seeded: the only frames
+    // the seed counts are `llm_call`s marked `TACHO_METERING_OBSERVED`, the
+    // model proxy is the only writer of those (`settleMetered` and
+    // `sealKeepAlive` in `model-proxy.ts`), and both charge `add` with the
+    // cost they put on the frame. So the WAL holds nothing for the new day that
+    // this counter has not seen. The read it skips scanned the WAL on the
+    // daemon's only thread at the first priced call after each UTC midnight
+    // (#5381).
+    if (held !== undefined) {
+      held = { day, ownMicros: 0 };
+      return 0;
+    }
     let seeded = 0;
     try {
       seeded = nonNegative(deps.priorDaySpendMicros?.(day) ?? 0);

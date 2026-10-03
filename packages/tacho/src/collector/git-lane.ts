@@ -14,7 +14,7 @@
  * queues and the chain's terminal, which are the daemon's.
  */
 import { join } from "node:path";
-import { jsonContent } from "../evidence/frame-body";
+import { type FrameBody, jsonContent } from "../evidence/frame-body";
 import type { TachoEvent } from "../envelope";
 import type { ExecAsync } from "../host/service";
 import {
@@ -109,8 +109,14 @@ export interface GitLaneDeps {
    * so the lane calls it outside every queue.
    */
   settleEnding: (ending: HookEnvelope, sessionUuid: string) => Promise<void>;
-  /** Write sealed events to the WAL. Throws when the write fails. */
-  record: (events: readonly TachoEvent[]) => void;
+  /**
+   * Write sealed events to the WAL, with the bodies of the ones that carry
+   * content. Throws when the write fails.
+   */
+  record: (
+    events: readonly TachoEvent[],
+    bodies?: readonly FrameBody[],
+  ) => void;
   /**
    * The directory under Tacho's state directory that holds each session's
    * pre-session copies (`TachoPaths.preSessionCopies`).
@@ -527,6 +533,15 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
    * the rollback cannot reach a sibling the loop has not settled yet. A
    * registry-wide snapshot would, by rebuilding every `SessionRecord` and
    * detaching the recorders this loop is still holding.
+   *
+   * The diff is the frame's content, so its body is taken in the same call
+   * as the event. The shipper sends a body only with its own event. This
+   * write used to leave the body waiting on the recorder, and the next caller
+   * to drain it either dropped it or wrote it after the event had shipped,
+   * so the Run page showed a retained diff as not retained (#5381). A write
+   * that fails writes neither: `Wal.append` cuts its files back, and the
+   * rollback puts back the bodies the mark found waiting, without this
+   * frame's.
    */
   function recordReconciliation(
     session: SessionRecord,
@@ -535,44 +550,43 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
   ): void {
     const mark = session.recorder.markChain();
     try {
-      record([
-        session.recorder.sealCollectorEvent(
-          "oxagen:worktree_reconciled",
-          worktreeReconciledBody(reading.changes),
-          {
-            attrs: {
-              // What the list measures, so a reader can tell a list that
-              // leaves out pulled commits and earlier edits from one that
-              // does not (ADR-188).
-              changes_basis: reading.basis,
-              pre_session_changes: PRE_SESSION_CHANGES[reading.preexisting],
-              // Whether the rows of files that held edits before the session
-              // count the session's lines alone, or the whole file against
-              // `HEAD` for want of a copy.
-              ...(reading.preSessionCounts !== undefined
-                ? { pre_session_edit_counts: reading.preSessionCounts }
-                : {}),
-              ...(snapshot
-                ? {
-                    worktree_root: snapshot.root,
-                    ...(snapshot.repository
-                      ? { repository_url: snapshot.repository }
-                      : {}),
-                    ...(snapshot.baseline
-                      ? { diff_base_sha: snapshot.baseline }
-                      : {}),
-                    ...(snapshot.head ? { diff_head_sha: snapshot.head } : {}),
-                    diff_complete: String(snapshot.complete),
-                    diff_limitations: snapshot.limitations.join(","),
-                  }
-                : {}),
-            },
+      const reconciled = session.recorder.sealCollectorEvent(
+        "oxagen:worktree_reconciled",
+        worktreeReconciledBody(reading.changes),
+        {
+          attrs: {
+            // What the list measures, so a reader can tell a list that
+            // leaves out pulled commits and earlier edits from one that
+            // does not (ADR-188).
+            changes_basis: reading.basis,
+            pre_session_changes: PRE_SESSION_CHANGES[reading.preexisting],
+            // Whether the rows of files that held edits before the session
+            // count the session's lines alone, or the whole file against
+            // `HEAD` for want of a copy.
+            ...(reading.preSessionCounts !== undefined
+              ? { pre_session_edit_counts: reading.preSessionCounts }
+              : {}),
             ...(snapshot
-              ? { content: jsonContent(JSON.stringify(snapshot)) }
+              ? {
+                  worktree_root: snapshot.root,
+                  ...(snapshot.repository
+                    ? { repository_url: snapshot.repository }
+                    : {}),
+                  ...(snapshot.baseline
+                    ? { diff_base_sha: snapshot.baseline }
+                    : {}),
+                  ...(snapshot.head ? { diff_head_sha: snapshot.head } : {}),
+                  diff_complete: String(snapshot.complete),
+                  diff_limitations: snapshot.limitations.join(","),
+                }
               : {}),
           },
-        ),
-      ]);
+          ...(snapshot
+            ? { content: jsonContent(JSON.stringify(snapshot)) }
+            : {}),
+        },
+      );
+      record([reconciled], session.recorder.takeBodies());
     } catch (error) {
       session.recorder.rollbackChain(mark);
       // The lane's own handler requeues the sessions with a pending end. This
