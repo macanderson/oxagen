@@ -25,6 +25,7 @@ import {
   staticPwaHead,
   withPwaHead,
 } from "./sync-brand-assets.mjs";
+import { SEMANTIC_KEEP } from "./lib/brand-literals.mjs";
 
 const SCRIPT = fileURLToPath(new URL("./sync-brand-assets.mjs", import.meta.url));
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -66,10 +67,19 @@ function fixtureRepo(root: string) {
     const faces = ["story/index.html", "read/index.html"].includes(page)
       ? "<style>h1, h2, h3 { font-family: var(--ox-font-display); }</style>\n"
       : "";
+    // The story's chart hues, which SEMANTIC_KEEP keeps by hand, so the
+    // allowlist excuses something here as it does in the tree.
+    const hues =
+      page === "story/index.html"
+        ? `<style>:root { ${(SEMANTIC_KEEP["apps/web/story/index.html"] ?? [])
+            .flatMap((e) => e.values)
+            .map((v, i) => `--hue-${i}: ${v};`)
+            .join(" ")} }</style>\n`
+        : "";
     put(
       root,
       `apps/web/${page}`,
-      `<head>\n<link rel="manifest" href="/oxagen.webmanifest">\n${faces}</head>\n`,
+      `<head>\n<link rel="manifest" href="/oxagen.webmanifest">\n${faces}${hues}</head>\n`,
     );
   }
   return join(root, "tools/scripts/sync-brand-assets.mjs");

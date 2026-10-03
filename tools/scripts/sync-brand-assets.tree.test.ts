@@ -14,6 +14,8 @@ import {
   GUARDED_PAGES,
   literalDrift,
   markupDrift,
+  markupSemanticDrift,
+  semanticDrift,
   typeDrift,
 } from "./lib/brand-literals.mjs";
 import { desktopIconDrift } from "./sync-brand-assets.mjs";
@@ -112,5 +114,17 @@ describe("the customer sites' type", () => {
       "utf8",
     );
     expect(typeDrift(files, { tokens })).toEqual([]);
+  });
+});
+
+// Mac, 2026-10-03: every colour, corner, shadow, spacing value, and button
+// on the customer sites reads a semantic token.
+describe("the customer sites' tokens", () => {
+  it("write no colour, raw colour token, spacing, or button colour by hand", () => {
+    const read = (path: string): [string, string] => [path, readFileSync(join(REPO_ROOT, path), "utf8")];
+    const sheets = new Map([...GUARDED, ...GUARDED_PAGES].map(({ path }) => read(path)));
+    expect(semanticDrift(sheets)).toEqual({ hits: [], stale: [] });
+    const markup = new Map(GUARDED_MARKUP.map(({ path }) => read(path)));
+    expect(markupSemanticDrift(markup)).toEqual({ hits: [], stale: [] });
   });
 });
