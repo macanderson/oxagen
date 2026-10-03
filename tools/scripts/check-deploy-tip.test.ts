@@ -3,7 +3,9 @@
  * deployment created at 19:18, after its descendant `ebcbcb8` (18:46) had
  * shipped at 18:48; the older run must skip. 2026-09-24: e111db5 went green
  * and three merges landed during its staging jobs; it must still ship,
- * because nothing newer was live. The shape guard is asserted on the real
+ * because nothing newer was live. 2026-10-02 (#5247): the older ddc1684's
+ * API shipped after the newer 976b3f9's migration renamed the tables it
+ * reads; the older deploy must skip. The shape guard is asserted on the real
  * pipeline and on mutations of it.
  */
 import { readFileSync } from "node:fs";
@@ -14,14 +16,21 @@ import {
   DEPLOY_ENVIRONMENT,
   DEPLOY_JOBS,
   decide,
+  decideSchema,
   deployJobSteps,
   guardProblems,
+  MIGRATION_DIRS,
+  missingMigrations,
   orderOutputs,
   readLive,
   readMainTip,
+  readMigrations,
   readOrder,
   readRelation,
+  readSchema,
   recordDeploy,
+  SCHEMA_FREE_SERVICES,
+  SCHEMA_SERVICE,
   SHIP_GATE,
   taskFor,
 } from "./check-deploy-tip.mjs";
@@ -253,6 +262,206 @@ describe("readOrder", () => {
   });
 });
 
+// 2026-10-02 (#5247): #5239 merged ddc1684 at 21:30 and #5188 merged
+// 976b3f9 at 21:47. 976b3f9's gate renamed the context tables, then
+// ddc1684's run shipped its API at 21:59.
+const BEFORE_RENAME = "ddc1684d92000000000000000000000000000000";
+const RENAMED = "976b3f9555000000000000000000000000000000";
+const [PG_DIR, CH_DIR] = MIGRATION_DIRS;
+const RENAME = `${PG_DIR}/20261003010000_steering_records_rename.sql`;
+
+/** A contents API listing of `names` as files. */
+const listing = (...names: string[]) =>
+  names.map((name) => ({ name, type: "file" }));
+
+/** The schema record and both migration directories at both commits. */
+const incidentRoutes = {
+  "task=deploy%3Aschema": [{ sha: RENAMED }],
+  [`atlas/migrations?ref=${RENAMED}`]: listing(
+    "20261002120000_earlier.sql",
+    "20261003010000_steering_records_rename.sql",
+    "atlas.sum",
+  ),
+  [`atlas/migrations?ref=${BEFORE_RENAME}`]: listing(
+    "20261002120000_earlier.sql",
+    "atlas.sum",
+  ),
+  "telemetry/src/migrations?ref=": listing("0037_served_tool_calls.sql"),
+};
+
+describe("decideSchema (#5247)", () => {
+  it("skips an older commit after a newer commit's migration, and names the migration", () => {
+    const late = decideSchema({
+      sha: BEFORE_RENAME,
+      mark: RENAMED,
+      missing: [RENAME],
+    });
+    expect(late.deploy).toBe(false);
+    expect(late.reason).toContain(RENAME);
+    expect(late.reason).toContain("976b3f955");
+    expect(late.warning).toMatch(/schema is ahead of ddc1684d9/);
+  });
+
+  it("ships a commit whose migrations match the recorded schema", () => {
+    expect(
+      decideSchema({ sha: RENAMED, mark: RENAMED, missing: [] }),
+    ).toMatchObject({ deploy: true });
+    // A commit newer than the record carries every file it holds.
+    expect(
+      decideSchema({ sha: RENAMED, mark: BEFORE_RENAME, missing: [] }).deploy,
+    ).toBe(true);
+  });
+
+  it("ships when nothing is recorded yet, and fails open with a warning when the API could not answer", () => {
+    expect(decideSchema({ sha: RENAMED, mark: null })).toMatchObject({
+      deploy: true,
+      reason: expect.stringMatching(/nothing is recorded/),
+    });
+    const blind = decideSchema({
+      sha: RENAMED,
+      mark: null,
+      error: "HTTP 502",
+    });
+    expect(blind.deploy).toBe(true);
+    expect(blind.warning).toMatch(/HTTP 502/);
+  });
+
+  it("holds back every service that reads the database, and only those", () => {
+    expect(SCHEMA_SERVICE).toBe("schema");
+    expect([...SCHEMA_FREE_SERVICES].sort()).toEqual(["desktop", "web"]);
+    for (const service of ["stella-serve", "docs", "app", "api", "mcp"]) {
+      expect(pipeline).toContain(`- service: ${service}\n`);
+      expect(SCHEMA_FREE_SERVICES).not.toContain(service);
+    }
+  });
+});
+
+describe("missingMigrations", () => {
+  it("lists each applied file the commit lacks, once and sorted", () => {
+    expect(
+      missingMigrations(["b.sql", "a.sql", "b.sql", "c.sql"], ["c.sql"]),
+    ).toEqual(["a.sql", "b.sql"]);
+    expect(missingMigrations(["a.sql"], ["a.sql", "z.sql"])).toEqual([]);
+  });
+});
+
+describe("readMigrations", () => {
+  it("lists the .sql files of every migration directory at the ref", async () => {
+    const calls: Call[] = [];
+    const read = await readMigrations({
+      repository: "o/r",
+      token: "t",
+      ref: RENAMED,
+      fetchImpl: fakeFetch(
+        {
+          "atlas/migrations?ref=": [
+            ...listing(
+              "20261002120000_earlier.sql",
+              "20261003010000_steering_records_rename.sql",
+              "atlas.sum",
+            ),
+            { name: "nested.sql", type: "dir" },
+          ],
+          "telemetry/src/migrations?ref=": listing(
+            "0037_served_tool_calls.sql",
+            "README.md",
+          ),
+        },
+        calls,
+      ),
+    });
+    expect(read).toEqual({
+      files: [
+        `${PG_DIR}/20261002120000_earlier.sql`,
+        RENAME,
+        `${CH_DIR}/0037_served_tool_calls.sql`,
+      ],
+    });
+    expect(calls.map((c) => c.url)).toEqual([
+      `https://api.github.com/repos/o/r/contents/${PG_DIR}?ref=${RENAMED}`,
+      `https://api.github.com/repos/o/r/contents/${CH_DIR}?ref=${RENAMED}`,
+    ]);
+  });
+
+  it("never throws, and treats a listing that may be cut short as no answer", async () => {
+    const io = { repository: "o/r", token: "t", ref: RENAMED };
+    await expect(
+      readMigrations({ ...io, fetchImpl: fakeFetch({ "/contents/": 502 }) }),
+    ).resolves.toEqual({
+      error: `listing ${PG_DIR} at 976b3f955: HTTP 502`,
+    });
+    const full = Array.from({ length: 1000 }, (_, i) => ({
+      name: `${i}.sql`,
+      type: "file",
+    }));
+    const cut = await readMigrations({
+      ...io,
+      fetchImpl: fakeFetch({ "/contents/": full }),
+    });
+    expect(cut.error).toMatch(/cut-short/);
+  });
+});
+
+describe("readSchema", () => {
+  const io = { repository: "o/r", token: "t" };
+
+  it("replays 2026-10-02: the older commit lacks the rename the newer gate applied", async () => {
+    const schema = await readSchema({
+      ...io,
+      sha: BEFORE_RENAME,
+      fetchImpl: fakeFetch(incidentRoutes),
+    });
+    expect(schema).toEqual({
+      sha: BEFORE_RENAME,
+      mark: RENAMED,
+      missing: [RENAME],
+    });
+    // The deploy skips, and a re-run of the older gate records nothing, so
+    // the record keeps the rename.
+    expect(decideSchema(schema).deploy).toBe(false);
+  });
+
+  it("finds nothing missing for the newer commit, or for any commit that carries every file", async () => {
+    const calls: Call[] = [];
+    const own = await readSchema({
+      ...io,
+      sha: RENAMED,
+      fetchImpl: fakeFetch(incidentRoutes, calls),
+    });
+    expect(own).toEqual({ sha: RENAMED, mark: RENAMED, missing: [] });
+    // The gate recorded this very commit: one call, no listing.
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toContain(
+      `task=${encodeURIComponent(taskFor(SCHEMA_SERVICE))}`,
+    );
+
+    const sameFiles = await readSchema({
+      ...io,
+      sha: BEFORE_RENAME,
+      fetchImpl: fakeFetch({
+        ...incidentRoutes,
+        "task=deploy%3Aschema": [{ sha: "0".repeat(40) }],
+        "atlas/migrations?ref=0000": listing("20261002120000_earlier.sql"),
+      }),
+    });
+    expect(sameFiles.missing).toEqual([]);
+    expect(decideSchema(sameFiles).deploy).toBe(true);
+  });
+
+  it("carries a listing error to a fail-open deploy", async () => {
+    const broken = await readSchema({
+      ...io,
+      sha: BEFORE_RENAME,
+      fetchImpl: fakeFetch({
+        "task=deploy%3Aschema": [{ sha: RENAMED }],
+        "/contents/": 502,
+      }),
+    });
+    expect(broken.error).toMatch(/HTTP 502/);
+    expect(decideSchema(broken).deploy).toBe(true);
+  });
+});
+
 describe("recordDeploy", () => {
   it("creates a production deployment for the service's task and marks it successful", async () => {
     const calls: Call[] = [];
@@ -429,6 +638,34 @@ describe("guardProblems", () => {
     const mutated = pipeline.replace(/^        id: record\n/m, "");
     expect(guardProblems(mutated)).toEqual([
       expect.stringMatching(/deploy-web: no step with id "record"/),
+    ]);
+  });
+
+  it("fails when migration-gate stops recording production's schema (#5247)", () => {
+    const unrecorded = pipeline.replace("          DEPLOY_SERVICE: schema\n", "");
+    expect(guardProblems(unrecorded)).toEqual([
+      expect.stringMatching(
+        /migration-gate: no step records production's schema/,
+      ),
+    ]);
+    const unpermitted = pipeline.replace(
+      "      # Records this commit as production's schema (check-deploy-tip.mjs).\n      deployments: write\n",
+      "",
+    );
+    expect(unpermitted).not.toBe(pipeline);
+    expect(guardProblems(unpermitted)).toEqual([
+      expect.stringMatching(/migration-gate:/),
+    ]);
+  });
+
+  it("fails when manual-app-deploy stops checking production's schema (#5247)", () => {
+    const unchecked = pipeline.replace(
+      'node "$RUNNER_TEMP/check-deploy-tip.mjs" --schema',
+      "true",
+    );
+    expect(unchecked).not.toBe(pipeline);
+    expect(guardProblems(unchecked)).toEqual([
+      expect.stringMatching(/manual-app-deploy: no step runs/),
     ]);
   });
 
