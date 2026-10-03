@@ -7,12 +7,8 @@
 // next revision, which a person approves before the item can be sent.
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import {
-  buttonSmall,
-  fieldLabel,
-  inputBase,
-  textareaBase,
-} from "@/ui/control-styles";
+import { fieldLabel, inputBase, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { type CriterionDraft, saveBrief } from "../actions";
 import { useActionFailure } from "./action-failure";
 import { briefRepository, draftCriteria, type ItemData } from "./view";
@@ -130,9 +126,9 @@ export function EditBriefDialog({
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="font-mono text-sm text-dim">{key}</span>
-                <button
+                <Button
                   type="button"
-                  className={buttonSmall}
+                  variant="outline" size="sm"
                   disabled={rows.length === 1}
                   aria-label={t("remove", { position: String(index + 1) })}
                   onClick={() => {
@@ -143,7 +139,7 @@ export function EditBriefDialog({
                   }}
                 >
                   {t("removeShort")}
-                </button>
+                </Button>
               </div>
               <div className="flex flex-col">
                 <label htmlFor={id("text")} className={fieldLabel}>
@@ -200,10 +196,10 @@ export function EditBriefDialog({
         })}
       </ol>
       <div>
-        <button
+        <Button
           type="button"
           data-testid="work-brief-add"
-          className={buttonSmall}
+          variant="outline" size="sm"
           onClick={() => {
             setState((before) => ({
               serial: before.serial + 1,
@@ -215,7 +211,7 @@ export function EditBriefDialog({
           }}
         >
           {t("add")}
-        </button>
+        </Button>
       </div>
     </WorkDialog>
   );

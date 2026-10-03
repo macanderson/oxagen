@@ -36,13 +36,8 @@ import {
   parseAvatarValue,
   serializeAvatar,
 } from "./avatar-spec";
-import {
-  buttonPrimary,
-  buttonSmall,
-  fieldHint,
-  fieldLabel,
-  inputBase,
-} from "./control-styles";
+import { fieldHint, fieldLabel, inputBase } from "./control-styles";
+import { Button } from "./button";
 import { FormAlert } from "./form-feedback";
 import { SheetDialog } from "./sheet-dialog";
 
@@ -108,9 +103,9 @@ const SHAPE: Record<AvatarSubject, AvatarShape> = {
 const segment =
   "inline-flex max-w-full overflow-hidden rounded-lg border border-border bg-card";
 const segmentButton =
-  "min-h-9 border-r border-border bg-card px-3 text-base font-medium text-muted-foreground last:border-r-0 hover:bg-hl/60 hover:text-foreground aria-pressed:bg-hl aria-pressed:font-semibold aria-pressed:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring";
+  "rounded-none border-0 border-r border-border bg-card last:border-r-0 hover:bg-hl/60 hover:text-foreground aria-pressed:bg-hl aria-pressed:font-semibold aria-pressed:text-foreground focus-visible:-outline-offset-2";
 const pickTile =
-  "border border-border bg-card text-muted-foreground hover:bg-hl/60 hover:text-foreground aria-pressed:border-gold aria-pressed:bg-hl aria-pressed:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring";
+  "border border-border bg-card text-muted-foreground hover:bg-hl/60 hover:text-foreground aria-pressed:border-gold aria-pressed:bg-hl aria-pressed:text-foreground focus-visible:-outline-offset-2";
 
 const FONT_FACE: Record<AvatarFont, string> = {
   sans: "font-sans",
@@ -231,15 +226,15 @@ export function AvatarEditorDialog({
       wide
       testId={testId}
       footer={
-        <button
+        <Button
           type="submit"
           form={formId}
           data-touch-target=""
           data-testid="avatar-save"
-          className={buttonPrimary}
+          variant="primary"
         >
           {t("save")}
-        </button>
+        </Button>
       }
     >
       {open ? (
@@ -376,9 +371,10 @@ function AvatarEditor({
             <span className={fieldLabel}>{t("kind")}</span>
             <div className={segment} role="group" aria-label={t("kind")}>
               {(["icon", "initials", "photo"] as const).map((kind) => (
-                <button
+                <Button
                   key={kind}
                   type="button"
+                  variant="ghost"
                   data-testid={`avatar-kind-${kind}`}
                   aria-pressed={draft.kind === kind}
                   className={segmentButton}
@@ -387,7 +383,7 @@ function AvatarEditor({
                   }}
                 >
                   {t(`kinds.${kind}`)}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -403,20 +399,21 @@ function AvatarEditor({
                 {AVATAR_ICONS.map((icon) => {
                   const Glyph = AVATAR_GLYPHS[icon];
                   return (
-                    <button
+                    <Button
                       key={icon}
                       type="button"
+                      variant="secondary"
                       aria-pressed={draft.icon === icon}
                       aria-label={icon}
                       title={icon}
                       data-testid={`avatar-icon-${icon}`}
-                      className={`grid h-9 place-items-center rounded-lg ${pickTile}`}
+                      className={`grid place-items-center rounded-lg px-0 ${pickTile}`}
                       onClick={() => {
                         edit({ icon });
                       }}
                     >
                       <Glyph className="size-4.5" aria-hidden />
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
@@ -453,9 +450,10 @@ function AvatarEditor({
                   aria-label={t("typeface")}
                 >
                   {AVATAR_FONTS.map((font) => (
-                    <button
+                    <Button
                       key={font}
                       type="button"
+                      variant="ghost"
                       data-testid={`avatar-font-${font}`}
                       aria-pressed={draft.font === font}
                       className={`${segmentButton} ${FONT_FACE[font]}`}
@@ -464,7 +462,7 @@ function AvatarEditor({
                       }}
                     >
                       {t(`fonts.${font}`)}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
@@ -501,13 +499,14 @@ function AvatarEditor({
                 className="flex flex-wrap items-center gap-2"
               >
                 {AVATAR_TONES.map((tone) => (
-                  <button
+                  <Button
                     key={tone}
                     type="button"
+                    variant="ghost"
                     data-testid={`avatar-tone-${tone}`}
                     aria-pressed={draft.tone === tone}
                     aria-label={t(`tones.${tone}`)}
-                    className={`flex min-w-16 flex-col items-center gap-1.5 rounded-xl px-1.5 pb-1.5 pt-2 text-xs ${pickTile}`}
+                    className={`h-auto min-w-16 flex-col gap-1.5 rounded-xl px-1.5 pb-1.5 pt-2 text-xs ${pickTile}`}
                     onClick={() => {
                       edit({ tone });
                     }}
@@ -519,7 +518,7 @@ function AvatarEditor({
                       shape={shape}
                     />
                     <span>{t(`tones.${tone}`)}</span>
-                  </button>
+                  </Button>
                 ))}
               </div>
               <p className={fieldHint}>{t("toneHint")}</p>
@@ -536,15 +535,15 @@ function AvatarEditor({
 
       {removable ? (
         <div className="mt-4">
-          <button
+          <Button
             type="button"
-            className={buttonSmall}
+            variant="outline" size="sm"
             disabled={pending}
             data-testid="avatar-remove"
             onClick={() => void write("")}
           >
             {t("remove")}
-          </button>
+          </Button>
           <p className={fieldHint}>{t(`removeHints.${subject}`)}</p>
         </div>
       ) : null}

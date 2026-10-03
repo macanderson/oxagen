@@ -26,6 +26,7 @@ const {
   handleTachoStatus,
   handleTachoUnenroll,
   handleTachoUninstall,
+  handleTachoReassign,
   handleTachoVerify,
   handleAgentEnroll,
   handleAgentRun,
@@ -37,6 +38,7 @@ const {
   handleTachoStatus: vi.fn<HostHandler>(async () => true),
   handleTachoUnenroll: vi.fn<HostHandler>(async () => true),
   handleTachoUninstall: vi.fn<HostHandler>(async () => true),
+  handleTachoReassign: vi.fn<HostHandler>(async () => true),
   handleTachoVerify: vi.fn<HostHandler>(async () => true),
   handleAgentEnroll: vi.fn<HostHandler>(async () => true),
   handleAgentRun: vi.fn<RunHandler>(async () => 0),
@@ -50,7 +52,7 @@ vi.mock("../commands/tacho.js", () => ({
   handleTachoStatus,
   handleTachoUnenroll,
   handleTachoUninstall,
-  handleTachoReassign: vi.fn(async () => true),
+  handleTachoReassign,
   handleTachoExport: vi.fn(async () => true),
   handleTachoVerify,
   handleTachoHosts: vi.fn(async () => true),
@@ -142,6 +144,29 @@ describe("oxagen agent enroll", () => {
     expect(stderr).toContain("--managed");
     expect(stderr).toContain("oxagen agent enroll");
     expect(process.exitCode).toBe(1);
+  });
+
+  it("carries --allow-root to the enroll on both paths, and to reassign", async () => {
+    await run("agent", "enroll", "--allow-root");
+    expect(handleTachoEnroll.mock.calls[0]?.[0]).toMatchObject({
+      allowRoot: true,
+    });
+    program = buildProgram().exitOverride();
+    await run("agent", "enroll", "--token", ENROLLMENT_TOKEN, "--allow-root");
+    expect(handleAgentEnroll.mock.calls[0]?.[0]).toMatchObject({
+      allowRoot: true,
+    });
+    program = buildProgram().exitOverride();
+    await run("agent", "reassign", "--workspace", "edge", "--allow-root");
+    expect(handleTachoReassign.mock.calls[0]?.[0]).toMatchObject({
+      workspace: "edge",
+      allowRoot: true,
+    });
+    program = buildProgram().exitOverride();
+    await run("tacho", "enroll", "--allow-root");
+    expect(handleTachoEnroll.mock.calls[1]?.[0]).toMatchObject({
+      allowRoot: true,
+    });
   });
 
   it("names every refused flag, not just the first (negative)", async () => {

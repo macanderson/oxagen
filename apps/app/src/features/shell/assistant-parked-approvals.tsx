@@ -28,13 +28,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { resolveApprovalAction } from "@/features/fleet/client";
 import type { ActionResult } from "@/server/kernel";
 import { routes } from "@/shared/safe-path";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  inputBase,
-  linkText,
-  mono,
-} from "@/ui/control-styles";
+import { inputBase, linkText, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { useFormatter } from "@/ui/formatter";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import type { ParkedCard } from "./assistant-stream-client";
@@ -269,17 +264,19 @@ export function AssistantParkedApprovals({
         ))}
       </ul>
       {!watching && views.some(unsettled) ? (
-        <button
+        <Button
           type="button"
+          variant="link"
+          size="xs"
           data-testid="assistant-parked-check"
-          className={`self-start text-sm ${linkText}`}
+          className="h-auto self-start px-0"
           onClick={() => {
             setPolls(0);
             void read();
           }}
         >
           {t("checkAgain")}
-        </button>
+        </Button>
       ) : null}
     </div>
   );
@@ -383,32 +380,32 @@ function ParkedApproval({
             <FailureLine failure={failure} org={org} />
           )}
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
               type="button"
               data-testid="assistant-parked-approve"
               aria-disabled={
                 pending !== null || view.kind === "checking" || undefined
               }
-              className={buttonPrimary}
+              variant="primary"
               onClick={() => {
                 if (view.kind !== "checking") void decide("approved");
               }}
             >
               {pending === "approved" ? t("approving") : t("approve")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               data-testid="assistant-parked-deny"
               aria-disabled={
                 pending !== null || view.kind === "checking" || undefined
               }
-              className={buttonSecondary}
+              variant="outline"
               onClick={() => {
                 if (view.kind !== "checking") void decide("denied");
               }}
             >
               {pending === "denied" ? t("denying") : t("deny")}
-            </button>
+            </Button>
           </div>
         </>
       ) : null}

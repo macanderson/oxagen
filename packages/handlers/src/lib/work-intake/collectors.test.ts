@@ -20,6 +20,14 @@ describe("renderGithubCollectorFile", () => {
     expect(read.file.fileHash).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
 
+  it("writes the switches it is given, so a change keeps the row's switches", () => {
+    registerCollectorModules();
+    const on = { certify_note: false, send_note: true, status: false, close: false, labels: false };
+    const text = renderGithubCollectorFile({ name: "github", connection: "con_01", repos: ["acme/web"], writeBack: on });
+    const read = readCollectorFile("work/collectors/github.toml", text);
+    expect(read.ok && read.file.writeBack).toEqual(on);
+  });
+
   it("fails the module's scope check for a repository that is not owner/name", () => {
     registerCollectorModules();
     const read = readCollectorFile("work/collectors/github.toml", renderGithubCollectorFile({ name: "github", connection: "con_01", repos: ["web"] }));

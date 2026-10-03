@@ -18,7 +18,8 @@ import {
   rmSync,
   unlinkSync,
 } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
+import { HARNESS_BACKUPS, HARNESS_RECEIPTS } from "../host/harness-file";
 import { acquireInstallLock } from "../host/install-lock";
 import { stripClaudeCodeMcpConfig } from "../host/claude-code-mcp-writer";
 import { stripClaudeDesktopConfig } from "../host/claude-desktop-writer";
@@ -953,6 +954,15 @@ async function unenrollLocked(
     // pending session ends hold sealed terminal batches, bodies included,
     // that never reached the WAL, so they go with it (ADR-139).
     rmSync(deps.paths.pendingEnds, { force: true });
+    // Settling deletes the copy of each harness file it gives back, so with
+    // no receipt left, a copy still here outlived a receipt that was lost.
+    // It can hold a key the file carried before custody took it. While a
+    // receipt remains, its copy is what the retry restores from.
+    if (!existsSync(join(deps.paths.dir, HARNESS_RECEIPTS)))
+      rmSync(join(deps.paths.dir, HARNESS_BACKUPS), {
+        recursive: true,
+        force: true,
+      });
     // One tachod writes one log for every agent (ADR-203), so it stays
     // while another agent on this machine is enrolled.
     if (otherLiveAgents(deps.paths, deps.paths.dir).length === 0) {

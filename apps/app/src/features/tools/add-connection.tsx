@@ -19,12 +19,8 @@
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import { routes } from "@/shared/safe-path";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  inputBase,
-  mono,
-} from "@/ui/control-styles";
+import { inputBase, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -106,16 +102,16 @@ export function AddConnection({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={`${TESTID}-open`}
-        className={primary ? buttonPrimary : buttonSecondary}
+        variant={primary ? "primary" : "outline"}
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {

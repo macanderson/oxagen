@@ -179,7 +179,6 @@ export function SteeringFailure({
                 testId="steering-incident"
                 label={t("error.incident")}
                 note={t("error.incidentNote")}
-                className={buttonSecondary}
               />
             </>
           }
@@ -215,7 +214,7 @@ export function SteeringFailure({
                 testId="steering-request-access"
                 label={t("denied.request")}
                 note={t("denied.requestNote", { permission })}
-                className={buttonPrimary}
+                variant="primary"
               />
               <SafeLink to={routes.fleet(org, ws)} className={buttonSecondary}>
                 {t("denied.back")}

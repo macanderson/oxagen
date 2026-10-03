@@ -10,7 +10,7 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { WorkspaceMemory } from "@/data/contracts/steering";
-import { buttonPrimary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import type { SteeringAt } from "../view";
@@ -72,17 +72,17 @@ export function DismissDialog({
       dismissible={!pending}
       footer={
         waiting.length === 0 ? null : (
-          <button
+          <Button
             type="button"
             data-testid="dismiss-submit"
-            className={buttonPrimary}
+            variant="primary"
             disabled={pending}
             onClick={() => {
               void submit();
             }}
           >
             {pending ? t("pending") : t("confirm", { count: waiting.length })}
-          </button>
+          </Button>
         )
       }
     >

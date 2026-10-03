@@ -1,7 +1,7 @@
 // Command delivery against a real Postgres: a `sent` command the host never
 // acknowledged is offered again once its lease runs out, and never while the
 // lease holds or after any acknowledgement; acknowledgements only move a row
-// forward; a `sent` row left unacknowledged past its expiry and the grace is
+// forward and keep the first acknowledgement's time; a `sent` row left unacknowledged past its expiry and the grace is
 // swept `expired`; two drains for one host at once deliver a command once;
 // and a value Postgres cannot store maps to a refused input. Runs wherever
 // DATABASE_URL points at a migrated database (CI's `test` job); a local run
@@ -243,6 +243,35 @@ describe.skipIf(!enabled)("command delivery against Postgres", () => {
     const after = await fetch([{ command_id: id, status: "failed" }]);
     expect(after.acknowledged).toBe(0);
     expect(await row(id)).toMatchObject({ outcome: "applied" });
+  });
+
+  it("keeps the first acknowledgement's time through a re-sent acknowledged and the applied after it", async () => {
+    await settleAll();
+    const first = ago(4_000);
+    const id = await command({
+      outcome: "acknowledged",
+      deliveredAt: ago(5_000),
+      acknowledgedAt: first,
+    });
+
+    // The host re-sends its acknowledgement after a poll it never read.
+    await fetch([{ command_id: id, status: "acknowledged" }]);
+    expect((await row(id)).acknowledgedAt?.getTime()).toBe(first.getTime());
+
+    await fetch([{ command_id: id, status: "applied", applied_at_seq: 7 }]);
+    const applied = await row(id);
+    expect(applied.outcome).toBe("applied");
+    expect(applied.acknowledgedAt?.getTime()).toBe(first.getTime());
+    expect(applied.appliedAt?.getTime()).toBeGreaterThan(first.getTime());
+
+    // A row applied with no acknowledgement before it takes the applied time.
+    const direct = await command({ outcome: "sent", deliveredAt: ago(5_000) });
+    await fetch([{ command_id: direct, status: "applied", applied_at_seq: 8 }]);
+    const settled = await row(direct);
+    expect(settled.acknowledgedAt).toBeInstanceOf(Date);
+    expect(settled.acknowledgedAt?.getTime()).toBe(
+      settled.appliedAt?.getTime(),
+    );
   });
 
   it("sweeps a sent row the host never acknowledged once the grace after its expiry has passed", async () => {

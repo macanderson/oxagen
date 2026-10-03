@@ -100,10 +100,14 @@ describe("computeReplayGrade", () => {
     );
   });
 
-  it("refuses a gap kind outside the vocabulary", () => {
-    expect(() =>
-      computeReplayGrade({ ...clean, gaps: ["bodies_lost"] }),
-    ).toThrow(/unknown completeness gap kind: bodies_lost/);
+  it("grades inspect on a gap kind outside the vocabulary, whatever else holds", () => {
+    expect(
+      computeReplayGrade({
+        ...clean,
+        gaps: ["bodies_lost"],
+        harnessReproducible: true,
+      }),
+    ).toBe("inspect");
   });
 
   it("ignores a repeated gap", () => {
@@ -217,10 +221,51 @@ describe("explainReplayGrade", () => {
     expect(ladder[3]?.reason).toBe("body_missing,chain_break");
   });
 
-  it("refuses a gap kind the vocabulary does not name (negative)", () => {
-    expect(() =>
-      explainReplayGrade({ ...base, gaps: ["something_new"] }),
-    ).toThrow(RangeError);
+  it("stops every rung above inspect on a gap kind the vocabulary does not name (negative)", () => {
+    const { grade, ladder } = explainReplayGrade({
+      ...base,
+      gaps: ["something_new"],
+    });
+    expect(grade).toBe("inspect");
+    expect(ladder.map((r) => [r.grade, r.met, r.reason])).toEqual([
+      ["inspect", true, "frames_recorded"],
+      ["view", false, "unknown_gap:something_new"],
+      ["fork", false, "unknown_gap:something_new"],
+      ["retry", false, "unknown_gap:something_new"],
+    ]);
+    expect(
+      explainReplayGrade({ ...base, gaps: ["something_new", "chain_break"] })
+        .ladder[1]?.reason,
+    ).toBe("chain_break,unknown_gap:something_new");
+  });
+
+  it("draws a backfilled session's ladder no higher than the grade its seal recorded", () => {
+    // `oxagen agent backfill` seals with the gap `backfill`, a word outside
+    // the vocabulary. The seal grades it `inspect`, and `get_run_chain`
+    // draws the ladder from the same gaps.
+    const sealed = sealTachoSession({
+      hostGaps: ["backfill"],
+      chainVerified: true,
+      unobservedTail: false,
+      telemetryGapCount: 0,
+      retentionMode: "content_exact",
+      contentFrames: 2,
+      bodyFrames: 2,
+      toolCalls: 1,
+      toolBodyFrames: 1,
+      enforcementTier: "gateway",
+    });
+    expect(sealed.replayGrade).toBe("inspect");
+    const explained = explainReplayGrade({
+      gaps: sealed.completenessGaps,
+      enforcementTier: "gateway",
+      retainedBodies: 2,
+      harnessReproducible: false,
+    });
+    expect(explained.grade).toBe(sealed.replayGrade);
+    expect(explained.ladder.filter((r) => r.met).map((r) => r.grade)).toEqual([
+      "inspect",
+    ]);
   });
 });
 

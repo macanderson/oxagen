@@ -188,7 +188,9 @@ describe("tachoFrame", () => {
     policy_source: "harness",
   });
 
-  it.each(["otel_log", "otel_span"])(
+  // `hook`: the PermissionDenied and PostToolBatch rows a host sealed as
+  // `policy_decision` until 2026-10-03, and one that has not upgraded still does.
+  it.each(["otel_log", "otel_span", "hook"])(
     "reads a stored %s harness check as harness_permission, not a policy decision",
     (source) => {
       const frame = tachoFrame(
@@ -229,9 +231,9 @@ describe("tachoFrame", () => {
     expect(frame.identity.target).toHaveLength(400);
   });
 
-  it("keeps a policy decision whose source is not OTel, even when it names the harness", () => {
+  it("keeps a collector's policy decision, even when it names the harness", () => {
     const frame = tachoFrame(
-      row(6, "policy_decision", { source: "hook", body: harnessBody }),
+      row(6, "policy_decision", { source: "collector", body: harnessBody }),
     );
     expect(frame.type).toBe("policy_decision");
     expect(frame.identity.target).toBeUndefined();

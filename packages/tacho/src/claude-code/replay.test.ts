@@ -200,7 +200,8 @@ describe("replaying the captured Claude Code session", () => {
       "tool_call",
       "file_io",
       "command",
-      "policy_decision",
+      // Claude Code's own checks: OTel `tool_decision` and `PostToolBatch`.
+      "harness_permission",
       "subagent_start",
       "oxagen:message",
       "turn_end",
@@ -211,6 +212,8 @@ describe("replaying the captured Claude Code session", () => {
     ]) {
       expect(kinds.has(kind as TachoEvent["kind"]), kind).toBe(true);
     }
+    // No Oxagen policy ran in this replay, so nothing reads as its verdict.
+    expect(kinds.has("policy_decision")).toBe(false);
     const sources = new Set(snapshot.events.map((e) => e.source));
     for (const source of [
       "hook",

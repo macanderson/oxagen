@@ -26,6 +26,7 @@ import type { ActionResult } from "@/server/kernel";
 import type { OrgRole, WsRole } from "@/server/viewer";
 import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
 import { buttonSecondary, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
 import { formatByteSize } from "@/ui/money-format";
@@ -80,13 +81,13 @@ function CopyDigest({ digest }: { digest: string }) {
       >
         {short}
       </code>
-      <button
+      <Button
         type="button"
-        className={`${buttonSecondary} h-8 px-2 text-sm`}
+        variant="outline" className="h-8 px-2 text-sm"
         onClick={() => void copy()}
       >
         {state === "copied" ? t("copied") : t("copy")}
-      </button>
+      </Button>
       {state === "failed" ? (
         <span className="text-sm text-muted-foreground">{t("copyFailed")}</span>
       ) : null}
@@ -296,10 +297,10 @@ function ExportStatus({
         <p data-testid="export-stalled">{t("stalled")}</p>
       ) : null}
       {(stalled || status?.status === "ready") && retryable ? (
-        <button
+        <Button
           type="button"
           data-testid="export-check-again"
-          className={`${buttonSecondary} self-start`}
+          variant="outline" className="self-start"
           disabled={reading}
           onClick={() => {
             setStalled(false);
@@ -307,7 +308,7 @@ function ExportStatus({
           }}
         >
           {t("checkAgain")}
-        </button>
+        </Button>
       ) : null}
     </div>
   );
@@ -369,16 +370,16 @@ function RecordDialog<O>({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={testId}
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {label}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={openChange}
@@ -410,16 +411,16 @@ function RecordDialog<O>({
               {queued}
             </code>
             {follow === undefined ? null : follow(queued)}
-            <button
+            <Button
               type="button"
-              className={buttonSecondary}
+              variant="outline"
               onClick={() => {
                 openChange(false);
                 navigate.refresh();
               }}
             >
               {t("reread")}
-            </button>
+            </Button>
           </div>
         )}
       </SheetDialog>
@@ -486,16 +487,16 @@ export function SummarizeAction({
     ? t("summarize.needsBodies")
     : t("summarize.needsRole");
   return (
-    <button
+    <Button
       type="button"
       disabled
       title={reason}
       data-testid={`run-${action}`}
       data-reason={hasRole ? "summarize-no-bodies" : "summarize-no-role"}
-      className={buttonSecondary}
+      variant="outline"
     >
       {t(`${action}.open`)}
-    </button>
+    </Button>
   );
 }
 
@@ -565,17 +566,17 @@ export function ExportAction({
   // tech as the button's description.
   return (
     <>
-      <button
+      <Button
         type="button"
         disabled
         title={reason}
         aria-describedby={reasonId}
         data-testid={testId}
         data-reason={why}
-        className={buttonSecondary}
+        variant="outline"
       >
         {text}
-      </button>
+      </Button>
       <span
         id={reasonId}
         data-testid={testId === "run-export" ? why : `${testId}-refused`}

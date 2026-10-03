@@ -37,7 +37,8 @@ import type {
 } from "@/data/contracts/approvals";
 import { AgentAvatar } from "@/ui/agent-avatar";
 import { Badge } from "@/ui/badge";
-import { buttonSecondary, linkText, mono } from "@/ui/control-styles";
+import { linkText, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { SafeLink } from "@/ui/navigation";
 import { routes } from "@/shared/safe-path";
 import { ReadFailure } from "@/ui/read-failure";
@@ -132,6 +133,10 @@ function Glyph({
   );
 }
 
+/** An approval row over the kit's outline: a card-cornered tile whose text wraps. */
+const rowClass =
+  "h-auto w-full items-start justify-start gap-2.5 whitespace-normal rounded-xl px-3 py-2.5 text-left font-normal";
+
 function PendingRow({
   item,
   wsName,
@@ -153,12 +158,13 @@ function PendingRow({
   const agent = shortAgent(item.agentKey);
   return (
     <li>
-      <button
+      <Button
         type="button"
+        variant="outline"
         data-testid="approval-row"
         aria-label={t("openApproval", { id: item.id })}
         onClick={onOpen}
-        className="flex w-full items-start gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5 text-left text-card-foreground transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-ring"
+        className={rowClass}
       >
         <Glyph agent={agent} harness={harness} />
         <span className="min-w-0 flex-1">
@@ -178,7 +184,7 @@ function PendingRow({
         >
           {left ?? t("expired")}
         </span>
-      </button>
+      </Button>
     </li>
   );
 }
@@ -199,12 +205,13 @@ function ResolvedRow({
   const agent = shortAgent(item.agentKey ?? null);
   return (
     <li>
-      <button
+      <Button
         type="button"
+        variant="outline"
         data-testid="resolved-row"
         aria-label={t("openApproval", { id: item.id })}
         onClick={onOpen}
-        className="flex w-full items-start gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5 text-left text-card-foreground opacity-80 transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-ring"
+        className={`${rowClass} opacity-80`}
       >
         <Glyph agent={agent} harness={harness} />
         <span className="min-w-0 flex-1">
@@ -220,7 +227,7 @@ function ResolvedRow({
             {t(`resolution.${item.resolution}`)}
           </Badge>
         </span>
-      </button>
+      </Button>
     </li>
   );
 }
@@ -450,16 +457,18 @@ export function ApprovalsDrawer({
               {t("waiting", { count: waitingLabel })}
             </Badge>
           )}
-          <button
+          <Button
             ref={closeRef}
             type="button"
+            variant="outline"
+            size="icon-sm"
             data-touch-target=""
             aria-label={t("close")}
             onClick={close}
-            className="ml-auto grid size-8 place-items-center rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+            className="ml-auto"
           >
             <XIcon aria-hidden="true" className="size-3.5" />
-          </button>
+          </Button>
         </div>
         <div
           ref={bodyRef}
@@ -468,9 +477,9 @@ export function ApprovalsDrawer({
         >
           {selected !== null ? (
             <>
-              <button
+              <Button
                 type="button"
-                className={`${buttonSecondary} mb-3`}
+                variant="outline" className="mb-3"
                 onClick={() => {
                   setSelected(null);
                   if (bodyRef.current) bodyRef.current.scrollTop = 0;
@@ -478,7 +487,7 @@ export function ApprovalsDrawer({
               >
                 <CaretLeftIcon aria-hidden="true" className="size-3.5" />
                 {t("all")}
-              </button>
+              </Button>
               {selected.kind === "resolved" ? (
                 <ResolvedCard
                   item={selected.item}

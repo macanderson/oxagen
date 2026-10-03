@@ -14,7 +14,8 @@ import { type SyntheticEvent, useState } from "react";
 import type { SlackChannel, SlackChannelList } from "@/data/contracts/org";
 import type { ActionResult } from "@/server/kernel";
 import { routes } from "@/shared/safe-path";
-import { buttonSecondary, inputBase } from "@/ui/control-styles";
+import { inputBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { recordReceipt } from "./receipt";
@@ -140,9 +141,9 @@ export function NotificationsControls({
       <div className="flex flex-col gap-3">
         {alert}
         <div>
-          <button
+          <Button
             type="button"
-            className={buttonSecondary}
+            variant="outline"
             onClick={() => {
               void onConnect();
             }}
@@ -150,7 +151,7 @@ export function NotificationsControls({
             data-testid="slack-connect"
           >
             {busy === "connecting" ? t("connecting") : t("connect")}
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -214,25 +215,25 @@ export function NotificationsControls({
               secondary
               disabled={picked === ""}
             />
-            <button
+            <Button
               type="button"
-              className={buttonSecondary}
+              variant="outline"
               onClick={() => {
                 setList(null);
                 setFailure(null);
               }}
             >
               {t("picker.cancel")}
-            </button>
+            </Button>
           </div>
         </form>
       )}
       {alert}
       <div className="flex flex-wrap items-center gap-3">
         {list === null ? (
-          <button
+          <Button
             type="button"
-            className={buttonSecondary}
+            variant="outline"
             onClick={onOpenPicker}
             aria-disabled={busy !== "idle" || undefined}
             data-testid="slack-pick"
@@ -242,7 +243,7 @@ export function NotificationsControls({
               : channel === null
                 ? t("picker.open")
                 : t("picker.change")}
-          </button>
+          </Button>
         ) : null}
         {confirming ? (
           <div
@@ -250,37 +251,37 @@ export function NotificationsControls({
             data-testid="slack-disconnect-confirm"
           >
             <p className="text-base">{t("disconnect.confirm")}</p>
-            <button
+            <Button
               type="button"
-              className={buttonSecondary}
+              variant="outline"
               onClick={onDisconnect}
               aria-disabled={busy !== "idle" || undefined}
             >
               {busy === "disconnecting"
                 ? t("disconnect.pending")
                 : t("disconnect.yes")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className={buttonSecondary}
+              variant="outline"
               onClick={() => {
                 setConfirming(false);
               }}
             >
               {t("disconnect.cancel")}
-            </button>
+            </Button>
           </div>
         ) : (
-          <button
+          <Button
             type="button"
-            className={buttonSecondary}
+            variant="outline"
             onClick={() => {
               setConfirming(true);
             }}
             data-testid="slack-disconnect"
           >
             {t("disconnect.open")}
-          </button>
+          </Button>
         )}
       </div>
     </div>

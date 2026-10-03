@@ -250,23 +250,32 @@ describe("hostCedarReader", () => {
     expect(Object.keys(second?.policies ?? {})).toContain(REVIEWER_NO_SHELL_ID);
   });
 
-  it("logs a version that does not compile once, and answers nothing", async () => {
+  it("fails the read for a version that does not compile when nothing compiled before, and compiles it once", async () => {
     const port = cedarPort(cedarVersion({ policies: [BROKEN_POLICY] }));
     const { read, loads } = reader(port);
+    // Answering no policies would sign a bundle that allows every call the
+    // policies forbid, as a failed read would.
     await expect(
       read.read("get_tacho_bundle", CTX, hostRow()),
-    ).resolves.toBeUndefined();
-    expect(warn).toHaveBeenCalledTimes(1);
+    ).rejects.toThrow(CedarPoliciesUnavailableError);
     expect(warn.mock.calls[0]?.[1]).toMatch(/do not compile/);
-    // The version never changes, so its failure is kept and not logged again.
+    expect(warn.mock.calls.at(-1)?.[1]).toMatch(
+      /do not compile, and this process holds no earlier Cedar policies/,
+    );
+    // The version never changes, so its failure is kept: it is not compiled
+    // again, and its errors are not logged again.
     await expect(
       read.read("get_tacho_bundle", CTX, hostRow()),
-    ).resolves.toBeUndefined();
-    expect(warn).toHaveBeenCalledTimes(1);
+    ).rejects.toThrow(CedarPoliciesUnavailableError);
+    expect(
+      warn.mock.calls.filter((call) =>
+        String(call[1]).includes("compiled from this version"),
+      ),
+    ).toHaveLength(1);
     expect(loads.count).toBe(1);
   });
 
-  it("logs a tool manifest that does not parse, and answers nothing", async () => {
+  it("fails the read for a tool manifest that does not parse when nothing compiled before", async () => {
     const version = cedarVersion();
     const port = cedarPort({
       ...version,
@@ -275,8 +284,25 @@ describe("hostCedarReader", () => {
     const { read } = reader(port);
     await expect(
       read.read("get_tacho_bundle", CTX, hostRow()),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow(CedarPoliciesUnavailableError);
     expect(warn.mock.calls[0]?.[1]).toMatch(/tool manifest does not parse/);
+  });
+
+  it("serves the last set that compiled, and keeps the etag, when a newly published version does not compile", async () => {
+    const port = cedarPort();
+    const { read } = reader(port);
+    const first = await read.read("get_tacho_bundle", CTX, hostRow());
+    expect(first?.policies).toHaveProperty(NO_SHELL_ID);
+    const served = await hostBundle(port, hostRow(), read);
+    port.version = cedarVersion({ version: 2, policies: [BROKEN_POLICY] });
+    await expect(
+      read.read("get_tacho_bundle", CTX, hostRow()),
+    ).resolves.toBe(first);
+    expect(warn.mock.calls.at(-1)?.[1]).toMatch(
+      /do not compile, so the host receives the last policies that compiled/,
+    );
+    // The host's next poll names the etag it holds, so it keeps its policies.
+    expect((await hostBundle(port, hostRow(), read)).etag).toBe(served.etag);
   });
 
   it("tries again on the next read when the evaluator did not load", async () => {
@@ -553,12 +579,13 @@ describe("the Cedar part of the signed bundle", () => {
     }
   });
 
-  it("serves the bundle without Cedar when the published version does not compile", async () => {
-    const bundle = await hostBundle(
-      cedarPort(cedarVersion({ policies: [BROKEN_POLICY] })),
-    );
-    expect(bundle).not.toHaveProperty("cedar");
-    expect(bundle.etag).toBe(bundleWithoutCedar().etag);
+  it("builds no bundle when the published version does not compile and nothing compiled before", async () => {
+    // A bundle without Cedar would let the host allow every call the
+    // policies forbid. The request fails, and the host keeps the bundle it
+    // holds.
+    await expect(
+      hostBundle(cedarPort(cedarVersion({ policies: [BROKEN_POLICY] }))),
+    ).rejects.toThrow(CedarPoliciesUnavailableError);
     expect(warn).toHaveBeenCalled();
   });
 

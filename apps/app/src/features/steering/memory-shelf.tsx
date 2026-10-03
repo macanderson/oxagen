@@ -21,19 +21,8 @@ import { type ReactNode, useState, useTransition } from "react";
 import type { MemoryItem } from "@/data/contracts/steering";
 import { CREATE_DESCRIPTION_MAX, openCreate } from "@/shared/create";
 import { Badge } from "@/ui/badge";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  panel,
-  panelFooter,
-  panelHeader,
-  panelTitle,
-  statNote,
-  statStrip,
-  statTerm,
-  statTile,
-  statValue,
-} from "@/ui/control-styles";
+import { buttonSecondary, panel, panelFooter, panelHeader, panelTitle, statNote, statStrip, statTerm, statTile, statValue } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
@@ -51,7 +40,6 @@ const CLASSES = ["OBSERVATION", "RULE", "FACT"] as const;
 
 const note =
   "border-l-2 border-gold py-0.5 pl-3 text-sm text-muted-foreground";
-const buttonDanger = `${buttonSecondary} border-error/40 text-error-ink hover:border-error`;
 
 /** The assembler's budget unit over the line a memory would be delivered as. */
 function memoryTokens(memory: MemoryItem): number {
@@ -138,12 +126,12 @@ function MemoryDialog({
       testId="memory-dialog"
       footer={
         <>
-          <button type="button" className={buttonDanger} onClick={onForget}>
+          <Button type="button" variant="destructive-outline" onClick={onForget}>
             {t("dialog.forget")}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className={buttonPrimary}
+            variant="primary"
             onClick={() => {
               onClose();
               openCreate("record", {
@@ -152,7 +140,7 @@ function MemoryDialog({
             }}
           >
             {t("dialog.promote")}
-          </button>
+          </Button>
         </>
       }
     >
@@ -222,9 +210,9 @@ function ForgetDialog({
       closeLabel={t("forget.keep")}
       testId="memory-forget"
       footer={
-        <button
+        <Button
           type="button"
-          className={buttonDanger}
+          variant="destructive-outline"
           disabled={pending}
           onClick={() => {
             setError(null);
@@ -236,7 +224,7 @@ function ForgetDialog({
           }}
         >
           {pending ? t("forget.pending") : t("forget.confirm")}
-        </button>
+        </Button>
       }
     >
       <div className="flex flex-col gap-3 text-sm">
@@ -369,9 +357,11 @@ export function MemoryShelfBody({
             >
               <td className={`${cell} cell-max-wide`}>
                 {/* The row's keyboard way in: a button answers Enter and Space. */}
-                <button
+                <Button
                   type="button"
-                  className="block max-w-full text-left font-medium text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:truncate"
+                  variant="link"
+                  size="xs"
+                  className="block h-auto max-w-full p-0 text-left whitespace-normal md:truncate"
                   aria-label={t("open", { ref: memory.publicRef })}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -379,7 +369,7 @@ export function MemoryShelfBody({
                   }}
                 >
                   {memory.body}
-                </button>
+                </Button>
                 <span className="mt-0.5 block font-mono text-xs text-dim md:truncate">
                   {t("provenance", {
                     ref: memory.publicRef,

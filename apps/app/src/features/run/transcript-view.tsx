@@ -66,6 +66,7 @@ import {
 import { isStale, type RunRow } from "@/data/contracts/runs";
 import type { DiffLine } from "@/shared/line-diff";
 import { routes } from "@/shared/safe-path";
+import { Button } from "@/ui/button";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount, formatDuration, ratioWidth } from "@/ui/money-format";
@@ -206,15 +207,16 @@ const txKinds = "flex flex-wrap gap-0.75";
  * `{ background:var(--hl); color:var(--fg); box-shadow:inset 0 0 0 1px
  * var(--rule) }`, released `{ color:var(--dim) }` with its words struck.
  * `.all { padding-left:8px }`, and `.err[aria-pressed="true"] {
- * color:var(--st-failed) }`.
+ * color:var(--st-failed) }`. Each chip is the kit's `ghost` button at its
+ * `xs` size (#5283), which draws the muted ink, the shape and the focus
+ * ring; these classes add the chip's padding, face and pressed states.
  */
-const kindShape =
-  "inline-flex items-center gap-1.5 rounded-md py-0.75 pr-2 font-mono text-xs focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-9";
+const kindShape = "gap-1.5 pr-2 font-mono text-xs max-md:min-h-9";
 const kindPressed =
   "aria-pressed:bg-hl aria-pressed:inset-ring aria-pressed:inset-ring-rule aria-[pressed=false]:text-dim aria-[pressed=false]:[&>span:not([data-dot])]:line-through";
-const txKind = `${kindShape} ${kindPressed} pl-1.5 text-muted-foreground aria-pressed:text-foreground`;
-const txKindAll = `${kindShape} pl-2 text-muted-foreground hover:text-foreground`;
-const txKindErrors = `${kindShape} ${kindPressed} pl-1.5 text-muted-foreground aria-pressed:text-error`;
+const txKind = `${kindShape} ${kindPressed} pl-1.5 aria-pressed:text-foreground`;
+const txKindAll = `${kindShape} pl-2`;
+const txKindErrors = `${kindShape} ${kindPressed} pl-1.5 aria-pressed:text-error`;
 /** `.tx-kind .n { font-size:10px; color:var(--dim) }` */
 const txKindCount = "text-xs tabular-nums text-dim";
 /**
@@ -255,27 +257,23 @@ const DOT: Record<FeedGroup, { on: string; off: string }> = {
 };
 /**
  * `.btn.sm` inside `.tx-play { padding:3px 8px; font-size:11.5px;
- * min-width:30px; justify-content:center }` over `.btn { border:1px solid
- * var(--border); background:var(--panel); border-radius:7px; font-weight:500;
- * gap:7px }`, `.btn:hover { border-color:var(--rule); background:var(--hl) }`
- * and `.tx-play .btn.sm[aria-pressed="true"]` the same; `.ghost` drops the
- * fill, and the play button is `min-width:74px`.
+ * min-width:30px; justify-content:center }`: the kit's button at its `xs`
+ * size (#5283), `outline` for the transport and the page reads, and `ghost`
+ * for a toggle and a speed. The variant draws the colour, border, radius and
+ * the disabled state; these classes add the mono face at the bar's size and
+ * each control's width. The play button is `min-width:74px`, and a pressed
+ * toggle is `{ background:var(--hl); border-color:var(--rule) }`.
  */
-const buttonShape =
-  "inline-flex items-center justify-center gap-1.75 rounded-lg border border-border px-2 py-0.75 font-mono text-xs font-medium text-foreground transition-colors hover:border-rule hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45 max-md:min-h-9";
-const txButton = `${buttonShape} min-w-7.5 bg-card`;
-const txGhost = `${buttonShape} min-w-7.5 bg-transparent`;
-const txPlayButton = `${buttonShape} min-w-18.5 bg-card`;
+const txButton = "min-w-7.5 font-mono text-xs max-md:min-h-9";
+const txGhost = `${txButton} aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground`;
+const txPlayButton = "min-w-18.5 font-mono text-xs max-md:min-h-9";
 /**
  * `.seg { display:inline-flex; gap:2px; padding:2px; border:1px solid
- * var(--border); border-radius:8px; background:var(--void) }` and `.seg .btn
- * { border-color:transparent; background:transparent }`, pressed `{
- * background:var(--hl); border-color:var(--rule) }`.
+ * var(--border); border-radius:8px; background:var(--void) }`. Its speeds
+ * are `txGhost`.
  */
 const txSeg =
   "ml-1 inline-flex gap-0.5 rounded-lg border border-border bg-void p-0.5";
-const txSegButton =
-  "inline-flex min-w-7.5 items-center justify-center rounded-lg border border-transparent bg-transparent px-2 py-0.75 font-mono text-xs font-medium text-foreground hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl max-md:min-h-9";
 /** `.tx-play .cnt { font-size:10.5px; color:var(--dim); margin-left:4px }` */
 const txCount = "ml-1 whitespace-nowrap text-xs tabular-nums text-dim";
 /**
@@ -430,32 +428,52 @@ function SubagentChip({ row }: { row: FeedRow }) {
 }
 
 /**
+ * `.tx-fold`: a bare glyph with no fill, padding or pill of its own, open or
+ * closed. It is the kit's `ghost` button (#5283), and these classes undo the
+ * variant's chrome, because a utility outranks the skin's component rule.
+ * The skin's rule still gives the pointer.
+ */
+const txFold =
+  "tx-fold h-auto rounded-none p-0 text-xs font-normal hover:bg-transparent aria-expanded:bg-transparent";
+/** `.tx-fold { color:var(--t-dim) }`, `:hover { color:var(--t-fg) }`: a fold in the line takes the skin's ink. */
+const foldInLine =
+  "text-(--t-dim) hover:text-(--t-fg) aria-expanded:text-(--t-dim) aria-expanded:hover:text-(--t-fg)";
+/** `.tm .tx-fold { color:var(--dim) }`, `:hover { color:var(--fg) }`: a fold in the margin takes the house's. */
+const foldInMargin =
+  "text-dim hover:text-foreground aria-expanded:text-dim aria-expanded:hover:text-foreground";
+
+/**
  * The control that opens and closes one row. A prose row leads with it
- * (`⏵`/`⏶`); a call row ends its margin with it (`⋯`/`⏶`).
+ * (`⏵`/`⏶`) in its line; a call row ends its margin with it (`⋯`/`⏶`).
  */
 function Fold({
   open,
   label,
   closedGlyph,
   onToggle,
+  inLine = false,
   className = "",
 }: {
   open: boolean;
   label: string;
   closedGlyph: "⏵" | "⋯";
   onToggle: () => void;
+  /** The fold leads a line rather than ending the margin. */
+  inLine?: boolean;
   className?: string;
 }) {
   return (
-    <button
+    <Button
       type="button"
-      className={`tx-fold ${className}`}
+      variant="ghost"
+      size="xs"
+      className={`${txFold} ${inLine ? foldInLine : foldInMargin} ${className}`}
       aria-expanded={open}
       aria-label={label}
       onClick={onToggle}
     >
       {open ? "⏶" : closedGlyph}
-    </button>
+    </Button>
   );
 }
 
@@ -574,6 +592,7 @@ function Prose({
         label={open ? t("showLess") : t("showFull")}
         closedGlyph="⏵"
         onToggle={onToggle}
+        inLine
         className="pr-ch"
       />
       {open ? (
@@ -748,15 +767,17 @@ function ThinkingRow({
       line={
         <div className="tx-ln tx-think">
           <div className="flex min-w-0 items-baseline gap-ch">
-            <button
+            <Button
               type="button"
-              className="tx-fold flex-none"
+              variant="ghost"
+              size="xs"
+              className={`${txFold} ${foldInLine} flex-none gap-ch`}
               aria-expanded={open}
               onClick={toggle}
             >
-              <span aria-hidden="true">{open ? "⏶ " : "⏵ "}</span>
+              <span aria-hidden="true">{open ? "⏶" : "⏵"}</span>
               {t("thinkingLines", { count: lines })}
-            </button>
+            </Button>
             {open ? null : (
               <span
                 data-testid="tx-think"
@@ -1350,9 +1371,11 @@ function KindChips({
       className={txKinds}
     >
       {FEED_GROUPS.map((group) => (
-        <button
+        <Button
           key={group}
           type="button"
+          variant="ghost"
+          size="xs"
           data-testid={`chip-${group}`}
           aria-pressed={on[group]}
           onClick={() => {
@@ -1371,10 +1394,12 @@ function KindChips({
               {count(counts[group])}
             </span>
           )}
-        </button>
+        </Button>
       ))}
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="xs"
         data-testid="chip-all"
         onClick={() => {
           onAll(anyOff);
@@ -1382,9 +1407,11 @@ function KindChips({
         className={txKindAll}
       >
         {anyOff ? t("all") : t("none")}
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
+        variant="ghost"
+        size="xs"
         data-testid="chip-errors"
         aria-pressed={errorsOnly}
         title={errors === 0 ? t("errorsNone") : t("errorsHint")}
@@ -1397,7 +1424,7 @@ function KindChips({
             {count(errors)}
           </span>
         ) : null}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -2321,8 +2348,10 @@ export function TranscriptView({
       <div role="group" aria-label={t("transportLabel")} className="rpbar">
         {paced ? (
           <>
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="xs"
               className={txButton}
               aria-label={t("rewind")}
               title={t("rewind")}
@@ -2332,9 +2361,11 @@ export function TranscriptView({
               }}
             >
               ⏮
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="outline"
+              size="xs"
               className={txButton}
               aria-label={t("back")}
               title={t("back")}
@@ -2344,9 +2375,11 @@ export function TranscriptView({
               }}
             >
               ◀
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="outline"
+              size="xs"
               data-testid="tx-play"
               className={txPlayButton}
               onClick={playPause}
@@ -2355,9 +2388,11 @@ export function TranscriptView({
                 {done ? "▶ " : isPlaying ? "❙❙ " : "▶ "}
               </span>
               {done ? t("replay") : isPlaying ? t("pause") : t("play")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="outline"
+              size="xs"
               className={txButton}
               aria-label={t("forward")}
               title={t("forward")}
@@ -2367,9 +2402,11 @@ export function TranscriptView({
               }}
             >
               ▶
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="outline"
+              size="xs"
               className={txButton}
               aria-label={t("end")}
               title={t("end")}
@@ -2379,7 +2416,7 @@ export function TranscriptView({
               }}
             >
               ⏭
-            </button>
+            </Button>
             <div className="rp-track">
               <div className="rp-rail" aria-hidden="true">
                 <div
@@ -2424,17 +2461,19 @@ export function TranscriptView({
             </span>
             <span role="group" aria-label={t("speedLabel")} className={txSeg}>
               {SPEEDS.map((value) => (
-                <button
+                <Button
                   key={value}
                   type="button"
+                  variant="ghost"
+                  size="xs"
                   aria-pressed={speed === value}
                   onClick={() => {
                     setSpeed(value);
                   }}
-                  className={txSegButton}
+                  className={txGhost}
                 >
                   {t("speed", { speed: value })}
-                </button>
+                </Button>
               ))}
             </span>
             <span data-testid="transport-readout" className={txCount}>
@@ -2447,8 +2486,10 @@ export function TranscriptView({
         ) : (
           <span className={txCount}>{t("unpaced")}</span>
         )}
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="xs"
           data-testid="expand-thinking"
           aria-pressed={thinking}
           className={`${txGhost} ml-auto`}
@@ -2458,7 +2499,7 @@ export function TranscriptView({
           }}
         >
           {thinking ? t("collapseThinking") : t("expandThinking")}
-        </button>
+        </Button>
       </div>
       <div className={`term ${skin}`}>
         <div className="term-top">
@@ -2534,8 +2575,10 @@ export function TranscriptView({
             <div className="tr">
               <div className="tg" />
               <div className={`tc ${txOlder}`}>
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="xs"
                   data-testid="transcript-older"
                   disabled={readingOlder}
                   onClick={() => {
@@ -2544,7 +2587,7 @@ export function TranscriptView({
                   className={txButton}
                 >
                   {readingOlder ? t("readingOlder") : t("older")}
-                </button>
+                </Button>
               </div>
               <div className="tm" />
             </div>
@@ -2577,8 +2620,10 @@ export function TranscriptView({
             <span data-testid="transcript-count">{footer}</span>
           )}
           {drawnCursor === null ? null : (
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="xs"
               data-testid="transcript-more"
               disabled={reading || stream === "denied"}
               onClick={() => {
@@ -2587,7 +2632,7 @@ export function TranscriptView({
               className={txButton}
             >
               {reading ? t("readingMore") : t("more")}
-            </button>
+            </Button>
           )}
           {pageFailure === null ? null : (
             <span data-testid="transcript-page-failed" className="basis-full">

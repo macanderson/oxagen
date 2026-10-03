@@ -9,7 +9,8 @@ import { UploadSimpleIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
 import { Badge, type BadgeTone } from "@/ui/badge";
-import { buttonSmall, inputBase, mono } from "@/ui/control-styles";
+import { inputBase, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { Table } from "@/ui/table";
 import {
   type ImportFile,
@@ -87,28 +88,28 @@ export function DropZone({
       <span className="min-w-44 grow text-sm font-medium text-foreground">
         {t("label")}
       </span>
-      <button
+      <Button
         type="button"
         data-touch-target=""
-        className={buttonSmall}
+        variant="outline" size="sm"
         disabled={disabled}
         onClick={() => {
           filesRef.current?.click();
         }}
       >
         {t("chooseFiles")}
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
         data-touch-target=""
-        className={buttonSmall}
+        variant="outline" size="sm"
         disabled={disabled}
         onClick={() => {
           folderRef.current?.click();
         }}
       >
         {t("chooseFolder")}
-      </button>
+      </Button>
       <input
         ref={filesRef}
         type="file"

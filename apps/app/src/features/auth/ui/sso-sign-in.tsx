@@ -14,7 +14,8 @@ import { KeyIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
-import { buttonSecondary, panel } from "@/ui/control-styles";
+import { panel } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import type { AuthOutcomeKey } from "../auth-errors";
@@ -131,16 +132,16 @@ export function SsoSignIn({
           />
         </form>
       ) : (
-        <button
+        <Button
           type="button"
           onClick={() => {
             setOpen(true);
           }}
-          className={`${buttonSecondary} justify-start`}
+          variant="outline" className="justify-start"
         >
           <KeyIcon aria-hidden className="size-4 flex-none" />
           <span>{tSso("entry")}</span>
-        </button>
+        </Button>
       )}
     </div>
   );

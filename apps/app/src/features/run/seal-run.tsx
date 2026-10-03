@@ -26,12 +26,8 @@ import {
   UNANSWERED,
   useActionFailure,
 } from "@/ui/command-failure";
-import {
-  buttonDanger,
-  buttonSecondary,
-  mono,
-  textareaBase,
-} from "@/ui/control-styles";
+import { mono, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -60,16 +56,16 @@ export function SealRunAction({
     // technology through the description it points to.
     return (
       <>
-        <button
+        <Button
           type="button"
           disabled
           title={t("roleReason")}
           aria-describedby={reasonId}
           data-testid="run-seal"
-          className={buttonDanger}
+          variant="destructive-outline"
         >
           {t("open")}
-        </button>
+        </Button>
         <span id={reasonId} data-testid="run-seal-refused" className="sr-only">
           {t("roleReason")}
         </span>
@@ -131,16 +127,16 @@ function SealDialog({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid="run-seal"
-        className={buttonDanger}
+        variant="destructive-outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={openChange}
@@ -199,16 +195,16 @@ function SealDialog({
                 {t(`killNotSent.${COMMAND_BLOCK_COPY[sealed.kill.reason]}`)}
               </p>
             )}
-            <button
+            <Button
               type="button"
-              className={buttonSecondary}
+              variant="outline"
               onClick={() => {
                 openChange(false);
                 navigate.refresh();
               }}
             >
               {t("reread")}
-            </button>
+            </Button>
           </div>
         )}
       </SheetDialog>

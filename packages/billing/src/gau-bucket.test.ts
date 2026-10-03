@@ -106,6 +106,7 @@ const {
   uninvoicedGau,
   assertGauAvailable,
   bucketBasis,
+  requiresSubscription,
   GauExhaustedError,
 } = await import("./gau-bucket");
 const { BillingSuspendedError } = await import("./dunning");
@@ -754,6 +755,98 @@ describe("assertGauAvailable", () => {
     expect(mocks.readOrgBillingSettings).toHaveBeenCalledWith(ORG);
     expect(mocks.getOrgBillingSettings).not.toHaveBeenCalled();
     expect(mocks.billingProvider).not.toHaveBeenCalled();
+  });
+
+  // purchase_gau_bucket refuses exactly when requiresSubscription is true
+  // (#4886). Each case seeds a bucket whose only units left are bought ones,
+  // and checks the predicate against what the gate does with them.
+  describe("bought units and requiresSubscription", () => {
+    const BOUGHT = 10_000;
+    const verdict = async (now: Date) => {
+      const entitlement = await mocks.resolveGauEntitlement(ORG, now);
+      return requiresSubscription(bucketBasis(entitlement, now), entitlement);
+    };
+    const bucketReads = () =>
+      store.log.filter((s) => s.op === "select" && s.table === "buckets");
+
+    it("after the grant with no subscription, the gate refuses without reading the bucket, and the predicate is true", async () => {
+      onGrant();
+      seedBucket({
+        periodStart: GRANT.expiresAt,
+        periodEnd: new Date("2026-11-01T00:00:00.000Z"),
+        includedGau: 0,
+        purchasedGau: BOUGHT,
+        usedGau: 0,
+      });
+
+      expect(await verdict(AFTER_GRANT)).toBe(true);
+      await expect(assertGauAvailable(ORG, AFTER_GRANT)).rejects.toSatisfy(
+        exhausted("signup_grant_expired"),
+      );
+      expect(bucketReads()).toEqual([]);
+    });
+
+    it("with no grant row and no subscription, the gate refuses and the predicate is true", async () => {
+      onGrant({ grant: null });
+      seedBucket({ includedGau: 0, purchasedGau: BOUGHT, usedGau: 0 });
+
+      expect(await verdict(NOW)).toBe(true);
+      await expect(assertGauAvailable(ORG, NOW)).rejects.toSatisfy(
+        exhausted("no_signup_grant"),
+      );
+    });
+
+    it("inside the grant with the grant spent, the gate admits on bought units, and the predicate is false", async () => {
+      onGrant();
+      seedBucket({
+        periodStart: GRANT.grantedAt,
+        periodEnd: GRANT.expiresAt,
+        includedGau: GRANT.grantedGau,
+        purchasedGau: BOUGHT,
+        usedGau: GRANT.grantedGau,
+      });
+
+      expect(await verdict(NOW)).toBe(false);
+      await expect(assertGauAvailable(ORG, NOW)).resolves.toBeUndefined();
+    });
+
+    it("the same spent grant with no bought units is refused, so the bought units are what admitted", async () => {
+      onGrant();
+      grantBucket(GRANT.grantedGau);
+
+      await expect(assertGauAvailable(ORG, NOW)).rejects.toSatisfy(
+        exhausted("signup_grant_used"),
+      );
+    });
+
+    it("with a subscription, the gate admits and the predicate is false", async () => {
+      onGrant({ terms: BUILD_TERMS, subscription: MONTH_SUB });
+      seedBucket({
+        periodStart: MONTH_SUB.currentPeriodStart,
+        periodEnd: MONTH_SUB.currentPeriodEnd,
+        includedGau: 50_000,
+        purchasedGau: BOUGHT,
+        usedGau: 60_000,
+      });
+
+      expect(await verdict(AFTER_GRANT)).toBe(false);
+      expect(await verdict(NOW)).toBe(false);
+      await expect(assertGauAvailable(ORG, NOW)).resolves.toBeUndefined();
+    });
+
+    it("with the subscription rule cleared, the gate counts bought units after the grant, and the predicate is false", async () => {
+      onGrant({ subscriptionRequiredAfterGrant: false });
+      seedBucket({
+        periodStart: GRANT.expiresAt,
+        periodEnd: new Date("2026-11-01T00:00:00.000Z"),
+        includedGau: 5_000,
+        purchasedGau: BOUGHT,
+        usedGau: 5_000,
+      });
+
+      expect(await verdict(AFTER_GRANT)).toBe(false);
+      await expect(assertGauAvailable(ORG, AFTER_GRANT)).resolves.toBeUndefined();
+    });
   });
 
   it("GauExhaustedError carries the code the API and the app classify by", () => {

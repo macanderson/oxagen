@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // shadcn's maia button on the house tokens (ADR-221): a pill in every
-// variant, the gold only on `default`, the caller's class winning over the
-// component's, and no `primary` token anywhere (INV-32).
+// variant, the gold only on `primary` and `default`, the caller's class
+// winning over the component's, and no `primary` token anywhere (INV-32).
+// `variant` is required, so no button turns gold by leaving it out (#5283).
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -12,8 +13,8 @@ const INK_PRIMARY =
   /\b(bg|text|border|ring|shadow-\[inset[^\]]*)-primary\b|var\(--primary\)/;
 
 describe("Button", () => {
-  it("draws the maia pill with the gold action by default", async () => {
-    const { container } = render(<Button>Save</Button>);
+  it("draws the maia pill with the gold action on `primary`", async () => {
+    const { container } = render(<Button variant="primary">Save</Button>);
     const button = screen.getByRole("button", { name: "Save" });
     expect(button).toHaveAttribute("data-slot", "button");
     expect(button.className).toContain("rounded-4xl");
@@ -28,6 +29,7 @@ describe("Button", () => {
       "secondary",
       "ghost",
       "destructive",
+      "destructive-outline",
       "link",
     ] as const) {
       const { unmount } = render(<Button variant={variant}>{variant}</Button>);
@@ -36,7 +38,7 @@ describe("Button", () => {
       expect(button.className).not.toMatch(INK_PRIMARY);
       unmount();
     }
-    render(<Button>gold</Button>);
+    render(<Button variant="primary">gold</Button>);
     expect(screen.getByRole("button", { name: "gold" }).className).not.toMatch(
       INK_PRIMARY,
     );
@@ -54,7 +56,11 @@ describe("Button", () => {
   });
 
   it("disables through Base UI, so a pointer cannot press it", () => {
-    render(<Button disabled>Wait</Button>);
+    render(
+      <Button variant="outline" disabled>
+        Wait
+      </Button>,
+    );
     expect(screen.getByRole("button", { name: "Wait" })).toBeDisabled();
   });
 });

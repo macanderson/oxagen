@@ -27,13 +27,8 @@ import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import type { LinkedRepository } from "@/data/contracts/repository";
 import { parseGitHubUrl } from "@/shared/github-url";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  inputBase,
-  mono,
-  textareaBase,
-} from "@/ui/control-styles";
+import { buttonSecondary, inputBase, mono, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { GitHubLink } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -289,40 +284,40 @@ export function InitWizard({
     finished ? null : (
       <>
         {index > 0 ? (
-          <button
+          <Button
             type="button"
             data-testid="init-wizard-back"
             data-touch-target=""
-            className={buttonSecondary}
+            variant="outline"
             onClick={back}
           >
             {t("back")}
-          </button>
+          </Button>
         ) : null}
         {step === "pullRequest" ? (
-          <button
+          <Button
             type="button"
             data-testid="init-wizard-open"
             data-touch-target=""
             disabled={pending}
-            className={buttonPrimary}
+            variant="primary"
             onClick={() => {
               void submit();
             }}
           >
             {pending ? t("opening") : t("open")}
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
             type="button"
             data-testid="init-wizard-next"
             data-touch-target=""
             disabled={step === "repository" && repository === null}
-            className={buttonPrimary}
+            variant="primary"
             onClick={next}
           >
             {t("next")}
-          </button>
+          </Button>
         )}
       </>
     );

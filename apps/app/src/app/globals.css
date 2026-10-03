@@ -293,12 +293,13 @@
     --button-default-border: var(--border);
     --button-default-hover-bg: var(--hl);
     --button-default-active-bg: var(--hl);
-    /* `.dlg { background:var(--panel) }`. The kit fills a dialog with its
-       popover, which on ink is the row wash (#27272A), a step lighter than
-       the mockup's panel (#18181B). Paper is unchanged: both are white. The
-       system-dark block below sets it again, because the kit's selector
-       there outranks this one. */
+    /* `.dlg { background:var(--panel); border:1px solid var(--rule) }`. The
+       kit draws a dialog on the popover, which on ink is the row wash and the
+       hairline (#27272A), so the dialog lost its edge and its hovered rows.
+       The `.dark` block and its no-JS copy repeat these two lines, because
+       @oxagen/ui sets both tokens there too. */
     --dialog-bg: var(--panel);
+    --dialog-border: var(--rule);
     /* `.tab[aria-selected] { border-bottom-color: var(--gold) }` */
     --tab-border-active: var(--gold);
     /* `.navitem { color: var(--muted) }`; current and hover take the ink.
@@ -371,6 +372,8 @@
        own (engine.css), so the page body is ink in the dark theme. Panels,
        tiles and the drawers stay on the panel. */
     --app-panel-bg: var(--ink);
+    --dialog-bg: var(--panel);
+    --dialog-border: var(--rule);
   }
 
   /* Match explicit dark mode before the theme script runs. */
@@ -411,6 +414,7 @@
       --input-disabled-bg: var(--hl);
       --app-panel-bg: var(--ink);
       --dialog-bg: var(--panel);
+      --dialog-border: var(--rule);
     }
   }
 }

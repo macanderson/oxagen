@@ -36,7 +36,11 @@ for (const target of targets) {
     bundle: true,
     platform: "node",
     format: "esm",
-    target: "node20",
+    // The oldest Node the bundles run on. The daemon imports zstd from
+    // `node:zlib` statically, and Node added it in 22.15 (and 23.8), so an
+    // older Node refuses to link `tachod.mjs`. The manifest's `engines`
+    // in prepare-standalone-publish.mjs states the same floor.
+    target: "node22.15",
     minify: target.minify,
     banner: {
       js: [

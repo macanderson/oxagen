@@ -2639,7 +2639,10 @@ describe("export and verify", () => {
       "--skip-git-repo-check",
       "Reply with exactly the word OK and nothing else.",
     ]);
-    expect(d.lines.join("\n")).toContain("Running codex exec");
+    // Progress is on stderr, so `verify --json` leaves stdout to the JSON.
+    expect(d.errors.join("\n")).toContain("Running codex exec");
+    expect(d.lines.join("\n")).not.toContain("Running codex exec");
+    expect(d.lines.join("\n")).not.toContain("chained as");
     const noCodex = deps({ codex: () => ({}) });
     noCodex.service.running = true;
     writeHostFile(
@@ -3395,7 +3398,7 @@ describe("stella", () => {
       "run",
       "Reply with exactly the word OK and nothing else.",
     ]);
-    expect(d.lines.join("\n")).toContain("Running stella run");
+    expect(d.errors.join("\n")).toContain("Running stella run");
 
     // Stella's default wait is 45 s: a clock that jumps 10 s per read
     // polls several times before giving up.
@@ -4776,6 +4779,39 @@ describe("two agents on one machine (ADR-203)", () => {
     });
     expect(d.lines).toContain(
       `Starting the ${d.serviceManager.kind} service again for acme.core.cc-laptop`,
+    );
+    expect(d.service.running).toBe(true);
+  });
+
+  it("restarts the service for the other agent when adding a harness fails after the revoke", async () => {
+    const { d, codex } = await twoAgents();
+    const controlPlane = d.fetch;
+    d.fetch = async (url, init) => {
+      if (url.endsWith("/tacho/enrollments"))
+        return { ok: false, status: 503, text: async () => "unavailable" };
+      return controlPlane(url, init);
+    };
+    d.requests.length = 0;
+    d.lines.length = 0;
+    const failed = await enroll(
+      { token: "tok", harnesses: ["claude-code", "cursor"] },
+      d,
+    );
+    expect(failed.ok).toBe(false);
+    expect(d.errors.join("\n")).toContain(
+      `Adding a harness failed after revoking ${TEST_ENROLLMENT}`,
+    );
+    expect(revoked(d)).toEqual([TEST_ENROLLMENT]);
+    expect(readHostFile(d.paths.hostFile)?.revoked_at).not.toBeNull();
+
+    // The abandoned addition removed the one service. The Codex agent keeps
+    // its enrollment and gets the service back.
+    expect(readHostFile(codex.hostFile)).toMatchObject({
+      host_enrollment_id: OTHER_ENROLLMENT,
+      revoked_at: null,
+    });
+    expect(d.lines).toContain(
+      `Starting the ${d.serviceManager.kind} service again for acme.core.codex-agent`,
     );
     expect(d.service.running).toBe(true);
   });

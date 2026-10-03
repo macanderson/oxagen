@@ -8,12 +8,8 @@ import {
   WarningIcon,
 } from "@phosphor-icons/react/ssr";
 import type { ReactNode } from "react";
-import {
-  buttonDanger,
-  buttonPrimary,
-  buttonSecondary,
-  panel,
-} from "./control-styles";
+import { Button } from "./button";
+import { panel } from "./control-styles";
 import { FocusedHeading } from "./focused-heading";
 
 export function FormAlert({
@@ -72,8 +68,11 @@ export function SubmitButton({
   disabled?: boolean;
 }) {
   return (
-    <button
+    <Button
       type="submit"
+      variant={
+        danger ? "destructive-outline" : secondary ? "outline" : "primary"
+      }
       form={form}
       data-testid={testId}
       // Every submit is a control, so at phone width it is a 44px target
@@ -81,7 +80,7 @@ export function SubmitButton({
       data-touch-target=""
       disabled={disabled || undefined}
       aria-disabled={pending || undefined}
-      className={`${danger ? buttonDanger : secondary ? buttonSecondary : buttonPrimary} ${fullWidth ? "w-full" : ""} ${className ?? ""}`}
+      className={`${fullWidth ? "w-full" : ""} ${className ?? ""}`}
     >
       {pending ? (
         <>
@@ -94,7 +93,7 @@ export function SubmitButton({
       ) : (
         label
       )}
-    </button>
+    </Button>
   );
 }
 

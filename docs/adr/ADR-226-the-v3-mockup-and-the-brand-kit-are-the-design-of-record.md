@@ -130,6 +130,8 @@ checks the recipes that draw them:
 - The stat tile is one recipe: a caps term over a figure in tabular numbers.
   No page draws a tile by hand.
 - A secondary button at rest sits on the panel fill.
+- A dialog sits on the panel fill behind the heavier rule (`--rule`) in both
+  themes, not on the kit's popover grey.
 
 ### Where the app differs from v3 today
 

@@ -17,6 +17,7 @@ import {
 import { createRequestHandler, type CollectorApi } from "./server";
 import { SessionRegistry } from "./registry";
 import { createGithubProxy } from "./github-proxy";
+import type { SessionExclusive } from "./chain-write";
 
 const NOW = Date.parse("2026-09-22T12:00:00Z");
 const SECRET = "ghs_FAKE_DAEMON_ONLY";
@@ -91,7 +92,50 @@ async function gitStderr(args: string[]): Promise<string> {
   throw new Error(`git ${args[0] ?? ""} succeeded against a refusing proxy`);
 }
 
-async function setup() {
+/**
+ * A session queue a test holds, the way a hook holds it between its seal and
+ * its write. Work queued while it is held runs, in order, on `release`.
+ */
+function holdingQueue(): {
+  exclusive: SessionExclusive;
+  held: () => number;
+  release: () => void;
+} {
+  const held: Array<() => void> = [];
+  let holding = true;
+  function exclusive<T>(
+    _session: { readonly harnessSessionId: string },
+    apply: () => T,
+  ): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const run = (): void => {
+        try {
+          resolve(apply());
+        } catch (error) {
+          reject(error);
+        }
+      };
+      if (holding) held.push(run);
+      else run();
+    });
+  }
+  return {
+    exclusive,
+    held: () => held.length,
+    release: () => {
+      holding = false;
+      for (const run of held.splice(0)) run();
+    },
+  };
+}
+
+async function setup(
+  options: {
+    /** Refuse the WAL write of these frames, the way a full disk does. */
+    refuse?: (events: readonly TachoEvent[]) => boolean;
+    exclusive?: SessionExclusive;
+  } = {},
+) {
   const signer = bundleSigner();
   const host = testHostFile(
     signer,
@@ -178,7 +222,14 @@ async function setup() {
     host: () => host,
     registry,
     now: () => now,
-    record: (events) => recorded.push(...events),
+    record: (events) => {
+      if (options.refuse?.(events) === true)
+        throw new Error("ENOSPC: no space left on device");
+      recorded.push(...events);
+    },
+    ...(options.exclusive !== undefined
+      ? { exclusive: options.exclusive }
+      : {}),
     log,
     controlFetch,
     fetch: upstream,
@@ -636,5 +687,74 @@ describe("GitHub daemon custody", () => {
     expect(t.forwarded[0]?.url).toBe(
       "https://api.github.com/installation/token",
     );
+  });
+});
+
+describe("GitHub custody frames on the session's chain", () => {
+  it("puts the chain back when a frame cannot be written, so the next frame takes its seq", async () => {
+    const t = await setup({
+      refuse: (events) => events.some((event) => event.kind === "token_use"),
+    });
+    const before = { ...t.session.recorder.chainCursor };
+    expect((await t.request()).status).toBe(502);
+    await vi.waitFor(() =>
+      expect(t.recorded.map((event) => event.kind)).toEqual(["tool_call"]),
+    );
+    // The token was minted and revoked, never used.
+    expect(t.forwarded.map((call) => call.url)).toEqual([
+      "https://api.github.com/installation/token",
+    ]);
+    // Left one seq ahead, this frame sealed past an event the WAL never held,
+    // and the control plane refused the run's chain from that gap on.
+    expect(t.recorded[0]).toMatchObject({
+      seq: before.seq,
+      prev_hash: before.prevHash,
+    });
+  });
+
+  it("seals only on the session's queue, after a hook there writes what it sealed", async () => {
+    const queue = holdingQueue();
+    const t = await setup({ exclusive: queue.exclusive });
+    // A hook on the session's queue sealed a frame and waits on its recall
+    // before writing it.
+    const hookFrame = t.session.recorder.sealCollectorEvent(
+      "oxagen:command_applied",
+      { policy_decision: "allow", policy_source: "human" },
+    );
+    const answer = t.request();
+    await vi.waitFor(() => expect(queue.held()).toBe(1));
+    // Recorded before the token is used, so the token waits with it.
+    expect(t.recorded).toEqual([]);
+    expect(t.upstream).not.toHaveBeenCalled();
+    // The hook writes its frame and leaves the queue.
+    t.recorded.push(hookFrame);
+    queue.release();
+    expect((await answer).status).toBe(200);
+    await vi.waitFor(() => expect(t.recorded).toHaveLength(3));
+    // Sealed beside the hook, `token_use` took the hook's seq + 1 and reached
+    // the WAL first, and the hook's own write was refused.
+    expect(t.recorded.map((event) => [event.kind, event.seq])).toEqual([
+      ["oxagen:command_applied", hookFrame.seq],
+      ["token_use", hookFrame.seq + 1],
+      ["tool_call", hookFrame.seq + 2],
+    ]);
+  });
+
+  it("logs a frame it cannot write after the answer and does not fail the request over it", async () => {
+    const t = await setup({
+      refuse: (events) => events.some((event) => event.kind === "tool_call"),
+    });
+    expect((await t.request()).status).toBe(200);
+    await vi.waitFor(() =>
+      expect(t.log).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "GitHub proxy could not record the push: ENOSPC",
+        ),
+      ),
+    );
+    expect(t.log).not.toHaveBeenCalledWith(
+      expect.stringContaining("GitHub proxy failed"),
+    );
+    expect(t.recorded.map((event) => event.kind)).toEqual(["token_use"]);
   });
 });

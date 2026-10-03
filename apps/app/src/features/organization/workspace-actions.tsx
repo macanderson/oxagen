@@ -665,6 +665,7 @@ function WorkspaceSetupPanel({
           <p className="min-w-0 flex-1">{t("ready")}</p>
           <Button
             type="button"
+            variant="primary"
             data-testid="create-workspace-pick-repositories"
             data-touch-target=""
             onClick={forward}

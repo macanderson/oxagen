@@ -95,4 +95,67 @@ describe("the unobserved-session detector", () => {
     expect(await d.tick()).toEqual([]);
     expect(d.unobserved).toEqual([]);
   });
+
+  it("lists processes only on the tick that reports a sighting, and waits for an async listing", async () => {
+    // Every tick used to run `ps` synchronously on the daemon's event loop,
+    // holding up every hook and stream, to fill a list only an incident reads.
+    const root = mkdtempSync(join(tmpdir(), "tacho-unobserved-"));
+    dirs.push(root);
+    const project = join(root, "-repo");
+    mkdirSync(project, { recursive: true });
+    const sessionId = "55555555-5555-4555-8555-555555555555";
+    const path = join(project, `${sessionId}.jsonl`);
+    writeFileSync(path, "{}\n");
+
+    let clock = 1_790_000_000_000;
+    const now = () => clock;
+    const registry = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now,
+    });
+    const host = registry.ensure("tachod-boot", { pid: process.pid }).record;
+    let listings = 0;
+    const d = new Detector({
+      registry,
+      hostRecorder: () => host.recorder,
+      listProcesses: async () => {
+        listings += 1;
+        return [{ pid: 4242, ppid: 1, command: "claude" }];
+      },
+      transcriptRoots: [root],
+      readSettings: () => ({}),
+      enrollment: () => ({
+        enrollmentId: TEST_ENROLLMENT,
+        harnesses: [],
+        verified: true,
+      }),
+      graceMs: 5_000,
+      now,
+    });
+
+    const stamp = (at: number) => utimesSync(path, new Date(at), new Date(at));
+    stamp(clock);
+    expect(await d.tick()).toEqual([]); // first sighting
+    clock += 1_000;
+    stamp(clock);
+    expect(await d.tick()).toEqual([]); // advanced, inside the grace
+    expect(listings).toBe(0);
+
+    clock += 6_000;
+    stamp(clock);
+    const incidents = await d.tick();
+    expect(incidents.map((e) => e.kind)).toEqual(["oxagen:unobserved_session"]);
+    expect(
+      (incidents[0]?.body as { incident_evidence: { claude_pids: number[] } })
+        .incident_evidence.claude_pids,
+    ).toEqual([4242]);
+    expect(listings).toBe(1);
+
+    // The session is registered now, so no later tick lists again.
+    clock += 1_000;
+    stamp(clock);
+    expect(await d.tick()).toEqual([]);
+    expect(listings).toBe(1);
+  });
 });

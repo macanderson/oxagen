@@ -11,17 +11,8 @@ import {
   parsePullRequestUrl,
   type PullRequestUrl,
 } from "@/shared/pull-request-url";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  inputBase,
-  mono,
-  panel,
-  panelBody,
-  panelHeader,
-  panelTitle,
-  textareaBase,
-} from "@/ui/control-styles";
+import { inputBase, mono, panel, panelBody, panelHeader, panelTitle, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { Badge } from "@/ui/badge";
 import { FormAlert } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
@@ -126,16 +117,16 @@ export function SkillVersions({
           {configuration.current === null ? (
             <div className="flex flex-col items-start gap-2">
               <p>{t("unpublished")}</p>
-              <button
+              <Button
                 type="button"
-                className={buttonSecondary}
+                variant="outline"
                 disabled={!canEdit || pending}
                 onClick={() => {
                   write(() => importSkillConfig(at.org, at.ws));
                 }}
               >
                 {t("import")}
-              </button>
+              </Button>
             </div>
           ) : null}
           <form
@@ -163,13 +154,13 @@ export function SkillVersions({
             >
               {t("normalized")}
             </p>
-            <button
+            <Button
               type="submit"
-              className={`${buttonPrimary} self-start`}
+              variant="primary" className="self-start"
               disabled={!canEdit || pending || !text.trim()}
             >
               {pending ? t("working") : t("propose")}
-            </button>
+            </Button>
           </form>
           {failure ? <FormAlert>{failure}</FormAlert> : null}
           {notice ? <p role="status">{notice}</p> : null}
@@ -196,13 +187,13 @@ export function SkillVersions({
                 setPr(event.target.value);
               }}
             />
-            <button
+            <Button
               type="submit"
-              className={`${buttonSecondary} self-start`}
+              variant="outline" className="self-start"
               disabled={!canEdit || pending || !/^[1-9]\d*$/.test(pr)}
             >
               {t("publish")}
-            </button>
+            </Button>
           </form>
         </div>
       </section>

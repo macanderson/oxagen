@@ -33,6 +33,7 @@
 import { CaretRightIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
+import { Button } from "@/ui/button";
 import { StellaIcon } from "@/ui/stella-mark";
 import { useShellState } from "./shell-state";
 
@@ -71,8 +72,9 @@ export function AssistantLauncher({
   const t = useTranslations("shell.assistant");
   const { assistantOpen, setAssistantOpen, assistantUnread } = useShellState();
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
       onClick={() => {
         setAssistantOpen(!assistantOpen);
         onNavigate?.();
@@ -87,9 +89,9 @@ export function AssistantLauncher({
       data-touch-target=""
       data-testid="assistant-launcher"
       data-unread={assistantUnread ? "" : undefined}
-      className={`mb-2 flex w-full items-center gap-2.5 rounded-xl border bg-card px-2.5 py-2 text-left text-card-foreground transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-ring ${
-        assistantOpen ? "border-gold" : "border-border"
-      } ${assistantUnread ? "ox-launcher-unread" : ""}`}
+      className={`mb-2 h-auto w-full justify-start gap-2.5 rounded-xl px-2.5 py-2 text-left aria-expanded:border-gold ${
+        assistantUnread ? "ox-launcher-unread" : ""
+      }`}
     >
       <StellaIcon className="size-7 flex-none" />
       <span className="min-w-0 flex-1">
@@ -110,6 +112,6 @@ export function AssistantLauncher({
             : "text-sidebar-nav-label-fg"
         }`}
       />
-    </button>
+    </Button>
   );
 }

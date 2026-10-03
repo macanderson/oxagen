@@ -32,12 +32,8 @@ import {
 import type { RegistryServer } from "@/data/contracts/tools";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { Badge, type BadgeTone } from "@/ui/badge";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  inputBase,
-  mono,
-} from "@/ui/control-styles";
+import { inputBase, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { PullRequestLink } from "@/ui/navigation";
 import {
@@ -425,15 +421,15 @@ export function DefinitionFields({
           {t(outcome.kind, { name: outcome.name })}
         </FormAlert>
       )}
-      <button
+      <Button
         type="submit"
         data-testid="studio-add-definition-submit"
         data-retry={stored === null ? undefined : "true"}
         aria-disabled={busy || undefined}
-        className={`${buttonPrimary} self-start`}
+        variant="primary" className="self-start"
       >
         {submitLabel}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -557,16 +553,16 @@ export function DiscoveryProgress({
 
   const startButton =
     canStart && server !== null ? (
-      <button
+      <Button
         type="button"
         data-testid="studio-discovery-start"
         data-capability={start.name}
         aria-disabled={starting || undefined}
-        className={`${buttonSecondary} self-start`}
+        variant="outline" className="self-start"
         onClick={() => void run()}
       >
         {starting ? t("starting") : t("start")}
-      </button>
+      </Button>
     ) : null;
 
   return (

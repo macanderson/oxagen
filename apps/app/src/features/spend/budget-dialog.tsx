@@ -9,7 +9,8 @@
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import { routes } from "@/shared/safe-path";
-import { buttonPrimary, buttonSecondary, inputBase } from "@/ui/control-styles";
+import { inputBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -126,16 +127,16 @@ export function BudgetDialog({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-placement={placement}
-        className={placement === "header" ? buttonPrimary : buttonSecondary}
+        variant={placement === "header" ? "primary" : "outline"}
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("actions.setBudget")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}

@@ -39,7 +39,8 @@ import {
 } from "@/data/contracts/mandates";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import { chooseToolPatterns } from "@/features/shell/client";
-import { buttonSecondary, inputBase, textareaBase } from "@/ui/control-styles";
+import { inputBase, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { RecordMultiPicker } from "@/ui/record-picker";
@@ -160,15 +161,15 @@ export function RequestMandate({
   const id = (name: string) => `${TESTID}-${name}`;
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
