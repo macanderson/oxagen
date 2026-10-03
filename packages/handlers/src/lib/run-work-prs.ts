@@ -1,13 +1,38 @@
+// The pull requests `get_run_work` lists (ADR-292), read from the forge
+// store: each one's identity, state, head, base, files, and the issues it
+// closes come from `forge.pull_requests`, its latest revision, and
+// `forge.pull_request_issues`, and its per-file patches from the stored diff.
+// Checks are the one live GitHub read, because the forge store holds none.
+// They are read only for the pull requests the forge set names, at each one's
+// stored head.
+import { withTenantDb } from "@oxagen/database";
 import { createGitHubClient, type GitHubClient } from "@oxagen/github";
 import { resolveGitHubToken } from "@oxagen/github/workspace-token";
+import { REVISION_DIFF_MAX_FILE_CHARS } from "@oxagen/oxagen/contracts/forge.revision.diff.get";
 import type {
   RunCheckout,
+  RunRepository,
   RunWorkPr,
 } from "@oxagen/oxagen/contracts/run.work.get";
 import type { RunStore } from "@oxagen/run-ledger";
 import type { RunScope } from "../run.list";
 import { logger } from "../logger";
 import { buildCiSummary } from "./ci-status";
+import { type DiffStore, diffStore } from "./forge-pull-requests/diff-store";
+import type { PullKey } from "./forge-pull-requests/read";
+import {
+  manifestFiles,
+  readRevisionFiles,
+  type RevisionFile,
+} from "./forge-pull-requests/revision-files";
+import {
+  type BranchKey,
+  branchKeyOf,
+  type RunPullRequest,
+  type RunPullRequestQuery,
+  type RunPullRequestRead,
+  readRunPullRequests,
+} from "./forge-pull-requests/run-pulls";
 import { type ConnectedRunRepository, workDigest } from "./run-work";
 
 export interface RecordedRunPr {
@@ -71,26 +96,37 @@ export async function readLedgerPrReceipts(
   }
   return { receipts, complete: false };
 }
+/** The most pull requests one read lists. */
 const PR_CAP = 20;
-const DIFF_BYTES_CAP = 512 * 1024;
+/** The most patch text one pull request carries, in UTF-16 code units. */
+const DIFF_CHARS_CAP = 512 * 1024;
+/**
+ * The largest stored diff one pull request's patches are read from. A larger
+ * one answers its file list with `diff_size_limit`, so a page read never
+ * fetches megabytes it would then cut.
+ */
+const DIFF_FETCH_MAX_BYTES = 2 * 1024 * 1024;
+/** The most stored diff bytes one read fetches across its pull requests. */
+const DIFF_FETCH_TOTAL_BYTES = 8 * 1024 * 1024;
+
 export interface WorkPrDeps {
-  client: (
+  /** The forge rows behind the run's pull requests (ADR-292). */
+  forge(
+    scope: RunScope,
+    query: RunPullRequestQuery,
+  ): Promise<RunPullRequestRead>;
+  /** The deployment's diff store; null when it names none. */
+  store(): DiffStore | null;
+  /** A GitHub client for one connected repository, for its checks alone. */
+  client(
     scope: RunScope,
     repository: ConnectedRunRepository,
-  ) => Promise<
-    Pick<
-      GitHubClient,
-      | "listPullRequests"
-      | "getPullRequest"
-      | "listClosingIssues"
-      | "listCiChecks"
-      | "listPullRequestFiles"
-      | "getRepoInfo"
-    >
-  >;
-  now: () => string;
+  ): Promise<Pick<GitHubClient, "listCiChecks">>;
 }
 export const defaultWorkPrDeps: WorkPrDeps = {
+  forge: (scope, query) =>
+    withTenantDb((tx) => readRunPullRequests(tx, scope, query)),
+  store: diffStore,
   client: async (scope, repository) =>
     createGitHubClient({
       token: await resolveGitHubToken({
@@ -98,239 +134,356 @@ export const defaultWorkPrDeps: WorkPrDeps = {
         connectionId: repository.connectionId,
       }),
     }),
-  now: () => new Date().toISOString(),
 };
 
+/** What names a run's pull requests, besides its own forge links. */
+export interface WorkPrSources {
+  /** The run's public id (`tse_` or `arun_`). */
+  runId: string;
+  checkouts: readonly RunCheckout[];
+  /** A ledger run's `provider_publish` receipts. */
+  receipts?: readonly RecordedRunPr[];
+  /** The GitHub pull requests a wrapped run's link frames name. */
+  links?: readonly { owner: string; name: string; number: number }[];
+}
+
+type PullRow = RunPullRequest["pull"];
+type RevisionRow = NonNullable<RunPullRequest["revision"]>;
+
+/** The forge for a recorded host, or null for a host Oxagen connects none on. */
+function providerOf(host: string): BranchKey["provider"] | null {
+  const lower = host.toLowerCase();
+  if (lower === "github.com") return "github";
+  if (lower === "gitlab.com") return "gitlab";
+  return null;
+}
+
+/** The checkout's repository as a branch match names it, or null. */
+function checkoutRepository(
+  checkout: RunCheckout,
+): { provider: BranchKey["provider"]; repository: string } | null {
+  const repo = checkout.repository;
+  if (repo === null) return null;
+  const provider = providerOf(repo.host);
+  return provider === null
+    ? null
+    : { provider, repository: `${repo.owner}/${repo.name}`.toLowerCase() };
+}
+
+/** The connected repository a forge row names, by its id first and its path second. */
+function connectedOf(
+  pull: PullRow,
+  repositories: readonly ConnectedRunRepository[],
+): ConnectedRunRepository | null {
+  if (pull.provider !== "github") return null;
+  return (
+    repositories.find(
+      (repo) => repo.providerRepositoryId === pull.providerRepositoryId,
+    ) ??
+    repositories.find(
+      (repo) => `${repo.owner}/${repo.name}`.toLowerCase() === pull.repository,
+    ) ??
+    null
+  );
+}
+
+/**
+ * The repository a pull request is in. A connected one keeps the casing the
+ * workspace links it with. Any other is read from the forge row, whose path
+ * is lower-cased; a GitLab path may nest groups, so the name is its last part.
+ */
+function repositoryOf(
+  pull: PullRow,
+  connected: ConnectedRunRepository | null,
+): RunRepository {
+  if (connected !== null)
+    return {
+      host: connected.host,
+      owner: connected.owner,
+      name: connected.name,
+      url: connected.url,
+      connected: true,
+    };
+  const cut = pull.repository.lastIndexOf("/");
+  return {
+    host: pull.host,
+    owner: pull.repository.slice(0, Math.max(cut, 0)),
+    name: pull.repository.slice(cut + 1),
+    url: `https://${pull.host}/${pull.repository}`,
+    connected: false,
+  };
+}
+
+/** True when the checkout was on the pull request's head branch or commit. */
+function checkoutMatches(checkout: RunCheckout, pull: PullRow): boolean {
+  const repo = checkoutRepository(checkout);
+  if (
+    repo === null ||
+    repo.provider !== pull.provider ||
+    repo.repository !== pull.repository
+  )
+    return false;
+  return (
+    (checkout.branch !== null &&
+      checkout.branch !== "HEAD" &&
+      checkout.branch === pull.headRef) ||
+    (checkout.headSha !== null && checkout.headSha === pull.headSha)
+  );
+}
+
+/**
+ * The issues the pull request closes, from the forge store's issue links.
+ * The sync reads them at each new head, so a pull request with no revision
+ * yet was never read, and GitLab's closing references are not read at all.
+ * Both answer null rather than "closes nothing".
+ */
+function closingIssuesOf(entry: RunPullRequest): RunWorkPr["closingIssues"] {
+  if (entry.pull.provider !== "github" || entry.revision === null) return null;
+  return {
+    issues: entry.issues.map((issue) => {
+      const cut = issue.repository.lastIndexOf("/");
+      return {
+        owner: issue.repository.slice(0, Math.max(cut, 0)),
+        repo: issue.repository.slice(cut + 1),
+        number: issue.number,
+        title: issue.title ?? "",
+        url: issue.url,
+        state: issue.state === "closed" ? "closed" : "open",
+      };
+    }),
+    complete: true,
+  };
+}
+
+/** One file as the contract carries it. */
+function fileOut(
+  file: RevisionFile,
+): NonNullable<RunWorkPr["diff"]>["files"][number] {
+  return {
+    path: file.path,
+    previousPath: file.previousPath ?? null,
+    status: file.status,
+    additions: file.additions,
+    deletions: file.deletions,
+    patch: file.patch,
+  };
+}
+
+/**
+ * The pull request's diff from its revision. A stored revision's patches
+ * come from the stored bytes, checked against their digest. A revision whose
+ * bytes are not kept, or are over the fetch cap, answers its file list with
+ * no patches, and its limitations say why.
+ */
+async function diffOf(
+  pull: PullRow,
+  revision: RevisionRow,
+  store: DiffStore | null,
+  fetch: boolean,
+  warnings: Set<string>,
+): Promise<NonNullable<RunWorkPr["diff"]>> {
+  const limitations = [...revision.limitations];
+  let files: RevisionFile[];
+  if (revision.diffStatus !== "stored") {
+    limitations.push(`diff_${revision.diffStatus}`);
+    files = manifestFiles(revision);
+  } else if (!fetch) {
+    limitations.push("diff_size_limit");
+    files = manifestFiles(revision);
+  } else {
+    const read = await readRevisionFiles(revision, store, {
+      maxChars: DIFF_CHARS_CAP,
+      maxFileChars: REVISION_DIFF_MAX_FILE_CHARS,
+    });
+    if (read.ok) {
+      files = read.files;
+      if (read.truncated || files.some((file) => file.truncated))
+        limitations.push("diff_size_limit");
+      if (files.some((file) => file.patch === null))
+        limitations.push("patch_not_available");
+    } else {
+      warnings.add("diff_read_failed");
+      limitations.push(read.reason);
+      files = manifestFiles(revision);
+    }
+  }
+  if (
+    revision.filesChanged !== null &&
+    revision.files.length < revision.filesChanged
+  )
+    limitations.push("diff_file_limit");
+  const unique = [...new Set(limitations)];
+  return {
+    digest:
+      revision.diffSha256 === null
+        ? workDigest(
+            JSON.stringify([pull.url, revision.headSha, files.map(fileOut)]),
+          )
+        : `sha256:${revision.diffSha256}`,
+    headSha: revision.headSha,
+    files: files.map(fileOut),
+    complete: revision.complete && unique.length === 0,
+    limitations: unique,
+  };
+}
+
+/** The pull request's checks at its stored head, read live from GitHub. */
+async function ciOf(
+  scope: RunScope,
+  pull: PullRow,
+  connected: ConnectedRunRepository | null,
+  deps: WorkPrDeps,
+  warnings: Set<string>,
+): Promise<{ ci: RunWorkPr["ci"]; headMatches: boolean }> {
+  if (pull.provider !== "github") {
+    warnings.add("gitlab_checks_not_read");
+    return { ci: null, headMatches: true };
+  }
+  if (connected === null) {
+    warnings.add("repository_not_connected");
+    return { ci: null, headMatches: true };
+  }
+  try {
+    const gh = await deps.client(scope, connected);
+    const value = await gh.listCiChecks({
+      owner: connected.owner,
+      repo: connected.name,
+      ref: pull.headSha,
+    });
+    const complete =
+      value.complete ??
+      (value.checkRuns.length < 100 && value.statuses.length < 100);
+    if (!complete) warnings.add("ci_check_limit");
+    const headMatches = value.sha === null || value.sha === pull.headSha;
+    if (!headMatches) warnings.add("ci_head_mismatch");
+    return { ci: { ...buildCiSummary(value), complete }, headMatches };
+  } catch (error) {
+    logger.warn(
+      { err: error, orgId: scope.orgId, workspaceId: scope.workspaceId },
+      "Run pull request checks could not be read",
+    );
+    warnings.add("ci_read_failed");
+    return { ci: null, headMatches: true };
+  }
+}
+
+/**
+ * The run's pull requests: its forge change set, plus the pull requests the
+ * forge store holds that a receipt, a link frame, or a checkout's branch
+ * names. A pull request the run's links or receipts name is `recorded`; one
+ * only a checkout's branch reaches is `head_commit` when the checkout was on
+ * its head and `branch` otherwise. Nothing here asks a forge to find a pull
+ * request.
+ */
 export async function readWorkPullRequests(
   scope: RunScope,
-  checkouts: readonly RunCheckout[],
+  sources: WorkPrSources,
   repositories: readonly ConnectedRunRepository[],
   deps: WorkPrDeps = defaultWorkPrDeps,
-  recorded: readonly RecordedRunPr[] = [],
 ): Promise<{
   pullRequests: RunWorkPr[];
   complete: boolean;
   warnings: string[];
 }> {
   const warnings = new Set<string>();
-  const result = new Map<string, RunWorkPr>();
-  const targets = checkouts.map((checkout) => ({
-    checkout,
-    recorded: null as RecordedRunPr | null,
-  }));
-  for (const receipt of recorded) {
-    const repo = repositories.find(
-      (candidate) => candidate.providerRepositoryId === receipt.repositoryId,
-    );
-    if (!repo) {
-      warnings.add("recorded_repository_not_connected");
-      continue;
-    }
-    targets.push({
-      recorded: receipt,
-      checkout: {
-        id: "",
-        path: "",
-        branch: null,
-        headSha: receipt.headSha,
-        remoteDigest: null,
-        repository: repo,
-        firstSeq: "",
-        lastSeq: "",
-      },
-    });
-  }
-  const seenBranches = new Map<string, string[]>();
-  const defaultBranches = new Map<string, string>();
-  let discoveries = 0;
-  for (const { checkout, recorded: receipt } of targets) {
-    const repo = repositories.find(
-      (candidate) => candidate.url === checkout.repository?.url,
-    );
-    if (!repo) {
+  const branches = new Map<string, BranchKey>();
+  for (const checkout of sources.checkouts) {
+    if (
+      !repositories.some((repo) => repo.url === checkout.repository?.url)
+    )
       warnings.add("repository_not_connected");
-      continue;
-    }
-    if (!checkout.branch && !receipt) {
+    const repo = checkoutRepository(checkout);
+    if (repo === null) continue;
+    if (checkout.branch === null) {
       warnings.add("branch_not_recorded");
       continue;
     }
-    const discoveryKey = `${repo.url}:${receipt ? `pr:${receipt.number}` : checkout.branch}`;
-    const prior = seenBranches.get(discoveryKey);
-    if (prior) {
-      for (const key of prior) {
-        const pr = result.get(key);
-        if (pr && checkout.id && !pr.checkoutIds.includes(checkout.id))
-          pr.checkoutIds.push(checkout.id);
-      }
+    // A detached HEAD names no branch, so it names no work of its own.
+    if (checkout.branch === "HEAD") {
+      warnings.add("default_branch_not_linked");
       continue;
     }
-    if (discoveries++ >= 20) {
-      warnings.add("repository_discovery_limit");
-      break;
-    }
-    const discovered: string[] = [];
-    seenBranches.set(discoveryKey, discovered);
-    try {
-      const gh = await deps.client(scope, repo);
-      // Every PR opened from a repository's default branch has that branch as
-      // its head, so a checkout on `main` matched whatever PR anyone ever
-      // opened from `main`, and a session started today showed one from July.
-      // A checkout on the default branch or a detached HEAD names no work of
-      // its own. Only a recorded receipt links a PR to it.
-      if (!receipt && checkout.branch) {
-        let defaultBranch = defaultBranches.get(repo.url);
-        if (defaultBranch === undefined) {
-          defaultBranch = (
-            await gh.getRepoInfo({ owner: repo.owner, repo: repo.name })
-          ).defaultBranch;
-          defaultBranches.set(repo.url, defaultBranch);
-        }
-        if (checkout.branch === defaultBranch || checkout.branch === "HEAD") {
-          warnings.add("default_branch_not_linked");
-          continue;
-        }
-      }
-      const prs = receipt
-        ? [{ number: receipt.number }]
-        : await gh.listPullRequests({
-            owner: repo.owner,
-            repo: repo.name,
-            head: `${repo.owner}:${checkout.branch}`,
-            state: "all",
-          });
-      if (prs.length >= 100) warnings.add("pull_request_list_limit");
-      for (const listed of prs) {
-        const key = `${repo.url}#${listed.number}`;
-        discovered.push(key);
-        const found = result.get(key);
-        if (found) {
-          if (checkout.id && !found.checkoutIds.includes(checkout.id))
-            found.checkoutIds.push(checkout.id);
-          if (receipt) found.association = "recorded";
-          continue;
-        }
-        if (result.size >= PR_CAP) {
-          warnings.add("pull_request_limit");
-          break;
-        }
-        const input = {
-          owner: repo.owner,
-          repo: repo.name,
-          number: listed.number,
-        };
-        const pr = await gh.getPullRequest(input);
-        // What the PR closes is GitHub's own record of it, so it can name the
-        // run's task without anything guessed from a branch or a title. A
-        // failed read is null and a warning, never an empty list.
-        let closingIssues: RunWorkPr["closingIssues"] = null;
-        try {
-          closingIssues = await gh.listClosingIssues(input);
-          if (!closingIssues.complete) warnings.add("closing_issue_limit");
-        } catch {
-          warnings.add("closing_issues_read_failed");
-        }
-        let ci: RunWorkPr["ci"] = null;
-        let diff: RunWorkPr["diff"] = null;
-        let current = false;
-        if (pr.headSha) {
-          const [checks, files] = await Promise.allSettled([
-            gh.listCiChecks({
-              owner: repo.owner,
-              repo: repo.name,
-              ref: pr.headSha,
-            }),
-            gh.listPullRequestFiles(input),
-          ]);
-          // The files endpoint is mutable. A moved head invalidates this read.
-          const after = await gh.getPullRequest(input);
-          current = after.headSha === pr.headSha;
-          if (!current) warnings.add("pull_request_head_changed");
-          if (checks.status === "fulfilled") {
-            const value = checks.value;
-            const complete =
-              value.complete ??
-              (value.checkRuns.length < 100 && value.statuses.length < 100);
-            ci = { ...buildCiSummary(value), complete };
-            if (!complete) warnings.add("ci_check_limit");
-            if (value.sha && value.sha !== pr.headSha) {
-              current = false;
-              warnings.add("ci_head_mismatch");
-            }
-          } else warnings.add("ci_read_failed");
-          if (files.status === "fulfilled" && current) {
-            let remaining = DIFF_BYTES_CAP;
-            const limitations: string[] = [];
-            const entries = files.value.map((file) => {
-              let patch = file.patch;
-              if (patch !== null) {
-                const size = Buffer.byteLength(patch, "utf8");
-                if (size > remaining) {
-                  patch = null;
-                  limitations.push("diff_size_limit");
-                } else remaining -= size;
-              } else limitations.push("patch_not_available");
-              return {
-                path: file.path,
-                previousPath: file.previousPath,
-                status: file.status,
-                additions: file.additions,
-                deletions: file.deletions,
-                patch,
-              };
-            });
-            if (entries.length < pr.changedFiles || entries.length >= 100)
-              limitations.push("diff_file_limit");
-            diff = {
-              digest: workDigest(
-                JSON.stringify([repo.url, pr.number, pr.headSha, entries]),
-              ),
-              headSha: pr.headSha,
-              files: entries,
-              complete: limitations.length === 0,
-              limitations: [...new Set(limitations)],
-            };
-          } else if (files.status === "rejected")
-            warnings.add("diff_read_failed");
-        } else warnings.add("pull_request_head_missing");
-        result.set(key, {
-          repository: {
-            host: repo.host,
-            owner: repo.owner,
-            name: repo.name,
-            url: repo.url,
-            connected: true,
-          },
-          number: pr.number,
-          title: pr.title,
-          url: pr.htmlUrl,
-          state: pr.merged ? "merged" : pr.state,
-          headSha: pr.headSha,
-          headRef: pr.headRef,
-          baseRef: pr.baseRef,
-          association: receipt
+    const key: BranchKey = { ...repo, branch: checkout.branch };
+    branches.set(branchKeyOf(key), key);
+  }
+  const links: PullKey[] = (sources.links ?? []).map((link) => ({
+    provider: "github",
+    repository: `${link.owner}/${link.name}`.toLowerCase(),
+    number: link.number,
+  }));
+  const read = await deps.forge(scope, {
+    runId: sources.runId,
+    receipts: (sources.receipts ?? []).map((receipt) => ({
+      providerRepositoryId: receipt.repositoryId,
+      number: receipt.number,
+    })),
+    links,
+    branches: [...branches.values()],
+  });
+  if (read.unstored > 0) warnings.add("pull_request_not_stored");
+  if (read.trunks.length > 0) warnings.add("default_branch_not_linked");
+  if (read.pullRequests.length > PR_CAP) warnings.add("pull_request_limit");
+  const listed = read.pullRequests.slice(0, PR_CAP);
+  const store = deps.store();
+  // The diff budget goes to the newest pull requests first.
+  let fetchBudget = DIFF_FETCH_TOTAL_BYTES;
+  const fetches = listed.map(({ revision }) => {
+    const bytes = revision?.diffBytes ?? null;
+    if (bytes === null || bytes > DIFF_FETCH_MAX_BYTES || bytes > fetchBudget)
+      return false;
+    fetchBudget -= bytes;
+    return true;
+  });
+  const pullRequests = await Promise.all(
+    listed.map(async (entry, index): Promise<RunWorkPr> => {
+      const { pull, revision } = entry;
+      const connected = connectedOf(pull, repositories);
+      const checkouts = sources.checkouts.filter((checkout) =>
+        checkoutMatches(checkout, pull),
+      );
+      const [checks, diff] = await Promise.all([
+        ciOf(scope, pull, connected, deps, warnings),
+        revision === null
+          ? Promise.resolve(null)
+          : diffOf(pull, revision, store, fetches[index] === true, warnings),
+      ]);
+      if (revision === null) warnings.add("pull_request_revision_missing");
+      // The stored revision is for an earlier head while the latest one's
+      // diff is not captured yet.
+      const captured = revision !== null && revision.headSha === pull.headSha;
+      if (revision !== null && !captured)
+        warnings.add("pull_request_head_not_captured");
+      return {
+        repository: repositoryOf(pull, connected),
+        number: pull.number,
+        title: pull.title ?? "",
+        url: pull.url,
+        state:
+          pull.state === "merged"
+            ? "merged"
+            : pull.state === "closed"
+              ? "closed"
+              : "open",
+        headSha: pull.headSha,
+        headRef: pull.headRef ?? "",
+        baseRef: pull.baseRef ?? "",
+        association:
+          entry.sources.includes("run") || entry.sources.includes("recorded")
             ? "recorded"
-            : checkout.headSha === pr.headSha
+            : checkouts.some((checkout) => checkout.headSha === pull.headSha)
               ? "head_commit"
               : "branch",
-          closingIssues,
-          checkoutIds: checkout.id ? [checkout.id] : [],
-          observedAt: deps.now(),
-          current,
-          ci,
-          diff,
-        });
-      }
-    } catch (error) {
-      logger.warn(
-        { err: error, orgId: scope.orgId, workspaceId: scope.workspaceId },
-        "Run pull request evidence could not be read",
-      );
-      warnings.add("pull_request_read_failed");
-    }
-  }
+        closingIssues: closingIssuesOf(entry),
+        checkoutIds: checkouts.map((checkout) => checkout.id),
+        observedAt: pull.stateSeenAt.toISOString(),
+        current: captured && checks.headMatches,
+        ci: checks.ci,
+        diff,
+      };
+    }),
+  );
   return {
-    pullRequests: [...result.values()],
+    pullRequests,
     complete: warnings.size === 0,
     warnings: [...warnings],
   };

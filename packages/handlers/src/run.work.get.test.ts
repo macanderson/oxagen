@@ -15,6 +15,7 @@ import { createRunWorkGetHandler, type RunWorkDeps } from "./run.work.get";
 import type { TachoSessionColumns } from "./run.list";
 import {
   ctx,
+  event,
   ledgerRun,
   memoryStores,
   summary,
@@ -372,19 +373,9 @@ describe("get_run_work", () => {
       },
     ]);
   });
-  it("passes each harness PR link to the PR read as a recorded receipt", async () => {
+  it("passes each harness PR link to the forge read by repository and number, connected or not", async () => {
     const { handler, deps } = setup();
-    vi.mocked(deps.repositories).mockResolvedValue([
-      {
-        connectionId: "conn_1",
-        providerRepositoryId: "R_1",
-        host: "github.com",
-        owner: "acme",
-        name: "app",
-        url: "https://github.com/acme/app",
-        connected: true,
-      },
-    ]);
+    vi.mocked(deps.repositories).mockResolvedValue([CONNECTED]);
     vi.mocked(deps.prLinks).mockResolvedValue([
       {
         url: "https://github.com/acme/app/pull/41",
@@ -407,14 +398,65 @@ describe("get_run_work", () => {
         first_seq: 40,
         first_ts: "2026-09-23 10:06:00.000",
       },
+      {
+        url: "not a url",
+        number: "",
+        repository: "",
+        first_seq: 50,
+        first_ts: "2026-09-23 10:07:00.000",
+      },
     ]);
     const result = await handler({ runId: RUN_ID }, ctx());
     const call = vi.mocked(deps.pullRequests).mock.calls[0]!;
-    expect(call[4]).toEqual([
-      { repositoryId: "R_1", number: 41, headSha: null },
-      { repositoryId: "R_1", number: 42, headSha: null },
-    ]);
-    expect(result.warnings).toContain("recorded_repository_not_connected");
+    expect(call[1]).toMatchObject({
+      runId: RUN_ID,
+      links: [
+        { owner: "acme", name: "app", number: 41 },
+        { owner: "Acme", name: "App", number: 42 },
+        { owner: "other", name: "repo", number: 7 },
+      ],
+    });
+    // The forge store decides which links it holds; a link to a repository
+    // this workspace does not connect is still looked up there.
+    expect(result.warnings).not.toContain("recorded_repository_not_connected");
+    expect(result.warnings).toContain("pr_link_unreadable");
+  });
+  it("passes a ledger run's receipts to the forge read under its public id", async () => {
+    const stores = memoryStores(
+      [ledgerRun({ publicId: LEDGER_ID, runId: LEDGER_UUID })],
+      [],
+    );
+    const { deps } = setup();
+    const handler = createRunWorkGetHandler({
+      ...deps,
+      queries: stores.queries,
+      readRunRollups: stores.readRunRollups,
+      readWitnessFor: stores.readWitnessFor,
+      store: {
+        getRunByPublicId: async (publicId) =>
+          publicId === LEDGER_ID ? summary() : null,
+        readAttemptEventsSince: async (_run: string, cursor: string) =>
+          cursor === "0"
+            ? [
+                event(1, {
+                  eventType: "provider_publish.pull_request_opened",
+                  payload: {
+                    provider_repository_id: "R_1",
+                    pull_request_number: 41,
+                    head_commit_sha: "abc",
+                  },
+                }),
+              ]
+            : [],
+      },
+    });
+    const result = await handler({ runId: LEDGER_ID }, ctx());
+    expect(vi.mocked(deps.pullRequests).mock.calls[0]?.[1]).toEqual({
+      runId: LEDGER_ID,
+      checkouts: [],
+      receipts: [{ repositoryId: "R_1", number: 41, headSha: "abc", seq: "1" }],
+    });
+    expect(result.warnings).toContain("checkout_context_not_recorded");
   });
   // #3791: the daemon seals a session's first hook before its first Git read,
   // so that frame names the path alone. As a checkout of its own it matched
@@ -468,18 +510,20 @@ describe("get_run_work", () => {
         connected: true,
       },
     ]);
-    // The real PR read over a GitHub that holds no PR for the branch, so
-    // every warning comes from the checkouts the handler passes it.
-    const github: WorkPrDeps = {
-      client: vi.fn().mockResolvedValue({
-        getRepoInfo: vi.fn().mockResolvedValue({ defaultBranch: "main" }),
-        listPullRequests: vi.fn().mockResolvedValue([]),
+    // The real PR read over a forge store that holds no PR for the branch,
+    // so every warning comes from the checkouts the handler passes it.
+    const forge: WorkPrDeps = {
+      forge: vi.fn().mockResolvedValue({
+        pullRequests: [],
+        unstored: 0,
+        trunks: [],
       }),
-      now: () => "2026-09-25T10:00:00Z",
+      store: () => null,
+      client: vi.fn(),
     };
     vi.mocked(deps.pullRequests).mockImplementation(
-      (scope, checkouts, repositories, _deps, recorded) =>
-        readWorkPullRequests(scope, checkouts, repositories, github, recorded),
+      (scope, sources, repositories) =>
+        readWorkPullRequests(scope, sources, repositories, forge),
     );
     const result = await handler({ runId: RUN_ID }, ctx());
     const merged = checkoutId(located);
@@ -512,14 +556,16 @@ describe("get_run_work", () => {
       },
     ]);
     vi.mocked(deps.pullRequests).mockImplementation(
-      (scope, checkouts, repositories, _deps, recorded) =>
-        readWorkPullRequests(
-          scope,
-          checkouts,
-          repositories,
-          { client: vi.fn(), now: () => "2026-09-25T10:00:00Z" },
-          recorded,
-        ),
+      (scope, sources, repositories) =>
+        readWorkPullRequests(scope, sources, repositories, {
+          forge: vi.fn().mockResolvedValue({
+            pullRequests: [],
+            unstored: 0,
+            trunks: [],
+          }),
+          store: () => null,
+          client: vi.fn(),
+        }),
     );
     const result = await handler({ runId: RUN_ID }, ctx());
     expect(result.checkouts).toMatchObject([{ path: "/tmp/scratch" }]);
