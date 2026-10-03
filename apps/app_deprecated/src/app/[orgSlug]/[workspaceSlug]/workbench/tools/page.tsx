@@ -50,7 +50,7 @@ export default async function WorkbenchToolsPage({ params }: PageProps) {
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-1">
         <h2 className="text-lg font-semibold">All Tools</h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           Every tool available to agents in this workspace — MCP servers and
           capabilities — after allowlist and risk filtering. Allowlist tools per
           agent in the Agent Builder; install more from the Marketplace.

@@ -140,7 +140,7 @@ export function MobileBottomBar({ ctx, user, planTier }: MobileBottomBarProps) {
               className={tabClass(isActive)}
             >
               <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
-              <span className="truncate text-[10px] font-medium">
+              <span className="truncate text-xs font-medium">
                 {item.label}
               </span>
             </Link>
@@ -159,7 +159,7 @@ export function MobileBottomBar({ ctx, user, planTier }: MobileBottomBarProps) {
             className={tabClass(moreActive)}
           >
             <MoreHorizontal className="h-5 w-5 shrink-0" aria-hidden="true" />
-            <span className="truncate text-[10px] font-medium">More</span>
+            <span className="truncate text-xs font-medium">More</span>
           </button>
         ) : null}
       </nav>
@@ -195,7 +195,7 @@ export function MobileBottomBar({ ctx, user, planTier }: MobileBottomBarProps) {
                       // routing + link semantics (a nav item is a link, not a button).
                       onClick={() => setMoreOpen(false)}
                       className={cn(
-                        "flex min-h-[2.75rem] items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
+                        "flex min-h-[2.75rem] items-center gap-3 rounded-md px-3 py-2.5 text-base font-medium transition-colors",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
                         isActive
                           ? "bg-sidebar-nav-link-active-bg text-sidebar-nav-link-active-fg"

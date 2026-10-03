@@ -437,7 +437,7 @@ export function AssistantChartBlock({
                 <Figure value={tile.value} format={tile.format} />
               </dd>
               {tile.note ? (
-                <dd className="text-sm text-muted-foreground">
+                <dd className="text-xs text-muted-foreground">
                   {tile.note}
                 </dd>
               ) : null}
@@ -453,7 +453,7 @@ export function AssistantChartBlock({
           ))}
         </div>
       ) : null}
-      <p className="text-sm text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {t("source", { source: spec.source })}
       </p>
     </figure>

@@ -14,15 +14,15 @@ export function SuccessState({ onClose }: { onClose: () => void }) {
         <CheckCircle2 className="h-6 w-6 text-success" aria-hidden="true" />
       </div>
       <div className="flex flex-col gap-1">
-        <p className="text-sm font-semibold text-foreground">Sync started!</p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-base font-semibold text-foreground">Sync started!</p>
+        <p className="text-sm text-muted-foreground">
           Your GitHub repositories are being indexed. This may take a few
           minutes. You can check the status on the Sources page.
         </p>
       </div>
       <button
         type="button"
-        className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+        className="rounded-md bg-primary px-4 py-2 text-base font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
         onClick={onClose}
         data-testid="wizard-done-btn"
       >

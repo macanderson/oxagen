@@ -53,8 +53,8 @@ type Load<T> =
   | { kind: "failed"; failure: RepositoriesFailure }
   | { kind: "ready"; value: T };
 
-const sectionTitle = "text-sm font-semibold text-foreground";
-const prose = "text-sm leading-relaxed text-muted-foreground";
+const sectionTitle = "text-base font-semibold text-foreground";
+const prose = "text-base leading-relaxed text-muted-foreground";
 
 /**
  * What the connect leg came back saying; null when it said nothing.
@@ -386,7 +386,7 @@ function Acknowledgement({
     <p
       role="status"
       data-testid={sentence.testId}
-      className="mt-3 text-sm text-foreground"
+      className="mt-3 text-base text-foreground"
     >
       {t(sentence.key)}
     </p>
@@ -593,7 +593,7 @@ function InstallationPicker({
           <label
             key={installation.installationId}
             data-touch-target=""
-            className="flex min-h-11 items-center gap-2.5 rounded-md border border-border px-2.5 py-2 text-sm hover:bg-accent has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
+            className="flex min-h-11 items-center gap-2.5 rounded-md border border-border px-2.5 py-2 text-base hover:bg-accent has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
           >
             <input
               type="radio"
@@ -608,14 +608,14 @@ function InstallationPicker({
               <b className="block truncate text-sm font-semibold">
                 {installation.accountLogin}
               </b>
-              <span className="block truncate text-xs text-muted-foreground">
+              <span className="block truncate text-sm text-muted-foreground">
                 {installation.repositorySelection === "all"
                   ? t("installations.allRepositories")
                   : t("installations.selectedRepositories")}
               </span>
             </span>
             {installation.accountType === null ? null : (
-              <span className="flex-none rounded-sm border border-border px-1.5 py-0.5 text-sm text-muted-foreground">
+              <span className="flex-none rounded-sm border border-border px-1.5 py-0.5 text-xs text-muted-foreground">
                 {installation.accountType}
               </span>
             )}
@@ -667,7 +667,7 @@ function BoundRepositoryPanel({
   return (
     <div data-testid="workspace-repository-bound" className={`${panel} p-4`}>
       <p className={eyebrow}>{t("bound.heading")}</p>
-      <p className="mt-1 font-mono text-sm font-semibold text-foreground">
+      <p className="mt-1 font-mono text-base font-semibold text-foreground">
         {repository.fullName}
       </p>
       <p className={`mt-1 ${prose}`}>

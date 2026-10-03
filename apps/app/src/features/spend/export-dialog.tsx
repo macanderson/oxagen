@@ -107,14 +107,14 @@ export function ExportDialog({ at, month }: { at: SpendAt; month: string }) {
             <FormAlert>{t(`exportDialog.alert.${alert}`)}</FormAlert>
           ) : null}
           <fieldset className="flex flex-col gap-1.5">
-            <legend className="mb-1 text-sm font-medium">
+            <legend className="mb-1 text-base font-medium">
               {t("exportDialog.kind")}
             </legend>
             {STATEMENT_KINDS.map((choice) => (
               <label
                 key={choice}
                 data-touch-target=""
-                className="flex min-h-11 items-start gap-2.5 rounded-md border border-border px-2.5 py-2 text-sm hover:bg-accent has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
+                className="flex min-h-11 items-start gap-2.5 rounded-md border border-border px-2.5 py-2 text-base hover:bg-accent has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
               >
                 <input
                   type="radio"
@@ -128,7 +128,7 @@ export function ExportDialog({ at, month }: { at: SpendAt; month: string }) {
                 />
                 <span className="flex flex-col">
                   <span>{t(`exportDialog.kinds.${choice}.label`)}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-sm text-muted-foreground">
                     {t(`exportDialog.kinds.${choice}.hint`)}
                   </span>
                 </span>

@@ -169,13 +169,13 @@ export function ErrorBody({
           <p
             id="repositories-error-incident"
             data-state="not-recorded"
-            className="mt-3 max-w-[52ch] text-xs text-dim"
+            className="mt-3 max-w-[52ch] text-sm text-dim"
           >
             {t("incidentNotRecorded")}
           </p>
           <p
             data-testid="repositories-error-trace"
-            className="mt-4 font-mono text-sm text-dim"
+            className="mt-4 font-mono text-xs text-dim"
           >
             {t("trace", { at: readAt })}
           </p>
@@ -237,7 +237,7 @@ export function DeniedBody({
           <p
             id="repositories-denied-request"
             data-state="not-recorded"
-            className="mt-3 max-w-[52ch] text-xs text-dim"
+            className="mt-3 max-w-[52ch] text-sm text-dim"
           >
             {t("requestNotRecorded", { needed })}
           </p>

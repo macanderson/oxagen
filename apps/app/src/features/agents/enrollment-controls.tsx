@@ -62,10 +62,10 @@ function CopyValue({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-foreground">{label}</p>
+        <p className="text-base font-medium text-foreground">{label}</p>
         <button
           type="button"
-          className={`${buttonSecondary} h-8 px-2 text-xs`}
+          className={`${buttonSecondary} h-8 px-2 text-sm`}
           onClick={() => void copy()}
         >
           {state === "copied" ? t("copied") : t("copy")}
@@ -77,7 +77,7 @@ function CopyValue({
       >
         {value}
       </code>
-      <p role="status" className="text-xs text-muted-foreground">
+      <p role="status" className="text-sm text-muted-foreground">
         {state === "copied"
           ? t("copied")
           : state === "failed"
@@ -99,8 +99,8 @@ function TokenPanel({ token }: { token: EnrollmentToken }) {
         value={token.token}
         testId="enrollment-token-value"
       />
-      <p className="text-xs text-muted-foreground">{t("once")}</p>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">{t("once")}</p>
+      <p className="text-sm text-muted-foreground">
         {t("expires", {
           at: format.dateTime(new Date(token.expiresAt), {
             dateStyle: "medium",
@@ -187,7 +187,7 @@ export function EnrollHost({
         testId="enroll-host-dialog"
       >
         <form onSubmit={(e) => void mint(e)} className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">{t("body")}</p>
+          <p className="text-base text-muted-foreground">{t("body")}</p>
           <DesktopDownloads />
           {failure === null ? null : (
             <FormAlert testId="enroll-host-failure">{failure}</FormAlert>
@@ -278,7 +278,7 @@ export function RevokeHost({
         testId="revoke-host-dialog"
       >
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">{t("body")}</p>
+          <p className="text-base text-muted-foreground">{t("body")}</p>
           <Field
             id={fieldId}
             name="reason"

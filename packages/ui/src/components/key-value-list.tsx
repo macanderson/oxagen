@@ -37,7 +37,7 @@ const KeyValueList = React.forwardRef<HTMLDListElement, KeyValueListProps>(
     <dl
       ref={ref}
       className={cn(
-        "grid text-sm",
+        "grid text-base",
         stacked
           ? cn("grid-cols-1", dense ? "gap-y-2" : "gap-y-3")
           : cn(
@@ -53,7 +53,7 @@ const KeyValueList = React.forwardRef<HTMLDListElement, KeyValueListProps>(
           // HTML5 permits <div> pair-wrappers inside <dl>; keeps the grid gap
           // between PAIRS rather than between each label and its value.
           <div key={item.key ?? i} className="min-w-0 space-y-0.5">
-            <dt className="text-xs font-medium text-muted-foreground">
+            <dt className="text-sm font-medium text-muted-foreground">
               {item.label}
             </dt>
             <dd className="min-w-0 break-words font-medium text-foreground">

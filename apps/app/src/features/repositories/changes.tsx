@@ -134,7 +134,7 @@ export function Changes({
             data-testid="changes-other-kinds"
             data-state="not-recorded"
             data-gap={REPOSITORY_GAPS.lifecycle}
-            className="text-xs text-dim"
+            className="text-sm text-dim"
           >
             {t("otherKinds")}
           </p>
@@ -313,7 +313,7 @@ function ChangeRow({
           </b>
         </span>
         <span
-          className={`${mono} mt-0.5 block text-sm text-dim md:truncate`}
+          className={`${mono} mt-0.5 block text-xs text-dim md:truncate`}
         >
           {row.pullRequest.branch}
         </span>
@@ -345,7 +345,7 @@ function ChangeRow({
         <span className="flex min-w-0 items-center gap-2">
           <CiLight status={row.status} />
           <span
-            className={`${mono} min-w-0 text-sm text-muted-foreground md:truncate`}
+            className={`${mono} min-w-0 text-xs text-muted-foreground md:truncate`}
           >
             {row.checks === null
               ? t("ci.queued")

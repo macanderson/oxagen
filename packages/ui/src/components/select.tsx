@@ -16,7 +16,7 @@ const SelectValue = SelectPrimitive.Value;
  * enter/exit transition every other overlay uses.
  */
 const selectTriggerVariants = cva(
-  "flex w-full items-center justify-between whitespace-nowrap rounded-md border border-input-border bg-input-bg px-3 py-2 text-sm text-input-fg placeholder:text-input-placeholder hover:border-input-border-hover focus:outline-none focus:border-input-border-focus focus:ring-1 focus:ring-input-ring data-[popup-open]:border-input-border-focus disabled:cursor-not-allowed disabled:bg-input-disabled-bg disabled:text-input-disabled-fg [&>span]:line-clamp-1",
+  "flex w-full items-center justify-between whitespace-nowrap rounded-md border border-input-border bg-input-bg px-3 py-2 text-base text-input-fg placeholder:text-input-placeholder hover:border-input-border-hover focus:outline-none focus:border-input-border-focus focus:ring-1 focus:ring-input-ring data-[popup-open]:border-input-border-focus disabled:cursor-not-allowed disabled:bg-input-disabled-bg disabled:text-input-disabled-fg [&>span]:line-clamp-1",
   {
     // coss ui density scale. `lg` matches the shadcn/ui trigger height (36px).
     variants: {
@@ -111,7 +111,7 @@ const SelectLabel = React.forwardRef<
   <SelectPrimitive.GroupLabel
     ref={ref}
     className={cn(
-      "px-2 py-1.5 text-sm font-semibold text-menu-group-label-fg",
+      "px-2 py-1.5 text-base font-semibold text-menu-group-label-fg",
       className,
     )}
     {...props}
@@ -126,7 +126,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm text-menu-item-fg outline-none data-[highlighted]:bg-menu-item-highlighted-bg data-[highlighted]:text-menu-item-highlighted-fg data-[selected]:bg-menu-item-selected-bg data-[selected]:text-menu-item-selected-fg data-[disabled]:pointer-events-none data-[disabled]:text-menu-item-disabled-fg",
+      "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-base text-menu-item-fg outline-none data-[highlighted]:bg-menu-item-highlighted-bg data-[highlighted]:text-menu-item-highlighted-fg data-[selected]:bg-menu-item-selected-bg data-[selected]:text-menu-item-selected-fg data-[disabled]:pointer-events-none data-[disabled]:text-menu-item-disabled-fg",
       className,
     )}
     {...props}

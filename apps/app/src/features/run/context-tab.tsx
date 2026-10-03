@@ -81,7 +81,7 @@ const CUTS_SHOWN = 3;
  * and its `.v` figure (mono 10.5px): one part of the first request.
  */
 const promptBar =
-  "grid grid-cols-[minmax(0,22ch)_1fr_auto] items-center gap-[9px] text-sm text-muted-foreground";
+  "grid grid-cols-[minmax(0,22ch)_1fr_auto] items-center gap-[9px] text-xs text-muted-foreground";
 
 /**
  * `.ro-dot { position:absolute; left:-30px; top:6px; width:23px; height:23px;
@@ -166,7 +166,7 @@ function WindowBars({ measured }: { measured: ContextWindow }) {
               }}
             />
           </span>
-          <span className="font-mono text-sm">
+          <span className="font-mono text-xs">
             {block.tokens === null
               ? t("bytes", { count: formatCount(block.bytes, locale) })
               : t("tokens", { count: formatCount(block.tokens, locale) })}
@@ -202,7 +202,7 @@ function PromptPanel({
       testId="run-context-prompt"
       aside={
         <>
-          <span className="font-mono text-sm text-dim">
+          <span className="font-mono text-xs text-dim">
             {t("writtenNotRecorded")} ·{" "}
             {sent === null
               ? t("sentNotRecorded")
@@ -211,7 +211,7 @@ function PromptPanel({
           {/* A fragment on this page: WINDOW_ANCHOR, written out because a link's target is never computed (INV-13). */}
           <a
             href="#run-context-window"
-            className={`${buttonSecondary} min-h-7 px-2.5 text-xs`}
+            className={`${buttonSecondary} min-h-7 px-2.5 text-sm`}
           >
             {t("openWindow")}
           </a>
@@ -227,7 +227,7 @@ function PromptPanel({
           </p>
           <p
             data-testid="run-context-first-prompt"
-            className="m-0 max-w-[52ch] text-sm leading-[1.55] text-foreground [overflow-wrap:anywhere]"
+            className="m-0 max-w-[52ch] text-base leading-[1.55] text-foreground [overflow-wrap:anywhere]"
           >
             {prompt === null
               ? t("noPrompt")
@@ -239,7 +239,7 @@ function PromptPanel({
         <div className="min-w-0">
           <p className={`${eyebrowQuiet} mb-1.5`}>{t("firstRequest")}</p>
           {request === null && measured === null ? (
-            <p className="m-0 text-sm text-muted-foreground">
+            <p className="m-0 text-xs text-muted-foreground">
               {t("noRequest")}
             </p>
           ) : (
@@ -250,7 +250,7 @@ function PromptPanel({
                     <div key={part} className={promptBar}>
                       <span className="truncate">{part}</span>
                       <span className="block h-[7px] min-w-0 overflow-hidden rounded-[4px] bg-hl" />
-                      <span className="font-mono text-sm">
+                      <span className="font-mono text-xs">
                         <NoValue />
                       </span>
                     </div>
@@ -259,7 +259,7 @@ function PromptPanel({
               ) : (
                 <WindowBars measured={measured} />
               )}
-              <p className="mb-0 mt-2 text-sm text-muted-foreground">
+              <p className="mb-0 mt-2 text-xs text-muted-foreground">
                 {request !== null &&
                 request.input !== null &&
                 request.cached !== null
@@ -336,7 +336,7 @@ function SpineNode({ item }: { item: TranscriptRecallItem }) {
           )}
         </div>
         {why === null ? null : (
-          <p className="mb-0 mt-[3px] text-sm leading-[1.5] text-muted-foreground">
+          <p className="mb-0 mt-[3px] text-xs leading-[1.5] text-muted-foreground">
             {why}
           </p>
         )}
@@ -375,7 +375,7 @@ function ManifestSpine({
         {tally === null ? null : (
           <span
             data-testid="run-manifest-tally"
-            className="ml-auto font-mono text-sm text-dim"
+            className="ml-auto font-mono text-xs text-dim"
           >
             {t("renderedCount", { count: formatCount(tally.rendered, locale) })}{" "}
             · {t("cutCount", { count: formatCount(tally.cut, locale) })} ·{" "}
@@ -394,7 +394,7 @@ function ManifestSpine({
           disabled
           title={t("previewMissing")}
           aria-describedby="run-manifest-preview-why"
-          className={`${tally === null ? "ml-auto" : ""} cursor-not-allowed text-sm text-muted-foreground underline decoration-rule underline-offset-2 opacity-70`}
+          className={`${tally === null ? "ml-auto" : ""} cursor-not-allowed text-xs text-muted-foreground underline decoration-rule underline-offset-2 opacity-70`}
         >
           {t("preview")}
         </button>
@@ -425,7 +425,7 @@ function ManifestSpine({
           {cuts.length > CUTS_SHOWN ? (
             <li className="relative py-[5px]">
               <details className="group">
-                <summary className="cursor-pointer list-none text-sm text-muted-foreground underline decoration-rule underline-offset-2 hover:text-foreground [&::-webkit-details-marker]:hidden">
+                <summary className="cursor-pointer list-none text-xs text-muted-foreground underline decoration-rule underline-offset-2 hover:text-foreground [&::-webkit-details-marker]:hidden">
                   {t("moreCut", {
                     count: formatCount(cuts.length - CUTS_SHOWN, locale),
                   })}
@@ -444,7 +444,7 @@ function ManifestSpine({
         </ol>
       )}
       {manifest === null ? null : (
-        <p className="mb-0 mt-[11px] border-t border-border pt-2.5 text-sm text-dim">
+        <p className="mb-0 mt-[11px] border-t border-border pt-2.5 text-xs text-dim">
           {read === null || read.bundleVersion === null
             ? t("footNoBundle", { seq: manifest.entry.seq })
             : t("foot", {
@@ -542,7 +542,7 @@ function PromptWindow({
         }
       >
         {/* `.compbar { height:30px; border-radius:9px; border:1px solid var(--border); background:var(--hl) }`, with no band the record can fill. */}
-        <div className="flex h-[30px] items-center justify-center rounded-[9px] border border-border bg-hl font-mono text-sm text-dim">
+        <div className="flex h-[30px] items-center justify-center rounded-[9px] border border-border bg-hl font-mono text-xs text-dim">
           {t("blocksNotRecorded")}
         </div>
         <div className="mt-[13px]">
@@ -597,7 +597,7 @@ function frameRow(
         {/* A label that only repeats the kind says nothing the Kind column does not. */}
         {entry.label === entry.type ? null : (
           <span
-            className={`${mono} min-w-0 text-sm text-foreground md:truncate`}
+            className={`${mono} min-w-0 text-xs text-foreground md:truncate`}
           >
             {entry.label}
           </span>
@@ -642,7 +642,7 @@ function ContextFrames({
     >
       {entries.length === 0 ? (
         <PanelBody>
-          <p className="text-sm text-muted-foreground">{t("empty")}</p>
+          <p className="text-base text-muted-foreground">{t("empty")}</p>
         </PanelBody>
       ) : (
         // `table.narrow`: the split's detail column is narrower than a list
@@ -670,7 +670,7 @@ function ContextFrames({
         <div className="flex flex-col gap-2">
           <Note>{t("note")}</Note>
           {isWhole(read.value) ? null : (
-            <p className="text-xs text-muted-foreground">{t("cut")}</p>
+            <p className="text-sm text-muted-foreground">{t("cut")}</p>
           )}
         </div>
       </PanelBody>
@@ -699,7 +699,7 @@ function WalkWindow({
     <Panel title={t("title")} testId="run-context-walk" flush>
       {stops.length === 0 ? (
         <PanelBody>
-          <p className="text-sm text-muted-foreground">{t("empty")}</p>
+          <p className="text-base text-muted-foreground">{t("empty")}</p>
         </PanelBody>
       ) : (
         // `.stack { padding:7px; max-height:560px; overflow-y:auto }`
@@ -717,10 +717,10 @@ function WalkWindow({
                   aria-hidden="true"
                   className={`size-2 flex-none rounded-[2px] ${stop.hue}`}
                 />
-                <span className="min-w-0 flex-1 truncate font-mono text-sm">
+                <span className="min-w-0 flex-1 truncate font-mono text-xs">
                   {t("stop", { type: stop.entry.type, seq: stop.entry.seq })}
                 </span>
-                <span className="flex-none font-mono text-sm tabular-nums text-dim">
+                <span className="flex-none font-mono text-xs tabular-nums text-dim">
                   {stop.figure ?? t("frame", { seq: stop.entry.seq })}
                 </span>
               </SafeLink>

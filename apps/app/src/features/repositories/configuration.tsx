@@ -111,7 +111,7 @@ export function Configuration({
             data-testid="configuration-drift-pr"
             data-gap={REPOSITORY_GAPS.lifecycle}
             aria-describedby="configuration-drift-none"
-            className={`${buttonSecondary} min-h-7 px-2.5 py-1 text-xs`}
+            className={`${buttonSecondary} min-h-7 px-2.5 py-1 text-sm`}
           >
             {t("driftPr")}
           </button>
@@ -205,7 +205,7 @@ export function Configuration({
               {value.oxagen.files.join("\n")}
             </pre>
           )}
-          <p className="mt-2 text-xs text-dim">{t("treeJson")}</p>
+          <p className="mt-2 text-sm text-dim">{t("treeJson")}</p>
           <p className={`mt-3 ${note}`}>{t.rich("treeNote", { code })}</p>
         </PanelBody>
       </Panel>

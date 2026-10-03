@@ -40,7 +40,7 @@ export function ExportButton({ slugs, versionId }: ExportButtonProps) {
         <Download className="h-3.5 w-3.5" />
         {loading ? "Exporting…" : "Export schema"}
       </Button>
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   );
 }

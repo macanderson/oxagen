@@ -186,10 +186,10 @@ export function DeleteSourceDialog({
               >
                 <Radio value={opt.value} className="mt-0.5 shrink-0" />
                 <div className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-sm font-medium text-foreground">
+                  <span className="text-base font-medium text-foreground">
                     {opt.label}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-sm text-muted-foreground">
                     {opt.description}
                   </span>
                 </div>
@@ -198,7 +198,7 @@ export function DeleteSourceDialog({
           </RadioGroup>
 
           {error && (
-            <p role="alert" className="mt-3 text-xs text-destructive">
+            <p role="alert" className="mt-3 text-sm text-destructive">
               {error}
             </p>
           )}

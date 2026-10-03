@@ -39,8 +39,8 @@ import { ScimTokenControls } from "./scim-controls";
 import { SsoProviderDialog } from "./sso-provider-form";
 import { OrganizationTabs } from "./tabs";
 
-const sectionTitle = "text-base font-semibold text-foreground";
-const lead = "text-sm text-muted-foreground";
+const sectionTitle = "text-lg font-semibold text-foreground";
+const lead = "text-base text-muted-foreground";
 
 export async function Sso({
   ctx,
@@ -73,7 +73,7 @@ function SsoSection({
   return (
     <div className="flex flex-col gap-6">
       <OrganizationTabs org={org} current="sso" />
-      <p className="max-w-3xl text-sm text-muted-foreground">{t("intro")}</p>
+      <p className="max-w-3xl text-base text-muted-foreground">{t("intro")}</p>
       {read.ok ? (
         <>
           {read.value.entitled ? null : (
@@ -239,7 +239,7 @@ function Setup({
         {t("title", { name: provider.displayName })}
       </h2>
       <div className="flex flex-col gap-3">
-        <h3 className="text-sm font-semibold text-foreground">
+        <h3 className="text-base font-semibold text-foreground">
           {t("dnsTitle")}
         </h3>
         {provider.domainVerified ? (
@@ -264,7 +264,7 @@ function Setup({
         ) : null}
       </div>
       <div className="flex flex-col gap-3">
-        <h3 className="text-sm font-semibold text-foreground">
+        <h3 className="text-base font-semibold text-foreground">
           {t("idpTitle")}
         </h3>
         <p className={lead}>{t("idpLead")}</p>

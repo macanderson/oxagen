@@ -53,9 +53,9 @@ export function RunIssueConnections({
       aria-label={t("providersTitle")}
       className={`${panel} space-y-3 p-4`}
     >
-      <h2 className="text-sm font-semibold">{t("providersTitle")}</h2>
+      <h2 className="text-base font-semibold">{t("providersTitle")}</h2>
       {!canManage ? (
-        <p className="text-sm text-muted-foreground">{t("providerOwner")}</p>
+        <p className="text-base text-muted-foreground">{t("providerOwner")}</p>
       ) : (
         <>
           <button
@@ -74,14 +74,14 @@ export function RunIssueConnections({
           {data ? (
             <div className="space-y-4">
               <div className="space-y-2">
-                <h3 className="text-sm font-medium">{t("githubTitle")}</h3>
+                <h3 className="text-base font-medium">{t("githubTitle")}</h3>
                 {data.github.connected ? (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-base text-muted-foreground">
                     {t("githubConnected")}
                   </p>
                 ) : null}
                 {!connect && !install ? (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-base text-muted-foreground">
                     {t("githubUnconfigured")}
                   </p>
                 ) : (
@@ -100,18 +100,18 @@ export function RunIssueConnections({
                 )}
               </div>
               <div className="space-y-2">
-                <h3 className="text-sm font-medium">{t("linearTitle")}</h3>
+                <h3 className="text-base font-medium">{t("linearTitle")}</h3>
                 {data.linear.connections.length ? (
                   data.linear.connections.map((connection) => (
                     <p
-                      className="text-sm text-muted-foreground"
+                      className="text-base text-muted-foreground"
                       key={connection.connectionId}
                     >
                       {t("linearConnected", { name: connection.name })}
                     </p>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-base text-muted-foreground">
                     {t("linearEmpty")}
                   </p>
                 )}
@@ -127,7 +127,7 @@ export function RunIssueConnections({
                     {authorizing ? t("linearConnecting") : t("linearConnect")}
                   </button>
                 ) : (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-base text-muted-foreground">
                     {t("linearUnconfigured")}
                   </p>
                 )}

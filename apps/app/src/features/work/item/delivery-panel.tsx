@@ -76,7 +76,7 @@ function SendRow({ send, at }: { send: WorkSend; at: At }) {
       <td className={numericCell}>{send.send}</td>
       <td className={cell}>
         <span className="font-medium text-foreground">{send.agent.name ?? t("unnamedAgent")}</span>
-        <span className="block text-xs text-muted-foreground">
+        <span className="block text-sm text-muted-foreground">
           {t("sentLine", {
             at: when(send.requestedAt),
             by: person(send.operator),
@@ -89,7 +89,7 @@ function SendRow({ send, at }: { send: WorkSend; at: At }) {
           {t(`words.${word}`)}
         </Badge>
         {notes.length === 0 ? null : (
-          <span className="mt-1 block text-xs text-muted-foreground [overflow-wrap:anywhere]">
+          <span className="mt-1 block text-sm text-muted-foreground [overflow-wrap:anywhere]">
             {notes.join(" ")}
           </span>
         )}
@@ -129,7 +129,7 @@ export function DeliveryPanel({ detail, at }: { detail: WorkItemDetail; at: At }
           {t("heading")}
         </h2>
         {send === null ? null : (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             {t("count", { count: detail.sends.length })}
           </span>
         )}
@@ -165,7 +165,7 @@ export function DeliveryPanel({ detail, at }: { detail: WorkItemDetail; at: At }
                   {send.mandateId}
                 </SafeLink>
               )}
-              <span className="block text-xs text-muted-foreground">{t("noAuthority")}</span>
+              <span className="block text-sm text-muted-foreground">{t("noAuthority")}</span>
             </dd>
             <dt className={kvTerm}>{t("budget")}</dt>
             <dd className={kvValue} data-testid="work-delivery-budget">
@@ -180,7 +180,7 @@ export function DeliveryPanel({ detail, at }: { detail: WorkItemDetail; at: At }
                 <CopyValue value={send.key} label={t("keyLabel")} />
               </span>
               {sendLive(send) ? (
-                <span className="text-xs text-muted-foreground">{t("keyNote")}</span>
+                <span className="text-sm text-muted-foreground">{t("keyNote")}</span>
               ) : null}
             </dd>
           </dl>

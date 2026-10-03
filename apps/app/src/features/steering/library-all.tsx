@@ -192,7 +192,7 @@ export function LibraryAll({
               {t("notRecorded")}
             </span>
           </td>
-          <td className={`${cell} font-mono text-sm`}>
+          <td className={`${cell} font-mono text-xs`}>
             {source ?? (
               <span className="font-sans text-muted-foreground">
                 {t("sourceNone")}

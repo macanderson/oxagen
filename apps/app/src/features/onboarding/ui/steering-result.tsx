@@ -41,7 +41,7 @@ export function SteeringResultLine({
       <p
         role="status"
         data-testid="steering-connected"
-        className="text-sm text-foreground"
+        className="text-base text-foreground"
       >
         {t("connected")}
       </p>

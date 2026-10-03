@@ -197,14 +197,14 @@ function ConnectionRow({
         </div>
         <div className="flex flex-col gap-0.5 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-foreground">
+            <span className="text-base font-semibold text-foreground">
               {connection.displayName}
             </span>
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               via {displayName}
             </span>
           </div>
-          <div className="flex items-center gap-2 text-[11px]">
+          <div className="flex items-center gap-2 text-xs">
             <span
               className={`flex items-center gap-1 font-medium ${isSyncing ? "text-info" : statusConfig.className}`}
               data-testid={`connection-status-${connection.publicId}`}
@@ -244,7 +244,7 @@ function ConnectionRow({
         {RESYNCABLE_STATUSES.has(connection.status) && (
           <button
             type="button"
-            className="flex items-center gap-1 rounded-md border border-border/60 bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+            className="flex items-center gap-1 rounded-md border border-border/60 bg-card px-2.5 py-1.5 text-sm font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
             disabled={isSyncing}
             onClick={() => onResyncStart(connection.publicId)}
             data-testid={`resync-btn-${connection.publicId}`}
@@ -424,19 +424,19 @@ export function KnowledgeConnectionsClient({
         {activeConnections.length > 0 && (
           <div className="grid grid-cols-3 gap-3 flex-1">
             <div className="flex flex-col gap-0.5 rounded-lg border border-border/60 bg-card px-4 py-3">
-              <span className="text-xs text-muted-foreground">Sources</span>
+              <span className="text-sm text-muted-foreground">Sources</span>
               <span className="text-xl font-semibold tabular-nums text-foreground">
                 {activeConnections.length}
               </span>
             </div>
             <div className="flex flex-col gap-0.5 rounded-lg border border-border/60 bg-card px-4 py-3">
-              <span className="text-xs text-muted-foreground">Synced</span>
+              <span className="text-sm text-muted-foreground">Synced</span>
               <span className="text-xl font-semibold tabular-nums text-foreground">
                 {syncedCount}
               </span>
             </div>
             <div className="flex flex-col gap-0.5 rounded-lg border border-border/60 bg-card px-4 py-3">
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 Total records
               </span>
               <span className="text-xl font-semibold tabular-nums text-foreground">
@@ -448,7 +448,7 @@ export function KnowledgeConnectionsClient({
         {activeConnections.length > 0 && (
           <button
             type="button"
-            className="ml-3 flex flex-shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+            className="ml-3 flex flex-shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
             onClick={() => setWizardOpen(true)}
             data-testid="connect-source-btn"
           >
@@ -494,7 +494,7 @@ export function KnowledgeConnectionsClient({
         </div>
       )}
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         Connected sources sync on a set schedule or when a webhook arrives, and
         you can sync any source by hand. Everything a source brings in can be
         searched by every agent in this workspace.

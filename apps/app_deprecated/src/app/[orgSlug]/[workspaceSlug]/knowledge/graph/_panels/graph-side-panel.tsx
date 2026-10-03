@@ -75,8 +75,8 @@ export function GraphSidePanel() {
     <div className="flex h-full min-h-0 flex-col rounded-xl border border-border bg-card">
       <div className="flex items-start justify-between gap-2 border-b border-border/60 px-4 py-3">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">Graph</h2>
-          <p className="text-xs text-muted-foreground">
+          <h2 className="text-base font-semibold text-foreground">Graph</h2>
+          <p className="text-sm text-muted-foreground">
             Browse, search, and query the workspace graph.
           </p>
         </div>

@@ -115,7 +115,7 @@ function AutoTopupControl({
         <label
           htmlFor="auto-topup-enabled"
           data-touch-target=""
-          className="flex items-center gap-2 text-sm"
+          className="flex items-center gap-2 text-base"
         >
           <input
             id="auto-topup-enabled"
@@ -130,7 +130,7 @@ function AutoTopupControl({
           />
           {t("enabled")}
         </label>
-        <div className="flex flex-wrap items-center gap-3 text-sm">
+        <div className="flex flex-wrap items-center gap-3 text-base">
           <label htmlFor="auto-topup-blocks">{t("blocks")}</label>
           <input
             id="auto-topup-blocks"
@@ -157,7 +157,7 @@ function AutoTopupControl({
           )}
         </div>
         {invalid ? (
-          <p id="auto-topup-blocks-error" className="text-sm text-foreground">
+          <p id="auto-topup-blocks-error" className="text-base text-foreground">
             {t("invalidBlocks")}
           </p>
         ) : null}
@@ -171,22 +171,22 @@ function AutoTopupControl({
               secondary
             />
             {outcome === "saved" ? (
-              <p role="status" className="text-sm">
+              <p role="status" className="text-base">
                 {t("saved")}
               </p>
             ) : null}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">{t("readOnly")}</p>
+          <p className="text-base text-muted-foreground">{t("readOnly")}</p>
         )}
       </form>
       <p
         data-card={paymentMethod === null ? "none" : "saved"}
-        className="text-sm"
+        className="text-base"
       >
         {card}
       </p>
-      <p data-attempt={lastAttempt?.status ?? "none"} className="text-sm">
+      <p data-attempt={lastAttempt?.status ?? "none"} className="text-base">
         {lastAttempt === null
           ? t("attempt.none")
           : t(`attempt.${lastAttempt.status}`, { date: date(lastAttempt.at) })}

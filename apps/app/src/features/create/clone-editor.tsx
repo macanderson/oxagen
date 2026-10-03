@@ -104,7 +104,7 @@ export function CloneEditor({
       testId="configuration-clone"
       wide
     >
-      <p className="mb-3 text-sm text-muted-foreground">{t("lead")}</p>
+      <p className="mb-3 text-base text-muted-foreground">{t("lead")}</p>
       {loading ? (
         <p role="status">{t("loading")}</p>
       ) : done ? (

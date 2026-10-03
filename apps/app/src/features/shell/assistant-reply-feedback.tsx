@@ -199,7 +199,7 @@ export function AssistantReplyFeedback({
             onKeyDown={onNoteKeyDown}
             className={`${inputBase} resize-none`}
           />
-          <p id={hintId} className="text-sm text-muted-foreground">
+          <p id={hintId} className="text-xs text-muted-foreground">
             {t("noteHint", { max: REPLY_FEEDBACK_NOTE_MAX_CHARS })}
           </p>
           <div className="flex items-center gap-3">
@@ -227,7 +227,7 @@ export function AssistantReplyFeedback({
       <p
         role="status"
         data-testid="assistant-feedback-recorded"
-        className="mt-1 text-sm text-muted-foreground"
+        className="mt-1 text-xs text-muted-foreground"
       >
         {recorded === "useful" ? t("recordedUseful") : null}
         {recorded === "wrong" ? t("recordedWrong") : null}

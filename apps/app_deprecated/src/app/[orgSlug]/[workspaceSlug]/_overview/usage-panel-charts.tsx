@@ -39,13 +39,13 @@ export function UsagePanelCharts({
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <div>
-        <p className="mb-2 text-xs font-medium text-muted-foreground">
+        <p className="mb-2 text-sm font-medium text-muted-foreground">
           Daily tokens
         </p>
         <DailyUsageChart series={series} metric="tokens" />
       </div>
       <div>
-        <p className="mb-2 text-xs font-medium text-muted-foreground">
+        <p className="mb-2 text-sm font-medium text-muted-foreground">
           Top models by cost
         </p>
         <TopModelsChart byModel={byModel} metric="cost" />

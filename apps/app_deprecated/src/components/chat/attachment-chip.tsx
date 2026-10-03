@@ -129,7 +129,7 @@ export function AttachmentChip({
             aria-valuemax={100}
           >
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-            <span className="text-[10px] tabular-nums">
+            <span className="text-xs tabular-nums">
               {attachment.progress}%
             </span>
           </div>
@@ -148,7 +148,7 @@ export function AttachmentChip({
                 size="sm"
                 aria-label={`Retry upload for ${displayName}`}
                 onClick={() => onRetry(attachment.id)}
-                className="h-4 rounded px-1 text-[9px] leading-none text-destructive-foreground hover:bg-white/20"
+                className="h-4 rounded px-1 text-xs leading-none text-destructive-foreground hover:bg-white/20"
               >
                 Retry
               </Button>
@@ -169,7 +169,7 @@ export function AttachmentChip({
       </div>
       {compact && !isImage ? (
         <span
-          className="max-w-10 truncate text-[9px] leading-none text-muted-foreground"
+          className="max-w-10 truncate text-xs leading-none text-muted-foreground"
           title={displayName}
         >
           {displayName}

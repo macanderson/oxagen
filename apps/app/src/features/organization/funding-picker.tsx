@@ -31,7 +31,7 @@ export function FundingPicker({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
-        <label htmlFor={id} className="text-sm font-medium text-foreground">
+        <label htmlFor={id} className="text-base font-medium text-foreground">
           {t("source")}
         </label>
         <select
@@ -51,7 +51,7 @@ export function FundingPicker({
             </option>
           ))}
         </select>
-        <p id={`${id}-about`} className="text-xs text-muted-foreground">
+        <p id={`${id}-about`} className="text-sm text-muted-foreground">
           {chosen === null ? t("unknown") : t(`sources.${chosen}.about`)}
         </p>
       </div>

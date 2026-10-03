@@ -137,7 +137,7 @@ function Notices({
             <b className="block font-semibold text-foreground md:truncate">
               {t("kinds.killSwitch")}
             </b>
-            <span className="block font-mono text-sm text-muted-foreground md:truncate">
+            <span className="block font-mono text-xs text-muted-foreground md:truncate">
               {gate.id}
             </span>
           </td>

@@ -139,7 +139,7 @@ export function SchemaAssistantDrawer({
         >
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full py-16 text-center">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-base text-muted-foreground">
                 Ask the AI to help design your schema — add labels, suggest
                 properties, or explain relationship types.
               </p>
@@ -149,7 +149,7 @@ export function SchemaAssistantDrawer({
             <div
               key={idx}
               className={cn(
-                "rounded-xl px-4 py-3 text-sm whitespace-pre-wrap",
+                "rounded-xl px-4 py-3 text-base whitespace-pre-wrap",
                 msg.role === "user"
                   ? "bg-primary text-primary-foreground ml-8"
                   : "bg-muted text-muted-foreground mr-8",
@@ -159,7 +159,7 @@ export function SchemaAssistantDrawer({
             </div>
           ))}
           {loading && (
-            <div className="rounded-xl px-4 py-3 text-sm bg-muted text-muted-foreground mr-8 animate-pulse">
+            <div className="rounded-xl px-4 py-3 text-base bg-muted text-muted-foreground mr-8 animate-pulse">
               Thinking…
             </div>
           )}

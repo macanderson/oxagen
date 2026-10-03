@@ -126,7 +126,7 @@ export function SessionSettingsRail({
           className="size-4 shrink-0 text-muted-foreground"
           aria-hidden="true"
         />
-        <span className="flex-1 truncate text-sm font-semibold">Session</span>
+        <span className="flex-1 truncate text-base font-semibold">Session</span>
         <ChevronDown
           className={cn(
             "size-4 shrink-0 text-muted-foreground transition-transform",

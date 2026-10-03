@@ -162,7 +162,7 @@ export function PluginDetailPanel({
   if (!detail) {
     return (
       <p
-        className="p-6 text-sm text-destructive"
+        className="p-6 text-base text-destructive"
         data-testid="plugin-detail-error"
       >
         {error ?? "Not found"}
@@ -207,12 +207,12 @@ export function PluginDetailPanel({
         })()}
         <div className="min-w-0 flex-1">
           <h3
-            className="text-base font-semibold"
+            className="text-lg font-semibold"
             data-testid="plugin-detail-title"
           >
             {detail.title ?? detail.name}
           </h3>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {detail.name} · v{detail.version}
           </p>
           {detail.websiteUrl && (
@@ -220,7 +220,7 @@ export function PluginDetailPanel({
               href={detail.websiteUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-0.5 flex items-center gap-1 text-xs text-primary hover:underline"
+              className="mt-0.5 flex items-center gap-1 text-sm text-primary hover:underline"
               data-testid="plugin-detail-website"
             >
               {detail.websiteUrl.replace(/^https?:\/\//, "")}
@@ -296,7 +296,7 @@ export function PluginDetailPanel({
 
       {/* Body — description + README */}
       <div className="flex-1 overflow-auto px-6 py-4">
-        <p className="mb-3 text-sm text-muted-foreground">
+        <p className="mb-3 text-base text-muted-foreground">
           {detail.description}
         </p>
         {!isAgentOrKnowledge &&
@@ -310,13 +310,13 @@ export function PluginDetailPanel({
             // serialisation. Do NOT assign unsanitized markdown or third-party
             // HTML to this prop.
             <div
-              className="prose prose-sm dark:prose-invert max-w-none text-sm"
+              className="prose prose-sm dark:prose-invert max-w-none text-base"
               dangerouslySetInnerHTML={{ __html: detail.readmeHtml }}
               data-testid="plugin-detail-readme"
             />
           ) : (
             <p
-              className="text-xs text-muted-foreground italic"
+              className="text-sm text-muted-foreground italic"
               data-testid="plugin-detail-no-readme"
             >
               No README available.
@@ -326,7 +326,7 @@ export function PluginDetailPanel({
 
       {/* Install footer */}
       <div className="flex-shrink-0 border-t border-border/40 px-6 py-4">
-        {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
+        {error && <p className="mb-2 text-base text-destructive">{error}</p>}
         {detail.installed ? (
           <Button
             className="w-full"

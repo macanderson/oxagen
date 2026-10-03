@@ -173,19 +173,19 @@ export default async function AccessSessionsPage({
         title={
           <>
             Active sessions{" "}
-            <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+            <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
               {sessions.length}
             </span>
           </>
         }
       >
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p className="mb-4 text-base text-muted-foreground">
           All unexpired sessions for members of this organization. Owner and
           admin roles can revoke any session (CC6.1).
         </p>
 
         {sessions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             No active sessions found.
           </p>
         ) : (
@@ -208,7 +208,7 @@ export default async function AccessSessionsPage({
               ].map((h) => (
                 <span
                   key={h}
-                  className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                  className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
                 >
                   {h}
                 </span>
@@ -219,7 +219,7 @@ export default async function AccessSessionsPage({
               {sessions.map((s) => (
                 <div
                   key={s.id}
-                  className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm grid grid-cols-1 gap-y-1 sm:gap-4 sm:items-center"
+                  className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-base grid grid-cols-1 gap-y-1 sm:gap-4 sm:items-center"
                   style={{
                     gridTemplateColumns: canRevoke
                       ? "minmax(0,1.6fr) 110px 110px 160px 120px"
@@ -231,13 +231,13 @@ export default async function AccessSessionsPage({
                     <span className="font-medium text-foreground truncate">
                       {s.userName ?? s.userEmail}
                     </span>
-                    <span className="text-xs text-muted-foreground truncate">
+                    <span className="text-sm text-muted-foreground truncate">
                       {s.userName ? s.userEmail : ""}
                     </span>
                   </div>
 
                   {/* Device */}
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                     <DeviceIcon kind={s.deviceKind} />
                     <span className="truncate">
                       {extractBrowser(s.userAgent)}
@@ -245,17 +245,17 @@ export default async function AccessSessionsPage({
                   </div>
 
                   {/* IP */}
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
+                  <div className="flex items-center gap-1 text-sm text-muted-foreground font-mono">
                     <Globe className="h-3 w-3 shrink-0" aria-hidden="true" />
                     <span className="truncate">{s.ip ?? "—"}</span>
                   </div>
 
                   {/* Last active */}
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-sm text-muted-foreground">
                       {formatTs(s.updatedAt)}
                     </span>
-                    <span className="text-[11px] text-muted-foreground/60">
+                    <span className="text-xs text-muted-foreground/60">
                       Expires {formatTs(s.expiresAt)}
                     </span>
                   </div>
@@ -264,7 +264,7 @@ export default async function AccessSessionsPage({
                   {canRevoke && (
                     <div className="flex items-center">
                       {s.userId === session.user.id ? (
-                        <Badge variant="muted" className="text-[10px]">
+                        <Badge variant="muted" className="text-xs">
                           Your session
                         </Badge>
                       ) : (
@@ -290,7 +290,7 @@ export default async function AccessSessionsPage({
             className="h-4 w-4 shrink-0 text-muted-foreground"
             aria-hidden="true"
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Owner or admin role required to revoke sessions.
           </p>
         </div>

@@ -48,7 +48,7 @@ export function WorkItemHead({
         </h1>
         <div
           data-testid="work-item-facts"
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-xs text-muted-foreground"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-sm text-muted-foreground"
         >
           {source === null ? (
             <span data-testid="work-item-source">{origin}</span>

@@ -278,7 +278,7 @@ export function ConversationList({
         className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-2"
       >
         {active.length === 0 ? (
-          <p className="px-2.5 py-6 text-center text-xs text-muted-foreground">
+          <p className="px-2.5 py-6 text-center text-sm text-muted-foreground">
             No conversations yet. Start one above.
           </p>
         ) : (
@@ -318,7 +318,7 @@ export function ConversationList({
               type="button"
               onClick={toggleArchived}
               aria-expanded={archivedOpen}
-              className="flex flex-1 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex flex-1 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
             >
               {archivedOpen ? (
                 <ChevronDown className="size-3.5" />
@@ -348,12 +348,12 @@ export function ConversationList({
           {archivedOpen ? (
             <div className="mt-0.5 flex flex-col gap-0.5">
               {archivedLoading && archived === null ? (
-                <p className="flex items-center justify-center gap-2 px-2.5 py-4 text-xs text-muted-foreground">
+                <p className="flex items-center justify-center gap-2 px-2.5 py-4 text-sm text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
                   Loading…
                 </p>
               ) : archivedCount === 0 ? (
-                <p className="px-2.5 py-4 text-center text-xs text-muted-foreground">
+                <p className="px-2.5 py-4 text-center text-sm text-muted-foreground">
                   No archived conversations.
                 </p>
               ) : (

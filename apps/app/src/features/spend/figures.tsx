@@ -47,7 +47,7 @@ export function BasisLabel({ basis }: { basis: Cost["basis"] }) {
   return (
     <span
       data-basis={basis ?? "not_recorded"}
-      className="font-mono text-sm font-normal text-muted-foreground"
+      className="font-mono text-xs font-normal text-muted-foreground"
     >
       {basis === null ? t("basisNotRecorded") : t(`basis.${basis}`)}
     </span>
@@ -71,7 +71,7 @@ export function EstimateBasis({ cost }: { cost: Cost | null }) {
   return (
     <span
       data-estimate-basis={cost.basis ?? "not_recorded"}
-      className="block text-xs font-normal text-muted-foreground"
+      className="block text-sm font-normal text-muted-foreground"
     >
       {t("findings.costData", {
         basis:

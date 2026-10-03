@@ -23,10 +23,10 @@ export function ConfidenceMeter({ confidence }: ConfidenceMeterProps) {
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-sm font-semibold tabular-nums text-foreground">
+        <span className="text-base font-semibold tabular-nums text-foreground">
           {formatConfidence(clamped)}
         </span>
-        <span className="text-xs text-muted-foreground">{band}</span>
+        <span className="text-sm text-muted-foreground">{band}</span>
       </div>
       <div
         className="h-2 w-full overflow-hidden rounded-full bg-muted"

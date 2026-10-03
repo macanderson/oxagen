@@ -45,8 +45,8 @@ export function ApiKeyDisplay({
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-border/60 bg-card p-4">
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium text-foreground">{name}</p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-base font-medium text-foreground">{name}</p>
+        <p className="text-sm text-muted-foreground">
           Created{" "}
           {createdDate.toLocaleDateString("en-US", {
             month: "short",
@@ -60,7 +60,7 @@ export function ApiKeyDisplay({
 
       <div className="flex items-center gap-2">
         <div className="flex-1 overflow-hidden rounded-lg border border-border/40 bg-muted/50 p-3">
-          <code className="break-all font-mono text-xs text-foreground">
+          <code className="break-all font-mono text-sm text-foreground">
             {rawKey}
           </code>
         </div>
@@ -81,7 +81,7 @@ export function ApiKeyDisplay({
       </div>
 
       <div className="rounded-lg border border-warning/40 bg-warning/12 p-3">
-        <p className="text-xs text-warning">
+        <p className="text-sm text-warning">
           <strong>Save this key securely.</strong> You won&apos;t be able to see
           it again after you leave this page.
         </p>

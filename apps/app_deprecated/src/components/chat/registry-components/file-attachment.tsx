@@ -116,12 +116,12 @@ export default function FileAttachment({
       {/* File info */}
       <div className="min-w-0 flex-1">
         <p
-          className="truncate text-sm font-medium text-foreground"
+          className="truncate text-base font-medium text-foreground"
           title={name}
         >
           {name}
         </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
+        <p className="mt-0.5 text-sm text-muted-foreground">
           {label}
           {sizeBytes !== undefined ? ` · ${formatBytes(sizeBytes)}` : null}
         </p>

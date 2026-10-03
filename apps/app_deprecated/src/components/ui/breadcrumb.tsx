@@ -26,7 +26,7 @@ export interface BreadcrumbProps {
 export function Breadcrumb({ items, className }: BreadcrumbProps): JSX.Element {
   return (
     <nav aria-label="Breadcrumb" className={cn("flex items-center", className)}>
-      <ol className="flex items-center gap-1 text-sm text-muted-foreground">
+      <ol className="flex items-center gap-1 text-base text-muted-foreground">
         {items.map((item, index) => {
           const isLast = index === items.length - 1;
           return (

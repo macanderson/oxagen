@@ -57,11 +57,11 @@ function Detail({
 }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+      <span className="text-xs uppercase tracking-wide text-muted-foreground">
         {label}
       </span>
       <span
-        className={cn("text-xs text-foreground break-all", mono && "font-mono")}
+        className={cn("text-sm text-foreground break-all", mono && "font-mono")}
       >
         {value && value.length > 0 ? value : "—"}
       </span>
@@ -88,18 +88,18 @@ export function AuditEventRow({ row }: { row: AuditEventRowData }) {
           aria-hidden="true"
         />
         <div className="flex flex-1 flex-col gap-0.5 min-w-0">
-          <p className="font-mono text-xs font-medium text-foreground truncate">
+          <p className="font-mono text-sm font-medium text-foreground truncate">
             {row.eventType}
             {row.capability ? ` · ${row.capability}` : ""}
           </p>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <span>{formatDateTimeWithSeconds(row.occurredAt)}</span>
             {row.ip && <span className="font-mono">{row.ip}</span>}
           </div>
         </div>
         <Badge
           variant={OUTCOME_VARIANT[row.outcome] ?? "outline"}
-          className="shrink-0 text-xs"
+          className="shrink-0 text-sm"
         >
           <OutcomeIcon outcome={row.outcome} />
           {row.outcome}

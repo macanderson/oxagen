@@ -103,7 +103,7 @@ export function NodeDetailPanel({
           {state.status === "loading" ? (
             <PanelSpinner label="Loading properties" />
           ) : state.status === "error" ? (
-            <p className="text-xs text-destructive">
+            <p className="text-sm text-destructive">
               Failed to load node detail.
             </p>
           ) : (
@@ -126,7 +126,7 @@ export function NodeDetailPanel({
           {state.status === "loading" ? (
             <PanelSpinner label="Loading relationships" />
           ) : state.neighbors.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               No connected entities.
             </p>
           ) : (
@@ -170,7 +170,7 @@ function DetailHeader({
             {label}
           </Badge>
         </div>
-        <h2 className="mt-1 break-words text-sm font-semibold leading-snug text-foreground">
+        <h2 className="mt-1 break-words text-base font-semibold leading-snug text-foreground">
           {displayName}
         </h2>
         <div className="mt-1.5">
@@ -201,7 +201,7 @@ function NeighborRow({
       <button
         type="button"
         onClick={onSelect}
-        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/60"
+        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-base transition-colors hover:bg-muted/60"
       >
         {neighbor.direction === "out" ? (
           <ArrowRight
@@ -225,7 +225,7 @@ function NeighborRow({
         >
           {neighbor.displayName}
         </span>
-        <span className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+        <span className="shrink-0 font-mono text-xs uppercase tracking-wide text-muted-foreground">
           {neighbor.edgeType}
         </span>
       </button>
@@ -235,7 +235,7 @@ function NeighborRow({
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="mb-2 flex items-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+    <h3 className="mb-2 flex items-center text-sm font-semibold uppercase tracking-wide text-muted-foreground">
       {children}
     </h3>
   );
@@ -244,7 +244,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 function PanelSpinner({ label }: { label: string }) {
   return (
     <div
-      className={cn("flex items-center gap-2 text-xs text-muted-foreground")}
+      className={cn("flex items-center gap-2 text-sm text-muted-foreground")}
     >
       <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
       {label}…

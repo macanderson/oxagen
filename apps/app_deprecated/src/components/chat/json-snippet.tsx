@@ -94,7 +94,7 @@ export function JsonSnippet({
           <Copy className="size-3.5" aria-hidden="true" />
         )}
       </button>
-      <pre className="overflow-x-auto px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground">
+      <pre className="overflow-x-auto px-3 py-2.5 font-mono text-sm leading-relaxed text-foreground">
         {visible.map((line, i) => (
           <div key={i}>
             {tokens?.[i]
@@ -120,7 +120,7 @@ export function JsonSnippet({
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
-          className="flex w-full items-center justify-center gap-1 border-t border-border/60 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex w-full items-center justify-center gap-1 border-t border-border/60 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {expanded ? (
             <>

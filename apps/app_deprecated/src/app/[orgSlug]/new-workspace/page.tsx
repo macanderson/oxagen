@@ -20,7 +20,7 @@ export default async function NewWorkspacePage({
   return (
     <div className="mx-auto max-w-lg py-8">
       <Panel title="Create a workspace" className="w-full max-w-3xl">
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p className="mb-4 text-base text-muted-foreground">
           Workspaces scope the knowledge graph, data, and agents inside{" "}
           {org.name}. You&rsquo;ll be the workspace owner.
         </p>

@@ -46,7 +46,7 @@ function Select({
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-foreground">
+      <label htmlFor={id} className="text-base font-medium text-foreground">
         {label}
       </label>
       <select
@@ -210,7 +210,7 @@ export function BudgetDialog({
               setValues((prev) => ({ ...prev, limit: event.target.value }));
             }}
           />
-          <label className="flex items-start gap-2 text-sm text-foreground">
+          <label className="flex items-start gap-2 text-base text-foreground">
             <input
               type="checkbox"
               name="enabled"

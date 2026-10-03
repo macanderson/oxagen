@@ -256,7 +256,7 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
           <h2 className="text-lg font-semibold">Schema Registry</h2>
           {enforcementInfo && (
             <span
-              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${enforcementInfo.className}`}
+              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium ${enforcementInfo.className}`}
             >
               {enforcementInfo.label}
             </span>
@@ -273,7 +273,7 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
                 setVersionId(v == null || v === "draft" ? undefined : v)
               }
             >
-              <SelectTrigger className="h-7 text-xs w-36 max-md:h-11">
+              <SelectTrigger className="h-7 text-sm w-36 max-md:h-11">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -310,7 +310,7 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`shrink-0 px-4 py-2 max-md:min-h-11 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            className={`shrink-0 px-4 py-2 max-md:min-h-11 text-base font-medium transition-colors border-b-2 -mb-px ${
               activeTab === tab.id
                 ? "border-primary text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground"
@@ -337,7 +337,7 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-medium">No schemas defined</p>
-                  <p className="text-sm text-muted-foreground mt-0.5">
+                  <p className="text-base text-muted-foreground mt-0.5">
                     Use AI recommendations to draft a starter schema from your
                     graph.
                   </p>
@@ -397,7 +397,7 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
           </div>
           <div className="rounded-xl border border-border overflow-hidden">
             {allLabels.length === 0 && (
-              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+              <div className="px-4 py-8 text-center text-base text-muted-foreground">
                 No labels defined.
               </div>
             )}
@@ -415,17 +415,17 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
                 }
               >
                 <div>
-                  <span className="font-medium text-sm">
+                  <span className="font-medium text-base">
                     {label.displayName}
                   </span>
-                  <span className="ml-2 text-xs text-muted-foreground font-mono">
+                  <span className="ml-2 text-sm text-muted-foreground font-mono">
                     {label.name}
                   </span>
-                  <Badge variant="outline" className="ml-2 text-xs">
+                  <Badge variant="outline" className="ml-2 text-sm">
                     {label.schemaName}
                   </Badge>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   {label.properties?.length ?? 0} properties
                 </p>
               </div>
@@ -453,7 +453,7 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
           </div>
           <div className="rounded-xl border border-border overflow-hidden">
             {allRelationships.length === 0 && (
-              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+              <div className="px-4 py-8 text-center text-base text-muted-foreground">
                 No relationship types defined.
               </div>
             )}
@@ -471,19 +471,19 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
                 }
               >
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-sm font-medium">
+                  <span className="font-mono text-base font-medium">
                     {rel.name}
                   </span>
-                  <Badge variant="outline" className="text-xs">
+                  <Badge variant="outline" className="text-sm">
                     {rel.schemaName}
                   </Badge>
                   {rel.startLabel && rel.endLabel && (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-sm text-muted-foreground">
                       {rel.startLabel} → {rel.endLabel}
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   {rel.properties?.length ?? 0} properties
                 </p>
               </div>

@@ -18,7 +18,7 @@ function MintedToken({ minted }: { minted: MintedScimToken }) {
   const t = useTranslations("organization.sso.scim");
   return (
     <div className="flex flex-col gap-3" data-testid="scim-token-minted">
-      <p className="text-sm font-medium text-foreground">{t("once")}</p>
+      <p className="text-base font-medium text-foreground">{t("once")}</p>
       <CopyValue
         label={t("tokenLabel")}
         value={minted.token}
@@ -71,7 +71,7 @@ export function ScimTokenControls({
           onDone={refresh}
           done={done}
         >
-          <p className="text-sm text-muted-foreground">{t("once")}</p>
+          <p className="text-base text-muted-foreground">{t("once")}</p>
         </WriteDialog>
       ) : null}
       {entitled && hasToken ? (
@@ -87,7 +87,7 @@ export function ScimTokenControls({
           onDone={refresh}
           done={done}
         >
-          <p className="text-sm text-muted-foreground">{t("rotateBody")}</p>
+          <p className="text-base text-muted-foreground">{t("rotateBody")}</p>
         </WriteDialog>
       ) : null}
       {hasToken ? (
@@ -102,7 +102,7 @@ export function ScimTokenControls({
           submit={() => revokeScimToken(org)}
           onDone={refresh}
         >
-          <p className="text-sm text-muted-foreground">{t("revokeBody")}</p>
+          <p className="text-base text-muted-foreground">{t("revokeBody")}</p>
         </WriteDialog>
       ) : null}
     </div>

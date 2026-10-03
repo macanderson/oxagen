@@ -83,8 +83,8 @@ export function Statements({
   if (!allowed) {
     return (
       <Section id="billing-statements" title={t("title")}>
-        <p className="text-sm text-muted-foreground">{t("intro")}</p>
-        <p className="text-sm text-foreground" data-testid="statements-denied">
+        <p className="text-base text-muted-foreground">{t("intro")}</p>
+        <p className="text-base text-foreground" data-testid="statements-denied">
           {t("roleRequired")}
         </p>
       </Section>
@@ -165,7 +165,7 @@ export function Statements({
 
   return (
     <Section id="billing-statements" title={t("title")}>
-      <p className="text-sm text-muted-foreground">{t("intro")}</p>
+      <p className="text-base text-muted-foreground">{t("intro")}</p>
       {outcome.kind === "failed" ? (
         <FormAlert testId="statements-failed">
           {t(`failure.${outcome.code}`)}
@@ -180,7 +180,7 @@ export function Statements({
         }}
       >
         <fieldset className="flex flex-col gap-1.5">
-          <legend className="mb-1 text-sm font-medium text-foreground">
+          <legend className="mb-1 text-base font-medium text-foreground">
             {t("period")}
           </legend>
           <div className="flex flex-wrap gap-2">
@@ -188,7 +188,7 @@ export function Statements({
               <label
                 key={kind}
                 data-touch-target=""
-                className="flex min-h-11 items-center gap-2 rounded-md border border-border px-3 text-sm hover:bg-accent has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
+                className="flex min-h-11 items-center gap-2 rounded-md border border-border px-3 text-base hover:bg-accent has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
               >
                 <input
                   type="radio"
@@ -282,7 +282,7 @@ export function Statements({
       <p
         aria-live="polite"
         data-testid="statements-progress"
-        className="text-sm text-foreground"
+        className="text-base text-foreground"
       >
         {outcome.kind === "pending" && outcome.rows > 0
           ? t("progress", { rows: outcome.rows })

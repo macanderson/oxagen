@@ -100,8 +100,8 @@ export function OrgPrivacyPanel({ orgSlug }: { orgSlug: string }) {
     <div className="flex flex-col gap-8 max-w-xl">
       {/* Organization Data Export */}
       <section className="flex flex-col gap-3">
-        <h3 className="text-base font-semibold">Export organization data</h3>
-        <p className="text-sm text-muted-foreground">
+        <h3 className="text-lg font-semibold">Export organization data</h3>
+        <p className="text-base text-muted-foreground">
           Download a machine-readable ZIP archive of all organization data,
           including member profiles, workspace configurations, conversations,
           and generated assets. Requires Owner or Admin role. (GDPR Article 20)
@@ -117,28 +117,28 @@ export function OrgPrivacyPanel({ orgSlug }: { orgSlug: string }) {
           </Button>
         )}
         {exportState.phase === "pending" && (
-          <p className="text-sm text-muted-foreground">Submitting request…</p>
+          <p className="text-base text-muted-foreground">Submitting request…</p>
         )}
         {exportState.phase === "queued" && (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             Organization export is being prepared. This may take several
             minutes.
           </p>
         )}
         {exportState.phase === "ready" && (
           <div className="flex flex-col gap-2">
-            <p className="text-sm text-success">Export ready.</p>
+            <p className="text-base text-success">Export ready.</p>
             <a
               href={exportState.downloadUrl}
               download
-              className="text-sm underline underline-offset-4"
+              className="text-base underline underline-offset-4"
             >
               Download ZIP archive
             </a>
           </div>
         )}
         {exportState.phase === "error" && (
-          <p className="text-sm text-destructive">{exportState.message}</p>
+          <p className="text-base text-destructive">{exportState.message}</p>
         )}
       </section>
 
@@ -146,10 +146,10 @@ export function OrgPrivacyPanel({ orgSlug }: { orgSlug: string }) {
 
       {/* Organization Erasure */}
       <section className="flex flex-col gap-3">
-        <h3 className="text-base font-semibold text-destructive">
+        <h3 className="text-lg font-semibold text-destructive">
           Delete organization
         </h3>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           Permanently delete this organization and all associated data — all
           workspaces, members, conversations, and assets. This action requires
           Owner or Admin role and cannot be undone. (GDPR Article 17)
@@ -166,7 +166,7 @@ export function OrgPrivacyPanel({ orgSlug }: { orgSlug: string }) {
         )}
         {eraseState.phase === "confirming" && (
           <div className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-            <p className="text-sm font-medium">
+            <p className="text-base font-medium">
               This will permanently delete the entire organization. All members
               will be offboarded and all data erased. This cannot be undone.
             </p>
@@ -191,10 +191,10 @@ export function OrgPrivacyPanel({ orgSlug }: { orgSlug: string }) {
           </div>
         )}
         {eraseState.phase === "pending" && (
-          <p className="text-sm text-muted-foreground">Processing…</p>
+          <p className="text-base text-muted-foreground">Processing…</p>
         )}
         {eraseState.phase === "queued" && (
-          <p className="text-sm">
+          <p className="text-base">
             Organization deletion has been scheduled. Effective date:{" "}
             <span className="font-medium">
               {new Date(eraseState.effectiveAt).toLocaleDateString()}
@@ -203,7 +203,7 @@ export function OrgPrivacyPanel({ orgSlug }: { orgSlug: string }) {
           </p>
         )}
         {eraseState.phase === "error" && (
-          <p className="text-sm text-destructive">{eraseState.message}</p>
+          <p className="text-base text-destructive">{eraseState.message}</p>
         )}
       </section>
     </div>

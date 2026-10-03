@@ -91,14 +91,14 @@ export function BuyCredits({ orgSlug }: BuyCreditsProps) {
 
   return (
     <Panel title="Buy usage credits">
-      <p className="mb-4 text-sm text-muted-foreground">
+      <p className="mb-4 text-base text-muted-foreground">
         1 credit = 1¢. Volume discounts apply for larger purchases.
       </p>
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="credit-amount">Amount (USD)</Label>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">$</span>
+            <span className="text-base text-muted-foreground">$</span>
             <Input
               id="credit-amount"
               type="number"
@@ -111,7 +111,7 @@ export function BuyCredits({ orgSlug }: BuyCreditsProps) {
             />
           </div>
           {!isValid && amount !== "" ? (
-            <p className="text-xs text-destructive">
+            <p className="text-sm text-destructive">
               Minimum purchase is ${MIN_USD}.
             </p>
           ) : null}
@@ -119,7 +119,7 @@ export function BuyCredits({ orgSlug }: BuyCreditsProps) {
 
         {/* Live discount preview */}
         {preview && isValid ? (
-          <div className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-sm">
+          <div className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-base">
             {preview.percent > 0 ? (
               <p className="font-medium text-success">
                 {preview.percent}% off — pay{" "}
@@ -147,7 +147,7 @@ export function BuyCredits({ orgSlug }: BuyCreditsProps) {
             )}
           </div>
         ) : previewPending ? (
-          <p className="text-xs text-muted-foreground">Calculating…</p>
+          <p className="text-sm text-muted-foreground">Calculating…</p>
         ) : null}
 
         <Button

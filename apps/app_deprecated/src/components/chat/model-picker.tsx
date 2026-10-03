@@ -49,7 +49,7 @@ function VendorTile({ vendor }: { vendor: Vendor }) {
   return (
     <span
       aria-hidden="true"
-      className="inline-grid h-5 w-5 shrink-0 place-items-center rounded border border-border bg-muted/60 font-mono text-[10px] font-semibold uppercase text-muted-foreground"
+      className="inline-grid h-5 w-5 shrink-0 place-items-center rounded border border-border bg-muted/60 font-mono text-xs font-semibold uppercase text-muted-foreground"
     >
       {vendorLabels[vendor][0]}
     </span>
@@ -110,7 +110,7 @@ function OtherModelsList({ activeModelId, onSelect }: OtherModelsListProps) {
             }}
             aria-pressed={isActive}
             className={cn(
-              "flex w-full items-start gap-2.5 rounded-sm px-3 py-2 text-left text-sm transition-colors",
+              "flex w-full items-start gap-2.5 rounded-sm px-3 py-2 text-left text-base transition-colors",
               disabled
                 ? "cursor-not-allowed opacity-40"
                 : "cursor-pointer hover:bg-accent hover:text-accent-foreground",
@@ -125,7 +125,7 @@ function OtherModelsList({ activeModelId, onSelect }: OtherModelsListProps) {
                   <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
                 )}
               </span>
-              <span className="block truncate text-xs text-muted-foreground">
+              <span className="block truncate text-sm text-muted-foreground">
                 {vendorLabels[m.vendor]}
                 {" · "}
                 {formatReleaseDate(m.released)}
@@ -135,7 +135,7 @@ function OtherModelsList({ activeModelId, onSelect }: OtherModelsListProps) {
                 {m.capabilities.map((c) => (
                   <span
                     key={c}
-                    className="rounded border border-border bg-background px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground"
+                    className="rounded border border-border bg-background px-1.5 py-0.5 text-xs leading-none text-muted-foreground"
                   >
                     {capabilityLabel(c)}
                   </span>
@@ -194,7 +194,7 @@ export function ModelPicker({
             variant="ghost"
             size="sm"
             aria-label={`Model: ${triggerLabel}`}
-            className="h-8 gap-1.5 px-2 text-xs font-medium"
+            className="h-8 gap-1.5 px-2 text-sm font-medium"
           />
         }
       >
@@ -204,7 +204,7 @@ export function ModelPicker({
 
       <MenuPopup sideOffset={8} align="start" className="w-72 p-0">
         {/* Header */}
-        <MenuGroupLabel className="border-b border-border px-3 py-2 text-xs text-muted-foreground">
+        <MenuGroupLabel className="border-b border-border px-3 py-2 text-sm text-muted-foreground">
           Oxagen models
         </MenuGroupLabel>
 
@@ -222,15 +222,15 @@ export function ModelPicker({
                 className="flex-col items-start gap-0 px-3 py-2"
               >
                 <span className="flex w-full items-center gap-1.5">
-                  <span className="flex-1 text-sm font-medium">{t.name}</span>
+                  <span className="flex-1 text-base font-medium">{t.name}</span>
                   {isActive && (
                     <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
                   )}
                 </span>
-                <span className="block text-xs text-muted-foreground">
+                <span className="block text-sm text-muted-foreground">
                   {t.blurb}
                 </span>
-                <span className="mt-0.5 block font-mono text-[10px] text-muted-foreground/70">
+                <span className="mt-0.5 block font-mono text-xs text-muted-foreground/70">
                   {resolvedName}
                 </span>
               </MenuItem>
@@ -241,7 +241,7 @@ export function ModelPicker({
 
           {/* "Other Models" — hover-opening submenu */}
           <MenuSub>
-            <MenuSubTrigger className="w-full px-3 py-2 text-sm">
+            <MenuSubTrigger className="w-full px-3 py-2 text-base">
               Other models
             </MenuSubTrigger>
             <MenuSubPopup

@@ -64,7 +64,7 @@ export function AssistantEngineNotice({
       {health.error === null ? null : (
         <p
           data-testid="assistant-engine-code"
-          className="mt-1 ml-6 font-mono text-sm text-muted-foreground"
+          className="mt-1 ml-6 font-mono text-xs text-muted-foreground"
         >
           {health.error}
         </p>

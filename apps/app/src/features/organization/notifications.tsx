@@ -22,7 +22,7 @@ import { DateCell, emptyLine, NotRecordedValue, note, warn } from "./parts";
 import { lastFailureKey, OUTCOME_KEYS } from "./slack-failure";
 
 const term = "text-muted-foreground";
-const facts = "grid grid-cols-[minmax(8rem,auto)_1fr] gap-x-4 gap-y-2 text-sm";
+const facts = "grid grid-cols-[minmax(8rem,auto)_1fr] gap-x-4 gap-y-2 text-base";
 
 export function NotificationsTab({
   org,
@@ -51,7 +51,7 @@ export function NotificationsTab({
         {outcome === null ? null : (
           <p
             role="status"
-            className="text-sm"
+            className="text-base"
             data-testid="slack-outcome"
             data-outcome={outcome}
           >

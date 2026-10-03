@@ -19,7 +19,7 @@ export type CompilerAgentOption = {
   to: SafePath;
 };
 
-const field = `${inputBase} max-md:text-base`;
+const field = `${inputBase} max-md:text-input-touch`;
 
 export function CompilerControls({
   agents,

@@ -54,7 +54,7 @@ function GroupLabel({
 }) {
   if (collapsed) return <div className="h-2" aria-hidden="true" />;
   return (
-    <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-nav-label-fg">
+    <p className="px-3 pb-1 pt-1 text-xs font-semibold uppercase tracking-wider text-sidebar-nav-label-fg">
       {children}
     </p>
   );

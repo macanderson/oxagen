@@ -74,7 +74,7 @@ export function NamedMeasure({
   return (
     <>
       <Measure value={value} />
-      <span className="ml-1 text-xs text-muted-foreground">{measure}</span>
+      <span className="ml-1 text-sm text-muted-foreground">{measure}</span>
     </>
   );
 }

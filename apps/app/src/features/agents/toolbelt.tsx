@@ -36,7 +36,7 @@ function WireNode({
       className={`flex min-w-0 flex-col rounded-lg border px-3 py-2 text-sm ${belt ? "border-gold/50 bg-gold/10" : "border-border bg-hl"}`}
     >
       <span>{label}</span>
-      <span className="text-xs text-dim">{value}</span>
+      <span className="text-sm text-dim">{value}</span>
     </li>
   );
 }
@@ -107,7 +107,7 @@ function OffTheBelt({ tools }: { tools: Toolbelt["cannotSee"] }) {
       aside={<Badge tone="denied">{t("badge")}</Badge>}
     >
       {tools.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("empty")}</p>
+        <p className="text-base text-muted-foreground">{t("empty")}</p>
       ) : (
         <Table
           label={t("title")}
@@ -122,7 +122,7 @@ function OffTheBelt({ tools }: { tools: Toolbelt["cannotSee"] }) {
                 <span className={mono}>{tool.name}</span>
                 {tool.server === null ? null : (
                   <span
-                    className={`${mono} block text-xs text-muted-foreground md:truncate`}
+                    className={`${mono} block text-sm text-muted-foreground md:truncate`}
                   >
                     {tool.server}
                   </span>

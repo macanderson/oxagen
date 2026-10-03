@@ -75,13 +75,13 @@ function Requires({ rule }: { rule: ApprovalRule }) {
   }
   if (lines.length === 0) {
     return (
-      <span data-requires="floors-only" className="text-xs text-foreground">
+      <span data-requires="floors-only" className="text-sm text-foreground">
         {t("floorsOnly")}
       </span>
     );
   }
   return (
-    <ul className="flex flex-col gap-0.5 text-xs text-foreground">
+    <ul className="flex flex-col gap-0.5 text-sm text-foreground">
       {lines.map((line) => (
         <li key={line.key} data-requires={line.key} className="md:truncate">
           {line.text}
@@ -112,7 +112,7 @@ function Row({
           </span>
           {rule.disabledReason && (
             <span
-              className="text-xs text-muted-foreground md:truncate"
+              className="text-sm text-muted-foreground md:truncate"
               data-testid="rule-disabled-reason"
             >
               {t(`disabledReason.${rule.disabledReason.code}`, {
@@ -120,10 +120,10 @@ function Row({
               })}
             </span>
           )}
-          <span className={`${mono} text-xs text-muted-foreground md:truncate`}>
+          <span className={`${mono} text-sm text-muted-foreground md:truncate`}>
             {t("slug", { slug: rule.slug })}
           </span>
-          <span className="text-xs text-muted-foreground md:truncate">
+          <span className="text-sm text-muted-foreground md:truncate">
             {rule.lastWrittenBy === null
               ? t("writtenUnattributed", { at: date(rule.lastWrittenAt) })
               : t("written", {
@@ -145,12 +145,12 @@ function Row({
             // the row says the rule releases nothing until it is saved again.
             <span
               data-state="unstamped"
-              className="text-xs text-muted-foreground md:truncate"
+              className="text-sm text-muted-foreground md:truncate"
             >
               {t("unstamped")}
             </span>
           ) : rule.authoredConsequences.length === 0 ? null : (
-            <span className="text-xs text-muted-foreground md:truncate">
+            <span className="text-sm text-muted-foreground md:truncate">
               {t("checkedAgainst", {
                 tags: rule.authoredConsequences.join(", "),
               })}
@@ -220,7 +220,7 @@ export function AutoApprovals({
         actions={create ?? undefined}
         data-state="empty"
       >
-        <p className="max-w-prose text-xs text-muted-foreground">
+        <p className="max-w-prose text-sm text-muted-foreground">
           {t("floors")}
         </p>
       </Section>
@@ -253,10 +253,10 @@ export function AutoApprovals({
             <Row key={rule.slug} at={at} rule={rule} canWrite={canWrite} />
           ))}
         </Table>
-        <p className="max-w-prose text-xs text-muted-foreground">
+        <p className="max-w-prose text-sm text-muted-foreground">
           {t("floors")}
         </p>
-        <p className="max-w-prose text-xs text-muted-foreground">
+        <p className="max-w-prose text-sm text-muted-foreground">
           {t("counted", { days: windowDays })}
         </p>
       </Section>

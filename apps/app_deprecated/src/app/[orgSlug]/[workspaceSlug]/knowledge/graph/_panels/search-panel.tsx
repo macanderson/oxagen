@@ -119,7 +119,7 @@ export function SearchPanel({ orgSlug, workspaceSlug }: SearchPanelProps) {
         />
         <Label
           htmlFor="semantic-search-toggle"
-          className="flex items-center gap-1 text-xs text-muted-foreground"
+          className="flex items-center gap-1 text-sm text-muted-foreground"
         >
           <Sparkles className="size-3.5" aria-hidden="true" />
           Semantic search

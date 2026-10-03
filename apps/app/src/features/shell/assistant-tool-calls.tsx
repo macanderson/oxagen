@@ -85,11 +85,11 @@ export function AssistantToolCalls({
                 >
                   {t(OUTCOME_KEY[call.outcome])}
                 </span>
-                <span className="font-mono text-sm tabular-nums text-muted-foreground">
+                <span className="font-mono text-xs tabular-nums text-muted-foreground">
                   {formatDuration(call.durationMs, locale)}
                 </span>
               </summary>
-              <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
+              <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                 <dt>{t("toolCalls.tool")}</dt>
                 <dd className={copyable}>{call.toolName}</dd>
                 <dt>{t("toolCalls.callId")}</dt>
