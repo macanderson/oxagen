@@ -20,7 +20,10 @@ import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
 import { findingFixRecord } from "@oxagen/oxagen/contracts/finding.fix.record";
 import { spendCostCenterStatementExport } from "@oxagen/oxagen/contracts/spend.cost_center_statement.export";
 import { spendOperatorPseudonymsSet } from "@oxagen/oxagen/contracts/spend.operator_pseudonyms.set";
-import { spendStatementExport } from "@oxagen/oxagen/contracts/spend.statement.export";
+import {
+  spendStatementExport,
+  type StatementRows,
+} from "@oxagen/oxagen/contracts/spend.statement.export";
 import { tachoSessionPolicyWrite } from "@oxagen/oxagen/contracts/tacho.session_policy.write";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
@@ -129,9 +132,15 @@ export async function dismissFindingAction(
   return result.ok ? { ok: true, value: null } : result;
 }
 
+/**
+ * One month of this workspace's spend as CSV: the statement, one line per
+ * group (the default), or one line per run with its agent, operator, work item
+ * and cost (#2962).
+ */
 export async function exportStatementAction(
   at: SpendAt,
   month: string,
+  rows: StatementRows = "groups",
 ): Promise<ActionResult<{ filename: string; content: string }>> {
   const ctx = await requireViewer(at.org, at.ws);
   if (!isStatementMonth(month)) {
@@ -145,6 +154,7 @@ export async function exportStatementAction(
   const result = await kernelWrite(ctx, spendStatementExport, {
     month,
     format: "csv",
+    rows,
   });
   return result.ok
     ? {

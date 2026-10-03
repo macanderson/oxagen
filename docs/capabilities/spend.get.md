@@ -1,6 +1,6 @@
 # get_spend
 
-The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-060). Reads `cost.daily_totals` for the active workspace over an inclusive day range, grouped by operator, agent, model, tool, task, or cost center, and answers one row per group plus the period's total over every run: the month strip. The rows are a derived index rebuilt from frames by the rollup jobs (`cost.run-progress` while a run records frames, `cost.run-rollup` after each seal, `cost.daily-rollup` nightly); nothing here reads ClickHouse. A run still open is in every figure at its running estimate, and `estimatedRuns` says how many of the period's runs that is (ADR-159).
+The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-060). Reads `cost.daily_totals` for the active workspace over an inclusive day range, grouped by operator, agent, model, tool, task, cost center, MCP server, or work item, and answers one row per group plus the period's total over every run: the month strip. The rows are a derived index rebuilt from frames by the rollup jobs (`cost.run-progress` while a run records frames, `cost.run-rollup` after each seal, `cost.daily-rollup` nightly); nothing here reads ClickHouse. A run still open is in every figure at its running estimate, and `estimatedRuns` says how many of the period's runs that is (ADR-159).
 
 ## Mode
 
@@ -22,7 +22,7 @@ The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-0
 | Field | Type | Required | Constraint |
 |---|---|---|---|
 | `period` | object | yes | `{ from, to }`, UTC days `YYYY-MM-DD`, `to` on or after `from`, at most 92 days (`SPEND_RANGE_DAYS_MAX`): one read folds at most a quarter of the workspace's runs |
-| `groupBy` | enum | yes | `operator`, `agent`, `model`, `tool`, `task`, `cost_center` |
+| `groupBy` | enum | yes | `operator`, `agent`, `model`, `tool`, `task`, `cost_center`, `mcp_server`, `work_item` |
 
 ## Output
 
@@ -73,3 +73,11 @@ A harness whose model calls pass through neither the Oxagen gateway nor the loca
 ## Cost center
 
 The `cost_center` level charges each run to the cost center the rollup resolved when it rolled the run up (ADR-142): the agent's label first, then the workspace's. A run with neither lands on the `~none` key, so the level's rows sum to the period's total. A label deleted from the organization's list claims no new run. Runs already rolled up keep the cost center they had. `list_cost_centers` answers the organization's labels, and `export_cost_center_statement` answers the organization-wide chargeback statement.
+
+## Work item
+
+The `work_item` level puts each run on the work item it served (#2962). The cost rollup stores each run's work order on `cost.run_totals`: a send names its work item, and a direct work order names one once a person attaches it. A run with no work order, or a direct work order nobody has attached, lands on the `~no_work_item` key. So every run is on one row, and the rows sum to the period's total. A work item's row key is its public id (`wi_…`), and the row carries `workItem`: `{ id, number, subject }`, where `number` is the one people say out loud, such as `OPS-88`. `workItem` is null on the `~no_work_item` row, and absent on the assistant row and on every other level. The daily rollup does not store this level, so it is folded from the run rows, as `mcp_server` is. Each row holds whole runs, so it carries `tokenSources` as the `agent` level's rows do. No `get_spend_drill` kind takes a work item.
+
+## Run lines
+
+Each row's `topRuns` lists its costliest runs, at most eight. Each run carries `operatorKey` and `operator`: who the key names (`{ id, name, email, avatarUrl, role }`), so a run line prints a person and never the id (#2962). `operator` is null for a run with no operator and for a principal nobody can name. One read names the operator rows and every listed run's operator.

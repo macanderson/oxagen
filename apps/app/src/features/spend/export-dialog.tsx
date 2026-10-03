@@ -2,6 +2,8 @@
 // Export report (mockup `spendexport`, #2962): one calendar month's statement
 // through export_statement, saved as the CSV the call answers. The statement
 // covers this workspace at every level with each line's basis. The second
+// choice is the design's Export CSV: the same call with one line per run, with
+// its agent, operator, work item and cost. The third
 // choice is the organization's chargeback statement by cost center
 // (export_cost_center_statement, ADR-142), with the run ids behind each line. The mockup's
 // signed PDF and emailed delivery wait on the audit-exports lane and a signing
@@ -34,7 +36,7 @@ function saveFile({
   URL.revokeObjectURL(url);
 }
 
-const STATEMENT_KINDS = ["workspace", "cost_center"] as const;
+const STATEMENT_KINDS = ["workspace", "runs", "cost_center"] as const;
 type StatementKind = (typeof STATEMENT_KINDS)[number];
 
 export function ExportDialog({ at, month }: { at: SpendAt; month: string }) {
@@ -63,7 +65,9 @@ export function ExportDialog({ at, month }: { at: SpendAt; month: string }) {
       const result =
         kind === "workspace"
           ? await exportStatementAction(at, trimmed)
-          : await exportCostCenterStatementAction(at, trimmed);
+          : kind === "runs"
+            ? await exportStatementAction(at, trimmed, "runs")
+            : await exportCostCenterStatementAction(at, trimmed);
       if (result.ok) {
         saveFile(result.value);
         setOpen(false);
@@ -71,7 +75,7 @@ export function ExportDialog({ at, month }: { at: SpendAt; month: string }) {
       }
       if (result.reason === "invalid") setInvalid(true);
       else if (result.reason !== "denied") setAlert("failed");
-      else setAlert(kind === "workspace" ? "denied" : "deniedCostCenter");
+      else setAlert(kind === "cost_center" ? "deniedCostCenter" : "denied");
     } catch {
       setAlert("failed");
     } finally {

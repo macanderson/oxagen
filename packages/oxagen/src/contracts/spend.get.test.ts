@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  NO_WORK_ITEM_KEY,
   OTHER_SPEND_KEY,
   SPEND_TOP_RUNS_MAX,
   spendGet,
   spendRowSchema,
   spendTopRunSchema,
+  spendWorkItemSchema,
 } from "./spend.get";
 import { SPEND_RANGE_DAYS_MAX } from "./spend.shared";
 
@@ -35,7 +37,7 @@ describe("get_spend contract", () => {
     });
   });
 
-  it("takes an inclusive day range and one of the seven groupings, and nothing else", () => {
+  it("takes an inclusive day range and one of the eight groupings, and nothing else", () => {
     expect(
       spendGet.input.parse({
         period: { from: "2026-09-01", to: "2026-09-30" },
@@ -183,5 +185,72 @@ describe("get_spend contract", () => {
       spendRowSchema.safeParse({ ...row, topRuns: Array(9).fill(top) })
         .success,
     ).toBe(false);
+  });
+});
+
+describe("get_spend work items and run operators (#2962)", () => {
+  it("groups by work item, keying a run that served none apart (#2962)", () => {
+    expect(
+      spendGet.input.parse({
+        period: { from: "2026-09-01", to: "2026-09-30" },
+        groupBy: "work_item",
+      }).groupBy,
+    ).toBe("work_item");
+    // A work item's key is its public id, which never starts with a tilde.
+    expect(NO_WORK_ITEM_KEY.startsWith("~")).toBe(true);
+    const item = {
+      id: "wi_0000000000000000000001",
+      number: "OPS-88",
+      subject: "Fix the login page",
+    };
+    expect(spendWorkItemSchema.parse(item)).toEqual(item);
+    expect(
+      spendWorkItemSchema.safeParse({ ...item, id: "OPS-88" }).success,
+    ).toBe(false);
+    const row = {
+      ...figure,
+      key: item.id,
+      provider: null,
+      operator: null,
+      workItem: item,
+      tokens: {
+        input_uncached: 0,
+        cache_read: 0,
+        cache_write_5m: 0,
+        cache_write_1h: 0,
+        output: 0,
+        reasoning: 0,
+        server_tool_request: 0,
+      },
+      topRuns: [],
+    };
+    expect(spendRowSchema.parse(row)).toEqual(row);
+    expect(
+      spendRowSchema.parse({ ...row, key: NO_WORK_ITEM_KEY, workItem: null })
+        .workItem,
+    ).toBeNull();
+  });
+
+  it("names a run line's operator, or null for one nobody can name (#2962)", () => {
+    const top = {
+      runId: "tse_0000000000000000000001",
+      name: null,
+      startedAt: "2026-09-10T12:00:00.000Z",
+      agentKey: "acme.core.cc",
+      operatorKey: "prn_0123456789abcdefghjkmn",
+      operator: {
+        id: "prn_0123456789abcdefghjkmn",
+        name: "Marcus Bell",
+        email: null,
+        avatarUrl: null,
+        role: null,
+      },
+      cost: null,
+      calls: 1,
+    };
+    expect(spendTopRunSchema.parse(top)).toEqual(top);
+    expect(spendTopRunSchema.parse({ ...top, operator: null }).operator).toBe(
+      null,
+    );
   });
 });
