@@ -4,6 +4,8 @@ export type {
   GitLabClientOptions,
   GitLabCommitAction,
   GitLabCommitState,
+  GitLabCompareDiff,
+  GitLabCompareFile,
   GitLabMergeRequest,
   GitLabPathCommit,
   GitLabProject,

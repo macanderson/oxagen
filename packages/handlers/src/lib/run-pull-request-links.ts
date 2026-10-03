@@ -15,9 +15,19 @@
 // backfill then puts the Oxagen block and label on the pull request
 // (ADR-252). That event takes its own id, so a `pr_link` frame for the same
 // link in an earlier batch cannot stand in for it.
+//
+// Each link also asks the forge sync for the pull request (ADR-288), with
+// the run that named it, so `forge.pull_requests` holds the pull request, its
+// head's diff, and the link to the run and its work orders. That event names
+// no facts: the frame holds only the URL, so the sync reads the forge once.
 import { createHash } from "node:crypto";
-import { RUN_PULL_REQUEST_LINKED_EVENT } from "@oxagen/inngest-functions/events";
+import {
+  FORGE_PULL_REQUEST_OBSERVED_EVENT,
+  RUN_PULL_REQUEST_LINKED_EVENT,
+} from "@oxagen/inngest-functions/events";
+import type { ForgePullRequestObservedEvent } from "../forge.pull-request.webhook";
 import { logger } from "../logger";
+import { pullKeyOf } from "./forge-pull-requests/facts";
 import { forgeKeyOf } from "./run-pull-request-state";
 
 /** The fields of an ingest event this reads. */
@@ -98,22 +108,63 @@ export function pullRequestLinkEvents(
 }
 
 /**
- * Send the batch's link events. Best effort: a failed send is logged and
- * never fails the ingest. The links it named have no row, so they read
- * "status unknown" until the run records them again.
+ * One forge sync request per link event, naming the run's root session and
+ * whether it opened the pull request. Its id follows the link event's, so a
+ * re-sent batch asks once.
+ */
+export function forgeLinkEvents(
+  scope: { orgId: string; workspaceId: string },
+  links: readonly PullRequestLinkedEvent[],
+): ForgePullRequestObservedEvent[] {
+  return links.flatMap((link) => {
+    const key = forgeKeyOf(link.data.url);
+    if (key === null) return [];
+    return [
+      {
+        name: FORGE_PULL_REQUEST_OBSERVED_EVENT,
+        id: `forge-${link.id}`,
+        data: {
+          orgId: scope.orgId,
+          workspaceId: scope.workspaceId,
+          provider: key.provider,
+          repository: key.repository,
+          number: key.number,
+          pullKey: pullKeyOf(
+            scope.workspaceId,
+            key.provider,
+            key.repository,
+            key.number,
+          ),
+          link: {
+            rootSessionUuid: link.data.rootSessionUuid,
+            opened: link.data.opened === true,
+          },
+        },
+      },
+    ];
+  });
+}
+
+/**
+ * Send the batch's link events and their forge sync requests. Best effort: a
+ * failed send is logged and never fails the ingest. The links it named have
+ * no row, so they read "status unknown" until the run records them again.
  */
 export async function sendPullRequestLinks(
-  send: (events: PullRequestLinkedEvent[]) => Promise<unknown>,
+  send: (
+    events: (PullRequestLinkedEvent | ForgePullRequestObservedEvent)[],
+  ) => Promise<unknown>,
   scope: { orgId: string; workspaceId: string },
   frames: readonly LinkFrame[],
 ): Promise<void> {
-  const events = pullRequestLinkEvents(scope, frames);
-  if (events.length === 0) return;
+  const links = pullRequestLinkEvents(scope, frames);
+  if (links.length === 0) return;
+  const events = [...links, ...forgeLinkEvents(scope, links)];
   try {
     await send(events);
   } catch (err) {
     logger.warn(
-      { err, links: events.length },
+      { err, links: links.length },
       "tacho.events.ingest: run/pull-request.linked dispatch failed; these links read status unknown until the run records them again",
     );
   }

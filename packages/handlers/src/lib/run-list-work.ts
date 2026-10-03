@@ -16,7 +16,9 @@
 //                  (`tacho.session_files`, root and subagent chains).
 //   State          `tacho.run_pull_requests`: the state a forge last reported
 //                  for each link (ADR-192), read beside the frames. A link
-//                  with no row reads `state: null`.
+//                  that row leaves without a state reads the one
+//                  `forge.pull_requests` holds (ADR-288), and a link
+//                  neither table knows reads `state: null`.
 import { schema, withTenantDb } from "@oxagen/database";
 import type {
   RunDiff,
@@ -30,7 +32,12 @@ import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import type { RunScope } from "../run.list";
 import { logger } from "../logger";
 import {
+  type ForgeKey,
+  forgeKeyOf,
+  forgeKeyString,
+  readForgePullRequestStates,
   readStoredPullRequestStates,
+  type StoredPullRequestState,
   type StoredPullRequestStates,
 } from "./run-pull-request-state";
 import { prAttr } from "./run-work";
@@ -119,6 +126,14 @@ export type RunPullRequestReads = {
     scope: RunScope,
     sessionUuids: readonly string[],
   ) => Promise<StoredPullRequestStates>;
+  /**
+   * The state `forge.pull_requests` holds for each link still without one
+   * (ADR-288). Absent, a link no run row filled stays "status unknown".
+   */
+  readForgeStates?: (
+    scope: RunScope,
+    keys: readonly ForgeKey[],
+  ) => Promise<Map<string, StoredPullRequestState>>;
   /** The tenant the kernel scoped this call to. */
   scope: () => RunScope;
 };
@@ -162,8 +177,52 @@ export function createReadRunPullRequests(
         }),
       );
     }
-    return out;
+    return withForgeStates(reads, out);
   };
+}
+
+/**
+ * Fill each link still without a state from `forge.pull_requests`. A read
+ * that fails leaves those links "status unknown" and logs a warning, the way
+ * a failed run-row read does.
+ */
+async function withForgeStates(
+  reads: RunPullRequestReads,
+  out: Map<string, RunPullRequest[]>,
+): Promise<Map<string, RunPullRequest[]>> {
+  const read = reads.readForgeStates;
+  if (read === undefined) return out;
+  const keys = new Map<string, ForgeKey>();
+  for (const list of out.values())
+    for (const pull of list) {
+      if (pull.state !== null) continue;
+      const key = forgeKeyOf(pull.url);
+      if (key !== null) keys.set(forgeKeyString(key), key);
+    }
+  if (keys.size === 0) return out;
+  let found: Map<string, StoredPullRequestState>;
+  try {
+    found = await read(reads.scope(), [...keys.values()]);
+  } catch (err) {
+    logger.warn(
+      { err, links: keys.size },
+      "list_runs: the forge pull request states could not be read; these links read status unknown",
+    );
+    return out;
+  }
+  for (const [session, list] of out)
+    out.set(
+      session,
+      list.map((pull) => {
+        if (pull.state !== null) return pull;
+        const key = forgeKeyOf(pull.url);
+        const state = key === null ? undefined : found.get(forgeKeyString(key));
+        return state === undefined
+          ? pull
+          : { ...pull, state: state.state, stateSeenAt: state.stateSeenAt };
+      }),
+    );
+  return out;
 }
 
 /** The pull requests a page of wrapped sessions names, with their states. */
@@ -171,6 +230,7 @@ export const readRunPullRequests: ReadRunPullRequests =
   createReadRunPullRequests({
     readLinks: readRunPullRequestLinks,
     readStates: readStoredPullRequestStates,
+    readForgeStates: readForgePullRequestStates,
     scope: () => {
       const { orgId, workspaceId } = requireScope();
       return { orgId, workspaceId };

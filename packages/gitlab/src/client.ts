@@ -3,6 +3,8 @@ import type {
   GitLabClient,
   GitLabClientOptions,
   GitLabCommitAction,
+  GitLabCompareDiff,
+  GitLabCompareFile,
   GitLabMergeRequest,
   GitLabPathCommit,
   GitLabProject,
@@ -80,16 +82,27 @@ interface GLTreeItem {
   type: string;
 }
 
-interface GLDiff {
+/** One file of a GitLab compare, as the API answers it. */
+export interface GLDiff {
   old_path: string;
   new_path: string;
   renamed_file: boolean;
   deleted_file: boolean;
   new_file: boolean;
+  /** The file's hunks, from its first `@@` line; absent when GitLab left it out. */
+  diff?: string | null;
+  a_mode?: string | null;
+  b_mode?: string | null;
+  /** GitLab left the hunks out because the file's diff is over its limit. */
+  too_large?: boolean | null;
+  /** GitLab cut the hunks short because the whole compare is over its limit. */
+  collapsed?: boolean | null;
 }
 
 interface GLCompare {
   diffs?: GLDiff[] | null;
+  /** True when GitLab stopped the compare at its time limit. */
+  compare_timeout?: boolean | null;
 }
 
 interface GLMergeRequest {
@@ -109,6 +122,14 @@ interface GLMergeRequest {
   draft?: boolean;
   work_in_progress?: boolean;
   updated_at?: string | null;
+  closed_at?: string | null;
+  author?: { username?: string | null } | null;
+  /** The commits the merge request's diff runs between; base_sha is the merge base. */
+  diff_refs?: {
+    base_sha?: string | null;
+    head_sha?: string | null;
+    start_sha?: string | null;
+  } | null;
 }
 
 interface GLCommitStatus {
@@ -288,7 +309,47 @@ function mapMergeRequest(json: GLMergeRequest): GitLabMergeRequest {
         ? { draft: json.work_in_progress }
         : {}),
     ...(json.updated_at ? { updatedAt: json.updated_at } : {}),
+    ...(json.closed_at ? { closedAt: json.closed_at } : {}),
+    ...(json.author?.username ? { authorLogin: json.author.username } : {}),
+    ...(json.diff_refs?.base_sha ? { baseSha: json.diff_refs.base_sha } : {}),
+    ...(json.diff_refs?.start_sha
+      ? { targetSha: json.diff_refs.start_sha }
+      : {}),
   };
+}
+
+/**
+ * One file of a compare as a unified diff, with the `diff --git` and `---`
+ * and `+++` lines GitLab leaves out of its `diff` field. Null when GitLab sent
+ * no hunks for the file.
+ */
+export function unifiedFileDiff(d: GLDiff): string | null {
+  if (typeof d.diff !== "string") return null;
+  const from = d.new_file ? "/dev/null" : `a/${d.old_path}`;
+  const to = d.deleted_file ? "/dev/null" : `b/${d.new_path}`;
+  const lines = [`diff --git a/${d.old_path} b/${d.new_path}`];
+  if (d.new_file) lines.push(`new file mode ${d.b_mode ?? "100644"}`);
+  else if (d.deleted_file)
+    lines.push(`deleted file mode ${d.a_mode ?? "100644"}`);
+  else if (d.a_mode && d.b_mode && d.a_mode !== d.b_mode)
+    lines.push(`old mode ${d.a_mode}`, `new mode ${d.b_mode}`);
+  if (d.renamed_file)
+    lines.push(`rename from ${d.old_path}`, `rename to ${d.new_path}`);
+  const body = d.diff.endsWith("\n") || d.diff === "" ? d.diff : `${d.diff}\n`;
+  if (body === "") return `${lines.join("\n")}\n`;
+  lines.push(`--- ${from}`, `+++ ${to}`);
+  return `${lines.join("\n")}\n${body}`;
+}
+
+/** Counts the added and removed lines in a file's hunks. */
+function hunkCounts(diff: string): { additions: number; deletions: number } {
+  let additions = 0;
+  let deletions = 0;
+  for (const line of diff.split("\n")) {
+    if (line.startsWith("+") && !line.startsWith("+++")) additions += 1;
+    else if (line.startsWith("-") && !line.startsWith("---")) deletions += 1;
+  }
+  return { additions, deletions };
 }
 
 function firstLine(text: string): string {
@@ -573,6 +634,51 @@ export function createGitLabClient(options: GitLabClientOptions): GitLabClient {
         },
       );
       return { sha: data.id };
+    },
+
+    async compareDiff(a): Promise<GitLabCompareDiff> {
+      // The same compare as `compare`, read for its hunks. GitLab drops a
+      // file's hunks when they are over its limit, and cuts the rest short
+      // when the whole compare is, so the answer says which happened.
+      const data = await json<GLCompare>(
+        "GET",
+        `${project(a.project)}/repository/compare`,
+        { query: { from: a.from, to: a.to, straight: false } },
+      );
+      const diffs = data.diffs ?? [];
+      const limitations = new Set<string>();
+      if (data.compare_timeout === true) limitations.add("compare_timeout");
+      const files: GitLabCompareFile[] = [];
+      const parts: string[] = [];
+      for (const d of diffs) {
+        if (d.too_large === true) limitations.add("file_too_large");
+        if (d.collapsed === true) limitations.add("diff_collapsed");
+        const text = unifiedFileDiff(d);
+        if (text === null) limitations.add("file_without_hunks");
+        else parts.push(text);
+        const counts =
+          typeof d.diff === "string" && d.too_large !== true
+            ? hunkCounts(d.diff)
+            : { additions: null, deletions: null };
+        files.push({
+          path: d.new_path,
+          ...(d.renamed_file ? { previousPath: d.old_path } : {}),
+          status: d.new_file
+            ? "added"
+            : d.deleted_file
+              ? "removed"
+              : d.renamed_file
+                ? "renamed"
+                : "modified",
+          ...counts,
+        });
+      }
+      return {
+        text: parts.join(""),
+        files,
+        complete: limitations.size === 0,
+        limitations: [...limitations].sort(),
+      };
     },
 
     async compare(a): Promise<GitLabChangedPath[]> {

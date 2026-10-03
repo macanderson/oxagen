@@ -40,6 +40,7 @@ export * from "./steering-repo-health";
 export * from "./code-repository-findings";
 export * from "./machine-groups";
 export * from "./work";
+export * from "./forge";
 
 // Relations must be exported for Drizzle to include them in the schema
 export * from "../relations";

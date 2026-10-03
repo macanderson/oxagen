@@ -4,15 +4,17 @@ import type {
   GitHubCheckRunArgs,
   GitHubCiChecks,
   GitHubClient,
-  GitHubClosingIssues,
   GitHubClientOptions,
+  GitHubClosingIssues,
+  GitHubCommitStatus,
+  GitHubCompareDiff,
+  GitHubCompareRefs,
   GitHubInstallationRepo,
   GitHubInstallationRepositories,
-  GitHubCommitStatus,
   GitHubIssueStates,
+  GitHubPathCommit,
   GitHubPrComment,
   GitHubPrComments,
-  GitHubPathCommit,
   GitHubPrFile,
   GitHubPullRequest,
   GitHubRelease,
@@ -194,7 +196,11 @@ interface GHPullDetail {
   created_at: string;
   updated_at: string;
   body: string | null;
-  base: { ref: string };
+  base: {
+    ref: string;
+    sha?: string | null;
+    repo?: { id: number; full_name: string } | null;
+  };
   head: {
     ref: string;
     sha: string | null;
@@ -203,6 +209,7 @@ interface GHPullDetail {
   };
   merge_commit_sha?: string | null;
   merged_at?: string | null;
+  closed_at?: string | null;
   additions?: number;
   deletions?: number;
   changed_files?: number;
@@ -492,8 +499,26 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     path: string,
     body?: unknown,
   ): Promise<T> {
+    const res = await send(method, path, body);
+    if (res.status === 204) return undefined as T;
+    return res.json() as Promise<T>;
+  }
+
+  /**
+   * One request with the rate-limit retries, answering the successful
+   * response unread. `accept` asks for another media type, such as the raw
+   * diff (`application/vnd.github.diff`).
+   */
+  async function send(
+    method: string,
+    path: string,
+    body?: unknown,
+    accept?: string,
+  ): Promise<Response> {
     // A path is REST, under `baseUrl`; an absolute URL (GraphQL) is used as is.
     const url = path.startsWith("/") ? `${baseUrl}${path}` : path;
+    const headers =
+      accept === undefined ? commonHeaders : { ...commonHeaders, Accept: accept };
     for (let attempt = 0; ; attempt++) {
       opts.signal?.throwIfAborted();
       const timeout = AbortSignal.timeout(opts.timeoutMs ?? 30_000);
@@ -502,14 +527,11 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
         : timeout;
       const res = await fetch(url, {
         method,
-        headers: commonHeaders,
+        headers,
         signal,
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       });
-      if (res.ok) {
-        if (res.status === 204) return undefined as T;
-        return res.json() as Promise<T>;
-      }
+      if (res.ok) return res;
       let message = res.statusText;
       try {
         const err = (await res.json()) as GHErrorBody;
@@ -1073,6 +1095,14 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
         : { headRepository: data.head.repo?.full_name ?? null }),
       mergeCommitSha: data.merge_commit_sha ?? null,
       mergedAt: data.merged_at ?? null,
+      closedAt: data.closed_at ?? null,
+      baseSha: data.base.sha ?? null,
+      ...(data.base.repo
+        ? {
+            baseRepositoryId: String(data.base.repo.id),
+            baseRepository: data.base.repo.full_name,
+          }
+        : {}),
       additions: data.additions ?? 0,
       deletions: data.deletions ?? 0,
       changedFiles: data.changed_files ?? 0,
@@ -1356,6 +1386,57 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     return (data.files ?? []).map(toPrFile);
   }
 
+  async function compareRefs(args: {
+    owner: string;
+    repo: string;
+    base: string;
+    head: string;
+  }): Promise<GitHubCompareRefs> {
+    const data = await request<{
+      merge_base_commit?: { sha?: string | null } | null;
+      files?: GHPullFile[];
+    }>(
+      "GET",
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/compare/${encodeURIComponent(args.base)}...${encodeURIComponent(args.head)}`,
+    );
+    const files = (data.files ?? []).map(toPrFile);
+    return {
+      mergeBaseSha: data.merge_base_commit?.sha ?? null,
+      files,
+      filesTruncated: files.length >= COMPARE_FILES_MAX,
+    };
+  }
+
+  async function getCompareDiff(args: {
+    owner: string;
+    repo: string;
+    base: string;
+    head: string;
+    maxBytes: number;
+  }): Promise<GitHubCompareDiff> {
+    let res: Response;
+    try {
+      res = await send(
+        "GET",
+        `/repos/${seg(args.owner)}/${seg(args.repo)}/compare/${encodeURIComponent(args.base)}...${encodeURIComponent(args.head)}`,
+        undefined,
+        "application/vnd.github.diff",
+      );
+    } catch (err) {
+      // GitHub refuses a diff over its own limits (406, or 422 on a compare)
+      // and times out on one it cannot render in time (500 with a timeout
+      // message). Each is a diff too large to have, not a fault to retry.
+      if (err instanceof GitHubApiError && diffRefused(err)) {
+        return { status: "too_large", reason: "forge_refused" };
+      }
+      throw err;
+    }
+    const bytes = await readCapped(res, args.maxBytes);
+    return bytes === null
+      ? { status: "too_large", reason: "over_cap" }
+      : { status: "ok", bytes };
+  }
+
   async function findOpenPullRequest(args: {
     owner: string;
     repo: string;
@@ -1629,6 +1710,8 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     getRequiredStatusChecks,
     listPullRequestFiles,
     compareCommits,
+    compareRefs,
+    getCompareDiff,
     findOpenPullRequest,
     listBranches,
     listInstallationRepositories,
@@ -1795,6 +1878,46 @@ function requiredCheckRules(
     names.push(...contexts);
   }
   return { names, found };
+}
+
+/** The most files GitHub's compare answers with. */
+const COMPARE_FILES_MAX = 300;
+
+/** A refusal that means the diff is too large to render, not a fault. */
+function diffRefused(err: GitHubApiError): boolean {
+  if (err.status === 406 || err.status === 422) return true;
+  return err.status === 500 && /timed? ?out|too (large|big)|diff/i.test(err.message);
+}
+
+/**
+ * The body's bytes, or null once they pass `max`. The read stops there, so a
+ * diff of any size costs at most `max` bytes of memory.
+ */
+async function readCapped(res: Response, max: number): Promise<Uint8Array | null> {
+  if (res.body === null) return new Uint8Array(0);
+  const reader = (res.body as ReadableStream<Uint8Array>).getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = (await reader.read()) as {
+      done: boolean;
+      value?: Uint8Array;
+    };
+    if (done || value === undefined) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return out;
 }
 
 function toPrFile(f: GHPullFile): GitHubPrFile {

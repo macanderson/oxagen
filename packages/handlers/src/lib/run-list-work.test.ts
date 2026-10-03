@@ -191,11 +191,17 @@ describe("readRunPullRequests", () => {
         stateSeenAt: null,
       },
     ]);
-    // One Postgres read, fenced to the caller's tenant.
-    expect(tenantDb.sql).toHaveLength(1);
+    // The run rows, fenced to the caller's tenant, then the forge rows for
+    // the link the run rows left without a state (ADR-288). This mock answers
+    // run rows to both reads, so the forge read finds nothing it can use.
+    expect(tenantDb.sql).toHaveLength(2);
     expect(tenantDb.sql[0]?.sql).toContain('"tacho"."run_pull_requests"');
     expect(tenantDb.sql[0]?.params).toEqual(
       expect.arrayContaining([SCOPE.orgId, SCOPE.workspaceId, A]),
+    );
+    expect(tenantDb.sql[1]?.sql).toContain('"forge"."pull_requests"');
+    expect(tenantDb.sql[1]?.params).toEqual(
+      expect.arrayContaining([SCOPE.orgId, SCOPE.workspaceId, 43]),
     );
   });
 
@@ -232,6 +238,68 @@ describe("createReadRunPullRequests", () => {
     const out = await read([A]);
     // No `stateSeenAt`: the read did not look, which is not "never reported".
     expect(out.get(A)).toEqual([link]);
+  });
+
+  it("fills a link no run row holds from the forge's stored pull request (ADR-288)", async () => {
+    const other = { ...link, url: "https://github.com/acme/api/pull/43", number: 43 };
+    const readForgeStates = vi.fn(() =>
+      Promise.resolve(
+        new Map([
+          [
+            "github:acme/api#43",
+            { state: "merged" as const, stateSeenAt: "2026-10-02T10:00:00.000Z" },
+          ],
+        ]),
+      ),
+    );
+    const read = createReadRunPullRequests({
+      readLinks: () => Promise.resolve(new Map([[A, [link, other]]])),
+      readStates: () =>
+        Promise.resolve(
+          new Map([
+            [
+              A,
+              new Map([
+                [link.url, { state: "open" as const, stateSeenAt: "2026-10-01T10:00:00.000Z" }],
+              ]),
+            ],
+          ]),
+        ),
+      readForgeStates,
+      scope: () => SCOPE,
+    });
+    expect((await read([A])).get(A)).toEqual([
+      { ...link, state: "open", stateSeenAt: "2026-10-01T10:00:00.000Z" },
+      { ...other, state: "merged", stateSeenAt: "2026-10-02T10:00:00.000Z" },
+    ]);
+    // Only the link the run rows left without a state is asked for.
+    expect(readForgeStates).toHaveBeenCalledWith(SCOPE, [
+      { provider: "github", repository: "acme/api", number: 43 },
+    ]);
+  });
+
+  it("keeps status unknown when the forge read fails, and asks nothing when every link has a state (negative)", async () => {
+    const failing = createReadRunPullRequests({
+      readLinks: () => Promise.resolve(new Map([[A, [link]]])),
+      readStates: () => Promise.resolve(new Map()),
+      readForgeStates: () => Promise.reject(new Error("pg down")),
+      scope: () => SCOPE,
+    });
+    expect((await failing([A])).get(A)).toEqual([
+      { ...link, state: null, stateSeenAt: null },
+    ]);
+    const readForgeStates = vi.fn();
+    const known = createReadRunPullRequests({
+      readLinks: () => Promise.resolve(new Map([[A, [link]]])),
+      readStates: () =>
+        Promise.resolve(
+          new Map([[A, new Map([[link.url, { state: "closed" as const, stateSeenAt: null }]])]]),
+        ),
+      readForgeStates,
+      scope: () => SCOPE,
+    });
+    await known([A]);
+    expect(readForgeStates).not.toHaveBeenCalled();
   });
 
   it("keeps every link when there is no tenant scope to read under (negative)", async () => {
