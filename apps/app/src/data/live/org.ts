@@ -23,6 +23,7 @@ import { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
+import { workspaceSettingsRead } from "@oxagen/oxagen/contracts/workspace.settings.read";
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import {
@@ -159,13 +160,18 @@ export const org: DataSource["org"] = {
     );
   },
 
-  // What one workspace binds and registers. Both reads are workspace-scoped,
-  // so the caller resolves the workspace viewer first (`requireViewer(org,
-  // ws)`, where membership is checked, INV-15). Either read refusing refuses
-  // the whole: a row that printed the repositories beside an agent count it
-  // could not read would mix a fact with a gap in one set of cells.
+  // What one workspace binds and registers, and its spend settings. All three
+  // reads are workspace-scoped, so the caller resolves the workspace viewer
+  // first (`requireViewer(org, ws)`, where membership is checked, INV-15).
+  // The repositories or the agents refusing refuses the whole: a row that
+  // printed the repositories beside an agent count it could not read would
+  // mix a fact with a gap in one set of cells. The settings refusing does
+  // not: they feed the Edit dialog alone, and that dialog has to open to
+  // rename a workspace whose settings the viewer cannot read, so a refusal
+  // there is carried as `settings: null` and the dialog says the current
+  // values were not read.
   async workspaceFacts(ctx) {
-    const [repositories, agents] = await Promise.all([
+    const [repositories, agents, settings] = await Promise.all([
       kernelRead(ctx, {
         contract: repositoryList,
         input: {},
@@ -180,13 +186,22 @@ export const org: DataSource["org"] = {
         input: { limit: 100 },
         page: "organization",
       }),
+      kernelRead(ctx, {
+        contract: workspaceSettingsRead,
+        input: {},
+        page: "organization",
+      }),
     ]);
     if (!repositories.ok) return repositories;
     if (!agents.ok) return agents;
     return view(
       ctx.orgId,
       WorkspaceFacts,
-      toWorkspaceFacts(repositories.value, agents.value),
+      toWorkspaceFacts(
+        repositories.value,
+        agents.value,
+        settings.ok ? settings.value : null,
+      ),
       "org.workspaceFacts",
     );
   },
