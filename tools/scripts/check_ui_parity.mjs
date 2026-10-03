@@ -19,6 +19,11 @@
  *     script verifies the static half; CI e2e + the committed proof verify the
  *     runtime half.)
  *
+ *     The v2 descriptors under contracts/v2 are read too (computeV2Gaps). A
+ *     v2 tool is not registered until cutover, so it has no binding of its
+ *     own, but an "app" layer on it is still a promise, and a v1 contract that
+ *     declares "app" must carry it until then.
+ *
  *     One capability can be operable from more than one page: a run is paused
  *     from the run's own page and from its row on Fleet, and both are surfaces
  *     a person uses. The registry holds one object per capability, so the
@@ -58,6 +63,8 @@ const info = JSON_MODE ? () => {} : (...a) => console.log(...a);
 
 const ROOT = resolve(process.cwd());
 const CAP_DIR = join(ROOT, "packages/oxagen/src/contracts");
+/** The Appendix E descriptors staged for cutover (contracts/v2/_define.ts). */
+const V2_DIR = join(CAP_DIR, "v2");
 const REGISTRY = join(ROOT, APP_DIR, "capability-ui-map.json");
 /**
  * The rebuilt app's own registry. During the app rebuild the
@@ -113,6 +120,52 @@ export function parseContract(file, src) {
   const hasRegister = /registerCapability\s*\(/.test(src);
   const ident = identMatch ? identMatch[1] : null;
   return { file, name, layers, hasRegister, ident };
+}
+
+/** The quoted strings in an array literal's body, wrapped across lines or not. */
+function quotedList(body) {
+  return [...body.matchAll(/["'`]([^"'`]+)["'`]/g)].map((m) => m[1]);
+}
+
+/**
+ * One v2 descriptor read as `{ file, name, layers, absorbs }`, or null for a
+ * file that defines no tool.
+ *
+ * A v2 module exports `const <ident> = defineTool({...})` and never calls
+ * registerCapability (contracts/v2/_define.ts), so parseContract reads none
+ * of it. The fields are read from the defineTool call, anchored to a line
+ * start for the reason parseContract gives. A descriptor that composes a
+ * field from its live contract (`layers: live.layers`) declares nothing of
+ * its own for that field, and the live contract's own check covers it.
+ *
+ * Exported so the parse can be tested without a contracts directory.
+ *
+ * @param {string} file - the descriptor's filename, used as the fallback name
+ * @param {string} src - the file's source
+ */
+export function parseV2Tool(file, src) {
+  const declStart = src.search(/=\s*defineTool\s*\(/);
+  if (declStart === -1) return null;
+  const decl = src.slice(declStart);
+  const nameMatch = decl.match(/^\s*name:\s*["'`]([^"'`]+)["'`]/m);
+  const layersMatch = decl.match(/^\s*layers:\s*\[([^\]]*)\]/m);
+  const absorbsMatch = decl.match(/^\s*absorbs:\s*\[([^\]]*)\]/m);
+  return {
+    file,
+    name: nameMatch ? nameMatch[1] : file.replace(/\.ts$/, ""),
+    layers: layersMatch ? quotedList(layersMatch[1]) : [],
+    absorbs: absorbsMatch ? quotedList(absorbsMatch[1]) : [],
+  };
+}
+
+function readV2Tools() {
+  if (!existsSync(V2_DIR)) return [];
+  return readdirSync(V2_DIR)
+    .filter(
+      (f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && !f.startsWith("_"),
+    )
+    .map((file) => parseV2Tool(file, readFileSync(join(V2_DIR, file), "utf8")))
+    .filter((tool) => tool !== null);
 }
 
 function readCapabilities() {
@@ -263,6 +316,43 @@ function alsoGap(binding, pageExists) {
 }
 
 /**
+ * The v2 descriptors' half of the FORWARD law.
+ *
+ * A v2 tool is staged beside the v1 contracts it absorbs and is wired into the
+ * registry at cutover (#2884), so until then nothing invokes it and it has no
+ * binding of its own. Its "app" layer is still a promise. Until cutover a v1
+ * contract carries it: the live contract of the same name, or one the tool
+ * absorbs, that declares "app" itself and so is held to a binding by the v1
+ * check. A v2 tool that declares "app" with no such carrier promises a page
+ * that nothing in the app operates: ADR-081 retired the layer on its sources
+ * and the descriptor kept it. That is a gap like any other, so back it or drop
+ * the layer.
+ *
+ * A carrier with no binding is reported once, by the v1 check, and not here.
+ * A gap is named `v2:<name>`, so a v1 name in the baseline never hides it.
+ *
+ * @param {{tools:Array, caps:Array}} args
+ */
+export function computeV2Gaps({ tools, caps }) {
+  const promised = new Set(
+    caps.filter((c) => c.layers.includes("app")).map((c) => c.name),
+  );
+  const gaps = [];
+  for (const tool of tools) {
+    if (!tool.layers.includes("app")) continue;
+    const carriers = [tool.name, ...tool.absorbs].filter((n) =>
+      promised.has(n),
+    );
+    if (carriers.length > 0) continue;
+    gaps.push({
+      capability: `v2:${tool.name}`,
+      reason: `contracts/v2/${tool.file} declares 'app', but neither ${tool.name} nor a contract it absorbs (${tool.absorbs.join(", ") || "none"}) declares 'app' to carry it until cutover`,
+    });
+  }
+  return gaps;
+}
+
+/**
  * Pure parity computation. Given parsed contracts, the registry bindings, the
  * set of app-invoked names, and a `pageExists` predicate (injected so tests
  * need no disk), return { forward, reverse, blocking } gap lists.
@@ -274,7 +364,10 @@ function alsoGap(binding, pageExists) {
  * the full debt visible. `baseline` defaults to empty, so callers that omit it
  * get `blocking === forward` (backward compatible).
  *
- * @param {{caps:Array, bindings:Object, invoked:Set<string>, pageExists:(p:string)=>boolean, baseline?:Set<string>}} args
+ * `v2Tools` are the parsed v2 descriptors; their gaps (computeV2Gaps) join
+ * `forward` after the v1 ones. It defaults to none.
+ *
+ * @param {{caps:Array, bindings:Object, invoked:Set<string>, pageExists:(p:string)=>boolean, baseline?:Set<string>, v2Tools?:Array}} args
  */
 export function computeParity({
   caps,
@@ -282,6 +375,7 @@ export function computeParity({
   invoked,
   pageExists,
   baseline = new Set(),
+  v2Tools = [],
 }) {
   const byName = new Map(caps.map((c) => [c.name, c]));
   const forward = [];
@@ -304,6 +398,7 @@ export function computeParity({
     const extra = alsoGap(b, pageExists);
     if (extra) forward.push({ capability: cap.name, reason: extra });
   }
+  forward.push(...computeV2Gaps({ tools: v2Tools, caps }));
   const blocking = forward.filter((g) => !baseline.has(g.capability));
   const reverse = [];
   for (const name of invoked) {
@@ -423,6 +518,7 @@ function walkGrep(dir) {
 
 function main() {
   const caps = readCapabilities();
+  const v2Tools = readV2Tools();
   const bindings = readRegistry();
   const baseline = readBaseline();
   const validNames = new Set(caps.map((c) => c.name));
@@ -436,6 +532,7 @@ function main() {
     bindings,
     invoked,
     baseline,
+    v2Tools,
     pageExists: (p) => existsSync(join(ROOT, p)),
   });
 
@@ -448,7 +545,7 @@ function main() {
 
   const grandfathered = forward.length - blocking.length;
   info(
-    `UI parity: ${caps.length} capabilities, ${Object.keys(bindings).length} bindings, ${invoked.size} app-invoked, ${grandfathered} grandfathered.`,
+    `UI parity: ${caps.length} capabilities, ${v2Tools.length} v2 tools, ${Object.keys(bindings).length} bindings, ${invoked.size} app-invoked, ${grandfathered} grandfathered.`,
   );
 
   for (const g of reverse) {
