@@ -18,7 +18,7 @@ import {
 } from "@oxagen/oxagen/contracts/finding.shared";
 import { FINDINGS_LIST_MAX } from "@oxagen/oxagen/contracts/finding.list";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
-import { and, arrayContains, desc, eq } from "drizzle-orm";
+import { and, arrayContains, asc, desc, eq, sql } from "drizzle-orm";
 
 export type FindingScope = { orgId: string; workspaceId: string };
 export type FindingRow = typeof schema.findings.$inferSelect;
@@ -121,11 +121,6 @@ export function toEvidence(
   };
 }
 
-/** The operators the row's cited runs name. */
-export function operatorKeysOf(row: FindingRow): readonly string[] {
-  return (row.citedFrames as StoredEvidence).operatorKeys;
-}
-
 /**
  * The kinds whose detectors cite each run as a whole and store no frames:
  * cache writes never read, the standing context every request re-sends, and
@@ -170,9 +165,36 @@ export function citationOf(row: FindingRow, runId: string): FindingRunCitation {
   };
 }
 
+/** The findings a list matches: one status, and with a run only those citing it. */
+function matching(scope: FindingScope, filter: FindingFilter) {
+  return and(
+    eq(findings.orgId, scope.orgId),
+    eq(findings.workspaceId, scope.workspaceId),
+    eq(findings.status, filter.status),
+    filter.runId === undefined
+      ? undefined
+      : arrayContains(findings.citedRuns, [filter.runId]),
+  );
+}
+
 /**
- * A workspace's findings in one status: open by saving, decided by most
- * recent decision. With a run, only the findings whose cited runs hold it.
+ * A list's order: open by saving, decided by most recent decision. The id
+ * breaks ties, so the findings past FINDINGS_LIST_MAX are the same on every
+ * read.
+ */
+function listOrder(filter: FindingFilter) {
+  return [
+    filter.status === "open"
+      ? desc(findings.estimatedSavingMicros)
+      : desc(findings.decidedAt),
+    asc(findings.id),
+  ];
+}
+
+/**
+ * A workspace's findings in one status, in list order, at most
+ * FINDINGS_LIST_MAX of them. With a run, only the findings whose cited runs
+ * hold it.
  */
 export async function readFindingRows(
   scope: FindingScope,
@@ -182,23 +204,68 @@ export async function readFindingRows(
     tx
       .select()
       .from(findings)
-      .where(
-        and(
-          eq(findings.orgId, scope.orgId),
-          eq(findings.workspaceId, scope.workspaceId),
-          eq(findings.status, filter.status),
-          filter.runId === undefined
-            ? undefined
-            : arrayContains(findings.citedRuns, [filter.runId]),
-        ),
-      )
-      .orderBy(
-        filter.status === "open"
-          ? desc(findings.estimatedSavingMicros)
-          : desc(findings.decidedAt),
-      )
+      .where(matching(scope, filter))
+      .orderBy(...listOrder(filter))
       .limit(FINDINGS_LIST_MAX),
   );
+}
+
+/**
+ * What a list's counts and totals read from one finding: its figures, and
+ * the operators its cited runs name. The evidence stays unread, since a
+ * workspace can hold more findings than one answer lists (#5262).
+ */
+export type FindingTotalRow = Pick<
+  FindingRow,
+  | "confidence"
+  | "estimatedSavingMicros"
+  | "currency"
+  | "savingBasis"
+  | "windowStart"
+  | "windowEnd"
+> & { operatorKeys: readonly string[] };
+
+/** The operator keys the stored evidence lists, from their JSON text. */
+function keysOf(text: string | null): string[] {
+  if (text === null) return [];
+  const parsed: unknown = JSON.parse(text);
+  return Array.isArray(parsed)
+    ? parsed.filter((key): key is string => typeof key === "string")
+    : [];
+}
+
+/**
+ * Every finding a list matches, in list order and with no limit, as the
+ * figures its counts and totals read. A list answers at most
+ * FINDINGS_LIST_MAX findings, and its counts and totals still cover all of
+ * them.
+ */
+export async function readFindingTotals(
+  scope: FindingScope,
+  filter: FindingFilter,
+): Promise<FindingTotalRow[]> {
+  const rows = await withTenantDb((tx) =>
+    tx
+      .select({
+        confidence: findings.confidence,
+        estimatedSavingMicros: findings.estimatedSavingMicros,
+        currency: findings.currency,
+        savingBasis: findings.savingBasis,
+        windowStart: findings.windowStart,
+        windowEnd: findings.windowEnd,
+        // As JSON text, so any stored shape parses.
+        operatorKeys: sql<
+          string | null
+        >`(${findings.citedFrames} -> 'operatorKeys')::text`,
+      })
+      .from(findings)
+      .where(matching(scope, filter))
+      .orderBy(...listOrder(filter)),
+  );
+  return rows.map(({ operatorKeys, ...row }) => ({
+    ...row,
+    operatorKeys: keysOf(operatorKeys),
+  }));
 }
 
 export async function readFindingRow(

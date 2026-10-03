@@ -22,14 +22,19 @@ import { costSchema, ratioSchema } from "./spend.shared";
 /** A window shorter than this many days annualises as if it were this long. */
 export const ANNUALISED_WINDOW_MIN_DAYS = 7;
 
-/** At most this many findings in one answer: the job keeps at most `FINDINGS_MAX` open findings, so every one fits (billing's findings test asserts it). */
+/**
+ * At most this many findings in one answer. A workspace can hold more: the
+ * findings job never caps a finding that counts toward the unproductive
+ * spend headline (#5262). The counts and totals still cover every finding
+ * the read matches, and `truncated` says the list holds fewer.
+ */
 export const FINDINGS_LIST_MAX = 50;
 
 export const findingList = registerCapability({
   name: "list_findings",
   domain: "spend",
   description:
-    "List this workspace's costed findings ranked by the money at stake (open by default; applied or dismissed most recent first), each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend over the findings' window and that saving annualised. Given a run, it lists only the findings that cite that run, each with the frames it cites there.",
+    "List this workspace's costed findings ranked by the money at stake (open by default; applied or dismissed most recent first), each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend over the findings' window and that saving annualised. It lists at most 50 findings. The counts and totals cover every finding, and truncated is true when more exist than the list holds. Given a run, it lists only the findings that cite that run, each with the frames it cites there.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
@@ -56,25 +61,29 @@ export const findingList = registerCapability({
   output: z
     .object({
       status: findingStatusSchema,
-      /** The span the listed findings cover; null when none is listed. */
+      /**
+       * The span every matched finding covers; null when none matches. The
+       * totals below cover every finding the read matches, listed or not.
+       */
       window: z
         .object({ from: z.string().datetime(), to: z.string().datetime() })
         .strict()
         .nullable(),
-      /** The listed findings' savings summed, with the fold of their bases. */
+      /** Every matched finding's saving summed, with the fold of their bases. */
       saving: costSchema.nullable(),
       /** The workspace's priced spend over `window`; null when nothing in it was priced. */
       spend: costSchema.nullable(),
       /** `annualised` over `spend` scaled from `window` (at least ANNUALISED_WINDOW_MIN_DAYS) to 365 days, at most 1. */
       share: ratioSchema.nullable(),
-      /** Each listed finding's saving scaled from its own window (at least ANNUALISED_WINDOW_MIN_DAYS) to 365 days, summed. */
+      /** Each matched finding's saving scaled from its own window (at least ANNUALISED_WINDOW_MIN_DAYS) to 365 days, summed. */
       annualised: costSchema.nullable(),
+      /** Every finding the read matches, listed or not. */
       counts: z
         .object({
           findings: z.number().int().nonnegative(),
           high: z.number().int().nonnegative(),
           medium: z.number().int().nonnegative(),
-          /** Distinct operators whose runs the listed findings cite. */
+          /** Distinct operators whose runs the matched findings cite. */
           operators: z.number().int().nonnegative(),
         })
         .strict(),
@@ -86,6 +95,12 @@ export const findingList = registerCapability({
           }),
         )
         .max(FINDINGS_LIST_MAX),
+      /**
+       * True when the read matches more findings than `findings` lists, so
+       * `counts.findings` is larger than the list. The list holds the first
+       * FINDINGS_LIST_MAX in its order (#5262).
+       */
+      truncated: z.boolean(),
     })
     .strict(),
 });

@@ -423,6 +423,7 @@ export function spendFindings(
       calls: 22,
       ...finding,
     })),
+    truncated: false,
   });
 }
 
