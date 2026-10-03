@@ -191,20 +191,27 @@ function themeMapping(
   if (seen.includes(file)) return into;
   seen.push(file);
   const css = withoutComments(read(file), false);
-  const statement =
-    /@import\s+["']([^"']+)["'][^;]*;|@theme(?:\s+inline)?\s*\{([^}]*)\}/g;
+  // An import, or the opening of a `@theme` block with any options
+  // (`inline`, `static`). A block runs to its matching brace.
+  const statement = /@import\s+["']([^"']+)["'][^;]*;|@theme\b[^{;]*\{/g;
   for (const m of css.matchAll(statement)) {
     if (m[1] !== undefined) {
       const target = resolveImport(m[1], file);
       if (target !== null) themeMapping(target, into, seen);
       continue;
     }
-    const block = m[2] ?? "";
+    let depth = 1;
+    let end = m.index + m[0].length;
+    for (; end < css.length && depth > 0; end++) {
+      if (css[end] === "{") depth++;
+      if (css[end] === "}") depth--;
+    }
+    const block = css.slice(m.index + m[0].length, end - 1);
     for (const d of block.matchAll(
       /--text-([a-z0-9]+)(--line-height)?\s*:\s*([^;]+);/g,
     )) {
-      const step = d[1] as Step;
-      if (!STEPS.includes(step)) continue;
+      const step = STEPS.find((name) => name === d[1]);
+      if (step === undefined) continue;
       const value = (d[3] ?? "").trim();
       const prior = into.get(step);
       into.set(
