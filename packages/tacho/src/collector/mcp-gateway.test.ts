@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
+  answerFor,
   ceilingOf,
   CLAUDE_CODE_TOOL_USE_ID_META,
   createMcpGateway,
@@ -15,6 +16,7 @@ import {
   parseJsonRpc,
   readRpcBody,
   refusalRulesOf,
+  RPC_INTERNAL_ERROR,
   RPC_INVALID_REQUEST,
   RPC_REFUSED,
   toolCountOf,
@@ -23,7 +25,11 @@ import {
 } from "./mcp-gateway";
 import { digestJcs, jcs, jsonByteLength } from "../digest";
 import { jsonContent } from "../evidence/frame-body";
-import { policyBundleSchema, type PolicyBundle } from "../wire";
+import {
+  MCP_STREAMABLE_HTTP_ACCEPT,
+  policyBundleSchema,
+  type PolicyBundle,
+} from "../wire";
 import { unsignedBundle } from "../host/test-support";
 
 const ENROLLMENT = "tch_abcdefghijklmnopqrstuv";
@@ -42,7 +48,54 @@ function attribution(
   };
 }
 
-/** A control plane that answers with whatever the test hands it. */
+/**
+ * The refusal the MCP SDK's transport sends for an Accept header that lacks
+ * either media type, word for word. Its id is null because the transport
+ * refuses before it reads the body.
+ */
+const NOT_ACCEPTABLE = {
+  jsonrpc: "2.0",
+  error: {
+    code: -32000,
+    message:
+      "Not Acceptable: Client must accept both application/json and text/event-stream",
+  },
+  id: null,
+} as const;
+
+function headerOf(
+  headers: Record<string, string>,
+  name: string,
+): string | undefined {
+  const key = Object.keys(headers).find((k) => k.toLowerCase() === name);
+  return key === undefined ? undefined : headers[key];
+}
+
+/** One message framed as the transport frames it: an `event: message`. */
+function sse(message: unknown): string {
+  return `event: message\ndata: ${JSON.stringify(message)}\n\n`;
+}
+
+/**
+ * A control plane that answers with whatever the test hands it, under the
+ * rules of the transport the hosted server runs.
+ *
+ * `apps/mcp` serves through xmcp 0.6.13, which bundles the MCP SDK's
+ * streamable HTTP server transport. It runs stateless, with
+ * `enableJsonResponse` unset. This stub keeps the rules of that transport's
+ * `handlePostRequest` (SDK 1.30.0, `server/webStandardStreamableHttp.js`)
+ * that shape what the gateway reads:
+ *
+ *   - Accept must contain both `application/json` and `text/event-stream`.
+ *     Otherwise the answer is 406 with `NOT_ACCEPTABLE`.
+ *   - Content-Type must be `application/json`. Otherwise the answer is 415.
+ *   - A request is answered as an event stream. A notification is answered
+ *     with 202 and no body.
+ *
+ * The stub once answered any Accept with plain JSON. So a gateway that sent
+ * `application/json` alone passed every test here and failed every call in
+ * production (#5356).
+ */
 function remote(
   result: unknown,
   status = 200,
@@ -53,12 +106,45 @@ function remote(
   const calls: Array<{ url: string; init: Parameters<GatewayFetch>[1] }> = [];
   const fetch: GatewayFetch = async (url, init) => {
     calls.push({ url, init });
+    const accept = headerOf(init.headers, "accept");
+    if (
+      !accept?.includes("application/json") ||
+      !accept.includes("text/event-stream")
+    ) {
+      return {
+        ok: false,
+        status: 406,
+        text: async () => JSON.stringify(NOT_ACCEPTABLE),
+      };
+    }
+    const contentType = headerOf(init.headers, "content-type")
+      ?.split(";")[0]
+      ?.trim()
+      .toLowerCase();
+    if (contentType !== "application/json") {
+      return {
+        ok: false,
+        status: 415,
+        text: async () =>
+          JSON.stringify({
+            jsonrpc: "2.0",
+            error: {
+              code: -32000,
+              message:
+                "Unsupported Media Type: Content-Type must be application/json",
+            },
+            id: null,
+          }),
+      };
+    }
     const body = JSON.parse(init.body) as { id?: unknown };
+    if (body.id === undefined) {
+      return { ok: true, status: 202, text: async () => "" };
+    }
     return {
       ok: status < 400,
       status,
-      text: async () =>
-        JSON.stringify({ jsonrpc: "2.0", id: body.id ?? null, result }),
+      text: async () => sse({ jsonrpc: "2.0", id: body.id, result }),
     };
   };
   return { fetch, calls };
@@ -751,6 +837,263 @@ describe("reading the upstream body", () => {
   it("returns undefined for an empty body", () => {
     expect(readRpcBody("")).toBeUndefined();
     expect(readRpcBody("   ")).toBeUndefined();
+  });
+
+  it("joins an event's data lines with newlines, as the SSE standard reads them", () => {
+    const stream = [
+      "event: message",
+      'data: {"jsonrpc":"2.0",',
+      'data: "id":1,"result":{"a":1}}',
+      "",
+    ].join("\r\n");
+    expect(readRpcBody(stream)).toEqual({
+      jsonrpc: "2.0",
+      id: 1,
+      result: { a: 1 },
+    });
+  });
+
+  it("skips an event with no data, such as the SDK's priming event or a keep-alive", () => {
+    const stream = [
+      "id: 0",
+      "data: ",
+      "",
+      ": keepalive",
+      "",
+      "event: message",
+      "id: 1",
+      'data: {"jsonrpc":"2.0","id":4,"result":{}}',
+      "",
+      ": keepalive",
+      "",
+    ].join("\n");
+    expect(readRpcBody(stream)).toEqual({ jsonrpc: "2.0", id: 4, result: {} });
+  });
+
+  it("throws on a body that is not JSON, so the caller decides what the client hears", () => {
+    expect(() => readRpcBody("<html>502 Bad Gateway</html>")).toThrow();
+    expect(() => readRpcBody("event: message\ndata: not json\n\n")).toThrow();
+  });
+});
+
+/**
+ * The hosted server's transport refuses a POST whose Accept lacks
+ * `text/event-stream`, with a 406 whose id is null. The gateway sent
+ * `application/json` alone, so every call failed. The null id then reached
+ * the client, which never got an answer with its own id and timed out after
+ * 30 seconds (#5356).
+ */
+describe("the hosted server's transport rules (#5356)", () => {
+  const INIT = {
+    jsonrpc: "2.0" as const,
+    id: 1,
+    method: "initialize",
+    params: {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "claude-code", version: "2.1.287" },
+    },
+  };
+  const SERVER_INFO = {
+    protocolVersion: "2025-06-18",
+    capabilities: { tools: {} },
+    serverInfo: { name: "oxagen", version: "1.0.0" },
+  };
+
+  it("refuses the Accept the gateway used to send, as the transport does", async () => {
+    // The stub is the check every test in this file runs against, so it has
+    // to refuse what production refused.
+    const { fetch } = remote(SERVER_INFO);
+    const answer = await fetch("https://mcp.oxagen.sh/mcp", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(INIT),
+    });
+    expect(answer.status).toBe(406);
+    expect(JSON.parse(await answer.text())).toEqual(NOT_ACCEPTABLE);
+  });
+
+  it("forwards with both media types the transport requires", async () => {
+    const { fetch, calls } = remote(SERVER_INFO);
+    const { gw } = gateway({ fetch });
+    await gw.handle(INIT, CTX);
+    expect(calls[0]?.init.headers["Accept"]).toBe(MCP_STREAMABLE_HTTP_ACCEPT);
+    expect(MCP_STREAMABLE_HTTP_ACCEPT).toContain("application/json");
+    expect(MCP_STREAMABLE_HTTP_ACCEPT).toContain("text/event-stream");
+  });
+
+  it("completes the handshake and reads the streamed answer as one JSON reply", async () => {
+    const { fetch } = remote(SERVER_INFO);
+    const { gw } = gateway({ fetch });
+    const response = await gw.handle(INIT, CTX);
+    expect(response).toEqual({
+      status: 200,
+      body: { jsonrpc: "2.0", id: 1, result: SERVER_INFO },
+    });
+  });
+
+  it("passes a notification's acknowledgement through with no body", async () => {
+    const { fetch } = remote(SERVER_INFO);
+    const { gw, logs } = gateway({ fetch });
+    const response = await gw.handle(
+      { jsonrpc: "2.0", method: "notifications/initialized" },
+      CTX,
+    );
+    expect(response).toEqual({ status: 202, body: undefined });
+    expect(logs.join(" ")).not.toContain("error with the request's id");
+  });
+
+  it("logs a notification the hosted server refused, since no answer shows it", async () => {
+    const fetch: GatewayFetch = async () => ({
+      ok: false,
+      status: 503,
+      text: async () => "<html>Service Unavailable</html>",
+    });
+    const { gw, logs } = gateway({ fetch });
+    const response = await gw.handle(
+      { jsonrpc: "2.0", method: "notifications/initialized" },
+      CTX,
+    );
+    // No id, so no JSON-RPC answer: the status alone goes back.
+    expect(response).toEqual({ status: 503, body: undefined });
+    expect(logs.join(" ")).toContain(
+      "answered notifications/initialized with HTTP 503",
+    );
+  });
+
+  it("gives a null-id error from the hosted server the request's id", async () => {
+    const fetch: GatewayFetch = async () => ({
+      ok: false,
+      status: 406,
+      text: async () => JSON.stringify(NOT_ACCEPTABLE),
+    });
+    const { gw, records, logs } = gateway({ fetch });
+    const response = await gw.handle(CALL, CTX);
+    expect(response).toEqual({
+      status: 406,
+      body: { jsonrpc: "2.0", id: 7, error: NOT_ACCEPTABLE.error },
+    });
+    expect(records[0]?.status).toBe("error");
+    expect(records[0]?.refusedReason).toContain("Not Acceptable");
+    expect(logs.join(" ")).toContain("HTTP 406");
+  });
+
+  it("gives an error with no id at all the request's id, keeping its code and rules", async () => {
+    const error = {
+      code: RPC_REFUSED,
+      message: "refunds over $500 need a person",
+      data: { ruleIds: ["refund-cap"] },
+    };
+    const fetch: GatewayFetch = async () => ({
+      ok: true,
+      status: 200,
+      text: async () => sse({ jsonrpc: "2.0", error }),
+    });
+    const { gw, records } = gateway({ fetch });
+    const response = await gw.handle({ ...CALL, id: "req-a" }, CTX);
+    expect(response.body).toEqual({ jsonrpc: "2.0", id: "req-a", error });
+    expect(records[0]?.status).toBe("rejected");
+    expect(records[0]?.ruleIds).toEqual(["refund-cap"]);
+  });
+
+  it("turns a body that is not JSON into an error with the request's id", async () => {
+    const fetch: GatewayFetch = async () => ({
+      ok: false,
+      status: 502,
+      text: async () => "<html>\n  <body>502 Bad Gateway</body>\n</html>",
+    });
+    const { gw, records } = gateway({ fetch });
+    const response = await gw.handle(CALL, CTX);
+    expect(response.status).toBe(502);
+    const body = response.body as {
+      id: unknown;
+      error: { code: number; message: string };
+    };
+    expect(body.id).toBe(7);
+    expect(body.error.code).toBe(RPC_INTERNAL_ERROR);
+    expect(body.error.message).toBe(
+      "the Oxagen control plane answered HTTP 502 with a body that is not a JSON-RPC answer to this request: <html> <body>502 Bad Gateway</body> </html>",
+    );
+    // The server answered, so this is an error, and no "could not be reached".
+    expect(body.error.message).not.toContain("could not be reached");
+    expect(records[0]?.status).toBe("error");
+  });
+
+  it("answers a request the hosted server left with no body", async () => {
+    const fetch: GatewayFetch = async () => ({
+      ok: true,
+      status: 200,
+      text: async () => "",
+    });
+    const { gw } = gateway({ fetch });
+    const response = await gw.handle(CALL, CTX);
+    expect(response).toEqual({
+      status: 502,
+      body: {
+        jsonrpc: "2.0",
+        id: 7,
+        error: {
+          code: RPC_INTERNAL_ERROR,
+          message: "the Oxagen control plane answered HTTP 200 with no body",
+        },
+      },
+    });
+  });
+
+  it("decides each kind of answer by its status and body", () => {
+    const text = (body: unknown) => JSON.stringify(body);
+    const result = { jsonrpc: "2.0", id: 3, result: { tools: [] } };
+    // A 2xx result passes through untouched.
+    expect(
+      answerFor(3, { status: 200, body: result, text: text(result) }),
+    ).toEqual({ status: 200, body: result });
+    // A non-2xx status with a JSON body that is no JSON-RPC error.
+    const plain = answerFor(3, {
+      status: 503,
+      body: { message: "unavailable" },
+      text: '{"message":"unavailable"}',
+    });
+    expect(plain.status).toBe(503);
+    expect(plain.body).toMatchObject({
+      id: 3,
+      error: { code: RPC_INTERNAL_ERROR },
+    });
+    // A 2xx object with neither result nor error.
+    expect(answerFor(3, { status: 200, body: {}, text: "{}" })).toMatchObject({
+      status: 502,
+      body: { id: 3, error: { code: RPC_INTERNAL_ERROR } },
+    });
+    // A result for another id, or for none, answers some other request.
+    for (const other of [4, null, undefined]) {
+      const stray = { jsonrpc: "2.0", id: other, result: {} };
+      expect(
+        answerFor(3, { status: 200, body: stray, text: text(stray) }),
+      ).toMatchObject({
+        status: 502,
+        body: { id: 3, error: { code: RPC_INTERNAL_ERROR } },
+      });
+    }
+    // An error that already carries the request's id is left as it is.
+    const matched = {
+      jsonrpc: "2.0",
+      id: 3,
+      error: { code: -32602, message: "bad arguments" },
+    };
+    expect(
+      answerFor(3, { status: 200, body: matched, text: text(matched) }),
+    ).toEqual({ status: 200, body: matched });
+    // A long body is quoted only in part: its first 200 characters.
+    const long = answerFor(3, {
+      status: 500,
+      body: undefined,
+      text: "x".repeat(5_000),
+    });
+    expect(
+      (long.body as { error: { message: string } }).error.message,
+    ).toMatch(/to this request: x{200}$/);
   });
 });
 
