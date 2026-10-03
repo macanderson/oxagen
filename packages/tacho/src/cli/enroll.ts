@@ -3,7 +3,7 @@
  * under Oxagen control. Each step is idempotent and printed as it runs.
  */
 import { existsSync, lstatSync, rmSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import {
   type Agent,
   agentHolding,
@@ -36,6 +36,7 @@ import { loadOrCreateDeviceKey } from "../host/device-key";
 import { ensureDir } from "../host/fs";
 import { acquireInstallLock } from "../host/install-lock";
 import { modelBaseUrlFile } from "../host/model-base-url";
+import { helperCommandFor } from "../host/model-credential";
 import { mcpConfigShapeProblem } from "../host/mcp-config-writer";
 import type { TachoPaths } from "../host/paths";
 import { mergeStellaHooks, stellaHookPresence } from "../host/stella-writer";
@@ -73,6 +74,7 @@ import {
   type CredentialOptions,
   resolveApiUrl,
   resolveCredentials,
+  shellQuote,
 } from "./deps";
 import {
   brokerCredentials,
@@ -107,6 +109,12 @@ export interface EnrollOptions extends CredentialOptions {
   port?: number;
   /** Install the user service (default true). */
   service?: boolean;
+  /**
+   * Move the service and hooks back to the previous binary when the one
+   * this run moved them to never answers (default true). The rollback run
+   * itself passes false, so a previous binary that also fails stops there.
+   */
+  rollback?: boolean;
   validityDays?: number;
   /** Re-enroll even when a live enrollment exists. */
   force?: boolean;
@@ -197,6 +205,38 @@ export interface EnrollResult {
    * `healthy` is false, even with every hook written.
    */
   shipping?: ShippingHealth;
+  /**
+   * Set when this re-apply moved the service and hooks to a new binary, the
+   * daemon never answered, and everything was moved back to the binary that
+   * was running before (#5421). `ok` is false with it.
+   */
+  rolledBack?: { from: string; to: string };
+}
+
+/**
+ * The commands of the binary a host.json names, so a re-apply can be run
+ * again with them after a newer binary failed to start. Undefined when that
+ * binary is gone, since a rollback to nothing is no rollback.
+ */
+function runtimeOf(host: HostFile): CliDeps["runtime"] | undefined {
+  // The native layout runs `<bin>/oxagen daemon`; the script layout runs
+  // `node <bin>/tachod.mjs`. The first absolute path names the bin dir.
+  const files = host.daemon_command.filter((part) => isAbsolute(part));
+  const first = files[0];
+  if (first === undefined || !files.every((file) => existsSync(file)))
+    return undefined;
+  const binDir = dirname(first);
+  const tacho =
+    host.daemon_command[0] === first
+      ? shellQuote(first)
+      : `${host.daemon_command[0]} ${shellQuote(join(binDir, "tacho.mjs"))}`;
+  return {
+    hookCommand: host.hook_command,
+    credentialHelperCommand: helperCommandFor(tacho),
+    daemonCommand: [...host.daemon_command],
+    mcpStdioCommand: [...(host.mcp_stdio_command ?? [first, "mcp-stdio"])],
+    binDir,
+  };
 }
 
 /** How long enroll waits for the daemon's first contact with Oxagen. */
@@ -723,6 +763,9 @@ async function enrollSteps(
   const existing = readHostFile(deps.paths.hostFile);
   let host: HostFile;
   let harnesses: TachoHarness[] = options.harnesses ?? ["claude-code"];
+  // The host as it was before this run moved the service and hooks to
+  // another binary, kept so a daemon that never starts can be rolled back.
+  let movedFrom: HostFile | undefined;
   // A revoke from the fleet page reaches this machine as host_status, never
   // as revoked_at. Re-applying that enrollment re-armed hooks and base URLs
   // the control plane then denied, so it is refused, not repaired.
@@ -861,10 +904,12 @@ async function enrollSteps(
         // the environment it later runs in says.
         host = { ...repointed, harness_files: harnessFilesRecord(deps.paths) };
         writeHostFile(deps.paths.hostFile, host);
-        if (!sameCommands(existing, deps.runtime))
+        if (!sameCommands(existing, deps.runtime)) {
+          movedFrom = existing;
           deps.out(
             `      service and hooks now run from ${deps.runtime.binDir} (was ${existing.hook_command})`,
           );
+        }
         if (existing.wrapper_version !== deps.wrapperVersion)
           deps.out(
             `      host.json now records version ${deps.wrapperVersion} (was ${existing.wrapper_version})`,
@@ -1619,6 +1664,44 @@ async function enrollSteps(
   let shipping: ShippingHealth | undefined;
   if (options.service !== false) {
     const probe = await probeHealth(deps, host.port);
+    // This run moved the service and hooks to a binary whose daemon never
+    // answered. The binary that was running before is still on disk, so the
+    // same re-apply is run again with its commands: service, hooks and
+    // host.json go back together, and the machine is as it was before this
+    // run rather than hooked to a daemon that is not there (#5421). Only on
+    // silence: a daemon that says it is starting is coming up.
+    if (
+      probe.outcome === "silent" &&
+      movedFrom !== undefined &&
+      options.rollback !== false
+    ) {
+      const previous = runtimeOf(movedFrom);
+      if (previous !== undefined) {
+        deps.err(
+          `tachod from ${deps.runtime.binDir} did not answer on 127.0.0.1:${host.port} within ${(HEALTH_SILENCE_ATTEMPTS * HEALTH_POLL_MS) / 1000}s; moving the service and hooks back to ${previous.binDir}. Check ${deps.paths.log}, then run \`oxagen agent enroll\` from the new install again.`,
+        );
+        const back = await enrollSteps(
+          { ...options, rollback: false },
+          {
+            ...deps,
+            runtime: previous,
+            wrapperVersion: movedFrom.wrapper_version,
+          },
+          addition,
+        );
+        deps.err(
+          back.shipping?.healthy === false
+            ? `Rolled back to ${previous.binDir}, and that tachod is not answering either: ${back.shipping.detail}`
+            : `Rolled back: the service and hooks run from ${previous.binDir} (version ${movedFrom.wrapper_version}) again, and ${deps.runtime.binDir} (version ${deps.wrapperVersion}) is not in use. Nothing was recorded while the new tachod was tried.`,
+        );
+        return {
+          ...back,
+          ok: false,
+          warnings: [...warnings, ...back.warnings],
+          rolledBack: { from: deps.runtime.binDir, to: previous.binDir },
+        };
+      }
+    }
     const healthy = probe.outcome === "healthy";
     const gateway = probe.gateway;
     // The gateway (ADR-094): point Claude Code, Codex and Stella at the daemon's
@@ -1759,6 +1842,15 @@ async function enrollSteps(
         // model calls are about to be routed (#5411).
         warnings.push(
           `tachod is still starting after ${(HEALTH_STARTING_ATTEMPTS * HEALTH_POLL_MS) / 1000}s, so the model base URL was left as it is. Run \`oxagen agent status\` once it is up; check ${deps.paths.log} if it never is`,
+        );
+      } else if (deps.serviceManager.status().running !== false) {
+        // Silent, but the service manager does not say the daemon is gone:
+        // it may be hung, or slower than the probe. A base URL taken out on
+        // that guess stops recording for good and tells no one, while one
+        // left in fails every model call out loud until the daemon answers,
+        // which `oxagen agent status` names. Loud beats silent (#5421).
+        warnings.push(
+          `tachod did not answer on 127.0.0.1:${host.port} but its service is still ${deps.serviceManager.status().running === true ? "running" : "loaded"}, so the model base URL was left as it is. Check ${deps.paths.log}, then run \`oxagen agent enroll\` again`,
         );
       } else {
         // A re-enroll finds the previous enrollment's base URL and helper
