@@ -1,15 +1,14 @@
-// The Run page's header (mockup `pRun`'s `.phead`, pages/run.md, Header):
-// the eyebrow and the run id, then who ran it and under what tier, the rig it
-// ran on, where the work is, when it started, and the actions its status
-// allows, always ending on Export.
+// The Run page's header (run-header spec in the roadmap repository, Slot
+// rules): the eyebrow and the title, then two facts lines, and the actions
+// its status allows, always ending on Export. The first line says who ran the
+// run and when, the second what it worked on and what it made. Each line
+// holds at most six slots, and each slot holds one fact as one label. A list
+// shows as a count, and each count opens the Details drawer at its section.
 //
-// Every chip shows what the record holds. A fact the record does not capture
-// (a harness version the session did not report, an effort setting no frame
-// carried, a checkout the host did not enroll) is said to be missing in words
-// rather than left blank or guessed. The rig adds the thinking and permission
-// mode a session recorded, and a subagents row appears under the checkout
-// when the session started any; the design draws neither, and both show only
-// what the record holds.
+// The Details drawer holds every other fact: the run id, the tier, the rig,
+// the checkout with every pull request, every subagent, and each fact the
+// record does not hold with its reason. A fact the record does not capture is
+// said to be missing in words rather than left blank or guessed.
 import {
   FolderIcon,
   GitBranchIcon,
@@ -24,11 +23,17 @@ import { isStale, type RunRow, staleReason } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { parseGitHubUrl } from "@/shared/github-url";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
-import { routes } from "@/shared/safe-path";
+import { routes, type SafePath } from "@/shared/safe-path";
 import type { OrgRole, WsRole } from "@/server/viewer";
+import { AgentAvatar } from "@/ui/agent-avatar";
 import { AgentCard } from "@/ui/agent-card";
 import { Badge } from "@/ui/badge";
-import { buttonSecondary, eyebrow, linkChip } from "@/ui/control-styles";
+import {
+  buttonSecondary,
+  eyebrow,
+  linkChip,
+  linkText,
+} from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { useFormatter } from "@/ui/formatter";
 import { HarnessIcon } from "@/ui/harness-icon";
@@ -43,9 +48,11 @@ import { BackfillBadge, BackfillNote, isBackfilled } from "./backfill";
 import { CopyPath, CopyRunId } from "./copy-text";
 import { DeliveryReport } from "./delivery-report";
 import { effortVerdict, fitOf, runEffort } from "./fit";
+import { type MissingFact, missingFacts } from "./missing-facts";
 import { ExportAction } from "./record-actions";
 import { ReplayActions } from "./replay-actions";
 import { BannerResume, RunControls } from "./run-controls";
+import { RunDetailsDrawer, ScrollToSection } from "./run-details";
 import { SealRunAction } from "./seal-run";
 import type { Place } from "./tab-props";
 
@@ -473,11 +480,14 @@ function PullChip({
   label,
   title,
   state,
+  stateTestId = "run-pull-state",
 }: {
   url: string | null;
   label: string;
   title?: string;
   state: PullState;
+  /** The head's single pull request takes its own id, so the drawer's list counts alone. */
+  stateTestId?: string;
 }) {
   const t = useTranslations("run.header");
   const target = url === null ? null : parsePullRequestUrl(url);
@@ -503,7 +513,7 @@ function PullChip({
         </PullRequestLink>
       )}
       <span
-        data-testid="run-pull-state"
+        data-testid={stateTestId}
         data-state={state ?? "unknown"}
         className="whitespace-nowrap text-xs text-dim"
       >
@@ -612,31 +622,24 @@ function WhereFromWork({
           {branch}
         </ForgeChip>
       )}
-      {prs.length === 0 && recordedOnly.length === 0 ? (
-        <Chip>
-          <span className="text-dim">{t("noPullRequest")}</span>
-        </Chip>
-      ) : (
-        <>
-          {prs.map((pr) => (
-            <PullChip
-              key={`${pr.repository.url}/${String(pr.number)}`}
-              url={pr.url}
-              title={pr.title}
-              label={`${pr.repository.owner}/${pr.repository.name}#${String(pr.number)}`}
-              state={pr.state}
-            />
-          ))}
-          {recordedOnly.map((node) => (
-            <PullChip
-              key={`${node.chainRef ?? ""}:${node.seq ?? ""}:${node.name}`}
-              url={node.note}
-              label={recordedPullLabel(node)}
-              state={storedPullState(run, node.note)}
-            />
-          ))}
-        </>
-      )}
+      {/* Every pull request, with no cap: a run with none draws nothing. */}
+      {prs.map((pr) => (
+        <PullChip
+          key={`${pr.repository.url}/${String(pr.number)}`}
+          url={pr.url}
+          title={pr.title}
+          label={`${pr.repository.owner}/${pr.repository.name}#${String(pr.number)}`}
+          state={pr.state}
+        />
+      ))}
+      {recordedOnly.map((node) => (
+        <PullChip
+          key={`${node.chainRef ?? ""}:${node.seq ?? ""}:${node.name}`}
+          url={node.note}
+          label={recordedPullLabel(node)}
+          state={storedPullState(run, node.note)}
+        />
+      ))}
       {machine === null || checkout === null ? (
         // No enrolled checkout: the directory the session recorded, when the
         // row holds one, else the host and that no path is held.
@@ -670,9 +673,6 @@ function latestCheckout(work: RunWork): RunWork["checkouts"][number] | null {
   );
 }
 
-/** Subagent chips drawn before the rest are counted as "N more". */
-const SUBAGENT_CHIPS = 12;
-
 function SubagentChip({
   subagent,
   live,
@@ -701,9 +701,9 @@ function SubagentChip({
 }
 
 /**
- * The subagents the session started, one chip per recorded agent id, from
- * the same work read as the checkout. The design draws no such row, so it
- * appears only when the session started at least one.
+ * The Details drawer's Subagents section: every subagent the session
+ * started, one chip per recorded agent id, from the same work read as the
+ * checkout. A session that started none leaves the section out.
  */
 function SubagentsFromWork({
   read,
@@ -717,26 +717,20 @@ function SubagentsFromWork({
   const subagents = work.ok ? (work.value.subagents ?? []) : [];
   if (subagents.length === 0) return null;
   return (
-    <div
-      data-testid="run-subagents"
-      className="mt-2 flex flex-wrap items-center gap-2.25"
-    >
-      <span className="text-xs font-semibold uppercase tracking-widest text-dim">
-        {t("subagents")}
-      </span>
-      {subagents.slice(0, SUBAGENT_CHIPS).map((subagent) => (
-        <SubagentChip
-          key={subagent.agentRef}
-          subagent={subagent}
-          live={run.status === "live"}
-        />
-      ))}
-      {subagents.length > SUBAGENT_CHIPS ? (
-        <span className="text-xs text-dim">
-          {t("moreSubagents", { count: subagents.length - SUBAGENT_CHIPS })}
-        </span>
-      ) : null}
-    </div>
+    <DetailsSection id="subagents" title={t("subagents")}>
+      <div
+        data-testid="run-subagents"
+        className="flex flex-wrap items-center gap-2.25"
+      >
+        {subagents.map((subagent) => (
+          <SubagentChip
+            key={subagent.agentRef}
+            subagent={subagent}
+            live={run.status === "live"}
+          />
+        ))}
+      </div>
+    </DetailsSection>
   );
 }
 
@@ -848,11 +842,23 @@ function AgentLine({
  * The word sits in a polite live region, so when a refresh of the page parks
  * a call or pauses the run, a screen reader hears the new word.
  */
-function RunStatusWord({ run, parked }: { run: RunRow; parked: boolean }) {
+function RunStatusWord({
+  run,
+  parked,
+  live: region = true,
+}: {
+  run: RunRow;
+  parked: boolean;
+  /** The head's word is the live region; the drawer's copy of it is not. */
+  live?: boolean;
+}) {
   const t = useTranslations("run.header");
   const live = run.status === "live";
   return (
-    <span role="status" data-testid="run-status" className="inline-flex">
+    <span
+      {...(region ? { role: "status", "data-testid": "run-status" } : {})}
+      className="inline-flex"
+    >
       {isStale(run) ? (
         <StatusBadge
           status={run.status}
@@ -1005,6 +1011,539 @@ function PauseBanner({
   );
 }
 
+/** The run's current query values, so a link into Details keeps the tab and the view. */
+type RunQuery = NonNullable<Parameters<typeof routes.run>[3]>;
+
+/** The Details drawer's sections, by the value `?details=` names. */
+const DETAILS_TARGET: Readonly<Record<string, string>> = {
+  run: "run",
+  agent: "agent",
+  model: "model",
+  checkout: "checkout",
+  prs: "checkout",
+  subagents: "subagents",
+  missing: "missing",
+};
+
+/** A Details section's element id. */
+function sectionId(section: string): string {
+  return `run-details-${section}`;
+}
+
+/** One section of the Details drawer: a plain-noun heading and its facts. */
+function DetailsSection({
+  id,
+  title,
+  children,
+}: {
+  id: string;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      id={sectionId(id)}
+      data-testid={sectionId(id)}
+      aria-labelledby={`${sectionId(id)}-title`}
+      className="flex scroll-mt-4 flex-col gap-2"
+    >
+      <h3
+        id={`${sectionId(id)}-title`}
+        className="text-base font-semibold text-foreground"
+      >
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+/** One slot of a facts line: one fact as one label. */
+function Slot({
+  testId,
+  title,
+  className = "",
+  children,
+}: {
+  testId: string;
+  title?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <li
+      data-testid={testId}
+      title={title}
+      className={`flex min-w-0 items-center gap-1.5 ${className}`}
+    >
+      {children}
+    </li>
+  );
+}
+
+/** A facts line: at most six slots, wrapping on a narrow screen. */
+function FactsLine({
+  testId,
+  label,
+  children,
+}: {
+  testId: string;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <ul
+      data-testid={testId}
+      aria-label={label}
+      className="m-0 mt-2 flex list-none flex-wrap items-center gap-x-3.5 gap-y-1.5 p-0 text-sm text-muted-foreground"
+    >
+      {children}
+    </ul>
+  );
+}
+
+/**
+ * The first facts line: the agent, the operator, the model, and the start.
+ * The harness shows only as the mark on the agent's avatar.
+ */
+function FactsWho({
+  run,
+  agent,
+}: {
+  run: RunRow;
+  agent: Read<AgentDetail> | null;
+}) {
+  const t = useTranslations("run");
+  const format = useFormatter();
+  const slug = run.agentKey?.split(".").at(-1) ?? null;
+  const model = run.model;
+  const operator =
+    run.operatorName ??
+    (run.operatorKind === null
+      ? null
+      : t(`facts.operatorKind.${run.operatorKind}`));
+  return (
+    <FactsLine testId="run-facts-who" label={t("header.factsWho")}>
+      <Slot
+        testId="run-facts-agent"
+        {...(run.agentKey === null ? {} : { title: run.agentKey })}
+      >
+        {slug === null ? (
+          <span className="text-dim">{t("notRecorded")}</span>
+        ) : (
+          <>
+            <AgentAvatar
+              value={null}
+              initials={slug.slice(0, 2).toUpperCase()}
+              harness={run.harness?.name ?? harnessOf(agent)}
+              size={20}
+            />
+            <span className="max-w-48 truncate font-mono text-foreground">
+              {slug}
+            </span>
+          </>
+        )}
+      </Slot>
+      {operator === null ? null : (
+        <Slot testId="run-facts-operator" title={operator}>
+          <span className="max-w-48 truncate">{operator}</span>
+        </Slot>
+      )}
+      <Slot
+        testId="run-facts-model"
+        {...(model === null ? {} : { title: model.slug })}
+        className="max-md:hidden"
+      >
+        {model === null ? (
+          <span className="text-dim">{t("header.modelNotRecorded")}</span>
+        ) : (
+          <>
+            <ProviderMark provider={model.provider} model={model.slug} />
+            <span className="max-w-48 truncate font-mono">{model.slug}</span>
+          </>
+        )}
+      </Slot>
+      <Slot testId="run-facts-start">
+        <time dateTime={run.startedAt}>
+          {format.dateTime(new Date(run.startedAt), {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })}
+        </time>
+      </Slot>
+    </FactsLine>
+  );
+}
+
+/** A pull request as the head names it. */
+type PullFact = {
+  key: string;
+  url: string | null;
+  /** `owner/repo#12`, or the recorded name when no repository is known. */
+  full: string;
+  /** `#12`, when the pull request names its number. */
+  short: string | null;
+  /** `owner/repo`, lowercased, when known. */
+  repo: string | null;
+  state: PullState;
+};
+
+/** The facts the second line draws, read from the work read or, before it answers, from the row. */
+type WhatFacts = {
+  repo: { owner: string; name: string } | null;
+  branch: string | null;
+  /** True once the work read answered, so a missing repository is a fact. */
+  answered: boolean;
+  pulls: PullFact[];
+  /** Null while the work read has not answered. */
+  subagents: number | null;
+  missing: number;
+};
+
+function pullFromNode(run: RunRow, node: RunOutputNode): PullFact {
+  return {
+    key: `${node.chainRef ?? ""}:${node.seq ?? ""}:${node.name}`,
+    url: node.note,
+    full: recordedPullLabel(node),
+    short: node.name.startsWith("#") ? node.name : null,
+    repo: node.where === null ? null : node.where.toLowerCase(),
+    state: storedPullState(run, node.note),
+  };
+}
+
+/**
+ * The second facts line: the work item, the repository and branch, the pull
+ * requests, the subagents, the facts not recorded, and Details.
+ */
+function FactsWhat({
+  run,
+  facts,
+  link,
+}: {
+  run: RunRow;
+  facts: WhatFacts;
+  link: (section: string) => SafePath;
+}) {
+  const t = useTranslations("run.header");
+  const repoName =
+    facts.repo === null ? null : `${facts.repo.owner}/${facts.repo.name}`;
+  const [only] = facts.pulls;
+  return (
+    <FactsLine testId="run-facts-what" label={t("factsWhat")}>
+      {run.name !== null && run.taskRef !== null ? (
+        <Slot testId="run-facts-task" title={run.taskRef}>
+          <span className="max-w-48 truncate">{run.taskRef}</span>
+        </Slot>
+      ) : null}
+      {repoName === null && facts.branch === null ? (
+        facts.answered ? (
+          <Slot testId="run-facts-repo">
+            <span className="text-dim">{t("repoNotRecorded")}</span>
+          </Slot>
+        ) : null
+      ) : (
+        <Slot testId="run-facts-repo">
+          {repoName === null ? null : (
+            <span
+              title={repoName}
+              className="max-w-48 truncate text-foreground"
+            >
+              {repoName}
+            </span>
+          )}
+          {facts.branch === null ? null : (
+            <span
+              title={facts.branch}
+              className="max-w-40 truncate font-mono text-dim"
+            >
+              {facts.branch}
+            </span>
+          )}
+        </Slot>
+      )}
+      {facts.pulls.length === 1 && only !== undefined ? (
+        <Slot testId="run-facts-prs">
+          <PullChip
+            url={only.url}
+            label={
+              only.short !== null &&
+              repoName !== null &&
+              only.repo === repoName.toLowerCase()
+                ? only.short
+                : only.full
+            }
+            title={only.full}
+            state={only.state}
+            stateTestId="run-facts-pr-state"
+          />
+        </Slot>
+      ) : facts.pulls.length > 1 ? (
+        <Slot testId="run-facts-prs">
+          <SafeLink to={link("prs")} className={linkText}>
+            {t("pullRequests", { count: facts.pulls.length })}
+          </SafeLink>
+        </Slot>
+      ) : null}
+      {facts.subagents === null || facts.subagents === 0 ? null : (
+        <Slot testId="run-facts-subagents" className="max-md:hidden">
+          <SafeLink to={link("subagents")} className={linkText}>
+            {t("subagentCount", { count: facts.subagents })}
+          </SafeLink>
+        </Slot>
+      )}
+      {facts.missing === 0 ? null : (
+        <Slot testId="run-facts-missing" className="max-md:hidden">
+          <SafeLink to={link("missing")} className={linkText}>
+            {t("notRecordedCount", { count: facts.missing })}
+          </SafeLink>
+        </Slot>
+      )}
+      <Slot testId="run-facts-details">
+        <SafeLink to={link("run")} className={linkText}>
+          {t("details")}
+        </SafeLink>
+      </Slot>
+    </FactsLine>
+  );
+}
+
+/** The second line from the row alone, while the work read is in flight or after it failed. */
+function WhatFromRow({
+  run,
+  agent,
+  pulls,
+  link,
+}: {
+  run: RunRow;
+  agent: Read<AgentDetail> | null;
+  pulls: readonly RunOutputNode[] | null;
+  link: (section: string) => SafePath;
+}) {
+  const harness = useHarness(run, agent);
+  const repository = run.place?.repository ?? null;
+  return (
+    <FactsWhat
+      run={run}
+      link={link}
+      facts={{
+        repo: repository,
+        branch: run.place?.branch ?? null,
+        answered: false,
+        pulls: (pulls ?? []).map((node) => pullFromNode(run, node)),
+        subagents: null,
+        missing: missingFacts(run, harness, null).length,
+      }}
+    />
+  );
+}
+
+/** The second line once the work read answers: the checkout, every pull request, and the subagents. */
+function WhatFromWork({
+  read,
+  run,
+  agent,
+  pulls,
+  link,
+}: {
+  read: Promise<Read<RunWork>>;
+  run: RunRow;
+  agent: Read<AgentDetail> | null;
+  pulls: readonly RunOutputNode[] | null;
+  link: (section: string) => SafePath;
+}) {
+  const harness = useHarness(run, agent);
+  const work = use(read);
+  if (!work.ok)
+    return <WhatFromRow run={run} agent={agent} pulls={pulls} link={link} />;
+  const checkout = latestCheckout(work.value);
+  const sessionRepo =
+    checkout === null ? (run.place?.repository ?? undefined) : undefined;
+  const repo =
+    checkout?.repository ??
+    sessionRepo ??
+    work.value.pullRequests[0]?.repository ??
+    null;
+  const prs = work.value.pullRequests;
+  const recordedOnly = (pulls ?? []).filter(
+    (node) => !prs.some((pr) => samePull(node, pr)),
+  );
+  return (
+    <FactsWhat
+      run={run}
+      link={link}
+      facts={{
+        repo,
+        branch:
+          checkout === null ? (run.place?.branch ?? null) : checkout.branch,
+        answered: true,
+        pulls: [
+          ...prs.map((pr) => {
+            const name = `${pr.repository.owner}/${pr.repository.name}`;
+            return {
+              key: `${pr.repository.url}/${String(pr.number)}`,
+              url: pr.url,
+              full: `${name}#${String(pr.number)}`,
+              short: `#${String(pr.number)}`,
+              repo: name.toLowerCase(),
+              state: pr.state,
+            };
+          }),
+          ...recordedOnly.map((node) => pullFromNode(run, node)),
+        ],
+        subagents: (work.value.subagents ?? []).length,
+        missing: missingFacts(run, harness, {
+          checkout: checkout !== null,
+          machine: work.value.machine != null,
+        }).length,
+      }}
+    />
+  );
+}
+
+/** The Not recorded section: each missing fact with its reason. */
+function MissingList({ facts }: { facts: readonly MissingFact[] }) {
+  const t = useTranslations("run");
+  if (facts.length === 0) return null;
+  return (
+    <DetailsSection id="missing" title={t("details.sections.missing")}>
+      <dl data-testid="run-missing" className="m-0 flex flex-col gap-2">
+        {facts.map((fact) => (
+          <div key={fact.id} data-fact={fact.id} className="flex flex-col">
+            <dt className="text-sm font-semibold text-foreground">
+              {t(fact.label)}
+            </dt>
+            <dd className="m-0 text-sm text-muted-foreground first-letter:uppercase">
+              {t(fact.reason)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </DetailsSection>
+  );
+}
+
+function MissingFromRow({
+  run,
+  agent,
+}: {
+  run: RunRow;
+  agent: Read<AgentDetail> | null;
+}) {
+  const harness = useHarness(run, agent);
+  return <MissingList facts={missingFacts(run, harness, null)} />;
+}
+
+function MissingFromWork({
+  read,
+  run,
+  agent,
+}: {
+  read: Promise<Read<RunWork>>;
+  run: RunRow;
+  agent: Read<AgentDetail> | null;
+}) {
+  const harness = useHarness(run, agent);
+  const work = use(read);
+  if (!work.ok) return <MissingFromRow run={run} agent={agent} />;
+  return (
+    <MissingList
+      facts={missingFacts(run, harness, {
+        checkout: latestCheckout(work.value) !== null,
+        machine: work.value.machine != null,
+      })}
+    />
+  );
+}
+
+/**
+ * The drawer's sections, in the spec's order: Run, Agent, Model, Checkout
+ * (every pull request with it), Subagents, and Not recorded. Each reuses
+ * the component the header drew before, so what it reads is unchanged.
+ */
+function DetailsBody({
+  run,
+  agent,
+  roster,
+  work,
+  pulls,
+  parked,
+}: {
+  run: RunRow;
+  agent: Read<AgentDetail> | null;
+  roster: AgentRow | null;
+  work: Promise<Read<RunWork>>;
+  pulls: readonly RunOutputNode[] | null;
+  parked: boolean;
+}) {
+  const t = useTranslations("run");
+  return (
+    <>
+      <DetailsSection id="run" title={t("details.sections.run")}>
+        <div className="flex flex-wrap items-center gap-2.25">
+          <RunStatusWord run={run} parked={parked} live={false} />
+          {/* Nothing gated a run rebuilt from its transcript (ADR-161), so
+              the tier its row holds is no record of enforcement. */}
+          {isBackfilled(run) ? (
+            <Chip testId="run-tier">{t("backfill.tierNotRecorded")}</Chip>
+          ) : (
+            <EnforcementTierBadge
+              tier={run.enforcementTier}
+              testId="run-tier"
+            />
+          )}
+          {run.replayGrade === null ? null : (
+            <ReplayGradeBadge grade={run.replayGrade} />
+          )}
+        </div>
+        <CopyRunId id={run.id} />
+        <BackfillNote run={run} />
+        <When run={run} />
+        {run.completenessGaps.length === 0 ? null : (
+          <p
+            data-testid="run-gaps"
+            className="m-0 text-sm text-muted-foreground"
+          >
+            {t("gaps")}{" "}
+            {run.completenessGaps.map((gap) => t(`gap.${gap}`)).join(", ")}
+          </p>
+        )}
+      </DetailsSection>
+      <DetailsSection id="agent" title={t("details.sections.agent")}>
+        <div className="flex flex-wrap items-center gap-2.25">
+          <AgentCard
+            layout="compact"
+            agentKey={run.agentKey}
+            harness={run.harness?.name ?? harnessOf(agent)}
+            notRecorded={t("notRecorded")}
+            sub={<AgentLine run={run} agent={agent} roster={roster} />}
+          />
+          {run.taskRef === null ? null : (
+            <Chip testId="run-task">
+              {t("header.task", { ref: run.taskRef })}
+            </Chip>
+          )}
+        </div>
+      </DetailsSection>
+      <DetailsSection id="model" title={t("details.sections.model")}>
+        <Rig run={run} agent={agent} />
+      </DetailsSection>
+      <DetailsSection id="checkout" title={t("details.sections.checkout")}>
+        <Suspense
+          fallback={<WhereFromRow run={run} pulls={pulls} read="pending" />}
+        >
+          <WhereFromWork read={work} run={run} pulls={pulls} />
+        </Suspense>
+      </DetailsSection>
+      <Suspense fallback={null}>
+        <SubagentsFromWork read={work} run={run} />
+      </Suspense>
+      <Suspense fallback={<MissingFromRow run={run} agent={agent} />}>
+        <MissingFromWork read={work} run={run} agent={agent} />
+      </Suspense>
+    </>
+  );
+}
+
 export function RunHeader({
   run,
   agent,
@@ -1015,13 +1554,15 @@ export function RunHeader({
   wsRole,
   place,
   parked = false,
+  details = null,
+  query = {},
 }: {
   run: RunRow;
   /** `get_agent` for the run's agent; null when the run names no agent. */
   agent: Read<AgentDetail> | null;
   /** The agent's row on the Agents table's first page; null when it is not there. */
   roster: AgentRow | null;
-  /** `get_run_work`, started by the page: the checkout strip awaits it. */
+  /** `get_run_work`, started by the page: the second line and the checkout await it. */
   work: Promise<Read<RunWork>>;
   /** The pull requests the outputs recorded; null when the outputs read failed. */
   pulls: readonly RunOutputNode[] | null;
@@ -1037,83 +1578,59 @@ export function RunHeader({
   place: Place;
   /** A call on this run is parked for approval. */
   parked?: boolean;
+  /** `?details=`: the section the Details drawer opens at; null leaves it closed. */
+  details?: string | null;
+  /** The page's other query values, kept on every link into Details and on its close. */
+  query?: Omit<RunQuery, "details">;
 }) {
   const t = useTranslations("run");
   const sealed = run.status !== "live";
+  const title = run.name ?? run.taskRef ?? t("header.untitled");
+  const link = (section: string) =>
+    routes.run(place.org, place.ws, run.id, { ...query, details: section });
+  const target =
+    details === null ? null : (DETAILS_TARGET[details] ?? "run");
   return (
     <>
       <header
         data-testid="run-header"
         className="mb-4.5 flex flex-wrap items-start gap-4.5"
       >
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className={`${eyebrow} mb-2.5`}>{t("header.eyebrow")}</p>
-          {/* #4571: the session name is the heading, and the id sits under
-              it to copy. With automatic names off, get_run already sends
-              the harness's own title as `name` (or null), so the header
-              takes it as sent. */}
-          <h1 className="mb-1 break-words text-lg font-bold leading-tight text-foreground">
-            {run.name ?? run.taskRef ?? t("header.untitled")}
+          {/* #4571: the session name is the heading, cut at two lines with
+              the whole name on hover. With automatic names off, get_run
+              already sends the harness's own title as `name` (or null), so
+              the header takes it as sent. */}
+          <h1
+            title={title}
+            className="mb-1 line-clamp-2 break-words text-lg font-bold leading-tight text-foreground"
+          >
+            {title}
           </h1>
-          <CopyRunId id={run.id} />
-          <div
-            data-testid="run-chips"
-            aria-label={t("header.chips")}
-            className="mt-2 flex flex-wrap items-center gap-2.25"
-          >
-            <AgentCard
-              layout="compact"
-              agentKey={run.agentKey}
-              harness={run.harness?.name ?? harnessOf(agent)}
-              notRecorded={t("notRecorded")}
-              sub={<AgentLine run={run} agent={agent} roster={roster} />}
-            />
-            <RunStatusWord run={run} parked={parked} />
-            <BackfillBadge run={run} />
-            {/* Nothing gated a run rebuilt from its transcript (ADR-161), so
-                the tier its row holds is no record of enforcement. */}
-            {isBackfilled(run) ? (
-              <Chip testId="run-tier">{t("backfill.tierNotRecorded")}</Chip>
-            ) : (
-              <EnforcementTierBadge
-                tier={run.enforcementTier}
-                testId="run-tier"
-              />
-            )}
-            {run.replayGrade === null ? null : (
-              <ReplayGradeBadge grade={run.replayGrade} />
-            )}
-            {run.taskRef === null ? null : (
-              <Chip testId="run-task">
-                {t("header.task", { ref: run.taskRef })}
-              </Chip>
-            )}
-          </div>
-          <BackfillNote run={run} />
-          <Rig run={run} agent={agent} />
+          <FactsWho run={run} agent={agent} />
           <Suspense
-            fallback={<WhereFromRow run={run} pulls={pulls} read="pending" />}
+            fallback={
+              <WhatFromRow run={run} agent={agent} pulls={pulls} link={link} />
+            }
           >
-            <WhereFromWork read={work} run={run} pulls={pulls} />
+            <WhatFromWork
+              read={work}
+              run={run}
+              agent={agent}
+              pulls={pulls}
+              link={link}
+            />
           </Suspense>
-          <Suspense fallback={null}>
-            <SubagentsFromWork read={work} run={run} />
-          </Suspense>
-          <When run={run} />
-          {run.completenessGaps.length === 0 ? null : (
-            <p
-              data-testid="run-gaps"
-              className="mt-1 max-w-prose text-sm text-muted-foreground"
-            >
-              {t("gaps")}{" "}
-              {run.completenessGaps.map((gap) => t(`gap.${gap}`)).join(", ")}
-            </p>
-          )}
         </div>
         <div
           data-testid="run-actions"
           className="ml-auto flex flex-wrap items-start gap-2"
         >
+          <span className="inline-flex min-h-9 items-center gap-2">
+            <RunStatusWord run={run} parked={parked} />
+            <BackfillBadge run={run} />
+          </span>
           {sealed ? (
             <ReplayActions
               org={place.org}
@@ -1172,6 +1689,23 @@ export function RunHeader({
         </div>
       </header>
       <PauseBanner run={run} place={place} orgRole={orgRole} wsRole={wsRole} />
+      {target === null ? null : (
+        <RunDetailsDrawer
+          title={t("details.title")}
+          subtitle={title}
+          closeTo={routes.run(place.org, place.ws, run.id, query)}
+        >
+          <DetailsBody
+            run={run}
+            agent={agent}
+            roster={roster}
+            work={work}
+            pulls={pulls}
+            parked={parked}
+          />
+          <ScrollToSection id={sectionId(target)} />
+        </RunDetailsDrawer>
+      )}
     </>
   );
 }
