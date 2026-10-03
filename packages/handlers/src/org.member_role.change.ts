@@ -19,12 +19,16 @@ import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberRoleChange } from "@oxagen/oxagen/contracts/org.member_role.change";
 import { schema, withOrgDb, type Tx } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import { resolveMemberUserId } from "./lib/org-member";
 import { logger } from "./logger";
 
 const OWNER_ROLE_NAME = "Owner";
 const AUTHORIZED_ROLES = new Set(["Owner", "Admin"]);
+/** The roles that pass the actor gate, most privileged first. */
+const ROLE_PRECEDENCE: readonly string[] = ["Owner", "Admin"];
+/** Bounds a runaway row set; a principal holds a handful of org roles. */
+const ROLE_ASSIGNMENT_LIMIT = 50;
 
 /**
  * Resolve the internal principal id and their active org role name for a user,
@@ -60,7 +64,7 @@ async function resolveActorPrincipalAndRole(
 
   if (!principalRow) return { principalId: "", roleName: null };
 
-  const [praRow] = await tx
+  const assigned = await tx
     .select({ roleName: schema.roles.name })
     .from(schema.principalRoleAssignments)
     .innerJoin(
@@ -74,11 +78,23 @@ async function resolveActorPrincipalAndRole(
         eq(schema.roles.scopeKind, "org"),
         isNull(schema.principalRoleAssignments.workspaceId),
         isNull(schema.principalRoleAssignments.deletedAt),
+        // A time-bounded grant past its end grants nothing, as in
+        // resolveActorOrgRole (@oxagen/iam/org-role).
+        or(
+          isNull(schema.principalRoleAssignments.expiresAt),
+          gt(schema.principalRoleAssignments.expiresAt, new Date()),
+        ),
       ),
     )
-    .limit(1);
+    .limit(ROLE_ASSIGNMENT_LIMIT);
 
-  return { principalId: principalRow.id, roleName: praRow?.roleName ?? null };
+  // A principal may hold several org roles. Taking the first row Postgres
+  // returned refused an Admin who also held Billing, so the most
+  // privileged role wins.
+  const names = assigned.map((row) => row.roleName);
+  const roleName =
+    ROLE_PRECEDENCE.find((name) => names.includes(name)) ?? names[0] ?? null;
+  return { principalId: principalRow.id, roleName };
 }
 
 export const orgMemberRoleChangeHandler: CapabilityHandler<

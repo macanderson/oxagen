@@ -56,13 +56,17 @@ import { orgMemberRemove } from "@oxagen/oxagen/contracts/org.member.remove";
 import { schema, withSystemDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { removeOrgMemberInTx } from "@oxagen/database/member-lifecycle";
-import { and, eq, isNull, count } from "drizzle-orm";
+import { and, eq, gt, isNull, count, or } from "drizzle-orm";
 import { resolveMemberUserId } from "./lib/org-member";
 import { logger } from "./logger";
 import { revokeDepartedMember } from "./mcp-studio/credentials/revoke";
 
 // System org role names that carry Owner privileges.
 const OWNER_ROLE_NAME = "Owner";
+/** The roles that pass the actor gate, most privileged first. */
+const ROLE_PRECEDENCE: readonly string[] = ["Owner", "Admin"];
+/** Bounds a runaway row set; a principal holds a handful of org roles. */
+const ROLE_ASSIGNMENT_LIMIT = 50;
 
 /** Resolve the internal principal id and their active org role name for a user. */
 async function resolveActorPrincipalAndRole(
@@ -89,7 +93,7 @@ async function resolveActorPrincipalAndRole(
 
     // Resolve their highest-precedence org role via principal_role_assignments → roles.
     // We only check org-scoped (workspaceId IS NULL) roles.
-    const [praRow] = await tx
+    const assigned = await tx
       .select({ roleName: schema.roles.name })
       .from(schema.principalRoleAssignments)
       .innerJoin(
@@ -103,11 +107,23 @@ async function resolveActorPrincipalAndRole(
           eq(schema.roles.scopeKind, "org"),
           isNull(schema.principalRoleAssignments.workspaceId),
           isNull(schema.principalRoleAssignments.deletedAt),
+          // A time-bounded grant past its end grants nothing, as in
+          // resolveActorOrgRole (@oxagen/iam/org-role).
+          or(
+            isNull(schema.principalRoleAssignments.expiresAt),
+            gt(schema.principalRoleAssignments.expiresAt, new Date()),
+          ),
         ),
       )
-      .limit(1);
+      .limit(ROLE_ASSIGNMENT_LIMIT);
 
-    return { principalId: principalRow.id, roleName: praRow?.roleName ?? null };
+    // A principal may hold several org roles. Taking the first row Postgres
+    // returned refused an Admin who also held Billing, so the most
+    // privileged role wins.
+    const names = assigned.map((row) => row.roleName);
+    const roleName =
+      ROLE_PRECEDENCE.find((name) => names.includes(name)) ?? names[0] ?? null;
+    return { principalId: principalRow.id, roleName };
   });
 }
 

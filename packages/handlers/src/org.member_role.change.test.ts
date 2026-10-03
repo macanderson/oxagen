@@ -59,6 +59,21 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 const { orgMemberRoleChangeHandler } = await import("./org.member_role.change");
+const { schema } = await import("@oxagen/database");
+
+/** Whether a drizzle condition names `target` anywhere in its tree. */
+function mentions(
+  node: unknown,
+  target: unknown,
+  seen = new Set<unknown>(),
+): boolean {
+  if (node === target) return true;
+  if (typeof node !== "object" || node === null || seen.has(node)) return false;
+  seen.add(node);
+  if (Array.isArray(node)) return node.some((n) => mentions(n, target, seen));
+  if ("queryChunks" in node) return mentions(node.queryChunks, target, seen);
+  return false;
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -156,6 +171,57 @@ describe("orgMemberRoleChangeHandler", () => {
       "forbidden",
       "insufficient_role",
     );
+  });
+
+  // #3458: the actor gate took the first assignment row Postgres returned, so
+  // an Admin who also held Billing was refused whenever Billing came first.
+  it("an Admin who also holds Billing passes the actor gate", async () => {
+    mockTx.selectDistinct = mockTx.select = buildSelectMock([
+      [{ id: "actor-principal-id" }], // actor principal
+      [{ roleName: "Billing" }, { roleName: "Admin" }], // actor PRAs
+      [], // target orgUser — NOT found
+    ]);
+
+    await expectHandlerError(
+      orgMemberRoleChangeHandler(
+        { targetUserId: "stranger", newRole: "Admin" },
+        makeCtx(),
+      ),
+      "not_found",
+      "target_not_member",
+    );
+  });
+
+  // #3458: an assignment past its expiry still passed the actor gate.
+  it("reads only unexpired role assignments for the actor", async () => {
+    const conditions: unknown[] = [];
+    let callCount = 0;
+    mockTx.selectDistinct = mockTx.select = vi.fn().mockImplementation(() => {
+      callCount++;
+      const call = callCount;
+      const result = call === 1 ? [{ id: "actor-principal-id" }] : [];
+      const limit = vi.fn().mockResolvedValue(result);
+      const where = vi.fn().mockImplementation((condition: unknown) => {
+        if (call === 2) conditions.push(condition);
+        return { limit };
+      });
+      const innerJoin = vi.fn().mockReturnValue({ where });
+      const from = vi.fn().mockReturnValue({ where, innerJoin });
+      return { from };
+    });
+
+    await expectHandlerError(
+      orgMemberRoleChangeHandler(
+        { targetUserId: "t", newRole: "Admin" },
+        makeCtx(),
+      ),
+      "forbidden",
+      "insufficient_role",
+    );
+    expect(conditions).toHaveLength(1);
+    expect(
+      mentions(conditions[0], schema.principalRoleAssignments.expiresAt),
+    ).toBe(true);
   });
 
   it("target not a member → not_found (IDOR guard)", async () => {
