@@ -32,6 +32,19 @@ export interface ContainedBridgeOptions {
   github?: ContainedGitHubCustody;
   /** Records a Git request refused because custody issued no lease. */
   githubRefused?: (path: string) => void;
+  /**
+   * The answer the launcher's own SessionStart got. That start opened the
+   * session's chain, so the harness's first SessionStart gets this answer
+   * and is not recorded again, where the recorder would read it as a resume.
+   * A later SessionStart, after a compaction or a clear, is forwarded.
+   */
+  opening?: Record<string, unknown>;
+  /**
+   * The environment each forwarded hook carries. It names, as a host path,
+   * the folder the harness inside reads its skills from, so a start that
+   * places skills puts them there and not in this user's own folder.
+   */
+  env?: Record<string, string>;
 }
 
 /** The request headers the custody proxy reads from git. */
@@ -62,6 +75,8 @@ async function readJson(request: IncomingMessage): Promise<unknown> {
 
 /** The container can reach only these operations, never daemon administration. */
 export function containedBridgeHandler(options: ContainedBridgeOptions) {
+  // Taken by the harness's first SessionStart.
+  let opening = options.opening;
   return (request: IncomingMessage, response: ServerResponse): void => {
     void (async () => {
       const path = request.url ?? "/";
@@ -112,10 +127,23 @@ export function containedBridgeHandler(options: ContainedBridgeOptions) {
           send(response, 200, {});
           return;
         }
+        if (
+          payload["hook_event_name"] === "SessionStart" &&
+          opening !== undefined
+        ) {
+          const answer = opening;
+          opening = undefined;
+          send(response, 200, answer);
+          return;
+        }
         send(
           response,
           200,
-          await options.hook({ payload, harness: options.harness }),
+          await options.hook({
+            payload,
+            harness: options.harness,
+            ...(options.env !== undefined ? { env: options.env } : {}),
+          }),
         );
         return;
       }

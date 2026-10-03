@@ -89,7 +89,9 @@ import { policyModeText } from "./policy-mode";
 import { shippingHealth, type ShippingHealth } from "./status";
 import {
   disarmGateway,
+  restartForRemaining,
   revokeOnControlPlane,
+  serviceInstalled,
   stopGateway,
   stripEnrollmentHooks,
 } from "./unenroll";
@@ -647,8 +649,10 @@ interface PendingAddition {
  * unenrolled rather than half enrolled, the way a failed `reassign` leaves
  * it: the gateway comes out of the harness files while tachod still serves
  * it, and then the service goes, since it would keep running on a revoked
- * key. host.json stays marked retired, so the next `enroll` takes the fresh
- * path.
+ * key. One tachod serves every agent (ADR-203), so the service then starts
+ * again for any other agent on the machine, as it does after a failed
+ * `reassign`. host.json stays marked retired, so the next `enroll` takes the
+ * fresh path.
  */
 async function abandonAddition(
   addition: PendingAddition,
@@ -657,6 +661,9 @@ async function abandonAddition(
   warnings: string[],
 ): Promise<void> {
   const revoked = addition.revoked as HostFile;
+  // Nothing between the revoke and here touches the service, so this is
+  // whether the machine had one before the enroll.
+  const installed = serviceInstalled(deps);
   const own: string[] = [];
   const stopped = await stopGateway(revoked, deps, own);
   for (const warning of own) deps.err(`warning: ${warning}`);
@@ -665,6 +672,8 @@ async function abandonAddition(
   deps.err(
     `Adding a harness failed after revoking ${revoked.host_enrollment_id}; this host is now unenrolled (host.json kept, marked retired)${stopped ? " and tachod was stopped" : ""}. Run \`oxagen agent enroll --harness ${harnesses} --org ${revoked.org_slug} --workspace ${revoked.workspace_slug} --api-url ${options.apiUrl ?? revoked.api_url}\` once the cause is fixed.`,
   );
+  const restart = restartForRemaining(installed, deps);
+  if (restart !== undefined) warnings.push(restart);
 }
 
 async function enrollSteps(

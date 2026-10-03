@@ -44,7 +44,10 @@ const manifest = {
   },
   files: ["tacho.mjs", "tachod.mjs", "tacho-hook.mjs", "README.md"],
   dependencies: { [CEDAR]: cedarVersion },
-  engines: { node: ">=20" },
+  // zstd in `node:zlib`, which the daemon imports statically, arrived in Node
+  // 22.15 and 23.8. On an older Node, `tachod` fails to link and records
+  // nothing, so npm must refuse the install there (scripts/bundle.mjs).
+  engines: { node: "^22.15.0 || >=23.8.0" },
   keywords: [
     "oxagen",
     "tacho",

@@ -250,4 +250,45 @@ describe("claudeCodeSessionHasOxagenTools", () => {
       }),
     ).toBe(false);
   });
+
+  it("answers no where a local-scope or project-scope oxagen server wins over ours", () => {
+    // What Oxagen's docs have a user add with `claude mcp add`.
+    const hosted = { type: "http", url: "https://mcp.oxagen.sh/mcp" };
+    const repo = "/work/app";
+    const local = {
+      ...entry,
+      projects: { [repo]: { mcpServers: { oxagen: hosted } } },
+    };
+    const at = (
+      cwd: string,
+      config: unknown = local,
+      files: Record<string, unknown> = {},
+    ) =>
+      claudeCodeSessionHasOxagenTools({
+        ...base,
+        cwd,
+        readUserConfig: () => config,
+        readProjectConfig: (file) => files[file],
+      });
+    // The default local scope, read in the repository and below it.
+    expect(at(repo)).toBe(false);
+    expect(at(`${repo}/packages/web`)).toBe(false);
+    expect(at("/work/other")).toBe(true);
+    // `--scope project` writes `.mcp.json`, which a subdirectory reads too.
+    const project = {
+      [`${repo}/.mcp.json`]: { mcpServers: { oxagen: hosted } },
+    };
+    expect(at(`${repo}/src`, entry, project)).toBe(false);
+    // Other servers, or this enrollment's own entry, leave ours reachable.
+    const ours = entry.mcpServers?.["oxagen"];
+    expect(
+      at(repo, entry, {
+        [`${repo}/.mcp.json`]: { mcpServers: { linear: hosted, oxagen: ours } },
+      }),
+    ).toBe(true);
+    // Without the session's directory only the user scope is read.
+    expect(
+      claudeCodeSessionHasOxagenTools({ ...base, readUserConfig: () => local }),
+    ).toBe(true);
+  });
 });

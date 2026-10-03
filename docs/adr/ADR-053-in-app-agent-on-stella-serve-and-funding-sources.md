@@ -286,3 +286,5 @@ applied once no node runs the old code.
 ## Approved built-in calls
 
 ADR-118 adds a fresh evidence run for an approved built-in call. The original turn stays sealed. A durable worker submits the stored call through the kernel with fresh authorization and no model request.
+
+The request that approves the call delivers it first and answers with what happened. The worker delivers a call that request left queued. Both take one claim on the approval row, so the call runs once. ADR-118's amendment of 2026-10-03 lists the checks that run again at execution. A refusal names its reason on the card, and the next turn that asks for the same call gets that reason back instead of a new card.

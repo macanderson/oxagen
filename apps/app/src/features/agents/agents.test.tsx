@@ -19,6 +19,7 @@ import { readError } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
 import { phoneWidth } from "@/test/phone";
+import { expectTouchTarget } from "@/test/touch-target";
 import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
 import { agentPage, agentRow, agentsSource } from "./agents.builders";
 
@@ -1126,7 +1127,7 @@ describe("Agents at phone width", () => {
       const targets = phone.container.querySelectorAll("[data-touch-target]");
       expect(targets.length).toBeGreaterThan(1);
       for (const target of targets)
-        expect(getComputedStyle(target).minHeight).toBe("44px");
+        expectTouchTarget(getComputedStyle(target).minHeight);
     } finally {
       phone.restore();
     }

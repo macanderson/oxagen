@@ -214,19 +214,22 @@ beforeEach(async () => {
   // The kernel's order: the workspace's decision rules judge a call only
   // when it is not Stella's (ADR-235). A resume that lost its binding would
   // meet the real gate below, and the tests that pin the skip would fail.
+  // Once every gate admits the call, the kernel says the handler starts.
   h.invoke.mockImplementation(async (_name, input, ctx, opts) => {
-    if (isOxagenAssistantCall(ctx)) return;
-    const { createDecisionRulesGate } = await import("@oxagen/rules");
-    await createDecisionRulesGate({
-      loadRuleSet: async () => h.realRules,
-      autoApprove: h.autoApprove,
-    })({
-      capability: "write_test",
-      requireFreshRules: opts?.requireFreshRules,
-      approvedDigest: opts?.approvedDigest,
-      input: (h.schema as z.ZodType).parse(input),
-      ctx,
-    });
+    if (!isOxagenAssistantCall(ctx)) {
+      const { createDecisionRulesGate } = await import("@oxagen/rules");
+      await createDecisionRulesGate({
+        loadRuleSet: async () => h.realRules,
+        autoApprove: h.autoApprove,
+      })({
+        capability: "write_test",
+        requireFreshRules: opts?.requireFreshRules,
+        approvedDigest: opts?.approvedDigest,
+        input: (h.schema as z.ZodType).parse(input),
+        ctx,
+      });
+    }
+    opts?.onHandlerStart?.();
   });
   h.roles.mockResolvedValue(["Member"]);
   h.budgets.mockResolvedValue([]);
@@ -281,6 +284,7 @@ describe("approved call resumption", () => {
         surface: "agent",
         runId: "new-run",
         assertValidatedInput: expect.any(Function),
+        onHandlerStart: expect.any(Function),
       },
     );
     // The resume is the rest of a Stella call, so it carries a binding the
@@ -541,10 +545,45 @@ describe("approved call resumption", () => {
     expect(h.invoke).not.toHaveBeenCalled();
   });
   it("does not retry an invocation whose external outcome is unknown", async () => {
-    h.invoke.mockRejectedValue(new Error("connection lost after effect"));
+    h.invoke.mockImplementation(async (_name, _input, _ctx, opts) => {
+      opts.onHandlerStart();
+      throw new Error("connection lost after effect");
+    });
     expect(await resumeApprovedCall(ref)).toBe("indeterminate");
+    expect(h.row.resumeError).toBe("execution_outcome_unknown");
     expect(await resumeApprovedCall(ref)).toBe("not_claimed");
     expect(h.invoke).toHaveBeenCalledTimes(1);
+  });
+  // #3127: the kernel reads credit, billing and IAM again at the call. A gate
+  // that refuses there stops the call before its handler starts, so the row
+  // records a refusal the person can read, not an unknown outcome. These
+  // refusals used to land as `indeterminate`, and the card told the person to
+  // check a run whose call never ran.
+  it.each([
+    ["the credit gate", "gau_exhausted"],
+    ["the spend ceiling", "budget_exceeded"],
+  ])(
+    "records a refusal from %s at the call as failed, with its code",
+    async (_gate, code) => {
+      h.invoke.mockRejectedValueOnce(
+        Object.assign(new Error("refused at admission"), { code }),
+      );
+      expect(await resumeApprovedCall(ref)).toBe("failed");
+      expect(h.row.resumeStatus).toBe("failed");
+      expect(h.row.resumeError).toBe(code);
+      expect(h.receipt).not.toHaveBeenCalled();
+      expect(h.seal).toHaveBeenCalledWith({ status: "failed", error: code });
+      // A refusal is final for this approval: nothing claims it again.
+      expect(await resumeApprovedCall(ref)).toBe("not_claimed");
+      expect(h.invoke).toHaveBeenCalledTimes(1);
+    },
+  );
+  it("keeps the generic reason for an error whose code is not a refusal name (negative)", async () => {
+    h.invoke.mockRejectedValueOnce(
+      Object.assign(new Error("relation missing"), { code: "42P01" }),
+    );
+    expect(await resumeApprovedCall(ref)).toBe("failed");
+    expect(h.row.resumeError).toBe("authorization_or_admission_failed");
   });
   it("does not invoke twice if sealing fails after the external call", async () => {
     h.seal.mockRejectedValue(new Error("ledger unavailable"));

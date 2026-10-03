@@ -15,6 +15,8 @@ import {
   type CollectorApi,
   type CollectorServer,
   createCollectorServer,
+  MCP_SESSIONS_MAX,
+  rememberMcpSession,
 } from "./server";
 import { MCP_STREAMABLE_HTTP_ACCEPT } from "../wire";
 
@@ -207,6 +209,50 @@ describe("the TCP listener", () => {
     expect(closed).toEqual([id]);
   });
 
+  // The id scopes the evidence chain. Taken on the client's word, a local
+  // client could seal its calls under another app's session.
+  it("replaces a session id it never minted with one it mints (negative)", async () => {
+    const reply = await post({
+      port,
+      path: "/mcp",
+      body: RPC,
+      headers: { "Mcp-Session-Id": "mcp_chosen" },
+    });
+    const minted = reply.headers["mcp-session-id"];
+    expect(minted).toMatch(/^mcp_[0-9a-f]{24}$/);
+    expect(calls[0]?.context.sessionId).toBe(minted);
+  });
+
+  it("closes only a session it minted, and mints anew for a closed one (negative)", async () => {
+    const foreign = await post({
+      port,
+      path: "/mcp",
+      method: "DELETE",
+      headers: { "Mcp-Session-Id": "mcp_chosen" },
+    });
+    expect(foreign.status).toBe(204);
+    expect(closed).toEqual([]);
+
+    const first = await post({ port, path: "/mcp", body: RPC });
+    const id = first.headers["mcp-session-id"] as string;
+    await post({
+      port,
+      path: "/mcp",
+      method: "DELETE",
+      headers: { "Mcp-Session-Id": id },
+    });
+    expect(closed).toEqual([id]);
+    const again = await post({
+      port,
+      path: "/mcp",
+      body: RPC,
+      headers: { "Mcp-Session-Id": id },
+    });
+    expect(again.headers["mcp-session-id"]).toMatch(/^mcp_[0-9a-f]{24}$/);
+    expect(again.headers["mcp-session-id"]).not.toBe(id);
+    expect(calls[1]?.context.sessionId).toBe(again.headers["mcp-session-id"]);
+  });
+
   it("refuses a rebound request before it reads the bearer", async () => {
     const reply = await post({
       port,
@@ -293,6 +339,20 @@ describe("the TCP listener", () => {
     } finally {
       await bare.close();
     }
+  });
+});
+
+describe("the MCP session ids the daemon remembers", () => {
+  it("forgets the id used least recently past the cap, and answers it", () => {
+    const sessions = new Set<string>();
+    for (let i = 0; i < MCP_SESSIONS_MAX; i += 1)
+      expect(rememberMcpSession(sessions, `mcp_${i}`)).toBeUndefined();
+    // Using the oldest id makes it the newest, so the next oldest goes.
+    expect(rememberMcpSession(sessions, "mcp_0")).toBeUndefined();
+    expect(rememberMcpSession(sessions, "mcp_new")).toBe("mcp_1");
+    expect(sessions.size).toBe(MCP_SESSIONS_MAX);
+    expect(sessions.has("mcp_0")).toBe(true);
+    expect(sessions.has("mcp_new")).toBe(true);
   });
 });
 

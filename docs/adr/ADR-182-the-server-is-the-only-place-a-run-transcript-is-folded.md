@@ -6,8 +6,8 @@
 - **Amends:** ADR-166's amendment of 2026-09-24 (the one derivation of the
   Run page's figures moves from `features/run/metrics.ts` to the server),
   ADR-167 (`features/run/actions` reads the transcript port).
-- **Related:** issue #3375, issue #3942, issue #4083, issue #3994 (closed into
-  #3375), ADR-058 (the transcript is derived on read), ADR-140 (one tool call
+- **Related:** issue #3375, issue #3942, issue #4083, issue #4340, issue #3994
+  (closed into #3375), ADR-058 (the transcript is derived on read), ADR-140 (one tool call
   seals one frame).
 
 ## Context
@@ -87,6 +87,17 @@ fold, and the client fold introduced with #3345.
   and has its own issue, #4308.
 - The page's figures and counts share the transcript read's 10,000-frame cap,
   and say so when a run passes it, as they did before.
+- The fold stays on the server when a live run is followed (#4340). A read
+  from a cursor folds a window that starts at a turn's first frame, and a
+  read of a live run at `steps` also keeps, per process, a later start inside
+  the turn for the next read from its cursor: a model step the reader was
+  sent, with the run's turn, cost and proxy state there and every call key
+  the turn recorded before it. The next read folds only the frames from that
+  start, and folds the turn's window instead when one of those frames names
+  a kept key, because the fold would join it to a step that opened earlier.
+  The cache holds call keys only, at most 512 starts and 32,768 keys. A
+  cursor with no start in the serving process reads the turn's window.
+  `docs/capabilities/run.transcript.get.md` (The tail start) holds the rules.
 - A search can read every retained body of a run, so it is bounded per read
   and says what it left unsearched.
 - At `steps`, which prompts and replies draw nothing, and which reply repeats

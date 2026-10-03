@@ -117,6 +117,14 @@ describe("codex writer", () => {
       missing: [...CODEX_HOOK_EVENTS],
     });
     expect(codexHookPresence(null, TEST_ENROLLMENT).complete).toBe(false);
+    // A hand-edited file with an event that is not a list reads that event
+    // as missing, and does not throw (#5390).
+    const odd = { hooks: { [CODEX_HOOK_EVENTS[0] as string]: "not a list" } };
+    expect(codexHookPresence(odd, TEST_ENROLLMENT)).toEqual({
+      complete: false,
+      present: [],
+      missing: [...CODEX_HOOK_EVENTS],
+    });
     const merged = mergeCodexHooks(FOREIGN, CONFIG).settings;
     expect(codexHookPresence(merged, TEST_ENROLLMENT)).toEqual({
       complete: true,

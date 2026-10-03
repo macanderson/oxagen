@@ -1,5 +1,7 @@
 import { generateKeyPairSync } from "node:crypto";
 import type { CapabilityContext } from "@oxagen/oxagen";
+import { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -522,7 +524,8 @@ describe("fetch_commands", () => {
       appliedAtSeq: 9,
     });
     expect(commandUpdates[0]?.["appliedAt"]).toBeInstanceOf(Date);
-    expect(commandUpdates[0]?.["acknowledgedAt"]).toBeInstanceOf(Date);
+    // An expression that keeps an earlier acknowledgement's time (`ackPatch`).
+    expect(commandUpdates[0]?.["acknowledgedAt"]).toBeInstanceOf(SQL);
     expect(commandUpdates[1]).toMatchObject({ outcome: "received" });
     expect(commandUpdates[1]).not.toHaveProperty("acknowledgedAt");
     expect(commandUpdates[2]).toMatchObject({
@@ -919,7 +922,7 @@ describe("ackPatch", () => {
       outcome: "acknowledged",
       outcomeDetail: null,
       updatedAt: now,
-      acknowledgedAt: now,
+      acknowledgedAt: expect.any(SQL),
     });
     expect(
       ackPatch({ command_id: "c", status: "applied", applied_at_seq: 4 }, now),
@@ -927,7 +930,7 @@ describe("ackPatch", () => {
       outcome: "applied",
       outcomeDetail: null,
       updatedAt: now,
-      acknowledgedAt: now,
+      acknowledgedAt: expect.any(SQL),
       appliedAt: now,
       appliedAtSeq: 4,
     });
@@ -948,6 +951,24 @@ describe("ackPatch", () => {
     expect(
       ackPatch({ command_id: "c", status: "failed", detail: "gone" }, now),
     ).toEqual({ outcome: "failed", outcomeDetail: "gone", updatedAt: now });
+  });
+
+  it("keeps the time acknowledged_at already holds, for a re-sent acknowledged and for applied", () => {
+    const dialect = new PgDialect();
+    for (const ack of [
+      { command_id: "c", status: "acknowledged" as const },
+      { command_id: "c", status: "applied" as const, applied_at_seq: 4 },
+    ]) {
+      const value = ackPatch(ack, now).acknowledgedAt;
+      // A plain `now` here overwrote the first acknowledgement's time.
+      expect(value).toBeInstanceOf(SQL);
+      if (value === undefined) throw new Error("No acknowledged_at was set.");
+      const query = dialect.sqlToQuery(value);
+      expect(query.sql).toMatch(
+        /^coalesce\(.*"acknowledged_at", \$1::timestamptz\)$/,
+      );
+      expect(query.params).toEqual([now.toISOString()]);
+    }
   });
 });
 

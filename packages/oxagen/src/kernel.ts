@@ -1067,6 +1067,14 @@ export interface InvokeOptions {
   /** Internal replay invariant, checked on the exact parsed value before admission or dispatch. */
   assertValidatedInput?: (input: unknown) => void | Promise<void>;
   /**
+   * Internal approval resumption (#3127): called once, after every gate has
+   * admitted the call and immediately before the handler runs. A refusal
+   * thrown before it (IAM, credit, billing, entitlement, rules) means the
+   * handler never ran, so the caller can record a known refusal instead of
+   * an unknown outcome. Nested calls inside the handler do not inherit it.
+   */
+  onHandlerStart?: () => void;
+  /**
    * Surface the call arrives on. When set, the kernel enforces the
    * contract's `surfaces` allowlist — e.g. an `agent`-only capability
    * invoked over `mcp` is rejected before the handler runs.
@@ -1844,6 +1852,7 @@ async function _invokeCoreInner(
               principalKind: resolvedPrincipal.kind,
             }
           : { principalId: null, principalKind: null };
+      opts.onHandlerStart?.();
       return runWithPrincipal(attribution, () =>
         handler(inputResult.data, checkedCtx),
       );

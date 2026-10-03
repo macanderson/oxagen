@@ -13,6 +13,7 @@
  * plane from that record, never here.
  */
 import { request } from "node:http";
+import { resolve } from "node:path";
 import { readHostFile } from "../host/host-file";
 import { agentHolding } from "../host/agents";
 import type { CliDeps } from "./deps";
@@ -166,7 +167,13 @@ export async function runContained(
   }
   const repository = command.githubRepository;
   const body = JSON.stringify({
-    workspace: command.workspace ?? deps.cwd,
+    // Resolved here, against the operator's directory. tachod would resolve
+    // a relative path against the service's working directory, and mount
+    // the wrong folder or none.
+    workspace:
+      command.workspace === undefined
+        ? deps.cwd
+        : resolve(deps.cwd, command.workspace),
     harness,
     args: command.args,
     image,

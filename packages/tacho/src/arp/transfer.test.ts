@@ -736,6 +736,93 @@ describe("ARP capture and preparation", () => {
     expect(existsSync(f.options.out)).toBe(true);
   });
 
+  // PermissionDenied: Claude Code refused the call after its request was
+  // recorded, so no result ever settles the request.
+  it("captures a turn whose request the harness refused", async () => {
+    const f = fixture();
+    withEvidence(
+      f,
+      sealAll([
+        unsealed("agent_start", {
+          model: "test",
+          session_start_source: "startup",
+        }),
+        unsealed("turn_start", { prompt_length: 10 }),
+        unsealed("tool_requested", {
+          tool_name: "Bash",
+          tool_use_id: "toolu_refused",
+          policy_decision: "allow",
+        }),
+        unsealed("harness_permission", {
+          tool_name: "Bash",
+          tool_use_id: "toolu_refused",
+          policy_decision: "deny",
+          policy_source: "harness",
+        }),
+        unsealed("turn_end", {
+          last_assistant_message_digest: `sha256:${"a".repeat(64)}`,
+        }),
+      ]),
+    );
+    expect(() => captureCheckpoint(f.options)).not.toThrow();
+    expect(existsSync(f.options.out)).toBe(true);
+  });
+
+  // A Stop the daemon answered with decision "block" closes the turn, and the
+  // recorder opens it again for the work that follows (same turn number).
+  it("captures a turn the daemon sent on after its Stop", async () => {
+    const f = fixture();
+    const turn = { turn: { turn_seq: 1 } };
+    const reply = {
+      last_assistant_message_digest: `sha256:${"a".repeat(64)}`,
+    };
+    withEvidence(
+      f,
+      sealAll([
+        unsealed("agent_start", {
+          model: "test",
+          session_start_source: "startup",
+        }),
+        unsealed("turn_start", { prompt_length: 10 }, turn),
+        unsealed("turn_end", reply, turn),
+        unsealed(
+          "tool_requested",
+          { tool_name: "Read", tool_use_id: "toolu_steer" },
+          turn,
+        ),
+        unsealed(
+          "tool_call",
+          { tool_name: "Read", tool_use_id: "toolu_steer", tool_status: "ok" },
+          turn,
+        ),
+        unsealed("turn_end", { ...reply, stop_hook_active: true }, turn),
+      ]),
+    );
+    expect(() => captureCheckpoint(f.options)).not.toThrow();
+    expect(existsSync(f.options.out)).toBe(true);
+  });
+
+  it("refuses a second turn_end that names no turn", async () => {
+    const f = fixture();
+    const reply = {
+      last_assistant_message_digest: `sha256:${"a".repeat(64)}`,
+    };
+    withEvidence(
+      f,
+      sealAll([
+        unsealed("agent_start", {
+          model: "test",
+          session_start_source: "startup",
+        }),
+        unsealed("turn_start", { prompt_length: 10 }),
+        unsealed("turn_end", reply),
+        unsealed("turn_end", reply),
+      ]),
+    );
+    expect(() => captureCheckpoint(f.options)).toThrow(/turn/i);
+    expect(existsSync(f.options.out)).toBe(false);
+  });
+
   it("refuses a turn with an approval nothing answered", async () => {
     const f = fixture();
     withEvidence(f, gatedTurn({ policy_decision: "defer" }, []));

@@ -917,10 +917,19 @@ function applyOne(
 
   // A re-apply (a new port) keeps what the first apply remembered: the
   // original is the file before Oxagen touched it, not before this call.
+  // That holds only while nothing else has written the file since. Once
+  // something has (enroll's hooks under a new enrollment id, a brokered
+  // credential, the user), putting the original back would undo that write.
+  // With old hooks back in the file, the strip that follows removes only the
+  // current enrollment's, and unenroll can never finish. So the original is
+  // dropped, and restore edits the file instead.
+  const stale =
+    existing !== undefined && !untouchedSince(existing, file, text);
   const sidecar: Sidecar = existing
     ? {
         ...existing,
-        written_sha256: sha256(next),
+        ...(stale ? { original_base64: "" } : {}),
+        written_sha256: stale ? "" : sha256(next),
         // The first apply that wrote the key is the one whose displaced
         // value restore puts back; a later re-apply keeps that record.
         ...(existing.previous_tool_search === undefined &&
@@ -955,6 +964,26 @@ function applyOne(
   chmodSync(backup, 0o600);
   writeAtomicPreserving(file, next);
   return true;
+}
+
+/**
+ * Whether only Oxagen has written `file` since `sidecar` was taken: it holds
+ * the bytes the last apply wrote, or still the original, when the apply that
+ * wrote the sidecar stopped before the file (the sidecar lands first). A
+ * sidecar that has already given up its original never gets it back.
+ */
+function untouchedSince(
+  sidecar: Sidecar,
+  file: string,
+  text: string | undefined,
+): boolean {
+  if (sidecar.written_sha256 === "") return false;
+  if (text === undefined) return !sidecar.existed;
+  return (
+    sha256(text) === sidecar.written_sha256 ||
+    (sidecar.existed &&
+      readFileSync(file).toString("base64") === sidecar.original_base64)
+  );
 }
 
 function restoreOne(
