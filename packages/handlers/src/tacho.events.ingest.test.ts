@@ -1903,6 +1903,66 @@ describe("ingest_tacho_events", () => {
     });
   });
 
+  /** A root session recorded through seq 2 whose chain broke at seq 1. */
+  function brokenAtOne(db: FakeDb, lastHash: string | undefined): void {
+    db.sessions.set(SESSION, {
+      rootSessionUuid: SESSION,
+      parentSessionUuid: null,
+      id: "s1",
+      seqCount: 3,
+      lastHash,
+      chainVerified: false,
+      chainBreakAtSeq: 1,
+      hostId: HOST_ID,
+    });
+  }
+
+  it("keeps where the chain broke when a later batch is clean", async () => {
+    const db = fakeDb();
+    const events = session();
+    brokenAtOne(db, events[2]?.hash);
+    wire(db);
+    const output = await tachoEventsIngestHandler(
+      batch(events.slice(3)),
+      CONTEXT,
+    );
+    // The batch links to the recorded head, so it finds no break of its own.
+    expect(output.chain_breaks).toEqual([]);
+    const update = db.updates.find((u) => u.table === "sessions");
+    expect(update?.values).toMatchObject({ chainVerified: false });
+    // A clean batch used to write its null over the recorded seq.
+    expect(update?.values).not.toHaveProperty("chainBreakAtSeq");
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      chainVerified: false,
+      chainBreakAtSeq: 1,
+    });
+  });
+
+  it("keeps the first break when a later batch breaks the chain again", async () => {
+    const db = fakeDb();
+    brokenAtOne(db, `sha256:${"f".repeat(64)}`);
+    wire(db);
+    const output = await tachoEventsIngestHandler(
+      batch(session().slice(3)),
+      CONTEXT,
+    );
+    expect(output.chain_breaks).toEqual([
+      {
+        session_uuid: SESSION,
+        at_seq: 3,
+        reason: expect.stringContaining("recorded chain head"),
+      },
+    ]);
+    const update = db.updates.find((u) => u.table === "sessions");
+    const query = new PgDialect().sqlToQuery(
+      update?.values["chainBreakAtSeq"] as SQL,
+    );
+    expect(query.sql).toBe(
+      'COALESCE("tacho"."sessions"."chain_break_at_seq", $1)',
+    );
+    expect(query.params).toEqual([3]);
+  });
+
   it("opens the onboarding gate on a new root session, binding it to the host's agent (#2967)", async () => {
     const db = fakeDb();
     db.hosts[0]!["agentId"] = "agent-uuid";
@@ -2482,7 +2542,9 @@ describe("ingest_tacho_events", () => {
   it("re-addresses the agent's held commands to a root session it opens, and only then", async () => {
     const db = fakeDb();
     wire(db);
-    await tachoEventsIngestHandler(batch(session()), CONTEXT);
+    // A live run still open when the batch ends: no `agent_stop`.
+    const open = session().slice(0, -1);
+    await tachoEventsIngestHandler(batch(open), CONTEXT);
     const commandUpdates = () =>
       db.updates.filter((u) => u.table === "control_commands");
     const readdressed = commandUpdates().filter(
@@ -2510,9 +2572,25 @@ describe("ingest_tacho_events", () => {
     ).toBe(true);
     // The same batch again reaches the open session and takes nothing.
     db.updates.length = 0;
-    await tachoEventsIngestHandler(batch(session()), CONTEXT);
+    await tachoEventsIngestHandler(batch(open), CONTEXT);
     expect(
       commandUpdates().filter((u) => u.values["targetKind"] === "run"),
+    ).toEqual([]);
+  });
+
+  it("keeps the agent's held commands queued past a run that ends in the batch that opens it (negative)", async () => {
+    // A short run, such as `claude -p`, opens and ends inside one batch. Its
+    // host has sealed it before the envelope lands and would fail the steer,
+    // so the steer waits for the agent's next live run.
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(batch(session()), CONTEXT);
+    expect(db.sessions.get(SESSION)?.["sealedAt"]).toBeInstanceOf(Date);
+    expect(
+      db.updates.filter(
+        (u) =>
+          u.table === "control_commands" && u.values["targetKind"] === "run",
+      ),
     ).toEqual([]);
   });
 
@@ -3765,6 +3843,43 @@ describe("ingest_tacho_events: bodies and the seal", () => {
         orgId: CONTEXT.orgId,
         workspaceId: CONTEXT.workspaceId,
       },
+    });
+  });
+
+  it("refuses a re-send that ends on a hash other than the recorded head's, and writes none of it (negative)", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    // The Postgres commit landed and the ClickHouse append did not.
+    mocks.insertTachoEvents.mockRejectedValueOnce(new Error("clickhouse down"));
+    await expect(
+      tachoEventsIngestHandler(batch(events), CONTEXT),
+    ).rejects.toThrow("clickhouse down");
+
+    // Another chain for the same session that verifies on its own, such as
+    // one from a host whose log was rewritten. It covers every seq below the
+    // head, so nothing past the head links it to the recorded chain.
+    const other = session({}, { cwd: "/home/dev/other" });
+    expect(other.at(-1)?.hash).not.toBe(events.at(-1)?.hash);
+    const out = await tachoEventsIngestHandler(batch(other), CONTEXT);
+
+    // These used to fill ClickHouse's holes, stamped verified.
+    expect(insertedSeqs(1)).toEqual([]);
+    expect(out.chain_breaks).toEqual([
+      {
+        session_uuid: SESSION,
+        at_seq: 8,
+        reason: expect.stringContaining("recorded chain head"),
+      },
+    ]);
+    // No seal event for a stop that was never written.
+    expect(mocks.sendEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ name: "cost/run.sealed" }),
+    );
+    // The recorded chain stands.
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      chainVerified: true,
+      lastHash: events.at(-1)?.hash,
     });
   });
 
@@ -6810,7 +6925,9 @@ describe("governed action billing for wrapped-harness tool calls (ADR-165)", () 
           agentId: "agt_0123456789abcdefghjkmn",
           principalId: "55555555-5555-4555-8555-555555555555",
           principalKind: "agent",
-          operatorUserId: ENROLLER_PRINCIPAL_ID,
+          // The enroller's user id, which a statement looks up among users
+          // to name the operator. Their principal id named nobody.
+          operatorUserId: ENROLLER_USER_ID,
           runId: "tse_fake0000000000000001",
           sessionId: SESSION,
           toolCallId: "toolu_1",
@@ -7541,6 +7658,35 @@ describe("a backfilled session", () => {
     expect(mocks.recordSpend).not.toHaveBeenCalled();
     // A transcript tool call is not a governed action: nothing is billed.
     for (const event of events) expect(isBillableToolCall(event)).toBe(false);
+  });
+
+  it("gives a steer held for the agent's next run to no backfilled session (#2953, negative)", async () => {
+    // A backfill ships sessions the agent finished before enrollment as new
+    // root sessions. None is the agent's next run. Left open here, so the
+    // backfill mark alone keeps the steer queued.
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(batch(backfilled().slice(0, -1)), CONTEXT);
+    const row = db.sessions.get(SESSION);
+    expect(row).toMatchObject({ recordBasis: "backfill" });
+    expect(row?.["sealedAt"] ?? null).toBeNull();
+    expect(
+      db.updates.filter(
+        (u) =>
+          u.table === "control_commands" && u.values["targetKind"] === "run",
+      ),
+    ).toEqual([]);
+  });
+
+  it("leaves the onboarding gate shut for a backfilled session, which is no first run (#5390, negative)", async () => {
+    // A backfill at enrollment ships sessions the agent ran before the host
+    // enrolled. Taken as the first run, the welcome screen read "connected"
+    // and its banner linked to an old transcript.
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(batch(backfilled()), CONTEXT);
+    expect(db.sessions.get(SESSION)).toMatchObject({ recordBasis: "backfill" });
+    expect(mocks.unlockOnboardingGate).not.toHaveBeenCalled();
   });
 
   it("reads mixed for good once a live resume continues the chain", async () => {

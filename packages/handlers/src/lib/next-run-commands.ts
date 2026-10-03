@@ -17,6 +17,12 @@
 // harness can carry. That is the run's first prompt when the envelope lands
 // before it, and otherwise the next tool call or the end of the turn.
 //
+// Ingest calls it only for a live run that the batch leaves open. A session
+// `oxagen agent backfill` rebuilt from a transcript ended long ago, and a run
+// whose stop came in the batch that opened it has ended before the envelope
+// reaches its host. The host would fail the command on either, so the row
+// stays queued for the agent's next live run.
+//
 // A Stella run reads steering text only when its session starts, which has
 // passed by the time the session reaches ingest, so the row is re-addressed
 // as `failed` with `no_prompt_carrier`, the reason a broadcast records. A row
@@ -89,8 +95,9 @@ function byRequestedMode(
 
 /**
  * Re-address the agent's queued next-run commands to the run that just
- * opened. Returns how many rows the run took. Called only for a root session
- * this batch inserted, so a batch on a session already open never takes one.
+ * opened. Returns how many rows the run took. Called only for a live root
+ * session this batch inserted and left open, so a batch on a session already
+ * open never takes one, and neither does a backfilled or ended one.
  */
 export async function readdressNextRunCommands(
   tx: Tx,
