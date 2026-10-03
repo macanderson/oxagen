@@ -239,16 +239,6 @@ export async function readTriageStanding(scope: WorkScope, itemPublicId: string)
   });
 }
 
-/** The item's state, for a retry. Null when the workspace has no such live item. */
-export async function itemState(scope: WorkScope, itemPublicId: string) {
-  return withTenantDb(async (tx) => {
-    const item = await findItem(tx, scope, itemPublicId);
-    if (item === null) return null;
-    const record = await readWorkItem(tx, scope, item.id);
-    return { item, state: record.projection.state };
-  });
-}
-
 // ---------------------------------------------------------------------------
 // Priorities
 // ---------------------------------------------------------------------------

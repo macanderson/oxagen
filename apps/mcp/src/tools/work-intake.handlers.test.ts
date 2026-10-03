@@ -1,8 +1,10 @@
 // work-intake.handlers.test.ts: the MCP tools for work intake and triage
-// (P1-03, #5103): create_work_item, revise_work_triage, retry_work_triage,
-// list_work_collectors, sync_work_collector, and get_work_priorities.
-// set_work_collector has no tool: only a signed-in person changes a collector
-// (#5181), and tool-registry.test.ts holds the tool files to the contracts.
+// (P1-03, #5103): create_work_item, revise_work_triage, list_work_collectors,
+// and get_work_priorities. set_work_collector and sync_work_collector have no
+// tool: only a signed-in person changes a collector (#5181). retry_work_triage
+// has none either: only a person asks for a retry, because each one is a model
+// call (ADR-250, amended 2026-10-03). tool-registry.test.ts holds the tool
+// files to the contracts.
 //
 // The kernel `invoke` and the context seam `buildContext` are doubles. Each
 // case checks that invoke received the contract name, the args, and
@@ -20,11 +22,9 @@ vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mocks.invoke }));
 vi.mock("../context", () => ({ buildContext: mocks.buildContext }));
 vi.mock("xmcp/headers", () => ({ headers: mocks.headers }));
 
-import syncWorkCollector, { metadata as syncMeta } from "./work.collector.sync";
 import listWorkCollectors, { metadata as listMeta } from "./work.collectors.list";
 import createWorkItem, { metadata as createMeta, schema as createSchema } from "./work.item.create";
 import getWorkPriorities, { metadata as prioritiesMeta } from "./work.priorities.get";
-import retryWorkTriage, { metadata as retryMeta } from "./work.triage.retry";
 import reviseWorkTriage, { metadata as reviseMeta } from "./work.triage.revise";
 
 const fakeCtx = { orgId: "org_test", workspaceId: "ws_test", userId: "user_test", apiKeyId: null, surface: "mcp" as const };
@@ -73,9 +73,7 @@ describe("work intake MCP tools", () => {
   it.each([
     [createMeta, "create_work_item", false],
     [reviseMeta, "revise_work_triage", false],
-    [retryMeta, "retry_work_triage", false],
     [listMeta, "list_work_collectors", true],
-    [syncMeta, "sync_work_collector", false],
     [prioritiesMeta, "get_work_priorities", true],
   ])("names %s after its contract and marks only reads read-only", (meta, name, readOnly) => {
     expect(meta.name).toBe(name);
@@ -117,9 +115,7 @@ describe("work intake MCP tools", () => {
         standing: { outcome: "triaged", by: "oxagen", duplicate_of: null },
       },
     ],
-    ["retry_work_triage", () => retryWorkTriage({ item_id: "wi_01" }), { item_id: "wi_01", state: "new", queued: true }],
     ["list_work_collectors", () => listWorkCollectors({}), { collectors: [COLLECTOR] }],
-    ["sync_work_collector", () => syncWorkCollector({ collector_id: COLLECTOR_ID, name: undefined }), { collector_id: COLLECTOR_ID, queued: true }],
     [
       "get_work_priorities",
       () => getWorkPriorities({}),

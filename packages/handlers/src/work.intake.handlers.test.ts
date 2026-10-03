@@ -23,6 +23,7 @@ import { workTriageRevise } from "@oxagen/oxagen/contracts/work.triage.revise";
 import { effectiveTriage } from "@oxagen/work";
 import type { CollectorView } from "./lib/work-intake/collectors";
 import { CollectorSetupError } from "./lib/work-intake/collectors";
+import type { WorkEvent } from "./lib/work-intake/handler-support";
 import { createWorkCollectorSetHandler } from "./work.collector.set";
 import { createWorkCollectorSyncHandler } from "./work.collector.sync";
 import { createWorkCollectorsListHandler } from "./work.collectors.list";
@@ -179,27 +180,43 @@ describe("revise_work_triage", () => {
 });
 
 describe("retry_work_triage", () => {
-  it("queues a fresh triage run for an item triage may change", async () => {
+  it("queues a triage run for an item triage may change", async () => {
     const send = vi.fn(async () => undefined);
-    const out = await createWorkTriageRetryHandler({ state: async () => ({ state: "new" }), send, now: () => NOW })({ item_id: "wi_01" }, ctx);
+    const state = vi.fn(async () => ({ state: "new" as const, version: 3 }));
+    const out = await createWorkTriageRetryHandler({ state, send })({ item_id: "wi_01" }, ctx);
     expect(mocks.role).toHaveBeenCalledWith(workTriageRetry, ctx);
+    expect(state).toHaveBeenCalledWith(SCOPE, "wi_01");
     expect(send).toHaveBeenCalledWith([
       {
         name: "work/item.received",
-        id: `work-item-wi_01-retry-${NOW.getTime()}`,
+        id: "work-item-wi_01-retry-v3",
         data: { org_id: SCOPE.orgId, workspace_id: SCOPE.workspaceId, item_id: "wi_01", change: "retry" },
       },
     ]);
     expect(out).toEqual({ item_id: "wi_01", state: "new", queued: true });
   });
 
+  // A double click or a client retry must not start a second model call. The
+  // event id names the item and its version, so Inngest drops the repeat.
+  it("sends the same event id for a repeated retry, and a new one once triage moved the version", async () => {
+    const send = vi.fn(async (_events: readonly WorkEvent[]) => undefined);
+    let version = 3;
+    const handler = createWorkTriageRetryHandler({ state: async () => ({ state: "triaged" as const, version }), send });
+    await handler({ item_id: "wi_01" }, ctx);
+    await handler({ item_id: "wi_01" }, ctx);
+    version = 4;
+    await handler({ item_id: "wi_01" }, ctx);
+    const ids = send.mock.calls.map(([events]) => events[0]?.id);
+    expect(ids).toEqual(["work-item-wi_01-retry-v3", "work-item-wi_01-retry-v3", "work-item-wi_01-retry-v4"]);
+  });
+
   it("refuses an item the workspace does not hold, and one past triage", async () => {
     const send = vi.fn();
     await expect(
-      createWorkTriageRetryHandler({ state: async () => null, send, now: () => NOW })({ item_id: "wi_09" }, ctx),
+      createWorkTriageRetryHandler({ state: async () => null, send })({ item_id: "wi_09" }, ctx),
     ).rejects.toMatchObject({ code: "not_found" });
     await expect(
-      createWorkTriageRetryHandler({ state: async () => ({ state: "sent" }), send, now: () => NOW })({ item_id: "wi_01" }, ctx),
+      createWorkTriageRetryHandler({ state: async () => ({ state: "sent", version: 9 }), send })({ item_id: "wi_01" }, ctx),
     ).rejects.toMatchObject({ code: "conflict", reason: "not_allowed" });
     expect(send).not.toHaveBeenCalled();
   });
@@ -261,11 +278,32 @@ describe("sync_work_collector", () => {
     expect(send).toHaveBeenCalledWith([
       {
         name: "work/collector.check.requested",
-        id: `work-check-sync-${COLLECTOR_ID}-${NOW.getTime()}`,
+        // NOW is 2026-10-02T12:00:00Z: minute 29849040 since the epoch.
+        id: `work-check-sync-${COLLECTOR_ID}-m29849040`,
         data: { org_id: SCOPE.orgId, workspace_id: SCOPE.workspaceId, collector_id: COLLECTOR_ID, check: "reconcile", force: true },
       },
     ]);
     expect(out).toEqual({ collector_id: COLLECTOR_ID, queued: true });
+  });
+
+  // A double click or a client retry must not queue a second reconcile. The
+  // event id names the collector and the minute, so Inngest drops the repeat.
+  it("sends the same event id for a repeated sync in one minute, and a new one in the next", async () => {
+    const send = vi.fn(async (_events: readonly WorkEvent[]) => undefined);
+    const find = vi.fn(async () => ({ id: COLLECTOR_ID, health: "failing" }));
+    let now = new Date("2026-10-02T12:00:05.000Z");
+    const handler = createWorkCollectorSyncHandler({ find, send, now: () => now });
+    await handler({ collector_id: COLLECTOR_ID }, ctx);
+    now = new Date("2026-10-02T12:00:55.000Z");
+    await handler({ name: "github" }, ctx);
+    now = new Date("2026-10-02T12:01:00.000Z");
+    await handler({ collector_id: COLLECTOR_ID }, ctx);
+    const ids = send.mock.calls.map(([events]) => events[0]?.id);
+    expect(ids).toEqual([
+      `work-check-sync-${COLLECTOR_ID}-m29849040`,
+      `work-check-sync-${COLLECTOR_ID}-m29849040`,
+      `work-check-sync-${COLLECTOR_ID}-m29849041`,
+    ]);
   });
 
   it("finds the collector by its name and queues the reconcile under its row id", async () => {

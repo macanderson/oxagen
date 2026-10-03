@@ -3,6 +3,8 @@
 - **Status:** Accepted
 - **Date:** 2026-10-02
 - **Amended:** 2026-10-02, only a signed-in person changes a collector (#5181).
+- **Amended:** 2026-10-03, only a signed-in person syncs a collector or
+  retries triage.
 - **Owners:** work
 - **Related:** issue #5103 (lane P1-03), `agent-work-phase-1.html` in
   `oxageninc/roadmap` (Work lifecycle, Data contract, Delivery and review),
@@ -182,3 +184,21 @@ collectors. A collector decides what the workspace takes in.
   work decision. An agent on its operator's machine can read the operator's
   `oxagen login` key, so a key that resolves to a person is refused too.
 - `set_work_collector` is on the `api` surface only. It has no MCP tool.
+
+## Amendment 2026-10-03: a person syncs a collector and retries triage
+
+`sync_work_collector` and `retry_work_triage` are a signed-in person's, the
+way `set_work_collector` is.
+
+- A sync is a collector change. It forces a reconcile, and a reconcile that
+  finishes moves a failing collector back to its schedule. The failing state
+  waits for a person, so an agent with its operator's key must not lift it.
+- Triage runs once per item revision unless a person asks for a retry. Each
+  retry is a model call the organization pays for, so an agent must not ask
+  for one with its operator's key.
+- Both handlers refuse an agent run and every API key before they check the
+  role or read anything, including an `oxagen login` key that resolves to a
+  person. Both are on the `api` surface only and have no MCP tool.
+- A repeated request sends one event. A sync's event id names the collector
+  and the minute. A retry's event id names the item and its version, and each
+  triage run that records a result or a failure moves the version.

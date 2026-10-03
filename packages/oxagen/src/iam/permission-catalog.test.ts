@@ -1,7 +1,7 @@
 // The catalogue's three shape rules (ADR-063) and the two folds the role
 // editor and the roles read use.
 import { describe, expect, it } from "vitest";
-import { getCapability } from "../registry";
+import { getCapability, listCapabilities } from "../registry";
 import "../contracts/index";
 import {
   PERMISSION_CATALOG,
@@ -94,6 +94,61 @@ describe("the run and work permissions", () => {
       ["cancel_work_order", "close_work_item", "reopen_work_item", "return_work_order", "save_work_brief", "send_work_order", "stop_work_order"],
     );
     expect(capabilitiesOf(["work.approve"])).toEqual(["accept_work_order", "approve_work_brief", "refresh_work_order_checks"]);
+  });
+
+  it("put the Work reads and intake writes in permissions of their own, leaving run.read as it was", () => {
+    expect(capabilitiesOf(["work.read"])).toEqual([
+      "get_work_item",
+      "get_work_outcomes",
+      "get_work_priorities",
+      "list_work_collectors",
+      "list_work_items",
+      "list_work_targets",
+    ]);
+    expect(capabilitiesOf(["work.intake"])).toEqual([
+      "create_work_item",
+      "retry_work_triage",
+      "revise_work_triage",
+      "sync_work_collector",
+    ]);
+    // A role that held run.read before the Work reads existed still holds it.
+    expect(capabilitiesOf(["run.read"]).some((name) => name.includes("work"))).toBe(false);
+  });
+
+  it("give set_work_collector a permission of its own, for the roles its contract admits", () => {
+    expect(capabilitiesOf(["work.collectors"])).toEqual(["set_work_collector"]);
+    // No workspace Member, unlike every work.control action.
+    expect(getCapability("set_work_collector")?.defaultRoles.workspace).toEqual({ Owner: "allow" });
+    expect(getCapability("sync_work_collector")?.defaultRoles.workspace).toEqual({ Owner: "allow", Member: "allow" });
+  });
+});
+
+describe("the Work capabilities", () => {
+  // The calls the runtime and the agent working a send make. The handler
+  // checks the host key or the linked run against the order (ADR-251), so a
+  // role grant never decides them.
+  const RUNTIME_CALLS = new Set(["claim_work_order", "reject_work_order", "claim_work_criterion"]);
+  const work = listCapabilities()
+    .filter((c) => c.domain === "work")
+    .map((c) => c.name)
+    .sort();
+
+  it("are registered", () => {
+    expect(work).toEqual(expect.arrayContaining(["list_work_items", "set_work_collector", "claim_work_order", "reject_work_order"]));
+  });
+
+  it("are each in exactly one permission, so a custom role can grant them", () => {
+    for (const name of work) {
+      if (RUNTIME_CALLS.has(name)) continue;
+      const holders = PERMISSION_CATALOG.filter((p) => p.capabilities.includes(name)).map((p) => p.id);
+      expect(holders, name).toHaveLength(1);
+    }
+  });
+
+  it("leave the runtime's calls out of every permission", () => {
+    for (const name of work.filter((n) => RUNTIME_CALLS.has(n))) {
+      expect(PERMISSION_CATALOG.some((p) => p.capabilities.includes(name)), name).toBe(false);
+    }
   });
 });
 

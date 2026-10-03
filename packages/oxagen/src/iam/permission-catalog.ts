@@ -66,7 +66,10 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
   },
   // Phase 1 work actions (ADR-244, ADR-251). Their own permissions, so a
   // role that holds run.control or run.approve keeps it: a permission reads
-  // as held only when every capability it names is allowed.
+  // as held only when every capability it names is allowed. The calls a
+  // runtime makes for a send, such as claim_work_order and reject_work_order,
+  // are in no permission: the handler checks the host key against the order,
+  // not a role grant.
   {
     id: "work.control",
     group: "Runs",
@@ -86,6 +89,38 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
     group: "Runs",
     description: "Approve a work item's brief and accept its result",
     capabilities: ["approve_work_brief", "accept_work_order", "refresh_work_order_checks"],
+  },
+  // The Work reads and intake writes have permissions of their own for the
+  // same reason: adding them to run.read or work.control would make every
+  // custom role that holds those today read as not holding them, and saving
+  // such a role would drop its grants.
+  {
+    id: "work.read",
+    group: "Runs",
+    description: "Read the workspace's work items, their outcomes and targets, its collectors, and its priorities record",
+    capabilities: [
+      "list_work_items",
+      "get_work_item",
+      "get_work_outcomes",
+      "list_work_targets",
+      "list_work_collectors",
+      "get_work_priorities",
+    ],
+  },
+  {
+    id: "work.intake",
+    group: "Runs",
+    description: "File work items, correct and retry their triage, and sync a collector",
+    capabilities: ["create_work_item", "revise_work_triage", "retry_work_triage", "sync_work_collector"],
+  },
+  {
+    // set_work_collector's own permission: its contract admits an org Owner
+    // or Admin and a workspace Owner, and no workspace Member, unlike the
+    // work.control actions.
+    id: "work.collectors",
+    group: "Runs",
+    description: "Set up, change, pause, and resume the workspace's work collectors",
+    capabilities: ["set_work_collector"],
   },
   // ── Agents ───────────────────────────────────────────────────────────────
   {

@@ -20,4 +20,11 @@ describe("sync_work_collector contract", () => {
     expect(contract.mutates).toBe(true);
     expect(contract.surfaces).not.toContain("agent");
   });
+
+  // A sync changes a collector, so only a signed-in person runs it (#5181,
+  // ADR-250 amended 2026-10-03). The handler refuses every key, so no MCP tool.
+  it("is on the API surface only, like set_work_collector", () => {
+    expect(contract.surfaces).toEqual(["api"]);
+    expect(contract.layers).not.toContain("mcp");
+  });
 });
