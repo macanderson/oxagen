@@ -414,7 +414,8 @@ describe("list_findings past one answer (#5262)", () => {
       { status: "open", runId: run },
     );
     const [rows, totals] = compiled;
-    // Drizzle names a column by its schema and table: "cost"."findings"."id".
+    // Drizzle names a column by its schema and table in a filter or an order
+    // ("cost"."findings"."id"), and by its name alone in the select list.
     const order =
       /order by "cost"\."findings"\."estimated_saving_micros" desc, "cost"\."findings"\."id" asc/;
     expect(rows?.sql).toMatch(order);
@@ -424,9 +425,7 @@ describe("list_findings past one answer (#5262)", () => {
     expect(totals?.sql).not.toMatch(/limit/);
     // The totals read leaves the evidence and the text out, and reads only
     // the operators from the evidence.
-    expect(totals?.sql).toMatch(
-      /\("cost"\."findings"\."cited_frames" -> 'operatorKeys'\)::text/,
-    );
+    expect(totals?.sql).toMatch(/\("cited_frames" -> 'operatorKeys'\)::text/);
     expect(rows?.sql).toMatch(/"why"/);
     expect(totals?.sql).not.toMatch(/"why"/);
     expect(totals?.sql).not.toMatch(/"cited_frames",/);
