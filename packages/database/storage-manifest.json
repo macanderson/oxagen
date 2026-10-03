@@ -14594,6 +14594,12 @@
           "type": "date"
         },
         {
+          "name": "lane",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "spent_micros",
           "nullable": false,
           "primaryKey": false,

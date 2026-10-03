@@ -456,6 +456,8 @@ it("uses the same resolved funding for the selected model, credit gate and Stell
   });
   expect(evaluateTurnCreditGate).toHaveBeenCalledWith(scope.orgId, {
     fundedBy: "org",
+    lane: "run_enrichment",
+    workspaceId: scope.workspaceId,
   });
   expect(runGovernedTurn).toHaveBeenCalledWith(
     expect.objectContaining({

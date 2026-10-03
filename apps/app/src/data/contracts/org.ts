@@ -127,7 +127,7 @@ const BoundRepository = z.object({
 type BoundRepository = z.infer<typeof BoundRepository>;
 
 /** One lane's daily budget in US dollars, or null for no limit. */
-const DailyBudgetUsd = z.number().finite().nonnegative().nullable();
+const DailyBudgetUsd = z.number().nonnegative().nullable();
 
 /**
  * The workspace's own model spend settings, as `get_workspace_settings`
