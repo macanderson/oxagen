@@ -1093,16 +1093,19 @@ export function defaultCliDeps(
       );
     },
     // Claude Code rewrites this file all the time, so the read is taken
-    // inside its lock, not before it.
-    editClaudeUserConfig: (edit) =>
-      withClaudeConfigLock(paths.claudeUserConfig, () => {
-        const next = edit(harnessFiles.readJson(paths.claudeUserConfig));
+    // inside its lock, not before it. proper-lockfile resolves a file's real
+    // path before it locks it, so Claude Code holds no lock on a file that
+    // does not exist yet, and neither does this.
+    editClaudeUserConfig: (edit) => {
+      const file = paths.claudeUserConfig;
+      const apply = () => {
+        const next = edit(harnessFiles.readJson(file));
         if (next !== undefined)
-          harnessFiles.write(
-            paths.claudeUserConfig,
-            `${JSON.stringify(next, null, 2)}\n`,
-          );
-      }),
+          harnessFiles.write(file, `${JSON.stringify(next, null, 2)}\n`);
+      };
+      if (existsSync(file)) withClaudeConfigLock(file, apply);
+      else apply();
+    },
     harnessWriteProblem: (path) => harnessFiles.writeProblem(path),
     settleHarnessFiles: () => settleOrThrow(harnessFiles),
     // The base URL and the vendor key live in the files the hooks went into,
