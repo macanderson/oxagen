@@ -1985,7 +1985,7 @@ pub fn ensure_cli_installed(state: &CliInstallState) {
 /// how it exited. The launch passes the real one; a rig test passes a fake,
 /// and `ensure_cli_installed_in` passes none, so a rig that has no daemon
 /// to answer does not report a failed re-apply.
-pub(crate) type ReapplyRunner = dyn Fn(&Path) -> Result<std::process::Output, String>;
+pub(crate) type ReapplyRunner<'a> = dyn Fn(&Path) -> Result<std::process::Output, String> + 'a;
 
 /// The real runner: the kept copy, with the same environment the app's own
 /// sidecar calls get, so enroll records that copy and not the bundle.
@@ -2044,7 +2044,7 @@ fn tail_of(output: &std::process::Output) -> String {
 /// copy (#5421). Enroll moves the service and the hooks, and rolls them back
 /// itself when the new daemon never answers. Either way the outcome lands
 /// in the view: a failure is the install's state, not a log line.
-fn reapply_if_stale(env: &InstallEnv, view: &mut CliInstallView, runner: Option<&ReapplyRunner>) {
+fn reapply_if_stale(env: &InstallEnv, view: &mut CliInstallView, runner: Option<&ReapplyRunner<'_>>) {
     let Some(runner) = runner else { return };
     let kept = env.kept_dir();
     let from = hooks_needing_reapply(&env.roots, &kept, &env.version);
@@ -2105,7 +2105,7 @@ pub(crate) fn ensure_cli_installed_in(env: &InstallEnv, state: &CliInstallState)
 pub(crate) fn ensure_cli_installed_with(
     env: &InstallEnv,
     state: &CliInstallState,
-    reapply: Option<&ReapplyRunner>,
+    reapply: Option<&ReapplyRunner<'_>>,
 ) -> CliInstallView {
     let _guard = install_guard();
     let mut view = if read_auto_link_cli(&env.roots) {
