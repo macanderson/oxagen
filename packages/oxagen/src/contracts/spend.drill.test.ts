@@ -62,24 +62,48 @@ describe("get_spend_drill contract", () => {
     ).toBe(true);
   });
 
+  const tokens = {
+    input_uncached: 1200,
+    cache_read: 800,
+    cache_write_5m: 0,
+    cache_write_1h: 0,
+    output: 300,
+    reasoning: 0,
+    server_tool_request: 0,
+  };
+  const estimated = { micros: "2400", currency: "USD", basis: "estimated" };
+  const out = {
+    kind: "tool",
+    key: "Bash",
+    period: { from: "2026-08-16", to: "2026-09-14" },
+    total: {
+      cost: null,
+      calls: 4,
+      runs: 2,
+      proven: null,
+      accepted: null,
+      productiveRatio: null,
+    },
+    series: [{ day: "2026-08-16", cost: null, calls: 0, runs: 0 }],
+    averages: { perCall: null, perRun: null },
+    share: null,
+    tokens,
+    cacheHitRate: 0.4,
+    modelCalls: 6,
+    observed: null,
+    standing: {
+      toolDefinitionTokens: null,
+      contextFrameTokens: null,
+      steeringTokens: null,
+    },
+    resultTokens: null,
+    byTool: [],
+    byAgent: [],
+    byOperator: [],
+    byModel: [],
+  };
+
   it("answers a daily series whose money is micros with a basis, or null", () => {
-    const out = {
-      kind: "tool",
-      key: "Bash",
-      period: { from: "2026-08-16", to: "2026-09-14" },
-      total: {
-        cost: null,
-        calls: 4,
-        runs: 2,
-        proven: null,
-        accepted: null,
-        productiveRatio: null,
-      },
-      series: [{ day: "2026-08-16", cost: null, calls: 0, runs: 0 }],
-      averages: { perCall: null, perRun: null },
-      share: null,
-      byTool: [],
-    };
     expect(spendDrill.output.parse(out)).toEqual(out);
     expect(
       spendDrill.output.safeParse({
@@ -97,5 +121,77 @@ describe("get_spend_drill contract", () => {
     expect(spendDrill.output.safeParse({ ...out, share: 1.2 }).success).toBe(
       false,
     );
+  });
+
+  it("answers a tool's result tokens and their estimate with a basis, and each cross-cut row whole", () => {
+    const row = {
+      key: "acme.core.cc",
+      provider: null,
+      operator: null,
+      runs: 2,
+      calls: 4,
+      cost: estimated,
+      tokens,
+      resultTokens: 800,
+    };
+    const full = {
+      ...out,
+      total: { ...out.total, cost: estimated },
+      resultTokens: 800,
+      byTool: [
+        { name: "Bash", calls: 4, runs: 2, resultTokens: 800, cost: estimated },
+      ],
+      byAgent: [row],
+      byOperator: [
+        {
+          ...row,
+          key: "prn_0123456789abcdefghjkmn",
+          operator: {
+            id: "prn_0123456789abcdefghjkmn",
+            name: "Marcus Bell",
+            email: null,
+            avatarUrl: null,
+            role: null,
+          },
+        },
+      ],
+    };
+    expect(spendDrill.output.parse(full)).toEqual(full);
+    // A tool's estimate is a cost, so it carries the basis that says so.
+    expect(
+      spendDrill.output.safeParse({
+        ...full,
+        byTool: [
+          {
+            name: "Bash",
+            calls: 4,
+            runs: 2,
+            resultTokens: 800,
+            cost: { micros: "2400", currency: "USD" },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    // A cross-cut row carries every token class, and nothing else.
+    expect(
+      spendDrill.output.safeParse({
+        ...full,
+        byAgent: [{ ...row, tokens: { input_uncached: 1 } }],
+      }).success,
+    ).toBe(false);
+    expect(
+      spendDrill.output.safeParse({ ...full, byModel: [{ ...row, share: 1 }] })
+        .success,
+    ).toBe(false);
+  });
+
+  it("refuses a cache hit rate above one and a drill without its tokens (negative)", () => {
+    expect(
+      spendDrill.output.safeParse({ ...out, cacheHitRate: 1.5 }).success,
+    ).toBe(false);
+    const withoutTokens = Object.fromEntries(
+      Object.entries(out).filter(([key]) => key !== "tokens"),
+    );
+    expect(spendDrill.output.safeParse(withoutTokens).success).toBe(false);
   });
 });

@@ -1417,7 +1417,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "The private S3 bucket the pull request sync keeps each head commit's diff in (ADR-288). Unset, no diff is kept: each revision records its file list and reads unconfigured, and a later delivery fills it once a bucket is named.",
     secret: false,
     clientExposed: false,
-    services: ["api"],
+    services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
     refresh: {
@@ -1430,7 +1430,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "The AWS region of PR_DIFF_BUCKET. Unset, the AWS SDK's own region chain decides.",
     secret: false,
     clientExposed: false,
-    services: ["api"],
+    services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "us-east-1",

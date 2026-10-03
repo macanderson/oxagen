@@ -15,6 +15,7 @@ import { createGitHubClient, GitHubApiError } from "@oxagen/github";
 import { resolveGitHubToken } from "@oxagen/github/workspace-token";
 import { createGitLabClient, GitLabApiError } from "@oxagen/gitlab";
 import type {
+  ForgeClosingIssue,
   ForgePullRequestCapture,
   ForgePullRequestFacts,
   ForgePullRequestRecord,
@@ -38,6 +39,7 @@ import { githubClientFacts, gitlabClientFacts } from "./facts";
 import {
   linkRun,
   linkWorkOrders,
+  replaceIssueLinks,
   recordRevision,
   revisionStatusOf,
   runPublicIdOf,
@@ -91,6 +93,21 @@ export interface ForgeSyncDeps {
     capture: ForgePullRequestCapture,
     at: Date,
   ): Promise<ForgePullRequestRecord>;
+  /**
+   * The issues the pull request's closing references name, or null when the
+   * forge could not be asked (ADR-292). Absent, no issue is read.
+   */
+  readClosingIssues?(
+    scope: Scope,
+    request: ForgePullRequestSyncRequest,
+    target: Target,
+  ): Promise<ForgeClosingIssue[] | null>;
+  /** Replace the pull request's issue links; answers the links held. */
+  linkIssues?(
+    scope: Scope,
+    pullRequestId: string,
+    issues: readonly ForgeClosingIssue[],
+  ): Promise<number>;
   now(): Date;
 }
 
@@ -150,18 +167,78 @@ export async function captureObserved(
   const scope = scopeOf(request);
   const store = deps.store();
   const read = await deps.readDiff(scope, request, target, store !== null);
-  return captureFrom(scope, request, target, read, store);
+  const capture = await captureFrom(scope, request, target, read, store);
+  if (deps.readClosingIssues === undefined) return capture;
+  return {
+    ...capture,
+    closingIssues: await deps.readClosingIssues(scope, request, target),
+  };
 }
 
-/** Step three: the revision row. */
-export function recordObserved(
+/**
+ * Step three: the revision row, then the issue links the capture read. A
+ * capture that could not ask the forge (`closingIssues: null`) leaves the
+ * links as they were.
+ */
+export async function recordObserved(
   deps: ForgeSyncDeps,
   request: ForgePullRequestSyncRequest,
   pullRequestId: string,
   target: Target,
   capture: ForgePullRequestCapture,
 ): Promise<ForgePullRequestRecord> {
-  return deps.record(scopeOf(request), pullRequestId, target, capture, deps.now());
+  const scope = scopeOf(request);
+  const recorded = await deps.record(scope, pullRequestId, target, capture, deps.now());
+  if (Array.isArray(capture.closingIssues) && deps.linkIssues !== undefined)
+    await deps.linkIssues(scope, pullRequestId, capture.closingIssues);
+  return recorded;
+}
+
+/**
+ * The issues a GitHub pull request's closing references name. A refusal or a
+ * failure answers null, so the capture still records its diff and the links
+ * stand as they were. An issue GitHub sent with no node id is left out: it
+ * could not be matched to a work item.
+ */
+async function readGithubClosingIssues(
+  scope: Scope,
+  request: ForgePullRequestSyncRequest,
+  target: Target,
+): Promise<ForgeClosingIssue[] | null> {
+  if (request.provider !== "github") return null;
+  const [owner = "", repo = ""] = request.repository.split("/");
+  try {
+    const connectionId = await githubConnectionFor(scope, owner);
+    if (connectionId === null) return null;
+    const client = createGitHubClient({
+      token: await resolveGitHubToken({ ...scope, connectionId }),
+    });
+    const read = await client.listClosingIssues({
+      owner,
+      repo,
+      number: target.number,
+    });
+    return read.issues.flatMap((issue) =>
+      issue.nodeId === undefined
+        ? []
+        : [
+            {
+              nodeId: issue.nodeId,
+              repository: `${issue.owner}/${issue.repo}`.toLowerCase(),
+              number: issue.number,
+              url: issue.url,
+              title: issue.title,
+              state: issue.state,
+            },
+          ],
+    );
+  } catch (err) {
+    logger.warn(
+      { err, repository: request.repository, number: target.number },
+      "forge.pull-request-sync: the closing issues could not be read; the links stand",
+    );
+    return null;
+  }
 }
 
 function unreadableStatus(status: number): boolean {
@@ -237,6 +314,9 @@ export const forgeSyncDeps: ForgeSyncDeps = {
     withTenantDb((tx) =>
       linkWorkOrders(tx, scope, pullRequestId, orderIds, runId),
     ),
+  readClosingIssues: readGithubClosingIssues,
+  linkIssues: (scope, pullRequestId, issues) =>
+    withTenantDb((tx) => replaceIssueLinks(tx, scope, pullRequestId, issues)),
   store: diffStore,
   readDiff: (scope, request, target, wantBytes) =>
     request.provider === "github"

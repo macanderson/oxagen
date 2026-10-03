@@ -1,0 +1,19 @@
+/* Probe for hardcoded-values.test.ts: every value here reads a token, scales
+   one, or is not a value to tokenise, so the scan finds nothing. */
+:root {
+  --side-w: 236px;
+}
+.clean {
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-radius: 50%;
+  box-shadow: none;
+  box-shadow: var(--shadow-pop);
+  padding: calc(var(--ox-space) * 2);
+  width: 100%;
+  margin: 0;
+  animation: fade-in var(--motion-base) var(--ease-entry) both;
+  animation: none;
+  color: var(--foreground);
+  background: transparent;
+  border-color: currentColor;
+}

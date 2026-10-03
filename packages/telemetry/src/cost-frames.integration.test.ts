@@ -10,6 +10,7 @@ import {
 import { runInTenantScope } from "@oxagen/tenancy";
 import { describe, expect, it } from "vitest";
 import {
+  readGroupModelCallFrames,
   readModelCallFrames,
   RUN_SESSIONS_PARAMS_MAX,
   RUN_SESSIONS_PER_PARAM,
@@ -224,6 +225,110 @@ describe.skipIf(!process.env["CLICKHOUSE_URL"])(
         });
         expect(priced.map((frame) => frame.sessionUuid)).toEqual([root, child]);
       }
+    });
+  },
+);
+
+describe.skipIf(!process.env["CLICKHOUSE_URL"])(
+  "the group model-call read against a live store (#5168)",
+  () => {
+    it("reads each run of a group as a read of that run alone, and keeps one run's call ids from another's", async () => {
+      const orgId = randomUUID();
+      const workspaceId = randomUUID();
+      const rootA = sessionUuid("tch_group_a", randomUUID());
+      const childA = sessionUuid("tch_group_a_child", randomUUID());
+      const rootB = sessionUuid("tch_group_b", randomUUID());
+      const decoy = sessionUuid("tch_group_decoy", randomUUID());
+      const now = Date.now();
+      const at = (ms: number) => new Date(ms).toISOString();
+      const otel = { source: "otel_log", fidelity: "sdk" } as const;
+      const transcript = { source: "transcript", fidelity: "sdk" } as const;
+      /** `frame` recorded on `session`, under the run whose root is `root`. */
+      const under = (root: string, frame: UnsealedTachoEvent) =>
+        ({ ...frame, root_session_uuid: root }) as UnsealedTachoEvent;
+      const frames = [
+        // Run A's call, and its transcript row with the thinking split, which
+        // the host stamped a duplicate of the OTel row.
+        modelCall(rootA, at(now - 5_000), otel, {
+          request_id: "req_shared",
+          message_id: "msg_a",
+        }),
+        modelCall(
+          rootA,
+          at(now - 4_900),
+          transcript,
+          {
+            request_id: "req_shared",
+            message_id: "msg_a",
+            thinking_tokens: 50,
+          },
+          { [LLM_CALL_DUPLICATE_OF_ATTR]: "otel_log" },
+        ),
+        // A subagent's call on its own chain under run A.
+        under(
+          rootA,
+          modelCall(childA, at(now - 4_000), otel, {
+            request_id: "req_child",
+            message_id: "msg_child",
+          }),
+        ),
+        // Run B's call carries run A's request id. It must not take run A's
+        // thinking (negative).
+        modelCall(rootB, at(now - 3_000), otel, {
+          request_id: "req_shared",
+          message_id: "msg_b",
+        }),
+        // A run outside the group.
+        modelCall(decoy, at(now - 2_000), otel, {
+          request_id: "req_decoy",
+          message_id: "msg_decoy",
+        }),
+      ];
+      const events: TachoEvent[] = [];
+      let cursor = GENESIS_CURSOR;
+      for (const frame of frames) {
+        const sealed = sealEvent(frame, cursor);
+        events.push(sealed.event);
+        cursor = sealed.next;
+      }
+      await runInTenantScope({ orgId, workspaceId }, () =>
+        insertTachoEvents(
+          events.map((event) => ({ event, chainVerified: true })),
+        ),
+      );
+
+      const runA = { rootSessionUuid: rootA, sessionUuids: [rootA, childA] };
+      const runB = { rootSessionUuid: rootB, sessionUuids: [rootB] };
+      const grouped = await readGroupModelCallFrames({
+        orgId,
+        workspaceId,
+        runs: [runA, runB],
+      });
+      const aloneA = await readModelCallFrames({
+        orgId,
+        workspaceId,
+        run: { kind: "tacho", ...runA },
+      });
+      const aloneB = await readModelCallFrames({
+        orgId,
+        workspaceId,
+        run: { kind: "tacho", ...runB },
+      });
+
+      expect([...grouped.keys()]).toEqual([rootA, rootB]);
+      expect(grouped.get(rootA)).toEqual(aloneA);
+      expect(grouped.get(rootB)).toEqual(aloneB);
+      // Run A's call takes its thinking from its transcript row, and its
+      // subagent's call is read on the child chain.
+      expect(aloneA.map((f) => [f.sessionUuid, f.reasoning, f.output])).toEqual(
+        [
+          [rootA, 50, 150],
+          [childA, 0, 200],
+        ],
+      );
+      // Run B's call shares the request id and still has no thinking.
+      expect(aloneB.map((f) => [f.reasoning, f.output])).toEqual([[0, 200]]);
+      expect(grouped.has(decoy)).toBe(false);
     });
   },
 );

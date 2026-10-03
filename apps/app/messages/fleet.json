@@ -175,6 +175,7 @@
       "columns": {
         "run": "Session name",
         "agent": "Agent",
+        "harness": "Harness",
         "operator": "Operator",
         "status": "Status",
         "pullRequests": "Pull requests",
@@ -188,6 +189,7 @@
       },
       "parked": "parked for approval",
       "notRecorded": "not recorded",
+      "harnessRegistered": "The harness this run's agent registered.",
       "noUsage": "no usage reported",
       "basisNotRecorded": "basis not recorded",
       "estimate": "estimate",

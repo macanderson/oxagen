@@ -8,12 +8,27 @@
 // server the way the live rig does (apps/app/live/mcp-studio-rig.ts), builds
 // its folder, adds the folder to the steering repo fixture, and runs the
 // checks Oxagen reports on the PR.
+//
+// The second run got past Review and stopped at the merges. The first Review
+// PR merged. The next Review PR, and then the agent file PR that enrollment
+// opened, were refused checks_failed. The merge ran the checks on each head
+// against the production head, and each branch was cut before the first
+// merge, so the owned check read that merge's lock and ledger line as files
+// the PR removed and rewrote. The last block here opens the PRs in the live
+// order and merges each one through merge_steering_pr with the real checks.
 import { readFileSync } from "node:fs";
 import type { StudioDraftOp, StudioSource } from "@oxagen/oxagen/contracts/tool.studio.draft.save";
 import { fixtureContext, fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
+import type { CheckContext } from "@oxagen/steering-check";
 import { runChecksWithServers } from "@oxagen/steering-check/servers";
 import { describe, expect, it } from "vitest";
-import { buildFolder } from "./build";
+import { checkSteeringChange, steeringTreeHost } from "../../context.steering.checks";
+import { AUTHOR, REPO, REVIEWER, ctx, harness, type Harness } from "../../context.steering.test-support";
+import { AGENT_FILE_PULL_REQUEST, openAgentFilePr } from "../../steering-repo/agent-file";
+import { personAuthor } from "../../steering-repo/pr-proposal";
+import { createMergeSteeringPrHandler, type MergeSeams } from "../../steering.pr.merge";
+import { createSteeringPullRequestOpener, TOOLS_PULL_REQUEST, type ToolsPullRequestDeps } from "../../tools.pr.open";
+import { buildFolder, folderCommit } from "./build";
 import { importSource } from "./source";
 
 /** A file under packages/mcp-studio/fixtures. */
@@ -216,5 +231,203 @@ describe("a folder Studio's Review writes", () => {
     expect(folder.findings).toContainEqual(
       expect.objectContaining({ rule: "no_description", level: "error", tool: "create_issue" }),
     );
+  });
+});
+
+describe("a steering PR that merges after another one merged (#5139)", () => {
+  /** The runtime the live rig's host enrolls, which the agent file names. */
+  const RUNTIME = "mcp-live-1";
+  /** The member who enrolls the host: the author of every PR here. */
+  const OPERATOR = { userId: AUTHOR, publicId: "usr_01k5qk7d0000000000000000" };
+  const SCOPE = { orgId: ctx().orgId, workspaceId: ctx().workspaceId };
+
+  /** What Oxagen knows outside the repository: the fixture's, plus the run's runtime, operator, and credential. */
+  function context(): CheckContext {
+    const known = fixtureContext();
+    return {
+      runtimes: [...known.runtimes, RUNTIME],
+      members: [...known.members, OPERATOR.publicId],
+      teams: known.teams,
+      groups: known.groups,
+      credentials: [...known.credentials, CREDENTIAL],
+    };
+  }
+
+  /** The fixture steering repo on main, with a clock after its ledger. */
+  function steeringHarness(): Harness {
+    const seed: Record<string, string> = {};
+    for (const [path, text] of fixtureRepo()) seed[`main:${path}`] = text;
+    const h = harness(seed);
+    let t = Date.parse("2026-09-26T12:00:00.000Z");
+    const clock = () => new Date((t += 1000));
+    h.github.clock = clock;
+    h.now = clock;
+    return h;
+  }
+
+  function openerDeps(h: Harness): ToolsPullRequestDeps {
+    return {
+      host: () => h.github,
+      readIndex: async () => null,
+      readContext: async () => context(),
+      proposals: h.store,
+      now: h.now,
+    };
+  }
+
+  /** One run of the steering checks during a merge: the head, and the commit it was compared with. */
+  interface Checked {
+    head: string;
+    base: string;
+  }
+
+  /** Merge seams that run the real steering checks, as production does, and record each run. */
+  function realChecks(checked: Checked[]): MergeSeams {
+    return {
+      readHealth: async () => "healthy",
+      steeringCheck: async (_scope, host, repo, head, base) => {
+        checked.push({ head, base });
+        return checkSteeringChange({
+          host: steeringTreeHost(host, repo),
+          head,
+          base,
+          index: null,
+          context: context(),
+          health: null,
+        });
+      },
+    };
+  }
+
+  /** The proposal row the opener wrote for PR `number`. */
+  function proposalFor(h: Harness, number: number): string {
+    const row = h.store.proposals.find((p) => p.prNumber === number);
+    if (!row) throw new Error(`no proposal row for #${String(number)}`);
+    return row.publicId;
+  }
+
+  /** The "Oxagen steering" check the opener reported on `head`, which must have passed. */
+  function expectOpenedGreen(h: Harness, head: string): void {
+    const run = h.github.checkRuns.find((r) => r.name === "Oxagen steering" && r.headSha === head);
+    expect(run?.conclusion, run?.summary ?? `no check on ${head}`).toBe("success");
+  }
+
+  /** Opens the Review PR for a server on tools/<folder>, as Studio's Review does. */
+  async function openReview(h: Harness, server: LiveServer, edit?: (files: Map<string, string>) => void) {
+    const folder = await reviewed(server);
+    const files = new Map(folder.files);
+    edit?.(files);
+    const opened = await createSteeringPullRequestOpener(openerDeps(h), TOOLS_PULL_REQUEST).open(SCOPE, {
+      branch: `tools/${server.folder}`,
+      title: `Import the ${server.folder} server`,
+      body: "",
+      commitMessage: `Import the ${server.folder} server`,
+      files: folderCommit(server.folder, files, new Map()),
+      author: personAuthor(OPERATOR.userId),
+    });
+    return { ...opened, proposalId: proposalFor(h, opened.number) };
+  }
+
+  function merge(h: Harness, checked: Checked[], proposalId: string) {
+    return createMergeSteeringPrHandler(h, realChecks(checked))({ proposalId }, ctx({ userId: REVIEWER }));
+  }
+
+  it("merges the second Review PR after the first, checking it against the commit both branches started from", async () => {
+    const h = steeringHarness();
+    const start = h.github.heads.get(REPO.defaultBranch) as string;
+    const first = await openReview(h, SERVERS[0] as LiveServer);
+    const second = await openReview(h, SERVERS[1] as LiveServer);
+    expectOpenedGreen(h, first.headSha);
+    expectOpenedGreen(h, second.headSha);
+
+    const checked: Checked[] = [];
+    await merge(h, checked, first.proposalId);
+    const afterFirst = h.github.heads.get(REPO.defaultBranch) as string;
+    expect(checked).toEqual([{ head: first.headSha, base: start }]);
+
+    // What the merge did before the fix: the second head against the
+    // production head. The branch lacks the first server's lock and the
+    // ledger line the first merge's stamp wrote.
+    const stale = await checkSteeringChange({
+      host: steeringTreeHost(h.github, REPO),
+      head: second.headSha,
+      base: afterFirst,
+      index: null,
+      context: context(),
+      health: null,
+    });
+    expect(stale.passed).toBe(false);
+    expect(stale.findings).toContainEqual(
+      expect.objectContaining({
+        check: "owned",
+        rule: "oxagen-writes",
+        path: "tools/servers/live_mcp/tools.lock.json",
+        message: expect.stringContaining("This steering PR removes"),
+      }),
+    );
+    expect(stale.findings).toContainEqual(
+      expect.objectContaining({ check: "owned", path: expect.stringMatching(/^steering\/promotions\//) }),
+    );
+
+    checked.length = 0;
+    const out = await merge(h, checked, second.proposalId);
+
+    expect(out).toMatchObject({ status: "merged", kind: "tools", pullRequest: { number: second.number } });
+    // Once against the commit the branch started from, then, after the queue
+    // brought the branch up to date, against the production head it now holds.
+    const update = h.github.updates.find((u) => u.branch === "tools/live_payments");
+    expect(update).toBeDefined();
+    expect(checked).toEqual([
+      { head: second.headSha, base: start },
+      { head: update?.to, base: afterFirst },
+    ]);
+    for (const server of [SERVERS[0], SERVERS[1]] as LiveServer[]) {
+      expect(await h.github.readFile(REPO, `tools/servers/${server.folder}/tools.lock.json`, "main")).not.toBeNull();
+    }
+  });
+
+  it("merges the agent file PR enrollment opened after a Review PR merged", async () => {
+    const h = steeringHarness();
+    const agent = await openAgentFilePr(
+      {
+        opener: createSteeringPullRequestOpener(openerDeps(h), AGENT_FILE_PULL_REQUEST),
+        host: () => h.github,
+        proposals: h.store,
+      },
+      {
+        scope: SCOPE,
+        operator: OPERATOR,
+        runtime: { slug: RUNTIME, name: RUNTIME },
+        hostname: RUNTIME,
+        harnesses: ["claude-code"],
+      },
+    );
+    if (agent.status !== "opened") throw new Error(`enrollment opened no agent file PR: ${agent.reason}`);
+    expectOpenedGreen(h, agent.pullRequest.headSha);
+    const review = await openReview(h, SERVERS[0] as LiveServer);
+
+    const checked: Checked[] = [];
+    await merge(h, checked, review.proposalId);
+    const out = await merge(h, checked, proposalFor(h, agent.pullRequest.number));
+
+    expect(out).toMatchObject({ status: "merged", kind: "agent_file" });
+    expect(await h.github.readFile(REPO, `agents/${RUNTIME}.toml`, "main")).toContain(`runtime = "${RUNTIME}"`);
+    expect(await h.github.readFile(REPO, "tools/servers/live_mcp/tools.lock.json", "main")).not.toBeNull();
+  });
+
+  it("names the failed check and its first error when the checks refuse the merge", async () => {
+    const h = steeringHarness();
+    // A person raised a version in the lock Review wrote, which the owned check refuses.
+    const tampered = await openReview(h, SERVERS[0] as LiveServer, (files) => {
+      const lock = files.get("tools.lock.json") ?? "";
+      files.set("tools.lock.json", lock.replace('"version": 1', '"version": 2'));
+    });
+
+    const refusal = merge(h, [], tampered.proposalId);
+
+    await expect(refusal).rejects.toMatchObject({ code: "conflict", reason: "checks_failed" });
+    await expect(refusal).rejects.toThrow(/The [a-z, ]*owned[a-z ]* checks? found \d+ errors?\. The first error/);
+    await expect(refusal).rejects.toThrow(/The "Oxagen steering" check on .+ holds the full report\./);
+    expect(h.github.merges).toEqual([]);
   });
 });

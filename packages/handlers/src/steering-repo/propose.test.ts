@@ -315,6 +315,8 @@ describe("PROPOSAL_PULL_REQUEST through the opener", () => {
       updatePullRequest: vi.fn(async () => ({ number: 42, htmlUrl: "https://example.test/pull/42" })),
       findOpenPullRequest: vi.fn(async () => null),
       reportCheckRun: vi.fn(async () => "https://example.test/check/1"),
+      // The branch holds the production head, so the two share it.
+      mergeBase: vi.fn(async (_repo: SteeringRepository, _head: string, base: string) => base),
     };
     return fake;
   }

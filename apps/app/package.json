@@ -19,6 +19,7 @@
     "test:e2e": "playwright test",
     "gen:messages": "tsx scripts/gen-messages-types.ts",
     "check:messages": "tsx scripts/gen-messages-types.ts --check",
+    "gen:hardcoded-values": "tsx scripts/hardcoded-values-baseline.ts",
     "seed:e2e": "E2E_TEST=true tsx e2e/support/seed/index.ts",
     "seed:audit": "E2E_TEST=true tsx scripts/mockup-parity/seed-personas.ts",
     "seed:work": "E2E_TEST=true tsx scripts/work-walk/seed.ts"

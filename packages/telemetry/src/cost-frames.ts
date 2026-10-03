@@ -777,66 +777,274 @@ export async function readModelCallFrames(args: {
     format: "JSONEachRow",
     clickhouse_settings: COST_FRAME_QUERY_SETTINGS,
   });
-  type Row = {
-    at: string;
-    model: string;
-    provider: string;
-    input_uncached: string;
-    cache_read: string;
-    cache_write_5m: string;
-    cache_write_1h: string;
-    output: string;
-    reasoning: string;
-    server_tool_request: string;
-    cost_micros: string | null;
-    session_uuid: string;
-    tool_definition_tokens?: string | number | null;
-    context_frame_tokens?: string | number | null;
-    steering_tokens?: string | number | null;
-    system_context_digest?: string | null;
-    system_context_parts?: string | null;
-    proxy_observed?: string | number | null;
-    cache_keep_alive?: string | number | null;
-    backfilled?: string | number | null;
-    seq?: string | number | null;
+  return consumeFrames<WrappedFrameDbRow, ModelCallFrameRow>(
+    result,
+    toWrappedFrameRow,
+    consume,
+  );
+}
+
+/** One wrapped frame as the store returns it, from either wrapped read. */
+interface WrappedFrameDbRow {
+  at: string;
+  model: string;
+  provider: string;
+  input_uncached: string;
+  cache_read: string;
+  cache_write_5m: string;
+  cache_write_1h: string;
+  output: string;
+  reasoning: string;
+  server_tool_request: string;
+  cost_micros: string | null;
+  session_uuid: string;
+  tool_definition_tokens?: string | number | null;
+  context_frame_tokens?: string | number | null;
+  steering_tokens?: string | number | null;
+  system_context_digest?: string | null;
+  system_context_parts?: string | null;
+  proxy_observed?: string | number | null;
+  cache_keep_alive?: string | number | null;
+  backfilled?: string | number | null;
+  seq?: string | number | null;
+}
+
+/**
+ * A wrapped frame in the shape every reader takes. The run read and the group
+ * read both map their rows here, so a frame reads the same whichever read
+ * returned it (#5168).
+ */
+function toWrappedFrameRow(r: WrappedFrameDbRow): ModelCallFrameRow {
+  const parts = parseSystemContextParts(r.system_context_parts);
+  return {
+    at: r.at,
+    model: r.model,
+    provider: r.provider === "" ? null : r.provider,
+    inputUncached: Number(r.input_uncached),
+    cacheRead: Number(r.cache_read),
+    cacheWrite5m: Number(r.cache_write_5m),
+    cacheWrite1h: Number(r.cache_write_1h),
+    output: Number(r.output),
+    reasoning: Number(r.reasoning),
+    serverToolRequests: Number(r.server_tool_request),
+    reportedCostMicros: r.cost_micros,
+    // A call a backfill rebuilt from a transcript is estimated (ADR-161).
+    // A call the loopback proxy carried is gateway_observed. A row with no
+    // mark (older rows, or a call the proxy never saw) stays client_attested.
+    basis:
+      Number(r.backfilled ?? 0) === 1
+        ? "estimated"
+        : Number(r.proxy_observed ?? 0) === 1
+          ? "gateway_observed"
+          : "client_attested",
+    sessionUuid: r.session_uuid,
+    toolDefinitionTokens: nullableCount(r.tool_definition_tokens),
+    contextFrameTokens: nullableCount(r.context_frame_tokens),
+    steeringTokens: nullableCount(r.steering_tokens),
+    ...(r.system_context_digest
+      ? { systemContextDigest: r.system_context_digest }
+      : {}),
+    ...(parts === undefined ? {} : { systemContextParts: parts }),
+    ...(Number(r.cache_keep_alive ?? 0) === 1
+      ? { cacheKeepAlive: true as const }
+      : {}),
+    ...(r.seq === undefined || r.seq === null ? {} : { seq: Number(r.seq) }),
   };
-  return consumeFrames<Row, ModelCallFrameRow>(result, (r) => {
-    const parts = parseSystemContextParts(r.system_context_parts);
-    return {
-      at: r.at,
-      model: r.model,
-      provider: r.provider === "" ? null : r.provider,
-      inputUncached: Number(r.input_uncached),
-      cacheRead: Number(r.cache_read),
-      cacheWrite5m: Number(r.cache_write_5m),
-      cacheWrite1h: Number(r.cache_write_1h),
-      output: Number(r.output),
-      reasoning: Number(r.reasoning),
-      serverToolRequests: Number(r.server_tool_request),
-      reportedCostMicros: r.cost_micros,
-      // A call a backfill rebuilt from a transcript is estimated (ADR-161).
-      // A call the loopback proxy carried is gateway_observed. A row with no
-      // mark (older rows, or a call the proxy never saw) stays client_attested.
-      basis:
-        Number(r.backfilled ?? 0) === 1
-          ? "estimated"
-          : Number(r.proxy_observed ?? 0) === 1
-            ? "gateway_observed"
-            : "client_attested",
-      sessionUuid: r.session_uuid,
-      toolDefinitionTokens: nullableCount(r.tool_definition_tokens),
-      contextFrameTokens: nullableCount(r.context_frame_tokens),
-      steeringTokens: nullableCount(r.steering_tokens),
-      ...(r.system_context_digest
-        ? { systemContextDigest: r.system_context_digest }
-        : {}),
-      ...(parts === undefined ? {} : { systemContextParts: parts }),
-      ...(Number(r.cache_keep_alive ?? 0) === 1
-        ? { cacheKeepAlive: true as const }
-        : {}),
-      ...(r.seq === undefined || r.seq === null ? {} : { seq: Number(r.seq) }),
-    };
-  }, consume);
+}
+
+/** One wrapped run a group read names: its root session and every chain in it. */
+export interface GroupFrameRun {
+  rootSessionUuid: string;
+  sessionUuids: readonly string[];
+}
+
+/** The predicate that limits a group read to its runs' roots. */
+const GROUP_ROOTS = "root_session_uuid IN {rootSessionUuids:Array(UUID)}";
+
+/**
+ * A transcript-split join for a group read, on the request id (`t`) or the
+ * message id (`m`). It is the run read's join over every run of the group,
+ * keyed on the call id and the run's root session, so one run's call ids
+ * never meet another run's. The root key holds a subagent's sightings
+ * together, as the run read's root predicate does (ADR-168).
+ */
+function groupTranscriptJoin(
+  key: "request_id" | "message_id",
+  alias: string,
+): string {
+  return `LEFT JOIN (
+        SELECT
+          ${key} AS call_key,
+          root_session_uuid AS root_session_uuid,
+          toInt64(max(coalesce(thinking_tokens, 0))) AS thinking,
+          toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h,
+          toInt64(max(coalesce(web_search_requests, 0))) AS searches
+        FROM tacho_events FINAL
+        WHERE org_id = {orgId:UUID}
+          AND workspace_id = {workspaceId:UUID}
+          AND ${GROUP_ROOTS}
+          AND ${RUN_SESSIONS}
+          AND kind = 'llm_call'
+          AND ${TRANSCRIPT_SPLIT_ROW}
+        GROUP BY call_key, root_session_uuid
+        HAVING call_key != ''
+      ) AS ${alias} ON ${alias}.call_key = c.${key} AND ${alias}.root_session_uuid = c.root_session_uuid`;
+}
+
+/**
+ * {@link proxySightingJoin} for a group read, keyed on the call id and the
+ * run's root session for the reason {@link groupTranscriptJoin} gives.
+ */
+function groupProxySightingJoin(
+  key: "request_id" | "message_id",
+  alias: string,
+): string {
+  return `LEFT JOIN (
+        SELECT
+          ${key} AS call_key,
+          root_session_uuid AS root_session_uuid,
+          max(tool_definition_tokens) AS tool_definitions,
+          max(context_frame_tokens) AS context_frames,
+          max(steering_tokens) AS steering,
+          max(${METERING_VALUE}) AS metering,
+          max(system_context_digest) AS context_digest,
+          argMax(system_context_parts, (system_context_digest, length(system_context_parts))) AS context_parts
+        FROM tacho_events FINAL
+        WHERE org_id = {orgId:UUID}
+          AND workspace_id = {workspaceId:UUID}
+          AND ${GROUP_ROOTS}
+          AND ${RUN_SESSIONS}
+          AND kind = 'llm_call'
+          AND ${PROXY_SIGHTING}
+        GROUP BY call_key, root_session_uuid
+        HAVING call_key != ''
+      ) AS ${alias} ON ${alias}.call_key = c.${key} AND ${alias}.root_session_uuid = c.root_session_uuid`;
+}
+
+/**
+ * Every model-call frame of a group of wrapped runs, in one query, by root
+ * session (#5168). The findings job reads a recurring job's runs this way, so
+ * a job of 2,500 runs costs one query instead of 2,500.
+ *
+ * Each run's frames are the frames {@link readModelCallFrames} returns for
+ * that run alone, priced by the same expressions, in the same order, and
+ * mapped to the same shape. Each frame keeps its chain and its `seq`, so it
+ * keeps the key the findings job builds from them (#4506, #5156). The query
+ * differs from the run read in four places:
+ *
+ * - It names every run's root (`root_session_uuid IN ...`) and every session
+ *   of every run (`session_uuid IN ...`), so it still reads through the
+ *   table's sort key (#4103).
+ * - Each joined read keys on the call id and the root session, so a call id
+ *   joins only rows of its own run.
+ * - It returns each frame's root, and sorts by root, then time, then `seq`.
+ * - It drops a row whose chain is not one of its own run's sessions. The run
+ *   read never returns such a row, because it names one run's sessions alone.
+ *
+ * Every root the caller names has an entry, empty when the run has no frame.
+ * A row that names no model is left out unless `keepModelless` keeps it, as
+ * in the run read. Throws on a degraded store.
+ */
+export async function readGroupModelCallFrames(args: {
+  orgId: string;
+  workspaceId: string;
+  runs: readonly GroupFrameRun[];
+  /** Keep a wrapped `llm_call` row that names no model; see above. */
+  keepModelless?: boolean;
+}): Promise<Map<string, ModelCallFrameRow[]>> {
+  const out = new Map<string, ModelCallFrameRow[]>();
+  // Each run's sessions, by its root in lower case, the way ClickHouse prints
+  // a UUID.
+  const sessionsByRoot = new Map<
+    string,
+    { root: string; sessions: ReadonlySet<string> }
+  >();
+  for (const run of args.runs) {
+    out.set(run.rootSessionUuid, []);
+    sessionsByRoot.set(run.rootSessionUuid.toLowerCase(), {
+      root: run.rootSessionUuid,
+      sessions: new Set(runSessions(run).map((s) => s.toLowerCase())),
+    });
+  }
+  if (sessionsByRoot.size === 0) return out;
+  const sessionUuids = new Set<string>();
+  for (const run of args.runs)
+    for (const session of runSessions(run)) sessionUuids.add(session);
+
+  const ch = clickhouse();
+  const result = await ch.query({
+    query: `
+      SELECT
+        formatDateTime(c.ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS at,
+        c.model    AS model,
+        c.provider AS provider,
+        coalesce(c.input_tokens, 0)          AS input_uncached,
+        coalesce(c.cache_read_tokens, 0)     AS cache_read,
+        ${FRAME_CACHE_5M} AS cache_write_5m,
+        ${FRAME_CACHE_1H} AS cache_write_1h,
+        toInt64(greatest(0, toInt64(coalesce(c.output_tokens, 0)) - ${FRAME_REASONING})) AS output,
+        ${FRAME_REASONING} AS reasoning,
+        ${FRAME_SERVER_TOOL_REQUESTS} AS server_tool_request,
+        c.cost_usd_micros AS cost_micros,
+        toString(c.session_uuid) AS session_uuid,
+        ${proxiedCount("tool_definition_tokens", "tool_definitions")} AS tool_definition_tokens,
+        ${proxiedCount("context_frame_tokens", "context_frames")} AS context_frame_tokens,
+        ${proxiedCount("steering_tokens", "steering")} AS steering_tokens,
+        ${FRAME_CONTEXT_DIGEST} AS system_context_digest,
+        ${FRAME_CONTEXT_PARTS} AS system_context_parts,
+        ${FRAME_PROXY_OBSERVED} AS proxy_observed,
+        toUInt8(c.keep_alive = '1') AS cache_keep_alive,
+        toUInt8(c.record_basis = 'backfill') AS backfilled,
+        c.seq AS seq,
+        toString(c.root_session_uuid) AS run_root
+      FROM (
+        SELECT
+          ts, seq, session_uuid, root_session_uuid, model, provider,
+          input_tokens, output_tokens, cache_read_tokens,
+          cache_creation_tokens, cache_creation_1h_tokens, thinking_tokens,
+          web_search_requests, cost_usd_micros, request_id, message_id,
+          tool_definition_tokens, context_frame_tokens, steering_tokens,
+          system_context_digest, system_context_parts,
+          ${METERING_VALUE} AS metering,
+          ${CACHE_KEEP_ALIVE_VALUE} AS keep_alive,
+          ${RECORD_BASIS_VALUE} AS record_basis
+        FROM tacho_events FINAL
+        WHERE org_id = {orgId:UUID}
+          AND workspace_id = {workspaceId:UUID}
+          AND ${GROUP_ROOTS}
+          AND ${RUN_SESSIONS}
+          AND kind = 'llm_call'
+          AND source IN {sources:Array(String)}
+          AND ${NOT_A_DUPLICATE}
+          ${args.keepModelless === true ? "" : "AND model != ''"}
+      ) AS c
+      ${groupTranscriptJoin("request_id", "t")}
+      ${groupTranscriptJoin("message_id", "m")}
+      ${groupProxySightingJoin("request_id", "r")}
+      ${groupProxySightingJoin("message_id", "q")}
+      ORDER BY c.root_session_uuid, c.ts, c.seq
+    `,
+    query_params: {
+      orgId: args.orgId,
+      workspaceId: args.workspaceId,
+      rootSessionUuids: [...out.keys()],
+      sessionUuids: [...sessionUuids],
+      sources: TACHO_TOKEN_SOURCES,
+      duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
+    },
+    format: "JSONEachRow",
+    clickhouse_settings: COST_FRAME_QUERY_SETTINGS,
+  });
+  const rows = (await result.json()) as (WrappedFrameDbRow & {
+    run_root: string;
+  })[];
+  for (const r of rows) {
+    const run = sessionsByRoot.get(r.run_root.toLowerCase());
+    if (run === undefined || !run.sessions.has(r.session_uuid.toLowerCase()))
+      continue;
+    out.get(run.root)!.push(toWrappedFrameRow(r));
+  }
+  return out;
 }
 
 /**

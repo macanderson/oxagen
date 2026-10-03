@@ -275,11 +275,12 @@ describe("the user-menu trigger", () => {
     expect(avatar.textContent).toBe("");
   });
 
-  it("draws it at the trigger's 30px, not the editor preview's", () => {
+  it("draws it at the trigger's size 30, not the editor preview's", () => {
     renderShell(
       withAvatar('avatar:v1:{"kind":"icon","icon":"rocket","tone":"solid"}'),
     );
-    expect(screen.getByTestId("user-menu-avatar").style.width).toBe("30px");
+    // Every avatar draws a tenth larger than the size named.
+    expect(screen.getByTestId("user-menu-avatar").style.width).toBe("33px");
   });
 
   it("falls back to initials when no avatar is set, or the stored value is malformed (negative)", () => {

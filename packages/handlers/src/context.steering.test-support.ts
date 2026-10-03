@@ -891,7 +891,7 @@ export class FakeGitHub implements SteeringGitHub {
     }
     return out;
   }
-  private mergeBase(base: string, head: string): string | undefined {
+  private commonAncestor(base: string, head: string): string | undefined {
     const onBase = new Set(this.lineage(this.shaOf(base)));
     return this.lineage(this.shaOf(head)).find((s) => onBase.has(s));
   }
@@ -1068,7 +1068,7 @@ export class FakeGitHub implements SteeringGitHub {
       : null;
   }
   async changedPaths(_repo: SteeringRepository, base: string, head: string) {
-    const mergeBase = this.mergeBase(base, head);
+    const mergeBase = this.commonAncestor(base, head);
     const from = mergeBase ? this.tree(mergeBase) : new Map<string, string>();
     const to = this.tree(this.shaOf(head));
     return [...new Set([...from.keys(), ...to.keys()])]
@@ -1243,7 +1243,7 @@ export class FakeGitHub implements SteeringGitHub {
     base: string,
     head: string,
   ): Promise<SteeringChangedFile[]> {
-    const mergeBase = this.mergeBase(base, head);
+    const mergeBase = this.commonAncestor(base, head);
     const from = mergeBase ? this.tree(mergeBase) : new Map<string, string>();
     const to = this.tree(this.shaOf(head));
     return [...new Set([...from.keys(), ...to.keys()])]
@@ -1286,6 +1286,9 @@ export class FakeGitHub implements SteeringGitHub {
   async holdsCommit(_repo: SteeringRepository, head: string, ancestor: string) {
     return this.lineage(this.shaOf(head)).includes(ancestor);
   }
+  async mergeBase(_repo: SteeringRepository, head: string, base: string) {
+    return this.commonAncestor(base, head) ?? null;
+  }
   /** The commit's parents: its first, then the branch a merge brought in. */
   async commitParents(_repo: SteeringRepository, sha: string) {
     const out: string[] = [];
@@ -1315,7 +1318,7 @@ export class FakeGitHub implements SteeringGitHub {
     const main = args.base;
     if (this.lineage(head).includes(main))
       return { headSha: head, parents: null };
-    const mergeBase = this.mergeBase(main, head);
+    const mergeBase = this.commonAncestor(main, head);
     const baseTree = mergeBase
       ? this.tree(mergeBase)
       : new Map<string, string>();
