@@ -1417,6 +1417,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./work.order.reject")).workOrderRejectHandler as CapabilityHandlerFn,
   );
+  // The agent working a send claims a criterion of its brief (ADR-244). Only
+  // the run linked to the send, or the key of the host that claimed it.
+  registerHandler(
+    "claim_work_criterion",
+    async () =>
+      (await import("./work.criterion.claim")).workCriterionClaimHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "list_memory_pr_records",
     async () =>

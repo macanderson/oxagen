@@ -124,6 +124,8 @@ export default defineConfig({
         "src/tools/work.item.create.ts",
         "src/tools/work.priorities.get.ts",
         "src/tools/work.triage.revise.ts",
+        // the agent's criterion claim on a send (ADR-251, amended 2026-10-03)
+        "src/tools/work.criterion.claim.ts",
         // instruction files (#4518, ADR-263)
         "src/tools/steering.pr.restore_managed_block.ts",
         "src/tools/repository.findings.list.ts",

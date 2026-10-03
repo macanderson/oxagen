@@ -357,8 +357,6 @@ import { runForkRoute } from "./routes/v1/run.fork";
 import { runExportRoute } from "./routes/v1/run.export";
 import { runExportGetRoute } from "./routes/v1/run.export.get";
 import { runExportDownloadRoute } from "./routes/v1/run.export.download";
-import { workDoneBadgeRoute } from "./routes/v1/work.done.badge";
-import { workDoneKeyRoute } from "./routes/v1/work.done.key";
 import { workBriefSaveRoute } from "./routes/v1/work.brief.save";
 import { workBriefApproveRoute } from "./routes/v1/work.brief.approve";
 import { workItemCloseRoute } from "./routes/v1/work.item.close";
@@ -369,6 +367,7 @@ import { workOrderStopRoute } from "./routes/v1/work.order.stop";
 import { workOrderReturnRoute } from "./routes/v1/work.order.return";
 import { workOrderAcceptRoute } from "./routes/v1/work.order.accept";
 import { workOrderChecksRefreshRoute } from "./routes/v1/work.order.checks.refresh";
+import { workCriterionClaimRoute } from "./routes/v1/work.criterion.claim";
 import { runSealRoute } from "./routes/v1/run.seal";
 import { runSummarizeRoute } from "./routes/v1/run.summarize";
 import { agentListRoute } from "./routes/v1/agent.list";
@@ -531,35 +530,6 @@ app.use(
   }),
 );
 app.route("/v1/run-exports/download", runExportDownloadRoute);
-
-// GET /v1/work/done/badge/<token>.svg and GET /v1/work/done/key: the done
-// record's README badge and the public key that checks its attestation. Both
-// are public. GitHub's image proxy fetches a badge with no credential, and a
-// verifier needs the key with no account. They sit above the auth-gated `/v1`
-// mount with an IP ceiling, as the export download does. The badge ceiling is
-// higher because the image proxy sends many READMEs' badges from few addresses.
-app.use(
-  "/v1/work/done/badge/*",
-  distributedRateLimiter({
-    keyPrefix: "work-done-badge-ip",
-    max: 1_200,
-    bucketKey: trustedClientIpBucketKey,
-    methods: "all",
-    storeErrorPolicy: "degrade-to-local",
-  }),
-);
-app.route("/v1/work/done/badge", workDoneBadgeRoute);
-app.use(
-  "/v1/work/done/key",
-  distributedRateLimiter({
-    keyPrefix: "work-done-key-ip",
-    max: 300,
-    bucketKey: trustedClientIpBucketKey,
-    methods: "all",
-    storeErrorPolicy: "degrade-to-local",
-  }),
-);
-app.route("/v1/work/done/key", workDoneKeyRoute);
 
 // Shared pre-authentication ceilings for credential stuffing on Stella intake.
 // Register both on the concrete root path before the auth-gated subrouter:
@@ -1381,6 +1351,9 @@ orgScoped.route("/work/orders/stop", workOrderStopRoute);
 orgScoped.route("/work/orders/return", workOrderReturnRoute);
 orgScoped.route("/work/orders/accept", workOrderAcceptRoute);
 orgScoped.route("/work/orders/checks/refresh", workOrderChecksRefreshRoute);
+// The agent working a send claims a criterion of its brief (ADR-244). The
+// handler takes only the run linked to the send or the claiming host's key.
+orgScoped.route("/work/orders/criteria/claim", workCriterionClaimRoute);
 // Work intake and triage (P1-03, #5103): manual entry, triage revision and
 // retry, GitHub collectors and their health, and the priorities record.
 orgScoped.route("/work/items/create", workItemCreateRoute);
