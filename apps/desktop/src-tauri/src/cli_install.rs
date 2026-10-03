@@ -3299,7 +3299,10 @@ mod tests {
         assert_eq!(*ran.lock().unwrap(), vec![new_dir.clone()]);
         let reapply = view.reapply.clone().expect("a re-apply ran");
         assert_eq!(reapply.state, "moved");
-        assert_eq!(reapply.from, vec![format!("'{}' hook", old_dir.join(exe("oxagen")).display())]);
+        assert_eq!(
+            reapply.from,
+            vec![format!("'{}' hook", old_dir.join(exe("oxagen")).display())]
+        );
         assert!(reapply.detail.contains("moved"), "{reapply:?}");
         assert_ne!(view.state, "failed");
         // The old copy went with this launch, since nothing names it now.
@@ -3328,7 +3331,11 @@ mod tests {
         assert_eq!(reapply.state, "failed");
         assert!(reapply.detail.contains("exited exit status: 1"), "{reapply:?}");
         assert!(reapply.detail.contains("the verdict"), "{reapply:?}");
-        assert!(view.note.contains("could not move the hooks and the collector"), "{}", view.note);
+        assert!(
+            view.note.contains("could not move the hooks and the collector"),
+            "{}",
+            view.note
+        );
         assert!(view.note.contains("run the copy that was working"), "{}", view.note);
         // The copy the hooks still name stays.
         assert!(new_dir.exists());
