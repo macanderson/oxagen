@@ -32,11 +32,12 @@ export function isApprovalPublicId(value: string): boolean {
 /**
  * What became of the approved call itself (ADR-118), read back from the
  * approval row once the decision has been delivered. `status` is the row's
- * `resume_status`: `succeeded` or `dispatched` when the call ran, `failed` or
- * `indeterminate` when it did not or its outcome is unknown, `queued` when
- * delivery is left to the periodic worker, `denied` or `expired` when it will
- * never run. `runId` is the fresh run the call was recorded as; `reason` is the
- * refusal or failure code.
+ * `resume_status`: `succeeded` or `dispatched` when the call ran, `failed`
+ * when a check refused it before its handler started, `indeterminate` when the
+ * handler started and its outcome is unknown, `queued` when delivery is left
+ * to the periodic worker, `denied` or `expired` when it will never run.
+ * `runId` is the fresh run the call was recorded as; `reason` is the refusal
+ * or failure code.
  */
 const approvalExecutionSchema = z.object({
   status: z.string(),
