@@ -1,4 +1,5 @@
-import { AVATAR_SCALE, Avatar, avatarSide } from "./avatar";
+import { Avatar } from "./avatar";
+import { AVATAR_SCALE, avatarSide } from "./avatar-size";
 import { HarnessIcon } from "./harness-icon";
 
 /**

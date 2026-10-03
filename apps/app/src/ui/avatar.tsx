@@ -57,6 +57,7 @@ import {
   type AvatarTone,
   parseAvatarValue,
 } from "./avatar-spec";
+import { avatarSide } from "./avatar-size";
 
 export const AVATAR_GLYPHS: Record<AvatarIcon, PhosphorIcon> = {
   rocket: RocketIcon,
@@ -114,18 +115,6 @@ function initialsScale(letters: number): number {
 }
 
 export type AvatarShape = "person" | "agent";
-
-/**
- * How much larger every avatar draws than the size its caller names. The
- * call sites keep the sizes they were laid out with, and this one factor
- * makes every avatar in the app a little easier to read.
- */
-export const AVATAR_SCALE = 1.1;
-
-/** The side, in CSS pixels, that an avatar of the named size draws at. */
-export function avatarSide(size: number): number {
-  return Math.round(size * AVATAR_SCALE);
-}
 
 /**
  * The avatar for a person or an agent. Decorative in every state: the name it
