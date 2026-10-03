@@ -899,16 +899,22 @@ describe("Spend › Month", () => {
     expect(byGroup).toHaveBeenCalledExactlyOnceWith(ctx, "operator", PERIOD);
     const group = screen.getByRole("group", { name: "Group by" });
     const chips = within(group).getAllByRole("button");
+    // The design's order, with Work item first (#2962).
     expect(chips.map((chip) => chip.textContent)).toEqual([
+      "Work item",
       "Agent",
       "Operator",
       "Model",
       "MCP server",
     ]);
-    expect(chips[0]).toHaveAttribute("href", "/acme/core-platform/spend");
-    expect(chips[0]).toHaveAttribute("aria-pressed", "false");
-    expect(chips[1]).toHaveAttribute("aria-pressed", "true");
-    expect(chips[3]).toHaveAttribute(
+    expect(chips[0]).toHaveAttribute(
+      "href",
+      "/acme/core-platform/spend?by=work_item",
+    );
+    expect(chips[1]).toHaveAttribute("href", "/acme/core-platform/spend");
+    expect(chips[1]).toHaveAttribute("aria-pressed", "false");
+    expect(chips[2]).toHaveAttribute("aria-pressed", "true");
+    expect(chips[4]).toHaveAttribute(
       "href",
       "/acme/core-platform/spend?by=mcp_server",
     );
@@ -983,6 +989,101 @@ describe("Spend › Month", () => {
     ).toBeInTheDocument();
     // Other spend already holds the rest, so nothing is left ungrouped.
     expect(screen.queryByText("Not grouped")).toBeNull();
+  });
+
+  it("groups by work item: each item's number and title linked to it, the runs that served none apart, and nothing left ungrouped (#2962)", async () => {
+    loadedMonth(() =>
+      month([
+        row("wi_01k9login", {
+          cost: cost("9000000"),
+          runs: 8,
+          workItem: {
+            id: "wi_01k9login",
+            number: "OPS-88",
+            subject: "Repair the login redirect",
+          },
+          topRuns: [triage],
+        }),
+        row("~no_work_item", {
+          cost: cost("3345678"),
+          runs: 4,
+          workItem: null,
+          topRuns: [{ ...triage, runId: "tse_01k9terminal", name: "Terminal run" }],
+        }),
+      ]),
+    );
+    await renderSpend([], undefined, ctx, "work_item");
+    expect(byGroup).toHaveBeenCalledExactlyOnceWith(ctx, "work_item", PERIOD);
+    const table = screen.getByRole("table", { name: "By work item" });
+    expect(headers(table)).toEqual(["Work item", "Runs", "Share", "Cost"]);
+    const item = rowOf("wi_01k9login");
+    expect(item).toHaveTextContent("OPS-88");
+    expect(item).toHaveTextContent("Repair the login redirect");
+    expect(item).not.toHaveTextContent("wi_01k9login");
+    expect(
+      within(item).getByRole("link", { name: /OPS-88/ }),
+    ).toHaveAttribute("href", "/acme/core-platform/work/OPS-88");
+    expect(
+      within(item).getByRole("button", { name: "Costliest runs of OPS-88" }),
+    ).toHaveAttribute("aria-expanded", "false");
+    const none = rowOf("~no_work_item");
+    expect(none).toHaveTextContent("No work item");
+    expect(none).toHaveTextContent("Runs that served no work item");
+    expect(within(none).queryByRole("link")).toBeNull();
+    // The runs that served no work item still open, as the design's row does.
+    await userEvent.click(
+      within(none).getByRole("button", {
+        name: "Costliest runs of No work item",
+      }),
+    );
+    expect(
+      screen.getByRole("link", { name: /Terminal run/ }),
+    ).toHaveAttribute("href", "/acme/core-platform/runs/tse_01k9terminal");
+    // Every run is on one row, so no Not grouped row is drawn.
+    expect(screen.queryByText("Not grouped")).toBeNull();
+    await expectNoAxe(document.body);
+  });
+
+  it("names each listed run's operator beside its agent, and never the operator's id (#2962)", async () => {
+    loadedMonth(() =>
+      month([
+        row("acme.core.triage", {
+          cost: cost("9000000"),
+          runs: 3,
+          topRuns: [
+            { ...triage, operator: MARCUS },
+            {
+              ...triage,
+              runId: "arun_01k5rn8unnamed",
+              name: "Unnamed person's run",
+              operator: null,
+            },
+            {
+              ...triage,
+              runId: "arun_01k5rn8nobody",
+              name: "Run with no operator",
+              operatorKey: null,
+              operator: null,
+            },
+          ],
+        }),
+      ]),
+    );
+    await renderSpend();
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Costliest runs of acme.core.triage",
+      }),
+    );
+    const named = screen.getByRole("link", { name: /Repair the login redirect/ });
+    expect(named).toHaveTextContent("Marcus Bell");
+    expect(named).not.toHaveTextContent("prn_marcusbell");
+    const unnamed = screen.getByRole("link", { name: /Unnamed person's run/ });
+    expect(unnamed).toHaveTextContent("Unnamed operator");
+    expect(unnamed).not.toHaveTextContent("prn_marcusbell");
+    const nobody = screen.getByRole("link", { name: /Run with no operator/ });
+    expect(nobody.querySelector("[data-run-operator]")).toBeNull();
+    await expectNoAxe(document.body);
   });
 
   // ADR-235, 2026-10-02 amendment: the in-app assistant's spend is one row of

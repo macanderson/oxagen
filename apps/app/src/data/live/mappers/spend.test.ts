@@ -154,6 +154,82 @@ describe("toSpendReport", () => {
     expect(view.rows[1]?.topRuns).toEqual([]);
   });
 
+  it("copies a work item row's work item and each run's operator, and leaves both off where get_spend sent none (#2962)", () => {
+    const operator = {
+      id: "prn_7h2",
+      name: "Marcus Bell",
+      email: null,
+      avatarUrl: null,
+      role: null,
+    };
+    const run = {
+      runId: "tse_01k9",
+      name: null,
+      startedAt: "2026-09-14T09:30:00.000Z",
+      agentKey: "claude-code",
+      harness: null,
+      operatorKey: "prn_7h2",
+      operator,
+      cost: priced,
+      calls: 12,
+    };
+    const workItem = {
+      id: "wi_01k9",
+      number: "OPS-88",
+      subject: "Fix the login page",
+    };
+    const out = spendGet.output.parse({
+      period: { from: "2026-09-14", to: "2026-09-15" },
+      groupBy: "work_item",
+      total: figure,
+      days: [],
+      reported: null,
+      rows: [
+        {
+          ...figure,
+          key: workItem.id,
+          provider: null,
+          operator: null,
+          workItem,
+          tokens: wireTokens,
+          topRuns: [run],
+        },
+        {
+          ...figure,
+          key: "~no_work_item",
+          provider: null,
+          operator: null,
+          workItem: null,
+          tokens: wireTokens,
+          topRuns: [{ ...run, operator: null }],
+        },
+      ],
+    });
+    const view = SpendReport.parse(toSpendReport(out));
+    expect(view.rows[0]?.workItem).toEqual(workItem);
+    expect(view.rows[0]?.topRuns?.[0]?.operator).toEqual(operator);
+    expect(view.rows[1]?.workItem).toBeNull();
+    expect(view.rows[1]?.topRuns?.[0]?.operator).toBeNull();
+
+    const old = spendGet.output.parse({
+      ...out,
+      groupBy: "agent",
+      rows: [
+        {
+          ...figure,
+          key: "claude-code",
+          provider: null,
+          operator: null,
+          tokens: wireTokens,
+          topRuns: [{ ...run, operator: undefined }],
+        },
+      ],
+    });
+    const plain = SpendReport.parse(toSpendReport(old));
+    expect(plain.rows[0]).not.toHaveProperty("workItem");
+    expect(plain.rows[0]?.topRuns?.[0]).not.toHaveProperty("operator");
+  });
+
   it("copies a row's prompt sources, keeps an unmeasured one null, and leaves a row without them without (#5295)", () => {
     const sources = {
       toolDefinitionTokens: 18_000,

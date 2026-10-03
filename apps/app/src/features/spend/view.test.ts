@@ -20,6 +20,16 @@ describe("parseSpendView", () => {
     expect(parseSpendView(["month"])).toEqual(month);
   });
 
+  it("offers the design's five groupings in its order, Work item first (#2962)", () => {
+    expect(SPEND_MONTH_BY).toEqual([
+      "work_item",
+      "agent",
+      "operator",
+      "model",
+      "mcp_server",
+    ]);
+  });
+
   it.each(SPEND_MONTH_BY)("groups the Month tab by %s from the query", (by) => {
     expect(parseSpendView(undefined, undefined, by)).toEqual({
       tab: "month",

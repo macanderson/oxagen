@@ -9,6 +9,11 @@
 // The run rows also give the spend by day, each row's costliest runs, and
 // the `mcp_server` grouping, which the daily rollup does not store.
 //
+// `work_item` is folded from the run rows too (#2962): each run lands on the
+// work item its work order served, or on the `NO_WORK_ITEM_KEY` row, so the
+// rows sum to the total. Every run line names its operator, so the page
+// prints a person beside each run and never the principal id.
+//
 // The in-app assistant's spend is one row of its own, keyed
 // `ASSISTANT_SPEND_KEY`, in every grouping (ADR-235, 2026-10-02 amendment).
 // The other rows leave its share out, and the total, the days, and the
@@ -17,6 +22,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   ASSISTANT_SPEND_KEY,
+  NO_WORK_ITEM_KEY,
   OTHER_SPEND_KEY,
   SPEND_TOP_RUNS_MAX,
   spendGet,
@@ -25,6 +31,7 @@ import {
   type SpendRow,
   type SpendTokenSources,
   type SpendTopRun,
+  type SpendWorkItem,
 } from "@oxagen/oxagen/contracts/spend.get";
 import {
   type TokenCounts,
@@ -39,6 +46,7 @@ import {
   utcDay,
 } from "@oxagen/billing";
 import { bareToolName } from "@oxagen/run-ledger";
+import type { OperatorFacts } from "@oxagen/oxagen/contracts/operator.shared";
 import {
   noOperatorFacts,
   readOperatorFacts,
@@ -46,6 +54,13 @@ import {
 } from "./lib/operator-facts";
 import { readAgentHarnesses, readRunHarnesses } from "./lib/run-harnesses";
 import { readRunNames } from "./lib/run-names";
+import {
+  noRunWorkItems,
+  type ReadRunWorkItems,
+  readRunWorkItems,
+  type RunWorkOrderRef,
+  workOrderKey,
+} from "./lib/run-work-items";
 import {
   addTokens,
   cost,
@@ -75,6 +90,8 @@ export type SpendGetDeps = {
   ) => Promise<SpendRunRecord[]>;
   /** Who each operator key names; a harness that has no store leaves it out. */
   readOperatorFacts?: ReadOperatorFacts;
+  /** The work item each run's work order served, for the `work_item` grouping. */
+  readRunWorkItems?: ReadRunWorkItems;
   /** The period's wrapped runs that recorded no usage, by harness (#3304). */
   readUnmeteredRuns: (
     scope: SpendScope,
@@ -207,10 +224,15 @@ export function mcpServerShares(run: RunTotalsRecord): RunShare[] {
   return [...servers.values(), rest];
 }
 
-/** What one run adds to each row of a grouping. */
+/**
+ * What one run adds to each row of a grouping. `workItemOf` names the work
+ * item a run served, by its public id; a run it names none for lands on the
+ * {@link NO_WORK_ITEM_KEY} row.
+ */
 export function runShares(
   run: RunTotalsRecord,
   groupBy: SpendGroupBy,
+  workItemOf: (run: RunTotalsRecord) => string | null = () => null,
 ): RunShare[] {
   const whole = (key: string | null): RunShare[] =>
     key === null
@@ -253,7 +275,53 @@ export function runShares(
       }));
     case "mcp_server":
       return mcpServerShares(run);
+    case "work_item":
+      // Every run lands on one row, so the rows sum to the total.
+      return whole(workItemOf(run) ?? NO_WORK_ITEM_KEY);
   }
+}
+
+/** A run's work order, when the rollup resolved one. */
+function workOrderOf(run: RunTotalsRecord): RunWorkOrderRef | null {
+  const id = run.workOrderId ?? null;
+  const kind = run.workOrderKind ?? null;
+  return id === null || kind === null
+    ? null
+    : { workOrderId: id, workOrderKind: kind };
+}
+
+/**
+ * The work item each run served, read once for the runs' work orders: the
+ * public id each run lands on, and the work item each id names.
+ */
+async function workItemsOf(
+  read: ReadRunWorkItems,
+  scope: SpendScope,
+  runs: readonly RunTotalsRecord[],
+): Promise<{
+  keyOf: (run: RunTotalsRecord) => string | null;
+  byId: Map<string, SpendWorkItem>;
+}> {
+  const orders = runs.flatMap((run) => {
+    const order = workOrderOf(run);
+    return order === null ? [] : [order];
+  });
+  const items = await read(scope, orders);
+  const byId = new Map<string, SpendWorkItem>();
+  for (const item of items.values())
+    byId.set(item.id, {
+      id: item.id,
+      number: item.number,
+      subject: item.subject,
+    });
+  return {
+    keyOf: (run) => {
+      const order = workOrderOf(run);
+      if (order === null) return null;
+      return items.get(workOrderKey(order))?.id ?? null;
+    },
+    byId,
+  };
 }
 
 type Attributed = { run: SpendRunRecord; share: RunShare };
@@ -268,6 +336,7 @@ const WHOLE_RUN_GROUPINGS: ReadonlySet<SpendGroupBy> = new Set([
   "agent",
   "task",
   "cost_center",
+  "work_item",
 ]);
 
 /**
@@ -321,10 +390,11 @@ function compareShares(a: Attributed, b: Attributed): number {
 function attribute(
   runs: readonly SpendRunRecord[],
   groupBy: SpendGroupBy,
+  workItemOf?: (run: RunTotalsRecord) => string | null,
 ): Map<string, Attributed[]> {
   const byKey = new Map<string, Attributed[]>();
   for (const run of runs)
-    for (const share of runShares(run, groupBy)) {
+    for (const share of runShares(run, groupBy, workItemOf)) {
       const list = byKey.get(share.key) ?? [];
       list.push({ run, share });
       byKey.set(share.key, list);
@@ -340,9 +410,9 @@ function shareFigure({ run, share }: Attributed) {
   };
 }
 
-/** The `mcp_server` rows: each server, costliest first, then the rest. */
-export function mcpServerRows(byKey: Map<string, Attributed[]>): SpendRow[] {
-  const rowOf = (key: string, list: readonly Attributed[]): SpendRow => ({
+/** One row summed from the run rows' shares, for a grouping the daily rollup does not store. */
+function rowOf(key: string, list: readonly Attributed[]): SpendRow {
+  return {
     key,
     provider: null,
     operator: null,
@@ -352,7 +422,21 @@ export function mcpServerRows(byKey: Map<string, Attributed[]>): SpendRow[] {
       { ...ZERO_TOKENS },
     ),
     ...sumFigures(list.map(shareFigure)),
-  });
+  };
+}
+
+/**
+ * The `work_item` rows: each work item, and the {@link NO_WORK_ITEM_KEY} row,
+ * costliest first. Each run is on one row, so they sum to the total.
+ */
+export function workItemRows(byKey: Map<string, Attributed[]>): SpendRow[] {
+  return [...byKey.entries()]
+    .map(([key, list]) => rowOf(key, list))
+    .sort(compareRows);
+}
+
+/** The `mcp_server` rows: each server, costliest first, then the rest. */
+export function mcpServerRows(byKey: Map<string, Attributed[]>): SpendRow[] {
   const servers = [...byKey.entries()]
     .filter(([key]) => key !== OTHER_SPEND_KEY)
     .map(([key, list]) => rowOf(key, list))
@@ -542,10 +626,10 @@ export function createSpendGetHandler(
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     const { from, to } = input.period;
     const groupBy = input.groupBy;
-    // The daily rollup stores every level but `mcp_server`, which the run
-    // rows below answer on their own.
+    // The daily rollup stores every level but `mcp_server` and `work_item`,
+    // which the run rows below answer on their own.
     const [dailyRows, runs, unmeteredRuns] = await Promise.all([
-      groupBy === "mcp_server"
+      groupBy === "mcp_server" || groupBy === "work_item"
         ? Promise.resolve([])
         : deps.readDailyTotals(scope, { from, to, groupKind: groupBy }),
       deps.readRunTotals(scope, { from, to }),
@@ -554,20 +638,31 @@ export function createSpendGetHandler(
     // The workspace's own rows hold every run but the in-app ones, which
     // the assistant row holds (ADR-235).
     const { inApp, rest } = splitInApp(runs);
-    const byKey = attribute(rest, groupBy);
+    // No work item is read for an assistant run: its row names none.
+    const items =
+      groupBy === "work_item"
+        ? await workItemsOf(
+            deps.readRunWorkItems ?? noRunWorkItems,
+            scope,
+            rest,
+          )
+        : null;
+    const byKey = attribute(rest, groupBy, items?.keyOf);
     const inAppByKey = attribute(inApp, groupBy);
     const grouped =
       groupBy === "mcp_server"
         ? mcpServerRows(byKey)
-        : groupRows(dailyRows).flatMap((row) => {
-            const left = withoutInAppShares(
-              row,
-              dailyRows.filter((day) => day.groupKey === row.key),
-              inAppByKey.get(row.key) ?? [],
-              byKey.get(row.key) ?? [],
-            );
-            return left === null ? [] : [left];
-          });
+        : groupBy === "work_item"
+          ? workItemRows(byKey)
+          : groupRows(dailyRows).flatMap((row) => {
+              const left = withoutInAppShares(
+                row,
+                dailyRows.filter((day) => day.groupKey === row.key),
+                inAppByKey.get(row.key) ?? [],
+                byKey.get(row.key) ?? [],
+              );
+              return left === null ? [] : [left];
+            });
     const assistant = assistantRow(inAppByKey);
     // A row of whole runs carries its runs' prompt sources (#5295).
     const wholeRuns = WHOLE_RUN_GROUPINGS.has(groupBy);
@@ -589,13 +684,22 @@ export function createSpendGetHandler(
     const topAgentKeys = [...top.values()].flatMap((list) =>
       list.flatMap((a) => (a.run.agentKey === null ? [] : [a.run.agentKey])),
     );
+    // Each run line names its operator too (#2962), so one read covers the
+    // operator rows and every listed run's operator.
+    const operatorKeys = [
+      ...(groupBy === "operator" ? grouped.map((row) => row.key) : []),
+      ...[...top.values()].flatMap((list) =>
+        list.flatMap((a) =>
+          a.run.operatorKey === null ? [] : [a.run.operatorKey],
+        ),
+      ),
+    ];
     const [facts, names, harnesses, agentHarnesses] = await Promise.all([
-      groupBy === "operator"
-        ? (deps.readOperatorFacts ?? noOperatorFacts)(
-            scope,
-            grouped.map((row) => row.key),
-          )
-        : new Map<string, never>(),
+      operatorKeys.length === 0
+        ? new Map<string, OperatorFacts>()
+        : (deps.readOperatorFacts ?? noOperatorFacts)(scope, [
+            ...new Set(operatorKeys),
+          ]),
       deps.readRunNames(scope, topRunIds),
       deps.readRunHarnesses(scope, topRunIds),
       deps.readAgentHarnesses === undefined
@@ -614,6 +718,8 @@ export function createSpendGetHandler(
             ? null
             : (agentHarnesses.get(run.agentKey) ?? null)),
         operatorKey: run.operatorKey,
+        operator:
+          run.operatorKey === null ? null : (facts.get(run.operatorKey) ?? null),
         cost: cost(share.micros, run.currency, share.basis),
         calls: share.calls,
       }));
@@ -638,7 +744,11 @@ export function createSpendGetHandler(
       rows: [
         ...grouped.map((row) => ({
           ...row,
-          operator: facts.get(row.key) ?? null,
+          operator:
+            groupBy === "operator" ? (facts.get(row.key) ?? null) : null,
+          ...(items === null
+            ? {}
+            : { workItem: items.byId.get(row.key) ?? null }),
           topRuns: topRuns(row.key),
           ...(wholeRuns
             ? wholeRunTokens(runsOf(byKey.get(row.key) ?? []))
@@ -672,4 +782,5 @@ export const spendGetHandler = createSpendGetHandler({
   readRunNames,
   readRunHarnesses,
   readAgentHarnesses,
+  readRunWorkItems,
 });

@@ -570,6 +570,10 @@
         "cost_center": {
           "label": "Organization by cost center",
           "hint": "One line per cost center across every workspace, with the run ids behind each line and the total they sum to."
+        },
+        "runs": {
+          "label": "Runs in this workspace",
+          "hint": "One line per run, with its agent, operator, work item and cost."
         }
       },
       "month": "Month",
@@ -807,6 +811,10 @@
         "label": "Oxagen assistant",
         "note": "Spend on the assistant Oxagen runs"
       },
+      "noWorkItem": {
+        "label": "No work item",
+        "note": "Runs that served no work item"
+      },
       "moreRuns": "{count, plural, one {# more run} other {# more runs}}",
       "showRuns": "Costliest runs of {name}",
       "reported": "The harness reported {amount} of this total. The gateway metered or estimated the rest.",
@@ -829,12 +837,14 @@
       "by": {
         "label": "Group by",
         "options": {
+          "work_item": "Work item",
           "agent": "Agent",
           "operator": "Operator",
           "model": "Model",
           "mcp_server": "MCP server"
         },
         "titles": {
+          "work_item": "By work item",
           "agent": "By agent",
           "operator": "By operator",
           "model": "By model",

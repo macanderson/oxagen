@@ -11,6 +11,10 @@
  * {@link OTHER_SPEND_KEY} row is the rest of every run's cost, so the rows
  * sum to the total.
  *
+ * `work_item` is folded from the run rows too: each run lands on the work
+ * item its work order served, or on the {@link NO_WORK_ITEM_KEY} row, so the
+ * rows sum to the total (#2962).
+ *
  * The in-app assistant's spend is one row of its own in every grouping, the
  * {@link ASSISTANT_SPEND_KEY} row, and the other rows leave it out (ADR-235,
  * 2026-10-02 amendment). The total, the days, and the reported spend still
@@ -38,7 +42,8 @@ import {
 
 /**
  * The groupings `get_spend` answers: every level in `spendGroupKindSchema`,
- * which the daily rollup stores, plus `mcp_server`, which it does not.
+ * which the daily rollup stores, plus `mcp_server` and `work_item`, which it
+ * does not.
  */
 export const spendGroupBySchema = z.enum([
   "operator",
@@ -48,7 +53,29 @@ export const spendGroupBySchema = z.enum([
   "task",
   "cost_center",
   "mcp_server",
+  "work_item",
 ]);
+
+/**
+ * The `work_item` row key of the runs that served no work item: a run with
+ * no work order, as a terminal session started outside Oxagen has until the
+ * rollup opens one, and a run whose direct work order nobody has attached to
+ * a work item. A work item's key is its public id (`wi_…`), so none collides
+ * with it.
+ */
+export const NO_WORK_ITEM_KEY = "~no_work_item";
+
+/** The work item a `work_item` row names. */
+export const spendWorkItemSchema = z
+  .object({
+    /** The work item's public id (`wi_…`): the row's key. */
+    id: z.string().regex(/^wi_[0-9A-Za-z]+$/),
+    /** The number people say out loud, such as `OPS-88`. */
+    number: z.string().min(1),
+    subject: z.string(),
+  })
+  .strict();
+export type SpendWorkItem = z.output<typeof spendWorkItemSchema>;
 
 /**
  * The `mcp_server` row key of the spend no MCP server's tool results carried:
@@ -81,6 +108,12 @@ export const spendTopRunSchema = z
     harness: z.string().nullable().optional(),
     /** The operator's principal public id; null for a run with no operator. */
     operatorKey: z.string().nullable(),
+    /**
+     * Who `operatorKey` names, so a run line prints a name and never the id.
+     * Null for a run with no operator and for a principal nobody can name.
+     * Absent from an answer built before it was read.
+     */
+    operator: operatorFactsSchema.nullable().optional(),
     /**
      * The row's part of the run's cost: the whole run on an operator, agent,
      * task or cost-center row, the model's calls on a model row, and the
@@ -146,8 +179,9 @@ export const spendRowSchema = spendFigureSchema
   .extend({
     /**
      * The group's key: a principal id, an agent key, a model id, a tool name,
-     * a task reference, a cost-center label, an MCP server name,
-     * {@link OTHER_SPEND_KEY}, or {@link ASSISTANT_SPEND_KEY}.
+     * a task reference, a cost-center label, an MCP server name, a work item's
+     * public id, {@link OTHER_SPEND_KEY}, {@link NO_WORK_ITEM_KEY}, or
+     * {@link ASSISTANT_SPEND_KEY}.
      */
     key: z.string(),
     /** The model's provider on `model` rows; null elsewhere, and on the {@link ASSISTANT_SPEND_KEY} row. */
@@ -155,6 +189,12 @@ export const spendRowSchema = spendFigureSchema
     tokens: tokenCountsSchema,
     /** Who the key names on `operator` rows; null elsewhere, on the {@link ASSISTANT_SPEND_KEY} row, and for a principal nobody can name. */
     operator: operatorFactsSchema.nullable(),
+    /**
+     * The work item the key names on `work_item` rows; null on the
+     * {@link NO_WORK_ITEM_KEY} row, and absent on the
+     * {@link ASSISTANT_SPEND_KEY} row and on every other grouping.
+     */
+    workItem: spendWorkItemSchema.nullable().optional(),
     /**
      * The row's costliest runs in the period, at most
      * {@link SPEND_TOP_RUNS_MAX}; most calls first where nothing priced them.
@@ -164,8 +204,8 @@ export const spendRowSchema = spendFigureSchema
     topRuns: z.array(spendTopRunSchema).max(SPEND_TOP_RUNS_MAX),
     /**
      * The row's prompt sources over its runs (#5295). Present on a row that
-     * holds whole runs: operator, agent, task, cost center, and the
-     * {@link ASSISTANT_SPEND_KEY} row of those groupings. Absent on a model,
+     * holds whole runs: operator, agent, task, cost center, work item, and
+     * the {@link ASSISTANT_SPEND_KEY} row of those groupings. Absent on a model,
      * tool, or MCP server row, which holds part of a run, and on the
      * {@link OTHER_SPEND_KEY} row.
      */

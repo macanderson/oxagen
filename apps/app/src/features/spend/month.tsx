@@ -1,7 +1,8 @@
 // The Month tab (#2962; v3 mockup `spdMonth`, ADR-226): what every run cost
 // this month, from its own model requests. The total with the workspace's
-// monthly budget beside it, the spend by day, and one table grouped by agent,
-// operator, model, or MCP server, each row opening to its costliest runs. One
+// monthly budget beside it, the spend by day, and one table grouped by work
+// item, agent, operator, model, or MCP server, each row opening to its
+// costliest runs, each run with its agent, operator, and start. One
 // get_spend read at the chosen grouping carries all of it. The design's Budget
 // column is not drawn: a budget holds for the organization or the workspace,
 // never one agent or one operator (#3864). Grouped by agent, a second read
@@ -19,6 +20,7 @@ import {
 import {
   type AgentPerMergedPr,
   ASSISTANT_SPEND_KEY,
+  NO_WORK_ITEM_KEY,
   OTHER_SPEND_KEY,
   type SpendBudgets,
   type SpendPerMergedPr,
@@ -59,7 +61,12 @@ import {
 import { MonthTable, type MonthTableRow } from "./month-table";
 import { SpendByDayChart } from "./spend-by-day-chart";
 import { Empty, Panel } from "./tables";
-import { SPEND_MONTH_BY, type SpendAt, type SpendMonthBy } from "./view";
+import {
+  SPEND_MONTH_BY,
+  SPEND_MONTH_DEFAULT_BY,
+  type SpendAt,
+  type SpendMonthBy,
+} from "./view";
 
 type Row = SpendReport["rows"][number];
 
@@ -244,7 +251,7 @@ function ungroupedCost(report: SpendReport): Cost | null {
 function UngroupedLabel({
   by,
 }: {
-  by: Exclude<SpendMonthBy, "mcp_server">;
+  by: Exclude<SpendMonthBy, "mcp_server" | "work_item">;
 }) {
   const t = useTranslations("spend.month.ungrouped");
   return (
@@ -258,7 +265,9 @@ function UngroupedLabel({
 /**
  * A group's name, linked to its drill. Only an agent and an operator have a
  * drill: `get_spend_drill` has no model or MCP server kind. An agent's name
- * carries its avatar with the harness it registered (#4871).
+ * carries its avatar with the harness it registered (#4871). A work item reads
+ * as the Work list's item does, its number then its title, and links to the
+ * work item.
  */
 function GroupLabel({
   row,
@@ -343,7 +352,48 @@ function GroupLabel({
       );
     case "mcp_server":
       return <span className={`${mono} truncate font-semibold`}>{row.key}</span>;
+    case "work_item": {
+      const item = row.workItem ?? null;
+      if (row.key === NO_WORK_ITEM_KEY || item === null) {
+        return (
+          <span className="flex min-w-0 flex-col">
+            <span className="font-semibold">{t("noWorkItem.label")}</span>
+            <span className="text-sm text-muted-foreground">
+              {t("noWorkItem.note")}
+            </span>
+          </span>
+        );
+      }
+      return (
+        <SafeLink
+          to={routes.workItem(at.org, at.ws, item.number)}
+          className={`${linkText} flex min-w-0 items-baseline gap-2`}
+        >
+          <span className={`${mono} flex-none text-muted-foreground`}>
+            {item.number}
+          </span>
+          <span className="min-w-0 truncate font-semibold">{item.subject}</span>
+        </SafeLink>
+      );
+    }
   }
+}
+
+/**
+ * Who ran a listed run: the operator's name, "Unnamed operator" for a person
+ * nobody can name, and nothing for a run with no operator. Never the id.
+ */
+function RunOperator({ run }: { run: SpendTopRun }) {
+  const t = useTranslations("spend.month");
+  if (run.operatorKey === null) return null;
+  // A view built before get_spend named the operator carries only the id.
+  if (run.operator === undefined) return null;
+  const name = run.operator?.name ?? t("unnamedOperator");
+  return (
+    <span className="min-w-0 truncate" data-truncate="" data-run-operator="">
+      {name}
+    </span>
+  );
 }
 
 function Share({
@@ -413,10 +463,11 @@ function RunList({
               <span className="truncate text-foreground">
                 {run.name ?? run.runId}
               </span>
-              <span className="flex gap-2 text-sm text-muted-foreground">
+              <span className="flex min-w-0 gap-2 text-sm text-muted-foreground">
                 {run.agentKey === null ? null : (
                   <span className={mono}>{run.agentKey}</span>
                 )}
+                <RunOperator run={run} />
                 <Instant iso={run.startedAt} />
               </span>
             </span>
@@ -585,7 +636,7 @@ function GroupPicker({ by, at }: { by: SpendMonthBy; at: SpendAt }) {
           key={option}
           to={routes.spend(at.org, at.ws, {
             tab: "month",
-            by: option === "agent" ? undefined : option,
+            by: option === SPEND_MONTH_DEFAULT_BY ? undefined : option,
           })}
           pressed={option === by}
           data-by={option}
@@ -619,13 +670,16 @@ export function MonthSection({
   const t = useTranslations("spend.month");
   const locale = useLocale();
   const total = report.total.cost;
-  // The caret's label names the group: an operator by name, any other by key.
+  // The caret's label names the group: an operator by name, a work item by
+  // its number, any other by key.
   const nameOf = (row: Row) =>
     row.key === ASSISTANT_SPEND_KEY
       ? t("assistant.label")
       : by === "operator" && row.key !== OTHER_SPEND_KEY
         ? (row.operator?.name ?? t("unnamedOperator"))
-        : row.key;
+        : by === "work_item"
+          ? (row.workItem?.number ?? t("noWorkItem.label"))
+          : row.key;
   const largest = maxMoney(
     report.rows.flatMap((row) =>
       row.key === OTHER_SPEND_KEY || row.cost === null ? [] : [row.cost],
@@ -686,9 +740,11 @@ export function MonthSection({
     };
   });
   // The priced rows then sum to the Total row beneath them. The MCP server
-  // grouping needs no such row: Other spend holds the rest of each run.
-  const ungrouped = by === "mcp_server" ? null : ungroupedCost(report);
-  if (ungrouped !== null && by !== "mcp_server") {
+  // grouping needs no such row: Other spend holds the rest of each run. Nor
+  // does the work item grouping: every run is on one of its rows.
+  const ungrouped =
+    by === "mcp_server" || by === "work_item" ? null : ungroupedCost(report);
+  if (ungrouped !== null && by !== "mcp_server" && by !== "work_item") {
     rows.push({
       key: UNGROUPED_KEY,
       label: <UngroupedLabel by={by} />,
