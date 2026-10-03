@@ -163,10 +163,10 @@ export interface DeduplicationResult {
    * step after its retries, every record arriving during the outage was lost
    * for good. A duplicate principal is recoverable; a discarded record is not.
    *
-   * The cost is that a genuine alias may become its own principal instead. Such
-   * a node carries no `embedding` property, so
-   * `MATCH (n:EntityNode) WHERE n.embedding IS NULL` finds exactly the set that
-   * still needs embedding and re-resolution once the backend is healthy.
+   * The cost is that a genuine alias may become its own principal instead. The
+   * node is marked `similarityDeferredAt`. The embedding backfill gives it a
+   * vector, and the `similarity/reconcile` job then runs Pass B for it and
+   * clears the mark (`dedup/reconcile.ts`).
    */
   similarityDeferred?: boolean;
   /** Legacy identity could not be proved; these nodes require reconciliation. */

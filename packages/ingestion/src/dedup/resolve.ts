@@ -24,6 +24,11 @@
  * The ALIAS_OF edge in Neo4j stores:
  *   { confidence, matchReason, createdAt, confirmedAt?, rejectedAt?, reviewedBy? }
  *
+ * When Pass B cannot run (the embedder or the vector index is down), the
+ * entity is written as its own principal and marked `similarityDeferredAt`.
+ * The reconcile job runs Pass B for it later (`./reconcile.ts`). The design
+ * and the decision to degrade are in `docs/specs/ingestion-dedup/spec.md`.
+ *
  * Context queries follow ALIAS_OF edges to the principal and return unified data.
  * An agent asking "tell me everything about Mac Anderson" sees all aliases merged.
  */
@@ -285,45 +290,8 @@ export async function resolveEntity(
     };
   }
 
-  // Query the entity_node_embedding_index for similar nodes of the same entityType.
-  const searchSession = scopedSession();
-  let bestCandidate: {
-    nodeId: string;
-    displayName?: string;
-    email?: string;
-    url?: string;
-    score: number;
-  } | null = null;
-  let similaritySearchFailed = false;
-  // Only the query sits in the try. A fault in scoring below is a defect to
-  // surface, not an unavailable index to degrade around.
-  let candidateRecords: Array<{ get: (key: string) => unknown }> = [];
-  try {
-    // The index returns the GLOBAL top-K by similarity, but we only keep nodes
-    // matching this org + entityType. Over-fetch (K = limit x factor) so the
-    // tenant/type filter doesn't crowd out valid dedup candidates as global
-    // graph volume grows, then trim back to CANDIDATE_LIMIT after filtering.
-    const result = await searchSession.run(
-      `CALL db.index.vector.queryNodes('entity_node_embedding_index', $k, $vector)
-       YIELD node AS n, score
-       WHERE n.orgId = $orgId AND n.entityType = $entityType
-       WITH n, score
-       ORDER BY score DESC
-       LIMIT $limit
-       RETURN n.publicId AS nodeId,
-              n.displayName AS displayName,
-              n.properties AS properties,
-              score`,
-      {
-        vector,
-        orgId,
-        entityType: mutation.entityType,
-        k: BigInt(oversampledLimit(CANDIDATE_LIMIT)),
-        limit: BigInt(CANDIDATE_LIMIT),
-      },
-    );
-    candidateRecords = result.records;
-  } catch (err) {
+  const search = await findSimilarityMatch(mutation, vector, orgId);
+  if (!search.searched) {
     // An index the store cannot answer must not fail ingestion. A vector index
     // of another size than the embedding model's refuses every query until the
     // migration resizes it (#4148), and an index still populating can refuse
@@ -332,62 +300,15 @@ export async function resolveEntity(
     console.warn(
       "[ingestion] dedup: similarity search failed, deferring similarity match",
       {
-        err: err instanceof Error ? err.message : String(err),
+        err: search.error,
         orgId,
         entityType: mutation.entityType,
         naturalKey: mutation.naturalKey,
       },
     );
-    similaritySearchFailed = true;
-  } finally {
-    await searchSession.close();
   }
-
-  for (const record of candidateRecords) {
-    const candidateId = record.get("nodeId") as string;
-    const candidateDisplayName = record.get("displayName") as
-      | string
-      | undefined;
-    const rawProperties = record.get("properties") as string | null;
-    const embeddingSimilarity = record.get("score") as number;
-
-    let parsedProps: Record<string, unknown> = {};
-    if (rawProperties) {
-      try {
-        parsedProps = JSON.parse(rawProperties) as Record<string, unknown>;
-      } catch {
-        // malformed stored properties — skip property scoring
-      }
-    }
-
-    const candidate = {
-      displayName: candidateDisplayName,
-      email:
-        typeof parsedProps["email"] === "string"
-          ? parsedProps["email"]
-          : undefined,
-      url:
-        typeof parsedProps["url"] === "string"
-          ? parsedProps["url"]
-          : undefined,
-    };
-
-    const combinedScore = scoreCandidate(
-      mutation,
-      candidate,
-      embeddingSimilarity,
-    );
-
-    if (combinedScore >= ALIAS_THRESHOLD) {
-      if (!bestCandidate || combinedScore > bestCandidate.score) {
-        bestCandidate = {
-          nodeId: candidateId,
-          ...candidate,
-          score: combinedScore,
-        };
-      }
-    }
-  }
+  const similaritySearchFailed = !search.searched;
+  const bestCandidate = search.searched ? search.match : null;
 
   if (bestCandidate) {
     // Create new alias node, then link it to the principal.
@@ -434,14 +355,176 @@ export async function resolveEntity(
   };
 }
 
+/** What Pass B compares: the entity's type, its name, and its properties. */
+export interface SimilaritySubject {
+  entityType: string;
+  displayName?: string;
+  properties: Record<string, unknown>;
+}
+
+/** The best candidate at or above ALIAS_THRESHOLD, with its combined score. */
+export interface SimilarityMatch {
+  nodeId: string;
+  score: number;
+}
+
+/**
+ * The result of one Pass B search. `searched: false` means the vector index
+ * refused the query, and `error` says why. The caller decides how to degrade.
+ */
+export type SimilaritySearch =
+  | { searched: true; match: SimilarityMatch | null }
+  | { searched: false; error: string };
+
+export interface SimilaritySearchOptions {
+  /**
+   * Leave this node out of the candidates. The reconcile job searches with a
+   * stored node's own vector, and a node always matches itself.
+   */
+  excludeNodeId?: string;
+  /**
+   * Keep only candidates that are not an alias of another node. Without this,
+   * two duplicates written during one outage would each find the other, and
+   * the reconcile job would link them in a loop.
+   */
+  principalsOnly?: boolean;
+}
+
+/**
+ * Pass B: query `entity_node_embedding_index` with `vector`, score each
+ * candidate of the same organisation and type with `scoreCandidate`, and
+ * return the best one at or above ALIAS_THRESHOLD.
+ *
+ * Ingestion runs this for an entity it has not written yet. The reconcile job
+ * (`./reconcile.ts`) runs it for a node written while the search could not
+ * run. Both share this function so they cannot pick matches differently.
+ */
+export async function findSimilarityMatch(
+  subject: SimilaritySubject,
+  vector: number[],
+  orgId: string,
+  options: SimilaritySearchOptions = {},
+): Promise<SimilaritySearch> {
+  const filters = ["n.orgId = $orgId", "n.entityType = $entityType"];
+  if (options.excludeNodeId !== undefined) {
+    filters.push("n.publicId <> $excludeNodeId");
+  }
+  if (options.principalsOnly) {
+    filters.push("NOT (n)-[:ALIAS_OF]->(:EntityNode)");
+  }
+
+  const searchSession = scopedSession();
+  // Only the query sits in the try. A fault in scoring below is a defect to
+  // surface, not an unavailable index to degrade around.
+  let candidateRecords: Array<{ get: (key: string) => unknown }> = [];
+  try {
+    // The index returns the GLOBAL top-K by similarity, but we only keep nodes
+    // matching this org + entityType. Over-fetch (K = limit x factor) so the
+    // tenant/type filter doesn't crowd out valid dedup candidates as global
+    // graph volume grows, then trim back to CANDIDATE_LIMIT after filtering.
+    const result = await searchSession.run(
+      `CALL db.index.vector.queryNodes('entity_node_embedding_index', $k, $vector)
+       YIELD node AS n, score
+       WHERE ${filters.join(" AND ")}
+       WITH n, score
+       ORDER BY score DESC
+       LIMIT $limit
+       RETURN n.publicId AS nodeId,
+              n.displayName AS displayName,
+              n.properties AS properties,
+              score`,
+      {
+        vector,
+        orgId,
+        entityType: subject.entityType,
+        k: BigInt(oversampledLimit(CANDIDATE_LIMIT)),
+        limit: BigInt(CANDIDATE_LIMIT),
+        ...(options.excludeNodeId !== undefined
+          ? { excludeNodeId: options.excludeNodeId }
+          : {}),
+      },
+    );
+    candidateRecords = result.records;
+  } catch (err) {
+    return {
+      searched: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  } finally {
+    await searchSession.close();
+  }
+
+  let best: SimilarityMatch | null = null;
+  for (const record of candidateRecords) {
+    const candidateId: unknown = record.get("nodeId");
+    const candidateDisplayName: unknown = record.get("displayName");
+    const parsedProps = parseStoredProperties(record.get("properties"));
+    const embeddingSimilarity: unknown = record.get("score");
+    // The index yields a publicId and a float score for every node it holds.
+    // A row without them cannot be linked, so it is not a candidate.
+    if (typeof candidateId !== "string") continue;
+    if (typeof embeddingSimilarity !== "number") continue;
+
+    const candidate = {
+      displayName:
+        typeof candidateDisplayName === "string"
+          ? candidateDisplayName
+          : undefined,
+      email:
+        typeof parsedProps["email"] === "string"
+          ? parsedProps["email"]
+          : undefined,
+      url:
+        typeof parsedProps["url"] === "string"
+          ? parsedProps["url"]
+          : undefined,
+    };
+
+    const combinedScore = scoreCandidate(
+      subject,
+      candidate,
+      embeddingSimilarity,
+    );
+
+    if (combinedScore >= ALIAS_THRESHOLD) {
+      if (!best || combinedScore > best.score) {
+        best = { nodeId: candidateId, score: combinedScore };
+      }
+    }
+  }
+  return { searched: true, match: best };
+}
+
+/**
+ * A node's stored `properties` JSON as an object. Malformed or missing JSON
+ * reads as no properties, so property scoring is skipped for that node.
+ */
+export function parseStoredProperties(raw: unknown): Record<string, unknown> {
+  if (typeof raw !== "string" || raw.length === 0) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))
+      return {};
+    const properties: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      const item: unknown = value;
+      properties[key] = item;
+    }
+    return properties;
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Record on the node that it was written without similarity matching.
  *
  * The `similarityDeferred` flag on the result is gone once the pipeline logs
  * it. When the vector query was refused, the node still receives an embedding
  * later, so `n.embedding IS NULL` no longer finds it. `similarityDeferredAt`
- * is the one durable set a later re-resolve can select, for both fallbacks.
- * Best effort: a failed mark is logged and never fails the ingest.
+ * is the one durable set the reconcile job (`./reconcile.ts`) selects, for
+ * both fallbacks. Best effort: a failed mark is logged and never fails the
+ * ingest.
  */
 async function markSimilarityDeferred(
   nodeId: string,
@@ -475,14 +558,16 @@ async function markSimilarityDeferred(
  *   fuzzyNameSimilarity:         0.20
  */
 export function scoreCandidate(
-  incoming: EntityMutation,
+  incoming: Pick<SimilaritySubject, "displayName" | "properties">,
   candidate: { displayName?: string; email?: string; url?: string },
   embeddingSimilarity: number,
 ): number {
   let score = embeddingSimilarity * 0.4;
 
-  const incomingEmail = incoming.properties["email"] as string | undefined;
-  const incomingUrl = incoming.properties["url"] as string | undefined;
+  const email = incoming.properties["email"];
+  const url = incoming.properties["url"];
+  const incomingEmail = typeof email === "string" ? email : undefined;
+  const incomingUrl = typeof url === "string" ? url : undefined;
 
   if (
     incomingEmail &&
