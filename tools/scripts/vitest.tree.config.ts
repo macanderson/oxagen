@@ -17,5 +17,11 @@ export default defineConfig({
     globals: false,
     include: ["**/*.tree.test.ts"],
     exclude: [...configDefaults.exclude],
+    // These tests read the whole tree in one synchronous pass. Two of the
+    // brand guards in sync-brand-assets.tree.test.ts take 10 to 25 seconds in
+    // the checks job. Vitest 2 let a synchronous test run past its timeout.
+    // Vitest 3 checks the elapsed time when the test returns and fails it, so
+    // the 5 second default failed both guards on a clean tree.
+    testTimeout: 60_000,
   },
 });
