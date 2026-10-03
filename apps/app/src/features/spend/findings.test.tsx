@@ -108,6 +108,8 @@ const listing = (saving: SpendFindings["saving"]): SpendFindings => ({
   counts: { findings: 9, high: 9, medium: 0, operators: 1 },
   findings: NINE,
   truncated: false,
+  nextCursor: null,
+  offset: 0,
 });
 
 /** The operator rollup names nobody: the row carries no name. */
@@ -392,6 +394,8 @@ describe("Findings pager", () => {
             counts: { findings: 12, high: 12, medium: 0, operators: 0 },
             findings: TWELVE,
             truncated: false,
+            nextCursor: null,
+            offset: 0,
           }}
           operators={[]}
           at={AT}
@@ -435,8 +439,12 @@ describe("Findings pager", () => {
   });
 });
 
-describe("Findings past one answer (#5262)", () => {
-  function cut(total: number, truncated: boolean) {
+describe("Findings past one answer (#5262, #5303)", () => {
+  function cut(
+    total: number,
+    page: Partial<SpendFindings> = {},
+    cursor: string | null = null,
+  ) {
     render(
       <IntlProvider>
         <FindingsSection
@@ -444,8 +452,10 @@ describe("Findings past one answer (#5262)", () => {
           findings={{
             ...listing(null),
             counts: { findings: total, high: total, medium: 0, operators: 1 },
-            truncated,
+            truncated: total > NINE.length,
+            ...page,
           }}
+          cursor={cursor}
           operators={OPERATORS}
           at={AT}
           evidence={null}
@@ -453,22 +463,73 @@ describe("Findings past one answer (#5262)", () => {
       </IntlProvider>,
     );
   }
+  const ranks = () =>
+    Array.from(document.querySelectorAll("li[data-finding] > span:first-child")).map(
+      (span) => span.textContent,
+    );
+  const pages = () =>
+    screen.getByRole("navigation", { name: "Pages of open findings" });
 
-  it("says how many findings there are in all when the list is cut", () => {
-    cut(62, true);
+  it("says which findings the first page shows and opens the next page", () => {
+    cut(59, { nextCursor: "c2" });
     expect(screen.getByTestId("spend-findings-truncated")).toHaveTextContent(
-      "The list shows the 9 largest of 62 open findings.",
+      "The list shows open findings 1 to 9 of 59.",
     );
     // The hero counts every open finding, not only the nine listed.
     expect(screen.getByTestId("spend-findings-hero")).toHaveTextContent(
-      "62 findings",
+      "59 findings",
     );
     expect(order()).toHaveLength(9);
+    expect(ranks()[0]).toBe("1");
+    expect(
+      within(pages()).getByRole("link", { name: "Open the next page" }),
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/spend/findings?cursor=c2",
+    );
+    // The first page has no way back to itself.
+    expect(
+      within(pages()).queryByRole("link", { name: "Open the first page" }),
+    ).toBeNull();
   });
 
-  it("adds no line when the list holds every finding (negative)", () => {
-    cut(9, false);
+  it("opens the findings past the first 50, ranked from 51, with the way back to the first page", () => {
+    cut(59, { offset: 50, nextCursor: null }, "c2");
+    expect(screen.getByTestId("spend-findings-truncated")).toHaveTextContent(
+      "The list shows open findings 51 to 59 of 59.",
+    );
+    expect(ranks()).toEqual(
+      Array.from({ length: 9 }, (_, i) => String(51 + i)),
+    );
+    expect(
+      within(pages()).getByRole("link", { name: "Open the first page" }),
+    ).toHaveAttribute("href", "/acme/core-platform/spend/findings");
+    expect(
+      within(pages()).queryByRole("link", { name: "Open the next page" }),
+    ).toBeNull();
+    // A finding's evidence opens over this page, and closing it comes back here.
+    const [first] = screen.getAllByRole("link", { name: "Evidence" });
+    expect(first).toHaveAttribute(
+      "href",
+      "/acme/core-platform/spend/findings?finding=fnd_0a&cursor=c2",
+    );
+  });
+
+  it("says when a page holds no open findings and links the first page (negative)", () => {
+    cut(50, { findings: [], offset: 50, nextCursor: null }, "c3");
+    expect(
+      screen.getByText("This page holds no open findings."),
+    ).toBeVisible();
+    expect(
+      within(pages()).getByRole("link", { name: "Open the first page" }),
+    ).toHaveAttribute("href", "/acme/core-platform/spend/findings");
+    expect(order()).toHaveLength(0);
+  });
+
+  it("adds no line and no page links when the list holds every finding (negative)", () => {
+    cut(9);
     expect(screen.queryByTestId("spend-findings-truncated")).toBeNull();
+    expect(screen.queryByTestId("spend-findings-pages")).toBeNull();
     expect(screen.getByTestId("spend-findings-hero")).toHaveTextContent(
       "9 findings",
     );

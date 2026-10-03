@@ -2213,6 +2213,8 @@ describe("runs.findings", () => {
     counts: { findings: findings.length, high: 0, medium: 0, operators: 0 },
     findings,
     truncated: false,
+    nextCursor: null,
+    offset: 0,
   });
 
   it("reads the open findings that cite the run, with the frames each cites there (#4001)", async () => {

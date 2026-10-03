@@ -514,8 +514,11 @@ describe("listTree", () => {
 });
 
 describe("commitFiles", () => {
-  it("posts actions in GitLab's shape and returns the sha", async () => {
-    const { c, calls } = client({ status: 201, body: { id: "newsha" } });
+  it("posts actions in GitLab's shape and returns the sha with its parents", async () => {
+    const { c, calls } = client({
+      status: 201,
+      body: { id: "newsha", parent_ids: ["parentsha"] },
+    });
     const result = await c.commitFiles({
       project: 1,
       branch: "oxagen/x",
@@ -526,7 +529,7 @@ describe("commitFiles", () => {
         { action: "delete", filePath: "c.md" },
       ],
     });
-    expect(result).toEqual({ sha: "newsha" });
+    expect(result).toEqual({ sha: "newsha", parentIds: ["parentsha"] });
     expect(calls[0]).toMatchObject({
       method: "POST",
       url: `${API}/projects/1/repository/commits`,
@@ -540,6 +543,18 @@ describe("commitFiles", () => {
         ],
       },
     });
+  });
+
+  it("answers no parents when GitLab's answer leaves them out", async () => {
+    const { c } = client({ status: 201, body: { id: "newsha" } });
+    await expect(
+      c.commitFiles({
+        project: 1,
+        branch: "oxagen/x",
+        message: "m",
+        actions: [{ action: "delete", filePath: "c.md" }],
+      }),
+    ).resolves.toEqual({ sha: "newsha", parentIds: [] });
   });
 });
 

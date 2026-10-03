@@ -424,6 +424,8 @@ export function spendFindings(
       ...finding,
     })),
     truncated: false,
+    nextCursor: null,
+    offset: 0,
   });
 }
 

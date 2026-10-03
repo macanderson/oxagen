@@ -311,8 +311,12 @@ describe("list_prepaid_orders query", () => {
     const cursor = { at: "2026-09-23T12:00:00.000Z", id: uuid(7) };
     const paged = prepaidOrderPageQuery(db, ORG, { cursor, limit: 10 }).toSQL();
     expect(paged.sql).toMatch(/"prepaid_orders"\."id" < \$\d+/);
+    // The instant is bound as text and cast, never as a Date (#5303).
+    expect(paged.sql).toMatch(
+      /date_trunc\('milliseconds', "billing"\."prepaid_orders"\."created_at"\) < \$\d+::timestamptz/,
+    );
     expect(paged.params).toEqual(
-      expect.arrayContaining([new Date(cursor.at), uuid(7), 11]),
+      expect.arrayContaining([cursor.at, uuid(7), 11]),
     );
   });
 });

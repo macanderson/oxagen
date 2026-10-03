@@ -90,6 +90,7 @@ import {
 } from "./functions/run.enrich";
 import { runPullRequestBackfill } from "./functions/run.pull-request-backfill";
 import { forgePullRequestSync } from "./functions/forge.pull-request-sync";
+import { forgePullRequestBackfill } from "./functions/forge.pull-request-backfill";
 import { workOrderPullRequestLinked, workOrderRunEnded } from "./functions/work.order-results";
 import { agentInterjectionTimeout } from "./functions/agent.interjection-timeout";
 import { agentInterjectionTimeoutSweep } from "./functions/agent.interjection-timeout-sweep";
@@ -179,6 +180,8 @@ export const functions: any[] = [
   runEnrichmentSweep,
   runPullRequestBackfill,
   forgePullRequestSync,
+  // Move links recorded before the forge store existed into it (ADR-292).
+  forgePullRequestBackfill,
   workOrderRunEnded,
   workOrderPullRequestLinked,
   agentInterjectionTimeout,

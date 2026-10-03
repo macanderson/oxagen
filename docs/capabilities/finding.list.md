@@ -12,7 +12,7 @@ The workspace's costed findings ranked by the money at stake, with the totals th
 
 - API: `POST /v1/:org_slug/:workspace_slug/spend/findings`
 - MCP: `list_findings`
-- CLI: `oxagen findings list [--run <id>] [--status <status>]`
+- CLI: `oxagen findings list [--run <id>] [--status <status>] [--level <level>] [--subject <key>] [--kind <kind>] [--cursor <cursor>]`
 - Authentication: session (org Owner, Admin, Billing or Member; workspace Owner or Member)
 - Capability name: `list_findings`
 - Not billed (`noBillingGate: true`). IAM default-deny; medium sensitivity.
@@ -24,6 +24,10 @@ The workspace's costed findings ranked by the money at stake, with the totals th
 |---|---|---|---|
 | `status` | enum | no | `open` (default), `applied` or `dismissed` |
 | `runId` | string | no | `arun_…` or `tse_…`. Lists only the findings that cite this run (`cited_runs @> [runId]`), and the totals cover those findings (#4001) |
+| `level` | enum | no | `tool`, `agent`, `operator` or `workspace`. Lists only the findings at this level, and the totals cover those findings (#5303) |
+| `subject` | string | no | 1 to 256 characters: an agent key, an operator's `prn_…`, a tool name, or the workspace id. Lists only the findings about this key, and the totals cover those findings (#5303) |
+| `kind` | enum | no | One of the 13 finding kinds, such as `retry_loops` or `spin_loops`. Lists only the findings of this kind, and the totals cover those findings (#5303) |
+| `cursor` | string | no | 1 to 256 characters: the `nextCursor` of the page before. Without it the read answers the first page (#5303) |
 
 ## Output
 
@@ -36,10 +40,22 @@ The workspace's costed findings ranked by the money at stake, with the totals th
 | `share` | number or null | `annualised` over `spend` scaled from `window` to 365 days, at most 1; a `window` shorter than 7 days scales as 7 days |
 | `annualised` | cost or null | each matched finding's saving scaled from its own window to 365 days, summed; a window shorter than 7 days scales as 7 days, so a finding re-proven minutes after a decision is not scaled from minutes to a year |
 | `counts` | object | `{ findings, high, medium, operators }` over every matched finding, listed or not; `operators` counts the distinct operators whose runs those findings cite |
-| `findings` | object[] | at most 50; open findings largest saving first, decided findings most recent decision first, ties by id |
+| `findings` | object[] | one page of at most 50; open findings largest saving first, decided findings most recent decision first, ties by id |
 | `truncated` | boolean | true when the read matches more findings than `findings` lists, so `counts.findings` is larger than the list |
+| `nextCursor` | string or null | the cursor that reads the next page; null on the last page |
+| `offset` | integer | how many findings come before this page in the list order: 0 on the first page, 50 on the second. A finding's rank is `offset` plus its place on the page |
 
-A matched finding is one in the asked status, and with `runId` one that cites the run. The findings job writes every finding that counts toward the unproductive spend headline, however many there are (ADR-208, #5262), so a workspace can hold more open findings than one answer lists. The counts and totals still cover all of them. Paging past the first 50 is not built yet.
+A matched finding is one in the asked status, with `runId` one that cites the run, with `level` one at that level, with `subject` one about that key, and with `kind` one of that kind. The findings job writes every finding that counts toward the unproductive spend headline, however many there are (ADR-208, #5262), so a workspace can hold more open findings than one answer lists. The counts and totals cover every matched finding on every page.
+
+### Paging
+
+A read answers one page of at most 50 findings. To read the next page, send the same input again with `cursor` set to the answer's `nextCursor`. Repeat until `nextCursor` is null. Each page starts right after the last finding of the page before it, in the list order, so a finding is listed once and none is skipped while the findings stay as they are.
+
+- The cursor is opaque text. It holds the last finding's place in the order: its saving for open findings, or its decision time to the millisecond for decided ones, then its row id.
+- A cursor reads only the status it was made for. A cursor from the open list sent with `status: applied` is refused with `invalid_input` (`invalid_cursor`), and so is any text the handler did not write.
+- A cursor does not expire. If findings are decided or re-proven between two reads, the next page starts after the same place in the order, so a finding whose saving moved past that place can be missed or listed twice. Start again without a cursor to read a fresh first page.
+- The findings job keeps at most one open finding per kind for each level and subject, and there are 13 kinds. So a read with `level` and `subject` lists every open finding about one agent, operator or tool in one page. An agent's page and a Spend drill in the app read their findings this way.
+- The Spend page's By tool tab totals each tool's findings over every page of `tool` findings. If a page does not answer, the total reads as not recorded, never as a sum of part of the findings.
 
 Each finding carries `id` (`fnd_…`), `kind`, `level`, `subject`, `saving` (cost), `confidence` (`high` or `medium`), `window`, `why`, `fix`, `runs` and `calls` (what it cites), `status`, `detectedAt`, `decidedAt` and `appliedActionId`. A finding whose fix names a setting also carries `recommendation`: the `setting`, the proposed `value`, and the `current` value when the findings job read one. A finding also carries `values`, its kind's figures that the Spend card fills its text from, such as a spin loop's tool and how many times in a row it ran, or the retention mode that decides the Needs prompt text badge. `values.kind` names the shape. A finding the job wrote before it stored values has none, and neither do `duplicate_tool_calls` and `repeated_shell_commands`, whose text needs only `runs`, `calls`, and `saving`.
 
@@ -52,7 +68,7 @@ A read that names `runId` adds `citation` to each finding: what it cites in that
 | `frames` | object[] or null | `{ seq, sessionUuid? }` for each cited call, seqs ascending, at most 50. `sessionUuid` names a subagent chain and is absent on the run's own chain, because a seq counts on its own chain. Null when the finding was written before frames were cited, until the findings job's next pass |
 | `framesTotal` | integer or null | every call the finding cites in the run, including any past the 50. On a finding written before frames were cited, the calls its evidence counted in the run, and null when that evidence did not itemise the run (it itemises the ten runs with the largest saving) |
 
-`oxagen findings list` prints the findings as a table. With `--run`, its last column names the frames each finding cites (`#14, #3 (subagent 0192d4a8) and 7 more`), or `the whole run`. `--json` prints the contract payload.
+`oxagen findings list` prints the findings as a table. With `--run`, its last column names the frames each finding cites (`#14, #3 (subagent 0192d4a8) and 7 more`), or `the whole run`. `--level` and `--subject` list the findings about one key, and `--kind` the findings of one kind. When more findings follow, a line under the table says which ones the page shows and prints the `--cursor` value that lists the next page. `--json` prints the contract payload, `nextCursor` included.
 
 ## Kinds
 

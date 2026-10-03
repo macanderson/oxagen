@@ -72,6 +72,7 @@ export function sendSummary(
     runtime: { name: "CI runner 6", tier: "gateway" },
     requestedAt: "2026-09-30T13:02:00Z",
     pullRequest: null,
+    pullRequests: [],
     checks: "no_pull_request",
     gate: { open: false, block: "run_active", detail: null },
     accepted: false,

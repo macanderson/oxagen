@@ -7,6 +7,7 @@
 import type { Sha256Digest } from "@oxagen/run-evidence";
 import { type TriageCorrection, type TriageDecision, effectiveTriage } from "@oxagen/work";
 import { type CheckConclusion, type WorkFact, newFact, reduceWorkItem } from "@oxagen/work/records";
+import type { OrderPullRequest } from "../forge-pull-requests/orders";
 import type { DerivedItem, Lookups } from "./derive";
 
 export const SHA1 = "1".repeat(40);
@@ -390,6 +391,23 @@ export function lookups(over: Partial<Lookups> = {}): Lookups {
       [O2, { publicId: "wo_two", mandateId: null, host: { name: "laptop-1", lastPollAt: at(30) }, commandOutcome: "queued" }],
     ]),
     runs: new Map(),
+    pullRequests: new Map<string, readonly OrderPullRequest[]>(),
+    ...over,
+  };
+}
+
+/** A pull request the forge store holds for a send: #612 in the item's repository, open. */
+export function forgePull(over: Partial<OrderPullRequest> = {}): OrderPullRequest {
+  return {
+    id: "fpr_612",
+    provider: "github",
+    repository: REPOSITORY,
+    number: 612,
+    url: `https://github.com/${REPOSITORY}/pull/612`,
+    title: "Show the expiry message",
+    state: "open",
+    headSha: SHA1,
+    stateSeenAt: at(20),
     ...over,
   };
 }

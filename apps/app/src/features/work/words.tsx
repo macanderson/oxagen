@@ -13,6 +13,7 @@ import { useTranslations } from "next-intl";
 import type {
   ChecksWord,
   CostCoverage,
+  ForgePullRequest,
   WorkPriority,
   WorkStatus,
   WorkWait,
@@ -70,6 +71,30 @@ const CHECKS_TONE: Record<ChecksWord, BadgeTone> = {
   no_pull_request: "failed",
   pr_closed: "failed",
 };
+
+const PULL_TONE: Record<ForgePullRequest["state"], BadgeTone> = {
+  open: "approval",
+  draft: "quiet",
+  merged: "allowed",
+  closed: "quiet",
+};
+
+/** A pull request's state as the forge store last recorded it, as one word. */
+export function PullStateBadge({ pull }: { pull: ForgePullRequest }) {
+  const t = useTranslations("work.pullState");
+  const format = useFormatter();
+  return (
+    <Badge
+      tone={PULL_TONE[pull.state]}
+      data-pull-state={pull.state}
+      title={t("seen", {
+        at: format.dateTime(new Date(pull.stateSeenAt), { dateStyle: "medium", timeStyle: "short" }),
+      })}
+    >
+      {t(pull.state)}
+    </Badge>
+  );
+}
 
 /** The required checks on the head commit, as one word beside its dot. */
 export function ChecksBadge({ word }: { word: ChecksWord }) {

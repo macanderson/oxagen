@@ -139,6 +139,23 @@ function toWait(wait: WaitOut): z.input<typeof WorkWait> {
   }
 }
 
+type ForgePullOut = SendOut["pull_requests"][number];
+
+/** One pull request a send has in the forge store, renamed for the view. */
+export function toForgePullRequest(pull: ForgePullOut) {
+  return {
+    id: pull.id,
+    provider: pull.provider,
+    repository: pull.repository,
+    number: pull.number,
+    url: pull.url,
+    title: pull.title,
+    state: pull.state,
+    head: pull.head,
+    stateSeenAt: pull.state_seen_at,
+  };
+}
+
 function toSendSummary(send: SendOut): z.input<typeof SendSummary> {
   return {
     id: send.id,
@@ -158,6 +175,7 @@ function toSendSummary(send: SendOut): z.input<typeof SendSummary> {
             url: send.pull_request.url,
             head: send.pull_request.head,
           },
+    pullRequests: send.pull_requests.map(toForgePullRequest),
     checks: send.checks,
     gate: { open: send.gate.open, block: send.gate.block, detail: send.gate.detail },
     accepted: send.accepted,

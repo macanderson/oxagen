@@ -53,7 +53,8 @@ Each send:
 | `stopped_at` | `string` or `null` | When the runtime confirmed the stop |
 | `runs` | `{ id, cost, basis, tier }[]` | Each run, with its cost, how it was measured, and its tier. `cost` is null when the run reported no usage or has not been rolled up |
 | `cost` | `{ runs, known_runs, total }` | As in a list row, over this send's runs |
-| `pull_request` | object or `null` | The repository, number, link, head, when the head was seen, the merge, and when it closed without merging |
+| `pull_request` | object or `null` | The repository, number, link, head, when the head was seen, the merge, and when it closed without merging, from the send's facts. `url` is the forge store's link when the store holds the same pull request |
+| `pull_requests` | pull request[] | Every pull request the send has in the forge store, newest first, as in a list row's send |
 | `required_checks` | `string[]` or `null` | The checks the base branch requires on the head. Null until Oxagen reads them |
 | `checks` | `{ name, conclusion, required }[]` | Each check's latest result on the head |
 | `earlier_checks` | `{ head, checks }` or `null` | The latest results on the head before this one. They decide nothing on the current head |
@@ -66,7 +67,7 @@ Each history entry names its `kind`, its `source`, who acted by display name, wh
 
 ## Semantics
 
-The answer is read from the item's records and reduced from its facts on the server ([ADR-244](../adr/ADR-244-phase-1-work-records-are-facts-and-the-state-is-reduced-from-them.md)). The item is found only in the caller's workspace. A deleted item reads as missing. A read never calls GitHub, and [refresh_work_order_checks](work.order.checks.refresh.md) reads GitHub again.
+The answer is read from the item's records and reduced from its facts on the server ([ADR-244](../adr/ADR-244-phase-1-work-records-are-facts-and-the-state-is-reduced-from-them.md)). The item is found only in the caller's workspace. A deleted item reads as missing. A read never calls GitHub, and [refresh_work_order_checks](work.order.checks.refresh.md) reads GitHub again. Each send's `pull_requests` and the link in its `pull_request` come from the forge store ([ADR-292](../adr/ADR-292-every-pull-request-read-comes-from-the-forge-store.md)). The head, the checks, the merge, and the acceptance come from the send's facts.
 
 Names are display names. A person shows as the name they gave, or their email when they gave none. A host's fact shows the host's name. Oxagen's and the provider's facts name nobody.
 
