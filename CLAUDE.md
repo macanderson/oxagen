@@ -157,6 +157,15 @@ Mac set this on 2026-10-02 (oxageninc/brand#83), replacing the rule of 2026-09-2
 - The brand check (`pnpm check:brand`) holds both customer sites to this rule: every size and face from a kit token, and h1 to h3 in Space Grotesk. `tools/scripts/lib/brand-literals.mjs` lists the stylesheets, the hand-written oxagen.sh pages, and the docs markup it reads.
 - In the app, no text is smaller than 14px, and no class sets a size of its own (Mac, 2026-10-02). Size text with `text-sm` (14px), `text-base` and up, or `var(--ox-a-*)` in a stylesheet. `text-xs` renders at 14px too. Do not write `text-[13px]`, `text-a-micro`, or a `font-size` under 14px. `apps/app/src/test/arch/type-scale.test.ts` (INV-36) fails on each of them.
 
+## Tokens on the customer sites
+
+Mac set this on 2026-10-03: every colour, corner, shadow, spacing value, and button on oxagen.sh and docs.oxagen.sh reads a semantic token (#5289).
+
+- Raw kit colours (`--ox-*`) appear only on the right of a custom property, the token-mapping layer. A rule reads the role, such as `var(--panel)` or `var(--success)`.
+- No hex, `rgb()`, `hsl()`, or `oklch()` colour and no named colour, except inside a data URI. Spacing reads `calc(var(--ox-space) * n)`. Corners and shadows read the kit's scale.
+- oxagen.sh's `.btn` classes read only the `--button-*` roles, which `assets/oxagen.css` maps with the names `packages/ui` uses. The read page maps its own.
+- The brand check's semantic pass holds both sites to this. `SEMANTIC_KEEP` and `MARKUP_KEEP` in `tools/scripts/lib/brand-literals.mjs` name each value kept by hand, with its reason: the print stylesheets and the story's chart hues.
+
 ## Runtime checks that matter
 
 - Register handlers before calling `invoke()`. A missing handler throws `CapabilityError` with code `no_handler`. Handler registration does not install IAM, billing, or entitlement gates. Bootstrap those at the surface entry point.
