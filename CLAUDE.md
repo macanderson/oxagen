@@ -157,6 +157,14 @@ Mac set this on 2026-10-02 (oxageninc/brand#83), replacing the rule of 2026-09-2
 - The brand check (`pnpm check:brand`) holds both customer sites to this rule: every size and face from a kit token, and h1 to h3 in Space Grotesk. `tools/scripts/lib/brand-literals.mjs` lists the stylesheets, the hand-written oxagen.sh pages, and the docs markup it reads.
 - The app's base font size is 14px, the kit's `--ox-a-base`, and every size in the app follows it (Mac, 2026-10-03, #5256). The base is a default, not a floor. `text-base` is body text. `text-sm` (12px) and `text-xs` (10px) are smaller, and `text-lg` (16px) through `text-6xl` are larger. The app gets these steps by importing the kit's `house-text-scale.css` in `apps/app/src/app/globals.css`. `@oxagen/ui`'s `globals.css` does not import it, because the docs site keeps Tailwind's stock sizes. In a stylesheet, use a `var(--ox-a-*)` step. A text field on a phone takes `max-md:text-input-touch`, so iOS never zooms the page. No class, stylesheet, or inline style sets a size of its own: no `text-[13px]`, no `font-size: 13px`, and no `fontSize: 13`. A component copied from shadcn/ui sets body text with `text-sm`, so rename its `text-sm` to `text-base` and its `text-xs` to `text-sm`. `apps/app/src/test/arch/type-scale.test.ts` (INV-36) fails on a hard-coded size and on a scale that stops following the base or falls out of order. It cannot tell a `text-sm` meant as body text from a small one.
 
+## Tokens
+
+Mac set this on 2026-10-03 (#5283). Every value in the app reads a token: a Tailwind scale step (`gap-2.5`, `max-w-180`, `rounded-2xl`), a theme utility, the kit's `Button` with one of its variants, or `var(--…)` in a stylesheet.
+
+- Do not write a Tailwind arbitrary value (`gap-[10px]`, `rounded-[8px]`, `shadow-[…]`), a `duration-<n>` step, a literal number or length in `style={{…}}`, a raw `<button>`, or a named colour. A value computed from data, such as `${pct}%`, may stay in a style.
+- In a stylesheet, a custom property definition may hold a raw value, because that is where a value becomes a token. A rule's radius, shadow, spacing, size, and motion read tokens.
+- `apps/app/src/test/arch/hardcoded-values.test.ts` (INV-37) fails on a new value. Values written before the rule wait in `apps/app/hardcoded-values-baseline.json`, which only shrinks. After you replace values, run `pnpm --filter @oxagen/app gen:hardcoded-values` and commit the smaller baseline.
+
 ## Runtime checks that matter
 
 - Register handlers before calling `invoke()`. A missing handler throws `CapabilityError` with code `no_handler`. Handler registration does not install IAM, billing, or entitlement gates. Bootstrap those at the surface entry point.

@@ -62,8 +62,13 @@ const BAR_SHARE = 0.62;
 /** Gridlines at a quarter of the dearest turn each: `for(i=0;i<=4;i++)`. */
 const GRID_STEPS = 4;
 
-/** `.wf-svg { width:100%; min-width:520px; height:auto; display:block }` */
-const chartSvg = "block h-auto w-full min-w-[520px]";
+/**
+ * `.wf-svg { width:100%; height:auto; display:block }`. The chart scales with
+ * its panel, and its labels scale with it. It is never drawn narrower than its
+ * own 760 units, where the mockup allowed 520px, so a label never renders
+ * under its step. The panel scrolls sideways instead.
+ */
+const chartSvg = "block h-auto w-full min-w-[760px]";
 /**
  * Every label in the chart, in the chart's own units. The mockup sets them at
  * 10px to 11px, so they take the scale's smallest step.
