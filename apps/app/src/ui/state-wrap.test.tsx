@@ -148,7 +148,7 @@ describe("StateWrap", () => {
     render(<StateWrap testId="bare" tone="neutral" title="Nothing here" />);
     const state = screen.getByTestId("bare");
     expect(state.querySelector("p")).toBeNull();
-    expect(state.querySelector(".gap-\\[9px\\]")).toBeNull();
+    expect(state.querySelector(".gap-2\\.25")).toBeNull();
   });
 
   it("draws what follows the actions: the trace line and the facts, on the design's recipes", () => {

@@ -942,7 +942,7 @@ describe("states", () => {
     const loading = screen.getByRole("status", { name: "Loading steering" });
     expect(loading).toHaveAttribute("aria-busy", "true");
     expect(loading.querySelectorAll(".h-9")).toHaveLength(7);
-    expect(loading.querySelectorAll(".h-\\[88px\\]")).toHaveLength(4);
+    expect(loading.querySelectorAll(".h-22")).toHaveLength(4);
     // Every bone is the design's shimmer, as on every other page, and none pulses.
     expect(loading.querySelectorAll(".skeleton").length).toBeGreaterThan(0);
     expect(loading.querySelector(".animate-pulse")).toBeNull();
