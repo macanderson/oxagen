@@ -28,6 +28,7 @@ const EXPECTED_PG_SCHEMAS = [
   "cost",
   "environments",
   "evidence",
+  "forge",
   "iam",
   "ingestion",
   "mcp",
