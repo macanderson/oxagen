@@ -9,6 +9,7 @@ import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.ge
 import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
+import { spendUnproductive } from "@oxagen/oxagen/contracts/spend.unproductive";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { describe, expect, it } from "vitest";
 import {
@@ -21,6 +22,7 @@ import {
   SpendReport,
   SpendWaste,
   UnpricedModels,
+  UnproductiveSpend,
 } from "@/data/contracts/spend";
 import {
   toFleetSpend,
@@ -32,6 +34,7 @@ import {
   toSpendReport,
   toSpendWaste,
   toUnpricedModels,
+  toUnproductiveSpend,
 } from "./spend";
 
 const tokens = {
@@ -280,6 +283,7 @@ describe("toSpendWaste", () => {
           ],
         },
       ],
+      findingsOutsidePeriod: 0,
     });
     const view = SpendWaste.parse(toSpendWaste(out));
     expect(view.causes[0]?.provingRuns).toEqual([
@@ -289,7 +293,7 @@ describe("toSpendWaste", () => {
     expect(view.wasted?.basis).toBe("gateway_observed");
   });
 
-  it("keeps a period with no waste null rather than zero", () => {
+  it("keeps a period with no waste null rather than zero, with the open findings outside it", () => {
     const out = spendWasteList.output.parse({
       period: { from: "2026-09-01", to: "2026-09-15" },
       wasted: null,
@@ -297,14 +301,81 @@ describe("toSpendWaste", () => {
       runsWithWaste: 0,
       largestCause: null,
       causes: [],
+      findingsOutsidePeriod: 4,
     });
     expect(SpendWaste.parse(toSpendWaste(out))).toEqual({
       wasted: null,
       share: null,
       runsWithWaste: 0,
       largestCause: null,
+      findingsOutsidePeriod: 4,
       causes: [],
     });
+  });
+
+  // #5294: the calls findings claim are causes the page draws.
+  it("copies every claimed cause with its basis", () => {
+    const cost = {
+      micros: "1807000",
+      currency: "USD",
+      basis: "client_attested",
+    } as const;
+    const out = spendWasteList.output.parse({
+      period: { from: "2026-10-01", to: "2026-10-02" },
+      wasted: cost,
+      share: 0.004,
+      runsWithWaste: 1,
+      largestCause: "repeated_calls",
+      causes: [
+        "repeated_calls",
+        "spin_loops",
+        "retry_loops",
+        "recurring_runs",
+        "spend_with_no_outcome",
+      ].map((cause) => ({
+        cause,
+        wasted: cost,
+        runs: 1,
+        runIds: ["tse_01k5rn9t4"],
+        provingRuns: [{ runId: "tse_01k5rn9t4", name: null }],
+      })),
+      findingsOutsidePeriod: 0,
+    });
+    const view = SpendWaste.parse(toSpendWaste(out));
+    expect(view.largestCause).toBe("repeated_calls");
+    expect(view.causes.map((c) => c.cause)).toEqual([
+      "repeated_calls",
+      "spin_loops",
+      "retry_loops",
+      "recurring_runs",
+      "spend_with_no_outcome",
+    ]);
+    expect(view.causes.every((c) => c.wasted.basis === "client_attested")).toBe(
+      true,
+    );
+  });
+});
+
+describe("toUnproductiveSpend", () => {
+  it("copies the headline, its parts, and the open findings outside the period", () => {
+    const usd = (micros: string) => ({ micros, currency: "USD" });
+    const out = spendUnproductive.output.parse({
+      period: { from: "2026-10-01", to: "2026-10-02" },
+      unproductive: usd("0"),
+      spend: null,
+      share: null,
+      parts: [
+        { detector: 2, saving: usd("0"), findings: 0 },
+        { detector: 3, saving: usd("0"), findings: 0 },
+        { detector: 5, saving: usd("0"), findings: 0 },
+      ],
+      estimate: { saving: usd("0"), findings: 0 },
+      findingsOutsidePeriod: 4,
+    });
+    const view = UnproductiveSpend.parse(toUnproductiveSpend(out));
+    expect(view.period).toEqual({ from: "2026-10-01", to: "2026-10-02" });
+    expect(view.findingsOutsidePeriod).toBe(4);
+    expect(view.spend).toBeNull();
   });
 });
 

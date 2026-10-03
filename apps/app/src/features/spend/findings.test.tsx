@@ -151,6 +151,7 @@ const HEADLINE: UnproductiveSpend = {
     { detector: 5, saving: usd("6000000"), findings: 3 },
   ],
   estimate: { saving: usd("15000000"), findings: 4 },
+  findingsOutsidePeriod: 0,
 };
 
 beforeEach(() => {
@@ -198,8 +199,70 @@ describe("Findings hero", () => {
     expect(screen.getByTestId("spend-headline-share")).toHaveTextContent(
       /12(\.3)?%/,
     );
-    expect(hero).toHaveTextContent(/of \$100(\.00)? spent this month\./);
+    expect(hero).toHaveTextContent(
+      /of \$100(\.00)? spent on calls in this window\./,
+    );
     expect(hero).not.toHaveTextContent("Savings identified");
+  });
+
+  // #5294: the list is the open backlog, so the hero names the days its
+  // headline counts, and why its spend can differ from the Spend tile.
+  it("names the days the headline counts, in UTC, and how its spend differs from the Spend tile", () => {
+    section(null);
+    expect(screen.getByTestId("spend-headline-window")).toHaveTextContent(
+      "Counts the calls that ran from Sep 1, 2026 to Sep 15, 2026.",
+    );
+    expect(screen.getByTestId("spend-findings-hero")).toHaveTextContent(
+      "The Spend tile counts each run on the day it started.",
+    );
+  });
+
+  it("prints each day of the window as the UTC day, whatever the viewer's zone", () => {
+    render(
+      <IntlProvider timeZone="America/Los_Angeles">
+        <FindingsSection
+          headline={readOk(HEADLINE)}
+          findings={listing(null)}
+          operators={OPERATORS}
+          at={AT}
+          evidence={null}
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("spend-headline-window")).toHaveTextContent(
+      "from Sep 1, 2026 to Sep 15, 2026.",
+    );
+  });
+
+  it("says how many open findings claim calls outside the window when the headline is zero", () => {
+    section(
+      null,
+      readOk({
+        ...HEADLINE,
+        unproductive: usd("0"),
+        share: 0,
+        findingsOutsidePeriod: 4,
+      }),
+    );
+    expect(screen.getByTestId("spend-headline")).toHaveTextContent("$0.00");
+    expect(screen.getByTestId("spend-headline-outside")).toHaveTextContent(
+      "4 open findings claim calls outside this window.",
+    );
+    // The list still shows the open backlog.
+    expect(order()).toHaveLength(9);
+  });
+
+  it("names no findings outside the window beside a headline that counts calls inside it (negative)", () => {
+    section(null, readOk({ ...HEADLINE, findingsOutsidePeriod: 4 }));
+    expect(screen.queryByTestId("spend-headline-outside")).toBeNull();
+  });
+
+  it("names no findings outside the window when none falls outside it (negative)", () => {
+    section(
+      null,
+      readOk({ ...HEADLINE, unproductive: usd("0"), share: 0 }),
+    );
+    expect(screen.queryByTestId("spend-headline-outside")).toBeNull();
   });
 
   it("shows the parts and the estimate beside the headline and adds none of them to it", () => {
@@ -234,7 +297,11 @@ describe("Findings hero", () => {
         .querySelector('[data-recorded="false"]'),
     ).not.toBeNull();
     expect(screen.getByTestId("spend-findings-hero")).toHaveTextContent(
-      /No share: this month’s spend has no single priced figure\./,
+      /No share: the calls in this window have no single priced figure\./,
+    );
+    // No spend figure, so nothing to set beside the Spend tile's.
+    expect(screen.getByTestId("spend-findings-hero")).not.toHaveTextContent(
+      "The Spend tile counts",
     );
   });
 

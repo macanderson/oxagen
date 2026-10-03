@@ -134,9 +134,12 @@
       },
       "costData": "Cost data: {basis}",
       "hero": "Unproductive spend",
+      "heroWindow": "Counts the calls that ran from {from} to {to}.",
       "heroShareOf": "of",
-      "heroPeriod": "spent this month.",
-      "heroNoSpend": "No share: this month’s spend has no single priced figure.",
+      "heroPeriod": "spent on calls in this window.",
+      "heroNoSpend": "No share: the calls in this window have no single priced figure.",
+      "heroSpendNote": "This share counts each call on the day it ran. The Spend tile counts each run on the day it started.",
+      "heroOutside": "{count, plural, one {# open finding claims} other {# open findings claim}} calls outside this window.",
       "mixedCurrency": "This month holds unproductive spend in more than one currency. Each figure adds up one currency, so Oxagen built none.",
       "parts": {
         "title": "Parts and estimates",
@@ -262,10 +265,20 @@
       "byCause": "By cause",
       "causeRuns": "{runs} runs",
       "cause": {
-        "cache_write_never_read": "cache written and never read"
+        "cache_write_never_read": "cache written and never read",
+        "spin_loops": "spin loops",
+        "retry_loops": "retry loops",
+        "repeated_calls": "repeated calls",
+        "recurring_runs": "recurring runs",
+        "spend_with_no_outcome": "spend with no outcome"
       },
       "why": {
-        "cache_write_never_read": "a prefix was written to the cache and no later call read it"
+        "cache_write_never_read": "a prefix was written to the cache and no later call read it",
+        "spin_loops": "a request repeated one call 20 or more times in a row with the same result",
+        "retry_loops": "a request only retried a call that had already failed with the same error",
+        "repeated_calls": "a request only repeated tool calls or shell commands the run had already made with the same result",
+        "recurring_runs": "a run sent the same prompt as 4 or more other runs and changed no file",
+        "spend_with_no_outcome": "a run's pull request closed unmerged or was reverted, or the run stopped mid-step"
       },
       "designCause": {
         "cacheMisses": "cache misses",
@@ -275,13 +288,12 @@
         "idleWhileParked": "idle while parked",
         "haltedEarly": "halted early"
       },
-      "causesMissing": "Retry loops come from the open findings, and one other cause is recorded. The five other causes the design meters are not recorded yet.",
-      "retryLoopsWhy": "a call failed with the same error 3 or more times in a row (open findings, last 30 days)",
-      "retryLoopsNone": "No retry loop found",
-      "retryLoopsFindings": "{findings} findings",
-      "retryLoopsOpen": "Open the findings",
+      "causesNote": "Wasted spend adds the calls that open findings claim and the cache writes that no call read. The claimed calls add up to the unproductive spend on the Findings tab.",
+      "causesMissing": "Cache misses, corrective prompts, context bloat, and idle while parked have no detector yet. Retry loops and halted early come from the calls that findings claim in this period.",
+      "outside": "{count, plural, one {# open finding claims} other {# open findings claim}} calls outside this period.",
+      "openFindings": "Open the findings",
       "runs": "Runs with waste",
-      "note": "Wasted spend is read from frames. Work a person accepted is excluded.",
+      "note": "Wasted spend is read from the frames each run recorded.",
       "runAmountMissing": "What each run wasted, its task and its steps are not on the waste record yet.",
       "none": "No run in this period shows waste in its frames.",
       "openRun": "Open the run",

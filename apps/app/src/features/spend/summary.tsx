@@ -82,9 +82,14 @@ export function SummaryTiles({
           {wasted === null || wasted.wasted === null ? (
             <NotRecordedValue />
           ) : (
-            <span data-tone="critical" className="text-destructive">
-              <Money value={wasted.wasted} />
-            </span>
+            <>
+              <span data-tone="critical" className="text-destructive">
+                <Money value={wasted.wasted} />
+              </span>
+              <span className={statNote}>
+                <BasisLabel basis={wasted.wasted.basis} />
+              </span>
+            </>
           )}
         </Tile>
       </TileStrip>
