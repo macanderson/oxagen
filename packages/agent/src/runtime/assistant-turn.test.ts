@@ -510,6 +510,8 @@ describe("prepareAssistantTurn", () => {
     expect(mocks.log).toEqual(["roles", "funding", "gate"]);
     expect(mocks.evaluateTurnCreditGate).toHaveBeenCalledWith("org-1", {
       fundedBy: "platform",
+      lane: "assistant",
+      workspaceId: "ws-1",
     });
     expect(captured.inserts).toHaveLength(0);
     expect(mocks.openAssistantRun).not.toHaveBeenCalled();
