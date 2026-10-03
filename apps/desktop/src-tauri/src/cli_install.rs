@@ -2098,6 +2098,9 @@ fn reapply_if_stale(env: &InstallEnv, view: &mut CliInstallView, runner: Option<
     }
 }
 
+/// The launch without a re-apply runner: what every rig that has no daemon
+/// to answer runs.
+#[cfg(test)]
 pub(crate) fn ensure_cli_installed_in(env: &InstallEnv, state: &CliInstallState) -> CliInstallView {
     ensure_cli_installed_with(env, state, None)
 }
