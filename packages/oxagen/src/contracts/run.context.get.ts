@@ -162,8 +162,11 @@ export const runContextGet = registerCapability({
   mutates: false,
   sensitivity: "medium",
   defaultEffect: "deny",
+  // Billing reads a run's Cost tab through `get_run_cost`, and that tab's
+  // Prompt composition reads this capability, so Billing gets the same read
+  // (#5340, Mac 2026-10-03). It returns sizes and shares, never prompt text.
   defaultRoles: {
-    org: { Owner: "allow", Admin: "allow", Member: "allow" },
+    org: { Owner: "allow", Admin: "allow", Billing: "allow", Member: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
   agent: { requiresApproval: false, riskLevel: "low", category: "run" },
