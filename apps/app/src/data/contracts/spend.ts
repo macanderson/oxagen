@@ -623,9 +623,13 @@ export const SpendFinding = z.object({
 });
 export type SpendFinding = z.infer<typeof SpendFinding>;
 
-/** `list_findings`: the open findings largest saving first, with the totals the page leads with. */
+/**
+ * `list_findings`: the open findings largest saving first, with the totals the
+ * page leads with. The list holds at most 50 findings. The counts and totals
+ * cover every open finding, listed or not (#5262).
+ */
 export const SpendFindings = z.object({
-  /** The span the listed findings cover; null when none is listed. */
+  /** The span every open finding covers; null when none is open. */
   window: FindingWindow.nullable(),
   saving: Cost.nullable(),
   /** The workspace's priced spend over `window`. */
@@ -634,13 +638,16 @@ export const SpendFindings = z.object({
   share: z.number().nonnegative().nullable(),
   annualised: Cost.nullable(),
   counts: z.object({
+    /** Every open finding, listed or not. */
     findings: Count,
     high: Count,
     medium: Count,
-    /** Distinct operators whose runs the listed findings cite. */
+    /** Distinct operators whose runs the open findings cite. */
     operators: Count,
   }),
   findings: z.array(SpendFinding),
+  /** True when the workspace holds more open findings than `findings` lists. */
+  truncated: z.boolean(),
 });
 export type SpendFindings = z.infer<typeof SpendFindings>;
 

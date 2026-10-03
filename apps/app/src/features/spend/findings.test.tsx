@@ -7,8 +7,9 @@
 // recorded" and never a guessed percentage, the list sorts by saving and by
 // kind, an operator the rollup cannot name is shown by id, and a filter that
 // hides every card says so. The pager under the cards holds Rows per page,
-// turns to the next ten and shows every card at 25. Evidence with no runs
-// says so, and closing it returns to the list.
+// turns to the next ten and shows every card at 25. When the workspace holds
+// more open findings than the list, a line says how many in all (#5262).
+// Evidence with no runs says so, and closing it returns to the list.
 import {
   cleanup,
   render,
@@ -106,6 +107,7 @@ const listing = (saving: SpendFindings["saving"]): SpendFindings => ({
   annualised: null,
   counts: { findings: 9, high: 9, medium: 0, operators: 1 },
   findings: NINE,
+  truncated: false,
 });
 
 /** The operator rollup names nobody: the row carries no name. */
@@ -389,6 +391,7 @@ describe("Findings pager", () => {
             annualised: null,
             counts: { findings: 12, high: 12, medium: 0, operators: 0 },
             findings: TWELVE,
+            truncated: false,
           }}
           operators={[]}
           at={AT}
@@ -429,6 +432,46 @@ describe("Findings pager", () => {
     expect(pager).toHaveTextContent("1 to 12 of 12");
     expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+  });
+});
+
+describe("Findings past one answer (#5262)", () => {
+  function cut(total: number, truncated: boolean) {
+    render(
+      <IntlProvider>
+        <FindingsSection
+          headline={readOk(HEADLINE)}
+          findings={{
+            ...listing(null),
+            counts: { findings: total, high: total, medium: 0, operators: 1 },
+            truncated,
+          }}
+          operators={OPERATORS}
+          at={AT}
+          evidence={null}
+        />
+      </IntlProvider>,
+    );
+  }
+
+  it("says how many findings there are in all when the list is cut", () => {
+    cut(62, true);
+    expect(screen.getByTestId("spend-findings-truncated")).toHaveTextContent(
+      "The list shows the 9 largest of 62 open findings.",
+    );
+    // The hero counts every open finding, not only the nine listed.
+    expect(screen.getByTestId("spend-findings-hero")).toHaveTextContent(
+      "62 findings",
+    );
+    expect(order()).toHaveLength(9);
+  });
+
+  it("adds no line when the list holds every finding (negative)", () => {
+    cut(9, false);
+    expect(screen.queryByTestId("spend-findings-truncated")).toBeNull();
+    expect(screen.getByTestId("spend-findings-hero")).toHaveTextContent(
+      "9 findings",
+    );
   });
 });
 

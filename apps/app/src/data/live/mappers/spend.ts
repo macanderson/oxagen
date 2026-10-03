@@ -326,6 +326,7 @@ export function toSpendFindings(
       operators: out.counts.operators,
     },
     findings: out.findings.map(toFinding),
+    truncated: out.truncated,
   };
 }
 

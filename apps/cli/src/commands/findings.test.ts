@@ -124,6 +124,28 @@ describe("findings list", () => {
     expect(c.output()).toBe(`No open findings citing ${RUN}.`);
   });
 
+  it("says how many findings the list shows when the API cut it (#5262)", async () => {
+    const [finding] = result().findings;
+    apiPostOrThrow.mockResolvedValueOnce(
+      result({
+        counts: { findings: 62, high: 62, medium: 0, operators: 1 },
+        findings: Array.from({ length: 50 }, () => finding!),
+        truncated: true,
+      }),
+    );
+    const c = captureWriter();
+    await findingsList({}, c.writer);
+    expect(c.output()).toContain("62 open finding(s)");
+    expect(c.output()).toContain("The list shows the first 50 of 62 open findings.");
+  });
+
+  it("adds no line when the list holds every finding", async () => {
+    apiPostOrThrow.mockResolvedValueOnce(result({ truncated: false }));
+    const c = captureWriter();
+    await findingsList({}, c.writer);
+    expect(c.output()).not.toContain("The list shows");
+  });
+
   it("emits the contract payload as one JSON line", async () => {
     const payload = result();
     apiPostOrThrow.mockResolvedValueOnce(payload);

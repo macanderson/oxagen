@@ -44,6 +44,19 @@ function cachePromise<T>(
   return promise;
 }
 
+/**
+ * The kit's small type step in px (--ox-a-micro), read from the page so
+ * Mermaid lays its boxes out for the size the stylesheet draws its labels
+ * at. Mermaid takes a number, not a token.
+ */
+function microPx(): number {
+  const root = getComputedStyle(document.documentElement);
+  const value = root.getPropertyValue("--ox-a-micro").trim();
+  const n = Number.parseFloat(value);
+  if (!Number.isFinite(n)) return 14;
+  return value.endsWith("rem") ? n * Number.parseFloat(root.fontSize) : n;
+}
+
 function monoStack(): string {
   const value = getComputedStyle(document.documentElement)
     .getPropertyValue("--font-mono")
@@ -72,12 +85,13 @@ function MermaidContent({ chart }: { chart: string }) {
   );
 
   const mono = monoStack();
+  const micro = microPx();
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: "loose",
     theme: "base",
     fontFamily: mono,
-    themeVariables: { fontFamily: mono, fontSize: "12px" },
+    themeVariables: { fontFamily: mono, fontSize: `${micro}px` },
     themeCSS: "margin: 1.5rem auto 0;",
     flowchart: {
       curve: "basis",
@@ -89,9 +103,9 @@ function MermaidContent({ chart }: { chart: string }) {
       actorFontFamily: mono,
       messageFontFamily: mono,
       noteFontFamily: mono,
-      actorFontSize: 12,
-      messageFontSize: 12,
-      noteFontSize: 11,
+      actorFontSize: micro,
+      messageFontSize: micro,
+      noteFontSize: micro,
       // One row of participant boxes: the repeat along the bottom is height
       // the reader scrolls past for nothing.
       mirrorActors: false,

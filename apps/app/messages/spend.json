@@ -156,6 +156,7 @@
       "attributionMissing": "The operator and agent behind a tool or workspace finding, and each finding’s trend, are not recorded yet.",
       "evidenceLine": "evidence {runs} runs · {calls} calls · {from} to {to}",
       "list": "Findings ranked by savings",
+      "truncated": "The list shows the {shown} largest of {total} open findings.",
       "filters": {
         "label": "Filter findings",
         "level": "Level",

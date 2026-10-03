@@ -15,6 +15,11 @@
 // day they ran where the Spend tile counts runs by the day they started.
 // When the headline is zero while open findings claim calls outside the
 // period, the hero says how many, so a zero beside a full list reads true.
+//
+// list_findings lists at most 50 findings, and a workspace can hold more,
+// since the findings job never caps a finding the headline counts (#5262).
+// The counts cover every open finding, and when the list is cut a line above
+// the cards says how many it shows of how many in all.
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { compareMicros } from "@/data/contracts/money";
@@ -265,13 +270,26 @@ export function FindingsSection({
           <p className="text-sm text-muted-foreground">{t("empty")}</p>
         </section>
       ) : (
-        <FindingsList
-          findings={findings.findings}
-          spend={findings.spend}
-          names={names}
-          harnesses={harnesses}
-          at={at}
-        />
+        <>
+          {findings.truncated ? (
+            <p
+              data-testid="spend-findings-truncated"
+              className="text-sm text-muted-foreground"
+            >
+              {t("truncated", {
+                shown: formatCount(findings.findings.length, locale),
+                total: formatCount(findings.counts.findings, locale),
+              })}
+            </p>
+          ) : null}
+          <FindingsList
+            findings={findings.findings}
+            spend={findings.spend}
+            names={names}
+            harnesses={harnesses}
+            at={at}
+          />
+        </>
       )}
       <div className="flex flex-col gap-2 border-l-2 border-gold py-1 pl-3 text-sm text-muted-foreground">
         <p>{t("note")}</p>

@@ -108,7 +108,8 @@ transaction locks the open rows and re-reads the latest `decided_at` per
 fingerprint; a fingerprint whose decision the pass did not detect with is left
 to that decision. The comparison is between stored `decided_at` values, so a
 decision stamped by a clock behind the worker's is still seen. At most ten
-findings per kind are kept, largest saving first.
+advisory findings per kind are kept, largest saving first. A finding that
+counts toward the unproductive spend headline is never cut (ADR-208, item 11).
 
 `list_findings` annualises each finding's saving over its own window and
 divides by the priced spend of the findings' span scaled the same way. A
