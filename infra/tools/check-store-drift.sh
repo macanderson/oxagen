@@ -44,6 +44,10 @@
 # `system.columns` must count 0 rows on its table. Neither question above can
 # see a drop that never ran (#3072). See clickhouse_dropped_columns.
 #
+# Last, one read that is a report and never a verdict: how many rows
+# `error_events` holds per runtime. A table that exists can still be empty
+# because every insert into it fails (#3698). See report_error_events.
+#
 # Neo4j keeps no ledger — its migration is idempotent `CREATE ... IF NOT EXISTS` and
 # forgets what it did. But every constraint and index in `schema.cypher` is
 # NAMED, and `SHOW CONSTRAINTS` / `SHOW INDEXES` return those names, so the same
@@ -496,6 +500,71 @@ report_dropped_columns() {
   return 0
 }
 
+# error_event_sources
+#
+# The runtimes that write `error_events`, one per line: the `source` values
+# `ErrorEventRow` in packages/telemetry/src/clickhouse.ts allows. The test holds
+# this list to that type, so a runtime added there is counted here too.
+error_event_sources() {
+  printf '%s\n' api app inngest mcp runner
+}
+
+# report_error_events COUNTS_FILE
+#
+# How many rows `error_events` holds, per runtime, with the newest row's time.
+# COUNTS_FILE holds the tab-separated answer to `SELECT source, count(),
+# max(created_at) ... GROUP BY source`: one `<source> <count> <newest>` line
+# for each runtime that wrote a row. A runtime with no row is named.
+#
+# WHY THIS EXISTS (#3698)
+#
+# The tables question proves `error_events` exists. It cannot prove that a
+# captured error lands in it, and that is the half that failed: captureError()
+# reduces a failed insert to one stderr line, so the table can exist and stay
+# empty while every runtime reports into nothing. This puts the count in the
+# daily run's log, by runtime.
+#
+# It is a report, not a verdict, and returns 0 for any well-formed answer. A
+# runtime with no rows is not a defect, because a day with no unhandled error
+# leaves none. And the exit status gates a deploy: pipeline.yml's
+# migration-gate applies on 1 and refuses on 2, so a read that says nothing
+# about the schema must move neither. It returns 2 only when the answer is not
+# a count per runtime, so the caller can say the rows went uncounted.
+report_error_events() {
+  local counts=$1
+  local label="ClickHouse error_events"
+  local source count newest total=0 missing=""
+
+  if [[ ! -f $counts ]]; then
+    echo "report_error_events: no such file: $counts" >&2
+    return 2
+  fi
+  while IFS=$'\t' read -r source count newest; do
+    [[ -n $source ]] || continue
+    case "$count" in
+      "" | *[!0-9]*)
+        echo "::warning::$label: the store's answer is not a count per runtime, so the rows went uncounted."
+        return 2
+        ;;
+    esac
+    total=$((total + count))
+  done < "$counts"
+
+  echo "$label: $total rows."
+  while IFS=$'\t' read -r source count newest; do
+    [[ -n $source ]] || continue
+    echo "  $source: $count rows, newest $newest."
+  done < "$counts"
+  # grep reads the file itself rather than a pipe: under pipefail, `grep -q`
+  # can close the pipe early and fail the writer, which reads as no match.
+  for source in $(error_event_sources); do
+    grep -q -- "^$source"$'\t' "$counts" && continue
+    missing="${missing:+$missing, }$source"
+  done
+  [[ -z $missing ]] || echo "  No rows from: $missing."
+  return 0
+}
+
 # bump_status NEW
 #
 # Raises `status` without ever lowering it, and lets 2 dominate 1.
@@ -692,9 +761,11 @@ clickhouse_all_declared_tables \
   "$REPO/packages/telemetry/src/migrations" \
   > "$WORK/ch-tables-declared.txt" || bump_status 2
 
+ch_tables_read=0
 if [[ $ch_reachable -eq 1 ]] && require_declarations "ClickHouse tables" "$WORK/ch-tables-declared.txt"; then
   if ch_query "SELECT name FROM system.tables WHERE database = '${CLICKHOUSE_DATABASE}' ORDER BY name" \
        "$WORK/ch-tables-present.txt" "$WORK/ch-tables-err.txt"; then
+    ch_tables_read=1
     report_drift "ClickHouse tables" "$WORK/ch-tables-declared.txt" "$WORK/ch-tables-present.txt"
     bump_status $?
   else
@@ -743,6 +814,28 @@ if clickhouse_dropped_columns "$REPO/packages/telemetry/src/migrations" \
   fi
 else
   bump_status 2
+fi
+
+# --- ClickHouse: the rows error_events holds --------------------------------
+#
+# A report, not a verdict, so nothing in this section calls bump_status. See
+# report_error_events for why. It is asked only when the tables question found
+# the table: a missing table is already reported as behind above, and a failed
+# read of it would only say the same thing again.
+
+echo
+echo "== ClickHouse error_events =="
+if [[ $ch_tables_read -ne 1 ]]; then
+  echo "ClickHouse error_events: not counted, because the store's tables could not be read."
+elif ! grep -qxF error_events "$WORK/ch-tables-present.txt"; then
+  echo "ClickHouse error_events: not counted, because the store has no such table."
+elif ch_query "SELECT source, count(), max(created_at) FROM ${CLICKHOUSE_DATABASE}.error_events GROUP BY source ORDER BY source" \
+       "$WORK/ch-errors.txt" "$WORK/ch-errors-err.txt"; then
+  report_error_events "$WORK/ch-errors.txt" || true
+else
+  echo "::warning::ClickHouse error_events could not be read, so its rows went uncounted. The verdict below does not depend on them."
+  cat "$WORK/ch-errors.txt" "$WORK/ch-errors-err.txt" 2>/dev/null |
+    sed 's/^/::warning::  /' | head -5
 fi
 
 # --- Neo4j -----------------------------------------------------------------

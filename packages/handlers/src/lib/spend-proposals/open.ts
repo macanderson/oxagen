@@ -19,6 +19,12 @@
  * workspace role merges it as a steering PR, and `merge_steering_pr` checks that
  * role. Each write records the audit row the kernel would have written, with
  * a null actor and `findings_job` in its detail.
+ *
+ * Each failed write is also captured to the error log as the runner, the
+ * `source` its kernel context's surface names (#3698). The findings pass that
+ * calls this logs the throw below and carries on, and the throw carries only
+ * the first failure, so without the capture no failure here reached
+ * `error_events`.
  */
 import { randomUUID } from "node:crypto";
 import type {
@@ -28,6 +34,7 @@ import type {
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { isHandlerError, type CapabilityContext } from "@oxagen/oxagen";
 import { steeringProposalCreate } from "@oxagen/oxagen/contracts/steering.proposal.create";
+import { captureError } from "@oxagen/telemetry";
 import { createProposal } from "../../steering.proposal.shared";
 import {
   postgresSteeringStore,
@@ -40,12 +47,14 @@ export interface SpendProposalDeps {
   store: Pick<SteeringStore, "insertProposal">;
   create: typeof createProposal;
   audit: typeof emitSecurityEvent;
+  capture: typeof captureError;
 }
 
 const PRODUCTION_DEPS: SpendProposalDeps = {
   store: postgresSteeringStore,
   create: createProposal,
   audit: emitSecurityEvent,
+  capture: captureError,
 };
 
 /** True when the lineage already has a record or a proposal. */
@@ -142,6 +151,15 @@ export async function openProposals(
       else {
         failure ??= { err };
         audit(null);
+        deps.capture({
+          error: err,
+          source: "runner",
+          orgId: scope.orgId,
+          workspaceId: scope.workspaceId,
+          capability: steeringProposalCreate.name,
+          requestId: ctx.requestId,
+          context: "findings job could not open a steering record proposal",
+        });
       }
     }
   }
