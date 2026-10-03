@@ -344,25 +344,33 @@ function scanned(): string[] {
 
 /**
  * A reference to Space Grotesk: the kit's display token, the wordmark token,
- * or the family by name. Mac set the rule on 2026-10-02: every heading and
- * every line of text in the app is Aeonik, and Space Grotesk sets the
- * wordmark only.
+ * or the family by name. Mac set the rule on 2026-10-02 (oxageninc/brand#83):
+ * every heading and every line of text in the app is Aeonik. Space Grotesk
+ * sets the wordmark here, and h1 to h3 only on the marketing and customer
+ * sites.
  */
 const SPACE_GROTESK = /--ox-font-display|--font-wordmark|Space Grotesk/;
 
 describe("design record: one face for every heading and every line", () => {
-  it("the heading token is Aeonik, and Space Grotesk is left to the wordmark", () => {
+  it("app headings read the heading token, which is Aeonik, and Space Grotesk is the display face", () => {
     const styles = path.join(APP_DIR, "../../packages/ui/src/styles");
     const kit = readFileSync(path.join(styles, "house-tailwind.css"), "utf8");
-    expect(kit).toMatch(/--font-display:\s*var\(--font-aeonik, "Aeonik"\)/);
     expect(kit).toMatch(/--font-sans:\s*var\(--font-aeonik, "Aeonik"\)/);
+    expect(kit).toMatch(/--font-heading:\s*var\(--font-sans\);/);
+    expect(kit).toMatch(
+      /--font-display:\s*var\(--font-space-grotesk, "Space Grotesk"\)/,
+    );
     expect(kit).toMatch(
       /--font-wordmark:\s*var\(--font-space-grotesk, "Space Grotesk"\)/,
     );
     // The kit's tokens are the rule. A local @theme that re-points a face
     // would be a second copy of it (oxageninc/brand#27).
     const shared = readFileSync(path.join(styles, "globals.css"), "utf8");
-    expect(shared).not.toMatch(/^\s*--font-(display|sans|wordmark|mono):/m);
+    expect(shared).not.toMatch(/^\s*--font-(display|heading|sans|wordmark|mono):/m);
+    // The shared base sets h1 to h3 from the heading token, never from the
+    // display face, so the app's headings stay Aeonik.
+    expect(shared).toMatch(/h3\s*\{\s*font-family:\s*var\(--font-heading\);/);
+    expect(shared).not.toMatch(/font-family:\s*var\(--font-display\)/);
   });
 
   it(

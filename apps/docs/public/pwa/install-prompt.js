@@ -122,17 +122,17 @@
     "position:fixed;z-index:2147483000;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));" +
     "margin:0 auto;max-width:380px;box-sizing:border-box;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start;" +
     "padding:14px;border-radius:14px;border:1px solid var(--line);background:var(--bg);color:var(--fg);" +
-    "box-shadow:0 12px 32px rgba(9,9,11,.28);font:14px/1.45 Aeonik,ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;" +
+    "box-shadow:0 12px 32px rgba(9,9,11,.28);font:var(--ox-a-body, 0.875rem)/1.45 var(--ox-font, Aeonik),ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;" +
     "animation:rise .22s ease-out}" +
     ".card.dark{--bg:#18181B;--fg:#FAFAFA;--muted:#A1A1AA;--line:#27272A}" +
     "@media (prefers-reduced-motion:reduce){.card{animation:none}}" +
     "@keyframes rise{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}" +
     ".icon{width:40px;height:40px;border-radius:9px;display:block}" +
-    ".title{margin:0;font-weight:600;font-size:14px}" +
-    ".body{margin:2px 0 0;color:var(--muted);font-size:13px}" +
+    ".title{margin:0;font-weight:600;font-size:var(--ox-a-body, 0.875rem)}" +
+    ".body{margin:2px 0 0;color:var(--muted);font-size:var(--ox-a-body, 0.875rem)}" +
     ".body svg{vertical-align:-3px;margin:0 2px;color:var(--fg)}" +
     ".acts{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}" +
-    "button{font:inherit;font-size:13px;font-weight:500;cursor:pointer;border-radius:8px;padding:7px 12px;border:1px solid var(--line);background:transparent;color:var(--fg)}" +
+    "button{font:inherit;font-size:var(--ox-a-body, 0.875rem);font-weight:500;cursor:pointer;border-radius:8px;padding:7px 12px;border:1px solid var(--line);background:transparent;color:var(--fg)}" +
     "button.primary{background:var(--fg);border-color:var(--fg);color:var(--bg)}" +
     "button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}" +
     "button.x{border:0;padding:4px;line-height:0;color:var(--muted)}";

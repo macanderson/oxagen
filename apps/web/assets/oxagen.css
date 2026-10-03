@@ -112,14 +112,21 @@
      page clears it with this. */
   --nav-h: 76px;
   /* The site's type ramp, built on the kit's marketing scale so a theme edit
-     still reaches it. Body copy is the scale's body (18px). Secondary copy
-     (cards, steps, lists, tables) is 16px, labels and controls 15px, and the
-     top-level navigation 16px. The scale's micro step (14px) is left to
-     captions and notes. A section heading tops out at 1.2 times the scale's
-     h2 (48px). */
-  --fs-small: calc(var(--ox-m-body) * 8 / 9);
+     still reaches it. No step is under 14px, the house floor, and no rule on
+     this site writes a size of its own (Mac, 2026-10-02, oxageninc/brand#83).
+     Body copy is the scale's body (16px). A lead under a heading, a card
+     title, and a step's name are 18px. Secondary copy (cards, steps, lists,
+     tables) is 16px, as is the top-level navigation. Labels and controls are
+     15px. The scale's micro step (14px) sets captions, notes, tags, eyebrows,
+     table heads, and figure labels, which stand apart by case, tracking,
+     weight, or colour, never by a smaller size. A card heading is the scale's
+     h4 (20px), and a section heading tops out at 1.2 times its h2 (48px). */
+  --fs-micro: var(--ox-m-micro);
   --fs-ui: calc(var(--ox-m-micro) * 15 / 14);
+  --fs-small: calc(var(--ox-m-micro) * 8 / 7);
   --fs-nav: calc(var(--ox-m-micro) * 8 / 7);
+  --fs-lead: calc(var(--ox-m-body) * 9 / 8);
+  --fs-card: var(--ox-m-h4);
   --fs-sec: clamp(var(--ox-m-h3), 4.2vw, calc(var(--ox-m-h2) * 1.2));
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
@@ -233,13 +240,12 @@
 }
 
 /* The house faces, self-hosted from /fonts/ (vendored by
-   tools/scripts/sync-brand-assets.mjs). On this site Space Grotesk sets every
-   h1, h2, and h3, and so every line of a hero; Mac set that on 2026-10-02,
-   replacing the 2026-09-29 rule that kept it to hero line 1. The house sans
-   sets h4 and all running text. Monaspace Neon sets code, with texture
-   healing on. The heroes set their headline at 680, which resolves to the
-   700 file; every other heading is 600. Those are the two Space Grotesk
-   weights declared here. */
+   tools/scripts/sync-brand-assets.mjs). On this site Space Grotesk, the kit's
+   display face, sets every h1, h2, and h3, and Aeonik sets h4 to h6 and all
+   other text. Monaspace Neon sets code, data, and figures, with texture
+   healing on (Mac, 2026-10-02, oxageninc/brand#83). The heroes set their
+   headline at 680, which resolves to the 700 file; every other heading is
+   600. Those are the two Space Grotesk weights declared here. */
 @font-face {
   font-family: "Space Grotesk";
   src: url("/fonts/space-grotesk-latin-600.woff2") format("woff2");
@@ -293,12 +299,12 @@
 }
 :root {
   --font-sans: var(--ox-font);
-  /* Headings use the body face. The two Space Grotesk roles each get their
-     own name, so a new rule cannot reach the face by asking for "display". */
-  --font-display: var(--font-sans);
-  --font-wordmark: var(--ox-font-display);
-  --font-hero: var(--ox-font-display);
-  --font-mono: "Monaspace Neon", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* h1 to h3, and nothing else: the kit's marketing heading face. */
+  --font-heading: var(--ox-font-display);
+  /* A wordmark set as text. The kit holds it in Space Grotesk whatever face
+     the theme gives display. */
+  --font-wordmark: var(--ox-font-wordmark);
+  --font-mono: var(--ox-font-mono);
 }
 
 /* ============ base ============ */
@@ -334,7 +340,6 @@ h2,
 h3,
 h4 {
   margin: 0;
-  font-family: var(--font-display);
   font-weight: 600;
   letter-spacing: -0.015em;
   line-height: 1.1;
@@ -343,12 +348,10 @@ h4 {
 h1,
 h2,
 h3 {
-  font-family: var(--font-hero);
+  font-family: var(--font-heading);
 }
-/* The first line of a hero headline, kept for markup that marks it. The h1
-   around it already sets the same face. */
-.hero-line-1 {
-  font-family: var(--font-hero);
+h4 {
+  font-family: var(--font-sans);
 }
 p {
   margin: 0;
@@ -546,7 +549,7 @@ h2 .gold,
 }
 .sec-head p {
   color: var(--ink-3);
-  font-size: var(--ox-m-body);
+  font-size: var(--fs-lead);
   max-width: 62ch;
 }
 .sec-alt {
@@ -1022,7 +1025,7 @@ html:not(.js) .nav-item:is(:hover, :focus-within) > .menu {
 }
 .mm-ft {
   color: var(--ink);
-  font-size: var(--ox-m-body);
+  font-size: var(--fs-lead);
   font-weight: 600;
   line-height: 1.25;
 }
@@ -1330,7 +1333,7 @@ html:not(.js) .nav-item:is(:hover, :focus-within) > .menu {
   min-height: 54px;
   padding: 0 4px;
   color: var(--ink);
-  font-size: var(--ox-m-body);
+  font-size: var(--fs-lead);
   font-weight: 600;
   list-style: none;
   cursor: pointer;
@@ -1576,7 +1579,7 @@ figcaption b {
   opacity: 0.3;
 }
 .card h3 {
-  font-size: var(--ox-m-body);
+  font-size: var(--fs-lead);
   margin: 14px 0 8px;
   font-weight: 620;
 }
@@ -1774,7 +1777,7 @@ figcaption b {
   align-items: center;
   gap: 10px;
   font-weight: 620;
-  font-size: var(--ox-m-body);
+  font-size: var(--fs-lead);
 }
 .unlocked .ok-line .ok-dot {
   width: 22px;
@@ -2190,7 +2193,7 @@ html:not(.js) .theme-switch {
 }
 .dg-copy .lede {
   color: var(--ink-3);
-  font-size: var(--ox-m-body);
+  font-size: var(--fs-lead);
   max-width: 56ch;
 }
 .dg-copy ul {
@@ -2456,7 +2459,7 @@ table.matrix {
 .steps b {
   display: block;
   margin-bottom: 6px;
-  font-size: var(--ox-m-body);
+  font-size: var(--fs-lead);
   font-weight: 600;
   color: var(--ink);
 }
