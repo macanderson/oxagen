@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { workPrioritiesGet } from "@oxagen/oxagen/contracts/work.priorities.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...workPrioritiesGet.input.shape };
 
@@ -21,5 +22,5 @@ export default async function getWorkPrioritiesTool(args: InferSchema<typeof sch
   const output = await invoke(workPrioritiesGet.name, args, ctx, {
     surface: "mcp",
   });
-  return workPrioritiesGet.output.parse(output);
+  return toolResult(workPrioritiesGet.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMemoryCitationsList } from "@oxagen/oxagen/contracts/agent.memory_citation.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentMemoryCitationsList.input.shape,
@@ -34,5 +35,5 @@ export default async function agentMemoryCitationsListTool(
   const output = await invoke(agentMemoryCitationsList.name, args, ctx, {
     surface: "mcp",
   });
-  return agentMemoryCitationsList.output.parse(output);
+  return toolResult(agentMemoryCitationsList.output.parse(output));
 }

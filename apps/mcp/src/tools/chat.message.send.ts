@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...chatMessageSend.input.shape,
@@ -38,5 +39,5 @@ export default async function chatMessageSendTool(
   const output = await invoke(chatMessageSend.name, args, ctx, {
     surface: "mcp",
   });
-  return chatMessageSend.output.parse(output);
+  return toolResult(chatMessageSend.output.parse(output));
 }

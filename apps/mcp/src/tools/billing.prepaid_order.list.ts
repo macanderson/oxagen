@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { billingPrepaidOrderList } from "@oxagen/oxagen/contracts/billing.prepaid_order.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...billingPrepaidOrderList.input.shape,
@@ -31,5 +32,5 @@ export default async function billingPrepaidOrderListTool(
   const output = await invoke(billingPrepaidOrderList.name, args, ctx, {
     surface: "mcp",
   });
-  return billingPrepaidOrderList.output.parse(output);
+  return toolResult(billingPrepaidOrderList.output.parse(output));
 }

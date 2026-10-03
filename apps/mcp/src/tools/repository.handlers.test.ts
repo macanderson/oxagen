@@ -69,7 +69,9 @@ describe("list_repositories tool", () => {
       ],
     };
     mocks.invoke.mockResolvedValue(output);
-    await expect(listTool({})).resolves.toEqual(output);
+    await expect(
+      listTool({}),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith(
       "list_repositories",
       {},
@@ -100,7 +102,9 @@ describe("link_repository tool", () => {
       },
     };
     mocks.invoke.mockResolvedValue(output);
-    await expect(linkTool(args)).resolves.toEqual(output);
+    await expect(
+      linkTool(args),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith(
       "link_repository",
       args,
@@ -119,7 +123,9 @@ describe("link_repository tool", () => {
       steeringPullRequest: null,
     };
     mocks.invoke.mockResolvedValue(output);
-    await expect(linkTool(args)).resolves.toEqual(output);
+    await expect(
+      linkTool(args),
+    ).resolves.toHaveProperty("structuredContent", output);
   });
 
   it("refuses the binding a link answered before ADR-212 (negative)", async () => {
@@ -150,7 +156,9 @@ describe("unlink_repository tool", () => {
       steeringPullRequest: null,
     };
     mocks.invoke.mockResolvedValue(output);
-    await expect(unlinkTool({ bindingId: "rpb_0b" })).resolves.toEqual(output);
+    await expect(
+      unlinkTool({ bindingId: "rpb_0b" }),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith(
       "unlink_repository",
       { bindingId: "rpb_0b" },
@@ -172,7 +180,9 @@ describe("unlink_repository tool", () => {
       },
     };
     mocks.invoke.mockResolvedValue(output);
-    await expect(unlinkTool({ bindingId: "rpb_0b" })).resolves.toEqual(output);
+    await expect(
+      unlinkTool({ bindingId: "rpb_0b" }),
+    ).resolves.toHaveProperty("structuredContent", output);
   });
 
   it("refuses an id that is not a binding id (negative)", () => {
@@ -221,7 +231,9 @@ describe("get_repository_tree tool", () => {
       readAt: "2026-09-19T00:00:00.000Z",
     };
     mocks.invoke.mockResolvedValue(output);
-    await expect(treeTool({ bindingId: "rpb_0a" })).resolves.toEqual(output);
+    await expect(
+      treeTool({ bindingId: "rpb_0a" }),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith(
       "get_repository_tree",
       { bindingId: "rpb_0a" },
@@ -247,7 +259,7 @@ describe("set_production_branch tool", () => {
     mocks.invoke.mockResolvedValue(output);
     await expect(
       branchTool({ bindingId: "rpb_0a", branch: "release" }),
-    ).resolves.toEqual(output);
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith(
       "set_production_branch",
       { bindingId: "rpb_0a", branch: "release" },
@@ -281,7 +293,9 @@ describe("open_init_pr tool", () => {
       openedAt: "2026-09-19T00:00:00.000Z",
     };
     mocks.invoke.mockResolvedValue(output);
-    await expect(initTool(args)).resolves.toEqual(output);
+    await expect(
+      initTool(args),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith("open_init_pr", args, fakeCtx, {
       surface: "mcp",
     });
@@ -322,7 +336,9 @@ describe("list_working_copies tool", () => {
       ],
     };
     mocks.invoke.mockResolvedValue(output);
-    await expect(workingCopiesTool({ limit: 10 })).resolves.toEqual(output);
+    await expect(
+      workingCopiesTool({ limit: 10 }),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith(
       "list_working_copies",
       { limit: 10 },
@@ -350,9 +366,9 @@ describe("get_published_steering tool", () => {
       readAt: "2026-09-24T00:00:00.000Z",
     };
     mocks.invoke.mockResolvedValue(output);
-    await expect(publishedTool({ bindingId: undefined })).resolves.toEqual(
-      output,
-    );
+    await expect(
+      publishedTool({ bindingId: undefined }),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith(
       "get_published_steering",
       {},

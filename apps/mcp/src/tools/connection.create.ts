@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { connectionCreate } from "@oxagen/oxagen/contracts/connection.create";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...connectionCreate.input.shape };
 
@@ -20,5 +21,8 @@ export default async function connectionCreateTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  return invoke(connectionCreate.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(connectionCreate.name, args, ctx, {
+    surface: "mcp",
+  });
+  return toolResult(output);
 }

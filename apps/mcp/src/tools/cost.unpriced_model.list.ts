@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { costUnpricedModelList } from "@oxagen/oxagen/contracts/cost.unpriced_model.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...costUnpricedModelList.input.shape,
@@ -31,5 +32,5 @@ export default async function costUnpricedModelListTool(
   const output = await invoke(costUnpricedModelList.name, args, ctx, {
     surface: "mcp",
   });
-  return costUnpricedModelList.output.parse(output);
+  return toolResult(costUnpricedModelList.output.parse(output));
 }

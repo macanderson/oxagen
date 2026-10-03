@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { connectionPreview } from "@oxagen/oxagen/contracts/connection.preview";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...connectionPreview.input.shape };
 
@@ -20,5 +21,8 @@ export default async function connectionPreviewTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  return invoke(connectionPreview.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(connectionPreview.name, args, ctx, {
+    surface: "mcp",
+  });
+  return toolResult(output);
 }

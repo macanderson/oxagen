@@ -6,6 +6,7 @@ import {
 } from "@oxagen/oxagen/contracts/billing.action_estimate";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = billingActionEstimateFields;
 
@@ -26,5 +27,5 @@ export default async function billingActionEstimateTool(
   const output = await invoke(billingActionEstimate.name, args, ctx, {
     surface: "mcp",
   });
-  return billingActionEstimate.output.parse(output);
+  return toolResult(billingActionEstimate.output.parse(output));
 }

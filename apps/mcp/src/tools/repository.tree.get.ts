@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   bindingId: repositoryTreeGet.input.shape.bindingId.describe(
@@ -27,5 +28,5 @@ export default async function repositoryTreeGetTool(
   const output = await invoke(repositoryTreeGet.name, args, ctx, {
     surface: "mcp",
   });
-  return repositoryTreeGet.output.parse(output);
+  return toolResult(repositoryTreeGet.output.parse(output));
 }

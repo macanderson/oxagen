@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { runContextGet } from "@oxagen/oxagen/contracts/run.context.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   runId: runContextGet.input.shape.runId.describe(
@@ -25,5 +26,5 @@ export default async function runContextGetTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(runContextGet.name, args, ctx, { surface: "mcp" });
-  return runContextGet.output.parse(output);
+  return toolResult(runContextGet.output.parse(output));
 }

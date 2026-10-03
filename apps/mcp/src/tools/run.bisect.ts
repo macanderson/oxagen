@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { runBisect } from "@oxagen/oxagen/contracts/run.bisect";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   runA: runBisect.input.shape.runA.describe(
@@ -26,5 +27,5 @@ export const metadata: ToolMetadata = {
 export default async function runBisectTool(args: InferSchema<typeof schema>) {
   const ctx = await buildContext(headers());
   const output = await invoke(runBisect.name, args, ctx, { surface: "mcp" });
-  return runBisect.output.parse(output);
+  return toolResult(runBisect.output.parse(output));
 }

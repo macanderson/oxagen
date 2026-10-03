@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { pauseWorkspaceRuns } from "@oxagen/oxagen/contracts/tacho.workspace_runs.pause";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   reason: pauseWorkspaceRuns.input.shape.reason.describe(
@@ -28,5 +29,5 @@ export default async function pauseWorkspaceRunsTool(
   const output = await invoke(pauseWorkspaceRuns.name, input, ctx, {
     surface: "mcp",
   });
-  return pauseWorkspaceRuns.output.parse(output);
+  return toolResult(pauseWorkspaceRuns.output.parse(output));
 }

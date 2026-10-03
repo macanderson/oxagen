@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { billingStatementExport } from "@oxagen/oxagen/contracts/billing.statement.export";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...billingStatementExport.input.shape,
@@ -46,5 +47,5 @@ export default async function billingStatementExportTool(
   const output = await invoke(billingStatementExport.name, args, ctx, {
     surface: "mcp",
   });
-  return billingStatementExport.output.parse(output);
+  return toolResult(billingStatementExport.output.parse(output));
 }

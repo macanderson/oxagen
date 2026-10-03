@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { orgSsoGroupRolesSet } from "@oxagen/oxagen/contracts/org.sso.group_roles.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 const shape = orgSsoGroupRolesSet.input.shape;
 
@@ -31,5 +32,5 @@ export default async function orgSsoGroupRolesSetTool(
   const output = await invoke(orgSsoGroupRolesSet.name, args, ctx, {
     surface: "mcp",
   });
-  return orgSsoGroupRolesSet.output.parse(output);
+  return toolResult(orgSsoGroupRolesSet.output.parse(output));
 }

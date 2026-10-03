@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { schemaSetup } from "@oxagen/oxagen/contracts/schema.setup";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...schemaSetup.input.shape,
@@ -23,5 +24,5 @@ export default async function schemaSetupTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(schemaSetup.name, args, ctx, { surface: "mcp" });
-  return schemaSetup.output.parse(output);
+  return toolResult(schemaSetup.output.parse(output));
 }

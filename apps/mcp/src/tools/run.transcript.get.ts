@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   runId: runTranscriptGet.input.shape.runId.describe(
@@ -45,5 +46,5 @@ export default async function runTranscriptGetTool(
   const output = await invoke(runTranscriptGet.name, args, ctx, {
     surface: "mcp",
   });
-  return runTranscriptGet.output.parse(output);
+  return toolResult(runTranscriptGet.output.parse(output));
 }

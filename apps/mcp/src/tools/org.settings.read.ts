@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { orgSettingsRead } from "@oxagen/oxagen/contracts/org.settings.read";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {};
 
@@ -23,5 +24,5 @@ export default async function orgSettingsReadTool(
   const output = await invoke(orgSettingsRead.name, {}, ctx, {
     surface: "mcp",
   });
-  return orgSettingsRead.output.parse(output);
+  return toolResult(orgSettingsRead.output.parse(output));
 }

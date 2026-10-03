@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { environmentUpdate } from "@oxagen/oxagen/contracts/environment.update";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...environmentUpdate.input.shape,
@@ -25,5 +26,5 @@ export default async function environmentUpdateTool(
   const output = await invoke(environmentUpdate.name, args, ctx, {
     surface: "mcp",
   });
-  return environmentUpdate.output.parse(output);
+  return toolResult(environmentUpdate.output.parse(output));
 }

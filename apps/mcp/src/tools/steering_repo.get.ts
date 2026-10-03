@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { steeringRepoGet } from "@oxagen/oxagen/contracts/steering_repo.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = steeringRepoGet.input.shape;
 
@@ -23,5 +24,5 @@ export default async function getSteeringRepoTool(
   const output = await invoke(steeringRepoGet.name, {}, ctx, {
     surface: "mcp",
   });
-  return steeringRepoGet.output.parse(output);
+  return toolResult(steeringRepoGet.output.parse(output));
 }

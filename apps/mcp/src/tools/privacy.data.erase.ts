@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { privacyDataErase } from "@oxagen/oxagen/contracts/privacy.data.erase";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...privacyDataErase.input.shape,
@@ -31,5 +32,5 @@ export default async function privacyDataEraseTool(
   const output = await invoke(privacyDataErase.name, args, ctx, {
     surface: "mcp",
   });
-  return privacyDataErase.output.parse(output);
+  return toolResult(privacyDataErase.output.parse(output));
 }

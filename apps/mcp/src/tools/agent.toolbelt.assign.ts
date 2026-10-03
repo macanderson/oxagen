@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentToolbeltAssign } from "@oxagen/oxagen/contracts/agent.toolbelt.assign";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   agentId: agentToolbeltAssign.input.shape.agentId.describe(
@@ -30,5 +31,5 @@ export default async function agentToolbeltAssignTool(
   const output = await invoke(agentToolbeltAssign.name, args, ctx, {
     surface: "mcp",
   });
-  return agentToolbeltAssign.output.parse(output);
+  return toolResult(agentToolbeltAssign.output.parse(output));
 }

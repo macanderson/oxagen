@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { schemaReconcileDispatch } from "@oxagen/oxagen/contracts/schema.reconcile.dispatch";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...schemaReconcileDispatch.input.shape,
@@ -25,5 +26,5 @@ export default async function schemaReconcileDispatchTool(
   const output = await invoke(schemaReconcileDispatch.name, args, ctx, {
     surface: "mcp",
   });
-  return schemaReconcileDispatch.output.parse(output);
+  return toolResult(schemaReconcileDispatch.output.parse(output));
 }

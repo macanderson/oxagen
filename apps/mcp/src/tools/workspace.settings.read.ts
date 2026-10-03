@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { workspaceSettingsRead } from "@oxagen/oxagen/contracts/workspace.settings.read";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {};
 
@@ -23,5 +24,5 @@ export default async function workspaceSettingsReadTool(
   const output = await invoke(workspaceSettingsRead.name, {}, ctx, {
     surface: "mcp",
   });
-  return workspaceSettingsRead.output.parse(output);
+  return toolResult(workspaceSettingsRead.output.parse(output));
 }

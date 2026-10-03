@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { contextGovernanceModeSet } from "@oxagen/oxagen/contracts/context.governance_mode.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   workspaceId: contextGovernanceModeSet.input.shape.workspaceId.describe(
@@ -36,5 +37,5 @@ export default async function contextGovernanceModeSetTool(
   const output = await invoke(contextGovernanceModeSet.name, args, ctx, {
     surface: "mcp",
   });
-  return contextGovernanceModeSet.output.parse(output);
+  return toolResult(contextGovernanceModeSet.output.parse(output));
 }

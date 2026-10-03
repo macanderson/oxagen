@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { shellNavCountsGet } from "@oxagen/oxagen/contracts/shell.nav_counts.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...shellNavCountsGet.input.shape };
 
@@ -23,5 +24,5 @@ export default async function getNavCountsTool(
   const output = await invoke(shellNavCountsGet.name, args, ctx, {
     surface: "mcp",
   });
-  return shellNavCountsGet.output.parse(output);
+  return toolResult(shellNavCountsGet.output.parse(output));
 }

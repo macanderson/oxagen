@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { environmentCreate } from "@oxagen/oxagen/contracts/environment.create";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...environmentCreate.input.shape,
@@ -25,5 +26,5 @@ export default async function environmentCreateTool(
   const output = await invoke(environmentCreate.name, args, ctx, {
     surface: "mcp",
   });
-  return environmentCreate.output.parse(output);
+  return toolResult(environmentCreate.output.parse(output));
 }

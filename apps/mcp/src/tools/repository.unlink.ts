@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { repositoryUnlink } from "@oxagen/oxagen/contracts/repository.unlink";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   bindingId: repositoryUnlink.input.shape.bindingId.describe(
@@ -30,5 +31,5 @@ export default async function repositoryUnlinkTool(
   const output = await invoke(repositoryUnlink.name, args, ctx, {
     surface: "mcp",
   });
-  return repositoryUnlink.output.parse(output);
+  return toolResult(repositoryUnlink.output.parse(output));
 }

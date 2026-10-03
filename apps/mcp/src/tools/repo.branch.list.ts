@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { repoBranchList } from "@oxagen/oxagen/contracts/repo.branch.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...repoBranchList.input.shape,
@@ -30,5 +31,5 @@ export default async function repoBranchListTool(
   const output = await invoke(repoBranchList.name, args, ctx, {
     surface: "mcp",
   });
-  return repoBranchList.output.parse(output);
+  return toolResult(repoBranchList.output.parse(output));
 }

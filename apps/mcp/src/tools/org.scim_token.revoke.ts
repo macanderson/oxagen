@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { orgScimTokenRevoke } from "@oxagen/oxagen/contracts/org.scim_token.revoke";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 // Revoking is on MCP; minting and rotating are not, because their answer is
 // the token itself and a tool result lands in an agent's transcript (#3734).
@@ -24,5 +25,5 @@ export default async function orgScimTokenRevokeTool() {
   const output = await invoke(orgScimTokenRevoke.name, {}, ctx, {
     surface: "mcp",
   });
-  return orgScimTokenRevoke.output.parse(output);
+  return toolResult(orgScimTokenRevoke.output.parse(output));
 }

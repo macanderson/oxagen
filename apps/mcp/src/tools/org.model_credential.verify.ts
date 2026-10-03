@@ -6,6 +6,7 @@ import {
 } from "@oxagen/oxagen/contracts/org.model_credential.verify";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 // Derived from the contract's base object (the refined `input` has no `.shape`).
 // invoke() re-parses the full refined contract input, so the rule that
@@ -53,5 +54,5 @@ export default async function orgModelCredentialVerifyTool(
   const output = await invoke(orgModelCredentialVerify.name, args, ctx, {
     surface: "mcp",
   });
-  return orgModelCredentialVerify.output.parse(output);
+  return toolResult(orgModelCredentialVerify.output.parse(output));
 }

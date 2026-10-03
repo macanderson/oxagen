@@ -14,8 +14,9 @@
 // the schema exposes the contract's input fields and the metadata names the
 // contract with the annotations its mutability warrants; buildContext then
 // invoke are called once with the contract name, the args and
-// { surface: "mcp" }; the handler answers the parsed output; an output the
-// contract refuses is refused here; an invoke error propagates.
+// { surface: "mcp" }; the handler answers the parsed output as its
+// structuredContent; an output the contract refuses is refused here; an
+// invoke error propagates.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -602,7 +603,7 @@ for (const tool of CASES) {
       expect(mocks.invoke).toHaveBeenCalledWith(tool.name, tool.args, fakeCtx, {
         surface: "mcp",
       });
-      expect(result).toEqual(tool.validOutput);
+      expect(result).toHaveProperty("structuredContent", tool.validOutput);
     });
 
     it("refuses an output the contract refuses (negative)", async () => {

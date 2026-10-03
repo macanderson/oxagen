@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { toolRelayRevoke } from "@oxagen/oxagen/contracts/tool.relay.revoke";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 // create_relay has no MCP tool. Its answer carries a plaintext relay token,
 // and a tool would put that token in the agent's transcript. Revoking puts no
@@ -33,5 +34,5 @@ export default async function revokeRelayTool(
   const output = await invoke(toolRelayRevoke.name, input, ctx, {
     surface: "mcp",
   });
-  return toolRelayRevoke.output.parse(output);
+  return toolResult(toolRelayRevoke.output.parse(output));
 }

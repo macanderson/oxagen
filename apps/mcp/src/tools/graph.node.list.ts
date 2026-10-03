@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { graphNodeList } from "@oxagen/oxagen/contracts/graph.node.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...graphNodeList.input.shape,
@@ -40,5 +41,5 @@ export default async function graphNodeListTool(
   const output = await invoke(graphNodeList.name, args, ctx, {
     surface: "mcp",
   });
-  return graphNodeList.output.parse(output);
+  return toolResult(graphNodeList.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { toolStateSet } from "@oxagen/oxagen/contracts/tool.state.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 // The contract refines its object twice (one target, at least one switch),
 // so the tool lists the object's own fields and the kernel applies both
@@ -41,5 +42,5 @@ export default async function toolStateSetTool(
   const output = await invoke(toolStateSet.name, args, ctx, {
     surface: "mcp",
   });
-  return toolStateSet.output.parse(output);
+  return toolResult(toolStateSet.output.parse(output));
 }

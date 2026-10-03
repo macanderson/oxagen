@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { repositoryInstallationCandidates } from "@oxagen/oxagen/contracts/repository.installation.candidates";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...repositoryInstallationCandidates.input.shape,
@@ -28,5 +29,5 @@ export default async function repositoryInstallationCandidatesTool(
     ctx,
     { surface: "mcp" },
   );
-  return repositoryInstallationCandidates.output.parse(output);
+  return toolResult(repositoryInstallationCandidates.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { conversationExport } from "@oxagen/oxagen/contracts/conversation.export";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   conversationId: conversationExport.input.shape.conversationId.describe(
@@ -32,5 +33,5 @@ export default async function conversationExportTool(
   const output = await invoke(conversationExport.name, args, ctx, {
     surface: "mcp",
   });
-  return conversationExport.output.parse(output);
+  return toolResult(conversationExport.output.parse(output));
 }

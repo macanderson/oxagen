@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMemoryUpdate } from "@oxagen/oxagen/contracts/agent.memory.update";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentMemoryUpdate.input.shape,
@@ -44,5 +45,5 @@ export default async function agentMemoryUpdateTool(
   const output = await invoke(agentMemoryUpdate.name, args, ctx, {
     surface: "mcp",
   });
-  return agentMemoryUpdate.output.parse(output);
+  return toolResult(agentMemoryUpdate.output.parse(output));
 }

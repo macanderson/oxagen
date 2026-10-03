@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { steeringMemoryPrRecordsList } from "@oxagen/oxagen/contracts/steering.memory_pr_records.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...steeringMemoryPrRecordsList.input.shape };
 
@@ -21,5 +22,5 @@ export default async function listMemoryPrRecordsTool(args: InferSchema<typeof s
   const output = await invoke(steeringMemoryPrRecordsList.name, args, ctx, {
     surface: "mcp",
   });
-  return steeringMemoryPrRecordsList.output.parse(output);
+  return toolResult(steeringMemoryPrRecordsList.output.parse(output));
 }

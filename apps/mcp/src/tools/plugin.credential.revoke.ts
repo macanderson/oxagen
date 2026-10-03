@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { pluginCredentialRevoke } from "@oxagen/oxagen/contracts/plugin.credential.revoke";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...pluginCredentialRevoke.input.shape,
@@ -25,5 +26,5 @@ export default async function pluginCredentialRevokeTool(
   const output = await invoke(pluginCredentialRevoke.name, args, ctx, {
     surface: "mcp",
   });
-  return pluginCredentialRevoke.output.parse(output);
+  return toolResult(pluginCredentialRevoke.output.parse(output));
 }

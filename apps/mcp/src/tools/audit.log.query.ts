@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { auditLogQuery } from "@oxagen/oxagen/contracts/audit.log.query";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...auditLogQuery.input.shape,
@@ -34,5 +35,5 @@ export default async function auditLogQueryTool(
   const output = await invoke(auditLogQuery.name, args, ctx, {
     surface: "mcp",
   });
-  return auditLogQuery.output.parse(output);
+  return toolResult(auditLogQuery.output.parse(output));
 }

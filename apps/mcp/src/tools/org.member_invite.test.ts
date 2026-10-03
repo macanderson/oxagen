@@ -35,7 +35,7 @@ describe.each([
         : {}),
     };
     mocks.invoke.mockResolvedValue(output);
-    expect(await tool(args)).toEqual(output);
+    expect((await tool(args)).structuredContent).toEqual(output);
     expect(metadata.name).toBe(name);
     expect(metadata.annotations?.readOnlyHint).toBe(false);
     expect(mocks.buildContext).toHaveBeenCalledWith({

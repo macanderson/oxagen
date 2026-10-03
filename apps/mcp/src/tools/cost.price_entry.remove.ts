@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { costPriceEntryRemove } from "@oxagen/oxagen/contracts/cost.price_entry.remove";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...costPriceEntryRemove.input.shape,
@@ -42,5 +43,5 @@ export default async function costPriceEntryRemoveTool(
   const output = await invoke(costPriceEntryRemove.name, args, ctx, {
     surface: "mcp",
   });
-  return costPriceEntryRemove.output.parse(output);
+  return toolResult(costPriceEntryRemove.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMcpSetEnabled } from "@oxagen/oxagen/contracts/agent.mcp.set_enabled";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentMcpSetEnabled.input.shape,
@@ -31,5 +32,5 @@ export default async function agentMcpSetEnabledTool(
   const output = await invoke(agentMcpSetEnabled.name, args, ctx, {
     surface: "mcp",
   });
-  return agentMcpSetEnabled.output.parse(output);
+  return toolResult(agentMcpSetEnabled.output.parse(output));
 }

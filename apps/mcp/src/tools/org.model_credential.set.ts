@@ -6,6 +6,7 @@ import {
 } from "@oxagen/oxagen/contracts/org.model_credential.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 // Built from the BASE object: the registered input is refined (superRefine)
 // and has no `.shape`. `invoke()` re-parses the refined input, so the
@@ -48,5 +49,5 @@ export default async function orgModelCredentialSetTool(
   const output = await invoke(orgModelCredentialSet.name, args, ctx, {
     surface: "mcp",
   });
-  return orgModelCredentialSet.output.parse(output);
+  return toolResult(orgModelCredentialSet.output.parse(output));
 }

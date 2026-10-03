@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { conversationPurge } from "@oxagen/oxagen/contracts/conversation.purge";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {};
 
@@ -23,5 +24,5 @@ export default async function conversationPurgeTool(
   const output = await invoke(conversationPurge.name, {}, ctx, {
     surface: "mcp",
   });
-  return conversationPurge.output.parse(output);
+  return toolResult(conversationPurge.output.parse(output));
 }

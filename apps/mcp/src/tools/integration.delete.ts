@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { integrationDelete } from "@oxagen/oxagen/contracts/integration.delete";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...integrationDelete.input.shape,
@@ -31,5 +32,5 @@ export default async function integrationDeleteTool(
   const output = await invoke(integrationDelete.name, args, ctx, {
     surface: "mcp",
   });
-  return integrationDelete.output.parse(output);
+  return toolResult(integrationDelete.output.parse(output));
 }

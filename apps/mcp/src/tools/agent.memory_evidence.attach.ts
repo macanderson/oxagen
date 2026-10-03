@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMemoryEvidenceAttach } from "@oxagen/oxagen/contracts/agent.memory_evidence.attach";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentMemoryEvidenceAttach.input.shape,
@@ -34,5 +35,5 @@ export default async function agentMemoryEvidenceAttachTool(
   const output = await invoke(agentMemoryEvidenceAttach.name, args, ctx, {
     surface: "mcp",
   });
-  return agentMemoryEvidenceAttach.output.parse(output);
+  return toolResult(agentMemoryEvidenceAttach.output.parse(output));
 }

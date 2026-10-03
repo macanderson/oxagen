@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentEnvironmentUnbind } from "@oxagen/oxagen/contracts/agent.environment.unbind";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentEnvironmentUnbind.input.shape,
@@ -25,5 +26,5 @@ export default async function agentEnvironmentUnbindTool(
   const output = await invoke(agentEnvironmentUnbind.name, args, ctx, {
     surface: "mcp",
   });
-  return agentEnvironmentUnbind.output.parse(output);
+  return toolResult(agentEnvironmentUnbind.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMemoryPolicyRead } from "@oxagen/oxagen/contracts/agent.memory_policy.read";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = agentMemoryPolicyRead.input.shape;
 
@@ -23,5 +24,5 @@ export default async function agentMemoryPolicyReadTool(
   const output = await invoke(agentMemoryPolicyRead.name, {}, ctx, {
     surface: "mcp",
   });
-  return agentMemoryPolicyRead.output.parse(output);
+  return toolResult(agentMemoryPolicyRead.output.parse(output));
 }

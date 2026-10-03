@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { orgSsoUpdate } from "@oxagen/oxagen/contracts/org.sso.update";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 const shape = orgSsoUpdate.input.shape;
 
@@ -36,5 +37,5 @@ export default async function orgSsoUpdateTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(orgSsoUpdate.name, args, ctx, { surface: "mcp" });
-  return orgSsoUpdate.output.parse(output);
+  return toolResult(orgSsoUpdate.output.parse(output));
 }

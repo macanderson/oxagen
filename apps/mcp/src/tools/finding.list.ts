@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   status: findingList.input.shape.status.describe(
@@ -43,5 +44,5 @@ export default async function findingListTool(
   const output = await invoke(findingList.name, input, ctx, {
     surface: "mcp",
   });
-  return findingList.output.parse(output);
+  return toolResult(findingList.output.parse(output));
 }

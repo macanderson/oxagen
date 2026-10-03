@@ -67,7 +67,7 @@ describe("billing.credits.purchase handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({
+    expect(result.structuredContent).toMatchObject({
       url: "https://checkout.stripe.com/pay/cs_test",
       grantCents: 5000,
     });
@@ -153,7 +153,7 @@ describe("billing.contract_rate.get handler", () => {
         surface: "mcp",
       },
     );
-    expect(out).toEqual(rate);
+    expect(out.structuredContent).toEqual(rate);
   });
 
   it("refuses a rate that arrives as a number", async () => {
@@ -210,7 +210,7 @@ describe("billing.gau_bucket.purchase handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toEqual(output);
+    expect(result.structuredContent).toEqual(output);
   });
 
   it("refuses an output whose checkout URL is not a URL", async () => {
@@ -263,7 +263,7 @@ describe("billing.subscription.upgrade.start handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({
+    expect(result.structuredContent).toMatchObject({
       checkoutUrl: "https://checkout.stripe.com/pay/cs_test",
     });
   });
@@ -387,7 +387,9 @@ describe("billing.usage.breakdown handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({ totals: { executions: 0 } });
+    expect(result.structuredContent).toMatchObject({
+      totals: { executions: 0 },
+    });
   });
 
   it("propagates invoke errors", async () => {

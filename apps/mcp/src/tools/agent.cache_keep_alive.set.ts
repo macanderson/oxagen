@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentCacheKeepAliveSet } from "@oxagen/oxagen/contracts/agent.cache_keep_alive.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   agent: agentCacheKeepAliveSet.input.shape.agent.describe(
@@ -30,5 +31,5 @@ export default async function agentCacheKeepAliveSetTool(
   const output = await invoke(agentCacheKeepAliveSet.name, args, ctx, {
     surface: "mcp",
   });
-  return agentCacheKeepAliveSet.output.parse(output);
+  return toolResult(agentCacheKeepAliveSet.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentApprovalList } from "@oxagen/oxagen/contracts/agent.approval.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentApprovalList.input.shape,
@@ -34,5 +35,5 @@ export default async function agentApprovalListTool(
   const output = await invoke(agentApprovalList.name, args, ctx, {
     surface: "mcp",
   });
-  return agentApprovalList.output.parse(output);
+  return toolResult(agentApprovalList.output.parse(output));
 }

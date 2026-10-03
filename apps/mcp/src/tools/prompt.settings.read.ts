@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { promptSettingsRead } from "@oxagen/oxagen/contracts/prompt.settings.read";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {};
 
@@ -23,5 +24,5 @@ export default async function promptSettingsReadTool(
   const output = await invoke(promptSettingsRead.name, {}, ctx, {
     surface: "mcp",
   });
-  return promptSettingsRead.output.parse(output);
+  return toolResult(promptSettingsRead.output.parse(output));
 }

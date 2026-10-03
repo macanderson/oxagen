@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { pluginOrgInstall } from "@oxagen/oxagen/contracts/plugin.org.install";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...pluginOrgInstall.input.shape,
@@ -25,5 +26,5 @@ export default async function pluginOrgInstallTool(
   const output = await invoke(pluginOrgInstall.name, args, ctx, {
     surface: "mcp",
   });
-  return pluginOrgInstall.output.parse(output);
+  return toolResult(pluginOrgInstall.output.parse(output));
 }

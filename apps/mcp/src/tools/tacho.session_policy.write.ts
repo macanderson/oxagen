@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { tachoSessionPolicyWrite } from "@oxagen/oxagen/contracts/tacho.session_policy.write";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...tachoSessionPolicyWrite.input.shape,
@@ -37,5 +38,5 @@ export default async function tachoSessionPolicyWriteTool(
   const output = await invoke(tachoSessionPolicyWrite.name, args, ctx, {
     surface: "mcp",
   });
-  return tachoSessionPolicyWrite.output.parse(output);
+  return toolResult(tachoSessionPolicyWrite.output.parse(output));
 }

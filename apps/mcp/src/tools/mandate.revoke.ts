@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { mandateRevoke } from "@oxagen/oxagen/contracts/mandate.revoke";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 export const schema = {
   ...mandateRevoke.input.shape,
 };
@@ -24,5 +25,5 @@ export default async function mandateRevokeTool(
   const output = await invoke(mandateRevoke.name, args, ctx, {
     surface: "mcp",
   });
-  return mandateRevoke.output.parse(output);
+  return toolResult(mandateRevoke.output.parse(output));
 }

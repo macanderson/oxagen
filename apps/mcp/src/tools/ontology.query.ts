@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { ontologyQuery } from "@oxagen/oxagen/contracts/ontology.query";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...ontologyQuery.input.shape,
@@ -43,5 +44,5 @@ export default async function ontologyQueryTool(
   const output = await invoke(ontologyQuery.name, args, ctx, {
     surface: "mcp",
   });
-  return ontologyQuery.output.parse(output);
+  return toolResult(ontologyQuery.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { workspaceArchive } from "@oxagen/oxagen/contracts/workspace.archive";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...workspaceArchive.input.shape,
@@ -28,5 +29,5 @@ export default async function archiveWorkspaceTool(
   const output = await invoke(workspaceArchive.name, args, ctx, {
     surface: "mcp",
   });
-  return workspaceArchive.output.parse(output);
+  return toolResult(workspaceArchive.output.parse(output));
 }

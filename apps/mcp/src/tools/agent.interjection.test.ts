@@ -78,7 +78,9 @@ describe("list_interjections tool", () => {
   it("invokes list_interjections on the mcp surface and returns the parsed page", async () => {
     mocks.invoke.mockResolvedValue(output);
     const args = { open: true, limit: 50, runId: undefined, cursor: undefined };
-    await expect(listTool(args)).resolves.toEqual(output);
+    await expect(
+      listTool(args),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
       "list_interjections",
@@ -132,7 +134,9 @@ describe("answer_interjection tool", () => {
       path: undefined,
       create: undefined,
     };
-    await expect(answerTool(args)).resolves.toEqual(output);
+    await expect(
+      answerTool(args),
+    ).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith(
       "answer_interjection",
       args,
@@ -155,7 +159,9 @@ describe("answer_interjection tool", () => {
       path: "create" as const,
       create: { name: "API", slug: "api" },
     };
-    await expect(answerTool(args)).resolves.toEqual(created);
+    await expect(
+      answerTool(args),
+    ).resolves.toHaveProperty("structuredContent", created);
     expect(mocks.invoke).toHaveBeenCalledWith(
       "answer_interjection",
       args,
@@ -185,7 +191,9 @@ describe("answer_interjection tool", () => {
       path: "link" as const,
       create: undefined,
     };
-    await expect(answerTool(args)).resolves.toEqual(linked);
+    await expect(
+      answerTool(args),
+    ).resolves.toHaveProperty("structuredContent", linked);
   });
 
   it("refuses the binding a link answered before ADR-212 (negative)", async () => {

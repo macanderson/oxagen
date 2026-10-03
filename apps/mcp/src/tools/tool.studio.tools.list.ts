@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { toolStudioToolsList } from "@oxagen/oxagen/contracts/tool.studio.tools.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   server: toolStudioToolsList.input.shape.server.describe(
@@ -19,5 +20,5 @@ export const metadata: ToolMetadata = {
 export default async function toolStudioToolsListTool(args: InferSchema<typeof schema>) {
   const ctx = await buildContext(headers());
   const output = await invoke(toolStudioToolsList.name, args, ctx, { surface: "mcp" });
-  return toolStudioToolsList.output.parse(output);
+  return toolResult(toolStudioToolsList.output.parse(output));
 }

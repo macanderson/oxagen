@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { billingContractRateGet } from "@oxagen/oxagen/contracts/billing.contract_rate.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {};
 
@@ -23,5 +24,5 @@ export default async function billingContractRateGetTool(
   const output = await invoke(billingContractRateGet.name, {}, ctx, {
     surface: "mcp",
   });
-  return billingContractRateGet.output.parse(output);
+  return toolResult(billingContractRateGet.output.parse(output));
 }

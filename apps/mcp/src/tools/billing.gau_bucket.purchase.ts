@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { billingGauBucketPurchase } from "@oxagen/oxagen/contracts/billing.gau_bucket.purchase";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...billingGauBucketPurchase.input.shape,
@@ -34,5 +35,5 @@ export default async function billingGauBucketPurchaseTool(
   const output = await invoke(billingGauBucketPurchase.name, args, ctx, {
     surface: "mcp",
   });
-  return billingGauBucketPurchase.output.parse(output);
+  return toolResult(billingGauBucketPurchase.output.parse(output));
 }

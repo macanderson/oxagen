@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { contextSteeringDeliveries } from "@oxagen/oxagen/contracts/context.steering.deliveries";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = contextSteeringDeliveries.input.shape;
 
@@ -23,5 +24,5 @@ export default async function getSteeringDeliveriesTool(
   const output = await invoke(contextSteeringDeliveries.name, args, ctx, {
     surface: "mcp",
   });
-  return contextSteeringDeliveries.output.parse(output);
+  return toolResult(contextSteeringDeliveries.output.parse(output));
 }

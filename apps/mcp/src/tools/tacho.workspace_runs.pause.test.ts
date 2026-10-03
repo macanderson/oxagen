@@ -73,7 +73,7 @@ describe("pause_workspace_runs MCP tool", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(out).toEqual(RECEIPT);
+    expect(out.structuredContent).toEqual(RECEIPT);
   });
 
   it("refuses a call with no reason before the kernel runs (negative)", async () => {

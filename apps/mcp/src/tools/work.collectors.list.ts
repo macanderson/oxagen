@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { workCollectorsList } from "@oxagen/oxagen/contracts/work.collectors.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...workCollectorsList.input.shape };
 
@@ -21,5 +22,5 @@ export default async function listWorkCollectorsTool(args: InferSchema<typeof sc
   const output = await invoke(workCollectorsList.name, args, ctx, {
     surface: "mcp",
   });
-  return workCollectorsList.output.parse(output);
+  return toolResult(workCollectorsList.output.parse(output));
 }

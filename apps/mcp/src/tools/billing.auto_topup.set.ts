@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { billingAutoTopupSet } from "@oxagen/oxagen/contracts/billing.auto_topup.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...billingAutoTopupSet.input.shape,
@@ -31,5 +32,5 @@ export default async function billingAutoTopupSetTool(
   const output = await invoke(billingAutoTopupSet.name, args, ctx, {
     surface: "mcp",
   });
-  return billingAutoTopupSet.output.parse(output);
+  return toolResult(billingAutoTopupSet.output.parse(output));
 }

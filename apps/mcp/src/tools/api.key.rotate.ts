@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { apiKeyRotate } from "@oxagen/oxagen/contracts/api.key.rotate";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...apiKeyRotate.input.shape,
@@ -23,5 +24,5 @@ export default async function apiKeyRotateTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(apiKeyRotate.name, args, ctx, { surface: "mcp" });
-  return apiKeyRotate.output.parse(output);
+  return toolResult(apiKeyRotate.output.parse(output));
 }

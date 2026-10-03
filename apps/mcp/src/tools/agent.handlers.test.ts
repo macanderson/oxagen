@@ -85,7 +85,7 @@ describe("agent.approval.list handler", () => {
     expect(mocks.invoke).toHaveBeenCalledWith("list_approvals", args, fakeCtx, {
       surface: "mcp",
     });
-    expect(result).toEqual(validOutput);
+    expect(result.structuredContent).toEqual(validOutput);
   });
 
   it("carries the mandate hop and the parking rule of a mandate-gate row", async () => {
@@ -114,7 +114,7 @@ describe("agent.approval.list handler", () => {
       limit: 50,
       cursor: undefined,
     });
-    expect(result).toEqual(mandateRow);
+    expect(result.structuredContent).toEqual(mandateRow);
   });
 
   it("refuses an output that carries a row uuid instead of a public id", async () => {
@@ -215,7 +215,7 @@ describe("agent.approval.list_resolved handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toEqual(validOutput);
+    expect(result.structuredContent).toEqual(validOutput);
   });
 
   it("propagates invoke errors", async () => {
@@ -269,7 +269,7 @@ describe("agent.approval.resolve handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({
+    expect(result.structuredContent).toMatchObject({
       approvalId: "apr_1",
       resolution: "approved",
       mandate: null,
@@ -292,7 +292,7 @@ describe("agent.approval.resolve handler", () => {
       decision: "approved" as const,
       note: undefined,
     });
-    expect(result).toEqual(settled);
+    expect(result.structuredContent).toEqual(settled);
   });
 
   it("propagates invoke errors", async () => {
@@ -330,7 +330,7 @@ describe("agent.mcp.list handler", () => {
     expect(mocks.invoke).toHaveBeenCalledWith("list_mcp_servers", {}, fakeCtx, {
       surface: "mcp",
     });
-    expect(result).toMatchObject({ servers: [] });
+    expect(result.structuredContent).toMatchObject({ servers: [] });
   });
 });
 
@@ -370,7 +370,7 @@ describe("agent.mcp.register handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({
+    expect(result.structuredContent).toMatchObject({
       mcpServerId: "srv_1",
       healthStatus: "healthy",
     });
@@ -446,7 +446,7 @@ describe("agent.memory.write handler", () => {
     expect(mocks.invoke).toHaveBeenCalledWith("write_memory", args, fakeCtx, {
       surface: "mcp",
     });
-    expect(result).toMatchObject({ memoryId: "mem_1" });
+    expect(result.structuredContent).toMatchObject({ memoryId: "mem_1" });
   });
 });
 

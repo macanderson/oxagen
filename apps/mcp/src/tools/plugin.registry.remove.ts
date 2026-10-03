@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { pluginRegistryRemove } from "@oxagen/oxagen/contracts/plugin.registry.remove";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...pluginRegistryRemove.input.shape,
@@ -25,5 +26,5 @@ export default async function pluginRegistryRemoveTool(
   const output = await invoke(pluginRegistryRemove.name, args, ctx, {
     surface: "mcp",
   });
-  return pluginRegistryRemove.output.parse(output);
+  return toolResult(pluginRegistryRemove.output.parse(output));
 }

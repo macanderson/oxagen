@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { orgMemberRoleChange } from "@oxagen/oxagen/contracts/org.member_role.change";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...orgMemberRoleChange.input.shape,
@@ -31,5 +32,5 @@ export default async function orgMemberRoleChangeTool(
   const output = await invoke(orgMemberRoleChange.name, args, ctx, {
     surface: "mcp",
   });
-  return orgMemberRoleChange.output.parse(output);
+  return toolResult(orgMemberRoleChange.output.parse(output));
 }

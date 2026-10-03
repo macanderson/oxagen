@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { toolbeltList } from "@oxagen/oxagen/contracts/toolbelt.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...toolbeltList.input.shape };
 
@@ -25,5 +26,5 @@ export default async function toolbeltListTool(
   const output = await invoke(toolbeltList.name, args, ctx, {
     surface: "mcp",
   });
-  return toolbeltList.output.parse(output);
+  return toolResult(toolbeltList.output.parse(output));
 }

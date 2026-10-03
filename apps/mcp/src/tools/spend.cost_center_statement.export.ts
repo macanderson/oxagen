@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { spendCostCenterStatementExport } from "@oxagen/oxagen/contracts/spend.cost_center_statement.export";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...spendCostCenterStatementExport.input.shape,
@@ -31,5 +32,5 @@ export default async function spendCostCenterStatementExportTool(
   const output = await invoke(spendCostCenterStatementExport.name, args, ctx, {
     surface: "mcp",
   });
-  return spendCostCenterStatementExport.output.parse(output);
+  return toolResult(spendCostCenterStatementExport.output.parse(output));
 }

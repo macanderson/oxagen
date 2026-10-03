@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentEnvironmentBind } from "@oxagen/oxagen/contracts/agent.environment.bind";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentEnvironmentBind.input.shape,
@@ -25,5 +26,5 @@ export default async function agentEnvironmentBindTool(
   const output = await invoke(agentEnvironmentBind.name, args, ctx, {
     surface: "mcp",
   });
-  return agentEnvironmentBind.output.parse(output);
+  return toolResult(agentEnvironmentBind.output.parse(output));
 }

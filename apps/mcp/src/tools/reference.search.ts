@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { referenceSearch } from "@oxagen/oxagen/contracts/reference.search";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...referenceSearch.input.shape,
@@ -37,5 +38,5 @@ export default async function referenceSearchTool(
   const output = await invoke(referenceSearch.name, args, ctx, {
     surface: "mcp",
   });
-  return referenceSearch.output.parse(output);
+  return toolResult(referenceSearch.output.parse(output));
 }

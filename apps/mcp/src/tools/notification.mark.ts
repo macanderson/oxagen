@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { notificationsMark } from "@oxagen/oxagen/contracts/notification.mark";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...notificationsMark.input.shape,
@@ -25,5 +26,5 @@ export default async function notificationsMarkTool(
   const output = await invoke(notificationsMark.name, args, ctx, {
     surface: "mcp",
   });
-  return notificationsMark.output.parse(output);
+  return toolResult(notificationsMark.output.parse(output));
 }

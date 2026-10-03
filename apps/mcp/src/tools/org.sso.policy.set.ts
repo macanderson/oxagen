@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { orgSsoPolicySet } from "@oxagen/oxagen/contracts/org.sso.policy.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ssoRequired: orgSsoPolicySet.input.shape.ssoRequired.describe(
@@ -28,5 +29,5 @@ export default async function orgSsoPolicySetTool(
   const output = await invoke(orgSsoPolicySet.name, args, ctx, {
     surface: "mcp",
   });
-  return orgSsoPolicySet.output.parse(output);
+  return toolResult(orgSsoPolicySet.output.parse(output));
 }

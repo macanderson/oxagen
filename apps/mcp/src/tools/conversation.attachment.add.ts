@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { conversationAttachmentAdd } from "@oxagen/oxagen/contracts/conversation.attachment.add";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   conversationId: conversationAttachmentAdd.input.shape.conversationId.describe(
@@ -30,5 +31,5 @@ export default async function conversationAttachmentAddTool(
   const output = await invoke(conversationAttachmentAdd.name, args, ctx, {
     surface: "mcp",
   });
-  return conversationAttachmentAdd.output.parse(output);
+  return toolResult(conversationAttachmentAdd.output.parse(output));
 }

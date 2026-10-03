@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { schemaVersionPin } from "@oxagen/oxagen/contracts/schema.version.pin";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...schemaVersionPin.input.shape,
@@ -25,5 +26,5 @@ export default async function schemaVersionPinTool(
   const output = await invoke(schemaVersionPin.name, args, ctx, {
     surface: "mcp",
   });
-  return schemaVersionPin.output.parse(output);
+  return toolResult(schemaVersionPin.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { iamRoleCreate } from "@oxagen/oxagen/contracts/iam.role.create";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...iamRoleCreate.input.shape,
@@ -29,5 +30,5 @@ export default async function createRoleTool(args: InferSchema<typeof schema>) {
   const output = await invoke(iamRoleCreate.name, args, ctx, {
     surface: "mcp",
   });
-  return iamRoleCreate.output.parse(output);
+  return toolResult(iamRoleCreate.output.parse(output));
 }

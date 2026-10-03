@@ -32,7 +32,7 @@ describe("get_export_status MCP", () => {
     };
     mocks.invoke.mockResolvedValue(result);
     expect(metadata.name).toBe("get_export_status");
-    expect(await tool({ exportId })).toEqual(result);
+    expect((await tool({ exportId })).structuredContent).toEqual(result);
     expect(mocks.invoke).toHaveBeenCalledWith(
       "get_export_status",
       { exportId },

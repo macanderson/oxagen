@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { orgMemberRemove } from "@oxagen/oxagen/contracts/org.member.remove";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...orgMemberRemove.input.shape,
@@ -29,5 +30,5 @@ export default async function orgMemberRemoveTool(
   const output = await invoke(orgMemberRemove.name, args, ctx, {
     surface: "mcp",
   });
-  return orgMemberRemove.output.parse(output);
+  return toolResult(orgMemberRemove.output.parse(output));
 }

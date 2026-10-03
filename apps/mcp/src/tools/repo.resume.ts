@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { repoResume } from "@oxagen/oxagen/contracts/repo.resume";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...repoResume.input.shape,
@@ -24,5 +25,5 @@ export const metadata: ToolMetadata = {
 export default async function repoResumeTool(args: InferSchema<typeof schema>) {
   const ctx = await buildContext(headers());
   const output = await invoke(repoResume.name, args, ctx, { surface: "mcp" });
-  return repoResume.output.parse(output);
+  return toolResult(repoResume.output.parse(output));
 }

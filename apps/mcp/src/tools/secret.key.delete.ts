@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { secretKeyDelete } from "@oxagen/oxagen/contracts/secret.key.delete";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...secretKeyDelete.input.shape,
@@ -25,5 +26,5 @@ export default async function secretKeyDeleteTool(
   const output = await invoke(secretKeyDelete.name, args, ctx, {
     surface: "mcp",
   });
-  return secretKeyDelete.output.parse(output);
+  return toolResult(secretKeyDelete.output.parse(output));
 }

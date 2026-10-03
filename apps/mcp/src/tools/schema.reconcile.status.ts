@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { schemaReconcileStatus } from "@oxagen/oxagen/contracts/schema.reconcile.status";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...schemaReconcileStatus.input.shape,
@@ -25,5 +26,5 @@ export default async function schemaReconcileStatusTool(
   const output = await invoke(schemaReconcileStatus.name, args, ctx, {
     surface: "mcp",
   });
-  return schemaReconcileStatus.output.parse(output);
+  return toolResult(schemaReconcileStatus.output.parse(output));
 }

@@ -6,6 +6,7 @@ import {
 } from "@oxagen/oxagen/contracts/org.create";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...organizationCreateInputBase.shape,
@@ -53,5 +54,5 @@ export default async function organizationCreateTool(
   const output = await invoke(organizationCreate.name, args, ctx, {
     surface: "mcp",
   });
-  return organizationCreate.output.parse(output);
+  return toolResult(organizationCreate.output.parse(output));
 }

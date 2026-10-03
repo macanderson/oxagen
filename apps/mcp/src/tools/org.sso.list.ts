@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 // The contract takes no input: the providers are the caller's organisation's.
 export const schema = {
@@ -23,5 +24,5 @@ export const metadata: ToolMetadata = {
 export default async function orgSsoListTool(args: InferSchema<typeof schema>) {
   const ctx = await buildContext(headers());
   const output = await invoke(orgSsoList.name, args, ctx, { surface: "mcp" });
-  return orgSsoList.output.parse(output);
+  return toolResult(orgSsoList.output.parse(output));
 }

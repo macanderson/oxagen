@@ -6,6 +6,7 @@ import {
 } from "@oxagen/oxagen/contracts/billing.budget.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 // Derived from the contract's base object (the refined `input` has no `.shape`).
 // invoke() re-parses the full refined contract input, so the rolling/monthly
@@ -46,5 +47,5 @@ export default async function billingBudgetSetTool(
   const output = await invoke(billingBudgetSet.name, args, ctx, {
     surface: "mcp",
   });
-  return billingBudgetSet.output.parse(output);
+  return toolResult(billingBudgetSet.output.parse(output));
 }

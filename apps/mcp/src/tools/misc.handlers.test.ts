@@ -63,7 +63,10 @@ describe("notifications.list handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({ notifications: [], unreadCount: 0 });
+    expect(result.structuredContent).toMatchObject({
+      notifications: [],
+      unreadCount: 0,
+    });
   });
 
   it("propagates invoke errors", async () => {
@@ -361,7 +364,9 @@ describe("the role editor and archive_workspace tools", () => {
       description: null,
       permissions: ["run.read"],
     };
-    await expect(handler_iamRoleCreate(args)).resolves.toEqual({
+    await expect(
+      handler_iamRoleCreate(args),
+    ).resolves.toHaveProperty("structuredContent", {
       role: roleRow,
     });
     expect(mocks.invoke).toHaveBeenCalledWith("create_role", args, fakeCtx, {
@@ -382,7 +387,9 @@ describe("the role editor and archive_workspace tools", () => {
       { surface: "mcp" },
     );
     mocks.invoke.mockResolvedValueOnce({ id: "rol_1", name: "agent.release" });
-    await expect(handler_iamRoleDelete({ roleId: "rol_1" })).resolves.toEqual({
+    await expect(
+      handler_iamRoleDelete({ roleId: "rol_1" }),
+    ).resolves.toHaveProperty("structuredContent", {
       id: "rol_1",
       name: "agent.release",
     });
@@ -398,7 +405,9 @@ describe("the role editor and archive_workspace tools", () => {
     });
     await expect(
       handler_workspaceArchive({ workspaceId: "wrk_1" }),
-    ).resolves.toMatchObject({ id: "wrk_1", suspendedApiKeys: 0 });
+    ).resolves.toMatchObject({
+      structuredContent: { id: "wrk_1", suspendedApiKeys: 0 },
+    });
     mocks.invoke.mockResolvedValueOnce({
       id: "wrk_1",
       slug: "data",
@@ -451,7 +460,9 @@ describe("workspace.create handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result.steering_repo).toEqual({ status: "provisioning" });
+    expect(result.structuredContent?.steering_repo).toEqual({
+      status: "provisioning",
+    });
   });
 });
 

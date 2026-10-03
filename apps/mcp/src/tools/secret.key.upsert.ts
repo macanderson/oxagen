@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { secretKeyUpsert } from "@oxagen/oxagen/contracts/secret.key.upsert";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...secretKeyUpsert.input.shape,
@@ -25,5 +26,5 @@ export default async function secretKeyUpsertTool(
   const output = await invoke(secretKeyUpsert.name, args, ctx, {
     surface: "mcp",
   });
-  return secretKeyUpsert.output.parse(output);
+  return toolResult(secretKeyUpsert.output.parse(output));
 }

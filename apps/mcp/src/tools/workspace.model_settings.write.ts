@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { workspaceModelSettingsWrite } from "@oxagen/oxagen/contracts/workspace.model_settings.write";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...workspaceModelSettingsWrite.input.shape,
@@ -33,5 +34,5 @@ export default async function workspaceModelSettingsWriteTool(
   const output = await invoke(workspaceModelSettingsWrite.name, args, ctx, {
     surface: "mcp",
   });
-  return workspaceModelSettingsWrite.output.parse(output);
+  return toolResult(workspaceModelSettingsWrite.output.parse(output));
 }

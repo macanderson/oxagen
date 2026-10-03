@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { steeringProposalList } from "@oxagen/oxagen/contracts/steering.proposal.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...steeringProposalList.input.shape };
 
@@ -23,5 +24,5 @@ export default async function steeringProposalListTool(
   const output = await invoke(steeringProposalList.name, args, ctx, {
     surface: "mcp",
   });
-  return steeringProposalList.output.parse(output);
+  return toolResult(steeringProposalList.output.parse(output));
 }

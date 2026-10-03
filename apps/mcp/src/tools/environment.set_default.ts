@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { environmentSetDefault } from "@oxagen/oxagen/contracts/environment.set_default";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...environmentSetDefault.input.shape,
@@ -25,5 +26,5 @@ export default async function environmentSetDefaultTool(
   const output = await invoke(environmentSetDefault.name, args, ctx, {
     surface: "mcp",
   });
-  return environmentSetDefault.output.parse(output);
+  return toolResult(environmentSetDefault.output.parse(output));
 }

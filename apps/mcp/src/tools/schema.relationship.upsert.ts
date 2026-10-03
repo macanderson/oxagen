@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { schemaRelationshipUpsert } from "@oxagen/oxagen/contracts/schema.relationship.upsert";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...schemaRelationshipUpsert.input.shape,
@@ -25,5 +26,5 @@ export default async function schemaRelationshipUpsertTool(
   const output = await invoke(schemaRelationshipUpsert.name, args, ctx, {
     surface: "mcp",
   });
-  return schemaRelationshipUpsert.output.parse(output);
+  return toolResult(schemaRelationshipUpsert.output.parse(output));
 }

@@ -127,7 +127,7 @@ describe("work intake MCP tools", () => {
     ],
   ])("invokes %s on the mcp surface and returns its checked output", async (name, call, output) => {
     mocks.invoke.mockResolvedValue(output);
-    await expect(call()).resolves.toEqual(output);
+    await expect(call()).resolves.toHaveProperty("structuredContent", output);
     expect(mocks.invoke).toHaveBeenCalledWith(name, expect.any(Object), fakeCtx, { surface: "mcp" });
   });
 

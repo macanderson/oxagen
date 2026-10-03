@@ -68,7 +68,7 @@ describe("conversation.export tool", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toEqual(fakeOutput);
+    expect(result.structuredContent).toEqual(fakeOutput);
   });
 
   it("parses and returns the pdf output shape", async () => {
@@ -85,7 +85,7 @@ describe("conversation.export tool", () => {
       conversationId: "cnv_1",
       format: "pdf",
     });
-    expect(result).toEqual(fakeOutput);
+    expect(result.structuredContent).toEqual(fakeOutput);
   });
 
   it("rejects when the kernel returns a malformed output", async () => {

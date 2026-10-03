@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { steeringMemoriesList } from "@oxagen/oxagen/contracts/steering.memories.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...steeringMemoriesList.input.shape };
 
@@ -21,5 +22,5 @@ export default async function listWorkspaceMemoriesTool(args: InferSchema<typeof
   const output = await invoke(steeringMemoriesList.name, args, ctx, {
     surface: "mcp",
   });
-  return steeringMemoriesList.output.parse(output);
+  return toolResult(steeringMemoriesList.output.parse(output));
 }

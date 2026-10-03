@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { steeringPropose } from "@oxagen/oxagen/contracts/steering.propose";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 /**
  * The tool an agent calls to open a steering PR without a clone. Oxagen names
@@ -30,5 +31,5 @@ export default async function proposeSteeringTool(
   const output = await invoke(steeringPropose.name, args, ctx, {
     surface: "mcp",
   });
-  return steeringPropose.output.parse(output);
+  return toolResult(steeringPropose.output.parse(output));
 }

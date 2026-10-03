@@ -112,7 +112,7 @@ describe("the auto-approval rule tools", () => {
       expect(mocks.invoke).toHaveBeenLastCalledWith(capability, args, fakeCtx, {
         surface: "mcp",
       });
-      expect(result).toEqual(RULE_PAGE);
+      expect(result).toHaveProperty("structuredContent", RULE_PAGE);
     }
     expect(mocks.buildContext).toHaveBeenCalledTimes(4);
   });
@@ -131,7 +131,7 @@ describe("the auto-approval rule tools", () => {
     mocks.invoke.mockResolvedValue(out);
     expect(
       await handler_eligibility({ approvalId: "apr_0123456789abcdefghjkmn" }),
-    ).toEqual(out);
+    ).toHaveProperty("structuredContent", out);
   });
 
   it("refuses an output whose approver is neither a person nor a rule", async () => {

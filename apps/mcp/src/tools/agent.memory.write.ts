@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMemoryWrite } from "@oxagen/oxagen/contracts/agent.memory.write";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentMemoryWrite.input.shape,
@@ -41,5 +42,5 @@ export default async function agentMemoryWriteTool(
   const output = await invoke(agentMemoryWrite.name, args, ctx, {
     surface: "mcp",
   });
-  return agentMemoryWrite.output.parse(output);
+  return toolResult(agentMemoryWrite.output.parse(output));
 }

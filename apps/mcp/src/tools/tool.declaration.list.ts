@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { toolDeclarationList } from "@oxagen/oxagen/contracts/tool.declaration.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...toolDeclarationList.input.shape,
@@ -34,5 +35,5 @@ export default async function toolDeclarationListTool(
   const output = await invoke(toolDeclarationList.name, args, ctx, {
     surface: "mcp",
   });
-  return toolDeclarationList.output.parse(output);
+  return toolResult(toolDeclarationList.output.parse(output));
 }

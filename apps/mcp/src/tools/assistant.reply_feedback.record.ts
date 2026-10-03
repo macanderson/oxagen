@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { assistantReplyFeedbackRecord } from "@oxagen/oxagen/contracts/assistant.reply_feedback.record";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...assistantReplyFeedbackRecord.input.shape };
 
@@ -24,5 +25,5 @@ export default async function recordReplyFeedbackTool(
   const output = await invoke(assistantReplyFeedbackRecord.name, args, ctx, {
     surface: "mcp",
   });
-  return assistantReplyFeedbackRecord.output.parse(output);
+  return toolResult(assistantReplyFeedbackRecord.output.parse(output));
 }

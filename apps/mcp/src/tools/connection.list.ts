@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { connectionList } from "@oxagen/oxagen/contracts/connection.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...connectionList.input.shape };
 
@@ -20,5 +21,8 @@ export default async function connectionListTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  return invoke(connectionList.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(connectionList.name, args, ctx, {
+    surface: "mcp",
+  });
+  return toolResult(output);
 }

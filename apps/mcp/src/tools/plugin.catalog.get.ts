@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { pluginCatalogGet } from "@oxagen/oxagen/contracts/plugin.catalog.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...pluginCatalogGet.input.shape,
@@ -25,5 +26,5 @@ export default async function pluginCatalogGetTool(
   const output = await invoke(pluginCatalogGet.name, args, ctx, {
     surface: "mcp",
   });
-  return pluginCatalogGet.output.parse(output);
+  return toolResult(pluginCatalogGet.output.parse(output));
 }

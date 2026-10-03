@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { repoPrGet } from "@oxagen/oxagen/contracts/repo.pr.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...repoPrGet.input.shape,
@@ -27,5 +28,5 @@ export const metadata: ToolMetadata = {
 export default async function repoPrGetTool(args: InferSchema<typeof schema>) {
   const ctx = await buildContext(headers());
   const output = await invoke(repoPrGet.name, args, ctx, { surface: "mcp" });
-  return repoPrGet.output.parse(output);
+  return toolResult(repoPrGet.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { repoCiStatus } from "@oxagen/oxagen/contracts/repo.ci.status";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...repoCiStatus.input.shape,
@@ -31,5 +32,5 @@ export default async function repoCiStatusTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(repoCiStatus.name, args, ctx, { surface: "mcp" });
-  return repoCiStatus.output.parse(output);
+  return toolResult(repoCiStatus.output.parse(output));
 }

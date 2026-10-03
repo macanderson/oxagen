@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { repoPrDiff } from "@oxagen/oxagen/contracts/repo.pr.diff";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...repoPrDiff.input.shape,
@@ -27,5 +28,5 @@ export const metadata: ToolMetadata = {
 export default async function repoPrDiffTool(args: InferSchema<typeof schema>) {
   const ctx = await buildContext(headers());
   const output = await invoke(repoPrDiff.name, args, ctx, { surface: "mcp" });
-  return repoPrDiff.output.parse(output);
+  return toolResult(repoPrDiff.output.parse(output));
 }

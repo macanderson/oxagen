@@ -83,7 +83,7 @@ describe("start_studio_listing", () => {
     const args = { server: "notes", revision: 3, pin: { version: "0.9.2", digest: DIGEST } };
     const result = await startStudioListing(args);
     expect(mocks.invoke).toHaveBeenCalledWith("start_studio_listing", args, fakeCtx, { surface: "mcp" });
-    expect(result).toEqual({ listing: WAITING });
+    expect(result.structuredContent).toEqual({ listing: WAITING });
   });
 
   it("refuses a missing listing, which start never returns", async () => {
@@ -96,13 +96,17 @@ describe("start_studio_listing", () => {
 describe("get_studio_listing", () => {
   it("invokes with the contract name and forwards the listing", async () => {
     mocks.invoke.mockResolvedValue({ listing: WAITING });
-    await expect(getStudioListing({ server: "notes" })).resolves.toEqual({ listing: WAITING });
+    await expect(
+      getStudioListing({ server: "notes" }),
+    ).resolves.toHaveProperty("structuredContent", { listing: WAITING });
     expect(mocks.invoke).toHaveBeenCalledWith("get_studio_listing", { server: "notes" }, fakeCtx, { surface: "mcp" });
   });
 
   it("passes a draft with no listing through as null", async () => {
     mocks.invoke.mockResolvedValue({ listing: null });
-    await expect(getStudioListing({ server: "notes" })).resolves.toEqual({ listing: null });
+    await expect(
+      getStudioListing({ server: "notes" }),
+    ).resolves.toHaveProperty("structuredContent", { listing: null });
   });
 
   it("refuses an output outside the contract", async () => {

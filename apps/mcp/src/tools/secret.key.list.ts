@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { secretKeyList } from "@oxagen/oxagen/contracts/secret.key.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...secretKeyList.input.shape,
@@ -25,5 +26,5 @@ export default async function secretKeyListTool(
   const output = await invoke(secretKeyList.name, args, ctx, {
     surface: "mcp",
   });
-  return secretKeyList.output.parse(output);
+  return toolResult(secretKeyList.output.parse(output));
 }

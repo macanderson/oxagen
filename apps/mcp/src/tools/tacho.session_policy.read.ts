@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { tachoSessionPolicyRead } from "@oxagen/oxagen/contracts/tacho.session_policy.read";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {};
 
@@ -23,5 +24,5 @@ export default async function tachoSessionPolicyReadTool(
   const output = await invoke(tachoSessionPolicyRead.name, {}, ctx, {
     surface: "mcp",
   });
-  return tachoSessionPolicyRead.output.parse(output);
+  return toolResult(tachoSessionPolicyRead.output.parse(output));
 }

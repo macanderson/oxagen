@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   runId: runFrameBodyGet.input.shape.runId.describe(
@@ -33,5 +34,5 @@ export default async function runFrameBodyGetTool(
   const output = await invoke(runFrameBodyGet.name, args, ctx, {
     surface: "mcp",
   });
-  return runFrameBodyGet.output.parse(output);
+  return toolResult(runFrameBodyGet.output.parse(output));
 }

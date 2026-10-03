@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...repositoryList.input.shape,
@@ -25,5 +26,5 @@ export default async function repositoryListTool(
   const output = await invoke(repositoryList.name, args, ctx, {
     surface: "mcp",
   });
-  return repositoryList.output.parse(output);
+  return toolResult(repositoryList.output.parse(output));
 }

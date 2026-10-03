@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { steeringRecordList } from "@oxagen/oxagen/contracts/steering.record.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...steeringRecordList.input.shape,
@@ -34,5 +35,5 @@ export default async function steeringRecordListTool(
   const output = await invoke(steeringRecordList.name, args, ctx, {
     surface: "mcp",
   });
-  return steeringRecordList.output.parse(output);
+  return toolResult(steeringRecordList.output.parse(output));
 }

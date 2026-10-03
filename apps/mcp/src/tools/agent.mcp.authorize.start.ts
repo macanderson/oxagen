@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentMcpAuthorizeStart } from "@oxagen/oxagen/contracts/agent.mcp.authorize.start";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 const shape = agentMcpAuthorizeStart.input.shape;
 
@@ -45,5 +46,5 @@ export default async function agentMcpAuthorizeStartTool(
   const output = await invoke(agentMcpAuthorizeStart.name, args, ctx, {
     surface: "mcp",
   });
-  return agentMcpAuthorizeStart.output.parse(output);
+  return toolResult(agentMcpAuthorizeStart.output.parse(output));
 }

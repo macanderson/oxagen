@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { apiKeyRevoke } from "@oxagen/oxagen/contracts/api.key.revoke";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...apiKeyRevoke.input.shape,
@@ -27,5 +28,5 @@ export default async function apiKeyRevokeTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(apiKeyRevoke.name, args, ctx, { surface: "mcp" });
-  return apiKeyRevoke.output.parse(output);
+  return toolResult(apiKeyRevoke.output.parse(output));
 }

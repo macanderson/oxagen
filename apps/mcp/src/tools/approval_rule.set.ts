@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { approvalRuleSet } from "@oxagen/oxagen/contracts/approval_rule.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...approvalRuleSet.input.shape,
@@ -25,5 +26,5 @@ export default async function approvalRuleSetTool(
   const output = await invoke(approvalRuleSet.name, args, ctx, {
     surface: "mcp",
   });
-  return approvalRuleSet.output.parse(output);
+  return toolResult(approvalRuleSet.output.parse(output));
 }

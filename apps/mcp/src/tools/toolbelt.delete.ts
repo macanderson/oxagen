@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { toolbeltDelete } from "@oxagen/oxagen/contracts/toolbelt.delete";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   toolbeltId: toolbeltDelete.input.shape.toolbeltId.describe(
@@ -27,5 +28,5 @@ export default async function toolbeltDeleteTool(
   const output = await invoke(toolbeltDelete.name, args, ctx, {
     surface: "mcp",
   });
-  return toolbeltDelete.output.parse(output);
+  return toolResult(toolbeltDelete.output.parse(output));
 }

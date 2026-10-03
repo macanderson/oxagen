@@ -218,7 +218,7 @@ describe("runtime and toolbelt tools", () => {
       expect(mocks.invoke).toHaveBeenCalledWith(name, entry.args, fakeCtx, {
         surface: "mcp",
       });
-      expect(result).toEqual(entry.output);
+      expect(result).toHaveProperty("structuredContent", entry.output);
     },
   );
 

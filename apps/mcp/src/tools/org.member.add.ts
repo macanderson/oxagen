@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { orgMemberAdd } from "@oxagen/oxagen/contracts/org.member.add";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...orgMemberAdd.input.shape,
@@ -29,5 +30,5 @@ export default async function orgMemberAddTool(
 ) {
   const ctx = await buildContext(headers());
   const output = await invoke(orgMemberAdd.name, args, ctx, { surface: "mcp" });
-  return orgMemberAdd.output.parse(output);
+  return toolResult(orgMemberAdd.output.parse(output));
 }

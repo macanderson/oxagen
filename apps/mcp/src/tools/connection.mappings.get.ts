@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { connectionMappingsGet } from "@oxagen/oxagen/contracts/connection.mappings.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = { ...connectionMappingsGet.input.shape };
 
@@ -20,5 +21,8 @@ export default async function connectionMappingsGetTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  return invoke(connectionMappingsGet.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(connectionMappingsGet.name, args, ctx, {
+    surface: "mcp",
+  });
+  return toolResult(output);
 }

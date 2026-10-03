@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { costPriceEntrySet } from "@oxagen/oxagen/contracts/cost.price_entry.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...costPriceEntrySet.input.shape,
@@ -47,5 +48,5 @@ export default async function costPriceEntrySetTool(
   const output = await invoke(costPriceEntrySet.name, args, ctx, {
     surface: "mcp",
   });
-  return costPriceEntrySet.output.parse(output);
+  return toolResult(costPriceEntrySet.output.parse(output));
 }

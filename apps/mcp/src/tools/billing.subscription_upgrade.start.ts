@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { billingSubscriptionUpgradeStart } from "@oxagen/oxagen/contracts/billing.subscription_upgrade.start";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...billingSubscriptionUpgradeStart.input.shape,
@@ -38,5 +39,5 @@ export default async function billingSubscriptionUpgradeStartTool(
   const output = await invoke(billingSubscriptionUpgradeStart.name, args, ctx, {
     surface: "mcp",
   });
-  return billingSubscriptionUpgradeStart.output.parse(output);
+  return toolResult(billingSubscriptionUpgradeStart.output.parse(output));
 }

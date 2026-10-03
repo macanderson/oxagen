@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { resendMemberInvite } from "@oxagen/oxagen/contracts/org.member_invite.resend";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 export const schema = resendMemberInvite.input.shape;
 export const metadata: ToolMetadata = {
   name: resendMemberInvite.name,
@@ -15,7 +16,8 @@ export const metadata: ToolMetadata = {
 };
 export default async function tool(args: InferSchema<typeof schema>) {
   const ctx = await buildContext(headers());
-  return resendMemberInvite.output.parse(
-    await invoke(resendMemberInvite.name, args, ctx, { surface: "mcp" }),
-  );
+  const output = await invoke(resendMemberInvite.name, args, ctx, {
+    surface: "mcp",
+  });
+  return toolResult(resendMemberInvite.output.parse(output));
 }

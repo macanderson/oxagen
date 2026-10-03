@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { billingSubscriptionRead } from "@oxagen/oxagen/contracts/billing.subscription.read";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {};
 
@@ -23,5 +24,5 @@ export default async function billingSubscriptionReadTool(
   const output = await invoke(billingSubscriptionRead.name, {}, ctx, {
     surface: "mcp",
   });
-  return billingSubscriptionRead.output.parse(output);
+  return toolResult(billingSubscriptionRead.output.parse(output));
 }

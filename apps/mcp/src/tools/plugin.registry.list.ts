@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { pluginRegistryList } from "@oxagen/oxagen/contracts/plugin.registry.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {};
 
@@ -23,5 +24,5 @@ export default async function pluginRegistryListTool(
   const output = await invoke(pluginRegistryList.name, {}, ctx, {
     surface: "mcp",
   });
-  return pluginRegistryList.output.parse(output);
+  return toolResult(pluginRegistryList.output.parse(output));
 }

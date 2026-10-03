@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { iamRoleGrantsSet } from "@oxagen/oxagen/contracts/iam.role.grants.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...iamRoleGrantsSet.input.shape,
@@ -31,5 +32,5 @@ export default async function setRoleGrantsTool(
   const output = await invoke(iamRoleGrantsSet.name, args, ctx, {
     surface: "mcp",
   });
-  return iamRoleGrantsSet.output.parse(output);
+  return toolResult(iamRoleGrantsSet.output.parse(output));
 }

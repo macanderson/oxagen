@@ -6,6 +6,7 @@ import {
 } from "@oxagen/oxagen/contracts/steering.markdown_import.commit";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 // The contract refines its object (at most 299 files in one steering PR), so
 // the tool lists the object's own fields and the kernel applies the
@@ -31,5 +32,5 @@ export default async function commitMarkdownImportTool(
   const output = await invoke(steeringMarkdownImportCommit.name, args, ctx, {
     surface: "mcp",
   });
-  return steeringMarkdownImportCommit.output.parse(output);
+  return toolResult(steeringMarkdownImportCommit.output.parse(output));
 }

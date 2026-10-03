@@ -6,6 +6,7 @@ import {
 } from "@oxagen/oxagen/contracts/workspace.create";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...workspaceCreate.input.shape,
@@ -42,5 +43,5 @@ export default async function workspaceCreateTool(
   const output = await invoke(workspaceCreate.name, args, ctx, {
     surface: "mcp",
   });
-  return workspaceCreate.output.parse(output);
+  return toolResult(workspaceCreate.output.parse(output));
 }

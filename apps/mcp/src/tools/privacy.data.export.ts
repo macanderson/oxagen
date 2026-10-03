@@ -6,6 +6,7 @@ import {
 } from "@oxagen/oxagen/contracts/privacy.data.export";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...exportDataFields.shape,
@@ -31,5 +32,5 @@ export default async function privacyDataExportTool(
   const output = await invoke(privacyDataExport.name, args, ctx, {
     surface: "mcp",
   });
-  return privacyDataExport.output.parse(output);
+  return toolResult(privacyDataExport.output.parse(output));
 }

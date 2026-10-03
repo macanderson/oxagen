@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { agentInterjectionList } from "@oxagen/oxagen/contracts/agent.interjection.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...agentInterjectionList.input.shape,
@@ -37,5 +38,5 @@ export default async function agentInterjectionListTool(
   const output = await invoke(agentInterjectionList.name, args, ctx, {
     surface: "mcp",
   });
-  return agentInterjectionList.output.parse(output);
+  return toolResult(agentInterjectionList.output.parse(output));
 }

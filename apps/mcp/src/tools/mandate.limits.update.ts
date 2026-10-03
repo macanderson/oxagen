@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { mandateLimitsUpdate } from "@oxagen/oxagen/contracts/mandate.limits.update";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 import { mandateLimitsUpdateFields } from "@oxagen/oxagen/contracts/mandate.limits.update";
 
 // The contract input carries a `.refine()` (at least one change named), a
@@ -27,5 +28,5 @@ export default async function mandateLimitsUpdateTool(
   const output = await invoke(mandateLimitsUpdate.name, args, ctx, {
     surface: "mcp",
   });
-  return mandateLimitsUpdate.output.parse(output);
+  return toolResult(mandateLimitsUpdate.output.parse(output));
 }

@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { systemInstallInstructions } from "@oxagen/oxagen/contracts/system.install.instructions";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 // Returns step-by-step MCP/CLI install instructions for a given AI client.
 // Pure computation — no model call. Renders inline via the install-instructions
@@ -41,5 +42,5 @@ export default async function systemInstallInstructionsTool(
   const output = await invoke(systemInstallInstructions.name, args, ctx, {
     surface: "mcp",
   });
-  return systemInstallInstructions.output.parse(output);
+  return toolResult(systemInstallInstructions.output.parse(output));
 }

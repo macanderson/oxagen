@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { orgModelCredentialGet } from "@oxagen/oxagen/contracts/org.model_credential.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 // The contract takes no input: the credential is the caller's organisation's.
 export const schema = {
@@ -26,5 +27,5 @@ export default async function orgModelCredentialGetTool(
   const output = await invoke(orgModelCredentialGet.name, args, ctx, {
     surface: "mcp",
   });
-  return orgModelCredentialGet.output.parse(output);
+  return toolResult(orgModelCredentialGet.output.parse(output));
 }

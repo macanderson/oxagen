@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { secretValueSet } from "@oxagen/oxagen/contracts/secret.value.set";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...secretValueSet.input.shape,
@@ -25,5 +26,5 @@ export default async function secretValueSetTool(
   const output = await invoke(secretValueSet.name, args, ctx, {
     surface: "mcp",
   });
-  return secretValueSet.output.parse(output);
+  return toolResult(secretValueSet.output.parse(output));
 }

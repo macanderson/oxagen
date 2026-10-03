@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { runSeal } from "@oxagen/oxagen/contracts/run.seal";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   runId: runSeal.input.shape.runId.describe(
@@ -29,5 +30,5 @@ export default async function runSealTool(args: InferSchema<typeof schema>) {
   const ctx = await buildContext(headers());
   const input = runSeal.input.parse(args);
   const output = await invoke(runSeal.name, input, ctx, { surface: "mcp" });
-  return runSeal.output.parse(output);
+  return toolResult(runSeal.output.parse(output));
 }

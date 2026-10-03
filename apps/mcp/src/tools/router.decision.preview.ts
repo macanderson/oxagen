@@ -3,6 +3,7 @@ import { headers } from "xmcp/headers";
 import { routerDecisionPreview } from "@oxagen/oxagen/contracts/router.decision.preview";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
+import { toolResult } from "../tool-result";
 
 export const schema = {
   ...routerDecisionPreview.input.shape,
@@ -25,5 +26,5 @@ export default async function routerDecisionPreviewTool(
   const output = await invoke(routerDecisionPreview.name, args, ctx, {
     surface: "mcp",
   });
-  return routerDecisionPreview.output.parse(output);
+  return toolResult(routerDecisionPreview.output.parse(output));
 }

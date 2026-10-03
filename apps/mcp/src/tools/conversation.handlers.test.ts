@@ -61,7 +61,7 @@ describe("conversation.archive handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({ updated: 2 });
+    expect(result.structuredContent).toMatchObject({ updated: 2 });
   });
 
   it("propagates invoke errors", async () => {
@@ -188,7 +188,7 @@ describe("conversation.rename handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({ title: "New Title" });
+    expect(result.structuredContent).toMatchObject({ title: "New Title" });
   });
 });
 
