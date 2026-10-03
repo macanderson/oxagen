@@ -91,7 +91,16 @@ It sets the container's restart policy to `no`, renames it
 its port at once and finishes the requests it holds, so the new container
 starts on the same port straight away. A service that keeps the port 10
 seconds after SIGTERM, such as node running as PID 1 with no handler, gets
-SIGKILL, as every service did before.
+SIGKILL, as every service did before. The api handles SIGTERM itself
+(`apps/api/src/shutdown.ts`), and mcp starts with
+`--require ./drain-preload.cjs`, which closes the ports xmcp's server opens.
+`infra/tools/tests/node-swap.test.py` runs both cases against real Docker in
+the infra workflow.
+
+The app build needs `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` from Parameter Store,
+so its server action ids stay the same from one deploy to the next and a page
+left open keeps working. `package-for-node.sh` refuses to package the app
+without it.
 
 Once the new release is healthy, or the rollback has run, deployment releases
 the node lock and waits up to `drain_seconds` for the old container to exit,
