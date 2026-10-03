@@ -1418,6 +1418,9 @@ describe("merge_steering_pr", () => {
     expect(h.store.proposals[0]!.status).toBe("checks_passed");
 
     github.getPullRequest = read;
+    // The host merged, so the failed call kept its claim. The retry resumes
+    // once that claim lapses.
+    lapseMergeClaims(h);
     const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
     expect(out.status).toBe("merged");
     expect(out.mergedCommit).toBe("0000000000000000000000000000000000000519");
@@ -3169,9 +3172,11 @@ describe("merge_steering_pr", () => {
     const mergePullRequest = h.github.mergePullRequest.bind(h.github);
     h.github.mergePullRequest = async (repo, args) => {
       // This landing ran past MERGE_CLAIM_SECONDS, and a second merge, in
-      // another process, claimed the row again before the host answered.
+      // another process, claimed the row again before the host answered. The
+      // memory store hands the handler the object it stores, so the newer
+      // claim replaces the row rather than editing the handler's copy.
       newer = new Date(h.now().getTime() + 1000);
-      Object.assign(h.store.proposals[0]!, { mergeClaimedAt: newer });
+      h.store.proposals[0] = { ...h.store.proposals[0]!, mergeClaimedAt: newer };
       return mergePullRequest(repo, args);
     };
     const warn = vi.spyOn(logger, "warn");
