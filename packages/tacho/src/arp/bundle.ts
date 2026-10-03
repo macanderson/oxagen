@@ -223,6 +223,8 @@ export function verifySettledEvidence(events: readonly TachoEvent[]): void {
   if (head?.kind !== "turn_end")
     throw new Error("ARP source must end at a completed turn");
   let openTurn = false;
+  /** The Tacho turn number the last `turn_end` closed, when it named one. */
+  let closedTurn: number | undefined;
   const tools = new Set<string>();
   const requested = new Set<string>();
   const children = new Set<string>();
@@ -235,9 +237,16 @@ export function verifySettledEvidence(events: readonly TachoEvent[]): void {
         );
       openTurn = true;
     } else if (event.kind === "turn_end") {
-      if (!openTurn)
+      // A `Stop` the daemon answered with "keep going" closes the turn, and
+      // the recorder opens it again for the work that follows. The second
+      // `turn_end` names the same turn number as the first.
+      const reclosed =
+        event.turn?.turn_seq !== undefined &&
+        event.turn.turn_seq === closedTurn;
+      if (!openTurn && !reclosed)
         throw new Error("ARP source ends a turn that was not recorded open");
       openTurn = false;
+      closedTurn = event.turn?.turn_seq;
     }
     if (event.kind === "telemetry_gap")
       throw new Error("ARP source reports a telemetry gap");
@@ -292,10 +301,19 @@ export function verifySettledEvidence(events: readonly TachoEvent[]): void {
       const id = approvalCorrelationId(event.body);
       if (!id) throw new Error("ARP approval decision has no correlation ID");
       approvals.delete(id);
-    } else if (event.kind === "policy_decision") {
-      // PermissionDenied lands here carrying the gated call's tool_use_id.
+    } else if (
+      event.kind === "policy_decision" ||
+      event.kind === "harness_permission"
+    ) {
+      // An Oxagen verdict, or the harness's own check (PermissionDenied, and
+      // the same frame from an older host as `policy_decision`), carrying the
+      // gated call's tool_use_id.
       const id = approvalCorrelationId(event.body);
-      if (id) approvals.delete(id);
+      if (id) {
+        approvals.delete(id);
+        // A refused call never runs, so no result will settle its request.
+        if (event.body.policy_decision === "deny") tools.delete(id);
+      }
     }
   }
   if (tools.size || children.size || approvals.size)

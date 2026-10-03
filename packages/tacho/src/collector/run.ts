@@ -9,15 +9,20 @@
  * agent, each on its own ports and with its own state, under one service,
  * one pid file and one log.
  */
-import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { readFileSync, unlinkSync } from "node:fs";
 import {
   agentServes,
   listAgents,
   migrateLegacyLayout,
 } from "../host/agents";
+import { writeSensitiveFileAtomic } from "../host/fs";
 import type { TachoHome, TachoPaths } from "../host/paths";
 import { tachoHome } from "../host/paths";
-import { formatDaemonPid, parseDaemonPid } from "../host/process-scan";
+import {
+  formatDaemonPid,
+  parseDaemonPid,
+  readProcessStarts,
+} from "../host/process-scan";
 import { type DaemonHandle, type DaemonOptions, startDaemon } from "./daemon";
 
 /**
@@ -118,31 +123,62 @@ export function guardDaemonProcess(options: ProcessGuardOptions): () => void {
   };
 }
 
-/** Record this process in `tachod.pid`: its pid, start and executable. */
+/**
+ * Record this process in `tachod.pid`: its pid, when it wrote the record,
+ * its executable, and on Linux its start as `/proc` counts it (`start`). The
+ * file is replaced whole through a rename, so a service manager that reads
+ * it while the daemon starts sees the old record or this one, never an empty
+ * or half-written file.
+ */
 export function writeDaemonPid(
   path: string,
   now: Date = new Date(),
   execPath: string = process.execPath,
+  start?: string,
 ): void {
-  writeFileSync(
+  writeSensitiveFileAtomic(
     path,
     formatDaemonPid({
       pid: process.pid,
       started_at: now.toISOString(),
       exe: execPath,
+      ...(start !== undefined ? { start } : {}),
     }),
+    0o644,
   );
 }
 
-/**
- * Remove `tachod.pid` as the daemon exits, so the file never outlives it to
- * name a pid the OS may give to another program. A file a newer daemon has
- * written since is left alone.
- */
-export function releaseDaemonPid(path: string): void {
+/** This process's start as `/proc` counts it, on Linux only. */
+function ownProcStart(): string | undefined {
+  if (process.platform !== "linux") return undefined;
+  return readProcessStarts([process.pid], undefined, "linux")?.get(
+    process.pid,
+  );
+}
+
+/** A file's text, or undefined when there is none to read. */
+function readPidFile(path: string): string | undefined {
   try {
-    if (parseDaemonPid(readFileSync(path, "utf8"))?.pid === process.pid)
-      unlinkSync(path);
+    return readFileSync(path, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Give up `tachod.pid` as the daemon exits, so the file never outlives it to
+ * name a pid the OS may give to another program. `previous` is what the file
+ * held before this process wrote it, put back when this process never
+ * started serving: a second daemon that fails on the first one's ports must
+ * not leave the first with no record to be stopped by. A file a newer daemon
+ * has written since is left alone.
+ */
+export function releaseDaemonPid(path: string, previous?: string): void {
+  try {
+    if (parseDaemonPid(readFileSync(path, "utf8"))?.pid !== process.pid)
+      return;
+    if (previous === undefined) unlinkSync(path);
+    else writeSensitiveFileAtomic(path, previous, 0o644);
   } catch {
     // Gone already, or unreadable: nothing of this process to remove.
   }
@@ -251,8 +287,11 @@ export async function runDaemonProcess(): Promise<void> {
   const daemons: DaemonHandle[] = [];
   let stopping: Promise<void> | undefined;
   const stopOnce = () => (stopping ??= stopAll(daemons));
+  // What `tachod.pid` held before this process wrote it, kept until a
+  // collector is up.
+  let previousPid = readPidFile(paths.pid);
   const exit = (code: number) => {
-    releaseDaemonPid(paths.pid);
+    releaseDaemonPid(paths.pid, previousPid);
     process.exit(code);
   };
   const log = (line: string) => {
@@ -271,8 +310,18 @@ export async function runDaemonProcess(): Promise<void> {
       `tachod: could not move the enrollment into agents/: ${error instanceof Error ? error.message : String(error)}\n`,
     );
   }
-  await startAgents(daemonAgents(paths), daemons, log);
-  writeDaemonPid(paths.pid);
+  // Written before any collector starts. The first collector answers hooks
+  // while the rest start, and a reinstall in that window stops the daemon by
+  // this file. Written after them, the file was missing, the stop killed
+  // nothing, and a second daemon started beside this one.
+  writeDaemonPid(paths.pid, new Date(), process.execPath, ownProcStart());
+  try {
+    await startAgents(daemonAgents(paths), daemons, log);
+  } catch (error) {
+    releaseDaemonPid(paths.pid, previousPid);
+    throw error;
+  }
+  previousPid = undefined;
   const stop = (signal: string) => {
     if (stopping !== undefined) return;
     process.stderr.write(`tachod: ${signal}, stopping\n`);

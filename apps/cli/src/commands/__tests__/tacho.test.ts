@@ -24,7 +24,11 @@ const calls: Array<{ name: string; args: unknown[] }> = [];
 const lastCall = (name: string) =>
   calls.filter((call) => call.name === name).at(-1);
 const outcomes = {
-  enroll: { ok: true, warnings: [] as string[] },
+  enroll: { ok: true, warnings: [] as string[] } as {
+    ok: boolean;
+    warnings: string[];
+    shipping?: { healthy: boolean; detail: string };
+  },
   verify: { ok: true, detail: "chained" },
   status: { enrolled: true } as {
     enrolled: boolean;
@@ -38,7 +42,12 @@ const outcomes = {
     to: undefined as { org: string; workspace: string } | undefined,
   },
   exportCommand: true,
-  moved: [] as Array<{ agentKey: string; from: string; ok: boolean }>,
+  moved: [] as Array<{
+    agentKey: string;
+    from: string;
+    ok: boolean;
+    skipped?: "harness_files_elsewhere";
+  }>,
   claudeCodeMcp: [] as Array<{
     agentKey: string;
     path: string;
@@ -309,6 +318,55 @@ describe("oxagen tacho", () => {
     expect(calls).toEqual([]);
   });
 
+  it("enroll fails when the new daemon never reaches Oxagen, verified or not", async () => {
+    const { writer } = captureWriter();
+    outcomes.enroll = {
+      ok: true,
+      warnings: [],
+      shipping: {
+        healthy: false,
+        detail: "tachod has not reached Oxagen after 30s",
+      },
+    };
+    expect(await handleTachoEnroll({}, writer)).toBe(false);
+    // Every hook is written, so the other agents still move to the new names.
+    expect(calls.map((c) => c.name)).toEqual(["enroll", "move"]);
+    // A turn chained on this machine does not make up for nothing shipping.
+    expect(await handleTachoEnroll({ verify: true }, writer)).toBe(false);
+    expect(calls.at(-1)?.name).toBe("verify");
+    outcomes.enroll = {
+      ok: true,
+      warnings: [],
+      shipping: { healthy: true, detail: "shipping" },
+    };
+    expect(await handleTachoEnroll({}, writer)).toBe(true);
+    expect(await handleTachoEnroll({ verify: true }, writer)).toBe(true);
+  });
+
+  it("enroll and reassign tell the recorder who runs them, and pass --allow-root", async () => {
+    const { writer } = captureWriter();
+    // The recorder refuses root from `getuid`; without it the guard never ran.
+    await handleTachoEnroll({}, writer);
+    const enrollDeps = lastCall("enroll")?.args[1] as {
+      getuid?: () => number | undefined;
+    };
+    expect(typeof enrollDeps.getuid).toBe("function");
+    expect(enrollDeps.getuid?.()).toBe(process.getuid?.());
+    expect(lastCall("enroll")?.args[0]).not.toHaveProperty("allowRoot");
+    await handleTachoEnroll({ allowRoot: true }, writer);
+    expect(lastCall("enroll")?.args[0]).toMatchObject({ allowRoot: true });
+
+    await handleTachoReassign({ workspace: "edge", allowRoot: true }, writer);
+    expect(lastCall("reassign")?.args[0]).toMatchObject({ allowRoot: true });
+    const reassignDeps = lastCall("reassign")?.args[1] as {
+      recorded?: boolean;
+      getuid?: () => number | undefined;
+    };
+    expect(reassignDeps.recorded).toBe(true);
+    expect(typeof reassignDeps.getuid).toBe("function");
+    expect(reassignDeps.getuid?.()).toBe(process.getuid?.());
+  });
+
   it("says on stderr which agents it moved off the tacho names, and which it could not", async () => {
     const stdout: string[] = [];
     const stderr: string[] = [];
@@ -325,6 +383,12 @@ describe("oxagen tacho", () => {
     outcomes.moved = [
       { agentKey: "acme.core.cc-laptop", from: "tacho hook", ok: true },
       { agentKey: "acme.core.codex-laptop", from: "tacho hook", ok: false },
+      {
+        agentKey: "acme.core.cursor-laptop",
+        from: "tacho hook",
+        ok: false,
+        skipped: "harness_files_elsewhere",
+      },
     ];
     expect(await handleTachoStatus({ json: true }, writer)).toBe(true);
     expect(calls.map((c) => c.name)).toEqual([
@@ -339,6 +403,14 @@ describe("oxagen tacho", () => {
     );
     expect(errors()).toContain(
       "Could not move acme.core.codex-laptop's hooks and service off tacho hook",
+    );
+    // An agent left for its harness files gets no "try again", which from
+    // this shell would leave it again (#5390).
+    expect(errors()).toContain(
+      "Left acme.core.cursor-laptop's hooks and service on tacho hook; they keep working. The line above says how to move them.",
+    );
+    expect(errors()).not.toContain(
+      "Could not move acme.core.cursor-laptop's",
     );
     // The move's own step lines are dropped, and its errors reach stderr.
     const moveDeps = calls[0]?.args[0] as {

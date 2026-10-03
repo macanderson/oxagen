@@ -124,15 +124,25 @@ function systemDb(): void {
 
 /**
  * The token read answers TOKEN. Inside the tenant transaction the reads
- * answer, in order: the locked token row, the agent (or none), and no
- * existing host.
+ * answer, in order: the locked token row (unused and unexpired, unless
+ * `locked` says otherwise), the agent (or none), and no existing host.
  */
-function db(agent: Record<string, unknown> | undefined): void {
+function db(
+  agent: Record<string, unknown> | undefined,
+  locked: Record<string, unknown> = {},
+): void {
   systemDb();
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) => {
       const answers: unknown[][] = [
-        [{ usedAt: null, agentId: "agent-uuid" }],
+        [
+          {
+            usedAt: null,
+            expiresAt: TOKEN.expiresAt,
+            agentId: "agent-uuid",
+            ...locked,
+          },
+        ],
         agent ? [agent] : [],
         [],
       ];
@@ -195,6 +205,43 @@ describe("enroll_host", () => {
       reason: "agent_retired",
       message: "The agent this token was issued for no longer exists",
     });
+    expect(mocks.mintHostEnrollment).not.toHaveBeenCalled();
+    expect(tenantUpdates).toBe(0);
+  });
+
+  it("refuses a token a member removal expired while the presentation waited on the row lock", async () => {
+    // The first read found the token unexpired. The removal committed before
+    // the lock was granted, so the locked read holds the expiry it stamped.
+    db(AGENT, { expiresAt: new Date(Date.now() - 1_000) });
+    await expect(tachoHostEnrollHandler(INPUT, CONTEXT)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "token_expired",
+    });
+    expect(mocks.mintHostEnrollment).not.toHaveBeenCalled();
+    expect(tenantUpdates).toBe(0);
+    // The token read, then the refusal counted on the row.
+    expect(mocks.withSystemDb).toHaveBeenCalledTimes(2);
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it("checks the locked expiry against the clock after the lock wait, not the handler's start", async () => {
+    // A removal that began after the handler read its clock stamps an expiry
+    // later than that reading. The lock is granted after the removal commits,
+    // so the clock read then is past the stamped expiry. The spy moves only
+    // `Date.now`: the handler's `new Date()` and the first expiry check keep
+    // the real time.
+    const stamped = new Date(Date.now() + 60_000);
+    db(AGENT, { expiresAt: stamped });
+    const clock = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(stamped.getTime() + 60_000);
+    try {
+      await expect(
+        tachoHostEnrollHandler(INPUT, CONTEXT),
+      ).rejects.toMatchObject({ code: "conflict", reason: "token_expired" });
+    } finally {
+      clock.mockRestore();
+    }
     expect(mocks.mintHostEnrollment).not.toHaveBeenCalled();
     expect(tenantUpdates).toBe(0);
   });
@@ -284,7 +331,13 @@ function mintDb(records: SteeringRow[]): void {
       const answer = (table: unknown): unknown[] => {
         switch (tableName(table)) {
           case "enrollment_tokens":
-            return [{ usedAt: null, agentId: "agent-uuid" }];
+            return [
+              {
+                usedAt: null,
+                expiresAt: TOKEN.expiresAt,
+                agentId: "agent-uuid",
+              },
+            ];
           case "agents":
             return [
               { ...AGENT, runtimeId: "runtime-uuid", activeVersionId: null },

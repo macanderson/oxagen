@@ -77,7 +77,7 @@ export function createDaySpend(deps: DaySpendDeps): DaySpend {
     // A later day than the one held starts at zero, with no WAL read. This
     // process has counted every priced call since it seeded: the only frames
     // the seed counts are `llm_call`s marked `TACHO_METERING_OBSERVED`, the
-    // model proxy is the only writer of those (`settleMetered` and
+    // model proxy is the only writer of those (`settle`'s `sealCall` and
     // `sealKeepAlive` in `model-proxy.ts`), and both charge `add` with the
     // cost they put on the frame. So the WAL holds nothing for the new day that
     // this counter has not seen. The read it skips scanned the WAL on the

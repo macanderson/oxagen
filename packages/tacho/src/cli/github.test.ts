@@ -293,6 +293,65 @@ describe("GitHub transport configuration", () => {
         .stdout.trim(),
     ).toBe("foreign-helper");
   });
+  it("configures again and removes custody after the executable moved", () => {
+    const t = setup();
+    t.git(["remote", "add", "origin", "https://github.com/acme/repo.git"]);
+    githubConfigure(t.options, t.deps);
+    const key =
+      "credential.http://127.0.0.1:47001/github/acme/repo.git.helper";
+    const first = readHostFile(t.deps.paths.hostFile)?.github_repositories?.[0]
+      ?.helper;
+    expect(first).toBeDefined();
+    // The move off `tacho`, then a new versioned copy: each time, the helper
+    // this command would write names another executable.
+    const moved = (command: string) => ({
+      ...t.deps,
+      runtime: {
+        ...t.deps.runtime,
+        credentialHelperCommand: `${command} credential issue --harness claude-code`,
+      },
+    });
+    githubConfigure(t.options, moved("/opt/oxagen/oxagen"));
+    const helper = t.git(["config", "--get-all", key]).stdout.trim();
+    expect(helper).toContain("/opt/oxagen/oxagen github credential");
+    expect(helper).not.toBe(first);
+    expect(
+      readHostFile(t.deps.paths.hostFile)?.github_repositories?.[0]?.helper,
+    ).toBe(helper);
+
+    githubConfigure(
+      { ...t.options, remove: true },
+      moved("/opt/oxagen/2.1.4/oxagen"),
+    );
+    expect(t.git(["remote", "get-url", "origin"]).stdout.trim()).toBe(
+      "https://github.com/acme/repo.git",
+    );
+    expect(t.git(["config", "--get-all", key]).stdout).toBe("");
+    expect(
+      readHostFile(t.deps.paths.hostFile)?.github_repositories,
+    ).toEqual([]);
+  });
+  it("still refuses to configure over a helper that is not ours (negative)", () => {
+    const t = setup();
+    t.git(["remote", "add", "origin", "https://github.com/acme/repo.git"]);
+    githubConfigure(t.options, t.deps);
+    t.git([
+      "config",
+      "--replace-all",
+      "credential.http://127.0.0.1:47001/github/acme/repo.git.helper",
+      "foreign-helper",
+    ]);
+    expect(() =>
+      githubConfigure(t.options, {
+        ...t.deps,
+        runtime: {
+          ...t.deps.runtime,
+          credentialHelperCommand:
+            "/opt/oxagen/oxagen credential issue --harness claude-code",
+        },
+      }),
+    ).toThrow("different GitHub proxy helper");
+  });
   it("returns only a local daemon lease through Git's credential protocol", async () => {
     const t = setup();
     const daemonPost = vi.fn(async () => ({
