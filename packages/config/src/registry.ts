@@ -2732,6 +2732,16 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "app",
   },
+  SOURCE_COMMIT: {
+    group: "Operator scripts",
+    description:
+      "The commit a manual app deploy ships, from the dispatch's source_commit input. check-deploy-tip.mjs --schema reads it in place of GITHUB_SHA, which is main's head on a dispatch, to refuse code older than production's schema (#5247).",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   PR_NUMBER: {
     group: "Operator scripts",
     description:
