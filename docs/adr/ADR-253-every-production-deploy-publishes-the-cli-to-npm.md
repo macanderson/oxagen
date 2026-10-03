@@ -106,7 +106,7 @@ The tarball was not served at once after all. On 2026-10-02 the run on
 `c7226a6` published `2.1.4-378` at 18:07:18Z, and its tarball URL answered 404
 until 18:12:46Z, about 5½ minutes later. The check gave up after about 100
 seconds, so the run failed although the publish worked. Every deploy dispatch
-on 2026-10-03 failed the same way. The publish had also moved `latest`
+on 2026-10-03 failed at the same check. The publish had also moved `latest`
 already, so for those minutes `npm install -g @oxagen/cli` fetched a tarball
 that answered 404.
 
