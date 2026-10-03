@@ -163,8 +163,10 @@ export const SWEEP_EVENT_TTL_MS = 30 * 60_000;
 /**
  * How often a named run that keeps changing is summarized again, live or
  * sealed. Every ingest batch moves an active run's `updated_at`, so the
- * revision rule alone made every active run due at every five-minute sweep,
- * and each pass reads and summarizes the whole run from the start.
+ * revision rule alone made every active run due at every five-minute sweep.
+ * A pass on a run that already has an account reads only the frames observed
+ * since the last pass and folds them in (#5415); before that, each pass read
+ * and summarized the whole run from the start, up to forty calls a time.
  */
 export const LIVE_ENRICHMENT_INTERVAL_MS = 30 * 60_000;
 
@@ -756,6 +758,9 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
               digest: table.summaryInputDigest,
               name: table.name,
               hasSummary: sql<boolean>`${table.summary} IS NOT NULL`,
+              summaryText: table.summary,
+              summaryError: table.summaryError,
+              observedAt: table.summaryObservedAt,
               branch:
                 table === schema.tachoSessions
                   ? sql<
@@ -771,6 +776,21 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
         if (!previous) return null;
         const record = await resolveRunRecord(scope, data.runPublicId);
         if (!record) return null;
+        // A run that already has a model's account is read from where the
+        // last pass stopped (#5415): only the frames observed after that
+        // pass's snapshot. The new portion is folded into the stored account
+        // by the account call. A run whose last pass failed, or read with
+        // bodies missing (`partial:`), is read from the start again, so an
+        // account never builds on a pass that did not finish.
+        const since =
+          previous.hasSummary &&
+          previous.summaryText !== null &&
+          previous.summaryError === null &&
+          previous.observedAt !== null &&
+          previous.digest !== null &&
+          !previous.digest.startsWith("partial:")
+            ? new Date(previous.observedAt)
+            : null;
         // Every chain the run recorded, its subagents' included, as the Run
         // page folds them: a subagent's work belongs in the run's account
         // (#3823). The read holds up to `TRANSCRIPT_FRAME_CAP` frames, which
@@ -784,6 +804,7 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
           (s, ref, options) => evidenceStore().getBody(s, ref, options),
           writer.write,
           complete,
+          since,
         );
         const { firstPrompt, chunks: _chunks, ...facts } = transcript;
         // Until a model writes the account, the run is named for its first
@@ -801,11 +822,15 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
               .where(and(where, isNull(table.name), isNull(table.summary))),
           );
         // Keyed on the summary, not the name: a fallback title is a name
-        // with no account behind it, and must not stop the model's.
+        // with no account behind it, and must not stop the model's. A read
+        // from where the last pass stopped is unchanged when it found no
+        // frame at all.
         const unchanged =
-          (previous.digest === transcript.digest ||
-            previous.digest === `partial:${transcript.digest}`) &&
-          previous.hasSummary;
+          since !== null
+            ? transcript.frames === 0
+            : (previous.digest === transcript.digest ||
+                previous.digest === `partial:${transcript.digest}`) &&
+              previous.hasSummary;
         const { scratch, digests, chars } = await writer.finish();
         return {
           ...facts,
@@ -814,6 +839,11 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
           chunkDigests: digests,
           scratch,
           unchanged,
+          // The account the new portion folds into. Null on a full read.
+          prior:
+            since === null
+              ? null
+              : { name: previous.name, summary: previous.summaryText ?? "" },
         };
       }),
     );
@@ -932,11 +962,25 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
       level += 1;
     }
     const portions = chunks;
+    // A read step recorded before #5415 carries no `prior`; it read the
+    // whole run, so there is nothing to fold.
+    const prior =
+      "prior" in collected && collected.prior !== null
+        ? collected.prior
+        : null;
     const generated = await step.run("write-account", async () => {
       if (!(await enabled())) throw new Error("Run enrichment was disabled");
       const chunks = await portionTexts(portions, budgetReached);
+      const coverage =
+        prior === null
+          ? `This input covers ${collected.frames} frames and ${collected.retained} retained text bodies; ${collected.missing} bodies were unavailable.`
+          : `The run already has an account, given first. This input covers only the ${collected.frames} frames recorded after it, with ${collected.retained} retained text bodies; ${collected.missing} bodies were unavailable. Return the account of the whole run: keep what still holds, add what the new frames changed or finished, and keep the name unless the goal changed.`;
+      const priorText =
+        prior === null
+          ? ""
+          : `\n\nPrior account:\nname: ${prior.name ?? ""}\nsummary: ${prior.summary}\n\nNew frames:`;
       const result = await narrate(
-        `Return only JSON with name and summary. name is the session's subject, the way a coding agent names a session: the specific user goal in sentence case, at most ${SESSION_SUBJECT_MAX} characters, with no quotes and no trailing period. summary is 2 to 3 sentences, at most ${SUMMARY_MAX_CHARS} characters, saying what the person asked for, what the agent did, and what was left unfinished. Name the distinctive task, not the first generic greeting. This input covers ${collected.frames} frames and ${collected.retained} retained text bodies; ${collected.missing} bodies were unavailable. State missing evidence when it limits the account.${budgetReached ? " The summarizing budget ran out, so this input covers only the start of the run. Say so in the summary." : ""}\n\n${chunks.join("\n")}`,
+        `Return only JSON with name and summary. name is the session's subject, the way a coding agent names a session: the specific user goal in sentence case, at most ${SESSION_SUBJECT_MAX} characters, with no quotes and no trailing period. summary is 2 to 3 sentences, at most ${SUMMARY_MAX_CHARS} characters, saying what the person asked for, what the agent did, and what was left unfinished. Name the distinctive task, not the first generic greeting. ${coverage} State missing evidence when it limits the account.${budgetReached ? " The summarizing budget ran out, so this input covers only the start of the run. Say so in the summary." : ""}${priorText}\n\n${chunks.join("\n")}`,
       );
       await recordEnrichmentSpend(data, result.costUsd);
       const json = result.text
@@ -997,6 +1041,7 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
         budgetUsd,
         runSpentUsd: priorSpentMicros / 1_000_000 + spentUsd,
         budgetReached,
+        incremental: prior !== null,
       },
       "Run enrichment wrote an account",
     );
@@ -1007,6 +1052,7 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
       calls,
       spentUsd,
       budgetReached,
+      incremental: prior !== null,
     };
   },
 );
