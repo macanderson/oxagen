@@ -382,7 +382,7 @@ describe("the docs markup", () => {
     const src =
       `const a = "text-[13.5px] rounded-[8px] rounded-tl-[0.5rem] shadow-[0_1px_2px_red] text-[0.9em] rounded-[999px] shadow-[0_0_0_1px_red]";`;
     expect(drift(src).map((h) => [h.value, h.use])).toEqual([
-      ["text-[13.5px]", "var(--ox-a-body) (14px)"],
+      ["text-[13.5px]", "var(--ox-a-body) (14px) or larger: no text is under 14px"],
       ["rounded-[8px]", "var(--ox-radius-lg) (7.2px)"],
       ["rounded-tl-[0.5rem]", "var(--ox-radius-lg) (7.2px)"],
       ["shadow-[0_1px_2px_red]", expect.stringContaining("var(--ox-shadow-pop)")],
@@ -423,7 +423,7 @@ describe("the docs markup", () => {
           'const a = "text-sm text-4xl text-[11px] text-[0.8em] text-[0.9em] text-[length:var(--ox-a-micro)]";',
         ],
       ]),
-      { tokens: TOKENS, guarded: [{ path: "landing.tsx", scale: "a", brackets: true }] },
+      { tokens: TYPE_TOKENS, guarded: [{ path: "landing.tsx", scale: "a", brackets: true }] },
     );
     expect(hits.map((h) => h.value)).toEqual(["text-[11px]", "text-[0.8em]"]);
     for (const h of hits) expect(h.use).toContain(`no text is under ${FLOOR_PX}px`);
@@ -515,16 +515,28 @@ describe("the type rule: computing a size", () => {
     ["87.5%", 14],
     ["var(--missing, 13px)", 13],
     ["var(--two)", 13],
+    ["calc((14px + 2px) * 1)", 16],
+    ["calc(20px + -4px)", 16],
+    ["calc(20px - 4px)", 16],
   ])("computes %s as %spx", (value, px) => {
     expect(minPx(value, vars)).toBeCloseTo(px);
   });
 
-  it.each(["min(14px, 2vw)", "12vw", "max(var(--missing), 0.8em)", "inherit"])(
-    "cannot tell %s, and so passes it",
-    (value) => {
-      expect(minPx(value, vars)).toBeNull();
-    },
-  );
+  it.each([
+    "min(14px, 2vw)",
+    "12vw",
+    "max(var(--missing), 0.8em)",
+    "inherit",
+    "calc(14px / 2px)",
+    "calc(14px + 2)",
+    "calc(14px / 0)",
+  ])("cannot tell %s, and so passes it", (value) => {
+    expect(minPx(value, vars)).toBeNull();
+  });
+
+  it("stops at a property that reads itself", () => {
+    expect(minPx("var(--loop)", new Map([["--loop", ["var(--loop)"]]]))).toBeNull();
+  });
 });
 
 describe("the type rule: the heading face", () => {

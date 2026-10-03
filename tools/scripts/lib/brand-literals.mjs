@@ -9,8 +9,10 @@
  *
  * It is a regex pass over a fixed list of files, with no build and no CSS
  * parser, so `sync-brand-assets.mjs --check` can run it on a bare runner.
- * The docs chrome's markup has a pass of its own (GUARDED_MARKUP, at the end
- * of this file), which reads the classes a component writes.
+ * The docs chrome's markup has a pass of its own (GUARDED_MARKUP), which
+ * reads the classes a component writes. The two customer sites, oxagen.sh
+ * and docs.oxagen.sh, have a type pass too (typeDrift, at the end of this
+ * file), which holds them to the house type rule of oxageninc/brand#83.
  *
  * What passes without an entry:
  *
