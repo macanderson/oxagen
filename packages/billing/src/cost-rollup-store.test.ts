@@ -17,6 +17,7 @@ import {
 } from "./cost-rollup";
 import { PriceBookSliceLimitError } from "./price-book";
 import {
+  createStandingSplit,
   inAppRunTotal,
   ledgerToolStatus,
   modelCallHidesTurn,
@@ -322,9 +323,11 @@ describe("the token sources a rollup writes (#4493)", () => {
         steeringTokens: 240,
       },
     ]);
+    // The second call sent the 42 first. The third re-sent those 42 and sent
+    // the next 12 first, so 42 were re-sent in all.
     expect(handed.written[0]?.breakdown.standing?.contextFrameTokens).toEqual({
       cached: 0,
-      uncached: 96,
+      uncached: 42,
     });
 
     const none = deps({
@@ -361,8 +364,10 @@ describe("the token sources a rollup writes (#4493)", () => {
 
   // #4572 item 2: the row kept each source's sum alone, so a reader took one
   // call's share as the average, and 0, 100, 100, 100 read 225 re-sent. The
-  // rollup now keeps the tokens on the calls after the first.
-  it("keeps each source's tokens on the calls after the first, whatever the first held", async () => {
+  // rollup now keeps the tokens on the calls themselves. #5339: a call
+  // re-sends only what an earlier call carried, so the first call to carry
+  // the 100, after a first call that carried none, sent them first.
+  it("keeps each source's re-sent tokens on the calls that re-sent them", async () => {
     const tools = (n: number): RunTokenSources => ({
       toolDefinitionTokens: n,
       contextFrameTokens: null,
@@ -379,7 +384,7 @@ describe("the token sources a rollup writes (#4493)", () => {
     });
     await rebuildRunTotals(WORKER, d);
     expect(written[0]?.breakdown.standing).toEqual({
-      toolDefinitionTokens: { cached: 0, uncached: 300 },
+      toolDefinitionTokens: { cached: 0, uncached: 200 },
       contextFrameTokens: null,
       steeringTokens: null,
     });
@@ -417,6 +422,84 @@ describe("the token sources a rollup writes (#4493)", () => {
       contextFrameTokens: null,
       steeringTokens: { cached: 80, uncached: 40 },
     });
+  });
+
+  /** The split over `calls`, fed in order, as the rollup feeds it. */
+  const splitOf = (calls: readonly PricedModelCall[]) => {
+    const split = createStandingSplit();
+    for (const call of calls) split.add(call);
+    return split.finish();
+  };
+  const context = (
+    at: string,
+    n: number | null,
+    cacheRead = 0,
+  ): PricedModelCall => ({
+    ...measured(at, {
+      toolDefinitionTokens: null,
+      contextFrameTokens: n,
+      steeringTokens: null,
+    }),
+    tokens: { ...ZERO_TOKENS, cache_read: cacheRead, input_uncached: 10 },
+  });
+
+  // #5339. Context frames grow during a run: each hook answer adds text the
+  // calls after it carry. A call re-sends only what the call before it
+  // carried, so each answer's first send is not counted as re-sent.
+  it("leaves each new part's first send out of a growing source's re-sent tokens", () => {
+    expect(
+      splitOf([
+        context("2026-10-03T10:01:00.000Z", 1_000, 900),
+        context("2026-10-03T10:02:00.000Z", 1_000, 900),
+        context("2026-10-03T10:03:00.000Z", 1_500, 900),
+        context("2026-10-03T10:04:00.000Z", 2_200),
+      ]).contextFrameTokens,
+      // 0, then 1,000, then 1,000 of the 1,500, then 1,500 of the 2,200,
+      // which the last call sent uncached.
+    ).toEqual({ cached: 2_000, uncached: 1_500 });
+  });
+
+  it("re-sends a source that holds still whole on every call after the first", () => {
+    const flat = [1, 2, 3, 4].map((minute) =>
+      context(`2026-10-03T10:0${minute}:00.000Z`, 800, 900),
+    );
+    // The same as before #5339: three calls re-sent all 800.
+    expect(splitOf(flat).contextFrameTokens).toEqual({
+      cached: 2_400,
+      uncached: 0,
+    });
+  });
+
+  it("skips a call that carried none of a source, and keeps the last count that did", () => {
+    expect(
+      splitOf([
+        context("2026-10-03T10:01:00.000Z", 600, 900),
+        // A side call, such as a session title, carries no context.
+        context("2026-10-03T10:02:00.000Z", null, 900),
+        context("2026-10-03T10:03:00.000Z", 900, 900),
+      ]).contextFrameTokens,
+    ).toEqual({ cached: 600, uncached: 0 });
+    // A side call's zero tool definitions do not reset what the session's
+    // own calls carried.
+    const tools = (at: string, n: number): PricedModelCall => ({
+      ...measured(at, {
+        toolDefinitionTokens: n,
+        contextFrameTokens: null,
+        steeringTokens: null,
+      }),
+      tokens: { ...ZERO_TOKENS, cache_read: 900, input_uncached: 10 },
+    });
+    expect(
+      splitOf([
+        tools("2026-10-03T10:01:00.000Z", 100),
+        tools("2026-10-03T10:02:00.000Z", 0),
+        tools("2026-10-03T10:03:00.000Z", 100),
+      ]).toolDefinitionTokens,
+    ).toEqual({ cached: 100, uncached: 0 });
+    // A source no call reported stays null, never zero.
+    expect(
+      splitOf([context("2026-10-03T10:01:00.000Z", null)]).contextFrameTokens,
+    ).toBeNull();
   });
 
   it("writes nothing when the calls cannot be read, so the job retries", async () => {

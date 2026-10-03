@@ -256,15 +256,18 @@ export interface RunBreakdown {
    */
   stepClasses?: StepClasses | null;
   /**
-   * Each standing context source's tokens on the run's model calls after its
-   * first, split by whether the call read the prompt cache (#4572). The store
-   * measures it on the frames beside the source sums, and it is null for a
-   * source no call reported. Absent on a row rolled up before it was kept.
+   * Each standing context source's re-sent tokens on the run's model calls,
+   * split by whether the call read the prompt cache (#4572). A call re-sent a
+   * source only up to what the last call that carried it sent (#5339;
+   * `createStandingSplit`). The store measures it on the frames beside the
+   * source sums, and it is null for a source no call reported. Absent on a
+   * row rolled up before it was kept. A row rolled up before #5339 counted
+   * every call after the run's first as re-sending its whole count.
    */
   standing?: RunStandingResent;
 }
 
-/** One standing context source's tokens on the calls after a run's first. */
+/** One standing context source's re-sent tokens over a run's model calls. */
 export interface ResentSourceTokens {
   /** On the calls that read anything from the prompt cache. */
   cached: number;

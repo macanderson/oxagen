@@ -590,30 +590,47 @@ export function sumTokenSources(
 }
 
 /**
- * Each source's tokens on a run's model calls after its first, split by
- * whether the call read the prompt cache (#4572). The first call sent the
- * prefix first, so the calls after it re-sent it: a call that read the cache
- * re-read the prefix at the read rate, and a call that read nothing sent it
- * uncached at the input rate. A source is null when no call reported it, as
- * its sum is. Feed it the calls in the order the run made them.
+ * Each source's re-sent tokens on a run's model calls, split by whether the
+ * call read the prompt cache (#4572). A call that read the cache re-read them
+ * at the read rate, and a call that read nothing sent them uncached at the
+ * input rate.
+ *
+ * A call re-sent a source only up to what the last call that carried it had
+ * already sent: the smaller of the two counts. The rest of the call's count
+ * went out for the first time (#5339). A source that holds still, such as the
+ * tool definitions, is re-sent whole on every call after the first that
+ * carried it. A source that grows during the run, such as the context
+ * Oxagen's hooks hand a session, is re-sent only as far as an earlier call
+ * carried it, so each new part's first send is not counted as re-sent.
+ *
+ * A call that carried none of a source, null or zero, is not the last call to
+ * carry it. A side call, such as a session title, sends zero tool definitions
+ * and no steering or context, and the session's next call still re-sends what
+ * the calls before the side call sent. A source is null when no call reported
+ * it, as its sum is. Feed it the calls in the order the run made them.
  */
 export function createStandingSplit() {
-  let first = true;
   const split: RunStandingResent = {
     toolDefinitionTokens: null,
     contextFrameTokens: null,
     steeringTokens: null,
   };
+  /** What the last call that carried each source sent of it; 0 before one did. */
+  const carried: Record<(typeof SOURCE_MEMBERS)[number], number> = {
+    toolDefinitionTokens: 0,
+    contextFrameTokens: 0,
+    steeringTokens: 0,
+  };
   const add = (call: PricedModelCall): void => {
-    const sentFirst = first;
-    first = false;
     for (const member of SOURCE_MEMBERS) {
       const tokens = call.sources?.[member];
       if (tokens === null || tokens === undefined) continue;
       const into = (split[member] ??= { cached: 0, uncached: 0 });
-      if (sentFirst) continue;
-      if (call.tokens.cache_read > 0) into.cached += tokens;
-      else into.uncached += tokens;
+      if (tokens <= 0) continue;
+      const resent = Math.min(carried[member], tokens);
+      carried[member] = tokens;
+      if (call.tokens.cache_read > 0) into.cached += resent;
+      else into.uncached += resent;
     }
   };
   return { add, finish: (): RunStandingResent => split };
