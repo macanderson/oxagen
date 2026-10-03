@@ -15,7 +15,12 @@ import {
   testHostFile,
   unsignedBundle,
 } from "../host/test-support";
-import { keepWorkOrder, readWorkOrder } from "../host/work-orders";
+import {
+  keepWorkOrder,
+  markWorkOrderRunning,
+  readWorkOrder,
+  runningWorkOrder,
+} from "../host/work-orders";
 import type { TachoHarness, WorkOrderClaimResponse } from "../wire";
 import type { AgentExit } from "./agent-run";
 import { type WorkCommandDeps, workList, workStart } from "./work";
@@ -194,6 +199,39 @@ describe("oxagen work start", () => {
 
   it("claims with the only live agent when the daemon has not kept the order yet", async () => {
     const m = machine();
+    expect(await workStart(WO, m.deps)).toBe(0);
+    expect(m.claims).toEqual([WO]);
+    expect(m.spawned).toHaveLength(1);
+  });
+
+  it("refuses a second start while this machine's first harness for the order still runs (negative)", async () => {
+    const m = machine();
+    m.keep();
+    let second: number | undefined;
+    let markedWhileRunning = false;
+    m.deps.spawnAgent = async (command, args, opts) => {
+      m.spawned.push({ command, args, env: opts.env, cwd: opts.cwd });
+      opts.onSpawn?.();
+      markedWhileRunning = runningWorkOrder(m.paths, WO) !== undefined;
+      second = await workStart(WO, m.deps);
+      return { code: 0, signal: null };
+    };
+    expect(await workStart(WO, m.deps)).toBe(0);
+    expect(markedWhileRunning).toBe(true);
+    expect(second).toBe(1);
+    expect(m.claims).toEqual([WO]);
+    expect(m.spawned).toHaveLength(1);
+    expect(m.errors).toContain(
+      `A harness for ${WO} is already running on this machine (process ${process.pid}), so nothing else started. Wait for it to end, or stop the run from the work item.`,
+    );
+    // The mark goes when the harness ends, so a later start may claim again.
+    expect(runningWorkOrder(m.paths, WO)).toBeUndefined();
+  });
+
+  it("starts again when the process that marked the order running is gone", async () => {
+    const m = machine();
+    markWorkOrderRunning(m.paths, WO, 424242, "2026-10-03T09:00:00.000Z");
+    m.deps.processIsAlive = () => false;
     expect(await workStart(WO, m.deps)).toBe(0);
     expect(m.claims).toEqual([WO]);
     expect(m.spawned).toHaveLength(1);

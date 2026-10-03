@@ -106,3 +106,82 @@ export function removeWorkOrder(
 ): void {
   rmSync(orderFile(paths, id), { force: true });
 }
+
+/**
+ * A harness `oxagen work start` started for an order and is still waiting
+ * on. The file sits beside the order's own, as `<wo>.running`, so
+ * `listWorkOrders` never reads it as an order.
+ *
+ * Oxagen links one run to a send and stops any other run that names it, but
+ * a second harness on the same checkout would still do the work twice before
+ * that stop lands. So `start` refuses while the process that wrote this file
+ * is alive. A file left by a process that died (a crash, a killed terminal)
+ * does not block: the person may start again, and the server refuses the
+ * claim if a run already linked.
+ */
+export const runningWorkOrderSchema = z
+  .object({
+    work_order: z.string().regex(WORK_ORDER_ID_PATTERN),
+    /** The `oxagen work start` process that waits on the harness. */
+    pid: z.number().int().positive(),
+    /** When the harness started, ISO 8601. */
+    started_at: z.string(),
+  })
+  .passthrough();
+
+export type RunningWorkOrder = z.output<typeof runningWorkOrderSchema>;
+
+function runningFile(paths: Pick<TachoPaths, "workOrders">, id: string): string {
+  if (!WORK_ORDER_ID_PATTERN.test(id))
+    throw new Error(`${JSON.stringify(id)} is not a work order id`);
+  return join(paths.workOrders, `${id}.running`);
+}
+
+/** Whether a process is alive. A process this user may not signal is alive. */
+export function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/** Record that a harness for `id` started, waited on by process `pid`. */
+export function markWorkOrderRunning(
+  paths: Pick<TachoPaths, "workOrders">,
+  id: string,
+  pid: number,
+  startedAt: string,
+): void {
+  const record: RunningWorkOrder = { work_order: id, pid, started_at: startedAt };
+  writeSensitiveFileAtomic(runningFile(paths, id), `${JSON.stringify(record)}\n`);
+}
+
+/**
+ * The harness still running for `id`, or undefined when none is: no file, a
+ * file that does not read, or a process that is gone.
+ */
+export function runningWorkOrder(
+  paths: Pick<TachoPaths, "workOrders">,
+  id: string,
+  isAlive: (pid: number) => boolean = processIsAlive,
+): RunningWorkOrder | undefined {
+  let raw: unknown;
+  try {
+    raw = readJsonFileIfExists(runningFile(paths, id));
+  } catch {
+    return undefined;
+  }
+  const parsed = runningWorkOrderSchema.safeParse(raw);
+  if (!parsed.success || parsed.data.work_order !== id) return undefined;
+  return isAlive(parsed.data.pid) ? parsed.data : undefined;
+}
+
+/** Clear the running mark for `id`. Nothing happens when there is none. */
+export function clearWorkOrderRunning(
+  paths: Pick<TachoPaths, "workOrders">,
+  id: string,
+): void {
+  rmSync(runningFile(paths, id), { force: true });
+}

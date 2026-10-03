@@ -18,7 +18,9 @@
  * run to the order.
  *
  * The order keeps waiting in `oxagen work list` until the harness has
- * started. Any failure before that leaves it there.
+ * started. Any failure before that leaves it there. While the harness runs,
+ * a second `start` for the same order on this machine refuses and starts
+ * nothing.
  *
  * A harness this host does not wrap, or one whose command is not installed,
  * cannot start the order. `start` refuses it on the server with the reason,
@@ -36,10 +38,13 @@ import {
 import type { HostFile } from "../host/host-file";
 import { homeOf } from "../host/paths";
 import {
+  clearWorkOrderRunning,
   listWorkOrders,
+  markWorkOrderRunning,
   type PendingWorkOrder,
   readWorkOrder,
   removeWorkOrder,
+  runningWorkOrder,
 } from "../host/work-orders";
 import {
   HARNESS_BINARY,
@@ -50,7 +55,12 @@ import {
   type WorkOrderClaimResponse,
   type WrappedHarness,
 } from "../wire";
-import { type AgentRunDeps, exitCodeOf, spawnAgent } from "./agent-run";
+import {
+  type AgentExit,
+  type AgentRunDeps,
+  exitCodeOf,
+  spawnAgent,
+} from "./agent-run";
 import type { CliDeps } from "./deps";
 
 /** The two calls `start` makes to the control plane. */
@@ -67,6 +77,8 @@ export interface WorkCommandDeps
   spawnAgent?: AgentRunDeps["spawnAgent"];
   /** The control plane client for one enrollment; a test passes a fake. */
   workOrderClient?: (host: HostFile) => WorkOrderClient;
+  /** Whether a process is alive; `processIsAlive` unless a test passes one. */
+  processIsAlive?: (pid: number) => boolean;
 }
 
 /** The live agents on this machine, each with its enrollment. */
@@ -188,6 +200,18 @@ export async function workStart(
     deps.err(NOT_ENROLLED);
     return 1;
   }
+  // A harness this machine already started for the order is still running.
+  // Oxagen would stop a second run once it linked, but by then two harnesses
+  // would be working one checkout, so nothing claims or starts.
+  for (const each of agents) {
+    const running = runningWorkOrder(each.paths, id, deps.processIsAlive);
+    if (running !== undefined) {
+      deps.err(
+        `A harness for ${id} is already running on this machine (process ${running.pid}), so nothing else started. Wait for it to end, or stop the run from the work item.`,
+      );
+      return 1;
+    }
+  }
   const agent = claimingAgent(agents, id);
   if (agent === undefined) {
     deps.err(
@@ -243,7 +267,7 @@ export async function workStart(
   );
   // The order stops waiting once the harness has started, and not before:
   // a start that fails leaves it in `oxagen work list`.
-  const started = () => {
+  const removeOrder = () => {
     try {
       removeWorkOrder(agent.paths, id);
     } catch {
@@ -251,19 +275,44 @@ export async function workStart(
       // the server refuses a second start once the run links.
     }
   };
-  const exit = await (deps.spawnAgent ?? spawnAgent)(
-    binary,
-    promptArgs(harness, claim.prompt),
-    {
-      env: { ...deps.env, [WORK_ORDER_ENV]: id },
-      cwd: deps.cwd,
-      onSpawn: started,
-    },
-  );
+  // While the harness runs, this process marks the order running, so a
+  // second `start` on this machine refuses instead of starting another.
+  let marked = false;
+  const started = () => {
+    removeOrder();
+    if (marked) return;
+    marked = true;
+    try {
+      markWorkOrderRunning(agent.paths, id, process.pid, new Date().toISOString());
+    } catch {
+      // The mark only guards this machine. The server still links one run.
+    }
+  };
+  let exit: AgentExit;
+  try {
+    exit = await (deps.spawnAgent ?? spawnAgent)(
+      binary,
+      promptArgs(harness, claim.prompt),
+      {
+        env: { ...deps.env, [WORK_ORDER_ENV]: id },
+        cwd: deps.cwd,
+        onSpawn: started,
+      },
+    );
+  } finally {
+    if (marked) {
+      try {
+        clearWorkOrderRunning(agent.paths, id);
+      } catch {
+        // A mark left behind names this process, which is about to exit, so
+        // it blocks nothing.
+      }
+    }
+  }
   if (exit.error === undefined) {
     // A process that exited without an error started, whether or not the
     // spawn reported it first.
-    started();
+    removeOrder();
     return exitCodeOf(exit);
   }
   if ((exit.error as NodeJS.ErrnoException).code === "ENOENT") {
