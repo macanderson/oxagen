@@ -76,7 +76,7 @@ function Option<V extends string>({
       >
         <span className="font-medium">{option.label}</span>
         {option.sub === undefined ? null : (
-          <span className="text-xs text-muted-foreground">{option.sub}</span>
+          <span className="text-sm text-muted-foreground">{option.sub}</span>
         )}
       </button>
       {disabled ? (
@@ -87,7 +87,7 @@ function Option<V extends string>({
           data-open={open ? "" : undefined}
           className={
             open
-              ? `${popoverSurface} absolute left-0 top-full z-20 mt-1.5 w-max max-w-72 px-3 py-2 text-xs`
+              ? `${popoverSurface} absolute left-0 top-full z-20 mt-1.5 w-max max-w-72 px-3 py-2 text-sm`
               : "sr-only"
           }
         >

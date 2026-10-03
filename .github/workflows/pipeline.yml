@@ -39,7 +39,9 @@ concurrency:
   # and the newest waiting push starts as soon as it does. A burst of merges
   # therefore costs one run at a time, and each run checks and ships every
   # merge since the run before it. Runs on main also finish in commit order,
-  # so an older commit cannot deploy after a newer commit's migration (#5247).
+  # so a push run never deploys after a newer commit's migration. A re-run or
+  # a dispatch of an older commit could, and check-deploy-tip.mjs refuses
+  # those (#5247).
   #
   # From 2026-09-07 to 2026-10-02 every push had a group of its own (ADR-046),
   # on the belief that the shared group starved main on 2026-09-07. The run
@@ -1415,6 +1417,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      # Records this commit as production's schema (check-deploy-tip.mjs).
+      deployments: write
     steps:
       - uses: actions/checkout@v5
 
@@ -1594,6 +1598,17 @@ jobs:
             echo "::error::The stores could not be read, so this job cannot say the schema is ready. Re-run it. See the run summary."
           fi
           exit 1
+
+      # Every store now carries this commit's migrations, so record the commit
+      # as production's schema. A deploy job then refuses a commit that lacks
+      # a migration this record holds, so a re-run or a dispatch of an older
+      # commit cannot ship code older than the schema (#5247). The record
+      # never moves to a commit that lacks one, and a failed record only warns.
+      - name: Record production's schema at this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SERVICE: schema
+        run: node tools/scripts/check-deploy-tip.mjs --record
 
   # ==========================================================================
 
@@ -1822,7 +1837,9 @@ jobs:
       # superseded on main still ships when it moves production forward, so a
       # burst of merges cannot starve the deploy; an older commit reaching
       # here after a newer one shipped skips, so production never moves
-      # backwards (#2874). Every step below is gated on the answer, and the
+      # backwards (#2874). It also skips when production's schema holds a
+      # migration this commit lacks, which a newer commit's migration-gate
+      # applied (#5247). Every step below is gated on the answer, and the
       # job holds the production-<service> lock while it runs. Shape held by
       # check-deploy-tip --guard in check:contracts.
       - name: Refuse to ship a commit older than what is live
@@ -2115,6 +2132,11 @@ jobs:
     # The trade is real and worth stating: a dispatch here can ship code ahead
     # of its migration. Check `Store Drift (scheduled)`'s last run, or dispatch
     # it, before using this for anything but recovery.
+    #
+    # It does refuse code older than the schema: a commit that lacks a
+    # migration production already applied (#5247). That code queries tables
+    # a newer migration renamed or dropped, which is how steering went down on
+    # 2026-10-02. The way past is a newer commit, such as main's tip.
     if: github.event_name == 'workflow_dispatch' && inputs.deploy_app
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
@@ -2125,6 +2147,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      # Reads the record of production's schema (check-deploy-tip.mjs).
+      deployments: read
     steps:
       - uses: actions/checkout@v5
         with:
@@ -2140,6 +2164,17 @@ jobs:
           git fetch origin main
           git merge-base --is-ancestor "$SOURCE_COMMIT" origin/main
           echo "Deploying merged revision $SOURCE_COMMIT" >> "$GITHUB_STEP_SUMMARY"
+      # main's copy of the check runs, because the selected commit may predate
+      # it. It fails the job when production's schema holds a migration the
+      # selected commit lacks, and names each one.
+      - name: Refuse a commit older than production's schema
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          set -euo pipefail
+          git show origin/main:tools/scripts/check-deploy-tip.mjs > "$RUNNER_TEMP/check-deploy-tip.mjs"
+          node "$RUNNER_TEMP/check-deploy-tip.mjs" --schema
       - uses: ./.github/actions/pnpm-install
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
         with:

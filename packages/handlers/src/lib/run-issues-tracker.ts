@@ -1,14 +1,16 @@
-// run-issues-tracker.ts — the GitHub reads behind get_run_issues (#3970,
-// ADR-197): the issues each pull request the run recorded opening closes, and
-// each issue's title and state as GitHub reads it now.
+// run-issues-tracker.ts — the reads behind get_run_issues (#3970, ADR-197):
+// the issues each pull request the run recorded opening closes, from the forge
+// store's issue links (ADR-292), and each issue's title and state as GitHub
+// reads it now.
 //
-// Both reads go through the workspace's connection for the repository
+// The state read goes through the workspace's connection for the repository
 // (`resolveGitHubToken` with its `connectionId`), never a token of another
 // workspace. An issue's state is cached in process for 60 seconds, keyed by
 // organization, workspace, repository and number, so a reload inside the
 // minute reads GitHub once and one workspace never reads another's answer.
 // The cache keeps the time GitHub answered, and that is the `readAt` a row
 // reports.
+import { withTenantDb } from "@oxagen/database";
 import {
   createGitHubClient,
   type GitHubClient,
@@ -19,6 +21,10 @@ import type { RunIssue } from "@oxagen/oxagen/contracts/run.issues.get";
 import type { RunRepository } from "@oxagen/oxagen/contracts/run.work.get";
 import type { RunScope } from "../run.list";
 import { logger } from "../logger";
+import {
+  readClosingIssueLinks,
+  type StoredClosingIssues,
+} from "./forge-pull-requests/run-pulls";
 import { connectionOf } from "./run-command-refs";
 import type { ConnectedRunRepository } from "./run-work";
 
@@ -56,7 +62,7 @@ export interface IssueTrackerDeps {
   client: (
     scope: RunScope,
     repository: ConnectedRunRepository,
-  ) => Promise<Pick<GitHubClient, "getIssues" | "listClosingIssues">>;
+  ) => Promise<Pick<GitHubClient, "getIssues">>;
   /** Epoch ms. */
   now: () => number;
   cache: IssueStateCache;
@@ -247,42 +253,66 @@ export interface ClosingPullRequest {
   seq: string | null;
 }
 
+/** Where the closing issues come from: the forge store's issue links. */
+export interface ClosingIssueDeps {
+  links(
+    scope: RunScope,
+    keys: readonly StoredClosingIssues["key"][],
+  ): Promise<StoredClosingIssues[]>;
+}
+
+const defaultClosingIssueDeps: ClosingIssueDeps = {
+  links: (scope, keys) =>
+    withTenantDb((tx) => readClosingIssueLinks(tx, scope, keys)),
+};
+
 /**
- * The issues each pull request closes, as GitHub records its
- * `closingIssuesReferences`. Only the closing list is read: no checks, no
- * diff and no branch search. A failed read is `closing_issues_read_failed`
- * and a list GitHub cut short is `closing_issue_limit`, so an unread list
+ * The issues each pull request closes, from the forge store's issue links
+ * (ADR-292). The sync reads GitHub's `closingIssuesReferences` at each new
+ * head and keeps them, so this read asks GitHub nothing. A pull request the
+ * store does not hold yet is `pull_request_not_stored`, and one whose
+ * references were never read is `closing_issues_not_read`, so an unread list
  * never reads as closing nothing.
  */
 export async function readClosingIssues(
   scope: RunScope,
   pulls: readonly ClosingPullRequest[],
-  deps: Pick<IssueTrackerDeps, "client"> = defaultIssueTrackerDeps,
+  deps: ClosingIssueDeps = defaultClosingIssueDeps,
 ): Promise<{
   closing: { pull: ClosingPullRequest; issues: GitHubClosingIssue[] }[];
   warnings: string[];
 }> {
   const warnings = new Set<string>();
-  const closing = await Promise.all(
-    pulls.map(async (pull) => {
-      try {
-        const gh = await deps.client(scope, pull.repository);
-        const list = await gh.listClosingIssues({
-          owner: pull.repository.owner,
-          repo: pull.repository.name,
-          number: pull.number,
-        });
-        if (!list.complete) warnings.add("closing_issue_limit");
-        return { pull, issues: list.issues };
-      } catch (error) {
-        logger.warn(
-          { err: error, orgId: scope.orgId, workspaceId: scope.workspaceId },
-          "Run pull request closing issues could not be read",
-        );
-        warnings.add("closing_issues_read_failed");
-        return { pull, issues: [] };
-      }
-    }),
+  const stored = await deps.links(
+    scope,
+    pulls.map((pull) => ({
+      provider: "github",
+      repository: `${pull.repository.owner}/${pull.repository.name}`,
+      number: pull.number,
+    })),
   );
+  const closing = pulls.map((pull, index) => {
+    const held = stored[index];
+    if (held === undefined || !held.stored) {
+      warnings.add("pull_request_not_stored");
+      return { pull, issues: [] };
+    }
+    if (!held.read) warnings.add("closing_issues_not_read");
+    return {
+      pull,
+      issues: held.issues.map((issue): GitHubClosingIssue => {
+        const cut = issue.repository.lastIndexOf("/");
+        return {
+          owner: issue.repository.slice(0, Math.max(cut, 0)),
+          repo: issue.repository.slice(cut + 1),
+          number: issue.number,
+          title: issue.title ?? "",
+          url: issue.url,
+          state: issue.state === "closed" ? "closed" : "open",
+          nodeId: issue.issueNodeId,
+        };
+      }),
+    };
+  });
   return { closing, warnings: [...warnings] };
 }

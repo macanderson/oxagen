@@ -85,7 +85,7 @@ function Detail({ detail }: { detail: ConnectionDetail }) {
           {date(detail.updatedAt)}
         </Fact>
       </Facts>
-      <p className="max-w-prose text-xs text-muted-foreground">
+      <p className="max-w-prose text-sm text-muted-foreground">
         {t("credentialNote")}
       </p>
     </div>
@@ -167,7 +167,7 @@ export function ConnectionDrawer({
           <p
             data-state="loading"
             aria-busy="true"
-            className="text-sm text-muted-foreground"
+            className="text-base text-muted-foreground"
           >
             {t("loading")}
           </p>

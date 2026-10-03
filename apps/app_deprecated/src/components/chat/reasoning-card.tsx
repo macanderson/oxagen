@@ -91,7 +91,7 @@ export function ReasoningCard({
   return (
     <div
       className={cn(
-        "relative rounded-xl border border-border/60 bg-muted/30 text-sm overflow-hidden my-1.5",
+        "relative rounded-xl border border-border/60 bg-muted/30 text-base overflow-hidden my-1.5",
         className,
       )}
       data-component="reasoning-card"
@@ -124,13 +124,13 @@ export function ReasoningCard({
 
         {status === "thinking" ? (
           <motion.span
-            className="text-xs text-muted-foreground"
+            className="text-sm text-muted-foreground"
             animate={pulseAnimate}
           >
             {label}
           </motion.span>
         ) : (
-          <span className="text-xs text-muted-foreground">{label}</span>
+          <span className="text-sm text-muted-foreground">{label}</span>
         )}
 
         {hasText ? (
@@ -162,10 +162,10 @@ export function ReasoningCard({
                 <StreamingText
                   text={text}
                   isStreaming
-                  className="text-sm text-muted-foreground"
+                  className="text-base text-muted-foreground"
                 />
               ) : (
-                <p className="text-sm text-muted-foreground/90 italic whitespace-pre-wrap leading-relaxed">
+                <p className="text-base text-muted-foreground/90 italic whitespace-pre-wrap leading-relaxed">
                   {text}
                 </p>
               )}

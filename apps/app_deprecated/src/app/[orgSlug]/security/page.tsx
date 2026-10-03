@@ -209,7 +209,7 @@ export default async function SecurityOverviewPage({
 
       {/* SOC 2 control status */}
       <Panel title="SOC 2 control status">
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p className="mb-4 text-base text-muted-foreground">
           Live status for the Trust Service Criteria this workspace touches,
           derived from current platform signals.
         </p>
@@ -223,21 +223,21 @@ export default async function SecurityOverviewPage({
                 <ControlIcon state={c.state} />
                 <div className="flex flex-col gap-0.5 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-xs font-semibold text-foreground">
+                    <span className="font-mono text-sm font-semibold text-foreground">
                       {c.criterion}
                     </span>
-                    <span className="text-sm font-medium text-foreground">
+                    <span className="text-base font-medium text-foreground">
                       {c.title}
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground leading-snug">
+                  <p className="text-sm text-muted-foreground leading-snug">
                     {c.rationale}
                   </p>
                 </div>
               </div>
               <Badge
                 variant={CONTROL_BADGE[c.state]}
-                className="shrink-0 text-xs"
+                className="shrink-0 text-sm"
               >
                 {CONTROL_LABEL[c.state]}
               </Badge>
@@ -249,14 +249,14 @@ export default async function SecurityOverviewPage({
       {/* Evidence snapshot status + quick links */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Panel title="Evidence snapshots">
-          <p className="mb-4 text-sm text-muted-foreground">
+          <p className="mb-4 text-base text-muted-foreground">
             Automated monthly compliance evidence bundles.
           </p>
           <div className="flex items-center gap-3 rounded-xl border border-dashed border-border/60 bg-muted/20 px-4 py-3">
-            <Badge variant="outline" className="shrink-0 text-xs">
+            <Badge variant="outline" className="shrink-0 text-sm">
               Pending
             </Badge>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               Automated monthly evidence snapshots are not yet enabled. Once
               live, the most recent bundles will appear here for one-click
               auditor download.
@@ -265,13 +265,13 @@ export default async function SecurityOverviewPage({
         </Panel>
 
         <Panel title="Jump to">
-          <p className="mb-4 text-sm text-muted-foreground">
+          <p className="mb-4 text-base text-muted-foreground">
             Drill into the underlying security surfaces.
           </p>
           <div className="flex flex-col gap-2">
             <Link
               href={org.security.audit(ctx)}
-              className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-base text-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span className="flex items-center gap-2">
                 <ScrollText
@@ -287,7 +287,7 @@ export default async function SecurityOverviewPage({
             </Link>
             <Link
               href={org.security.compliance(ctx)}
-              className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-base text-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span className="flex items-center gap-2">
                 <ClipboardCheck

@@ -55,7 +55,7 @@ export function DeltaChip({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 text-xs font-medium tabular-nums",
+        "inline-flex items-center gap-1 text-sm font-medium tabular-nums",
         tone,
         className,
       )}

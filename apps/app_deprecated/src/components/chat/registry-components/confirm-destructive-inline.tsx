@@ -42,7 +42,7 @@ export default function ConfirmDestructiveInline({
             className="h-5 w-5 shrink-0 text-success"
             aria-hidden="true"
           />
-          <p className="text-sm font-medium text-foreground">Confirmed</p>
+          <p className="text-base font-medium text-foreground">Confirmed</p>
         </div>
       </div>
     );
@@ -60,7 +60,7 @@ export default function ConfirmDestructiveInline({
             className="h-5 w-5 shrink-0 text-muted-foreground"
             aria-hidden="true"
           />
-          <p className="text-sm font-medium text-foreground">Cancelled</p>
+          <p className="text-base font-medium text-foreground">Cancelled</p>
         </div>
       </div>
     );
@@ -80,9 +80,9 @@ export default function ConfirmDestructiveInline({
           aria-hidden="true"
         />
         <div className="space-y-1">
-          <p className="text-sm font-semibold text-foreground">{title}</p>
+          <p className="text-base font-semibold text-foreground">{title}</p>
           {description && (
-            <p className="text-xs text-muted-foreground">{description}</p>
+            <p className="text-sm text-muted-foreground">{description}</p>
           )}
         </div>
       </div>

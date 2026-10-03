@@ -87,14 +87,14 @@ export function MappingsStep({
             data-testid={`mapping-row-${draft.sourceRecordType}`}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 Source record type:{" "}
                 <span className="font-medium text-foreground">
                   {draft.sourceRecordType}
                 </span>
               </span>
               {typeof draft.confidence === "number" && (
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-xs">
                   {confidenceLabel(draft.confidence)}
                 </Badge>
               )}
@@ -116,7 +116,7 @@ export function MappingsStep({
             </div>
 
             {draft.reasoning && (
-              <p className="text-xs text-muted-foreground">{draft.reasoning}</p>
+              <p className="text-sm text-muted-foreground">{draft.reasoning}</p>
             )}
 
             <div className="flex flex-col gap-1.5">

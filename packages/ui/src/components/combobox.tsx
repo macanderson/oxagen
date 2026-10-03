@@ -75,7 +75,7 @@ Combobox.displayName = "Combobox";
 // the field reads as a solid (dark-in-dark) field rather than a transparent
 // cut-out that shows the page through.
 const comboboxTriggerVariants = cva(
-  "flex w-full items-center justify-between whitespace-nowrap rounded-md border border-input-border bg-input-bg px-3 py-2 text-sm text-input-fg placeholder:text-input-placeholder hover:border-input-border-hover focus:outline-none focus:border-input-border-focus focus:ring-1 focus:ring-input-ring disabled:cursor-not-allowed disabled:bg-input-disabled-bg disabled:text-input-disabled-fg [&>span]:line-clamp-1",
+  "flex w-full items-center justify-between whitespace-nowrap rounded-md border border-input-border bg-input-bg px-3 py-2 text-base text-input-fg placeholder:text-input-placeholder hover:border-input-border-hover focus:outline-none focus:border-input-border-focus focus:ring-1 focus:ring-input-ring disabled:cursor-not-allowed disabled:bg-input-disabled-bg disabled:text-input-disabled-fg [&>span]:line-clamp-1",
   {
     variants: {
       size: {
@@ -189,7 +189,7 @@ function ComboboxPopup({
             <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             <ComboboxPrimitive.Input
               ref={inputRef}
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 min-w-0"
+              className="flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 min-w-0"
               placeholder={searchPlaceholder}
               value={searchValue}
               onChange={(e) => setSearchValue(e.currentTarget.value)}
@@ -199,7 +199,7 @@ function ComboboxPopup({
           {/* Scrollable option list — capped at ~280px before scrolling */}
           <ComboboxPrimitive.List className="max-h-[280px] overflow-y-auto overflow-x-hidden p-1">
             {filteredChildren}
-            <ComboboxPrimitive.Empty className="py-6 text-center text-sm text-muted-foreground">
+            <ComboboxPrimitive.Empty className="py-6 text-center text-base text-muted-foreground">
               No results found.
             </ComboboxPrimitive.Empty>
           </ComboboxPrimitive.List>
@@ -219,7 +219,7 @@ const ComboboxItem = React.forwardRef<
   <ComboboxPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none",
+      "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-base outline-none",
       // Highlighted option uses the PRIMARY button colours (per design), not the
       // subtle neutral accent the menus use.
       "data-[highlighted]:bg-primary data-[highlighted]:text-primary-foreground",

@@ -29,10 +29,12 @@ import type {
   Admission,
   ApprovalRequest,
   ApprovalState,
+  CallRate,
   EmergencyCall,
   EmergencyDeny,
   MeterEvent,
   PublishedTools,
+  RatedCall,
   ServedAgent,
   ServedCallRecord,
   ServedPorts,
@@ -357,6 +359,8 @@ export interface Recorded {
   claims: Array<{ request: ApprovalRequest; approvers: number }>;
   /** The calls checked against the kill switches. */
   emergencyDenies: EmergencyCall[];
+  /** The calls a rate was read for, with the clock each read used. */
+  rates: Array<{ run: ServedRun; call: RatedCall; now: number }>;
   credentials: CredentialRequest[];
   routes: ServedRoute[];
   local: LocalCall[];
@@ -374,6 +378,8 @@ export interface PortOptions {
   claim?: (request: ApprovalRequest, approvers: number) => Promise<boolean>;
   /** The kill switch that stops a call. Defaults to none. */
   emergencyDeny?: (call: EmergencyCall) => Promise<EmergencyDeny | null>;
+  /** The `rate` fact for a call. Defaults to no calls in either window. */
+  callRate?: (run: ServedRun, call: RatedCall, now: number) => Promise<CallRate>;
   credential?: (request: CredentialRequest) => Promise<ResolvedCredential>;
   /** Replaces the Transport lookup, such as to throw for a route or to refuse a call before the claim. */
   transport?: (route: ServedRoute) => ServedTransport;
@@ -403,6 +409,7 @@ export function fakePorts(options: PortOptions = {}): { ports: ServedPorts; reco
     requested: [],
     claims: [],
     emergencyDenies: [],
+    rates: [],
     credentials: [],
     routes: [],
     local: [],
@@ -438,6 +445,10 @@ export function fakePorts(options: PortOptions = {}): { ports: ServedPorts; reco
     emergencyDeny: (call) => {
       recorded.emergencyDenies.push(call);
       return options.emergencyDeny?.(call) ?? Promise.resolve(null);
+    },
+    callRate: (served, call, now) => {
+      recorded.rates.push({ run: served, call, now });
+      return options.callRate?.(served, call, now) ?? Promise.resolve({ calls_last_hour: 0, calls_last_minute: 0 });
     },
     approvals: {
       settle: (request) => {

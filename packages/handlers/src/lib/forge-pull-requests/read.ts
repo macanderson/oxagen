@@ -39,7 +39,7 @@ const issueLinks = schema.forgePullRequestIssues;
 type Db = Pick<Tx, "select" | "selectDistinct">;
 
 /** A pull request named by provider, repository, and number. */
-type PullKey = { provider: string; repository: string; number: number };
+export type PullKey = { provider: string; repository: string; number: number };
 
 const ISSUE_NODE = /^issue:node:(.+)$/;
 
@@ -48,7 +48,7 @@ function keyString(key: PullKey): string {
 }
 
 /** The forge ids of the pull requests the given keys name. */
-async function idsForKeys(
+export async function idsForKeys(
   db: Db,
   scope: Scope,
   keys: readonly PullKey[],

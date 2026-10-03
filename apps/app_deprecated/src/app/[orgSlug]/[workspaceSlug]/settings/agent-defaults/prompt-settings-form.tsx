@@ -80,7 +80,7 @@ export interface PromptSettingsFormProps {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-4">
+    <p className="text-base font-semibold uppercase tracking-widest text-muted-foreground mb-4">
       {children}
     </p>
   );
@@ -190,7 +190,7 @@ export function PromptSettingsForm({
                 <Label
                   id="auto-improve-heading"
                   htmlFor="auto-improve-switch"
-                  className="text-sm font-semibold text-foreground cursor-pointer"
+                  className="text-base font-semibold text-foreground cursor-pointer"
                 >
                   Auto-improve prompts
                 </Label>
@@ -198,7 +198,7 @@ export function PromptSettingsForm({
                   Beta
                 </Badge>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="text-sm text-muted-foreground mt-0.5">
                 A model judges whether your prompt is sufficient as-is; if not,
                 an attempt will be made to enhance context, which may yield
                 unintended results.
@@ -222,11 +222,11 @@ export function PromptSettingsForm({
           <Label
             id="additional-instructions-heading"
             htmlFor="additional-instructions"
-            className="text-sm font-medium text-foreground"
+            className="text-base font-medium text-foreground"
           >
             Workspace instructions
           </Label>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             These instructions are appended to every agent prompt in this
             workspace. Use this to set workspace-wide context, tone, or
             constraints.
@@ -243,7 +243,7 @@ export function PromptSettingsForm({
           />
           <p
             id="additional-instructions-count"
-            className="text-right text-xs text-muted-foreground"
+            className="text-right text-sm text-muted-foreground"
           >
             {additionalInstructions.length} / 8,000
           </p>
@@ -260,7 +260,7 @@ export function PromptSettingsForm({
           aria-controls="overrides-panel"
         >
           <SectionLabel>Per-prompt overrides</SectionLabel>
-          <span className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
+          <span className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
             {!isEnterprise && (
               <Lock className="h-3.5 w-3.5" aria-hidden="true" />
             )}
@@ -279,7 +279,7 @@ export function PromptSettingsForm({
 
         {overridesOpen && (
           <div id="overrides-panel" className="flex flex-col gap-4 mt-2">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Replace the built-in system prompt for specific agent
               capabilities. These overrides apply workspace-wide and are only
               available on the Enterprise plan. The core orchestration prompt is
@@ -295,7 +295,7 @@ export function PromptSettingsForm({
                 <div className="flex items-center gap-2">
                   <Label
                     htmlFor={`override-${key}`}
-                    className="text-sm font-medium text-foreground"
+                    className="text-base font-medium text-foreground"
                   >
                     {label}
                   </Label>
@@ -306,7 +306,7 @@ export function PromptSettingsForm({
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground">{description}</p>
+                <p className="text-sm text-muted-foreground">{description}</p>
                 <div className="relative">
                   <MarkdownCodeEditor
                     id={`override-${key}`}
@@ -326,7 +326,7 @@ export function PromptSettingsForm({
                       id={`override-${key}-help`}
                       className="absolute inset-0 flex items-center justify-center rounded-md bg-muted/40 pointer-events-none"
                     >
-                      <span className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1.5 text-xs text-muted-foreground shadow-sm">
+                      <span className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1.5 text-sm text-muted-foreground shadow-sm">
                         <Lock className="h-3 w-3" aria-hidden="true" />
                         Requires Enterprise plan
                       </span>
@@ -353,7 +353,7 @@ export function PromptSettingsForm({
         </Button>
 
         {!canEdit && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Only workspace owners and admins can edit prompt settings.
           </p>
         )}

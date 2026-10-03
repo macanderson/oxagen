@@ -93,7 +93,7 @@ export function AssistantLauncher({
     >
       <StellaIcon className="size-7 flex-none" />
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold">
+        <span className="block text-base font-semibold">
           <AskStella />
         </span>
         {assistantUnread ? (

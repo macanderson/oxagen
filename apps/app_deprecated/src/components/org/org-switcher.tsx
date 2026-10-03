@@ -89,8 +89,8 @@ export function OrgSwitcher({
       >
         <OrgAvatar name={activeName} avatarUrl={active?.avatarUrl} />
         <span className="hidden min-w-0 text-left leading-tight md:grid">
-          <span className="truncate text-sm font-semibold">{activeName}</span>
-          <span className="truncate text-xs font-normal text-muted-foreground">
+          <span className="truncate text-base font-semibold">{activeName}</span>
+          <span className="truncate text-sm font-normal text-muted-foreground">
             {activePlan}
           </span>
         </span>
@@ -106,8 +106,8 @@ export function OrgSwitcher({
           >
             <OrgAvatar name={t.name} avatarUrl={t.avatarUrl} />
             <span className="grid min-w-0 flex-1 text-left leading-tight">
-              <span className="truncate text-sm font-medium">{t.name}</span>
-              <span className="truncate text-xs font-normal text-muted-foreground">
+              <span className="truncate text-base font-medium">{t.name}</span>
+              <span className="truncate text-sm font-normal text-muted-foreground">
                 {t.planLabel ?? "Free"}
               </span>
             </span>

@@ -91,7 +91,7 @@ export function SsoSignIn({
         <div
           role="status"
           data-testid="sso-required"
-          className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm text-foreground"
+          className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-base text-foreground"
         >
           <KeyIcon
             aria-hidden
@@ -108,7 +108,7 @@ export function SsoSignIn({
           onSubmit={(e) => void onSubmit(e)}
           className={`${panel} flex flex-col gap-4 p-5 sm:p-6`}
         >
-          <p className="text-sm text-muted-foreground">{tSso("lead")}</p>
+          <p className="text-base text-muted-foreground">{tSso("lead")}</p>
           {outcome ? (
             <FormAlert testId="sso-outcome">
               {t(`outcomes.${outcome}`)}

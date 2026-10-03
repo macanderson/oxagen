@@ -38,7 +38,7 @@ export function WizardProgress({ currentStep }: WizardProgressProps) {
           />
         ))}
       </div>
-      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>
           Step {currentIndex + 1} of {WIZARD_STEPS.length}
         </span>

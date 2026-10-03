@@ -24,7 +24,7 @@ export const Default: Story = {
         <CardDescription>Deploy your new project in one click.</CardDescription>
       </CardHeader>
       <CardPanel>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           Card body content lives inside <code>CardPanel</code> — the coss ui
           body wrapper (replaces shadcn <code>CardContent</code>).
         </p>

@@ -71,7 +71,7 @@ export function SkillSearch({
         </h2>
       </header>
       <div className={`${panelBody} flex flex-col gap-4`}>
-        <p className="text-sm text-muted-foreground">{t("searchLead")}</p>
+        <p className="text-base text-muted-foreground">{t("searchLead")}</p>
         {configuration.current === null ? <p>{t("unpublished")}</p> : null}
         <form
           onSubmit={submit}
@@ -119,7 +119,7 @@ export function SkillSearch({
         {failure ? <FormAlert>{failure}</FormAlert> : null}
         {result ? (
           <div role="status" className="flex flex-col gap-3">
-            <p className="text-sm">
+            <p className="text-base">
               {t("searchContext", {
                 version: result.version,
                 commit: result.repositoryCommitSha.slice(0, 12),
@@ -138,15 +138,15 @@ export function SkillSearch({
                     <p className={mono}>
                       {skill.skillRef}@{skill.version}
                     </p>
-                    <p className="text-sm">{skill.description}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-base">{skill.description}</p>
+                    <p className="text-sm text-muted-foreground">
                       {t("score", {
                         score: skill.score,
                         tokens: skill.tokenCost,
                         source: skill.source,
                       })}
                     </p>
-                    <code className="break-all text-xs">{skill.digest}</code>
+                    <code className="break-all text-sm">{skill.digest}</code>
                   </li>
                 ))}
               </ul>
@@ -154,12 +154,12 @@ export function SkillSearch({
             <h3 className={panelTitle}>
               {t("withheld", { count: result.withheld.length })}
             </h3>
-            <p className="text-xs text-muted-foreground">{t("withheldLead")}</p>
+            <p className="text-sm text-muted-foreground">{t("withheldLead")}</p>
             <ul aria-label={t("heldList")} className="divide-y divide-border">
               {result.withheld.map((skill) => (
                 <li
                   key={skill.skillRef}
-                  className="flex flex-wrap gap-2 py-2 text-sm"
+                  className="flex flex-wrap gap-2 py-2 text-base"
                 >
                   <code>{skill.skillRef}</code>
                   <span>{t(skill.reason)}</span>

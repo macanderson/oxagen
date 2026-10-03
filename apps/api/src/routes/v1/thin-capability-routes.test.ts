@@ -2237,7 +2237,7 @@ const ROUTES: ThinRoute[] = [
     method: "POST",
     capability: spendStatementExport.name,
     body: { month: "2026-09" },
-    expectedInput: { month: "2026-09", format: "csv" },
+    expectedInput: { month: "2026-09", format: "csv", rows: "groups" },
     invalidBody: { month: "2026-13" },
     jsonGuard: true,
     status: 200,

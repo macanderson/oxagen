@@ -122,7 +122,7 @@ function ToastList({ closeLabel }: { closeLabel: string }) {
               news, and it names the toast's dialog either way. */}
           <Toast.Title
             render={<p />}
-            className="min-w-0 flex-1 text-sm font-medium"
+            className="min-w-0 flex-1 text-base font-medium"
           >
             {item.title}
           </Toast.Title>

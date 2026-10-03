@@ -9,6 +9,10 @@
 //     different answers, and the page says which one failed;
 //   - another vendor's fields follow the vendor (a URL only for an
 //     OpenAI-compatible server, models only for a direct vendor);
+//   - a model typed for one vendor is never sent to another (#3317);
+//   - an edit clears the vendor's last answer, which was about the old input;
+//   - a refusal shows at its field, or across the form when no field on
+//     screen can show it;
 //   - the key does not stay in memory after a save, and is never rendered;
 //   - Remove asks first, in the page.
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -392,6 +396,180 @@ describe("ModelFundingForm: Test and save", () => {
     await userEvent.type(screen.getByLabelText(KEY_LABEL), KEY);
     await testAndSave();
     expect(await screen.findByTestId("funding-failure")).toBeTruthy();
+  });
+});
+
+describe("ModelFundingForm: a model typed for one vendor stays with that vendor (#3317)", () => {
+  const OPENAI: ModelCredential = {
+    ...STORED,
+    provider: "openai",
+    baseUrl: null,
+    modelMap: { balanced: "gpt-5.2", fast: "gpt-5-mini", precise: "o4" },
+  };
+
+  it("sends another vendor none of the stored vendor's models", async () => {
+    testModelKey.mockResolvedValue({
+      ok: true,
+      value: { ok: false, toolCalling: null, latencyMs: 40, error: "no" },
+    });
+    renderForm(OPENAI);
+    expect(screen.getByLabelText("Balanced model")).toHaveValue("gpt-5.2");
+    await choose("anthropic");
+    expect(screen.getByLabelText("Balanced model")).toHaveValue("");
+    expect(screen.getByLabelText("Fast model")).toHaveValue("");
+    expect(screen.getByLabelText("Precise model")).toHaveValue("");
+    await userEvent.type(screen.getByLabelText(KEY_LABEL), KEY);
+    await testAndSave();
+    await waitFor(() => {
+      expect(testModelKey).toHaveBeenCalledTimes(1);
+    });
+    expect(testModelKey).toHaveBeenCalledWith(
+      "acme",
+      expect.objectContaining({
+        provider: "anthropic",
+        balanced: "",
+        fast: "",
+        precise: "",
+      }),
+    );
+  });
+
+  it("gives each vendor back the models typed for it", async () => {
+    renderForm(OPENAI);
+    await choose("anthropic");
+    await userEvent.type(
+      screen.getByLabelText("Balanced model"),
+      "claude-sonnet-4-5",
+    );
+    await choose("openai");
+    expect(screen.getByLabelText("Balanced model")).toHaveValue("gpt-5.2");
+    expect(screen.getByLabelText("Fast model")).toHaveValue("gpt-5-mini");
+    await choose("anthropic");
+    expect(screen.getByLabelText("Balanced model")).toHaveValue(
+      "claude-sonnet-4-5",
+    );
+  });
+});
+
+describe("ModelFundingForm: an edit clears the last test's answer (#3317)", () => {
+  const REFUSED = {
+    ok: true,
+    value: {
+      ok: false,
+      toolCalling: null,
+      latencyMs: 40,
+      error: "Invalid API key",
+    },
+  };
+
+  it.each([
+    KEY_LABEL,
+    "Endpoint URL",
+    "Balanced model",
+    "Fast model",
+    "Precise model",
+  ])(
+    "clears the vendor's answer when %s changes",
+    async (label) => {
+      testModelKey.mockResolvedValue(REFUSED);
+      renderForm();
+      await choose("openai_compatible");
+      await userEvent.type(screen.getByLabelText(KEY_LABEL), KEY);
+      await testAndSave();
+      expect(
+        await screen.findByTestId("funding-verdict-refused"),
+      ).toBeInTheDocument();
+      await userEvent.type(screen.getByLabelText(label), "x");
+      expect(screen.queryByTestId("funding-verdict-refused")).toBeNull();
+    },
+  );
+
+  it("clears a field's error once that field changes", async () => {
+    testModelKey.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+      code: "key_required",
+      field: "apiKey",
+    });
+    renderForm();
+    await testAndSave();
+    expect(
+      await screen.findByText("Paste a key of at least 8 characters."),
+    ).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(KEY_LABEL), KEY);
+    expect(
+      screen.queryByText("Paste a key of at least 8 characters."),
+    ).toBeNull();
+  });
+});
+
+describe("ModelFundingForm: every refusal shows somewhere (#3317)", () => {
+  const TOO_LONG =
+    "This model name is too long. Enter one of 200 characters or fewer.";
+  const TOO_LONG_TEXT =
+    /This model name is too long\. Enter one of 200 characters or fewer\./;
+
+  it.each<[string, string]>([
+    ["modelMap.fast", "Fast model"],
+    ["modelMap.precise", "Precise model"],
+    ["modelMap.balanced", "Balanced model"],
+    ["toolProbeModel", "Balanced model"],
+  ])(
+    "puts the contract's refusal of %s beside the %s field",
+    async (path, label) => {
+      testModelKey.mockResolvedValue({
+        ok: false,
+        reason: "invalid",
+        code: "invalid_input",
+        field: path,
+      });
+      renderForm();
+      await choose("openai");
+      await userEvent.type(screen.getByLabelText(KEY_LABEL), KEY);
+      await testAndSave();
+      await waitFor(() => {
+        expect(screen.getByLabelText(label)).toHaveAttribute(
+          "aria-invalid",
+          "true",
+        );
+      });
+      expect(screen.getByLabelText(label)).toHaveAccessibleDescription(
+        TOO_LONG_TEXT,
+      );
+      expect(screen.queryByTestId("funding-failure")).toBeNull();
+      expect(saveModelKey).not.toHaveBeenCalled();
+    },
+  );
+
+  it("puts a refusal across the whole form when its field is not on screen", async () => {
+    testModelKey.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "modelMap.fast",
+    });
+    renderForm();
+    // OpenRouter draws no model fields.
+    await userEvent.type(screen.getByLabelText(KEY_LABEL), KEY);
+    await testAndSave();
+    expect(await screen.findByTestId("funding-failure")).toHaveTextContent(
+      TOO_LONG,
+    );
+  });
+
+  it("puts a refusal across the whole form when its path names no field", async () => {
+    testModelKey.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "provider",
+    });
+    renderForm();
+    await userEvent.type(screen.getByLabelText(KEY_LABEL), KEY);
+    await testAndSave();
+    expect(await screen.findByTestId("funding-failure")).toHaveTextContent(
+      "Oxagen refused these settings.",
+    );
   });
 });
 

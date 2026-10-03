@@ -146,7 +146,7 @@ export async function InvitationBody({
                   {initialsOf(invitation.inviterName)}
                 </span>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-foreground">
+                  <p className="text-base font-semibold text-foreground">
                     {invitation.inviterName}
                   </p>
                   <p className="text-sm text-muted-foreground">

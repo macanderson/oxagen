@@ -119,7 +119,7 @@ export function UserSwitcher({
                   "flex shrink-0 items-center justify-center rounded-full transition-opacity hover:opacity-90"
                 : // Wide trigger (sidebar): avatar + name + email + chevron.
                   cn(
-                    "flex w-full items-center gap-2 rounded-md p-2 text-left text-sm transition-colors",
+                    "flex w-full items-center gap-2 rounded-md p-2 text-left text-base transition-colors",
                     "hover:bg-sidebar-nav-link-hover-bg hover:text-sidebar-nav-link-hover-fg",
                   ),
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -134,7 +134,7 @@ export function UserSwitcher({
           <>
             <span className="grid min-w-0 flex-1 leading-tight">
               <span className="truncate font-medium">{displayName}</span>
-              <span className="truncate text-xs text-muted-foreground">
+              <span className="truncate text-sm text-muted-foreground">
                 {user.email}
               </span>
             </span>
@@ -153,10 +153,10 @@ export function UserSwitcher({
       >
         <MenuGroupLabel className="font-normal">
           <div className="flex flex-col gap-0.5">
-            <span className="text-sm font-medium leading-tight">
+            <span className="text-base font-medium leading-tight">
               {displayName}
             </span>
-            <span className="text-xs font-normal text-muted-foreground leading-tight">
+            <span className="text-sm font-normal text-muted-foreground leading-tight">
               {user.email}
             </span>
           </div>
@@ -181,7 +181,7 @@ export function UserSwitcher({
 
         <MenuSeparator />
 
-        <MenuGroupLabel className="text-xs font-normal text-muted-foreground">
+        <MenuGroupLabel className="text-sm font-normal text-muted-foreground">
           Theme
         </MenuGroupLabel>
         {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (

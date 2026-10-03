@@ -78,7 +78,7 @@ const MenuItem = React.forwardRef<
   <MenuPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-menu-item-fg outline-none transition-colors data-[highlighted]:bg-menu-item-highlighted-bg data-[highlighted]:text-menu-item-highlighted-fg data-[disabled]:pointer-events-none data-[disabled]:text-menu-item-disabled-fg [&_svg]:size-4 [&_svg]:shrink-0",
+      "relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-base text-menu-item-fg outline-none transition-colors data-[highlighted]:bg-menu-item-highlighted-bg data-[highlighted]:text-menu-item-highlighted-fg data-[disabled]:pointer-events-none data-[disabled]:text-menu-item-disabled-fg [&_svg]:size-4 [&_svg]:shrink-0",
       variant === "destructive" &&
         "text-error data-[highlighted]:bg-error/10 data-[highlighted]:text-error [&_svg]:text-error",
       inset && "pl-8",
@@ -96,7 +96,7 @@ const MenuCheckboxItem = React.forwardRef<
   <MenuPrimitive.CheckboxItem
     ref={ref}
     className={cn(
-      "relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm text-menu-item-fg outline-none transition-colors data-[highlighted]:bg-menu-item-highlighted-bg data-[highlighted]:text-menu-item-highlighted-fg data-[disabled]:pointer-events-none data-[disabled]:text-menu-item-disabled-fg",
+      "relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-base text-menu-item-fg outline-none transition-colors data-[highlighted]:bg-menu-item-highlighted-bg data-[highlighted]:text-menu-item-highlighted-fg data-[disabled]:pointer-events-none data-[disabled]:text-menu-item-disabled-fg",
       className,
     )}
     {...props}
@@ -118,7 +118,7 @@ const MenuRadioItem = React.forwardRef<
   <MenuPrimitive.RadioItem
     ref={ref}
     className={cn(
-      "relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm text-menu-item-fg outline-none transition-colors data-[highlighted]:bg-menu-item-highlighted-bg data-[highlighted]:text-menu-item-highlighted-fg data-[disabled]:pointer-events-none data-[disabled]:text-menu-item-disabled-fg",
+      "relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-base text-menu-item-fg outline-none transition-colors data-[highlighted]:bg-menu-item-highlighted-bg data-[highlighted]:text-menu-item-highlighted-fg data-[disabled]:pointer-events-none data-[disabled]:text-menu-item-disabled-fg",
       className,
     )}
     {...props}
@@ -150,7 +150,7 @@ const MenuGroupLabel = React.forwardRef<
     ref={ref}
     role="presentation"
     className={cn(
-      "px-2 py-1.5 text-sm font-semibold text-menu-group-label-fg",
+      "px-2 py-1.5 text-base font-semibold text-menu-group-label-fg",
       inset && "pl-8",
       className,
     )}
@@ -177,7 +177,7 @@ function MenuShortcut({
 }: React.HTMLAttributes<HTMLSpanElement>) {
   return (
     <span
-      className={cn("ml-auto text-xs tracking-widest opacity-60", className)}
+      className={cn("ml-auto text-sm tracking-widest opacity-60", className)}
       {...props}
     />
   );
@@ -193,7 +193,7 @@ const MenuSubTrigger = React.forwardRef<
   <MenuPrimitive.SubmenuTrigger
     ref={ref}
     className={cn(
-      "flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm text-menu-item-fg outline-none data-[highlighted]:bg-menu-item-highlighted-bg data-[highlighted]:text-menu-item-highlighted-fg data-[popup-open]:bg-menu-item-highlighted-bg",
+      "flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-base text-menu-item-fg outline-none data-[highlighted]:bg-menu-item-highlighted-bg data-[highlighted]:text-menu-item-highlighted-fg data-[popup-open]:bg-menu-item-highlighted-bg",
       inset && "pl-8",
       className,
     )}

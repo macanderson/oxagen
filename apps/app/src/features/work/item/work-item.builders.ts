@@ -7,6 +7,7 @@
 // src/test/arch/layers.ts).
 import type {
   BriefRevision,
+  ForgePullRequest,
   WorkHistoryEntry,
   WorkItemDetail,
   WorkSend,
@@ -188,6 +189,7 @@ export function workSend(overrides: Partial<WorkSend> = {}): WorkSend {
     runs: [],
     cost: { runs: 0, knownRuns: 0, total: null },
     pullRequest: null,
+    pullRequests: [],
     requiredChecks: null,
     checks: [],
     earlierChecks: null,
@@ -241,6 +243,7 @@ function summaryOf(send: WorkSend): NonNullable<Item["send"]> {
             url: send.pullRequest.url,
             head: send.pullRequest.head,
           },
+    pullRequests: send.pullRequests,
     checks: send.checksWord,
     gate: send.gate,
     accepted: send.acceptance !== null,
@@ -614,6 +617,64 @@ function inReview(send: WorkSend, wait: Item["wait"], extra: Partial<Item> = {})
 
 export function inReviewItem(): WorkItemDetail {
   return inReview(reviewedSend(), { kind: "ready_for_review", head: HEAD });
+}
+
+/** Pull request #641 as the forge store holds it: open, with its title. */
+export function forgePull(overrides: Partial<ForgePullRequest> = {}): ForgePullRequest {
+  return {
+    id: "fpr_641",
+    provider: "github",
+    repository: "acme/platform",
+    number: 641,
+    url: "https://github.com/acme/platform/pull/641",
+    title: "Retry the export on 429",
+    state: "open",
+    head: HEAD,
+    stateSeenAt: "2026-10-01T11:02:00Z",
+    ...overrides,
+  };
+}
+
+/**
+ * In review, and the forge store holds two pull requests for the send: #642,
+ * a newer draft, and #641, the one the facts name, now merged.
+ */
+export function twoPullsItem(): WorkItemDetail {
+  return inReview(
+    reviewedSend({
+      pullRequests: [
+        forgePull({ id: "fpr_642", number: 642, url: "https://github.com/acme/platform/pull/642", title: null, state: "draft", stateSeenAt: "2026-10-01T11:05:00Z" }),
+        forgePull({ state: "merged" }),
+      ],
+    }),
+    { kind: "ready_for_review", head: HEAD },
+  );
+}
+
+/** In review on #641, and the forge store holds only #700 for the send. */
+export function otherPullItem(): WorkItemDetail {
+  return inReview(
+    reviewedSend({
+      pullRequests: [forgePull({ id: "fpr_700", number: 700, url: "https://github.com/acme/platform/pull/700", state: "closed" })],
+    }),
+    { kind: "ready_for_review", head: HEAD },
+  );
+}
+
+/** The run ended, its facts name no pull request, and the forge store holds one for the send. */
+export function unrecordedPullItem(): WorkItemDetail {
+  return inReview(
+    reviewedSend({
+      pullRequest: null,
+      pullRequests: [forgePull()],
+      requiredChecks: null,
+      checks: [],
+      checksWord: "no_pull_request",
+      gate: { open: false, block: "no_pull_request", detail: null },
+      claims: [],
+    }),
+    { kind: "no_pull_request" },
+  );
 }
 
 export function checkFailedItem(): WorkItemDetail {

@@ -47,7 +47,7 @@ type Line = { mark: Mark; text: string };
 function Consequences({ id, lines }: { id: string; lines: readonly Line[] }) {
   const t = useTranslations("run.interjection.consequence");
   return (
-    <ul id={id} className="flex flex-col gap-1 px-3 pb-2.5 text-xs">
+    <ul id={id} className="flex flex-col gap-1 px-3 pb-2.5 text-sm">
       {lines.map((line) => (
         <li
           key={line.text}
@@ -104,17 +104,17 @@ function PickCard({
         data-testid={`interjection-pick-${path}`}
         data-touch-target=""
         onClick={onPick}
-        className="flex min-h-11 w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-foreground enabled:hover:bg-gold/5 disabled:cursor-not-allowed"
+        className="flex min-h-11 w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left text-base font-semibold text-foreground enabled:hover:bg-gold/5 disabled:cursor-not-allowed"
       >
         <span
           aria-hidden="true"
-          className={`mt-0.5 flex size-4 flex-none items-center justify-center rounded border text-sm leading-none ${picked ? "border-gold bg-gold text-button-primary-fg" : "border-border"}`}
+          className={`mt-0.5 flex size-4 flex-none items-center justify-center rounded border text-xs leading-none ${picked ? "border-gold bg-gold text-button-primary-fg" : "border-border"}`}
         >
           {picked ? "✓" : null}
         </span>
         <span className="flex flex-col gap-0.5">
           {title}
-          <span className="text-xs font-normal text-muted-foreground">
+          <span className="text-sm font-normal text-muted-foreground">
             {description}
           </span>
         </span>
@@ -296,7 +296,7 @@ export function InterjectionAnswer({
       <div
         role="status"
         data-testid="interjection-receipt"
-        className="flex flex-col gap-1 rounded-lg border border-border bg-app-panel-bg px-3 py-2.5 text-sm"
+        className="flex flex-col gap-1 rounded-lg border border-border bg-app-panel-bg px-3 py-2.5 text-base"
       >
         <p>{t("receipt.sent", { receipt: answered.receiptId })}</p>
         {answered.path === "create" && answered.workspace !== null ? (
@@ -399,7 +399,7 @@ export function InterjectionAnswer({
         <span
           id={hintId}
           data-testid="interjection-send-hint"
-          className={`${mono} text-sm text-muted-foreground`}
+          className={`${mono} text-xs text-muted-foreground`}
         >
           {blocked ?? t("answersAs")}
         </span>

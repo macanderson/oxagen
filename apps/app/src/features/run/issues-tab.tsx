@@ -69,7 +69,7 @@ function ViewLink({ issue }: { issue: Issue }) {
   const t = useTranslations("run.issues");
   const target = parseGitHubUrl(issue.url);
   if (target === null)
-    return <span className="text-sm text-dim">{t("noLink")}</span>;
+    return <span className="text-xs text-dim">{t("noLink")}</span>;
   return (
     <GitHubLink
       to={target}
@@ -143,9 +143,9 @@ function issueRow(issue: Issue, place: Place): IssueTableRow {
     status: issue.statusRead === "read" ? issue.status : null,
     cells: [
       <span key="ref" className="flex min-w-0 flex-col">
-        <span className={`${mono} text-xs md:truncate`}>{issue.ref}</span>
+        <span className={`${mono} text-sm md:truncate`}>{issue.ref}</span>
         {issue.title === null ? null : (
-          <span className="truncate text-sm text-muted-foreground">
+          <span className="truncate text-xs text-muted-foreground">
             {issue.title}
           </span>
         )}
@@ -197,7 +197,7 @@ function IssuesPanel({
     >
       {read === null ? (
         <PanelBody>
-          <p className="text-sm text-muted-foreground">{t("loading")}</p>
+          <p className="text-base text-muted-foreground">{t("loading")}</p>
         </PanelBody>
       ) : !read.ok ? (
         <PanelBody>
@@ -205,7 +205,7 @@ function IssuesPanel({
         </PanelBody>
       ) : rows.length === 0 ? (
         <PanelBody>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             {complete ? t("empty") : t("emptyIncomplete")}
           </p>
         </PanelBody>

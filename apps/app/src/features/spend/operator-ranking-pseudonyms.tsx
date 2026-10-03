@@ -59,7 +59,7 @@ export function OperatorPseudonymsToggle({
   );
   return (
     <div className="flex max-w-xs flex-col items-end gap-1.5 text-right">
-      <p role="status" className="text-xs text-muted-foreground">
+      <p role="status" className="text-sm text-muted-foreground">
         {pseudonyms === null ? t("unknown") : pseudonyms ? t("on") : t("off")}
       </p>
       {pseudonyms === null ? (

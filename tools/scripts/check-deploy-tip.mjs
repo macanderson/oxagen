@@ -41,6 +41,26 @@
  * An API that cannot answer fails open: the job deploys, with a warning.
  * Blocking every deploy on an API blip is the outage #2730 already was once.
  *
+ * ## Never older than the schema (#5247)
+ *
+ * Code can be newer than what is live and still older than the schema. On
+ * 2026-10-02 the run for `976b3f9` applied a migration that renamed the
+ * context tables, and the run for the older `ddc1684` then shipped its API,
+ * which queried the old names. Every steering call failed for six minutes.
+ * Push runs now finish in commit order (ADR-287), but a re-run of an older
+ * run's deploy job, or `manual-app-deploy` naming an older commit, can still
+ * do it.
+ *
+ * So `migration-gate` records its commit as the `schema` service once every
+ * store carries that commit's migrations. That record is the ledger a deploy
+ * job can read: the order step runs before any credential, and Aurora's own
+ * revision table is reachable only over SSM. A service that reads the
+ * database skips when the recorded commit holds a migration file this commit
+ * lacks, and the log names each one. `--schema` asks the same question for
+ * `manual-app-deploy` and fails the job instead. The record never moves to a
+ * commit that lacks a migration the current one holds, so a re-run of an
+ * older gate cannot lower it.
+ *
  * ## Modes
  *
  * 1. `node check-deploy-tip.mjs` (the `order` step, first after checkout)
@@ -52,11 +72,16 @@
  * 2. `node check-deploy-tip.mjs --record` (the `record` step, last) records
  *    what shipped. A failed record only warns: the next run compares against
  *    an older record, sees itself ahead, and deploys, which is safe.
- * 3. `node check-deploy-tip.mjs --guard` (from `check:contracts`) asserts
+ *    `migration-gate` runs it with `DEPLOY_SERVICE=schema`.
+ * 3. `node check-deploy-tip.mjs --schema` (`manual-app-deploy`) exits 1 when
+ *    production's schema holds a migration `SOURCE_COMMIT` lacks.
+ * 4. `node check-deploy-tip.mjs --guard` (from `check:contracts`) asserts
  *    the shape of every deploy job, the installer publish included: the
  *    order step, the gate on every later step, the record step and the
- *    per-service concurrency group. Dropping any of them would look like a
- *    tidy-up in review and would let a deploy move production backwards.
+ *    per-service concurrency group. It also asserts that `migration-gate`
+ *    records the schema and `manual-app-deploy` checks it. Dropping any of
+ *    them would look like a tidy-up in review and would let a deploy move
+ *    production backwards.
  *
  * The file keeps its #2874 name so `check:contracts` and the history still
  * point at it.
@@ -78,6 +103,29 @@ export const DEPLOY_ENVIRONMENT = "production";
 export function taskFor(service) {
   return `deploy:${service}`;
 }
+
+/**
+ * The service `migration-gate` records once every store carries a commit's
+ * migrations.
+ */
+export const SCHEMA_SERVICE = "schema";
+
+/**
+ * The directories whose files a store's ledger lists once applied: Atlas's
+ * revision table for Postgres and the ClickHouse migrator's ledger. Neo4j
+ * re-applies one idempotent schema.cypher and keeps no ledger.
+ */
+export const MIGRATION_DIRS = [
+  "packages/database/atlas/migrations",
+  "packages/telemetry/src/migrations",
+];
+
+/**
+ * Services that open no database connection, so the schema never holds
+ * their deploy back: deploy-web publishes static files (its header says why
+ * it is not gated on migration-gate), and `desktop` dispatches a build.
+ */
+export const SCHEMA_FREE_SERVICES = ["web", "desktop"];
 
 const short = (sha) => (sha ? sha.slice(0, 9) : "none");
 
@@ -164,6 +212,54 @@ export function decide({ sha, live, relation, tip, error }) {
         warning: `unexpected compare status "${relation}"`,
       };
   }
+}
+
+/** Every file in `applied` that `contained` lacks, sorted. */
+export function missingMigrations(applied, contained) {
+  const have = new Set(contained);
+  return [...new Set(applied)].filter((file) => !have.has(file)).sort();
+}
+
+/**
+ * Whether `sha`'s code may run against production's schema, separated from
+ * I/O like `decide`.
+ *
+ * @param {{
+ *   sha: string,
+ *   mark: string | null,
+ *   missing?: string[],
+ *   error?: string,
+ * }} input
+ *   `mark` is the commit last recorded as production's schema, or null when
+ *   none is. `missing` lists the migration files it holds that `sha` lacks.
+ *   `error` says an API call could not answer.
+ * @returns {{ deploy: boolean, reason: string, warning?: string }}
+ */
+export function decideSchema({ sha, mark, missing = [], error }) {
+  if (error) {
+    return {
+      deploy: true,
+      reason: `could not read production's schema (${error}); deploying ${short(sha)} rather than blocking on the API`,
+      warning: `check-deploy-tip could not read production's schema: ${error}`,
+    };
+  }
+  if (!mark) {
+    return {
+      deploy: true,
+      reason: `nothing is recorded as production's schema yet; deploying ${short(sha)}`,
+    };
+  }
+  if (missing.length === 0) {
+    return {
+      deploy: true,
+      reason: `${short(sha)} carries every migration production's schema holds (recorded at ${short(mark)})`,
+    };
+  }
+  return {
+    deploy: false,
+    reason: `production's schema, recorded at ${short(mark)}, holds ${missing.length} migration(s) that ${short(sha)} lacks, so its code would query a schema it does not know (#5247): ${missing.join(", ")}`,
+    warning: `production's schema is ahead of ${short(sha)}; ship a commit that carries its migrations instead (docs/runbooks/deploy-order.md)`,
+  };
 }
 
 /**
@@ -290,6 +386,71 @@ export async function readOrder({
     return { sha, live, relation: compared.relation };
   const { tip } = await readMainTip(io);
   return { sha, live, relation: "diverged", tip };
+}
+
+/**
+ * The contents API lists at most this many entries of a directory, so a
+ * listing this long may be cut short.
+ */
+const CONTENTS_LIMIT = 1000;
+
+/** The `.sql` files under MIGRATION_DIRS at `ref`, as paths. Never throws. */
+export async function readMigrations({
+  repository,
+  token,
+  ref,
+  fetchImpl = fetch,
+  timeoutMs = API_TIMEOUT_MS,
+}) {
+  const files = [];
+  for (const dir of MIGRATION_DIRS) {
+    const { body, error } = await github({
+      path: `/repos/${repository}/contents/${dir}?ref=${encodeURIComponent(ref)}`,
+      token,
+      fetchImpl,
+      timeoutMs,
+    });
+    const at = `listing ${dir} at ${short(ref)}`;
+    if (error) return { error: `${at}: ${error}` };
+    if (!Array.isArray(body)) return { error: `${at}: not a directory` };
+    if (body.length >= CONTENTS_LIMIT)
+      return { error: `${at}: ${body.length} entries may be a cut-short list` };
+    for (const entry of body) {
+      if (entry?.type === "file" && /\.sql$/.test(entry?.name ?? ""))
+        files.push(`${dir}/${entry.name}`);
+    }
+  }
+  return { files };
+}
+
+/**
+ * Everything `decideSchema` needs, read from the API. Never throws. When the
+ * schema is recorded at `sha` itself, as it is in every push run whose own
+ * gate just passed, nothing is listed.
+ */
+export async function readSchema({
+  repository,
+  token,
+  sha,
+  fetchImpl = fetch,
+  timeoutMs = API_TIMEOUT_MS,
+}) {
+  const io = { repository, token, fetchImpl, timeoutMs };
+  const { live: mark, error } = await readLive({
+    ...io,
+    service: SCHEMA_SERVICE,
+  });
+  if (error) return { sha, mark: null, error };
+  if (!mark || mark === sha) return { sha, mark, missing: [] };
+  const applied = await readMigrations({ ...io, ref: mark });
+  if (applied.error) return { sha, mark, error: applied.error };
+  const contained = await readMigrations({ ...io, ref: sha });
+  if (contained.error) return { sha, mark, error: contained.error };
+  return {
+    sha,
+    mark,
+    missing: missingMigrations(applied.files, contained.files),
+  };
 }
 
 /**
@@ -441,6 +602,26 @@ export function guardProblems(yaml) {
       );
     }
   }
+  const gate = jobBlock(yaml, "migration-gate") ?? "";
+  if (
+    !/\n {10}DEPLOY_SERVICE: schema\n {8}run: node tools\/scripts\/check-deploy-tip\.mjs --record\n/.test(
+      gate,
+    ) ||
+    !/\n {6}deployments: write\n/.test(gate)
+  ) {
+    problems.push(
+      "migration-gate: no step records production's schema (`DEPLOY_SERVICE: schema`, `check-deploy-tip.mjs --record`, `deployments: write`); a deploy could then ship code older than the schema (#5247)",
+    );
+  }
+  const manual = jobBlock(yaml, "manual-app-deploy") ?? "";
+  if (
+    !manual.includes('check-deploy-tip.mjs" --schema') ||
+    !/\n {6}deployments: read\n/.test(manual)
+  ) {
+    problems.push(
+      "manual-app-deploy: no step runs `check-deploy-tip.mjs --schema` with `deployments: read`; a dispatch could then ship code older than the schema (#5247)",
+    );
+  }
   return problems;
 }
 
@@ -462,6 +643,27 @@ if (isEntrypoint) {
     console.log(
       "check-deploy-tip: every deploy job ships forward only, holds a per-service lock and records what shipped.",
     );
+  } else if (process.argv.includes("--schema")) {
+    // manual-app-deploy ships the dispatch's input. GITHUB_SHA is main's head
+    // there, and a workflow cannot override it.
+    const sha = process.env.SOURCE_COMMIT || process.env.GITHUB_SHA;
+    const repository = process.env.GITHUB_REPOSITORY;
+    const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
+    if (!sha || !repository || !token) {
+      console.error(
+        "check-deploy-tip --schema: SOURCE_COMMIT, GITHUB_REPOSITORY and GH_TOKEN must be set",
+      );
+      process.exit(1);
+    }
+    const verdict = decideSchema(await readSchema({ repository, token, sha }));
+    if (verdict.warning) console.log(`::warning::${verdict.warning}`);
+    if (!verdict.deploy) {
+      console.log(
+        `::error::refusing to deploy ${short(sha)}: ${verdict.reason}`,
+      );
+      process.exit(1);
+    }
+    console.log(verdict.reason);
   } else {
     const sha = process.env.GITHUB_SHA;
     const repository = process.env.GITHUB_REPOSITORY;
@@ -474,6 +676,20 @@ if (isEntrypoint) {
       process.exit(1);
     }
     if (process.argv.includes("--record")) {
+      // The schema record never drops a migration: a re-run of an older gate
+      // records nothing when a newer gate's commit holds a file it lacks. An
+      // API that cannot answer records, like every other failure here.
+      const held =
+        service === SCHEMA_SERVICE
+          ? decideSchema(await readSchema({ repository, token, sha }))
+          : null;
+      if (held && !held.deploy) {
+        console.log(
+          `::warning::not recording production's schema at ${short(sha)}: ${held.reason}`,
+        );
+        process.exit(0);
+      }
+      if (held?.warning) console.log(`::warning::${held.warning}`);
       const runUrl =
         process.env.GITHUB_SERVER_URL && process.env.GITHUB_RUN_ID
           ? `${process.env.GITHUB_SERVER_URL}/${repository}/actions/runs/${process.env.GITHUB_RUN_ID}`
@@ -487,7 +703,8 @@ if (isEntrypoint) {
       });
       if (recorded.error) {
         // A missing record is safe: the next run compares against an older
-        // one, finds itself ahead, and deploys.
+        // one, finds itself ahead, and deploys. A missing schema record
+        // leaves the older one in place until the next gate records.
         console.log(
           `::warning::check-deploy-tip could not record ${service} at ${short(sha)} as live: ${recorded.error}`,
         );
@@ -498,8 +715,25 @@ if (isEntrypoint) {
       }
     } else {
       const order = await readOrder({ repository, token, sha, service });
-      const verdict = decide(order);
+      let verdict = decide(order);
       if (verdict.warning) console.log(`::warning::${verdict.warning}`);
+      if (verdict.deploy && !SCHEMA_FREE_SERVICES.includes(service)) {
+        const schema = decideSchema(
+          await readSchema({ repository, token, sha }),
+        );
+        if (schema.warning) console.log(`::warning::${schema.warning}`);
+        if (schema.deploy) {
+          console.log(`schema: ${schema.reason}`);
+        } else {
+          verdict = schema;
+          if (process.env.GITHUB_STEP_SUMMARY) {
+            appendFileSync(
+              process.env.GITHUB_STEP_SUMMARY,
+              `### ${service} did not deploy\n\n${schema.reason}\n\n`,
+            );
+          }
+        }
+      }
       console.log(
         `${verdict.deploy ? "deploying" : "::notice::skipping the deploy"} ${service}: ${verdict.reason}`,
       );

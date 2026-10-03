@@ -78,7 +78,7 @@ export function StubDialog({
       primary={primary}
       stub
     >
-      <p className="text-sm text-muted-foreground">{body}</p>
+      <p className="text-base text-muted-foreground">{body}</p>
     </DetailsDialog>
   );
 }

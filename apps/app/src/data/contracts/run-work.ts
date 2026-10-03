@@ -75,20 +75,21 @@ const runCapturedDiffSchema = z
     observedAt: z.string(),
   })
   .strict();
+/** Null counts: the forge listed the file without line counts (ADR-292). */
 const runPrDiffFileSchema = z
   .object({
     path: z.string(),
     previousPath: z.string().nullable(),
     status: z.string(),
-    additions: z.number(),
-    deletions: z.number(),
+    additions: z.number().nullable(),
+    deletions: z.number().nullable(),
     patch: z.string().nullable(),
   })
   .strict();
 /**
- * The issues a pull request closes on merge, as GitHub records them (closing
- * keywords and sidebar links). Null when they could not be read, so an unread
- * list never reads as "closes nothing".
+ * The issues a pull request closes on merge, from the forge store's issue
+ * links. Null when they were never read, so an unread list never reads as
+ * "closes nothing".
  */
 const runPrClosingIssuesSchema = z
   .object({

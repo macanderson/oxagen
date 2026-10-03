@@ -83,7 +83,7 @@ const SegmentedControlItem = React.forwardRef<
   <Toggle
     ref={ref}
     className={cn(
-      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1 text-sm font-medium",
+      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1 text-base font-medium",
       // Fallback matches --motion-base's own value, for the (unexpected) case
       // where @oxagen/ui's globals.css is not loaded.
       "ring-offset-background transition-all duration-[var(--motion-base,220ms)]",

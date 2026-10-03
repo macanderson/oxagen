@@ -97,7 +97,7 @@ export function RationalePicker({
 
   const fieldId = `${idPrefix}-rationale`;
   const label = (
-    <label htmlFor={fieldId} className="text-[11px] text-muted-foreground">
+    <label htmlFor={fieldId} className="text-xs text-muted-foreground">
       Rationale
     </label>
   );

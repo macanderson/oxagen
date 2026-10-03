@@ -1,0 +1,47 @@
+{
+  "window": {
+    "start": "583d7f87f89874ae7dcb0a162b19387c38733aa1",
+    "startMeaning": "last main commit before 2026-09-17T00:00Z (#3135)",
+    "end": "11cc318c11b0db2bce87b907ece557cece01581f",
+    "endMeaning": "the #3556 merge",
+    "now": "f080863dac4493aae6bb329730f1343dfc2cc76b"
+  },
+  "commits": 184,
+  "prSquashes": 177,
+  "mergeCommitsPushedToMain": 2,
+  "directPushesSkipped": 5,
+  "commitsWithCandidates": 65,
+  "candidates": 745,
+  "candidatesByChange": {
+    "removed": 663,
+    "readded": 68,
+    "binary": 14
+  },
+  "candidatesInOriginalWindowThrough79d393a334": 507,
+  "clearedAutomatically": 381,
+  "reviewedByHand": 364,
+  "liveRevertsFound": 1,
+  "liveRevertIds": [
+    "C0511"
+  ],
+  "liveRevertsInCode": 0,
+  "rawCandidatesSha256": "17dc5d7f227b9cf87b85675c7bfbe24ad9afa8f4068938844b367f4a8460caef",
+  "originalMethodRerun": {
+    "tip": "79d393a33480b440779594534d7c0b1c47501a23",
+    "since": "2026-09-17T14:30:00-07:00",
+    "commits": 87,
+    "pairsCompared": 84,
+    "pairsSkipped": 2,
+    "rawHits": 19,
+    "generatedFileHits": 10
+  },
+  "treeSearchExcludes": [
+    "docs/reviews/**",
+    "docs/audits/**",
+    ".agent/**",
+    "CHANGELOG.md",
+    "releases/**",
+    ".design-sync/**",
+    "apps/app_deprecated/**"
+  ]
+}

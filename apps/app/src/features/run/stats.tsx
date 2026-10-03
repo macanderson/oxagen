@@ -91,7 +91,7 @@ function Involved({
         notRecorded={t("notRecorded")}
         sub={sub === "" ? t("header.harnessNotRecorded") : sub}
       />
-      <span className="font-mono text-sm text-dim">
+      <span className="font-mono text-xs text-dim">
         {t("summary.onBehalfOf")}
       </span>
       <span
@@ -127,7 +127,7 @@ function Involved({
                     t(`facts.operatorKind.${run.operatorKind}`)
                   ))}
               </b>
-              <span className="truncate font-mono text-sm text-dim">
+              <span className="truncate font-mono text-xs text-dim">
                 {/* A wrapped session's operator can be the person who
                     enrolled the host rather than one who started the run,
                     and the record says which. */}
@@ -203,12 +203,12 @@ export function SummaryPanel({
           {t("summary.title")}
         </h2>
         <Badge tone="quiet" dot={false}>
-          <span className="text-sm">{t("summary.generated")}</span>
+          <span className="text-xs">{t("summary.generated")}</span>
         </Badge>
       </div>
       <Involved run={run} agent={agent} place={place} />
       {summary === null ? (
-        <p className="mb-2.5 mt-3 max-w-[78ch] text-sm text-muted-foreground">
+        <p className="mb-2.5 mt-3 max-w-[78ch] text-base text-muted-foreground">
           {t("noSummary")}
         </p>
       ) : (
@@ -222,12 +222,12 @@ export function SummaryPanel({
       {run.enrichmentError === undefined ? null : (
         <p
           data-testid="run-summary-failed"
-          className="mb-2.5 text-xs text-muted-foreground"
+          className="mb-2.5 text-sm text-muted-foreground"
         >
           {t("summaryFailed", { reason: run.enrichmentError })}
         </p>
       )}
-      <div className="mt-[13px] flex flex-wrap items-center gap-2.5 border-t border-border pt-[11px] font-mono text-sm text-dim">
+      <div className="mt-[13px] flex flex-wrap items-center gap-2.5 border-t border-border pt-[11px] font-mono text-xs text-dim">
         <span className="min-w-0 flex-1">
           {summary === null ? (
             t("summary.notGenerated")
@@ -264,7 +264,7 @@ export function SummaryPanel({
         />
         <SafeLink
           to={routes.run(place.org, place.ws, run.id, { tab: "actions" })}
-          className={`${buttonSecondary} min-h-7 px-2.5 font-mono text-xs`}
+          className={`${buttonSecondary} min-h-7 px-2.5 font-mono text-sm`}
         >
           {t("summary.check")}
         </SafeLink>
@@ -376,7 +376,7 @@ export function StatRow({
         label={t("cost")}
         note={
           displayedCost === null ? undefined : (
-            <span className="font-mono text-sm text-dim">
+            <span className="font-mono text-xs text-dim">
               {metrics.cost === null
                 ? t("provisional")
                 : // A rebuilt run's cost is the rollup's price-book

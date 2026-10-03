@@ -314,7 +314,7 @@ export function McpServerList({
                     {server.title ?? server.name}
                   </p>
                   {server.description && (
-                    <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
+                    <p className="mt-0.5 text-sm text-muted-foreground line-clamp-1">
                       {server.description}
                     </p>
                   )}
@@ -322,10 +322,10 @@ export function McpServerList({
               </div>
               <dl className="flex flex-wrap items-center gap-x-6 gap-y-2">
                 <div className="min-w-0">
-                  <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Endpoint
                   </dt>
-                  <dd className="mt-0.5 max-w-[240px] truncate text-xs text-muted-foreground">
+                  <dd className="mt-0.5 max-w-[240px] truncate text-sm text-muted-foreground">
                     {server.endpointUrl || "—"}
                     {server.transport && (
                       <Badge variant="outline" size="sm" className="ml-2">
@@ -335,7 +335,7 @@ export function McpServerList({
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Auth
                   </dt>
                   <dd className="mt-0.5">
@@ -354,7 +354,7 @@ export function McpServerList({
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Status
                   </dt>
                   <dd className="mt-0.5 flex flex-wrap items-center gap-2">
@@ -423,7 +423,7 @@ export function McpServerList({
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Enabled
                   </dt>
                   <dd className="mt-0.5">
@@ -452,7 +452,7 @@ export function McpServerList({
                 </button>
               </div>
               {errors[server.id] && (
-                <p className="text-xs text-destructive sm:basis-full">
+                <p className="text-sm text-destructive sm:basis-full">
                   {errors[server.id]}
                 </p>
               )}

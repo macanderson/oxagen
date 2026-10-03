@@ -113,7 +113,7 @@ function TokenUse({
   if (row === null) {
     return (
       <Panel id="agent-token-use" title={t("title")}>
-        <p className="text-sm text-muted-foreground">{t("none")}</p>
+        <p className="text-base text-muted-foreground">{t("none")}</p>
       </Panel>
     );
   }
@@ -125,7 +125,7 @@ function TokenUse({
       aside={
         <span
           data-testid="token-badge"
-          className={`${mono} text-sm text-muted-foreground`}
+          className={`${mono} text-xs text-muted-foreground`}
         >
           {t("badge", { tokens: n(r.total) })}
           {" · "}
@@ -388,7 +388,7 @@ function Coaching({
       <div className="-mx-4 -mb-4 border-t border-border px-4 py-3">
         <SafeLink
           to={routes.spend(org, ws, { tab: "findings" })}
-          className={`${linkText} text-sm`}
+          className={`${linkText} text-base`}
         >
           {t("all")}
         </SafeLink>

@@ -109,11 +109,11 @@ export async function GraphHero({
     <div className="flex items-center justify-between gap-3">
       <div className="flex items-center gap-2">
         <Network className="size-4 text-muted-foreground" aria-hidden="true" />
-        <h2 className="text-sm font-medium text-foreground">Knowledge graph</h2>
+        <h2 className="text-base font-medium text-foreground">Knowledge graph</h2>
       </div>
       <Link
         href={exploreHref}
-        className="text-sm font-medium text-primary hover:underline"
+        className="text-base font-medium text-primary hover:underline"
       >
         Explore graph →
       </Link>
@@ -152,7 +152,7 @@ export async function GraphHero({
           action={
             <Link
               href={sourcesHref}
-              className="text-sm font-medium text-primary hover:underline"
+              className="text-base font-medium text-primary hover:underline"
             >
               Connect a source →
             </Link>
@@ -170,7 +170,7 @@ export async function GraphHero({
                 {/* Wrap to two lines rather than truncate — these tiles are
                       narrow enough that a two-word label clips even on a
                       desktop viewport. */}
-                <span className="flex items-start gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <span className="flex items-start gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   <Icon
                     className="mt-px size-3.5 shrink-0"
                     aria-hidden="true"
@@ -187,7 +187,7 @@ export async function GraphHero({
           {/* Node-creation growth */}
           <div className="rounded-xl border border-border bg-card p-3">
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 New nodes
               </span>
               {growth ? (
@@ -224,7 +224,7 @@ export async function GraphHero({
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Growth trend unavailable.
               </p>
             )}

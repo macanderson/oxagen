@@ -99,7 +99,7 @@ export function MandateBar({ authority }: { authority: MandateAuthority }) {
             periodKey: authority.periodKey,
           })}
         </span>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           {t.rich("of", { limit: () => <Measure value={perPeriod} /> })}
         </span>
       </div>
@@ -121,7 +121,7 @@ export function MandateBar({ authority }: { authority: MandateAuthority }) {
           />
         ) : null}
       </div>
-      <dl className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+      <dl className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-sm">
         <div className="flex gap-1">
           <dt className="text-muted-foreground">{t("settled")}</dt>
           <dd>
@@ -146,7 +146,7 @@ export function MandateBar({ authority }: { authority: MandateAuthority }) {
         )}
       </dl>
       {over ? (
-        <p data-state="over-limit" className="mt-1 text-xs text-foreground">
+        <p data-state="over-limit" className="mt-1 text-sm text-foreground">
           {t("overLimit")}
         </p>
       ) : null}

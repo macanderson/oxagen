@@ -77,7 +77,7 @@ export function Reconnect({
       <p
         role="status"
         data-testid={`work-reconnect-status-${name}`}
-        className="text-sm text-muted-foreground"
+        className="text-base text-muted-foreground"
       >
         {queued ? t("reconnectQueued", { name }) : null}
       </p>

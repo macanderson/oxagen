@@ -104,7 +104,7 @@ const SHAPE: Record<AvatarSubject, AvatarShape> = {
 const segment =
   "inline-flex max-w-full overflow-hidden rounded-lg border border-input-border bg-input-bg";
 const segmentButton =
-  "min-h-9 border-r border-input-border px-3 text-sm font-medium text-muted-foreground last:border-r-0 aria-pressed:bg-secondary aria-pressed:font-semibold aria-pressed:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring";
+  "min-h-9 border-r border-input-border px-3 text-base font-medium text-muted-foreground last:border-r-0 aria-pressed:bg-secondary aria-pressed:font-semibold aria-pressed:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring";
 
 const FONT_FACE: Record<AvatarFont, string> = {
   sans: "font-sans",
@@ -360,7 +360,7 @@ function AvatarEditor({
               shape={shape}
             />
           </div>
-          <p className="break-words text-center font-mono text-sm leading-snug text-muted-foreground">
+          <p className="break-words text-center font-mono text-xs leading-snug text-muted-foreground">
             {describe}
           </p>
         </div>
@@ -427,7 +427,7 @@ function AvatarEditor({
                 <input
                   id={lettersId}
                   data-testid="avatar-letters"
-                  className={`${inputBase} w-[120px] text-base tracking-[0.08em] ${FONT_FACE[draft.font]}`}
+                  className={`${inputBase} w-[120px] text-lg tracking-[0.08em] ${FONT_FACE[draft.font]}`}
                   value={draft.text}
                   maxLength={INITIALS_MAX}
                   autoCapitalize="characters"
@@ -522,7 +522,7 @@ function AvatarEditor({
         </div>
       </div>
 
-      <p className="mt-4 border-l-2 border-brand pl-3 text-xs leading-relaxed text-muted-foreground">
+      <p className="mt-4 border-l-2 border-brand pl-3 text-sm leading-relaxed text-muted-foreground">
         {t.rich(`notes.${subject}`, {
           code: (chunks) => <span className="font-mono">{chunks}</span>,
         })}

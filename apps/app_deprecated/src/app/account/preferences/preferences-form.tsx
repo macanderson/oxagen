@@ -156,7 +156,7 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
       <section aria-labelledby="appearance-heading">
         <h2
           id="appearance-heading"
-          className="mb-4 text-sm font-semibold uppercase tracking-widest text-muted-foreground"
+          className="mb-4 text-base font-semibold uppercase tracking-widest text-muted-foreground"
         >
           Appearance
         </h2>
@@ -175,7 +175,7 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
               <SegmentedControlItem value="medium">Medium</SegmentedControlItem>
               <SegmentedControlItem value="large">Large</SegmentedControlItem>
             </SegmentedControl>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Scales the base text size across the whole interface.
             </p>
           </div>
@@ -199,7 +199,7 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
                 Spacious
               </SegmentedControlItem>
             </SegmentedControl>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Controls spacing and padding in dense lists and the chat
               interface.
             </p>
@@ -213,7 +213,7 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
       <section aria-labelledby="agent-heading">
         <h2
           id="agent-heading"
-          className="mb-4 text-sm font-semibold uppercase tracking-widest text-muted-foreground"
+          className="mb-4 text-base font-semibold uppercase tracking-widest text-muted-foreground"
         >
           Interactive agent
         </h2>
@@ -235,7 +235,7 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
                 ⌘+Enter sends
               </SegmentedControlItem>
             </SegmentedControl>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {enterToSubmit
                 ? "Enter sends the message. Shift+Enter adds a new line."
                 : "Enter adds a new line. ⌘/Ctrl+Enter sends the message."}
@@ -262,7 +262,7 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
                 Interrupt the response
               </SegmentedControlItem>
             </SegmentedControl>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {pendingPromptBehavior === "queue"
                 ? "Your next prompt will run after the current response finishes."
                 : "The current response will be stopped and your new prompt will run immediately."}
@@ -288,7 +288,7 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
       <section aria-labelledby="regional-heading">
         <h2
           id="regional-heading"
-          className="mb-4 text-sm font-semibold uppercase tracking-widest text-muted-foreground"
+          className="mb-4 text-base font-semibold uppercase tracking-widest text-muted-foreground"
         >
           Regional
         </h2>
@@ -322,7 +322,7 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
                 </SelectGroup>
               </SelectPopup>
             </Select>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Used for displaying dates and times across the platform.
             </p>
           </div>
@@ -355,7 +355,7 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
                 </SelectGroup>
               </SelectPopup>
             </Select>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Sets your preferred display language.
             </p>
           </div>
@@ -370,7 +370,7 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
           {isSaving ? "Saving…" : "Save preferences"}
         </Button>
         {status === "saved" && (
-          <span className="text-xs text-muted-foreground" role="status">
+          <span className="text-sm text-muted-foreground" role="status">
             Saved
           </span>
         )}

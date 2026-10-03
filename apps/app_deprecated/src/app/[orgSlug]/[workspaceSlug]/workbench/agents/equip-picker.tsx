@@ -99,7 +99,7 @@ function EquipRow({
       <div className="min-w-0 flex flex-col gap-0.5">
         <span className="font-medium text-foreground truncate">{title}</span>
         {subtitle ? (
-          <span className="text-xs text-muted-foreground truncate">
+          <span className="text-sm text-muted-foreground truncate">
             {subtitle}
           </span>
         ) : null}
@@ -132,7 +132,7 @@ function EquipRow({
 
 function EmptyPool({ label }: { label: string }) {
   return (
-    <p className="px-1 py-6 text-center text-xs text-muted-foreground">
+    <p className="px-1 py-6 text-center text-sm text-muted-foreground">
       No {label} available in this workspace.
     </p>
   );
@@ -170,21 +170,21 @@ export function EquipPicker({
                 <>
                   <Badge
                     variant={riskVariant(t.riskLevel)}
-                    className="text-[10px]"
+                    className="text-xs"
                   >
                     {t.riskLevel} risk
                   </Badge>
                   {t.requiresApproval ? (
                     <Badge
                       variant="outline"
-                      className="inline-flex items-center gap-1 text-[10px]"
+                      className="inline-flex items-center gap-1 text-xs"
                     >
                       <ShieldAlert className="h-3 w-3" aria-hidden="true" />
                       approval
                     </Badge>
                   ) : null}
                   {t.external ? (
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" className="text-xs">
                       external
                     </Badge>
                   ) : null}
@@ -211,7 +211,7 @@ export function EquipPicker({
               subtitle={m.description ?? m.name}
               meta={
                 !m.enabled ? (
-                  <Badge variant="outline" className="text-[10px]">
+                  <Badge variant="outline" className="text-xs">
                     disabled
                   </Badge>
                 ) : undefined

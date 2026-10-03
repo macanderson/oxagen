@@ -187,17 +187,17 @@ export function MemoryPromotionQueue({
         />
         <h2
           id="memory-promotion-queue-heading"
-          className="text-sm font-semibold text-foreground"
+          className="text-base font-semibold text-foreground"
         >
           Promotion Candidates
         </h2>
         {candidates.length > 0 && (
-          <span className="inline-flex items-center rounded-full bg-amber-500/12 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+          <span className="inline-flex items-center rounded-full bg-amber-500/12 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
             {candidates.length}
           </span>
         )}
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         Memories flagged as promotion-worthy by citation pressure, awaiting
         review. Promoting to Fact requires explicit confirmation — it represents
         a human-confirmed, org-wide truth, not just policy.
@@ -243,7 +243,7 @@ export function MemoryPromotionQueue({
                   </Button>
                 )}
               </div>
-              <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
                 <span>
                   {candidate.citationCount} citation
                   {candidate.citationCount === 1 ? "" : "s"}
@@ -357,7 +357,7 @@ function PromotionConfirmFlow({
 
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border/60 p-3">
-      <p className="text-xs font-medium text-foreground">
+      <p className="text-sm font-medium text-foreground">
         Promote to {CLASS_CONFIG[target].label}
       </p>
 
@@ -365,7 +365,7 @@ function PromotionConfirmFlow({
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor={`queue-promote-enforcement-${candidate.id}`}
-            className="text-[11px] text-muted-foreground"
+            className="text-xs text-muted-foreground"
           >
             Enforcement:{" "}
             <span className="tabular-nums">{enforcementScore}</span>
@@ -394,7 +394,7 @@ function PromotionConfirmFlow({
           />
           <label
             htmlFor={`queue-promote-fact-confirm-${candidate.id}`}
-            className="text-[11px] text-foreground"
+            className="text-xs text-foreground"
           >
             I confirm this is a durable, org-wide fact — always fully enforced
             (100) and human-confirmed, not just policy. This cannot be casually
@@ -416,7 +416,7 @@ function PromotionConfirmFlow({
       />
 
       {error && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}

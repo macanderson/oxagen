@@ -82,7 +82,7 @@ export function CatalogView({
           value={filter.domain}
           onChange={(e) => setFilter((f) => ({ ...f, domain: e.target.value }))}
           aria-label="Filter by domain"
-          className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+          className="h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground"
         >
           <option value="">All domains</option>
           {domains.map((d) => (
@@ -112,7 +112,7 @@ export function CatalogView({
             </button>
           </Badge>
         ) : null}
-        <span className="ml-auto text-xs text-muted-foreground">
+        <span className="ml-auto text-sm text-muted-foreground">
           {filtered.length} of {rows.length} contracts
         </span>
       </div>
@@ -126,8 +126,8 @@ export function CatalogView({
         />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-muted/40 text-xs text-muted-foreground">
+          <table className="w-full text-left text-base">
+            <thead className="bg-muted/40 text-sm text-muted-foreground">
               <tr className="border-b border-border">
                 <th className="px-3 py-2 font-medium">Capability</th>
                 <th className="px-3 py-2 font-medium">Domain</th>
@@ -151,7 +151,7 @@ export function CatalogView({
                     <td className="px-3 py-2">
                       <button
                         type="button"
-                        className="font-mono text-xs text-foreground underline-offset-2 hover:underline"
+                        className="font-mono text-sm text-foreground underline-offset-2 hover:underline"
                         onClick={(e) => {
                           e.stopPropagation();
                           openRow(row);
@@ -160,7 +160,7 @@ export function CatalogView({
                         {row.name}
                       </button>
                     </td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">
+                    <td className="px-3 py-2 text-sm text-muted-foreground">
                       {row.domain}
                     </td>
                     <td className="px-3 py-2">
@@ -177,7 +177,7 @@ export function CatalogView({
                         ) : null}
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">
+                    <td className="px-3 py-2 text-sm text-muted-foreground">
                       {roles.length > 0 ? roles.join(", ") : row.defaultEffect}
                     </td>
                     <td className="px-3 py-2">

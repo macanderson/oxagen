@@ -66,7 +66,7 @@ export function MandateAuthorityList({
           {showWindow ? (
             <div
               data-window={entry.period}
-              className="text-xs text-muted-foreground"
+              className="text-sm text-muted-foreground"
             >
               {t("window", {
                 period: t(`period.${entry.period}`),

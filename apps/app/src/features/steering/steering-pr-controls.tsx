@@ -119,7 +119,7 @@ export function RefreshFromHost({
         <p
           role="status"
           data-found={found}
-          className="text-xs text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           {t(found)}
         </p>
@@ -202,7 +202,7 @@ export function CloneCommands({
         }
       >
         <div className="flex flex-col gap-3">
-          <p className="text-sm text-foreground">{t("lead")}</p>
+          <p className="text-base text-foreground">{t("lead")}</p>
           <pre
             data-testid="clone-commands"
             className="overflow-x-auto rounded-[10px] border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-[1.6] text-foreground"
@@ -211,7 +211,7 @@ export function CloneCommands({
           </pre>
           {gh === null ? null : (
             <div className="flex flex-col gap-1.5">
-              <p className="text-sm text-foreground">{t("ghLead")}</p>
+              <p className="text-base text-foreground">{t("ghLead")}</p>
               <pre
                 data-testid="clone-gh"
                 className="overflow-x-auto rounded-[10px] border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-[1.6] text-foreground"
@@ -231,7 +231,7 @@ export function CloneCommands({
             </div>
           )}
           {copied === "failed" ? (
-            <p role="alert" className="text-xs text-error-ink">
+            <p role="alert" className="text-sm text-error-ink">
               {t("copyFailed")}
             </p>
           ) : null}

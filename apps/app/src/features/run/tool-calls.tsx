@@ -40,15 +40,15 @@ const familyIcon =
 const familyName =
   "whitespace-nowrap text-sm font-semibold text-foreground md:truncate";
 const familyTools =
-  "whitespace-nowrap font-mono text-sm text-muted-foreground md:truncate";
+  "whitespace-nowrap font-mono text-xs text-muted-foreground md:truncate";
 /** `.hrow { grid-template-columns:8ch 1fr auto; gap:9px; font-size:11.5px; color:var(--muted) }` */
 const histRow =
-  "grid grid-cols-[8ch_minmax(0,1fr)_auto] items-center gap-[9px] text-sm text-muted-foreground";
+  "grid grid-cols-[8ch_minmax(0,1fr)_auto] items-center gap-[9px] text-xs text-muted-foreground";
 /** `.hrow .hk`, `.hrow .hv { font-family:var(--mono); font-size:11px }`; the value in the ink. */
-const histKey = "font-mono text-sm";
-const histValue = "font-mono text-sm tabular-nums text-foreground";
+const histKey = "font-mono text-xs";
+const histValue = "font-mono text-xs tabular-nums text-foreground";
 /** `.spec .sv { font-size:22px; font-weight:700; letter-spacing:-.02em; margin-bottom:7px }` */
-const specValue = "mb-[7px] text-2xl font-bold tracking-[-0.02em]";
+const specValue = "mb-[7px] text-xl font-bold tracking-[-0.02em]";
 /** `.stk { height:8px; border-radius:4px }` drawn as an empty track: no prefetch was recorded to fill it. */
 const emptyTrack = "block h-2 rounded bg-hl";
 
@@ -235,7 +235,7 @@ export function ToolCalls({ metrics }: { metrics: RunMetrics }) {
       flush
       aside={
         toolCalls === null || families === null ? undefined : (
-          <span className="font-mono text-sm text-dim">
+          <span className="font-mono text-xs text-dim">
             {t("tally", {
               calls: toolCalls.count,
               // `batches` is null only for a run with no tool call, which ran
@@ -261,7 +261,7 @@ export function ToolCalls({ metrics }: { metrics: RunMetrics }) {
           ) : (
             <FamilyTable families={families} />
           )}
-          <p className="mb-0 mt-[9px] text-sm text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground">
+          <p className="mb-0 mt-[9px] text-xs text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground">
             {t.rich("familyNote", { b: (chunks) => <b>{chunks}</b> })}
           </p>
         </div>

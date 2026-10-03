@@ -52,23 +52,23 @@ function AgentInfoBody({
           size="md"
           shape="square"
         />
-        <span className="text-sm font-medium text-foreground">
+        <span className="text-base font-medium text-foreground">
           {agent.name}
         </span>
       </div>
       {description ? (
-        <p className="text-sm text-muted-foreground">{description}</p>
+        <p className="text-base text-muted-foreground">{description}</p>
       ) : null}
       {agent.toolRefs.length > 0 ? (
         <div className="flex flex-col gap-1">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Skills
           </span>
           <ul className="flex flex-col gap-1">
             {agent.toolRefs.map((t, i) => (
               <li
                 key={`${t.type}:${t.ref}:${i}`}
-                className="text-sm text-foreground"
+                className="text-base text-foreground"
               >
                 {prettifyRef(t.ref)}
               </li>

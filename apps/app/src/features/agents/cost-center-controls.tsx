@@ -127,9 +127,9 @@ export function ChargeAgent({
         testId={TEST_ID}
       >
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">{t("body")}</p>
+          <p className="text-base text-muted-foreground">{t("body")}</p>
           {offer.state === "loading" ? (
-            <p data-state="loading" className="text-sm text-muted-foreground">
+            <p data-state="loading" className="text-base text-muted-foreground">
               {t("loading")}
             </p>
           ) : null}
@@ -139,12 +139,12 @@ export function ChargeAgent({
             </FormAlert>
           ) : null}
           {empty ? (
-            <p data-state="empty" className="text-sm text-foreground">
+            <p data-state="empty" className="text-base text-foreground">
               {t("empty")}
             </p>
           ) : null}
           {centers !== null && !empty ? (
-            <div className="flex flex-col gap-1 text-sm text-foreground">
+            <div className="flex flex-col gap-1 text-base text-foreground">
               <label htmlFor={`${TEST_ID}-label`}>{t("field")}</label>
               <select
                 id={`${TEST_ID}-label`}

@@ -39,7 +39,7 @@ const code = (chunks: ReactNode) => <span className={mono}>{chunks}</span>;
 function Property({ name, children }: { name: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <dt className="text-sm text-muted-foreground">{name}</dt>
+      <dt className="text-xs text-muted-foreground">{name}</dt>
       <dd className="flex min-h-6 items-center">{children}</dd>
     </div>
   );
@@ -84,7 +84,7 @@ export function Header({
         <div className="flex items-start gap-3">
           {record.kind === null ? null : <KindTile kind={record.kind} />}
           <div className="min-w-0">
-            <h1 className="min-w-0 max-w-[62ch] text-lg font-semibold leading-[1.35] text-foreground md:text-2xl">
+            <h1 className="min-w-0 max-w-[62ch] text-lg font-semibold leading-[1.35] text-foreground md:text-xl">
               {label}
             </h1>
             <p

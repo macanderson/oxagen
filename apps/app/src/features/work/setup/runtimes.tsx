@@ -192,7 +192,7 @@ export function RuntimesTab({
         </h2>
         <span
           data-testid="work-targets-ready"
-          className="text-xs text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           {t("runtimes.caption", { count: ready })}
         </span>

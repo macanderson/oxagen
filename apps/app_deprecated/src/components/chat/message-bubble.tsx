@@ -115,14 +115,14 @@ export function MessageBubble({
     >
       <div
         className={cn(
-          "max-w-[80%] px-4 py-3 text-sm shadow-sm",
+          "max-w-[80%] px-4 py-3 text-base shadow-sm",
           isUser
             ? "bg-accent text-accent-foreground"
             : "rounded-xl border bg-card",
         )}
         style={isUser ? { borderRadius: "16px 16px 4px 16px" } : undefined}
       >
-        <div className="mb-1 flex items-center gap-2 text-xs opacity-80">
+        <div className="mb-1 flex items-center gap-2 text-sm opacity-80">
           <span className="font-semibold capitalize">{message.role}</span>
           {message.branchReason ? (
             <Badge variant="muted">{message.branchReason}</Badge>

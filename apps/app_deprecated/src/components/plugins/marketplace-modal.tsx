@@ -370,7 +370,7 @@ export function MarketplaceModal({
                     setSelected(new Set());
                     setServers([]);
                   }}
-                  className={`flex items-center gap-2.5 px-4 py-2.5 text-sm text-left transition-colors ${
+                  className={`flex items-center gap-2.5 px-4 py-2.5 text-base text-left transition-colors ${
                     isActive
                       ? "bg-muted/60 text-foreground font-medium"
                       : "text-muted-foreground hover:bg-muted/30 hover:text-foreground"
@@ -401,7 +401,7 @@ export function MarketplaceModal({
                       key={k || "all"}
                       type="button"
                       onClick={() => setAuthFilter(k)}
-                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
+                      className={`rounded-full px-2.5 py-0.5 text-sm font-medium border transition-colors ${
                         authFilter === k
                           ? "bg-primary text-primary-foreground border-primary"
                           : "border-border/60 text-muted-foreground hover:border-foreground/40"
@@ -428,7 +428,7 @@ export function MarketplaceModal({
                     key={`installed-${k || "all"}`}
                     type="button"
                     onClick={() => setInstalledFilter(k)}
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
+                    className={`rounded-full px-2.5 py-0.5 text-sm font-medium border transition-colors ${
                       installedFilter === k
                         ? "bg-primary text-primary-foreground border-primary"
                         : "border-border/60 text-muted-foreground hover:border-foreground/40"
@@ -508,7 +508,7 @@ export function MarketplaceModal({
                     className={`flex-1 min-w-0 overflow-auto p-5 ${detailId ? "border-r border-border/40" : ""}`}
                   >
                     {error && (
-                      <p className="mb-4 text-sm text-destructive">{error}</p>
+                      <p className="mb-4 text-base text-destructive">{error}</p>
                     )}
                     {loading && servers.length === 0 ? (
                       <div
@@ -524,7 +524,7 @@ export function MarketplaceModal({
                       </div>
                     ) : (
                       <>
-                        <p className="mb-3 text-xs text-muted-foreground">
+                        <p className="mb-3 text-sm text-muted-foreground">
                           {total}{" "}
                           {value === "agent_capability" ||
                           value === "knowledge_source"
@@ -539,7 +539,7 @@ export function MarketplaceModal({
                         >
                           {servers.length === 0 && (
                             <p
-                              className="col-span-2 py-8 text-center text-sm text-muted-foreground"
+                              className="col-span-2 py-8 text-center text-base text-muted-foreground"
                               data-testid="marketplace-no-results"
                             >
                               No plugins found.
@@ -584,10 +584,10 @@ export function MarketplaceModal({
                                     size={32}
                                   />
                                   <div className="min-w-0">
-                                    <p className="truncate text-sm font-medium leading-tight">
+                                    <p className="truncate text-base font-medium leading-tight">
                                       {srv.title ?? srv.name}
                                     </p>
-                                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                                    <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">
                                       {srv.description}
                                     </p>
                                   </div>
@@ -703,7 +703,7 @@ export function MarketplaceModal({
           className="flex-shrink-0 border-t border-border/40 px-6 py-4"
           data-testid="marketplace-footer"
         >
-          <p className="mr-auto text-sm text-muted-foreground">
+          <p className="mr-auto text-base text-muted-foreground">
             {selected.size > 0
               ? `${selected.size} selected`
               : "Select plugins to bulk-install"}

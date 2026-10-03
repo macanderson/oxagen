@@ -103,12 +103,12 @@ export function Eligibility({
   const t = useTranslations("fleet.approvals.eligibility");
   if (eligibility === null)
     return (
-      <p data-testid="eligibility" className="text-xs text-muted-foreground">
+      <p data-testid="eligibility" className="text-sm text-muted-foreground">
         {t("none")}
       </p>
     );
   return (
-    <div data-testid="eligibility" className="flex flex-col gap-1 text-xs">
+    <div data-testid="eligibility" className="flex flex-col gap-1 text-sm">
       <p>
         {eligibility.ok
           ? t("ok", { rule: eligibility.ruleRef })
@@ -303,12 +303,12 @@ export function ApprovalDecision({
         testId="approval-decision"
       >
         <div className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">{t("body")}</p>
+          <p className="text-base text-muted-foreground">{t("body")}</p>
           <Eligibility eligibility={shown} />
           {fresh === null && unread === null ? (
             <p
               data-testid="eligibility-checking"
-              className="text-xs text-muted-foreground"
+              className="text-sm text-muted-foreground"
             >
               {t("checking")}
             </p>
@@ -316,7 +316,7 @@ export function ApprovalDecision({
           {unread === null ? null : (
             <p
               data-testid="eligibility-unread"
-              className="text-xs text-muted-foreground"
+              className="text-sm text-muted-foreground"
             >
               {t("eligibilityUnread", { code: unread })}
             </p>
@@ -326,7 +326,7 @@ export function ApprovalDecision({
               {t("settled", { by: settledBy })}
             </FormAlert>
           )}
-          <div className="flex flex-col gap-1 text-sm text-foreground">
+          <div className="flex flex-col gap-1 text-base text-foreground">
             <label htmlFor={noteId}>{t("note")}</label>
             <textarea
               id={noteId}
@@ -339,7 +339,7 @@ export function ApprovalDecision({
               }}
               className={textareaBase}
             />
-            <p className="text-xs text-muted-foreground">{t("noteHint")}</p>
+            <p className="text-sm text-muted-foreground">{t("noteHint")}</p>
           </div>
           {failure === null ? null : (
             <FormAlert testId="approval-decision-failure">

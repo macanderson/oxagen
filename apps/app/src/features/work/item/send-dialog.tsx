@@ -116,9 +116,9 @@ export function SendDialog({
       }
       submit={submit}
     >
-      <p className="text-sm text-muted-foreground">{t("body")}</p>
+      <p className="text-base text-muted-foreground">{t("body")}</p>
       {sendable.length === 0 ? (
-        <p data-testid="work-send-none" className="text-sm text-foreground">
+        <p data-testid="work-send-none" className="text-base text-foreground">
           {t("none")}
         </p>
       ) : (
@@ -144,7 +144,7 @@ export function SendDialog({
                 />
                 <span className="flex min-w-0 flex-col items-start gap-0.5 text-sm">
                   <span className="font-medium text-foreground">{target.name}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-sm text-muted-foreground">
                     {t("where", {
                       harness: target.harness,
                       runtime: target.runtime?.name ?? t("itsRuntime"),
@@ -154,7 +154,7 @@ export function SendDialog({
                     <EnforcementTierBadge tier={target.runtime.tier} />
                   )}
                   {line === null ? null : (
-                    <span className="text-xs text-muted-foreground">{line}</span>
+                    <span className="text-sm text-muted-foreground">{line}</span>
                   )}
                 </span>
               </label>
@@ -203,7 +203,7 @@ export function SendDialog({
           <dt className={kvTerm}>{t("key")}</dt>
           <dd className={kvValue}>
             <code className="font-mono break-all">{sendKey}</code>
-            <span className="block text-xs text-muted-foreground">{t("keyNote")}</span>
+            <span className="block text-sm text-muted-foreground">{t("keyNote")}</span>
           </dd>
         </dl>
       </section>

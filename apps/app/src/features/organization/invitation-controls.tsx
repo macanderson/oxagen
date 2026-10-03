@@ -140,7 +140,7 @@ export function InvitationControls({
             void act("revoke");
           }}
         >
-          <p className="text-sm">
+          <p className="text-base">
             {t.rich("confirmBody", {
               email,
               b: (chunks) => <b>{chunks}</b>,

@@ -100,7 +100,7 @@ export function BriefPanel({ detail }: { detail: WorkItemDetail }) {
             </Badge>
           )}
         </div>
-        <p className="min-w-0 text-xs text-muted-foreground">{line}</p>
+        <p className="min-w-0 text-sm text-muted-foreground">{line}</p>
       </div>
       {shown !== null ? (
         <>
@@ -133,7 +133,7 @@ export function BriefPanel({ detail }: { detail: WorkItemDetail }) {
                       ) : (
                         <span className="flex flex-col items-start gap-1">
                           <Badge tone="quiet">{t("claimed")}</Badge>
-                          <span className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                          <span className="text-sm text-muted-foreground [overflow-wrap:anywhere]">
                             {claim.text}
                           </span>
                         </span>
@@ -158,7 +158,7 @@ export function BriefPanel({ detail }: { detail: WorkItemDetail }) {
               <dt className={kvTerm}>{t("schema")}</dt>
               <dd className={`${kvValue} font-mono`}>{t("schemaName")}</dd>
             </dl>
-            <p className="text-xs text-muted-foreground">{t("noVerdict")}</p>
+            <p className="text-sm text-muted-foreground">{t("noVerdict")}</p>
           </div>
         </>
       ) : brief.triageCriteria.length > 0 ? (

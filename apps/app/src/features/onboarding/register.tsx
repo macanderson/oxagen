@@ -134,7 +134,7 @@ function TopBar({
       {email === null ? null : (
         <span
           data-testid="register-email"
-          className={`${mono} ml-auto truncate text-xs text-muted-foreground max-md:sr-only`}
+          className={`${mono} ml-auto truncate text-sm text-muted-foreground max-md:sr-only`}
         >
           {email}
         </span>
@@ -154,7 +154,7 @@ function TopBar({
 function Caption() {
   const t = useTranslations("onboarding.register");
   return (
-    <p className="mx-auto mt-[22px] max-w-[772px] text-center text-xs text-muted-foreground">
+    <p className="mx-auto mt-[22px] max-w-[772px] text-center text-sm text-muted-foreground">
       {t("caption")}
     </p>
   );
@@ -249,7 +249,7 @@ function StepHeader({
         {t(`${step}.title`)}
       </h1>
       {lead === null ? null : (
-        <p className="max-w-xl text-sm text-muted-foreground">{lead}</p>
+        <p className="max-w-xl text-base text-muted-foreground">{lead}</p>
       )}
     </div>
   );
@@ -286,7 +286,7 @@ function Denied({ ctx, viewer }: { ctx: WsCtx; viewer: string }) {
         <LockIcon aria-hidden className="size-4" />
       </span>
       <h1 className="text-lg font-semibold text-foreground">{t("title")}</h1>
-      <p className="max-w-md text-sm text-muted-foreground">
+      <p className="max-w-md text-base text-muted-foreground">
         {t.rich("body", {
           org: ctx.orgName,
           b: (chunks) => (
@@ -326,8 +326,8 @@ function NoAgent({ place }: { place: Place }) {
   const t = useTranslations("onboarding.register.noAgent");
   return (
     <section data-testid="register-no-agent" className={`${panel} p-4`}>
-      <h2 className="text-sm font-semibold">{t("title")}</h2>
-      <p className="max-w-prose pt-1 text-sm text-muted-foreground">
+      <h2 className="text-base font-semibold">{t("title")}</h2>
+      <p className="max-w-prose pt-1 text-base text-muted-foreground">
         {t("body")}
       </p>
       <p className="pt-2">
@@ -355,7 +355,7 @@ function PlaceFailure({ failure }: { failure: OnboardingFailure }) {
   const failureText = useOnboardingFailure();
   return (
     <div data-testid="register-place-failure" className={`${panel} p-4`}>
-      <p className="text-sm text-muted-foreground">{failureText(failure)}</p>
+      <p className="text-base text-muted-foreground">{failureText(failure)}</p>
     </div>
   );
 }
@@ -454,7 +454,7 @@ function Waiting({
           className="size-3.5 flex-none animate-spin rounded-full border-2 border-border border-t-accent-text motion-reduce:animate-none"
         />
         <h2 className="text-sm font-semibold">{t("title")}</h2>
-        <span className={`${mono} ml-auto text-sm text-muted-foreground`}>
+        <span className={`${mono} ml-auto text-xs text-muted-foreground`}>
           {t("polling")}
         </span>
       </div>
@@ -510,7 +510,7 @@ function Waiting({
         <p
           data-testid="not-backed"
           data-element="collector-log"
-          className="text-xs text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           {logT("notRecorded")}
         </p>
@@ -538,7 +538,7 @@ function LogBlock({ lines, waiting }: { lines: LogLine[]; waiting: string }) {
   return (
     <ol
       data-testid="first-frame-log"
-      className={`${mono} flex flex-col gap-1 overflow-x-auto text-sm`}
+      className={`${mono} flex flex-col gap-1 overflow-x-auto text-xs`}
     >
       {lines.map((line) => (
         <li
@@ -591,7 +591,7 @@ function Received({
       <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3">
         <Badge tone="allowed">{t("connected")}</Badge>
         <h2 className="text-sm font-semibold">{t("title")}</h2>
-        <span className={`${mono} ml-auto text-sm text-muted-foreground`}>
+        <span className={`${mono} ml-auto text-xs text-muted-foreground`}>
           {precise(receivedAt)}
         </span>
       </div>
@@ -599,7 +599,7 @@ function Received({
         {run.ok ? (
           <ol
             data-testid="first-frames"
-            className={`${mono} divide-y divide-border overflow-x-auto rounded-lg border border-border text-sm`}
+            className={`${mono} divide-y divide-border overflow-x-auto rounded-lg border border-border text-xs`}
           >
             {run.value.frames.frames.slice(0, 2).map((frame) => (
               <li
@@ -665,7 +665,7 @@ function ReadError({ read }: { read: Exclude<Read<unknown>, { ok: true }> }) {
       data-testid="first-frame-error"
       className={`${panel} flex flex-col items-center gap-3 px-6 py-7 text-center`}
     >
-      <h2 className="text-base font-semibold">{t("error.title")}</h2>
+      <h2 className="text-lg font-semibold">{t("error.title")}</h2>
       <ReadFailure read={read} section={t("waiting.title")} />
       <CheckAgain />
     </section>
@@ -690,7 +690,7 @@ function WaitFooter({ place, agent }: { place: Place; agent: string }) {
       >
         {t("back")}
       </SafeLink>
-      <span className="text-xs text-muted-foreground md:ml-auto">
+      <span className="text-sm text-muted-foreground md:ml-auto">
         {t("run.caption")}
       </span>
     </div>

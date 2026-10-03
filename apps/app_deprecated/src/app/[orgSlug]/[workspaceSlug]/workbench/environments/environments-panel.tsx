@@ -110,8 +110,8 @@ export function EnvironmentsPanel(props: Props) {
       )}
 
       <div>
-        <h2 className="text-base font-medium">Environments &amp; Secrets</h2>
-        <p className="text-sm text-muted-foreground">
+        <h2 className="text-lg font-medium">Environments &amp; Secrets</h2>
+        <p className="text-base text-muted-foreground">
           Workspace-root secret keys with per-environment overrides. Sensitive
           values are encrypted at rest. Paste a <code>.env</code> file to
           bulk-import.
@@ -171,7 +171,7 @@ function EnvironmentsBar({
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">Environments</h3>
+        <h3 className="text-base font-medium">Environments</h3>
         {canManage && (
           <Button
             variant="outline"
@@ -186,17 +186,17 @@ function EnvironmentsBar({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {environments.length === 0 && (
-          <span className="text-sm text-muted-foreground">
+          <span className="text-base text-muted-foreground">
             No environments yet.
           </span>
         )}
         {environments.map((env) => (
           <div
             key={env.id}
-            className="flex flex-wrap items-center gap-2 rounded-md border border-border/50 px-3 py-1.5 text-sm"
+            className="flex flex-wrap items-center gap-2 rounded-md border border-border/50 px-3 py-1.5 text-base"
           >
             <span className="font-medium">{env.name}</span>
-            <span className="text-xs text-muted-foreground">{env.slug}</span>
+            <span className="text-sm text-muted-foreground">{env.slug}</span>
             {env.isDefault ? (
               <Badge variant="secondary" size="sm">
                 ★ default
@@ -235,7 +235,7 @@ function EnvironmentsBar({
             </DialogDescription>
           </DialogHeader>
           <DialogPanel className="flex flex-col gap-3">
-            <label className="text-sm font-medium" htmlFor="env-name">
+            <label className="text-base font-medium" htmlFor="env-name">
               Name
             </label>
             <Input
@@ -246,11 +246,11 @@ function EnvironmentsBar({
               onChange={(e) => setName(e.target.value)}
             />
             {name && (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 slug: <code>{slugify(name) || "—"}</code>
               </p>
             )}
-            {error && <p className="text-xs text-destructive">{error}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
           </DialogPanel>
           <DialogFooter className="flex-wrap">
             <Button
@@ -327,7 +327,7 @@ function SecretsSection({
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">Secrets</h3>
+        <h3 className="text-base font-medium">Secrets</h3>
         {canManage && (
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -352,9 +352,9 @@ function SecretsSection({
       </div>
 
       <div className="overflow-x-auto rounded-md border border-border/40">
-        <table className="w-full text-sm">
+        <table className="w-full text-base">
           <thead>
-            <tr className="border-b border-border/40 text-xs text-muted-foreground">
+            <tr className="border-b border-border/40 text-sm text-muted-foreground">
               <th className="px-3 py-2 text-left font-medium">Key</th>
               <th className="px-2 py-2 text-left font-medium">Sens</th>
               <th className="px-3 py-2 text-left font-medium">Memo</th>
@@ -389,7 +389,7 @@ function SecretsSection({
                 key={k.id}
                 className="border-b border-border/30 last:border-0"
               >
-                <td className="px-3 py-2 font-mono text-xs">{k.key}</td>
+                <td className="px-3 py-2 font-mono text-sm">{k.key}</td>
                 <td className="px-2 py-2">{k.sensitive ? "●" : "○"}</td>
                 <td className="px-3 py-2 text-muted-foreground">
                   {k.memo ?? ""}
@@ -486,7 +486,7 @@ function SecretsSection({
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         ● sensitive (encrypted) · ○ plain config · ‹inherit› falls back to the
         Fallback value. Reveal/export a plaintext value via the API or{" "}
         <code>oxagen secret reveal</code> (audited).
@@ -575,18 +575,18 @@ function Cell({
     <td className="px-3 py-2">
       <div className="flex flex-wrap items-center gap-2">
         {present ? (
-          <span className="font-mono text-xs">
+          <span className="font-mono text-sm">
             {sensitive ? "••••••" : "set"}
           </span>
         ) : (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             {inherit ? "‹inherit›" : "—"}
           </span>
         )}
         {canManage && (
           <button
             type="button"
-            className="inline-flex items-center text-xs text-muted-foreground underline-offset-2 hover:underline max-md:min-h-11"
+            className="inline-flex items-center text-sm text-muted-foreground underline-offset-2 hover:underline max-md:min-h-11"
             onClick={onEdit}
           >
             {present ? "edit" : "set"}
@@ -595,7 +595,7 @@ function Cell({
         {canManage && present && onClear && (
           <button
             type="button"
-            className="inline-flex items-center text-xs text-muted-foreground underline-offset-2 hover:underline max-md:min-h-11"
+            className="inline-flex items-center text-sm text-muted-foreground underline-offset-2 hover:underline max-md:min-h-11"
             onClick={onClear}
           >
             clear
@@ -675,10 +675,10 @@ function PasteEnvDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2 text-base">
             <span className="text-muted-foreground">Target:</span>
             <select
-              className="max-md:h-11 rounded-md border border-border/50 bg-background px-2 py-1 text-sm"
+              className="max-md:h-11 rounded-md border border-border/50 bg-background px-2 py-1 text-base"
               value={target}
               onChange={(e) => {
                 setTarget(e.target.value);
@@ -703,18 +703,18 @@ function PasteEnvDialog({
               '# paste here\nDATABASE_URL="postgres://…"\nexport OPENAI_API_KEY=sk-…\nLOG_LEVEL=info'
             }
             rows={8}
-            className="font-mono text-xs"
+            className="font-mono text-sm"
           />
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
           {preview && (
             <div className="rounded-md border border-border/40">
-              <div className="border-b border-border/40 px-3 py-1.5 text-xs text-muted-foreground">
+              <div className="border-b border-border/40 px-3 py-1.5 text-sm text-muted-foreground">
                 {preview.length} parsed ·{" "}
                 {preview.filter((r) => r.isNewKey).length} new ·{" "}
                 {preview.filter((r) => !r.isNewKey).length} existing
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className="w-full text-sm">
                   <tbody>
                     {preview.map((r) => (
                       <tr
@@ -854,11 +854,11 @@ function AddKeyDialog({
             placeholder="memo (optional)"
             onChange={(e) => setMemo(e.target.value)}
           />
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex items-center gap-2 text-base">
             <Switch checked={sensitive} onCheckedChange={setSensitive} />
             Sensitive (encrypt at rest)
           </label>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </DialogPanel>
         <DialogFooter className="flex-wrap">
           <Button

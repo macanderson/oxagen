@@ -66,10 +66,10 @@ function RegistryHelpPopover({ docsBaseUrl }: { docsBaseUrl: string }) {
         <HelpCircle className="h-4 w-4" aria-hidden="true" />
       </PopoverTrigger>
       <PopoverPopup className="w-80">
-        <p className="mb-2 font-semibold text-sm text-foreground">
+        <p className="mb-2 font-semibold text-base text-foreground">
           What is a registry?
         </p>
-        <p className="mb-3 text-xs text-muted-foreground leading-relaxed">
+        <p className="mb-3 text-sm text-muted-foreground leading-relaxed">
           A plugin registry is a URL that exposes a list of available MCP
           servers and tools. Oxagen queries the registry to populate the
           marketplace and discover installable plugins. Any server implementing
@@ -79,17 +79,17 @@ function RegistryHelpPopover({ docsBaseUrl }: { docsBaseUrl: string }) {
           </span>{" "}
           can be added.
         </p>
-        <p className="mb-2 text-xs font-medium text-foreground">
+        <p className="mb-2 text-sm font-medium text-foreground">
           Example registry URL
         </p>
-        <code className="block mb-3 rounded-md bg-muted px-3 py-2 text-xs font-mono text-foreground break-all">
+        <code className="block mb-3 rounded-md bg-muted px-3 py-2 text-sm font-mono text-foreground break-all">
           https://registry.modelcontextprotocol.io
         </code>
         <a
           href={`${docsBaseUrl}/plugins/registries`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+          className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
         >
           Learn more about registries
         </a>
@@ -202,10 +202,10 @@ export function RegistryManager({
     <div className="rounded-xl border border-border/60 bg-card p-6">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">
+          <h3 className="text-base font-semibold text-foreground">
             MCP Server Registries
           </h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="mt-0.5 text-sm text-muted-foreground">
             Registries are the catalog sources Oxagen discovers and installs MCP
             servers and plugins from.
           </p>
@@ -228,7 +228,7 @@ export function RegistryManager({
         <div className="mb-4 flex flex-col gap-3 rounded-lg border border-border/40 bg-muted/20 p-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
-              <Label htmlFor="reg-name" className="text-xs">
+              <Label htmlFor="reg-name" className="text-sm">
                 Registry name
               </Label>
               <Input
@@ -242,7 +242,7 @@ export function RegistryManager({
               />
             </div>
             <div className="flex flex-col gap-1">
-              <Label htmlFor="reg-url" className="text-xs">
+              <Label htmlFor="reg-url" className="text-sm">
                 Base URL
               </Label>
               <Input
@@ -256,7 +256,7 @@ export function RegistryManager({
               />
             </div>
           </div>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex items-center gap-2">
             <Button
               size="sm"
@@ -315,18 +315,18 @@ export function RegistryManager({
 
               <dl className="flex flex-wrap items-center gap-x-6 gap-y-2">
                 <div className="min-w-0">
-                  <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     URL
                   </dt>
-                  <dd className="mt-0.5 max-w-[240px] truncate text-xs text-muted-foreground">
+                  <dd className="mt-0.5 max-w-[240px] truncate text-sm text-muted-foreground">
                     {reg.baseUrl}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Status
                   </dt>
-                  <dd className="mt-0.5 text-sm">
+                  <dd className="mt-0.5 text-base">
                     <Badge
                       variant={reg.enabled ? "success" : "muted"}
                       size="sm"
@@ -359,7 +359,7 @@ export function RegistryManager({
 
       {/* Error outside the form (from remove actions) */}
       {!showForm && error && (
-        <p className="mt-2 text-xs text-destructive">{error}</p>
+        <p className="mt-2 text-sm text-destructive">{error}</p>
       )}
     </div>
   );

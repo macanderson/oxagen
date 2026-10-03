@@ -71,12 +71,12 @@ const Panel = React.forwardRef<HTMLElement, PanelProps>(
           <header className="flex items-center gap-3 border-b border-border px-[18px] py-[15px]">
             <div className="min-w-0 flex-1">
               {eyebrow && (
-                <div className="mb-[3px] text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                <div className="mb-[3px] text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                   {eyebrow}
                 </div>
               )}
               {title && (
-                <h3 className="m-0 text-[15px] font-semibold leading-none tracking-tight">
+                <h3 className="m-0 text-base font-semibold leading-none tracking-tight">
                   {title}
                 </h3>
               )}

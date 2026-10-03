@@ -44,6 +44,10 @@ export const SIGNED_IN_ROUTES: readonly RouteRow[] = [
   { path: `/${org}/${ws}/agents?tab=switches`, titleKey: "agents" },
   { path: `/${org}/${ws}/steering`, titleKey: "steering" },
   { path: `/${org}/${ws}/steering/library`, titleKey: "steering" },
+  // The Skills shelf of the Library. `/skills` and every path under it
+  // redirect here, so this row is the one page load of the skills inventory
+  // (#3098).
+  { path: `/${org}/${ws}/steering/skills`, titleKey: "steering" },
   { path: `/${org}/${ws}/repositories`, titleKey: "repositories" },
   { path: `/${org}/${ws}/spend`, titleKey: "spend" },
   { path: `/${org}/${ws}/spend/tokens`, titleKey: "spend" },

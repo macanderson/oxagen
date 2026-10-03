@@ -37,12 +37,12 @@ export default function ConnectionCreateInline({
               className="h-4 w-4 shrink-0 text-muted-foreground"
               aria-hidden="true"
             />
-            <span className="text-sm font-semibold text-foreground">
+            <span className="text-base font-semibold text-foreground">
               Connect a GitHub repository
             </span>
           </div>
 
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Authorize Oxagen to read your repositories and start indexing
             commits, branches, and pull requests into your knowledge graph.
           </p>
@@ -84,19 +84,19 @@ export default function ConnectionCreateInline({
           className="h-4 w-4 shrink-0 text-muted-foreground"
           aria-hidden="true"
         />
-        <span className="text-sm font-semibold text-foreground">
+        <span className="text-base font-semibold text-foreground">
           Connect a source
         </span>
       </div>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         Inline connect is not available for this connector yet. Open the Sources
         page to set it up manually.
       </p>
 
       <Link
         href={sourcesHref}
-        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
         data-testid="connection-create-inline-sources-link"
       >
         Open Sources

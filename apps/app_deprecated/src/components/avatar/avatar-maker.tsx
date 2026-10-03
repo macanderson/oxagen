@@ -380,7 +380,7 @@ export function AvatarMaker({
                     onCropComplete={cropUpload.onCropComplete}
                   />
                 ) : (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-base text-muted-foreground">
                     Pick a PNG, JPEG, or WebP photo to crop and upload.
                   </p>
                 )}
@@ -449,7 +449,7 @@ export function AvatarMaker({
                       />
                     ))}
                     {filteredEntries.length === 0 && (
-                      <p className="col-span-full py-4 text-center text-sm text-muted-foreground">
+                      <p className="col-span-full py-4 text-center text-base text-muted-foreground">
                         No icons match &ldquo;{search}&rdquo;.
                       </p>
                     )}
@@ -490,7 +490,7 @@ export function AvatarMaker({
                     />
                   </div>
                   {hexError && (
-                    <p className="text-sm text-destructive" role="alert">
+                    <p className="text-base text-destructive" role="alert">
                       {hexError}
                     </p>
                   )}

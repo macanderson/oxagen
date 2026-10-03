@@ -43,12 +43,12 @@ export function RevokeOwnSessionButton({
   if (status === "confirming") {
     return (
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">Revoke?</span>
+        <span className="text-sm text-muted-foreground">Revoke?</span>
         <Button
           variant="destructive"
           size="sm"
           onClick={handleRevoke}
-          className="h-7 px-2.5 text-xs"
+          className="h-7 px-2.5 text-sm"
         >
           Confirm
         </Button>
@@ -56,7 +56,7 @@ export function RevokeOwnSessionButton({
           variant="ghost"
           size="sm"
           onClick={() => setStatus("idle")}
-          className="h-7 px-2.5 text-xs"
+          className="h-7 px-2.5 text-sm"
         >
           Cancel
         </Button>
@@ -67,12 +67,12 @@ export function RevokeOwnSessionButton({
   if (status === "error") {
     return (
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-destructive">{errorMsg}</span>
+        <span className="text-sm text-destructive">{errorMsg}</span>
         <Button
           variant="ghost"
           size="sm"
           onClick={() => setStatus("idle")}
-          className="h-7 px-2.5 text-xs"
+          className="h-7 px-2.5 text-sm"
         >
           Dismiss
         </Button>
@@ -85,7 +85,7 @@ export function RevokeOwnSessionButton({
       variant="ghost"
       size="sm"
       onClick={handleRevoke}
-      className="h-7 px-2.5 text-xs text-muted-foreground hover:text-destructive"
+      className="h-7 px-2.5 text-sm text-muted-foreground hover:text-destructive"
       title="Revoke this session"
     >
       <CircleSlash className="mr-1 h-3 w-3" aria-hidden="true" />

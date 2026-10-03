@@ -190,7 +190,7 @@ export function BeltSearch({ belt }: { belt: Toolbelt }) {
           value={query}
           placeholder={t("placeholder")}
           aria-label={t("label")}
-          className={`${inputBase} border-0 bg-transparent px-1 max-md:text-base`}
+          className={`${inputBase} border-0 bg-transparent px-1 max-md:text-input-touch`}
           onChange={(event) => {
             setQuery(event.target.value);
           }}
@@ -203,7 +203,7 @@ export function BeltSearch({ belt }: { belt: Toolbelt }) {
         </button>
       </form>
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">{t("try")}</span>
+        <span className="text-sm text-muted-foreground">{t("try")}</span>
         {SEARCH_EXAMPLES.map((example) => (
           <button
             key={example}
@@ -223,13 +223,13 @@ export function BeltSearch({ belt }: { belt: Toolbelt }) {
             {hits.slice(0, 8).map((tool) => (
               <li key={tool.name} className="flex flex-col px-3 py-2">
                 <span className={`${mono} break-all`}>{tool.name}</span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   {tool.category ?? t("noCategory")}
                 </span>
               </li>
             ))}
           </ul>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t("matched", {
               hits: formatCount(hits.length, locale),
               total: formatCount(belt.tools.length, locale),
@@ -387,7 +387,7 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
           </button>
           {tool.server === null ? null : (
             <span
-              className={`${mono} block text-xs text-muted-foreground md:truncate`}
+              className={`${mono} block text-sm text-muted-foreground md:truncate`}
             >
               {tool.server}
             </span>
@@ -407,7 +407,7 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
             {t(`decision.${tool.decision}`)}
           </Badge>
           <span
-            className={`${mono} block text-xs text-muted-foreground md:truncate`}
+            className={`${mono} block text-sm text-muted-foreground md:truncate`}
           >
             {tool.rule}
           </span>
@@ -424,7 +424,7 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
         <td className={cell}>
           <NotRecordedValue />
         </td>
-        <td className={`${cell} ${mono} text-xs text-dim`}>
+        <td className={`${cell} ${mono} text-sm text-dim`}>
           {tool.schemaDigest === null ? (
             <NotRecordedValue />
           ) : (
@@ -455,7 +455,7 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
                 <td className={`${cell} font-semibold`} colSpan={6}>
                   {key === NO_CATEGORY ? t("categories.none") : key}
                 </td>
-                <td className={`${cell} text-xs text-dim`}>
+                <td className={`${cell} text-sm text-dim`}>
                   {t("groupCount", { count: rows.length })}
                 </td>
               </tr>,
@@ -489,7 +489,7 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
       }
     >
       {belt.tools.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("empty")}</p>
+        <p className="text-base text-muted-foreground">{t("empty")}</p>
       ) : (
         <>
           <div
@@ -522,7 +522,7 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
             <span data-testid="belt-high">{t("high", { count: high })}</span>
             <span data-testid="belt-approval">
               {t("approvalCount", { count: approval })}

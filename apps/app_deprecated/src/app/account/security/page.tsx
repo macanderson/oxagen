@@ -172,18 +172,18 @@ export default async function AccountSecurityPage() {
         title={
           <>
             Active sessions{" "}
-            <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+            <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
               {sessions.length}
             </span>
           </>
         }
       >
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p className="mb-4 text-base text-muted-foreground">
           All active sessions for your account. You can revoke any session you
           do not recognize.
         </p>
         {sessions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             No active sessions found.
           </p>
         ) : (
@@ -198,7 +198,7 @@ export default async function AccountSecurityPage() {
               {["Device", "IP", "Started", "Last active", ""].map((h) => (
                 <span
                   key={h}
-                  className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                  className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
                 >
                   {h}
                 </span>
@@ -216,18 +216,18 @@ export default async function AccountSecurityPage() {
                     // property, not an inline style: an inline style beats
                     // `grid-cols-1` at every breakpoint, laying phone rows out
                     // ~660px wide and clipping the timestamp/revoke columns.
-                    className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm grid grid-cols-1 gap-y-1 sm:gap-4 sm:items-center sm:[grid-template-columns:minmax(0,1.4fr)_100px_120px_160px_140px]"
+                    className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-base grid grid-cols-1 gap-y-1 sm:gap-4 sm:items-center sm:[grid-template-columns:minmax(0,1.4fr)_100px_120px_160px_140px]"
                   >
                     {/* Device */}
                     <div className="flex items-center gap-1.5 min-w-0">
                       <DeviceIcon kind={s.deviceKind} />
-                      <span className="text-xs text-muted-foreground truncate">
+                      <span className="text-sm text-muted-foreground truncate">
                         {extractBrowser(s.userAgent)}
                       </span>
                       {isCurrent && (
                         <Badge
                           variant="success"
-                          className="ml-1 text-[10px] shrink-0"
+                          className="ml-1 text-xs shrink-0"
                         >
                           Current
                         </Badge>
@@ -235,22 +235,22 @@ export default async function AccountSecurityPage() {
                     </div>
 
                     {/* IP */}
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
+                    <div className="flex items-center gap-1 text-sm text-muted-foreground font-mono">
                       <Globe className="h-3 w-3 shrink-0" aria-hidden="true" />
                       <span className="truncate">{s.ip ?? "—"}</span>
                     </div>
 
                     {/* Started */}
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-sm text-muted-foreground">
                       {formatTs(s.createdAt)}
                     </span>
 
                     {/* Last active */}
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-sm text-muted-foreground">
                         {formatTs(s.updatedAt)}
                       </span>
-                      <span className="text-[11px] text-muted-foreground/60">
+                      <span className="text-xs text-muted-foreground/60">
                         Expires {formatTs(s.expiresAt)}
                       </span>
                     </div>
@@ -258,7 +258,7 @@ export default async function AccountSecurityPage() {
                     {/* Revoke */}
                     <div className="flex items-center">
                       {isCurrent ? (
-                        <Badge variant="muted" className="text-[10px]">
+                        <Badge variant="muted" className="text-xs">
                           This session
                         </Badge>
                       ) : (

@@ -150,7 +150,7 @@ export function Sub({
       // Under a numeric cell the sub-line keeps its own face: the cell's mono
       // is for the figure above it. In a table cell on a wide screen it ends
       // in an ellipsis, as every cell value does; in a key-value list it wraps.
-      className={`block text-xs text-muted-foreground md:[td_&]:truncate ${monoFace ? mono : "font-sans"}`}
+      className={`block text-sm text-muted-foreground md:[td_&]:truncate ${monoFace ? mono : "font-sans"}`}
     >
       {children}
     </span>
@@ -286,10 +286,10 @@ export function HarnessNames({ host }: { host: RuntimeEnrollment }) {
           {harness === "claude-code" && host.claudeVersionAtEnroll !== null ? (
             <span className="text-muted-foreground">
               <span className={mono}>{host.claudeVersionAtEnroll}</span>{" "}
-              <span className="text-xs">{t("atEnrollment")}</span>
+              <span className="text-sm">{t("atEnrollment")}</span>
             </span>
           ) : (
-            <span className="text-xs">
+            <span className="text-sm">
               <NotBacked gap="version">{t("versionUnrecorded")}</NotBacked>
             </span>
           )}

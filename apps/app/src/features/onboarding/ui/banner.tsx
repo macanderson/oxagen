@@ -31,8 +31,8 @@ export function GateBanner({
         </Badge>
       </span>
       <div className="flex min-w-0 grow flex-col gap-1">
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-        <div className="max-w-prose text-sm text-muted-foreground">
+        <h2 className="text-base font-semibold text-foreground">{title}</h2>
+        <div className="max-w-prose text-base text-muted-foreground">
           {children}
         </div>
       </div>

@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { describe, expect, it } from "vitest";
-import { readServedToolFeedback, recordServedToolCall, type ServedToolCallRow } from "./served-tool-calls";
+import {
+  readServedToolCallRate,
+  readServedToolFeedback,
+  recordServedToolCall,
+  type ServedToolCallRow,
+} from "./served-tool-calls";
 
 // CI migrates ClickHouse before the unit job, so `served_tool_calls` exists.
 // Missing configuration skips local collection. This is the witness that both
@@ -69,5 +74,52 @@ describe.skipIf(!process.env["CLICKHOUSE_URL"])("served tool feedback against a 
       { tool: refund, calls: 8, schemaRejections: 3, errorResults: 1, retries: 2 },
       { tool: charges, calls: 2, schemaRejections: 1, errorResults: 0, retries: 1 },
     ]);
+  });
+
+  // The rate a policy reads (#4666): only calls that left Oxagen, in the
+  // hour and the minute before the clock the decision uses.
+  it("counts one tool's calls that left Oxagen in the last hour and minute", async () => {
+    const scope = { orgId: randomUUID(), workspaceId: randomUUID() };
+    const now = Date.now();
+    const at = (ms: number) => new Date(now - ms).toISOString();
+    const post = "slack__post_message";
+    const call = (over: Partial<ServedToolCallRow> & Pick<ServedToolCallRow, "created_at">): ServedToolCallRow => ({
+      server: "slack",
+      tool: post,
+      run_public_id: "tse_witnessrate000000000",
+      outcome: "allowed",
+      problem: "",
+      ...over,
+    });
+
+    await runInTenantScope(scope, async () => {
+      for (const row of [
+        // In the last minute: an allowed call and an error result.
+        call({ created_at: at(10 * 1000) }),
+        call({ created_at: at(20 * 1000), outcome: "failed", problem: "error_result" }),
+        // In the last hour only.
+        call({ created_at: at(30 * MINUTE_MS) }),
+        // Never sent: denied, parked, a schema rejection, a missing credential.
+        call({ created_at: at(5 * 1000), outcome: "denied" }),
+        call({ created_at: at(6 * 1000), outcome: "parked" }),
+        call({ created_at: at(7 * 1000), outcome: "failed", problem: "schema_rejected" }),
+        call({ created_at: at(8 * 1000), outcome: "failed" }),
+        // Older than an hour.
+        call({ created_at: at(61 * MINUTE_MS) }),
+        // Another tool of the server.
+        call({ tool: "slack__list_channels", created_at: at(10 * 1000) }),
+      ]) {
+        await recordServedToolCall(row);
+      }
+    });
+    // Another workspace's call to the same tool.
+    await runInTenantScope({ orgId: scope.orgId, workspaceId: randomUUID() }, () =>
+      recordServedToolCall(call({ created_at: at(10 * 1000) })),
+    );
+
+    const rate = await runInTenantScope(scope, () =>
+      readServedToolCallRate({ server: "slack", tool: post, now }),
+    );
+    expect(rate).toEqual({ lastHour: 3, lastMinute: 2 });
   });
 });

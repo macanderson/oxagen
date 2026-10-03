@@ -49,7 +49,7 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
       <table
         ref={ref}
         className={cn(
-          "w-full caption-bottom text-sm",
+          "w-full caption-bottom text-base",
           densityVars[density],
           className,
         )}
@@ -136,7 +136,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-9 whitespace-nowrap px-[var(--table-pad-x)] text-left align-middle text-xs font-medium uppercase tracking-wide text-card-header-fg/70",
+      "h-9 whitespace-nowrap px-[var(--table-pad-x)] text-left align-middle text-sm font-medium uppercase tracking-wide text-card-header-fg/70",
       className,
     )}
     {...props}
@@ -165,7 +165,7 @@ const TableCaption = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <caption
     ref={ref}
-    className={cn("mt-3 text-xs text-muted-foreground", className)}
+    className={cn("mt-3 text-sm text-muted-foreground", className)}
     {...props}
   />
 ));
@@ -183,7 +183,7 @@ const TableEmpty = React.forwardRef<HTMLTableRowElement, TableEmptyProps>(
     <tr ref={ref} className={cn("hover:bg-transparent", className)} {...props}>
       <td
         colSpan={colSpan}
-        className="px-[var(--table-pad-x)] py-8 text-center text-sm text-muted-foreground"
+        className="px-[var(--table-pad-x)] py-8 text-center text-base text-muted-foreground"
       >
         {children ?? "No results."}
       </td>

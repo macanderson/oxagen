@@ -318,7 +318,7 @@ function RuntimesLoaded({
           {idle === 0 ? null : (
             <p
               data-testid="runtimes-idle"
-              className="text-xs text-muted-foreground"
+              className="text-sm text-muted-foreground"
             >
               {t("idle", { count: idle })}
             </p>
@@ -352,7 +352,7 @@ function RuntimesLoaded({
       {list.more ? (
         <p
           data-testid="runtimes-more"
-          className="text-xs text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           {t("more", {
             count: formatCount(list.enrollments.length, locale),

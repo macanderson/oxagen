@@ -170,7 +170,7 @@ function ToolRow({
     <span className="flex min-w-0 flex-col">
       <span className="font-medium">{tool.name}</span>
       {tool.slug === tool.name ? null : (
-        <span className={`${mono} text-xs text-muted-foreground`}>
+        <span className={`${mono} text-sm text-muted-foreground`}>
           {tool.slug}
         </span>
       )}
@@ -179,7 +179,7 @@ function ToolRow({
   const unavailable = tool.available ? null : (
     <span
       data-state="unavailable"
-      className="text-xs font-medium text-muted-foreground"
+      className="text-sm font-medium text-muted-foreground"
     >
       {t("unavailable")}
     </span>
@@ -346,12 +346,12 @@ function DeleteToolbelt({
         testId="belt-delete-dialog"
       >
         {carriers > 0 ? (
-          <p data-testid="belt-delete-in-use" className="text-sm">
+          <p data-testid="belt-delete-in-use" className="text-base">
             {t("inUse", { count: carriers })}
           </p>
         ) : (
           <form
-            className="flex flex-col gap-3 text-sm"
+            className="flex flex-col gap-3 text-base"
             onSubmit={(event) => {
               event.preventDefault();
               void confirm();
@@ -433,7 +433,7 @@ export function BeltView({
           <h2 id="tools-belt-open" className={panelTitle}>
             {belt.name}
           </h2>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             <span className={mono}>{belt.slug}</span>
             {belt.clonedFrom === null ? null : (
               <span> {t("clonedFrom", { name: belt.clonedFrom.name })}</span>
@@ -518,7 +518,7 @@ export function BeltView({
                     ))}
                   </ul>
                 ) : (
-                  <p className="pt-1 text-xs text-muted-foreground">
+                  <p className="pt-1 text-sm text-muted-foreground">
                     {t("belt.notIncluded")}
                   </p>
                 )}

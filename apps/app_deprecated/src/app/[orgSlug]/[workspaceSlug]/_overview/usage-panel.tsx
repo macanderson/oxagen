@@ -80,17 +80,17 @@ export async function UsagePanel({
         <CardPanel className="p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-medium text-foreground">
+              <span className="text-base font-medium text-foreground">
                 Usage hidden
               </span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 Usage breakdown requires billing access — ask an org owner,
                 admin, or billing manager.
               </span>
             </div>
             <Link
               href={usageHref}
-              className="text-sm font-medium text-primary hover:underline"
+              className="text-base font-medium text-primary hover:underline"
             >
               View billing →
             </Link>
@@ -129,10 +129,10 @@ export async function UsagePanel({
     <div data-testid="overview-usage-panel">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
-          <CardTitle className="text-base">Usage</CardTitle>
+          <CardTitle className="text-lg">Usage</CardTitle>
           <Link
             href={usageHref}
-            className="text-sm font-medium text-primary hover:underline"
+            className="text-base font-medium text-primary hover:underline"
           >
             Full breakdown →
           </Link>
@@ -151,7 +151,7 @@ export async function UsagePanel({
               action={
                 <Link
                   href={usageHref}
-                  className="text-sm font-medium text-primary hover:underline"
+                  className="text-base font-medium text-primary hover:underline"
                 >
                   View billing →
                 </Link>
@@ -163,7 +163,7 @@ export async function UsagePanel({
                 <p className="text-2xl font-semibold tabular-nums leading-none text-foreground">
                   {formatUsdFromMicros(breakdown.totals.costMicros)}
                 </p>
-                <p className="mt-1.5 text-xs text-muted-foreground">
+                <p className="mt-1.5 text-sm text-muted-foreground">
                   {breakdown.totals.executions.toLocaleString()} LLM calls ·
                   month to date
                 </p>

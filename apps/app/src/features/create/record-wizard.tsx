@@ -226,7 +226,7 @@ function DescribeStep({ api, ctx }: StepProps<RecordDraft>) {
     recordOf(api, ctx).choice.lineageId,
   );
   return (
-    <div className="flex flex-col gap-3 text-sm">
+    <div className="flex flex-col gap-3 text-base">
       <div className="flex flex-col gap-1">
         <label htmlFor={labelId}>{t("name")}</label>
         <input
@@ -246,7 +246,7 @@ function DescribeStep({ api, ctx }: StepProps<RecordDraft>) {
               api.update({ name: tidyName(api.draft.name) });
           }}
         />
-        <span id={`${labelId}-hint`} className="text-xs text-muted-foreground">
+        <span id={`${labelId}-hint`} className="text-sm text-muted-foreground">
           {t("labelHint")}
         </span>
       </div>
@@ -270,9 +270,9 @@ function DescribeStep({ api, ctx }: StepProps<RecordDraft>) {
           }}
         />
         {slugValid ? (
-          <span className="text-xs text-muted-foreground">{t("slugHint")}</span>
+          <span className="text-sm text-muted-foreground">{t("slugHint")}</span>
         ) : (
-          <span role="alert" className="text-xs text-destructive">
+          <span role="alert" className="text-sm text-destructive">
             {t("slugInvalid")}
           </span>
         )}
@@ -299,7 +299,7 @@ function KindStep({ api }: StepProps<RecordDraft>) {
   const t = useTranslations("createRecord.kind");
   const chosen = api.draft.kind;
   return (
-    <div className="flex flex-col gap-3 text-sm">
+    <div className="flex flex-col gap-3 text-base">
       <ul
         aria-label={t("cards")}
         className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3"
@@ -354,7 +354,7 @@ function StatementStep({ api, ctx }: StepProps<RecordDraft>) {
     api.update({ statement: value === record.seed ? null : value });
   };
   return (
-    <div className="flex flex-col gap-3 text-sm">
+    <div className="flex flex-col gap-3 text-base">
       <DraftNote title={t("drafted.title")} body={t("drafted.body")} />
       <FileEditor
         path={t("path", { path: record.path ?? "…" })}
@@ -370,7 +370,7 @@ function StatementStep({ api, ctx }: StepProps<RecordDraft>) {
             </span>
             <button
               type="button"
-              className={`${buttonSecondary} min-h-8 px-3 py-1 text-xs`}
+              className={`${buttonSecondary} min-h-8 px-3 py-1 text-sm`}
               disabled={!record.edited}
               onClick={() => {
                 api.update({ statement: null });
@@ -414,7 +414,7 @@ function StatementStep({ api, ctx }: StepProps<RecordDraft>) {
               </option>
             ))}
           </select>
-          <p id="record-force-hint" className="text-xs text-muted-foreground">
+          <p id="record-force-hint" className="text-sm text-muted-foreground">
             {isStable(force) ? t("force.stable") : t("force.selected")}
             {kind === "preference" ? ` ${t("force.preference")}` : null}
             {kind === "fact" || kind === "memory"
@@ -441,7 +441,7 @@ function StatementStep({ api, ctx }: StepProps<RecordDraft>) {
               {t("scope.repository")}
             </option>
           </select>
-          <p id="record-scope-hint" className="text-xs text-muted-foreground">
+          <p id="record-scope-hint" className="text-sm text-muted-foreground">
             {t("scope.workspaceHint", {
               repository: repo ?? ctx.ws,
               workspace: ctx.wsName,
@@ -474,7 +474,7 @@ function StatementStep({ api, ctx }: StepProps<RecordDraft>) {
               </option>
             ))}
           </select>
-          <p id="record-effect-hint" className="text-xs text-muted-foreground">
+          <p id="record-effect-hint" className="text-sm text-muted-foreground">
             {t("effect.hint")}
           </p>
         </div>
@@ -527,7 +527,7 @@ function ChecksStep({ api, ctx }: StepProps<RecordDraft>) {
         : t.rich("items.effect.constraint", { effect, code }),
   };
   return (
-    <div className="flex flex-col gap-3 text-sm">
+    <div className="flex flex-col gap-3 text-base">
       <ul data-testid="record-checks" className="flex flex-col gap-2">
         {CHECKS.map((c) => (
           <li
@@ -583,7 +583,7 @@ function PullRequestStep({ api, ctx }: StepProps<RecordDraft>) {
           detail: detail[c],
         }))}
       />
-      <div className="flex flex-col gap-1 text-sm">
+      <div className="flex flex-col gap-1 text-base">
         <p className="font-medium">{t("rationale")}</p>
         <p
           data-testid="record-rationale"
@@ -594,7 +594,7 @@ function PullRequestStep({ api, ctx }: StepProps<RecordDraft>) {
       </div>
       <div aria-live="polite" className="flex flex-col gap-2">
         {repo.state === "loading" ? (
-          <p className="text-sm text-muted-foreground">{t("repo.loading")}</p>
+          <p className="text-base text-muted-foreground">{t("repo.loading")}</p>
         ) : repo.state === "unbound" ? (
           <FormAlert testId="repo-state">{t("repo.unbound")}</FormAlert>
         ) : repo.state === "denied" ? (
@@ -614,7 +614,7 @@ function PullRequestStep({ api, ctx }: StepProps<RecordDraft>) {
         d.proposal.key === choiceKey(record.choice) ? (
           <p
             data-testid="proposal-kept"
-            className="text-sm text-muted-foreground"
+            className="text-base text-muted-foreground"
           >
             {t("proposalKept", { proposal: d.proposal.id })}
           </p>
@@ -669,7 +669,7 @@ function Opened({ record, ctx }: { record: OpenedRecord; ctx: CreateContext }) {
     <div
       role="status"
       data-testid="pr-opened"
-      className="flex flex-col gap-3 text-sm"
+      className="flex flex-col gap-3 text-base"
     >
       {pr === null ? (
         <p>{t("noPr")}</p>
@@ -689,7 +689,7 @@ function Opened({ record, ctx }: { record: OpenedRecord; ctx: CreateContext }) {
               </PullRequestLink>
             )}
           </p>
-          <p className={`${mono} break-all text-xs text-muted-foreground`}>
+          <p className={`${mono} break-all text-sm text-muted-foreground`}>
             {t("path", { path: pr.path, branch: pr.branch })}
           </p>
         </>

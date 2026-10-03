@@ -61,9 +61,9 @@ function PullRequest({ pullRequest }: { pullRequest: InstructionDriftFinding["pu
     : t("openPullRequest", { number: pullRequest.number });
   const url = parsePullRequestUrl(pullRequest.url);
   return url === null ? (
-    <span className="text-xs text-muted-foreground">{label}</span>
+    <span className="text-sm text-muted-foreground">{label}</span>
   ) : (
-    <PullRequestLink to={url} className={`${linkText} text-xs`}>
+    <PullRequestLink to={url} className={`${linkText} text-sm`}>
       {label}
     </PullRequestLink>
   );

@@ -85,7 +85,7 @@ function TokenClasses({
       flush
       aside={
         tokens === null ? undefined : (
-          <span className="font-mono text-sm text-dim">
+          <span className="font-mono text-xs text-dim">
             {t("classes.tally", { count: count(tokens.total) })}
           </span>
         )
@@ -307,7 +307,7 @@ function PromptComposition({
       testId="prompt-composition"
       aside={
         perModelCall === null ? undefined : (
-          <span className="font-mono text-sm text-dim">
+          <span className="font-mono text-xs text-dim">
             {t("tally", { count: formatCount(perModelCall, locale) })}
           </span>
         )
@@ -349,7 +349,7 @@ function PromptComposition({
       {context.ok ? (
         <p
           data-testid="composition-note"
-          className="mb-0 mt-2.5 text-sm text-muted-foreground"
+          className="mb-0 mt-2.5 text-xs text-muted-foreground"
         >
           <PartsNote context={context} from={split?.from ?? null} />
         </p>

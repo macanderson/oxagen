@@ -40,7 +40,7 @@ organisation's.
 | --- | --- | --- |
 | provider | `"openrouter" \| "gateway" \| "openai" \| "anthropic" \| "openai_compatible"` | Which vendor issued the key |
 | apiKey | string (8–512 chars) | The plaintext key, as pasted |
-| baseUrl | https URL, ≤2048 chars? | `openai_compatible` only, and required there; refused on every other provider |
+| baseUrl | https URL, ≤2048 chars? | `openai_compatible` only, and required there; refused on every other provider. Surrounding whitespace is trimmed before the checks, and the trimmed value is stored. A query, such as Azure's `?api-version=…`, stays on every request, after the path |
 | modelMap | `{ fast?, balanced?, precise? }`? | The key's own model id per tier. `balanced` required for `openai`, `anthropic`, `openai_compatible`; ignored for the routed two |
 
 | provider | Endpoint | Needs | Serves embeddings? |

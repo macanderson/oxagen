@@ -60,7 +60,7 @@ export function CitationDailyChart({ daily }: CitationDailyChartProps) {
 
   if (daily.length === 0 || !hasData) {
     return (
-      <div className="flex h-[240px] items-center justify-center text-sm text-muted-foreground">
+      <div className="flex h-[240px] items-center justify-center text-base text-muted-foreground">
         No citations recorded in this window yet.
       </div>
     );
@@ -68,7 +68,7 @@ export function CitationDailyChart({ daily }: CitationDailyChartProps) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-4 text-[11px] text-muted-foreground">
+      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <span
             className="inline-block h-2 w-2 rounded-[2px]"

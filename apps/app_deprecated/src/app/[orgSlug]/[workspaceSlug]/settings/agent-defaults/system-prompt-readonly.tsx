@@ -22,11 +22,11 @@ export interface SystemPromptReadonlyProps {
 export function SystemPromptReadonly({ prompt }: SystemPromptReadonlyProps) {
   return (
     <section aria-labelledby="system-prompt-heading">
-      <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-4">
+      <p className="text-base font-semibold uppercase tracking-widest text-muted-foreground mb-4">
         System prompt
       </p>
       <details className="group rounded-lg border border-border/60 bg-card">
-        <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-foreground">
+        <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 text-base font-medium text-foreground">
           <span className="flex items-center gap-2">
             <span id="system-prompt-heading">
               Effective workspace system prompt
@@ -35,10 +35,10 @@ export function SystemPromptReadonly({ prompt }: SystemPromptReadonlyProps) {
               Read-only
             </Badge>
           </span>
-          <span className="text-xs text-muted-foreground">Click to expand</span>
+          <span className="text-sm text-muted-foreground">Click to expand</span>
         </summary>
         <div className="border-t border-border/40 px-4 py-3">
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-sm text-muted-foreground">
             This is the exact instruction set your agent runs with in this
             workspace — Oxagen&apos;s core orchestration prompt with your{" "}
             <span className="font-medium text-foreground">
@@ -47,7 +47,7 @@ export function SystemPromptReadonly({ prompt }: SystemPromptReadonlyProps) {
             (below) appended. The core prompt is managed by Oxagen and is not
             editable; use Additional instructions to add workspace-wide context.
           </p>
-          <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+          <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 font-mono text-sm leading-relaxed text-muted-foreground">
             {prompt}
           </pre>
         </div>

@@ -114,7 +114,7 @@ function RelatedCard({ item }: { item: RelatedItem }) {
           <SafeLink
             to={item.href}
             data-touch-target=""
-            className={`${buttonSecondary} ms-auto min-h-7 px-2.5 py-1 text-xs`}
+            className={`${buttonSecondary} ms-auto min-h-7 px-2.5 py-1 text-sm`}
           >
             {t("open")}
           </SafeLink>
@@ -133,7 +133,7 @@ function RelatedCard({ item }: { item: RelatedItem }) {
             {item.statement}
           </p>
         )}
-        <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-sm text-dim">
+        <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-dim">
           <b className="font-semibold text-muted-foreground">
             {term(`scopes.${item.scope}`)}
           </b>

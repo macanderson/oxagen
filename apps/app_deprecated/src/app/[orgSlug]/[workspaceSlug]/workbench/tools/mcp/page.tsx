@@ -178,10 +178,10 @@ export default async function AgentToolsMcpPage({
       {/* ── Installed MCP servers ────────────────────────────────────────────── */}
       <div className="rounded-xl border border-border/60 bg-card p-6">
         <div className="mb-4">
-          <h2 className="text-sm font-semibold text-foreground">
+          <h2 className="text-base font-semibold text-foreground">
             Installed MCP servers
           </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="mt-0.5 text-sm text-muted-foreground">
             Servers this workspace can use. Authenticate or reconnect when a
             credential expires, remove authentication to force a fresh sign-in,
             or uninstall the server entirely.
@@ -202,10 +202,10 @@ export default async function AgentToolsMcpPage({
       {/* ── Install from the marketplace ─────────────────────────────────────── */}
       <div className="rounded-xl border border-border/60 bg-card p-6">
         <div className="mb-4">
-          <h2 className="text-sm font-semibold text-foreground">
+          <h2 className="text-base font-semibold text-foreground">
             Install from the marketplace
           </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="mt-0.5 text-sm text-muted-foreground">
             Search the marketplace catalog and install hosted servers into this
             workspace. OAuth-protected servers (Stripe, GitHub, …) prompt you to
             authenticate right after install. Catalog sources are administered
@@ -232,10 +232,10 @@ export default async function AgentToolsMcpPage({
       {/* ── Connect a custom MCP server ─────────────────────────────────────── */}
       <div className="rounded-xl border border-border/60 bg-card p-6">
         <div className="mb-4">
-          <h2 className="text-sm font-semibold text-foreground">
+          <h2 className="text-base font-semibold text-foreground">
             Connect manually
           </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="mt-0.5 text-sm text-muted-foreground">
             Point this workspace at any MCP-compatible server by endpoint URL.
           </p>
         </div>
@@ -250,38 +250,38 @@ export default async function AgentToolsMcpPage({
       {/* ── Connect an external MCP client to Oxagen ─────────────────────────── */}
       <div className="rounded-xl border border-border/60 bg-card p-6">
         <div className="mb-4 flex flex-col gap-1">
-          <h2 className="text-sm font-semibold text-foreground">
+          <h2 className="text-base font-semibold text-foreground">
             Connect an external client
           </h2>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Point Claude Code, Claude Desktop, Cursor, or any other MCP client
             at your Oxagen workspace.
           </p>
         </div>
 
         <div className="flex flex-col gap-4">
-          <div className="flex items-start gap-2 rounded-xl border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+          <div className="flex items-start gap-2 rounded-xl border border-border/40 bg-muted/30 px-4 py-3 text-base text-muted-foreground">
             <ExternalLink
               className="mt-0.5 h-4 w-4 shrink-0"
               aria-hidden="true"
             />
             <span>
               The MCP endpoint is live at{" "}
-              <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-foreground">
+              <code className="rounded bg-muted px-1 py-0.5 font-mono text-sm text-foreground">
                 {MCP_URL}
               </code>
               . Connect over streamable HTTP — no SSE path needed.
             </span>
           </div>
 
-          <div className="flex items-start gap-2 rounded-xl border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+          <div className="flex items-start gap-2 rounded-xl border border-border/40 bg-muted/30 px-4 py-3 text-base text-muted-foreground">
             <KeySquare className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <span>
               The Claude Code command names{" "}
-              <code className="font-mono text-xs">$OXAGEN_API_KEY</code>, which
+              <code className="font-mono text-sm">$OXAGEN_API_KEY</code>, which
               your shell expands. The JSON configs cannot expand anything, so
               replace{" "}
-              <code className="font-mono text-xs">&lt;your-api-key&gt;</code> in
+              <code className="font-mono text-sm">&lt;your-api-key&gt;</code> in
               them with the key value you saved when the key was created — it is
               shown once and cannot be read back. Create one on the{" "}
               <a

@@ -80,7 +80,7 @@ export function WorkspaceModelsForm({
 
         {/* Error state */}
         {error !== null && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="text-base text-destructive">
             {error}
           </p>
         )}
@@ -99,7 +99,7 @@ export function WorkspaceModelsForm({
           </Button>
 
           {savedAt !== null && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Saved at{" "}
               {savedAt.toLocaleTimeString(undefined, {
                 hour: "2-digit",
@@ -109,7 +109,7 @@ export function WorkspaceModelsForm({
           )}
 
           {!canEdit && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Only workspace owners and admins can edit model defaults.
             </p>
           )}

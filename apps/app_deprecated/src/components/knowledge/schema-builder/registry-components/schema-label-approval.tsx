@@ -15,13 +15,13 @@ export default function SchemaLabelApproval({
   return (
     <div className="rounded-xl border border-border bg-card px-4 py-3 space-y-3">
       <div>
-        <p className="font-medium text-sm">{labelName}</p>
-        <p className="text-xs text-muted-foreground">Schema: {schemaName}</p>
+        <p className="font-medium text-base">{labelName}</p>
+        <p className="text-sm text-muted-foreground">Schema: {schemaName}</p>
       </div>
       {properties.length > 0 && (
         <div className="space-y-1">
           {properties.map((p) => (
-            <div key={p.key} className="flex items-center gap-2 text-xs">
+            <div key={p.key} className="flex items-center gap-2 text-sm">
               <span className="font-mono">{p.key}</span>
               <span className="text-muted-foreground">({p.dataType})</span>
             </div>

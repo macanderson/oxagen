@@ -205,7 +205,7 @@ export function ToolsCatalog({ tools, marketplaceHref }: ToolsCatalogProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted-foreground">
+          <span className="text-base text-muted-foreground">
             <span className="font-medium text-foreground tabular-nums">
               {filtered.length}
             </span>{" "}
@@ -294,20 +294,20 @@ export function ToolsCatalog({ tools, marketplaceHref }: ToolsCatalogProps) {
                     data-testid={`tool-row-${tool.name}`}
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block break-all font-mono text-xs font-medium text-foreground">
+                      <span className="block break-all font-mono text-sm font-medium text-foreground">
                         {tool.name}
                       </span>
-                      <span className="line-clamp-1 text-xs text-muted-foreground">
+                      <span className="line-clamp-1 text-sm text-muted-foreground">
                         {tool.description}
                       </span>
                     </span>
                     <span className="hidden shrink-0 items-center gap-1.5 sm:flex">
-                      <Badge variant="outline" className="text-[10px]">
+                      <Badge variant="outline" className="text-xs">
                         {tool.domain}
                       </Badge>
                       <Badge
                         variant={riskBadgeVariant(tool.riskLevel)}
-                        className="text-[10px]"
+                        className="text-xs"
                         data-testid={`tool-risk-badge-${tool.name}`}
                       >
                         {riskLabel(tool.riskLevel)}
@@ -341,24 +341,24 @@ export function ToolsCatalog({ tools, marketplaceHref }: ToolsCatalogProps) {
                   className="flex flex-col gap-2 rounded-xl border bg-card p-4 text-left transition-all hover:border-border hover:shadow-sm"
                   data-testid={`tool-row-${tool.name}`}
                 >
-                  <span className="break-all font-mono text-xs font-medium text-foreground">
+                  <span className="break-all font-mono text-sm font-medium text-foreground">
                     {tool.name}
                   </span>
-                  <span className="line-clamp-2 text-xs text-muted-foreground">
+                  <span className="line-clamp-2 text-sm text-muted-foreground">
                     {tool.description}
                   </span>
                   <span className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="outline" className="text-sm">
                       {tool.domain}
                     </Badge>
                     {tool.category ? (
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className="text-sm">
                         {tool.category}
                       </Badge>
                     ) : null}
                     <Badge
                       variant={riskBadgeVariant(tool.riskLevel)}
-                      className="text-xs"
+                      className="text-sm"
                       data-testid={`tool-risk-badge-${tool.name}`}
                     >
                       {riskLabel(tool.riskLevel)}
@@ -402,13 +402,13 @@ export function ToolsCatalog({ tools, marketplaceHref }: ToolsCatalogProps) {
           {selected ? (
             <>
               <SheetHeader>
-                <SheetTitle className="break-all font-mono text-base">
+                <SheetTitle className="break-all font-mono text-lg">
                   {selected.name}
                 </SheetTitle>
                 <SheetDescription>{selected.description}</SheetDescription>
               </SheetHeader>
               <SheetPanel>
-                <dl className="flex flex-col gap-3 text-sm">
+                <dl className="flex flex-col gap-3 text-base">
                   <div className="flex items-center justify-between gap-4">
                     <dt className="text-muted-foreground">Domain</dt>
                     <dd className="font-medium text-foreground">
@@ -426,7 +426,7 @@ export function ToolsCatalog({ tools, marketplaceHref }: ToolsCatalogProps) {
                     <dd>
                       <Badge
                         variant={riskBadgeVariant(selected.riskLevel)}
-                        className="text-xs"
+                        className="text-sm"
                       >
                         {riskLabel(selected.riskLevel)}
                       </Badge>
@@ -445,7 +445,7 @@ export function ToolsCatalog({ tools, marketplaceHref }: ToolsCatalogProps) {
                     </dd>
                   </div>
                 </dl>
-                <p className="mt-6 border-t pt-4 text-xs text-muted-foreground">
+                <p className="mt-6 border-t pt-4 text-sm text-muted-foreground">
                   Equip this in the Agent Builder · manage grants in Access →
                   Roles.
                 </p>

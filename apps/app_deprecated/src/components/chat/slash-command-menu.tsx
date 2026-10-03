@@ -52,13 +52,13 @@ export function SlashCommandMenu({
                 index === activeIndex ? "bg-muted" : "hover:bg-muted/60",
               )}
             >
-              <span className="font-mono text-xs font-medium">
+              <span className="font-mono text-sm font-medium">
                 /{command.name}
                 {command.args ? (
                   <span className="text-muted-foreground"> {command.args}</span>
                 ) : null}
               </span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 {command.summary}
               </span>
             </button>

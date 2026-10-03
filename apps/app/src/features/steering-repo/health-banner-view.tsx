@@ -149,7 +149,7 @@ export function SteeringRepoHealthBannerView({
       data-provider={provider ?? "github"}
       className="mx-auto flex w-full max-w-6xl flex-col gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-foreground"
     >
-      <h2 id={headingId} className="text-sm font-semibold">
+      <h2 id={headingId} className="text-base font-semibold">
         {t(`heading.${health}`)}
       </h2>
       <p>{t("body")}</p>

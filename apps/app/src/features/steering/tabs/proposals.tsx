@@ -62,7 +62,7 @@ function StateFilters({
           {t(state)}
           {counts === null ? null : (
             <span
-              className="font-mono text-sm text-dim"
+              className="font-mono text-xs text-dim"
               data-count={String(counts[state])}
             >
               {counts[state]}

@@ -48,9 +48,9 @@ const SIZE_PX: Record<EntityAvatarSize, number> = {
 };
 
 const GLYPH_TEXT_CLASS: Record<EntityAvatarSize, string> = {
-  xs: "text-[10px]",
-  sm: "text-xs",
-  md: "text-sm",
+  xs: "text-xs",
+  sm: "text-sm",
+  md: "text-base",
   lg: "text-xl",
   xl: "text-3xl",
 };

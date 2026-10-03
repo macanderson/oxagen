@@ -160,7 +160,7 @@ export function CapabilityStrip({
 
   return (
     <div className={cn("flex flex-wrap items-center gap-1", className)}>
-      <span className="text-[11px] leading-none text-muted-foreground">
+      <span className="text-xs leading-none text-muted-foreground">
         {summary.label}
       </span>
       {named.map((t, i) => {
@@ -168,7 +168,7 @@ export function CapabilityStrip({
         return (
           <span
             key={`${t.type}:${t.ref}:${i}`}
-            className="inline-flex max-w-[9rem] items-center gap-1 rounded border border-border bg-muted/50 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground"
+            className="inline-flex max-w-[9rem] items-center gap-1 rounded border border-border bg-muted/50 px-1.5 py-0.5 text-xs leading-none text-muted-foreground"
             title={prettifyRef(t.ref)}
           >
             <Icon className="size-3 shrink-0" />
@@ -177,7 +177,7 @@ export function CapabilityStrip({
         );
       })}
       {overflow > 0 && (
-        <span className="inline-flex items-center rounded border border-border bg-muted/50 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+        <span className="inline-flex items-center rounded border border-border bg-muted/50 px-1.5 py-0.5 text-xs leading-none text-muted-foreground">
           <Puzzle className="mr-1 size-3 shrink-0" />+{overflow}
           {v2 ? " tools" : ""}
         </span>

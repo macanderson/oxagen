@@ -211,7 +211,7 @@ export function LoginForm({
             showLabel={t("fields.showPassword")}
             hideLabel={t("fields.hidePassword")}
             labelAside={
-              <Link href="/forgot-password" className={`${linkText} text-xs`}>
+              <Link href="/forgot-password" className={`${linkText} text-sm`}>
                 {t("login.forgot")}
               </Link>
             }

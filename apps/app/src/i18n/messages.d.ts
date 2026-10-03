@@ -4830,6 +4830,7 @@ type Messages = {
         baseUrlRequired: string;
         balancedRequired: string;
         invalid: string;
+        modelTooLong: string;
         refused: string;
         pendingApproval: string;
         unavailable: string;
@@ -12742,6 +12743,13 @@ type Messages = {
       no_pull_request: string;
       pr_closed: string;
     };
+    pullState: {
+      open: string;
+      draft: string;
+      closed: string;
+      merged: string;
+      seen: string;
+    };
     wait: {
       aPerson: string;
       theRuntime: string;
@@ -13361,7 +13369,9 @@ type Messages = {
       heading: string;
       aPerson: string;
       noPullRequest: string;
+      noRecordedPullRequest: string;
       pullRequest: string;
+      pullRequests: string;
       pullRequestRef: string;
       head: string;
       headUnread: string;

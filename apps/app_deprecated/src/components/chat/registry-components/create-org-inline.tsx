@@ -82,7 +82,7 @@ export default function CreateOrgInline({
             className="h-5 w-5 shrink-0 text-success"
             aria-hidden="true"
           />
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-base font-medium text-foreground">
             Organization created — redirecting…
           </p>
         </div>
@@ -103,7 +103,7 @@ export default function CreateOrgInline({
           className="h-4 w-4 shrink-0 text-muted-foreground"
           aria-hidden="true"
         />
-        <span className="text-sm font-semibold text-foreground">
+        <span className="text-base font-semibold text-foreground">
           Create organization
         </span>
       </div>
@@ -147,7 +147,7 @@ export default function CreateOrgInline({
           disabled={isSubmitting}
           autoComplete="off"
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Lowercase, digits, hyphens. 2–40 chars.
         </p>
       </div>
@@ -158,7 +158,7 @@ export default function CreateOrgInline({
       {formState === "error" && errorMessage !== null && (
         <p
           role="alert"
-          className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-base text-destructive"
         >
           {errorMessage}
         </p>
