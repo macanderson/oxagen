@@ -4,6 +4,7 @@ import {
   createWindowComposition,
   ledgerContextWindows,
   type RecordedWindow,
+  streamedWindowComposition,
   tachoContextWindow,
   type TachoModelCallRow,
   walkLedgerContextWindows,
@@ -363,6 +364,45 @@ describe("createWindowComposition", () => {
     expect(composition.finish()).toBeNull();
     composition.add(measured(1, [["conversation", 1, 30]], null));
     expect(composition.finish()).toBeNull();
+  });
+});
+
+describe("streamedWindowComposition", () => {
+  it("sums the windowed rows of every batch and skips a row with no window", async () => {
+    const composition = await streamedWindowComposition(async (consume) => {
+      await consume([llmCall({ seq: 1 }), llmCall({ seq: 2, attrs: {} })]);
+      await consume([
+        llmCall({
+          seq: 3,
+          attrs: { "oxagen.window": "system=100:1;conversation=900:4" },
+          inputTokens: 1_000,
+          cacheReadTokens: null,
+          cacheCreationTokens: null,
+        }),
+      ]);
+    });
+    // Each default row's total is 40 + 900 + 60 = 1,000 tokens.
+    expect(composition).toEqual({
+      requests: 2,
+      requestsWithoutTokens: 0,
+      promptTokens: 2_000,
+      blocks: {
+        system: 200,
+        steering: null,
+        tools: 300,
+        context: null,
+        conversation: 1_500,
+      },
+      initialConversationTokens: 600,
+    });
+  });
+
+  it("answers null when no batch carried a window (negative)", async () => {
+    expect(
+      await streamedWindowComposition(async (consume) => {
+        await consume([llmCall({ attrs: {} })]);
+      }),
+    ).toBeNull();
   });
 });
 

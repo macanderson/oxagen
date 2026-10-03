@@ -326,6 +326,7 @@ export {
   isContextWindowEvent,
   isLaterLlmCallSighting,
   ledgerContextWindows,
+  streamedWindowComposition,
   tachoContextWindow,
   walkLedgerContextWindows,
   windowComposition,

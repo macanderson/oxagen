@@ -31,12 +31,14 @@
  * made before windows were recorded, and a call on an API the proxy does not
  * parse all answer that way.
  *
- * `composition` sums each block's tokens over every window the read reached,
+ * `composition` sums each block's tokens over every window the run recorded,
  * not only the first `RUN_CONTEXT_WINDOW_MAX` it lists (#5295). The Cost
  * tab's Prompt composition and Spend by area draw it. It is summed here,
  * beside the read that walks the frames, because `get_run_cost` is read on
- * every tab of the Run page and this walk is not. A wrapped run's windows are
- * its root session's, so a subagent's calls are not in it.
+ * every tab of the Run page and this walk is not. A wrapped run's `windows`
+ * are its root session's, the chain the Context tab draws, and its
+ * `composition` covers every chain of the run, its subagents' included: the
+ * same windows the cost rollup sums into the run's row (#5341).
  *
  * `noBillingGate: true`: reading a recording is a console read (§1.5).
  */
@@ -184,10 +186,12 @@ export const runContextGet = registerCapability({
       /** False when the read stopped at a cap, so the lists are a prefix. */
       complete: z.boolean(),
       /**
-       * Each block's tokens summed over every window the read reached, the
-       * windows past `RUN_CONTEXT_WINDOW_MAX` included. Null when no window
-       * reported a prompt total. `complete` says whether the read reached
-       * every frame.
+       * Each block's tokens summed over every window the run recorded, the
+       * windows past `RUN_CONTEXT_WINDOW_MAX` included. A wrapped run's sum
+       * covers every chain of the run, its subagents' included. A ledger
+       * run's covers the windows its walk reached, and `complete` says
+       * whether that walk reached every frame. Null when no window reported
+       * a prompt total.
        */
       composition: runContextCompositionSchema.nullable().default(null),
     })

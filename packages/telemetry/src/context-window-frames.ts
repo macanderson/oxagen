@@ -17,13 +17,18 @@
  * (`runSessionsFilter`), which the `chSelect` fence refuses. So this read
  * names the organization, the workspace and the run's root in its predicates,
  * as the other rollup reads in ./cost-frames.ts do.
+ *
+ * It reads the organization's own ClickHouse plane (ADR-042), the store
+ * `chInsert` wrote its frames to. `get_run_context` sums a wrapped run's
+ * composition through this read too, and before it read through `chSelect`,
+ * which resolves the same plane.
  */
 import {
   CONTEXT_WINDOW_ATTR,
   LLM_CALL_DUPLICATE_OF_ATTR,
 } from "@oxagen/recorder";
-import { clickhouse } from "./clickhouse";
 import { COST_FRAME_QUERY_SETTINGS, runSessionsFilter } from "./cost-frames";
+import { planeClient } from "./tenant";
 
 /**
  * One windowed `llm_call` row. The members match `TachoModelCallRow` in
@@ -108,7 +113,8 @@ export async function readTachoWindowFrames(
       ? args.sessionUuids
       : [args.rootSessionUuid, ...args.sessionUuids],
   );
-  const result = await clickhouse().query({
+  const client = await planeClient(args.orgId);
+  const result = await client.query({
     query: `
       SELECT
         seq,

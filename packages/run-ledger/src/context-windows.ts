@@ -397,6 +397,28 @@ export function windowComposition(
 }
 
 /**
+ * A wrapped run's prompt composition from its `llm_call` rows, which `stream`
+ * hands over in batches in frame order (#5341). A row with no window adds
+ * nothing. `get_run_context` and the cost rollup both sum a wrapped run's
+ * windows here, over every chain of the run, so a run's Cost tab and its
+ * part of the Agent page agree. Null when no window reported a prompt total.
+ */
+export async function streamedWindowComposition(
+  stream: (
+    consume: (rows: readonly TachoModelCallRow[]) => Promise<void>,
+  ) => Promise<void>,
+): Promise<WindowComposition | null> {
+  const composition = createWindowComposition();
+  await stream(async (rows) => {
+    for (const row of rows) {
+      const window = tachoContextWindow(row);
+      if (window !== null) composition.add(window);
+    }
+  });
+  return composition.finish();
+}
+
+/**
  * {@link windowComposition} one window at a time, so a reader that streams a
  * long run's windows holds the sums and not every window. Feed it the
  * windows in frame order.
