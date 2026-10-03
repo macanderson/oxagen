@@ -1226,7 +1226,7 @@ const CSS = `
 :root[data-theme="dark"]{--ground:#10100F;--panel:#181715;--raised:#201F1C;--line:#292722;--rule:#34322D;--ink:#F2EEE5;--ink-2:#D9D4C8;--muted:#9B958A;--faint:#6B665C;--accent:#D6962C;--accent-ink:#F1C364;--fig-ground:#10100F;--fig-panel:#151412;--fig-head:rgba(214,150,44,.14);--fig-group:rgba(214,150,44,.05);--fig-note:rgba(214,150,44,.10);--pill:#242220;--heat:214,150,44;color-scheme:dark}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth;scroll-padding-top:16px}
-body{margin:0;background:var(--ground);color:var(--ink);font:15px/1.55 "Aeonik",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--ground);color:var(--ink);font:15px/1.55 "Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 a{color:var(--accent-ink)}
 code,.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;font-size:.86em}
@@ -1260,7 +1260,7 @@ p{max-width:70ch}
 .figure{margin:22px 0 30px}
 .figure h3{margin:0 0 10px}
 .figwrap{overflow-x:auto;padding:14px 10px;border:1px solid var(--line);border-radius:10px;background:var(--fig-ground)}
-.fig{display:block;width:100%;max-width:100%;height:auto;color:var(--ink);font-family:"Aeonik",ui-sans-serif,system-ui,sans-serif}
+.fig{display:block;width:100%;max-width:100%;height:auto;color:var(--ink);font-family:"Geist",ui-sans-serif,system-ui,sans-serif}
 .fig .sub,.fig .ctype,.fig .detail,.fig .group-label,.fig .num,.fig .exit,.fig .ext,.fig .badge{fill:var(--muted)}
 .fig .elabel{fill:var(--ink-2)}
 .fig .pk{font-weight:600}
