@@ -37,22 +37,15 @@ export interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
   containerClassName?: string;
 }
 
-const densityVars: Record<TableDensity, string> = {
-  // One knob per axis — every cell and header reads these vars.
-  default: "[--table-pad-x:0.75rem] [--table-pad-y:0.625rem]",
-  compact: "[--table-pad-x:0.625rem] [--table-pad-y:0.375rem]",
-};
-
 const Table = React.forwardRef<HTMLTableElement, TableProps>(
   ({ className, density = "default", containerClassName, ...props }, ref) => (
     <div className={cn("relative w-full overflow-x-auto", containerClassName)}>
       <table
         ref={ref}
-        className={cn(
-          "w-full caption-bottom text-base",
-          densityVars[density],
-          className,
-        )}
+        // One knob per axis, set in globals.css by density: every cell and
+        // header reads --table-pad-x and --table-pad-y.
+        data-density={density}
+        className={cn("w-full caption-bottom text-base", className)}
         {...props}
       />
     </div>
@@ -119,7 +112,7 @@ const TableRow = React.forwardRef<HTMLTableRowElement, TableRowProps>(
     <tr
       ref={ref}
       className={cn(
-        "border-b border-border/50 transition-colors duration-[var(--motion-micro)] hover:bg-muted/50 data-[state=selected]:bg-muted",
+        "border-b border-border/50 transition-colors duration-(--motion-micro) hover:bg-muted/50 data-[state=selected]:bg-muted",
         interactive && "cursor-pointer",
         className,
       )}
@@ -136,7 +129,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-9 whitespace-nowrap px-[var(--table-pad-x)] text-left align-middle text-sm font-medium uppercase tracking-wide text-card-header-fg/70",
+      "h-9 whitespace-nowrap px-(--table-pad-x) text-left align-middle text-sm font-medium uppercase tracking-wide text-card-header-fg/70",
       className,
     )}
     {...props}
@@ -151,7 +144,7 @@ const TableCell = React.forwardRef<
   <td
     ref={ref}
     className={cn(
-      "px-[var(--table-pad-x)] py-[var(--table-pad-y)] align-middle",
+      "px-(--table-pad-x) py-(--table-pad-y) align-middle",
       className,
     )}
     {...props}
@@ -183,7 +176,7 @@ const TableEmpty = React.forwardRef<HTMLTableRowElement, TableEmptyProps>(
     <tr ref={ref} className={cn("hover:bg-transparent", className)} {...props}>
       <td
         colSpan={colSpan}
-        className="px-[var(--table-pad-x)] py-8 text-center text-base text-muted-foreground"
+        className="px-(--table-pad-x) py-8 text-center text-base text-muted-foreground"
       >
         {children ?? "No results."}
       </td>

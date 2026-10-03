@@ -1,1 +1,17 @@
-{}
+{
+  "../../packages/ui/src/components/global-error.tsx": {
+    "<button>": "Next.js renders global-error outside the root layout, so no stylesheet, no token and no Button loads there, and the page styles itself inline.",
+    "style:border": "Next.js renders global-error outside the root layout, so no stylesheet, no token and no Button loads there, and the page styles itself inline.",
+    "style:borderRadius": "Next.js renders global-error outside the root layout, so no stylesheet, no token and no Button loads there, and the page styles itself inline.",
+    "style:color": "Next.js renders global-error outside the root layout, so no stylesheet, no token and no Button loads there, and the page styles itself inline.",
+    "style:fontSize": "Next.js renders global-error outside the root layout, so no stylesheet, no token and no Button loads there, and the page styles itself inline.",
+    "style:fontWeight": "Next.js renders global-error outside the root layout, so no stylesheet, no token and no Button loads there, and the page styles itself inline.",
+    "style:height": "Next.js renders global-error outside the root layout, so no stylesheet, no token and no Button loads there, and the page styles itself inline.",
+    "style:margin": "Next.js renders global-error outside the root layout, so no stylesheet, no token and no Button loads there, and the page styles itself inline.",
+    "style:marginTop": "Next.js renders global-error outside the root layout, so no stylesheet, no token and no Button loads there, and the page styles itself inline.",
+    "style:maxWidth": "Next.js renders global-error outside the root layout, so no stylesheet, no token and no Button loads there, and the page styles itself inline.",
+    "style:minHeight": "Next.js renders global-error outside the root layout, so no stylesheet, no token and no Button loads there, and the page styles itself inline.",
+    "style:padding": "Next.js renders global-error outside the root layout, so no stylesheet, no token and no Button loads there, and the page styles itself inline.",
+    "style:width": "Next.js renders global-error outside the root layout, so no stylesheet, no token and no Button loads there, and the page styles itself inline."
+  }
+}

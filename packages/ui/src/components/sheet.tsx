@@ -18,7 +18,7 @@ const SheetOverlay = React.forwardRef<
     ref={ref}
     className={cn(
       // Token-driven scrim (matches DialogOverlay) — never a raw palette color.
-      "fixed inset-0 z-50 bg-overlay-scrim transition-opacity duration-300 ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[ending-style]:opacity-0",
+      "fixed inset-0 z-50 bg-overlay-scrim transition-opacity duration-(--motion-entry) ease-(--ease-entry) data-[starting-style]:opacity-0 data-[ending-style]:opacity-0",
       className,
     )}
     {...props}
@@ -27,7 +27,7 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = "SheetOverlay";
 
 const sheetVariants = cva(
-  "fixed z-50 gap-4 bg-background p-6 shadow-lg transition ease-[var(--ease-entry)] duration-300 data-[ending-style]:duration-200",
+  "fixed z-50 gap-4 bg-background p-6 shadow-pop transition ease-(--ease-entry) duration-(--motion-entry) data-[ending-style]:duration-(--motion-overlay)",
   {
     variants: {
       side: {

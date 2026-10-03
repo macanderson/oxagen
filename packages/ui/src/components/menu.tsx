@@ -52,8 +52,8 @@ const MenuPopup = React.forwardRef<
         <MenuPrimitive.Popup
           ref={ref}
           className={cn(
-            "z-50 min-w-[8rem] overflow-hidden rounded-lg border border-menu-popup-border bg-menu-popup-bg p-1 text-menu-popup-fg",
-            "origin-[var(--transform-origin)] transition-[opacity,transform,translate,scale] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:-translate-y-1 data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:-translate-y-1",
+            "z-50 min-w-32 overflow-hidden rounded-lg border border-menu-popup-border bg-menu-popup-bg p-1 text-menu-popup-fg",
+            "origin-(--transform-origin) transition duration-(--motion-overlay) ease-(--ease-entry) data-[starting-style]:opacity-0 data-[starting-style]:scale-98 data-[starting-style]:-translate-y-1 data-[ending-style]:opacity-0 data-[ending-style]:scale-98 data-[ending-style]:-translate-y-1",
             className,
           )}
           {...props}
@@ -223,8 +223,8 @@ const MenuSubPopup = React.forwardRef<
         <MenuPrimitive.Popup
           ref={ref}
           className={cn(
-            "z-50 min-w-[8rem] overflow-hidden rounded-lg border border-menu-popup-border bg-menu-popup-bg p-1 text-menu-popup-fg",
-            "origin-[var(--transform-origin)] transition-[opacity,transform,translate,scale] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:-translate-y-1 data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:-translate-y-1",
+            "z-50 min-w-32 overflow-hidden rounded-lg border border-menu-popup-border bg-menu-popup-bg p-1 text-menu-popup-fg",
+            "origin-(--transform-origin) transition duration-(--motion-overlay) ease-(--ease-entry) data-[starting-style]:opacity-0 data-[starting-style]:scale-98 data-[starting-style]:-translate-y-1 data-[ending-style]:opacity-0 data-[ending-style]:scale-98 data-[ending-style]:-translate-y-1",
             className,
           )}
           {...props}

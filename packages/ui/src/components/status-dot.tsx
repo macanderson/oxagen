@@ -63,7 +63,7 @@ function StatusDot({
           <span
             aria-hidden="true"
             className={cn(
-              "absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-60 [animation-duration:1.6s]",
+              "absolute inline-flex h-full w-full animate-ping animate-slow rounded-full bg-current opacity-60",
               dotSize,
             )}
           />

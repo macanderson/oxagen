@@ -18,7 +18,9 @@ import {
   parseBaseline,
   RAW_BUTTON,
   scanFile,
+  scannedFiles,
   scanTree,
+  UI_SRC,
 } from "./hardcoded-values";
 import { APP_DIR, WHOLE_TREE_TIMEOUT_MS } from "./parse";
 
@@ -41,6 +43,19 @@ function probe(name: string): string[] {
 describe("hardcoded values: every value reaches the page through a token", () => {
   it("the baseline is an object of files, each token with a positive count or a reason", () => {
     expect(() => baseline()).not.toThrow();
+  });
+
+  it("reads packages/ui beside apps/app, and skips the kit's synced files", () => {
+    const files = scannedFiles();
+    expect(files).toEqual(
+      expect.arrayContaining([
+        "src/app/globals.css",
+        `${UI_SRC}styles/globals.css`,
+        `${UI_SRC}components/dialog.tsx`,
+      ]),
+    );
+    expect(files).not.toContain(`${UI_SRC}styles/house-tokens.css`);
+    expect(files.some((file) => file.endsWith(".stories.tsx"))).toBe(false);
   });
 
   it(

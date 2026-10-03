@@ -17,7 +17,7 @@ const Tabs = TabsPrimitive.Root;
 
 const tabsListVariants = cva(
   // `relative` is load-bearing: TabsIndicator is absolutely positioned with
-  // `[left:var(--active-tab-left)]`, so the list MUST establish its containing
+  // `left-(--active-tab-left)`, so the list MUST establish its containing
   // block. Without it the bar resolves against whatever ancestor happens to be
   // positioned (or the initial containing block) and lands somewhere arbitrary
   // — a different place per host page.
@@ -62,7 +62,7 @@ const TabsTab = React.forwardRef<
       // Default (pill) list treatment — active pill is a flat card surface.
       "group-data-[variant=default]/list:rounded-md group-data-[variant=default]/list:px-3 group-data-[variant=default]/list:py-1 group-data-[variant=default]/list:data-[active]:bg-card group-data-[variant=default]/list:data-[active]:text-tab-fg-active",
       // Underline list treatment — constant-width border at rest, color flips on state.
-      "group-data-[variant=underline]/list:-mb-px group-data-[variant=underline]/list:border-b-[length:var(--tab-border-width)] group-data-[variant=underline]/list:border-tab-border group-data-[variant=underline]/list:hover:border-tab-border-hover group-data-[variant=underline]/list:px-1 group-data-[variant=underline]/list:py-2 group-data-[variant=underline]/list:data-[active]:border-tab-border-active group-data-[variant=underline]/list:data-[active]:text-tab-fg-active",
+      "group-data-[variant=underline]/list:-mb-px group-data-[variant=underline]/list:border-b-(length:--tab-border-width) group-data-[variant=underline]/list:border-tab-border group-data-[variant=underline]/list:hover:border-tab-border-hover group-data-[variant=underline]/list:px-1 group-data-[variant=underline]/list:py-2 group-data-[variant=underline]/list:data-[active]:border-tab-border-active group-data-[variant=underline]/list:data-[active]:text-tab-fg-active",
       className,
     )}
     {...props}
@@ -114,12 +114,12 @@ const TabsIndicator = React.forwardRef<
     className={cn(
       // Active indicator is a solid bar in the active tab-border color.
       // NOTE: do NOT add a `left-0` here — it conflicts with the
-      // `[left:var(--active-tab-left)]` arbitrary value below and pins the
+      // `left-(--active-tab-left)` arbitrary value below and pins the
       // bar under the first tab (width still tracks, so it "grows" wrongly).
       "absolute bottom-0 h-0.5 rounded-full bg-tab-border-active",
       // PRESERVED MOTION: the indicator slides between tabs.
-      "transition-all duration-[var(--motion-base)] ease-[var(--ease-hover)]",
-      "[left:var(--active-tab-left)] [width:var(--active-tab-width)]",
+      "transition-all duration-(--motion-base) ease-(--ease-hover)",
+      "left-(--active-tab-left) w-(--active-tab-width)",
       className,
     )}
     {...props}

@@ -31,7 +31,7 @@ const Radio = React.forwardRef<
     ref={ref}
     className={cn(
       "flex aspect-square h-4 w-4 items-center justify-center rounded-full border border-control-border",
-      "transition-colors duration-[var(--motion-base)]",
+      "transition-colors duration-(--motion-base)",
       "data-[checked]:border-control-track-bg-checked",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-control-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
       "disabled:cursor-not-allowed disabled:opacity-50",
