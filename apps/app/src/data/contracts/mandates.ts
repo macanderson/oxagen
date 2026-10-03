@@ -378,6 +378,8 @@ export function isUpcoming(mandate: MandateRow, at: Date): boolean {
  * mandate is effective up to but not including `validTo` and elapsed from that
  * instant on. With `isUpcoming` the three split an active mandate's timeline
  * with no gap and no overlap, and both handovers are pinned at the instant.
+ *
+ * @internal Exported for its unit test. Pages read it through `windowOf`.
  */
 export function isElapsed(mandate: MandateRow, at: Date): boolean {
   return (
