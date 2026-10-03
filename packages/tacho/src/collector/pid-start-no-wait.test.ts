@@ -165,7 +165,7 @@ describe("the daemon on macOS", () => {
       },
       exec: () => NOT_A_REPOSITORY,
       execAsync: (command, args) =>
-        command === "ps"
+        command === "env" && args.includes("ps")
           ? new Promise<ExecResult>((resolve) => {
               psReads.push({
                 args,
@@ -195,7 +195,16 @@ describe("the daemon on macOS", () => {
     const first = handle.registry.get(FIRST);
     expect(first?.pid).toBe(pid);
     expect(psReads.map((read) => read.args)).toEqual([
-      ["-o", "pid=,lstart=", "-p", String(pid)],
+      [
+        "TZ=UTC",
+        "LC_ALL=C",
+        "LANG=C",
+        "ps",
+        "-o",
+        "pid=,lstart=",
+        "-p",
+        String(pid),
+      ],
     ]);
     expect(first?.pidInstance).toBeUndefined();
 
@@ -211,5 +220,66 @@ describe("the daemon on macOS", () => {
     await settle();
     expect(first?.pidInstance).toBe(STARTED);
     expect(psReads).toHaveLength(1);
+  });
+
+  it("reads a hook's start time in the sweep's zone, so a live session stays open", async () => {
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    writeHostFile(
+      paths.hostFile,
+      readHostFile(paths.hostFile) ??
+        testHostFile(signer, signer.sign(unsignedBundle())),
+    );
+    const pid = process.pid;
+    // One live process, as `ps -o pid=,lstart=` prints it in UTC and in a
+    // laptop's own zone (UTC-7).
+    const inZone = (utc: boolean): ExecResult => ({
+      status: 0,
+      stdout: `${pid} ${utc ? STARTED : "Fri Sep 25 02:00:00 2026"}\n`,
+      stderr: "",
+    });
+    const readsStart = (command: string, args: string[]) =>
+      (command === "ps" || (command === "env" && args.includes("ps"))) &&
+      args.includes("pid=,lstart=");
+    const handle = await startDaemon({
+      paths,
+      fetch: async () => {
+        throw new Error("ECONNREFUSED");
+      },
+      // The sweep's `ps`, which runs with the zone pinned to UTC.
+      exec: (command, args) =>
+        readsStart(command, args) ? inZone(true) : NOT_A_REPOSITORY,
+      // The daemon's general exec, which runs in the laptop's zone unless
+      // the command line pins it.
+      execAsync: async (command, args) =>
+        readsStart(command, args)
+          ? inZone(args.includes("TZ=UTC"))
+          : NOT_A_REPOSITORY,
+      platform: "darwin",
+      now: () => 3_600_000,
+      log: () => {},
+      listen: false,
+      transcriptRoots: [`${paths.tachoDir}/no-transcripts`],
+      timers: {
+        detectorMs: 60 * 60_000,
+        sweepMs: 60_000,
+        checkpointMs: 60 * 60_000,
+        commandsPollMs: 0,
+      },
+    });
+    handles.push(handle);
+
+    await handle.api.handleHook({
+      payload: { session_id: FIRST, hook_event_name: "SessionStart" },
+      env: { CLAUDE_PID: String(pid) },
+    });
+    await settle();
+    expect(handle.registry.get(FIRST)?.pidInstance).toBe(STARTED);
+
+    // The sweep reads the same process in UTC. A start time recorded in the
+    // laptop's zone read as another process, and the sweep sealed a live
+    // Claude Code session `crashed` seconds after it started.
+    await handle.tick();
+    expect(handle.registry.get(FIRST)?.sealed).toBe(false);
   });
 });
