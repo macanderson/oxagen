@@ -230,11 +230,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
   // The forge backfill (ADR-292) reads the run links and work order facts
   // that predate the forge store through this package, for the same reason,
   // and is loaded on its first run.
-  setForgeBackfillRunner(async (request) =>
-    (await import("./lib/forge-pull-requests/backfill")).forgeBackfillPage(
-      request,
-    ),
-  );
+  const forgeBackfill = () => import("./lib/forge-pull-requests/backfill");
+  setForgeBackfillRunner({
+    range: async (source) => (await forgeBackfill()).forgeBackfillRange(source),
+    page: async (request) => (await forgeBackfill()).forgeBackfillPage(request),
+  });
   // A work order's run end and pull request (ADR-251) write work records and
   // read GitHub through this package too, and load on their first run.
   setWorkOrderResultsRunner({

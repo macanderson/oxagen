@@ -9,7 +9,8 @@
 //     request by repository and number.
 //
 // The reads fall back to both until every link has a forge row. Each page
-// reads one store's rows by id, looks their pull requests up in
+// reads one store's rows in id order, between the bounds the backfill gives
+// it, looks their pull requests up in
 // `forge.pull_requests` in a second query, and answers one
 // `forge/pull-request.observed` event for each link whose pull request has
 // no forge row in its workspace. The sync then writes the row, its revision,
@@ -28,10 +29,12 @@ import { schema, withSystemDb } from "@oxagen/database";
 import type {
   ForgeBackfillEvent,
   ForgeBackfillPage,
+  ForgeBackfillRange,
   ForgeBackfillRequest,
+  ForgeBackfillSource,
 } from "@oxagen/inngest-functions/forge-pull-request-backfill-runner";
 import type { ForgePullRequestSyncRequest } from "@oxagen/inngest-functions/forge-pull-request-sync-runner";
-import { and, asc, eq, gt, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, lte, max, min } from "drizzle-orm";
 import { type ForgeProvider, pullKeyOf } from "./facts";
 
 /** One `tacho.run_pull_requests` row, with the root session it belongs to. */
@@ -71,10 +74,13 @@ export type LinkKey = {
 /** A run by its public id, in the workspace that holds it. */
 export type RunRef = { workspaceId: string; runId: string };
 
+/** Rows above `after` and at or below `until`, where each is set. */
+type Bounds = { after: string | null; until: string | null };
+
 /** The reads one page makes. Each runs across every tenant. */
 export interface ForgeBackfillDeps {
-  tachoPage(after: string | null, limit: number): Promise<TachoLinkRow[]>;
-  factPage(after: string | null, limit: number): Promise<FactLinkRow[]>;
+  tachoPage(bounds: Bounds, limit: number): Promise<TachoLinkRow[]>;
+  factPage(bounds: Bounds, limit: number): Promise<FactLinkRow[]>;
   /** The `pullKeyOf` keys of the given pull requests that have a forge row. */
   heldKeys(keys: readonly LinkKey[]): Promise<Set<string>>;
   /** Each root session's `session_uuid`, by `sessionRefOf` of its run. */
@@ -203,8 +209,9 @@ export async function readBackfillPage(
   deps: ForgeBackfillDeps,
   request: ForgeBackfillRequest,
 ): Promise<ForgeBackfillPage> {
+  const bounds = { after: request.after, until: request.until };
   if (request.source === "run_pull_requests") {
-    const rows = await deps.tachoPage(request.after, request.limit);
+    const rows = await deps.tachoPage(bounds, request.limit);
     const keys = rows.flatMap((row) => tachoKeyOf(row) ?? []);
     const held = await deps.heldKeys(keys);
     return {
@@ -213,7 +220,7 @@ export async function readBackfillPage(
       last: rows.at(-1)?.id ?? null,
     };
   }
-  const rows = await deps.factPage(request.after, request.limit);
+  const rows = await deps.factPage(bounds, request.limit);
   const keys = rows.flatMap((row) => factKeyOf(row) ?? []);
   const held = await deps.heldKeys(keys);
   // Only a wrapped run has a root session to link; a ledger run has none.
@@ -239,9 +246,28 @@ const sessionTable = schema.tachoSessions;
 const facts = schema.workItemFacts;
 const pulls = schema.forgePullRequests;
 
+/** The id filter for a page: above `after` and at or below `until`, where each is set. */
+function between(
+  id: typeof tacho.id | typeof facts.id,
+  bounds: Bounds,
+) {
+  return and(
+    bounds.after === null ? undefined : gt(id, bounds.after),
+    bounds.until === null ? undefined : lte(id, bounds.until),
+  );
+}
+
+/** A range from a min and max read; null when the read found no row. */
+function rangeOf(
+  row: { first: string | null; last: string | null } | undefined,
+): ForgeBackfillRange | null {
+  if (row === undefined || row.first === null || row.last === null) return null;
+  return { first: row.first, last: row.last };
+}
+
 /** The real reads, each one schema, each across every tenant on the shared plane. */
 export const forgeBackfillDeps: ForgeBackfillDeps = {
-  async tachoPage(after, limit) {
+  async tachoPage(bounds, limit) {
     // tenancy: a scheduled global backfill across all orgs. It reads link
     // keys only, and each event it sends is filtered to one org and
     // workspace, which the sync re-enters as its tenant scope before it writes.
@@ -263,7 +289,7 @@ export const forgeBackfillDeps: ForgeBackfillDeps = {
           sessionTable,
           and(eq(sessionTable.id, tacho.sessionId), eq(sessionTable.orgId, tacho.orgId)),
         )
-        .where(after === null ? undefined : gt(tacho.id, after))
+        .where(between(tacho.id, bounds))
         .orderBy(asc(tacho.id))
         .limit(limit),
     );
@@ -280,7 +306,7 @@ export const forgeBackfillDeps: ForgeBackfillDeps = {
           : { uuid: row.sessionUuid, runId: row.runId },
     }));
   },
-  async factPage(after, limit) {
+  async factPage(bounds, limit) {
     // tenancy: a scheduled global backfill across all orgs. It reads the
     // pull request keys of pr_linked facts only, and each event it sends is
     // filtered to the fact's own org and workspace for the sync to re-enter.
@@ -297,10 +323,7 @@ export const forgeBackfillDeps: ForgeBackfillDeps = {
         })
         .from(facts)
         .where(
-          and(
-            eq(facts.kind, "pr_linked"),
-            after === null ? undefined : gt(facts.id, after),
-          ),
+          and(eq(facts.kind, "pr_linked"), between(facts.id, bounds)),
         )
         .orderBy(asc(facts.id))
         .limit(limit),
@@ -371,7 +394,32 @@ export const forgeBackfillDeps: ForgeBackfillDeps = {
   },
 };
 
-/** The runner `register.ts` installs: one page, with the real reads. */
+/** The lowest and highest row id of a source, or null when it holds no row. */
+export async function forgeBackfillRange(
+  source: ForgeBackfillSource,
+): Promise<ForgeBackfillRange | null> {
+  if (source === "run_pull_requests") {
+    // tenancy: a scheduled global backfill across all orgs. It reads only the
+    // lowest and highest row id, and no row's content, to choose where the
+    // pass starts; every page after it is filtered by org and workspace.
+    const [row] = await withSystemDb((tx) =>
+      tx.select({ first: min(tacho.id), last: max(tacho.id) }).from(tacho),
+    );
+    return rangeOf(row);
+  }
+  // tenancy: a scheduled global backfill across all orgs. It reads only the
+  // lowest and highest pr_linked fact id, and no fact's content, to choose
+  // where the pass starts; every page after it is filtered by org and workspace.
+  const [row] = await withSystemDb((tx) =>
+    tx
+      .select({ first: min(facts.id), last: max(facts.id) })
+      .from(facts)
+      .where(eq(facts.kind, "pr_linked")),
+  );
+  return rangeOf(row);
+}
+
+/** One page of one source, with the real reads. */
 export function forgeBackfillPage(
   request: ForgeBackfillRequest,
 ): Promise<ForgeBackfillPage> {

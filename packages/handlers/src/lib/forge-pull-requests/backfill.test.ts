@@ -184,9 +184,13 @@ describe("readBackfillPage", () => {
     const page = await readBackfillPage(d, {
       source: "run_pull_requests",
       after: "0192d4a8-7c1e-7a00-8000-000000000100",
+      until: null,
       limit: 2,
     });
-    expect(d.tachoPage).toHaveBeenCalledWith("0192d4a8-7c1e-7a00-8000-000000000100", 2);
+    expect(d.tachoPage).toHaveBeenCalledWith(
+      { after: "0192d4a8-7c1e-7a00-8000-000000000100", until: null },
+      2,
+    );
     expect(d.heldKeys).toHaveBeenCalledWith([
       { workspaceId: WS, provider: "github", repository: "acme/api", number: 42 },
       { workspaceId: WS, provider: "github", repository: "acme/api", number: 43 },
@@ -199,8 +203,17 @@ describe("readBackfillPage", () => {
 
   it("resolves root sessions only for the facts whose pull request has no forge row", async () => {
     const d = deps();
-    const page = await readBackfillPage(d, { source: "pr_linked", after: null, limit: 2 });
-    expect(d.factPage).toHaveBeenCalledWith(null, 2);
+    const page = await readBackfillPage(d, {
+      source: "pr_linked",
+      after: null,
+      until: "0192d4a8-7c1e-7a00-8000-000000000300",
+      limit: 2,
+    });
+    // The wrap leg reads from the lowest row up to the start, inclusive.
+    expect(d.factPage).toHaveBeenCalledWith(
+      { after: null, until: "0192d4a8-7c1e-7a00-8000-000000000300" },
+      2,
+    );
     expect(d.rootSessions).toHaveBeenCalledWith([{ workspaceId: WS, runId: RUN }]);
     expect(page.events).toHaveLength(1);
     expect(page.events[0]?.data).toMatchObject({
@@ -213,7 +226,7 @@ describe("readBackfillPage", () => {
   it("answers no cursor for an empty page (negative)", async () => {
     const d = deps({ factPage: vi.fn(async () => []) });
     await expect(
-      readBackfillPage(d, { source: "pr_linked", after: "x", limit: 2 }),
+      readBackfillPage(d, { source: "pr_linked", after: "x", until: null, limit: 2 }),
     ).resolves.toEqual({ events: [], read: 0, last: null });
     expect(d.heldKeys).toHaveBeenCalledWith([]);
     expect(d.rootSessions).toHaveBeenCalledWith([]);

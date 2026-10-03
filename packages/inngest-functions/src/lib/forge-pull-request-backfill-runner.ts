@@ -15,11 +15,22 @@ import type { ForgePullRequestSyncRequest } from "./forge-pull-request-sync-runn
 export const FORGE_BACKFILL_SOURCES = ["run_pull_requests", "pr_linked"] as const;
 export type ForgeBackfillSource = (typeof FORGE_BACKFILL_SOURCES)[number];
 
-/** One page of one source: the rows after `after`, by id, at most `limit`. */
+/** The lowest and highest row id a source holds. */
+export interface ForgeBackfillRange {
+  first: string;
+  last: string;
+}
+
+/**
+ * One page of one source: its rows by id, at most `limit`, with an id above
+ * `after` (when set) and at or below `until` (when set).
+ */
 export interface ForgeBackfillRequest {
   source: ForgeBackfillSource;
-  /** The id of the last row the previous page read; null for the first page. */
+  /** Read only rows with a higher id; null reads from the lowest. */
   after: string | null;
+  /** Read only rows with this id or a lower one; null reads to the highest. */
+  until: string | null;
   limit: number;
 }
 
@@ -40,9 +51,11 @@ export interface ForgeBackfillPage {
   last: string | null;
 }
 
-export type ForgeBackfillRunner = (
-  request: ForgeBackfillRequest,
-) => Promise<ForgeBackfillPage>;
+export interface ForgeBackfillRunner {
+  /** The source's lowest and highest row id; null when it holds no row. */
+  range(source: ForgeBackfillSource): Promise<ForgeBackfillRange | null>;
+  page(request: ForgeBackfillRequest): Promise<ForgeBackfillPage>;
+}
 
 let runner: ForgeBackfillRunner | null = null;
 
