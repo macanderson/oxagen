@@ -1,7 +1,7 @@
 {
   "name": "list_findings",
   "domain": "spend",
-  "description": "List this workspace's costed findings ranked by the money at stake (open by default; applied or dismissed most recent first), each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend over the findings' window and that saving annualised. It lists at most 50 findings. The counts and totals cover every finding, and truncated is true when more exist than the list holds. Given a run, it lists only the findings that cite that run, each with the frames it cites there.",
+  "description": "List this workspace's costed findings ranked by the money at stake (open by default; applied or dismissed most recent first), each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend over the findings' window and that saving annualised. It lists at most 50 findings a page. The counts and totals cover every finding, truncated is true when more exist than the page holds, and nextCursor reads the next page. Given a run, it lists only the findings that cite that run, each with the frames it cites there. Given a level and a subject, it lists only the findings about that agent, operator, tool or workspace, and given a kind, only the findings of that kind.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -36,6 +36,43 @@
       },
       "runId": {
         "type": "string"
+      },
+      "level": {
+        "type": "string",
+        "enum": [
+          "tool",
+          "agent",
+          "operator",
+          "workspace"
+        ]
+      },
+      "subject": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "cache_writes_never_read",
+          "duplicate_tool_calls",
+          "repeated_shell_commands",
+          "unpaged_results",
+          "spin_loops",
+          "standing_context",
+          "idle_cache_rewrites",
+          "cache_busts",
+          "model_class_fit",
+          "repeated_instructions",
+          "recurring_runs",
+          "spend_with_no_outcome",
+          "retry_loops"
+        ]
+      },
+      "cursor": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
       }
     },
     "additionalProperties": false
@@ -1002,6 +1039,22 @@
       },
       "truncated": {
         "type": "boolean"
+      },
+      "nextCursor": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0
       }
     },
     "required": [
@@ -1013,7 +1066,9 @@
       "annualised",
       "counts",
       "findings",
-      "truncated"
+      "truncated",
+      "nextCursor",
+      "offset"
     ],
     "additionalProperties": false
   }

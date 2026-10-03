@@ -96,6 +96,8 @@ import {
   GUARDED_PAGES,
   literalDrift,
   markupDrift,
+  markupSemanticDrift,
+  semanticDrift,
   typeDrift,
 } from "./lib/brand-literals.mjs";
 import { isEntrypoint } from "./lib/is-entrypoint.mjs";
@@ -914,6 +916,24 @@ function literals() {
       kind: "type",
       path: h.path,
       why: `line ${h.line}: ${h.prop}: ${h.value}; use ${h.use}`,
+    });
+  }
+  // The semantic rule on the customer sites: colours, raw tokens, spacing,
+  // corners and shadows in a page, and buttons, each from a semantic token.
+  const semantic = semanticDrift(typed);
+  const markupSemantic = markupSemanticDrift(markup);
+  for (const h of [...semantic.hits, ...markupSemantic.hits]) {
+    drifted.push({
+      kind: "token",
+      path: h.path,
+      why: `line ${h.line}: ${h.prop}${h.prop === "class" ? " " : ": "}${h.value}; use ${h.use}`,
+    });
+  }
+  for (const k of [...semantic.stale, ...markupSemantic.stale]) {
+    drifted.push({
+      kind: "keep",
+      path: k.path,
+      why: `an allowlist in tools/scripts/lib/brand-literals.mjs keeps ${k.value}, which the file no longer writes; remove the entry`,
     });
   }
   for (const k of stale) {

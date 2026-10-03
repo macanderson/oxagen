@@ -167,13 +167,18 @@ export interface GitLabClient {
     ref: string;
     path?: string;
   }): Promise<string[]>;
-  /** POST /projects/:id/repository/commits */
+  /**
+   * POST /projects/:id/repository/commits. GitLab writes the commit on the
+   * branch's tip at the moment of the write. `parentIds` are the parents
+   * GitLab gave it, from the same answer, so a caller can tell whether a push
+   * landed under it. An answer without `parent_ids` gives an empty list.
+   */
   commitFiles(a: {
     project: GitLabProjectRef;
     branch: string;
     message: string;
     actions: GitLabCommitAction[];
-  }): Promise<{ sha: string }>;
+  }): Promise<{ sha: string; parentIds: string[] }>;
   /**
    * The same compare as `compare`, as one unified diff with each file's
    * `diff --git` header, and the files it changed.

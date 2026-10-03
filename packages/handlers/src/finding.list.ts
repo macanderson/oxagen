@@ -16,22 +16,31 @@
 // totals cover those, and each finding answers what it cites there: the
 // frames the Run page pins it to, or the run as a whole.
 //
-// The list holds at most FINDINGS_LIST_MAX findings. A workspace can hold
+// A page holds at most FINDINGS_LIST_MAX findings. A workspace can hold
 // more, because the findings job never caps a finding that counts toward the
 // unproductive spend headline (#5262). So the counts and totals read every
 // finding the filter matches, through a second read that leaves the evidence
-// out, and `truncated` says when the list holds fewer.
+// out, and `truncated` says when the page holds fewer. The cursor reads the
+// next page in the list order, and the counts and totals cover every
+// matching finding on every page (#5303). Given a level and a subject, the
+// read lists only the findings about that key: an agent's page reads its own
+// findings this way. Given a kind, it lists only the findings of that kind.
 import { type CostBasis, divideHalfEven, foldBasis } from "@oxagen/billing";
 import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   ANNUALISED_WINDOW_MIN_DAYS,
+  FINDINGS_LIST_MAX,
   findingList,
   type FindingListOutput,
 } from "@oxagen/oxagen/contracts/finding.list";
+import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { and, eq, gte, isNotNull, lt, sql } from "drizzle-orm";
 import {
   citationOf,
+  cursorAfter,
+  decodeFindingCursor,
+  type FindingCursor,
   type FindingFilter,
   findingScope,
   type FindingRow,
@@ -55,10 +64,14 @@ const annualisedOver = (from: Date, to: Date): bigint => {
 type PricedSpend = { micros: bigint; currency: string; basis: CostBasis };
 
 type FindingListDeps = {
-  /** The listed findings, in list order, at most FINDINGS_LIST_MAX. */
+  /**
+   * One page of findings in list order, after the cursor when there is one:
+   * at most FINDINGS_LIST_MAX, plus one more when a later page exists.
+   */
   readFindings: (
     scope: FindingScope,
     filter: FindingFilter,
+    after: FindingCursor | null,
   ) => Promise<FindingRow[]>;
   /** Every finding the filter matches, in list order, as the counts and totals read it. */
   readFindingTotals: (
@@ -116,12 +129,35 @@ export function createFindingListHandler(
 ): CapabilityHandler<typeof findingList> {
   return async (input, ctx): Promise<FindingListOutput> => {
     const scope = findingScope(ctx);
-    const { runId } = input;
-    const filter: FindingFilter =
-      runId === undefined
-        ? { status: input.status }
-        : { status: input.status, runId };
-    const rows = await deps.readFindings(scope, filter);
+    const { runId, level, subject, kind } = input;
+    const after =
+      input.cursor === undefined ? null : decodeFindingCursor(input.cursor);
+    // A cursor from another status holds a key of another kind: a saving
+    // where this list orders by decision instant, or the reverse.
+    if (
+      input.cursor !== undefined &&
+      (after === null || after.status !== input.status)
+    )
+      throw new CapabilityError(
+        findingList.name,
+        "invalid_input",
+        "invalid_cursor",
+      );
+    const filter: FindingFilter = {
+      status: input.status,
+      ...(runId === undefined ? {} : { runId }),
+      ...(level === undefined ? {} : { level }),
+      ...(subject === undefined ? {} : { subject }),
+      ...(kind === undefined ? {} : { kind }),
+    };
+    const read = await deps.readFindings(scope, filter, after);
+    const rows = read.slice(0, FINDINGS_LIST_MAX);
+    const offset = after?.offset ?? 0;
+    const last = rows.at(-1);
+    const nextCursor =
+      read.length > FINDINGS_LIST_MAX && last !== undefined
+        ? cursorAfter(input.status, last, offset + rows.length)
+        : null;
     const all = await deps.readFindingTotals(scope, filter);
     const counts = {
       findings: all.length,
@@ -147,6 +183,8 @@ export function createFindingListHandler(
         counts,
         findings,
         truncated,
+        nextCursor,
+        offset,
       };
 
     let start = all[0]!.windowStart;
@@ -196,6 +234,8 @@ export function createFindingListHandler(
       counts,
       findings,
       truncated,
+      nextCursor,
+      offset,
     };
   };
 }

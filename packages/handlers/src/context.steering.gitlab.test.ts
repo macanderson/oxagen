@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HandlerError } from "@oxagen/oxagen";
 import { steeringProposalCreate } from "@oxagen/oxagen/contracts/steering.proposal.create";
+import { fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
 import { gitBlobId } from "@oxagen/steering-bundle";
 
 const gate = vi.hoisted(() => ({ refuse: false }));
@@ -43,6 +44,11 @@ import {
   FakeGitLabApi,
   GITLAB_PROJECT,
 } from "./context.steering.gitlab.test-support";
+import {
+  landSteeringPr,
+  readSteeringLayout,
+} from "./steering-repo/merge-queue";
+import { steeringBranch } from "./steering-repo/stamp";
 import {
   REVIEWER,
   SCOPE,
@@ -885,6 +891,46 @@ describe("the GitLab seam's merge-queue calls", () => {
     ).rejects.toMatchObject({ code: "conflict", reason: "head_moved" });
   });
 
+  it("refuses a commit GitLab wrote on a push that landed after the branch read, and keeps the push", async () => {
+    const { api, head } = await onBranch();
+    // The author pushes after Oxagen reads the branch and before GitLab
+    // writes, so GitLab writes the commit on top of the push.
+    const client = api.client.bind(api);
+    let pushed: string | null = null;
+    api.client = (t) => {
+      const inner = client(t);
+      return {
+        ...inner,
+        commitFiles: async (a) => {
+          pushed ??= api.commit("b", "other", "pushed by the author");
+          return inner.commitFiles(a);
+        },
+      };
+    };
+    const { seam } = gitlabSeam(api);
+    const repo = await seam.resolveRepository(SCOPE);
+
+    await expect(
+      seam.commitFiles(repo, {
+        branch: "b",
+        parent: head,
+        message: "steering: stamp #1",
+        files: [{ path: "a", content: "2" }],
+      }),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "head_moved",
+      message: expect.stringContaining("Oxagen left the branch as it is"),
+    });
+    // The branch still holds the push, under the commit GitLab wrote.
+    const tip = api.branches.get("b")!;
+    expect(pushed).not.toBeNull();
+    expect(api.commits.get(tip)).toMatchObject({
+      parent: pushed,
+      message: "steering: stamp #1",
+    });
+  });
+
   it("says whether a head holds a commit, without a call when they are equal", async () => {
     const { api, seam, repo, head } = await onBranch();
     await expect(seam.holdsCommit(repo, head, head)).resolves.toBe(true);
@@ -1283,6 +1329,96 @@ describe("the GitLab seam's merge-queue calls", () => {
     await expect(seam.holdsCommit(forged, "a", "b")).rejects.toThrow(
       "no GitLab client",
     );
+  });
+});
+
+describe("a GitLab steering PR in the merge queue", () => {
+  const LANE = "a-intel.platform.release-notes";
+  const RECORD_PATH = `steering/platform/${LANE}.md`;
+  const RECORD = [
+    "---",
+    "schema: steering-record/v1",
+    `lineage: ${LANE}`,
+    "label: A rule",
+    "kind: rule",
+    "force: must",
+    "scope: workspace",
+    "status: active",
+    "origin: user",
+    "---",
+    "",
+    "Every release has notes.",
+    "",
+  ].join("\n");
+
+  it("does not merge a push that lands while Oxagen writes the stamp, and keeps the push on the branch", async () => {
+    const api = new FakeGitLabApi(Object.fromEntries(fixtureRepo()));
+    // When armed, the author pushes after Oxagen reads the branch and before
+    // GitLab writes the stamp, so GitLab writes the stamp on top of the push.
+    let race: (() => void) | null = null;
+    const client = api.client.bind(api);
+    api.client = (t) => {
+      const inner = client(t);
+      return {
+        ...inner,
+        commitFiles: async (a) => {
+          const push = race;
+          race = null;
+          push?.();
+          return inner.commitFiles(a);
+        },
+      };
+    };
+    const { seam } = gitlabSeam(api);
+    const repo = await seam.resolveRepository(SCOPE);
+    const branch = steeringBranch(LANE);
+    await seam.ensureBranch(repo, branch, "main");
+    const { commitSha: head } = await seam.putFile(repo, {
+      path: RECORD_PATH,
+      content: RECORD,
+      message: "Add a rule",
+      branch,
+    });
+    const mr = await seam.openPullRequest(repo, {
+      title: LANE,
+      head: branch,
+      base: "main",
+      body: "",
+    });
+    let pushed: string | null = null;
+    race = () => {
+      pushed = api.commit(branch, "README.md", "pushed after the approval\n");
+    };
+
+    await expect(
+      landSteeringPr({
+        host: seam,
+        repo,
+        number: mr.number,
+        branch,
+        checkedHead: head,
+        checks: ["schema"],
+        layout: await readSteeringLayout(seam, repo),
+        // The reviewer approved the head the checks passed on.
+        approve: async () => ({ approvedBy: [REVIEWER], withoutReview: false }),
+        mergedBy: REVIEWER,
+        commitTitle: `steering: publish (#${mr.number})`,
+        version: 2,
+        now: () => new Date("2026-09-26T12:00:00.000Z"),
+        recheck: async () => ({ ok: true, checks: ["schema"] }),
+      }),
+    ).rejects.toMatchObject({ code: "conflict", reason: "head_moved" });
+
+    // Nothing merged, and the stamp carries no passing check.
+    expect(api.merges).toEqual([]);
+    const tip = api.branches.get(branch)!;
+    expect(api.statuses.filter((s) => s.sha === tip)).toEqual([]);
+    // The push stays on the branch, under the stamp GitLab wrote.
+    expect(pushed).not.toBeNull();
+    expect(api.commits.get(tip)).toMatchObject({
+      parent: pushed,
+      message: `steering: stamp #${mr.number}`,
+    });
   });
 });
 

@@ -53,6 +53,7 @@ describe("parseSpendView", () => {
       tab: "findings",
       drill: null,
       finding: null,
+      cursor: null,
     });
   });
 
@@ -74,6 +75,7 @@ describe("parseSpendView", () => {
         tab,
         drill: null,
         finding: null,
+        ...(tab === "findings" ? { cursor: null } : {}),
       });
     },
   );
@@ -101,11 +103,13 @@ describe("parseSpendView", () => {
       tab: "findings",
       drill: null,
       finding: "fnd_01k5rtgh",
+      cursor: null,
     });
     expect(parseSpendView(["findings"], ["fnd_01k5rtgh", "fnd_2"])).toEqual({
       tab: "findings",
       drill: null,
       finding: "fnd_01k5rtgh",
+      cursor: null,
     });
   });
 
@@ -121,6 +125,7 @@ describe("parseSpendView", () => {
         tab: "findings",
         drill: null,
         finding: null,
+        cursor: null,
       });
     },
   );
@@ -133,11 +138,49 @@ describe("parseSpendView", () => {
     });
   });
 
+  it("opens the page of the findings list a cursor names, with or without a finding's evidence (#5303)", () => {
+    expect(
+      parseSpendView(["findings"], undefined, undefined, "WyJvcGVuIl0"),
+    ).toEqual({
+      tab: "findings",
+      drill: null,
+      finding: null,
+      cursor: "WyJvcGVuIl0",
+    });
+    expect(
+      parseSpendView(["findings"], "fnd_01k5rtgh", undefined, [
+        "WyJvcGVuIl0",
+        "x",
+      ]),
+    ).toEqual({
+      tab: "findings",
+      drill: null,
+      finding: "fnd_01k5rtgh",
+      cursor: "WyJvcGVuIl0",
+    });
+  });
+
+  it.each([
+    ["an empty cursor", ""],
+    ["a cursor with a path in it", "abc/../x"],
+    ["a cursor past the bound", "a".repeat(257)],
+  ])("opens the first page for %s (negative)", (_case, cursor) => {
+    expect(parseSpendView(["findings"], undefined, undefined, cursor)).toEqual(
+      { tab: "findings", drill: null, finding: null, cursor: null },
+    );
+  });
+
+  it("carries no cursor onto another tab (negative)", () => {
+    expect(parseSpendView(["waste"], undefined, undefined, "WyJvcGVuIl0"))
+      .toEqual({ tab: "waste", drill: null, finding: null });
+  });
+
   it("opens a finding saved on the bare path on the findings tab, from when Findings was the landing tab", () => {
     expect(parseSpendView(undefined, "fnd_01k5rtgh")).toEqual({
       tab: "findings",
       drill: null,
       finding: "fnd_01k5rtgh",
+      cursor: null,
     });
   });
 

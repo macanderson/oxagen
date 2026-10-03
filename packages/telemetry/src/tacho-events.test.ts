@@ -449,6 +449,80 @@ describe("selectTachoSubagentEvents: listed chains", () => {
   });
 });
 
+/** `n` distinct chain uuids. */
+function manyChains(n: number): string[] {
+  return Array.from(
+    { length: n },
+    (_, i) => `0192d4a8-7c1e-7a00-8000-${i.toString(16).padStart(12, "0")}`,
+  );
+}
+
+// #5311: a run with thousands of subagent chains named more than one URL
+// field holds, and ClickHouse refused the read before it ran.
+describe("a long chain list", () => {
+  it("splits the subagent read's list across parameters in one query", async () => {
+    chSelect.mockReset();
+    chSelect.mockResolvedValueOnce({ data: [] });
+    const chains = manyChains(1_001);
+    await selectTachoSubagentEvents({
+      rootSessionUuid: SESSION,
+      sessionUuids: chains,
+      after: null,
+      limit: 50,
+    });
+    expect(chSelect).toHaveBeenCalledTimes(1);
+    const [call] = chSelect.mock.calls[0] ?? [];
+    expect(call?.query).toContain(
+      "AND (session_uuid IN {sessionUuids:Array(UUID)} OR session_uuid IN {sessionUuids1:Array(UUID)})",
+    );
+    expect(call?.params).toEqual({
+      rootSessionUuid: SESSION,
+      sessionUuids: chains.slice(0, 1_000),
+      sessionUuids1: [chains[1_000]],
+      limit: 50,
+    });
+  });
+
+  it("reads by the root alone when the list is too long for the URL", async () => {
+    chSelect.mockReset();
+    chSelect.mockResolvedValueOnce({ data: [] });
+    await selectTachoSubagentEvents({
+      rootSessionUuid: SESSION,
+      sessionUuids: manyChains(10_001),
+      after: null,
+      limit: 50,
+    });
+    const [call] = chSelect.mock.calls[0] ?? [];
+    expect(call?.query).not.toContain("sessionUuids");
+    expect(call?.query).toContain("root_session_uuid = {rootSessionUuid:UUID}");
+    expect(call?.params).toEqual({ rootSessionUuid: SESSION, limit: 50 });
+  });
+
+  it("reads chain heads in batches of 1,000 chains and joins the answers", async () => {
+    chSelect.mockReset();
+    const chains = manyChains(1_001);
+    chSelect
+      .mockResolvedValueOnce({
+        data: [{ session_uuid: chains[0], last_seq: "4", frame_count: "5" }],
+      })
+      .mockResolvedValueOnce({
+        data: [{ session_uuid: chains[1_000], last_seq: 0, frame_count: 1 }],
+      });
+    const heads = await selectTachoChainHeads({
+      rootSessionUuid: SESSION,
+      sessionUuids: chains,
+    });
+    expect(chSelect.mock.calls.map(([q]) => q.params)).toEqual([
+      { rootSessionUuid: SESSION, sessionUuids: chains.slice(0, 1_000) },
+      { rootSessionUuid: SESSION, sessionUuids: [chains[1_000]] },
+    ]);
+    expect(heads).toEqual([
+      { sessionUuid: chains[0], lastSeq: 4, frameCount: 5 },
+      { sessionUuid: chains[1_000], lastSeq: 0, frameCount: 1 },
+    ]);
+  });
+});
+
 describe("selectTachoStoredFrames", () => {
   it("answers the stored hash of each asked seq, and asks nothing for none", async () => {
     chSelect.mockReset();

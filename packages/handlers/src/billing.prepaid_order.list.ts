@@ -95,7 +95,10 @@ const createdAtMs = sql`date_trunc('milliseconds', ${orders.createdAt})`;
 
 function beforeCursor(cursor: OrderCursor | null): SQL | undefined {
   if (!cursor) return undefined;
-  const instant = new Date(cursor.at);
+  // Bound as text with a cast. Compared with an expression rather than a
+  // column, a Date reaches postgres-js unconverted and the query fails, so a
+  // second page answered 500 (found by list_findings' Postgres test, #5303).
+  const instant = sql`${new Date(cursor.at).toISOString()}::timestamptz`;
   return or(
     lt(createdAtMs, instant),
     and(eq(createdAtMs, instant), lt(orders.id, cursor.id)),

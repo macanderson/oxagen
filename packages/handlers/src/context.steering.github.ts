@@ -302,7 +302,10 @@ export interface SteeringHost {
    * Write one commit on `branch` whose only parent is `parent`: each file
    * with content is written, each file with null content is deleted. The
    * host refuses with `head_moved` when the branch no longer points at
-   * `parent`, so a stamp never lands on a head nobody checked.
+   * `parent`, so no caller gets back a commit on a head nobody checked.
+   * GitHub then writes nothing. GitLab cannot pin the parent, so a push in
+   * the moment before its write leaves the new commit on top of the push,
+   * and the call still refuses and leaves the branch as it is.
    */
   commitFiles(
     repo: SteeringRepository,

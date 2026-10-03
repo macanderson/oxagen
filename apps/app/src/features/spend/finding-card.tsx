@@ -362,6 +362,7 @@ function FindingText({
 export function FindingCard({
   finding,
   rank,
+  cursor = null,
   names,
   harnesses = {},
   spend,
@@ -369,6 +370,8 @@ export function FindingCard({
 }: {
   finding: SpendFinding;
   rank: number;
+  /** The cursor of the list page the card sits on, so its evidence closes back to that page (#5303). */
+  cursor?: string | null;
   /** An operator finding's subject is a `prn_…` id; this is the person's name for it. */
   names: Readonly<Record<string, string>>;
   /** An agent finding's subject is an agent key; this is its harness by key. */
@@ -457,6 +460,7 @@ export function FindingCard({
           to={routes.spend(at.org, at.ws, {
             tab: "findings",
             finding: finding.id,
+            cursor: cursor ?? undefined,
           })}
           className={buttonSecondary}
         >

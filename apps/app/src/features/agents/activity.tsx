@@ -5,7 +5,7 @@
 //
 // Every figure is read from a record: the runs from `list_runs`, the tokens
 // and spend from this agent's row of `get_spend`, the findings from
-// `list_findings` narrowed to this agent's key, and the incidents from
+// `list_findings` read by this agent's key (#5303), and the incidents from
 // `list_incidents` narrowed to the agent, one cursor page at the size Rows
 // picks (#4693). A run's own token count and a class's rate and cost are not
 // recorded yet (G3), so they say so. Tool definitions is the runs' measured
