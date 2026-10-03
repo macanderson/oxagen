@@ -44,7 +44,7 @@ const strong = (chunks: ReactNode) => <b>{chunks}</b>;
 
 /** `.eyebrow.q`: a panel's section eyebrow. */
 const sectionEyebrow =
-  "mb-1.5 text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground";
+  "mb-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground";
 
 /** `.kv`: a two-column definition list. */
 const kv =
@@ -139,8 +139,8 @@ function Meter({
     grey: "bg-rule",
   }[tone];
   return (
-    <li data-meter={name} className="grid gap-[5px]">
-      <span className="flex text-sm text-muted-foreground">
+    <li data-meter={name} className="grid gap-1.25">
+      <span className="flex text-xs text-muted-foreground">
         {label}
         <span className="ms-auto font-semibold tabular-nums text-foreground">
           {value === null ? (
@@ -219,7 +219,7 @@ function Meters({
       <p
         data-state="not-recorded"
         data-gap={RECORD_GAPS.violated}
-        className="text-sm text-dim"
+        className="text-xs text-dim"
       >
         {t("thirdNotRecorded")}
       </p>

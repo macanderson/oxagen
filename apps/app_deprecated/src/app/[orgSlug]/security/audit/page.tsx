@@ -132,7 +132,7 @@ export default async function SecurityAuditPage({
         }
       >
         <div className="flex flex-col gap-4">
-          <p className="mb-4 text-sm text-muted-foreground">
+          <p className="mb-4 text-base text-muted-foreground">
             Append-only security event stream. Filter, drill down, and export
             signed evidence.
           </p>
@@ -145,7 +145,7 @@ export default async function SecurityAuditPage({
           />
 
           {page.rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               {hasActiveFilter(filter)
                 ? "No security events match these filters."
                 : "No security events recorded yet."}
@@ -200,7 +200,7 @@ export default async function SecurityAuditPage({
                   <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                 </Button>
               ) : (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   End of results
                 </span>
               )}

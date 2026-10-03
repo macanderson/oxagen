@@ -27,7 +27,7 @@ export function FormAlert({
     <div
       role="alert"
       data-testid={testId}
-      className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm text-foreground"
+      className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-base text-foreground"
     >
       <WarningIcon
         aria-hidden
@@ -169,7 +169,7 @@ export function OutcomePanel({
         </h2>
       )}
       {children ? (
-        <div className="max-w-prose text-sm leading-relaxed text-muted-foreground">
+        <div className="max-w-prose text-base leading-relaxed text-muted-foreground">
           {children}
         </div>
       ) : null}

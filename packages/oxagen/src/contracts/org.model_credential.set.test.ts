@@ -41,6 +41,25 @@ describe("org.model_credential.set capability", () => {
     expect(parsed.baseUrl).toBe("https://api.together.xyz/v1");
   });
 
+  it.each([
+    "https://api.together.xyz/v1 ",
+    " https://api.together.xyz/v1",
+    "\thttps://api.together.xyz/v1\n",
+  ])(
+    "stores the pasted endpoint %j without its surrounding whitespace (#3317)",
+    (baseUrl) => {
+      // URL parsing drops the space, so `.url()` alone accepts it, and the
+      // probe would then ask `https://api.together.xyz/v1%20/models`.
+      const parsed = orgModelCredentialSet.input.parse({
+        provider: "openai_compatible",
+        apiKey: KEY,
+        baseUrl,
+        modelMap: { balanced: "m" },
+      });
+      expect(parsed.baseUrl).toBe("https://api.together.xyz/v1");
+    },
+  );
+
   it("rejects a vendor there is no provider client for", () => {
     expect(() =>
       orgModelCredentialSet.input.parse({

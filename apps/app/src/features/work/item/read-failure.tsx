@@ -44,7 +44,7 @@ export function WorkItemReadFailure({
           title={t("deniedTitle")}
           actions={back}
           after={
-            <p className="mx-auto mt-5 max-w-[420px] text-sm text-muted-foreground">
+            <p className="mx-auto mt-5 max-w-105 text-sm text-muted-foreground">
               {t("needed")}{" "}
               <span className={`${mono} text-foreground`}>{read.permission}</span>
             </p>

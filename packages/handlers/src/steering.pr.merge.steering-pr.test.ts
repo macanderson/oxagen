@@ -136,7 +136,11 @@ function fakePublisher(published: string[]): SteeringPublisher {
   };
   return {
     repository: (repo) => repo.fullName,
-    store: { highestVersion: async () => 20, versionAt: async () => null },
+    store: {
+      highestVersion: async () => 20,
+      versionAt: async () => null,
+      current: async () => null,
+    },
     publish: async (_repo, commit) => held(commit),
     withLock: (_repo, fn) => fn(held),
   };
@@ -354,8 +358,8 @@ describe("merge_steering_pr on a steering PR proposal", () => {
     });
     const row = rowFor(h, opened.number);
     // An earlier call claimed the row and the host merged the PR. That call
-    // failed before the row moved to merged.
-    row.mergeClaimedAt = new Date("2026-09-26T11:59:00.000Z");
+    // failed before the row moved to merged, and its claim has lapsed.
+    row.mergeClaimedAt = new Date("2026-09-26T11:49:00.000Z");
     const mergeSha = h.github.mergeOnHost(opened.number);
     const s = seams();
 

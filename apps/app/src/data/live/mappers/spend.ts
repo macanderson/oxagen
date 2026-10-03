@@ -80,6 +80,8 @@ export function toSpendReport(
       provider: row.provider,
       tokens: row.tokens,
       operator: row.operator,
+      // Only a work item row names one (#2962).
+      ...(row.workItem === undefined ? {} : { workItem: row.workItem }),
       topRuns: row.topRuns.map((run) => ({
         runId: run.runId,
         name: run.name,
@@ -87,6 +89,8 @@ export function toSpendReport(
         agentKey: run.agentKey,
         harness: run.harness ?? null,
         operatorKey: run.operatorKey,
+        // Absent from an answer built before get_spend named the operator.
+        ...(run.operator === undefined ? {} : { operator: run.operator }),
         cost: run.cost,
         calls: run.calls,
       })),
@@ -100,6 +104,22 @@ export function toSpendReport(
               steeringTokens: row.tokenSources.steeringTokens,
               toolResultTokens: row.tokenSources.toolResultTokens,
             },
+          }),
+      // Null says no run of the row stored windows (#5341); a row that holds
+      // part of a run carries no key.
+      ...(row.windows === undefined
+        ? {}
+        : {
+            windows:
+              row.windows === null
+                ? null
+                : {
+                    runs: row.windows.runs,
+                    requests: row.windows.requests,
+                    requestsWithoutTokens: row.windows.requestsWithoutTokens,
+                    promptTokens: row.windows.promptTokens,
+                    blocks: { ...row.windows.blocks },
+                  },
           }),
     })),
   };

@@ -141,12 +141,12 @@ export async function InvitationBody({
               <>
                 <span
                   aria-hidden
-                  className="grid size-[38px] flex-none place-items-center rounded-full bg-foreground text-sm font-semibold text-background"
+                  className="grid size-9.5 flex-none place-items-center rounded-full bg-foreground text-sm font-semibold text-background"
                 >
                   {initialsOf(invitation.inviterName)}
                 </span>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-foreground">
+                  <p className="text-base font-semibold text-foreground">
                     {invitation.inviterName}
                   </p>
                   <p className="text-sm text-muted-foreground">

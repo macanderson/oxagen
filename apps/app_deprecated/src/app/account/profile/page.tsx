@@ -46,7 +46,7 @@ export default async function AccountProfilePage() {
   if (!user) {
     // Defensive: should never happen for an authenticated user
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-base text-muted-foreground">
         Unable to load profile. Please sign in again.
       </p>
     );

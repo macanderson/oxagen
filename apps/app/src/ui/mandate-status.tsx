@@ -45,7 +45,7 @@ export function MandateStatus({
       {state === null ? null : (
         <span
           data-state={state}
-          className="whitespace-nowrap text-xs text-muted-foreground md:truncate"
+          className="whitespace-nowrap text-sm text-muted-foreground md:truncate"
         >
           {state === "upcoming"
             ? t("startsOn", { date: day(mandate.validFrom) })

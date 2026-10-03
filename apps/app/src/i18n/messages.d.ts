@@ -4823,6 +4823,7 @@ type Messages = {
         baseUrlRequired: string;
         balancedRequired: string;
         invalid: string;
+        modelTooLong: string;
         refused: string;
         pendingApproval: string;
         unavailable: string;
@@ -9714,6 +9715,10 @@ type Messages = {
           label: string;
           hint: string;
         };
+        runs: {
+          label: string;
+          hint: string;
+        };
       };
       month: string;
       monthHint: string;
@@ -9950,6 +9955,10 @@ type Messages = {
         label: string;
         note: string;
       };
+      noWorkItem: {
+        label: string;
+        note: string;
+      };
       moreRuns: string;
       showRuns: string;
       reported: string;
@@ -9972,12 +9981,14 @@ type Messages = {
       by: {
         label: string;
         options: {
+          work_item: string;
           agent: string;
           operator: string;
           model: string;
           mcp_server: string;
         };
         titles: {
+          work_item: string;
           agent: string;
           operator: string;
           model: string;
@@ -12739,6 +12750,13 @@ type Messages = {
       no_pull_request: string;
       pr_closed: string;
     };
+    pullState: {
+      open: string;
+      draft: string;
+      closed: string;
+      merged: string;
+      seen: string;
+    };
     wait: {
       aPerson: string;
       theRuntime: string;
@@ -13108,6 +13126,7 @@ type Messages = {
         title: string;
         cohort: string;
         reopened: string;
+        reverted: string;
         waiting: string;
         reverts: string;
       };
@@ -13358,7 +13377,9 @@ type Messages = {
       heading: string;
       aPerson: string;
       noPullRequest: string;
+      noRecordedPullRequest: string;
       pullRequest: string;
+      pullRequests: string;
       pullRequestRef: string;
       head: string;
       headUnread: string;
@@ -13472,6 +13493,7 @@ type Messages = {
         accepted: string;
         merged: string;
         pr_closed: string;
+        reverted: string;
         closed: string;
         reopened: string;
       };

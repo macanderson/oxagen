@@ -60,11 +60,25 @@ item, or an issue changed as a whole.
 
 - **One pull request reads the same everywhere,** and each level's diff is
   the stored bytes a check can cite by revision id and digest.
-- **Two older stores are still read as fallbacks** until the backfill lands.
-  Once every link is in the forge store, the fallbacks can be removed.
-- **Checks are not in the forge store.** Pages that show a pull request's
-  checks keep reading them from `work.item_facts` and GitHub until the store
-  records them.
+- **The older pages read the forge store too.** `get_run_work` lists a run's
+  pull requests from its change set, with each one's files and patches from
+  its stored revision and its closing issues from `forge.pull_request_issues`.
+  It asks no forge which pull requests a run has. A ledger receipt, a link
+  frame, or a checkout's branch adds a pull request only when the store
+  already holds it. `get_run_issues` reads closing issues from the same
+  links. The work pages show each send's pull requests, their state, title,
+  and URL from the forge store, and the `work.item_facts` record stays the
+  source of acceptance, required checks, and history (ADR-251).
+- **Two older stores are still read as fallbacks** until the backfill
+  drains: `tacho.run_pull_requests` and `work.item_facts` `pr_linked` facts.
+  `forge/pull-request-backfill` runs every 15 minutes and sends one
+  `forge/pull-request.observed` event for each of their links whose pull
+  request has no forge row in that workspace. Once none is left, the
+  fallbacks can be removed.
+- **Checks stay a live read.** The forge store records no checks.
+  `get_run_work` reads them from GitHub for the pull requests its list names,
+  at each one's stored head, and the work pages keep reading them from
+  `work.item_facts`.
 - **GitLab closing references are not read yet.** A GitLab issue reaches a
   pull request only through a work item's work orders.
 - **Left as they are:** Spend's cost per merged pull request

@@ -78,7 +78,7 @@ const EmptyState = React.forwardRef<HTMLDivElement, EmptyStateProps>(
       <div
         className={cn(
           "font-medium text-foreground",
-          size === "default" ? "text-sm" : "text-xs",
+          size === "default" ? "text-base" : "text-sm",
         )}
       >
         {title}
@@ -87,7 +87,7 @@ const EmptyState = React.forwardRef<HTMLDivElement, EmptyStateProps>(
         <p
           className={cn(
             "max-w-sm text-muted-foreground",
-            size === "default" ? "text-sm" : "text-xs",
+            size === "default" ? "text-base" : "text-sm",
           )}
         >
           {description}

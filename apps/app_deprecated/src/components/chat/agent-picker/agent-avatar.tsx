@@ -20,8 +20,8 @@ export type AgentAvatarSize = "sm" | "md" | "lg";
 
 // Fallback-tile sizing + glyph text, in lockstep with EntityAvatar's sm/md/lg.
 const FALLBACK_TILE: Record<AgentAvatarSize, string> = {
-  sm: "size-6 text-xs",
-  md: "size-8 text-sm",
+  sm: "size-6 text-sm",
+  md: "size-8 text-base",
   lg: "size-12 text-lg",
 };
 

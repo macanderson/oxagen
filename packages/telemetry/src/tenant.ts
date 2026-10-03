@@ -25,8 +25,12 @@ import { dedicatedClickhouse } from "./data-plane-client";
  * a row on a breaker trip loses data, whereas falling back here would MISFILE
  * it into another operator's store, which is a compliance breach rather than a
  * gap.
+ *
+ * Exported for the package's own readers that name the organization in their
+ * predicates instead of reading through `chSelect` (./context-window-frames.ts).
+ * The barrel does not export it.
  */
-async function planeClient(orgId: string): Promise<ClickHouseClient> {
+export async function planeClient(orgId: string): Promise<ClickHouseClient> {
   const plane = await resolveDataPlane(orgId, "clickhouse");
   assertDataPlaneUsable(plane);
   if (plane.mode === "shared") return clickhouse();

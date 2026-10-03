@@ -373,7 +373,7 @@ export function AuditSkeleton() {
     >
       <div className={statStrip}>
         {[0, 1, 2, 3].map((tile) => (
-          <span key={tile} className={`${statTile} h-[86px]`}>
+          <span key={tile} className={`${statTile} h-21.5`}>
             <span className={`${block} h-3 w-24`} />
           </span>
         ))}

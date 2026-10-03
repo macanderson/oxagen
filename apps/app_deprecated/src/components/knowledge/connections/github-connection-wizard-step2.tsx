@@ -234,13 +234,13 @@ export function Step2SelectRepos({
       {/* Org list */}
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-muted-foreground">
+          <p className="text-sm font-medium text-muted-foreground">
             Select organization
           </p>
           {!installationsLoading && (
             <button
               type="button"
-              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
               onClick={() => void loadInstallations("refresh")}
               disabled={installationsRefreshing}
               data-testid="refresh-installations-btn"
@@ -258,11 +258,11 @@ export function Step2SelectRepos({
             <Spinner />
           </div>
         ) : installationsError ? (
-          <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {installationsError}
           </p>
         ) : installations.length === 0 ? (
-          <p className="rounded-md border border-border/60 px-3 py-2 text-xs text-muted-foreground">
+          <p className="rounded-md border border-border/60 px-3 py-2 text-sm text-muted-foreground">
             No GitHub App installations found. Install the GitHub App on your
             account or organization using the link below, then refresh.
           </p>
@@ -275,7 +275,7 @@ export function Step2SelectRepos({
               <li key={installation.id}>
                 <button
                   type="button"
-                  className={`flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted/50 ${
+                  className={`flex w-full items-center gap-3 px-3 py-2.5 text-left text-base transition-colors hover:bg-muted/50 ${
                     selectedInstallationId === installation.id
                       ? "bg-primary/10 text-primary"
                       : "text-foreground"
@@ -301,7 +301,7 @@ export function Step2SelectRepos({
                   <span className="flex-1 truncate font-medium">
                     {installation.accountLogin}
                   </span>
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {installation.accountType}
                   </span>
                 </button>
@@ -314,7 +314,7 @@ export function Step2SelectRepos({
         {manageUrl && !installationsLoading && (
           <button
             type="button"
-            className="flex items-center gap-1 self-start text-[11px] text-primary hover:underline"
+            className="flex items-center gap-1 self-start text-xs text-primary hover:underline"
             onClick={() => openManagePage(manageUrl)}
             data-testid="manage-installations-link"
           >
@@ -330,10 +330,10 @@ export function Step2SelectRepos({
       {selectedInstallationId !== null && (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-muted-foreground">
+            <p className="text-sm font-medium text-muted-foreground">
               Select repositories
               {selectedInstallation?.repositorySelection === "all" && (
-                <span className="ml-1 text-[11px] text-info">
+                <span className="ml-1 text-xs text-info">
                   (all repositories granted)
                 </span>
               )}
@@ -341,7 +341,7 @@ export function Step2SelectRepos({
             {repositories.length > 0 && (
               <button
                 type="button"
-                className="text-[11px] text-primary hover:underline"
+                className="text-xs text-primary hover:underline"
                 onClick={toggleAll}
                 data-testid="select-all-repos-btn"
               >
@@ -355,11 +355,11 @@ export function Step2SelectRepos({
               <Spinner />
             </div>
           ) : reposError ? (
-            <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {reposError}
             </p>
           ) : repositories.length === 0 ? (
-            <p className="rounded-md border border-border/60 px-3 py-2 text-xs text-muted-foreground">
+            <p className="rounded-md border border-border/60 px-3 py-2 text-sm text-muted-foreground">
               No repositories found for this installation.
             </p>
           ) : (
@@ -378,11 +378,11 @@ export function Step2SelectRepos({
                         data-testid={`repo-checkbox-${repo.name}`}
                       />
                       <div className="flex flex-1 items-center gap-2 min-w-0">
-                        <span className="flex-1 truncate text-sm font-medium text-foreground">
+                        <span className="flex-1 truncate text-base font-medium text-foreground">
                           {repo.name}
                         </span>
                         <span
-                          className={`flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                          className={`flex-shrink-0 rounded px-1.5 py-0.5 text-xs font-medium ${
                             repo.private
                               ? "bg-warning/12 text-warning"
                               : "bg-success/12 text-success"
@@ -391,7 +391,7 @@ export function Step2SelectRepos({
                           {repo.private ? "Private" : "Public"}
                         </span>
                         {repo.language && (
-                          <span className="flex-shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          <span className="flex-shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                             {repo.language}
                           </span>
                         )}
@@ -407,7 +407,7 @@ export function Step2SelectRepos({
           {selectedInstallation?.htmlUrl && (
             <button
               type="button"
-              className="flex items-center gap-1 self-start text-[11px] text-primary hover:underline"
+              className="flex items-center gap-1 self-start text-xs text-primary hover:underline"
               onClick={() => openManagePage(selectedInstallation.htmlUrl!)}
               data-testid="configure-repos-link"
             >
@@ -421,7 +421,7 @@ export function Step2SelectRepos({
       <DialogFooter className="mt-2">
         <button
           type="button"
-          className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-base font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           disabled={selectedInstallationId === null || selectedRepos.size === 0}
           onClick={handleNext}
           data-testid="select-repos-next-btn"

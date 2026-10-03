@@ -43,11 +43,11 @@ const timelineHeader =
  * z-index:3 }`.
  */
 const tick =
-  "absolute bottom-4 -ml-0.5 w-1 rounded-t-[2px] shadow-[0_0_0_2px_var(--panel)] before:absolute before:-inset-x-2 before:-inset-y-1.5 before:content-[''] hover:z-[3] hover:brightness-125 focus-visible:z-[3] focus-visible:brightness-125 focus-visible:outline-none";
+  "absolute bottom-4 -ml-0.5 w-1 rounded-t-[2px] shadow-[0_0_0_2px_var(--panel)] before:absolute before:-inset-x-2 before:-inset-y-1.5 before:content-[''] hover:z-3 hover:brightness-125 focus-visible:z-3 focus-visible:brightness-125 focus-visible:outline-none";
 /** `.rt-tick.tall { height:30px }`, `.rt-tick.cost { height:24px }`, and the resting 18px. */
-const TICK_HEIGHT = { tall: "h-[30px]", cost: "h-6", rest: "h-[18px]" };
+const TICK_HEIGHT = { tall: "h-7.5", cost: "h-6", rest: "h-4.5" };
 /** `.rt-tick.on { outline:2px solid var(--fg); outline-offset:1px; z-index:2 }` */
-const tickOn = "z-[2] outline-2 outline-offset-1 outline-foreground";
+const tickOn = "z-2 outline-2 outline-offset-1 outline-foreground";
 
 /** A cost the record carries and that is more than nothing. */
 function spent(frame: RunFrame): boolean {
@@ -61,13 +61,13 @@ function Legend({ frames }: { frames: readonly RunFrame[] }) {
     // `.rt-leg { display:flex; gap:4px 12px; flex-wrap:wrap; font-size:11px; color:var(--muted); margin-left:auto }`
     <ul
       aria-label={t("legendLabel")}
-      className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground"
+      className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
     >
       {kindCounts(frames).map(({ kind, count }) => (
         <li
           key={kind}
           data-testid={`legend-${kind}`}
-          className="inline-flex items-center gap-[5px] tabular-nums"
+          className="inline-flex items-center gap-1.25 tabular-nums"
         >
           {/* `.rt-leg i { width:8px; height:8px; border-radius:2px; background:var(--c) }` */}
           <i
@@ -144,7 +144,7 @@ export function RunTimeline({
         </h3>
         <span
           data-testid="timeline-shown"
-          className={`${mono} text-sm text-dim`}
+          className={`${mono} text-xs text-dim`}
         >
           {t("shown", {
             shown: formatCount(frames.length, locale),
@@ -158,7 +158,7 @@ export function RunTimeline({
         {/* `.rt-turns { position:relative; height:16px; font-family:var(--mono); font-size:10px; color:var(--dim); letter-spacing:.06em; text-transform:uppercase }` */}
         <div
           aria-hidden="true"
-          className="relative h-4 font-mono text-sm uppercase tracking-[0.06em] text-dim"
+          className="relative h-4 font-mono text-xs uppercase tracking-[0.06em] text-dim"
         >
           {bands.map((band) => (
             <span
@@ -176,7 +176,7 @@ export function RunTimeline({
           ))}
         </div>
         {/* `.rt-track { position:relative; height:50px; margin:2px 0 0 }` */}
-        <div className="relative mt-0.5 h-[50px]">
+        <div className="relative mt-0.5 h-12.5">
           {bands.map((band) => (
             <div
               key={`${String(band.turn)}:${String(band.left)}`}
@@ -227,7 +227,7 @@ export function RunTimeline({
             // `.rt-axis { position:absolute; left:0; right:0; bottom:0; height:14px; border-top:1px solid var(--border); display:flex; justify-content:space-between; font-family:var(--mono); font-size:10px; color:var(--dim); padding-top:2px }`
             <div
               data-testid="timeline-axis"
-              className="absolute inset-x-0 bottom-0 flex h-3.5 justify-between border-t border-border pt-0.5 font-mono text-sm text-dim"
+              className="absolute inset-x-0 bottom-0 flex h-3.5 justify-between border-t border-border pt-0.5 font-mono text-xs text-dim"
             >
               <span>{clock(first.observedAt)}</span>
               <span>
@@ -249,14 +249,14 @@ export function RunTimeline({
         {/* `.rt-marks { position:relative; height:14px; margin-top:3px }`, hidden on a phone */}
         <div
           aria-hidden="true"
-          className="relative mt-[3px] h-3.5 max-md:hidden"
+          className="relative mt-0.75 h-3.5 max-md:hidden"
         >
           {marks.map((mark) => (
             <span
               key={`${mark.kind}:${String(mark.at)}`}
               data-testid={`timeline-mark-${mark.kind}`}
               // `.rt-mark { position:absolute; top:0; transform:translateX(-50%); font-family:var(--mono); font-size:10px; color:var(--muted); white-space:nowrap }`, `.right { transform:translateX(-100%) }`
-              className={`pointer-events-none absolute top-0 whitespace-nowrap font-mono text-sm text-muted-foreground ${mark.kind === "parked" ? "-translate-x-full" : "-translate-x-1/2"}`}
+              className={`pointer-events-none absolute top-0 whitespace-nowrap font-mono text-xs text-muted-foreground ${mark.kind === "parked" ? "-translate-x-full" : "-translate-x-1/2"}`}
               style={{ left: ratioWidth(mark.at / 100) }}
             >
               {t(mark.kind)}
@@ -264,7 +264,7 @@ export function RunTimeline({
           ))}
         </div>
         {/* `.rt-foot { display:flex; gap:12px; flex-wrap:wrap; font-size:11px; color:var(--dim); margin-top:8px }` */}
-        <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-dim">
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-dim">
           <span className="min-w-0 flex-1">{t("foot")}</span>
           {bands.length === 0 ? null : (
             <span data-testid="timeline-turns">

@@ -191,7 +191,7 @@ export function ProposeDialog({
             data-testid="record-diff"
             className="overflow-hidden rounded-[10px] border border-border"
           >
-            <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-sm">
               {repository === null ? null : (
                 <Badge tone="quiet" dot={false} mono>
                   {repository}
@@ -214,7 +214,7 @@ export function ProposeDialog({
               </span>
             </div>
             {changed ? (
-              <div className="max-h-64 overflow-auto bg-code-bg font-mono text-xs">
+              <div className="max-h-64 overflow-auto bg-code-bg font-mono text-sm">
                 {rows.map((row, index) => (
                   <div
                     key={`${String(index)}-${row.op}`}

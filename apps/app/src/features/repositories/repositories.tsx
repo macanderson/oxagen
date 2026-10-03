@@ -378,7 +378,7 @@ export function Repositories({
             <p
               role="status"
               data-testid="repositories-notice"
-              className="mb-3.5 text-sm text-foreground"
+              className="mb-3.5 text-base text-foreground"
             >
               {notice}
             </p>

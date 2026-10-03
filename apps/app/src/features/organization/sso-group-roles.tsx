@@ -109,7 +109,7 @@ export function SsoGroupRoles({
   const table =
     rows.length === 0 ? (
       <p
-        className="text-sm text-muted-foreground"
+        className="text-base text-muted-foreground"
         data-testid={`${idBase}-empty`}
       >
         {t("empty")}
@@ -147,7 +147,7 @@ export function SsoGroupRoles({
                       <p
                         id={`${idBase}-group-${String(row.key)}-error`}
                         data-wrap=""
-                        className="mt-1 text-sm text-error-ink"
+                        className="mt-1 text-base text-error-ink"
                       >
                         {error}
                       </p>
@@ -212,7 +212,7 @@ export function SsoGroupRoles({
         <FormAlert testId={`${idBase}-failure`}>{wholeFormFailure}</FormAlert>
       )}
       {saved ? (
-        <p role="status" className="text-sm" data-testid={`${idBase}-saved`}>
+        <p role="status" className="text-base" data-testid={`${idBase}-saved`}>
           {t("saved")}
         </p>
       ) : null}

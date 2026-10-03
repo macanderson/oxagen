@@ -25,7 +25,7 @@ export interface MarkdownContentProps {
 
 export function MarkdownContent({ children, className }: MarkdownContentProps) {
   return (
-    <MarkdownMessage className={cn("text-sm leading-relaxed", className)}>
+    <MarkdownMessage className={cn("text-base leading-relaxed", className)}>
       {children}
     </MarkdownMessage>
   );

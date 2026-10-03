@@ -42,7 +42,7 @@ const PAD = 12;
 const codeText =
   "font-mono text-sm leading-5 [font-feature-settings:var(--ox-font-mono-features)]";
 const layer =
-  "m-0 whitespace-pre-wrap break-words px-[18px] py-3 [overflow-wrap:break-word] [tab-size:2]";
+  "m-0 whitespace-pre-wrap break-words px-4.5 py-3 [overflow-wrap:break-word] [tab-size:2]";
 
 /**
  * Ln and Col of an offset, 1-based, as the status line prints them.
@@ -279,7 +279,7 @@ export function StatementEditor({
       data-testid="record-editor"
       className={`${panel} flex flex-col`}
     >
-      <div className="flex flex-wrap items-center gap-2.5 border-b border-border px-3.5 py-2 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-2.5 border-b border-border px-3.5 py-2 text-sm text-muted-foreground">
         <span className={`${mono} min-w-0 break-all text-foreground`}>
           {path}
         </span>
@@ -319,7 +319,7 @@ export function StatementEditor({
                 areaRef.current?.focus();
               }
             }}
-            className="w-[170px] max-w-full rounded-[7px] border border-border bg-input-bg px-2 py-1 font-mono text-base text-foreground outline-none focus-visible:border-input-border-focus sm:text-xs"
+            className="w-42.5 max-w-full rounded-[7px] border border-border bg-input-bg px-2 py-1 font-mono text-lg text-foreground outline-none focus-visible:border-input-border-focus sm:text-sm"
           />
           <span
             data-testid="record-find-count"
@@ -331,12 +331,12 @@ export function StatementEditor({
         </label>
       </div>
       <div
-        className={`${codeText} grid max-h-[calc(100vh-300px)] min-h-[180px] grid-cols-[max-content_minmax(0,1fr)] overflow-auto bg-code-bg`}
+        className={`${codeText} grid max-h-(--editor-max-h) min-h-45 grid-cols-[max-content_minmax(0,1fr)] overflow-auto bg-code-bg`}
       >
         <div
           aria-hidden="true"
           data-testid="record-gutter"
-          className="sticky left-0 z-[4] min-w-11 select-none border-r border-border bg-code-bg py-3 pr-2.5 pl-3.5 text-right text-dim"
+          className="sticky left-0 z-4 min-w-11 select-none border-r border-border bg-code-bg py-3 pr-2.5 pl-3.5 text-right text-dim"
         >
           {lines.map((_, i) => (
             // eslint-disable-next-line @eslint-react/no-array-index-key -- the key is the line number, which is what this gutter row is
@@ -356,7 +356,7 @@ export function StatementEditor({
             ref={paintRef}
             aria-hidden="true"
             data-testid="record-paint"
-            className={`${layer} pointer-events-none relative z-[2] text-foreground`}
+            className={`${layer} pointer-events-none relative z-2 text-foreground`}
           >
             {painted.map((tokens, i) => (
               // eslint-disable-next-line @eslint-react/no-array-index-key -- one painted block per source line, keyed by its line number like the gutter beside it
@@ -378,7 +378,7 @@ export function StatementEditor({
           </div>
           <div
             aria-hidden="true"
-            className={`${layer} pointer-events-none absolute inset-0 z-[1] text-transparent`}
+            className={`${layer} pointer-events-none absolute inset-0 z-1 text-transparent`}
           >
             <Marks
               text={value}
@@ -409,11 +409,11 @@ export function StatementEditor({
             onKeyUp={track}
             onClick={track}
             onKeyDown={keyDown}
-            className={`${codeText} ${layer} absolute inset-0 z-[3] block size-full resize-none overflow-hidden border-0 bg-transparent text-base text-transparent caret-foreground outline-none [-webkit-text-fill-color:transparent] focus-visible:outline-2 focus-visible:outline-ring sm:text-sm`}
+            className={`${codeText} ${layer} absolute inset-0 z-3 block size-full resize-none overflow-hidden border-0 bg-transparent text-lg text-transparent caret-foreground outline-none [-webkit-text-fill-color:transparent] focus-visible:outline-2 focus-visible:outline-ring sm:text-sm`}
           />
         </div>
       </div>
-      <div className="flex flex-wrap gap-3.5 border-t border-border px-3.5 py-1.5 text-sm text-muted-foreground">
+      <div className="flex flex-wrap gap-3.5 border-t border-border px-3.5 py-1.5 text-xs text-muted-foreground">
         <span data-testid="record-caret">
           {t("caret", caret)}
           {selected > 0 ? ` ${t("selected", { count: selected })}` : ""}

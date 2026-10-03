@@ -182,7 +182,7 @@ export function AvatarUpload({
             ) : (
               // The cropper needs a source. When the read failed there isn't
               // one, so the reason has to surface here or the dialog is blank.
-              <p className="text-sm text-destructive" role="alert">
+              <p className="text-base text-destructive" role="alert">
                 {cropUpload.error ?? "Loading photo…"}
               </p>
             )}

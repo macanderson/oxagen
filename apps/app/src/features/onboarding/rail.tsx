@@ -31,16 +31,16 @@ function Body({ step, index }: { step: RailStep; index: number }) {
     <>
       <span
         aria-hidden="true"
-        className={`inline-flex size-6 flex-none items-center justify-center rounded-full border text-xs font-semibold ${MARK[step.state]}`}
+        className={`inline-flex size-6 flex-none items-center justify-center rounded-full border text-sm font-semibold ${MARK[step.state]}`}
       >
         {step.state === "done" ? "✓" : index + 1}
       </span>
       <span className="flex min-w-0 flex-col">
-        <span className="text-sm font-medium text-foreground">
+        <span className="text-base font-medium text-foreground">
           {step.label}
         </span>
         {step.sub === undefined ? null : (
-          <span className="text-xs text-muted-foreground">{step.sub}</span>
+          <span className="text-sm text-muted-foreground">{step.sub}</span>
         )}
       </span>
       <span className="sr-only">{step.stateLabel}</span>
@@ -129,7 +129,7 @@ export function StepRail({
             <>
               <span
                 aria-hidden="true"
-                className={`inline-flex size-[22px] flex-none items-center justify-center rounded-full border text-sm ${SEGMENT_MARK[step.state]}`}
+                className={`inline-flex size-5.5 flex-none items-center justify-center rounded-full border text-xs ${SEGMENT_MARK[step.state]}`}
               >
                 {step.state === "done" ? "✓" : index + 1}
               </span>

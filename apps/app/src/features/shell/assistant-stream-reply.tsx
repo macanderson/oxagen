@@ -47,7 +47,7 @@ export function AssistantAnswering({
         <p
           key={tool.id}
           data-testid="assistant-tool-running"
-          className="mt-1 font-mono text-sm text-muted-foreground"
+          className="mt-1 font-mono text-xs text-muted-foreground"
         >
           {t("tool", { capability: tool.capability })}
         </p>
@@ -100,7 +100,7 @@ export function AssistantDropped({
         </button>
       ) : (
         <>
-          <p className="mt-1 font-mono text-sm text-muted-foreground">
+          <p className="mt-1 font-mono text-xs text-muted-foreground">
             {t("recordedAs")}{" "}
             <SafeLink
               to={routes.run(org, ws, runId)}

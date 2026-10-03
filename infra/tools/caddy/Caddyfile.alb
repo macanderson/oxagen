@@ -208,6 +208,18 @@
 				header_up X-Forwarded-For {client_ip}
 				header_up -X-Real-Ip
 
+				# A deploy swaps the container on this port, and the new one
+				# takes a few seconds to listen (#5318). For this long Caddy
+				# retries a refused connection instead of answering 502. Caddy
+				# always retries a connection that failed, whatever the method,
+				# and a request it never delivered cannot run twice. A request
+				# that reached the upstream is retried only when it is a GET.
+				# A POST body survives the retry from Caddy 2.11.4 on, which
+				# wraps it so a failed dial cannot close it (caddyserver/caddy
+				# reverseproxy.go, bodyNopCloserIfNotRead).
+				lb_try_duration 30s
+				lb_try_interval 250ms
+
 				transport http {
 					response_header_timeout 300s
 				}
@@ -223,6 +235,18 @@
 				header_up X-Oxagen-Client-Ip {client_ip}
 				header_up X-Forwarded-For {client_ip}
 				header_up -X-Real-Ip
+
+				# A deploy swaps the container on this port, and the new one
+				# takes a few seconds to listen (#5318). For this long Caddy
+				# retries a refused connection instead of answering 502. Caddy
+				# always retries a connection that failed, whatever the method,
+				# and a request it never delivered cannot run twice. A request
+				# that reached the upstream is retried only when it is a GET.
+				# A POST body survives the retry from Caddy 2.11.4 on, which
+				# wraps it so a failed dial cannot close it (caddyserver/caddy
+				# reverseproxy.go, bodyNopCloserIfNotRead).
+				lb_try_duration 30s
+				lb_try_interval 250ms
 
 				transport http {
 					response_header_timeout 300s

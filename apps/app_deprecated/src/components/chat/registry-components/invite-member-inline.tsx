@@ -67,10 +67,10 @@ export default function InviteMemberInline({
             aria-hidden="true"
           />
           <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-base font-medium text-foreground">
               Invitation sent
             </p>
-            <p className="truncate text-xs text-muted-foreground">
+            <p className="truncate text-sm text-muted-foreground">
               {email} · {role}
             </p>
           </div>
@@ -92,7 +92,7 @@ export default function InviteMemberInline({
           className="h-4 w-4 shrink-0 text-muted-foreground"
           aria-hidden="true"
         />
-        <span className="text-sm font-semibold text-foreground">
+        <span className="text-base font-semibold text-foreground">
           Invite member
         </span>
       </div>
@@ -137,7 +137,7 @@ export default function InviteMemberInline({
       {formState === "error" && errorMessage !== null && (
         <p
           role="alert"
-          className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-base text-destructive"
         >
           {errorMessage}
         </p>

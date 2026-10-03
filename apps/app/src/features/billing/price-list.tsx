@@ -35,12 +35,12 @@ function Price({
     <tr data-price={name}>
       <th
         scope="row"
-        className={`${cell} w-[42%] text-left align-top text-sm font-normal`}
+        className={`${cell} w-5/12 text-left align-top text-sm font-normal`}
       >
         {term}
       </th>
       <td
-        className={`${cell} text-right align-top font-mono text-sm tabular-nums text-muted-foreground`}
+        className={`${cell} text-right align-top font-mono text-xs tabular-nums text-muted-foreground`}
       >
         {children}
       </td>
@@ -123,7 +123,7 @@ export function PriceList({
         </tbody>
       </table>
       <p
-        className={`${panelBody} border-t border-border text-xs text-muted-foreground`}
+        className={`${panelBody} border-t border-border text-sm text-muted-foreground`}
       >
         {t("priceList.footer")}
       </p>

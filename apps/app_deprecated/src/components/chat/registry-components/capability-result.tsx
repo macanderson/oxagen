@@ -154,7 +154,7 @@ function ValueView({
 
   if (Array.isArray(value)) {
     if (value.length === 0) {
-      return <span className="text-xs text-muted-foreground">(none)</span>;
+      return <span className="text-sm text-muted-foreground">(none)</span>;
     }
     const shown = value.slice(0, MAX_ARRAY_ITEMS);
     const allScalar = shown.every(
@@ -164,7 +164,7 @@ function ValueView({
       return (
         <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
           {shown.map((v, i) => (
-            <span key={i} className="text-xs text-foreground">
+            <span key={i} className="text-sm text-foreground">
               {truncate(String(v), 60)}
               {i < shown.length - 1 ? (
                 <span className="text-muted-foreground">,</span>
@@ -172,7 +172,7 @@ function ValueView({
             </span>
           ))}
           {value.length > MAX_ARRAY_ITEMS ? (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               +{value.length - MAX_ARRAY_ITEMS} more
             </span>
           ) : null}
@@ -195,7 +195,7 @@ function ValueView({
           </div>
         ))}
         {value.length > MAX_ARRAY_ITEMS ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             +{value.length - MAX_ARRAY_ITEMS} more
           </p>
         ) : null}
@@ -206,7 +206,7 @@ function ValueView({
   if (isPlainRecord(value)) {
     if (depth >= MAX_DEPTH) {
       return (
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           {Object.keys(value).length} field
           {Object.keys(value).length === 1 ? "" : "s"}
         </span>
@@ -241,7 +241,7 @@ function FieldList({
   const hidden = new Set(["render", "links", ...(hideFields ?? [])]);
   const entries = Object.entries(record).filter(([k]) => !hidden.has(k));
   if (entries.length === 0) {
-    return <p className="text-xs text-muted-foreground">No details.</p>;
+    return <p className="text-sm text-muted-foreground">No details.</p>;
   }
   return (
     <dl className="grid gap-x-4 gap-y-1.5 sm:grid-cols-[minmax(7rem,auto)_1fr]">
@@ -249,10 +249,10 @@ function FieldList({
         const path = parentPath ? `${parentPath}.${key}` : key;
         return (
           <React.Fragment key={path}>
-            <dt className="text-xs font-medium text-muted-foreground sm:py-0.5">
+            <dt className="text-sm font-medium text-muted-foreground sm:py-0.5">
               {humanizeKey(key)}
             </dt>
-            <dd className="min-w-0 text-sm text-foreground">
+            <dd className="min-w-0 text-base text-foreground">
               <ValueView
                 value={value}
                 fieldPath={path}
@@ -297,13 +297,13 @@ export default function CapabilityResult(
     >
       <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2.5">
         <span
-          className="truncate text-sm font-semibold text-foreground"
+          className="truncate text-base font-semibold text-foreground"
           title={heading}
         >
           {heading}
         </span>
         {capability ? (
-          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+          <span className="ml-auto shrink-0 text-sm text-muted-foreground">
             {capability}
           </span>
         ) : null}
@@ -319,7 +319,7 @@ export default function CapabilityResult(
                 ? { target: "_blank", rel: "noopener noreferrer" }
                 : {})}
               className={cn(
-                "inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium",
+                "inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-sm font-medium",
                 "text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               )}
             >
@@ -340,7 +340,7 @@ export default function CapabilityResult(
             hideFields={hideFields}
           />
         ) : output === null || output === undefined ? (
-          <p className="text-sm text-muted-foreground">No result.</p>
+          <p className="text-base text-muted-foreground">No result.</p>
         ) : (
           <ScalarValue value={output} />
         )}

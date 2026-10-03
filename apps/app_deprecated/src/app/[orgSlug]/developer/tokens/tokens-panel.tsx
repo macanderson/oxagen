@@ -79,7 +79,7 @@ function CreateKeyDialog({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
       >
         <Plus className="h-3.5 w-3.5" aria-hidden="true" />
         Create token
@@ -93,7 +93,7 @@ function CreateKeyDialog({
         <p
           role="alert"
           data-testid="api-key-create-error"
-          className="basis-full text-xs text-destructive"
+          className="basis-full text-sm text-destructive"
         >
           {error}
         </p>
@@ -101,7 +101,7 @@ function CreateKeyDialog({
       <div className="flex flex-col gap-1">
         <label
           htmlFor="key-name"
-          className="text-xs font-medium text-muted-foreground"
+          className="text-sm font-medium text-muted-foreground"
         >
           Token name
         </label>
@@ -111,7 +111,7 @@ function CreateKeyDialog({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. CI Pipeline"
-          className="h-8 rounded-md border border-border bg-background px-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          className="h-8 rounded-md border border-border bg-background px-2.5 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           autoFocus
           disabled={isPending}
         />
@@ -119,14 +119,14 @@ function CreateKeyDialog({
       <button
         type="submit"
         disabled={isPending || !name.trim()}
-        className="h-8 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+        className="h-8 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
       >
         {isPending ? "Creating…" : "Create"}
       </button>
       <button
         type="button"
         onClick={() => setOpen(false)}
-        className="h-8 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+        className="h-8 rounded-md border border-border px-3 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
       >
         Cancel
       </button>
@@ -145,18 +145,18 @@ function RawKeyBanner({ rawKey, label }: { rawKey: string; label: string }) {
 
   return (
     <div className="rounded-lg border border-warning/40 bg-warning/5 px-4 py-3">
-      <p className="text-xs font-semibold text-warning mb-1">
+      <p className="text-sm font-semibold text-warning mb-1">
         Copy your token now — it won&apos;t be shown again
       </p>
-      <p className="text-xs text-muted-foreground mb-2">{label}</p>
+      <p className="text-sm text-muted-foreground mb-2">{label}</p>
       <div className="flex items-center gap-2">
-        <code className="flex-1 rounded bg-muted px-2 py-1 font-mono text-xs text-foreground break-all">
+        <code className="flex-1 rounded bg-muted px-2 py-1 font-mono text-sm text-foreground break-all">
           {rawKey}
         </code>
         <button
           type="button"
           onClick={copyKey}
-          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
           aria-label="Copy token"
         >
           {copied ? (
@@ -227,27 +227,27 @@ function ActiveKeyRow({
   return (
     <div className="flex flex-col gap-1.5 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
       <div className="flex flex-1 flex-col gap-0.5 min-w-0">
-        <p className="text-sm font-medium text-foreground truncate">
+        <p className="text-base font-medium text-foreground truncate">
           {keyRow.name}
         </p>
-        <p className="font-mono text-xs text-muted-foreground truncate">
+        <p className="font-mono text-sm text-muted-foreground truncate">
           {obfuscatePrefix(keyRow.keyPrefix)}
         </p>
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1 text-sm text-muted-foreground">
           <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           {keyRow.lastUsedAt
             ? `Last used ${formatDate(keyRow.lastUsedAt)}`
             : "Never used"}
         </span>
         {keyRow.expiresAt ? (
-          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1 text-sm text-muted-foreground">
             <Layers className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             Expires {formatDate(keyRow.expiresAt)}
           </span>
         ) : (
-          <Badge variant="outline" className="text-xs">
+          <Badge variant="outline" className="text-sm">
             No expiry
           </Badge>
         )}
@@ -255,7 +255,7 @@ function ActiveKeyRow({
           type="button"
           onClick={handleRotate}
           disabled={isPending}
-          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-50 transition-colors"
+          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-sm font-medium text-muted-foreground hover:bg-muted disabled:opacity-50 transition-colors"
           title="Rotate key"
         >
           <RotateCw className="h-3 w-3" aria-hidden="true" />
@@ -267,14 +267,14 @@ function ActiveKeyRow({
               type="button"
               onClick={handleRevoke}
               disabled={isPending}
-              className="rounded-md bg-destructive px-2 py-1 text-xs font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 transition-colors"
+              className="rounded-md bg-destructive px-2 py-1 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 transition-colors"
             >
               Confirm
             </button>
             <button
               type="button"
               onClick={() => setConfirmRevoke(false)}
-              className="rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+              className="rounded-md border border-border px-2 py-1 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
             >
               Cancel
             </button>
@@ -284,7 +284,7 @@ function ActiveKeyRow({
             type="button"
             onClick={() => setConfirmRevoke(true)}
             disabled={isPending}
-            className="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-2 py-1 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-2 py-1 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50 transition-colors"
             title="Revoke key"
           >
             <Trash2 className="h-3 w-3" aria-hidden="true" />
@@ -296,7 +296,7 @@ function ActiveKeyRow({
         <p
           role="alert"
           data-testid="api-key-action-error"
-          className="text-xs text-destructive sm:basis-full"
+          className="text-sm text-destructive sm:basis-full"
         >
           {error}
         </p>
@@ -331,7 +331,7 @@ export function TokensPanel({ orgSlug, keys }: TokensPanelProps) {
           />
         }
       >
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p className="mb-4 text-base text-muted-foreground">
           Scoped service-principal credentials for programmatic access.
         </p>
 
@@ -342,14 +342,14 @@ export function TokensPanel({ orgSlug, keys }: TokensPanelProps) {
         )}
 
         {active.length === 0 && revoked.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             No API tokens yet. Create one above to get started.
           </p>
         ) : (
           <div className="flex flex-col gap-2">
             {active.length > 0 && (
               <>
-                <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-1">
+                <p className="text-sm font-medium uppercase tracking-widest text-muted-foreground mb-1">
                   Active
                 </p>
                 {active.map((key) => (
@@ -365,7 +365,7 @@ export function TokensPanel({ orgSlug, keys }: TokensPanelProps) {
 
             {revoked.length > 0 && (
               <>
-                <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mt-4 mb-1">
+                <p className="text-sm font-medium uppercase tracking-widest text-muted-foreground mt-4 mb-1">
                   Revoked / expired
                 </p>
                 {revoked.map((key) => (
@@ -374,14 +374,14 @@ export function TokensPanel({ orgSlug, keys }: TokensPanelProps) {
                     className="flex flex-col gap-1.5 rounded-xl border border-border/40 bg-muted/10 px-4 py-3 opacity-60 sm:flex-row sm:items-center sm:gap-4"
                   >
                     <div className="flex flex-1 flex-col gap-0.5 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
+                      <p className="text-base font-medium text-foreground truncate">
                         {key.name}
                       </p>
-                      <p className="font-mono text-xs text-muted-foreground truncate">
+                      <p className="font-mono text-sm text-muted-foreground truncate">
                         {obfuscatePrefix(key.keyPrefix)}
                       </p>
                     </div>
-                    <Badge variant="muted" className="shrink-0 text-xs">
+                    <Badge variant="muted" className="shrink-0 text-sm">
                       {key.deletedAt ? "Revoked" : "Expired"}
                     </Badge>
                   </div>

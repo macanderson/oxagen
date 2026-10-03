@@ -374,7 +374,7 @@ export function BrowsePanel({
                 setSelected(new Set());
                 setBulkFailures([]);
               }}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium border transition-colors ${
+              className={`rounded-full px-3 py-1.5 text-sm font-medium border transition-colors ${
                 isActive
                   ? "bg-primary text-primary-foreground border-primary"
                   : "border-border/60 text-muted-foreground hover:border-foreground/40"
@@ -407,7 +407,7 @@ export function BrowsePanel({
           on screen; a load failure with no results renders the ErrorState
           block below instead (never both). */}
       {error && servers.length > 0 && (
-        <p className="text-sm text-destructive">{error}</p>
+        <p className="text-base text-destructive">{error}</p>
       )}
 
       {/* Selection toolbar — appears once one or more cards are checked. */}
@@ -418,7 +418,7 @@ export function BrowsePanel({
         >
           <div className="flex items-center gap-3">
             <p
-              className="text-sm font-medium"
+              className="text-base font-medium"
               data-testid="marketplace-browse-selection-count"
             >
               {selected.size} selected
@@ -450,7 +450,7 @@ export function BrowsePanel({
           </div>
           {bulkFailures.length > 0 && (
             <ul
-              className="list-disc space-y-0.5 pl-5 text-xs text-destructive"
+              className="list-disc space-y-0.5 pl-5 text-sm text-destructive"
               data-testid="marketplace-browse-bulk-failures"
             >
               {bulkFailures.map((f, i) => (
@@ -524,7 +524,7 @@ export function BrowsePanel({
         />
       ) : (
         <>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {total} {noun}
           </p>
 
@@ -564,7 +564,7 @@ export function BrowsePanel({
                   />
                   <div className="min-w-0 flex-1">
                     <CardTitle
-                      className="truncate text-sm"
+                      className="truncate text-base"
                       data-testid={`marketplace-browse-title-${srv.id}`}
                     >
                       {srv.title ?? srv.name}

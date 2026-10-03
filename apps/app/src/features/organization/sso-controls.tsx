@@ -46,10 +46,10 @@ export function CopyValue({
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-foreground">{label}</p>
+        <p className="text-base font-medium text-foreground">{label}</p>
         <button
           type="button"
-          className={`${buttonSecondary} h-8 px-2 text-xs`}
+          className={`${buttonSecondary} h-8 px-2 text-sm`}
           onClick={() => void copy()}
           aria-label={t("copyLabel", { label })}
         >
@@ -58,11 +58,11 @@ export function CopyValue({
       </div>
       <code
         data-testid={testId}
-        className={`${mono} block select-all break-all rounded-md border border-border bg-hl px-2.5 py-1.5 text-xs`}
+        className={`${mono} block select-all break-all rounded-md border border-border bg-hl px-2.5 py-1.5 text-sm`}
       >
         {value}
       </code>
-      <p role="status" className="text-xs text-muted-foreground">
+      <p role="status" className="text-sm text-muted-foreground">
         {state === "failed" ? t("copyFailed") : ""}
       </p>
     </div>
@@ -122,7 +122,7 @@ export function VerifyDomain({
         </FormAlert>
       )}
       {verified ? (
-        <p role="status" className="text-sm">
+        <p role="status" className="text-base">
           {t("verifiedNow")}
         </p>
       ) : null}
@@ -153,7 +153,7 @@ export function DeleteProvider({
         navigate.refresh();
       }}
     >
-      <p className="text-sm text-muted-foreground">{t("body")}</p>
+      <p className="text-base text-muted-foreground">{t("body")}</p>
     </WriteDialog>
   );
 }
@@ -205,7 +205,7 @@ export function RequireSso({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex items-center gap-2 text-base">
         <input
           id="sso-required"
           type="checkbox"
@@ -224,7 +224,7 @@ export function RequireSso({
           <span className="text-muted-foreground">{t("saving")}</span>
         ) : null}
       </div>
-      <p id="sso-required-state" className="text-sm text-muted-foreground">
+      <p id="sso-required-state" className="text-base text-muted-foreground">
         {required
           ? lapsed
             ? t("lapsed")
@@ -233,7 +233,7 @@ export function RequireSso({
             ? t("off")
             : t("needsVerified")}
       </p>
-      <p id="sso-required-owners" className="text-sm text-muted-foreground">
+      <p id="sso-required-owners" className="text-base text-muted-foreground">
         {t("owners")}
       </p>
       {failure === null ? null : (

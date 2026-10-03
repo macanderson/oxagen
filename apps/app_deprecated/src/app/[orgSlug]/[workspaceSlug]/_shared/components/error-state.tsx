@@ -42,9 +42,9 @@ export function ErrorState({
       >
         <AlertTriangle />
       </div>
-      <div className="text-sm font-medium text-foreground">{title}</div>
+      <div className="text-base font-medium text-foreground">{title}</div>
       {description && (
-        <p className="max-w-sm text-sm text-muted-foreground">{description}</p>
+        <p className="max-w-sm text-base text-muted-foreground">{description}</p>
       )}
       {retry && (
         <div className="mt-2.5">

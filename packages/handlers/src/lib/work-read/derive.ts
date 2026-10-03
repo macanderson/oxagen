@@ -16,7 +16,9 @@
 //     reads accepted once a person accepted its head commit.
 //   - wait: what the item waits for, as one code and the facts to say it.
 //   - send: the latest send since the last reopen, with the required checks on
-//     its pull request's head as one word and whether Accept is open.
+//     its pull request's head as one word and whether Accept is open. The
+//     facts name the pull request acceptance is judged on. The forge store
+//     (ADR-292) names every pull request the send has and the state of each.
 //   - cost: what the item's runs cost, with how many of them have a known cost.
 //     A run with no recorded cost stays unknown. Nothing here invents a zero.
 //
@@ -34,6 +36,7 @@ import {
   reviewGate,
   sortFacts,
 } from "@oxagen/work/records";
+import type { OrderPullRequest } from "../forge-pull-requests/orders";
 
 export type WorkTab = WorkItemRowOutput["tab"];
 export type WorkStatus = WorkItemRowOutput["status"];
@@ -80,6 +83,11 @@ export interface Lookups {
   orders: ReadonlyMap<string, OrderRowRef>;
   /** Run costs by run id (`arun_…` or `tse_…`). */
   runs: ReadonlyMap<string, RunCost>;
+  /**
+   * Every pull request each send has in the forge store, newest first, by
+   * work order row id (ADR-292). A send with none is absent.
+   */
+  pullRequests: ReadonlyMap<string, readonly OrderPullRequest[]>;
 }
 
 /** The work.items columns a row shows. */
@@ -548,11 +556,33 @@ export function pullRequestUrl(repository: string, number: number): string {
   return `https://github.com/${repository}/pull/${number}`;
 }
 
-/** A send's pull request, by repository and number, with its head. Pure. */
-export function pullRequestRefOf(order: OrderProjection): WorkSendSummary["pull_request"] {
+/**
+ * A send's pull request, by repository and number, with its head, from the
+ * send's facts. The link is the forge store's when it holds the same pull
+ * request, and the GitHub link otherwise. Pure.
+ */
+export function pullRequestRefOf(order: OrderProjection, lookups: Pick<Lookups, "pullRequests">): WorkSendSummary["pull_request"] {
   if (order.pullRequest === null) return null;
   const { repository, number } = order.pullRequest;
-  return { repository, number, url: pullRequestUrl(repository, number), head: order.head };
+  const held = lookups.pullRequests
+    .get(order.orderId)
+    ?.find((pull) => pull.provider === "github" && pull.number === number && pull.repository === repository.toLowerCase());
+  return { repository, number, url: held?.url ?? pullRequestUrl(repository, number), head: order.head };
+}
+
+/** Every pull request a send has in the forge store, newest first. Pure. */
+export function forgePullRequestsOf(order: OrderProjection, lookups: Pick<Lookups, "pullRequests">): WorkSendSummary["pull_requests"] {
+  return (lookups.pullRequests.get(order.orderId) ?? []).map((pull) => ({
+    id: pull.id,
+    provider: pull.provider,
+    repository: pull.repository,
+    number: pull.number,
+    url: pull.url,
+    title: pull.title,
+    state: pull.state,
+    head: pull.headSha,
+    state_seen_at: pull.stateSeenAt,
+  }));
 }
 
 /** One send, as a list row shows it. Pure. */
@@ -567,7 +597,8 @@ export function sendSummaryOf(item: Pick<DerivedItem, "facts" | "projection">, o
     agent: agentRefOf(order, lookups),
     runtime: { name: runtimeNameOf(order, lookups), tier: order.runtimeTier },
     requested_at: order.requestedAt,
-    pull_request: pullRequestRefOf(order),
+    pull_request: pullRequestRefOf(order, lookups),
+    pull_requests: forgePullRequestsOf(order, lookups),
     checks: checksWordOf(order),
     gate: gateOf(item.projection, order),
     accepted: order.acceptance !== null,

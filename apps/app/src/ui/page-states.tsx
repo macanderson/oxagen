@@ -75,14 +75,14 @@ export function PageSkeleton({ label }: { label?: string }) {
       </div>
       <div aria-hidden="true" className={panel}>
         <div className={panelHeader}>
-          <span className="skeleton h-[22px] w-[180px] max-w-full rounded-[7px]" />
+          <span className="skeleton h-5.5 w-45 max-w-full rounded-[7px]" />
         </div>
         <div className={`${panelBody} flex flex-col gap-2`}>
           {[0, 1, 2, 3, 4, 5, 6].map((row) => (
             <span
               key={row}
               data-skeleton-row=""
-              className="skeleton h-[38px] rounded-[9px]"
+              className="skeleton h-9.5 rounded-[9px]"
             />
           ))}
         </div>
@@ -162,7 +162,7 @@ export function PageError({
           <p
             id={noteId}
             data-testid="page-error-incident-not-backed"
-            className="mt-2 text-xs text-muted-foreground"
+            className="mt-2 text-sm text-muted-foreground"
           >
             {t("incidentNotBacked")}
           </p>
@@ -311,7 +311,7 @@ export function PageDenied({
           <p
             id={noteId}
             data-testid="page-denied-request-not-backed"
-            className="mt-2 text-xs text-muted-foreground"
+            className="mt-2 text-sm text-muted-foreground"
           >
             {t("requestNotBacked")}
           </p>

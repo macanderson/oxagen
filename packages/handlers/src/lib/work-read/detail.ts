@@ -29,6 +29,7 @@ import {
   checksWordOf,
   costOf,
   factsOfOrder,
+  forgePullRequestsOf,
   gateOf,
   nameOf,
   noAnswerOf,
@@ -292,7 +293,7 @@ export function sendDetailOf(item: Pick<DerivedItem, "facts" | "projection">, or
   const rejected = last(ofKind(facts, "send_rejected"));
   const withdrawn = last(ofKind(facts, "send_withdrawn"));
   const stopAsked = last(ofKind(facts, "stop_requested"));
-  const ref = pullRequestRefOf(order);
+  const ref = pullRequestRefOf(order, lookups);
   const headSeen =
     order.head === null
       ? undefined
@@ -342,6 +343,7 @@ export function sendDetailOf(item: Pick<DerivedItem, "facts" | "projection">, or
             merged: order.merge === null ? null : { at: order.merge.at, merge_commit: order.merge.mergeCommit },
             closed_at: order.prClosed ? lastAt(facts.filter((fact) => onPullRequest(order, fact)), "pr_closed") : null,
           },
+    pull_requests: forgePullRequestsOf(order, lookups),
     required_checks: order.requiredChecks === null ? null : [...order.requiredChecks],
     checks: order.checks.map((check) => ({ name: check.name, conclusion: check.conclusion, required: check.required })),
     earlier_checks: earlierChecksOf(order, facts),
@@ -380,6 +382,9 @@ function detailsOf(fact: WorkFact): Pick<HistoryOut, "reason" | "resolution" | "
     case "check_observed":
       return { ...none, check: fact.data.name, conclusion: fact.data.conclusion };
     case "merged":
+    case "reverted":
+      // A revert's pull request column names the reverting pull request, and
+      // its merge commit is the revert's own.
       return { ...none, merge_commit: fact.data.merge_commit };
     default:
       return none;

@@ -100,11 +100,11 @@ export function NewWorkspaceForm({
             setSlug(next);
           }}
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Lowercase letters, digits, and hyphens. 2 to 40 chars.
         </p>
       </div>
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? <p className="text-base text-destructive">{error}</p> : null}
       <Button type="submit" disabled={pending}>
         {pending ? "Creating…" : "Create workspace"}
       </Button>

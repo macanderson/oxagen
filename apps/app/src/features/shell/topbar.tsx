@@ -43,7 +43,7 @@ function Breadcrumbs({ data }: { data: ShellData }) {
   });
   return (
     <nav aria-label={t("topbar.breadcrumbs")} className="min-w-0 flex-1">
-      <ol className="flex min-w-0 items-center gap-1.5 text-sm">
+      <ol className="flex min-w-0 items-center gap-1.5 text-base">
         {crumbs.map((crumb, i) => {
           const label =
             crumb.kind === "nav" ? t(`nav.${crumb.key}`) : crumb.text;
@@ -108,11 +108,11 @@ export function Topbar({ data }: { data: ShellData }) {
       aria-label={t("label")}
       // viewport-fit=cover (app/layout.tsx) draws the page under a notch, so
       // the sticky bar pads its top by the inset (mockup `#viewport.phone .top`).
-      className="sticky top-0 z-30 flex items-center gap-3 border-b border-app-topbar-border bg-app-topbar-bg/90 px-4 pb-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] text-app-topbar-fg backdrop-blur md:col-start-2 md:row-start-1 md:px-5"
+      className="sticky top-0 z-30 flex items-center gap-3 border-b border-app-topbar-border bg-app-topbar-bg/90 px-4 pb-2.5 pt-(--topbar-pad-top) text-app-topbar-fg backdrop-blur md:col-start-2 md:row-start-1 md:px-5"
     >
       <a
         href="#main"
-        className="sr-only rounded-md bg-foreground px-3 py-1.5 text-sm text-background focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50"
+        className="sr-only rounded-md bg-foreground px-3 py-1.5 text-base text-background focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50"
       >
         {tShell("skipToContent")}
       </a>
@@ -136,13 +136,13 @@ export function Topbar({ data }: { data: ShellData }) {
         aria-keyshortcuts="Meta+K Control+K"
         aria-label={t("search")}
         data-touch-target=""
-        className="flex items-center gap-2 rounded-[9px] border border-border bg-card px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:border-rule hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring lg:min-w-[190px]"
+        className="flex items-center gap-2 rounded-[9px] border border-border bg-card px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:border-rule hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring lg:min-w-47.5"
       >
         <MagnifyingGlassIcon aria-hidden="true" className="size-3.5" />
         <span className="hidden lg:inline">{t("search")}</span>
         <kbd
           aria-hidden="true"
-          className="ml-auto hidden rounded border border-border bg-hl px-[5px] font-mono text-sm text-muted-foreground sm:inline"
+          className="ml-auto hidden rounded border border-border bg-hl px-1.25 font-mono text-xs text-muted-foreground sm:inline"
         >
           {t("searchShortcut")}
         </kbd>
@@ -167,7 +167,7 @@ export function Topbar({ data }: { data: ShellData }) {
           <span
             aria-hidden="true"
             data-testid="unread-dot"
-            className="absolute right-1.5 top-1.5 size-[7px] rounded-full border border-app-topbar-bg bg-info"
+            className="absolute right-1.5 top-1.5 size-1.75 rounded-full border border-app-topbar-bg bg-info"
           />
         ) : null}
       </button>
@@ -193,7 +193,7 @@ export function Topbar({ data }: { data: ShellData }) {
           <span
             aria-hidden="true"
             data-testid="approvals-count"
-            className="absolute -right-1.5 -top-1.5 min-w-[18px] rounded-full border border-app-topbar-bg bg-info px-1 text-center font-mono text-sm font-semibold leading-4 text-info-foreground"
+            className="absolute -right-1.5 -top-1.5 min-w-4.5 rounded-full border border-app-topbar-bg bg-info px-1 text-center font-mono text-xs font-semibold leading-4 text-info-foreground"
           >
             {waitingText(waiting)}
           </span>

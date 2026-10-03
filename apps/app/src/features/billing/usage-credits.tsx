@@ -94,7 +94,7 @@ function TopUpForm({
           </button>
         ))}
       </div>
-      <div className="flex flex-wrap items-center gap-3 text-sm">
+      <div className="flex flex-wrap items-center gap-3 text-base">
         <label htmlFor="credits-amount">{t("amount")}</label>
         <input
           id="credits-amount"
@@ -171,18 +171,18 @@ export function UsageCreditsSection({
           <Money value={c.balance} />
         </Fact>
       </Facts>
-      <p data-basis="" className="max-w-prose text-sm text-muted-foreground">
+      <p data-basis="" className="max-w-prose text-base text-muted-foreground">
         {t("basis")}
       </p>
       {c.balanceCredits <= 0 ? (
-        <p data-exhausted="" className="text-sm font-medium text-foreground">
+        <p data-exhausted="" className="text-base font-medium text-foreground">
           {t("exhausted")}
         </p>
       ) : null}
       {topUp === "ok" ? (
         <TopUpForm org={org} presetsUsd={presetsUsd} minUsd={minUsd} />
       ) : (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           {t(topUp === "plan" ? "planDenied" : "denied")}
         </p>
       )}

@@ -23,7 +23,7 @@
  * mockup's sheet buttons have.
  */
 const buttonBase =
-  "inline-flex min-h-9 max-md:min-h-11 items-center justify-center gap-1.5 rounded-4xl px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 " +
+  "inline-flex min-h-9 max-md:min-h-11 items-center justify-center gap-1.5 rounded-4xl px-3 py-1.5 text-base font-medium whitespace-nowrap transition-colors [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring " +
   "disabled:cursor-not-allowed disabled:opacity-45 aria-disabled:cursor-not-allowed";
 
@@ -59,16 +59,16 @@ export const linkText =
  * The label and hint take the maia field's type: a 14px medium label in the
  * foreground, 8px above its control, and a 14px muted hint.
  */
-export const fieldLabel = "mb-2 block text-sm font-medium text-foreground";
-export const fieldHint = "mt-2 text-sm leading-normal text-muted-foreground";
+export const fieldLabel = "mb-2 block text-base font-medium text-foreground";
+export const fieldHint = "mt-2 text-base leading-normal text-muted-foreground";
 export const buttonSmall =
-  "inline-flex min-h-8 flex-none items-center justify-center gap-1 rounded-4xl border border-button-default-border bg-button-default-bg px-3 text-sm font-medium whitespace-nowrap text-button-default-fg hover:bg-button-default-hover-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:bg-button-disabled-bg disabled:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
+  "inline-flex min-h-8 flex-none items-center justify-center gap-1 rounded-4xl border border-button-default-border bg-button-default-bg px-3 text-base font-medium whitespace-nowrap text-button-default-fg hover:bg-button-default-hover-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:bg-button-disabled-bg disabled:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
 
 /** The one skin every field wears; `inputBase` and `textareaBase` add the shape. */
 const fieldSkin =
   // 16px below md as well as by phone.css, so the class list alone says an
   // input never makes iOS zoom the page on focus.
-  "block w-full min-w-0 border border-input-border bg-input-bg px-3 text-sm max-md:text-base text-input-fg placeholder:text-input-placeholder " +
+  "block w-full min-w-0 border border-input-border bg-input-bg px-3 text-base max-md:text-input-touch text-input-fg placeholder:text-input-placeholder " +
   "hover:border-input-border-hover focus-visible:border-input-border-focus focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-input-ring " +
   "disabled:bg-input-disabled-bg disabled:text-input-disabled-fg aria-invalid:border-input-invalid-border aria-invalid:outline-input-invalid-ring";
 
@@ -104,7 +104,7 @@ export const menuPopup = `${menuSurface} p-1`;
  */
 export const menuItemActive = "bg-foreground/10";
 export const menuItem =
-  "flex w-full cursor-pointer select-none items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-menu-item-fg outline-none " +
+  "flex w-full cursor-pointer select-none items-center gap-2.5 rounded-xl px-3 py-2 text-left text-base text-menu-item-fg outline-none " +
   "data-[highlighted]:bg-foreground/10 " +
   "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
 
@@ -112,7 +112,7 @@ export const menuItem =
 export const menuSeparator = "-mx-1 my-1 h-px bg-foreground/5";
 
 /** A group's name over its rows. */
-export const menuLabel = "px-3 py-2.5 text-xs text-muted-foreground";
+export const menuLabel = "px-3 py-2.5 text-sm text-muted-foreground";
 
 /**
  * A popover or hint that floats over the page: the menu's translucent fill
@@ -139,7 +139,7 @@ export const panel =
  * in gold-as-ink.
  */
 export const eyebrow =
-  "text-sm font-semibold uppercase tracking-[0.14em] text-accent-text";
+  "text-xs font-semibold uppercase tracking-[0.14em] text-accent-text";
 
 /**
  * `.eyebrow.q { color:var(--muted) }`: the same caps line inside a panel,
@@ -166,7 +166,7 @@ export const note =
  * left in the dim ink and value right.
  */
 export const kvList =
-  "grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-[7px] text-sm";
+  "grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1.75 text-sm";
 export const kvTerm = "whitespace-nowrap text-dim";
 export const kvValue = "m-0 min-w-0 text-foreground [overflow-wrap:anywhere]";
 
@@ -176,7 +176,7 @@ export const kvValue = "m-0 min-w-0 text-foreground [overflow-wrap:anywhere]";
  * the badges around it do not.
  */
 export const linkChip =
-  "inline-flex min-w-0 max-w-full items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-hl px-[7px] py-0.5 text-sm font-semibold leading-normal tracking-[0.02em] text-muted-foreground transition-colors hover:border-gold hover:bg-hl hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+  "inline-flex min-w-0 max-w-full items-center gap-1.25 whitespace-nowrap rounded-md border border-border bg-hl px-1.75 py-0.5 text-xs font-semibold leading-normal tracking-[0.02em] text-muted-foreground transition-colors hover:border-gold hover:bg-hl hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
 /**
  * `.panel-h { padding:12px 16px; border-bottom:1px solid var(--border) }` and
@@ -186,9 +186,9 @@ export const linkChip =
  */
 export const panelHeader =
   "flex flex-wrap items-center justify-between gap-3 border-b border-border bg-panel-head px-4 py-3";
-export const panelTitle = "text-sm font-semibold text-foreground";
+export const panelTitle = "text-base font-semibold text-foreground";
 export const panelFooter =
-  "flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-muted-foreground";
+  "flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm text-muted-foreground";
 /** `.panel-b { padding:14px 16px }` */
 export const panelBody = "px-4 py-3.5";
 
@@ -201,12 +201,12 @@ export const panelBody = "px-4 py-3.5";
  * figure to `.stat .v { font-size:17px }`, so two tiles fit a row.
  */
 export const statTile =
-  "flex min-w-0 flex-col rounded-2xl border border-border bg-card px-[15px] py-[13px] text-card-foreground max-md:px-3 max-md:py-[11px]";
+  "flex min-w-0 flex-col rounded-2xl border border-border bg-card px-3.75 py-3.25 text-card-foreground max-md:px-3 max-md:py-2.75";
 export const statTerm =
-  "mb-[5px] text-sm font-semibold uppercase tracking-[0.1em] text-dim";
+  "mb-1.25 text-xs font-semibold uppercase tracking-[0.1em] text-dim";
 export const statValue =
-  "text-2xl font-bold leading-[1.15] tracking-[-0.02em] tabular-nums max-md:text-lg";
-export const statNote = "mt-[3px] text-sm text-muted-foreground";
+  "text-xl font-bold leading-[1.15] tracking-[-0.02em] tabular-nums max-md:text-lg";
+export const statNote = "mt-0.75 text-xs text-muted-foreground";
 /**
  * `.grid.g4 { grid-template-columns:repeat(auto-fit,minmax(175px,1fr)); gap:14px }`,
  * and `#viewport.phone .g4 { grid-template-columns:1fr 1fr }`: a phone draws
@@ -222,11 +222,11 @@ export const statNote = "mt-[3px] text-sm text-muted-foreground";
 export const runStatStrip =
   "grid grid-cols-2 gap-2 sm:grid-cols-3 min-[86.25rem]:grid-cols-6";
 export const runStatTile =
-  "flex min-w-0 flex-col rounded-2xl border border-border bg-card px-[11px] py-[9px] text-card-foreground";
+  "flex min-w-0 flex-col rounded-2xl border border-border bg-card px-2.75 py-2.25 text-card-foreground";
 export const runStatTerm =
-  "mb-[5px] text-sm font-semibold uppercase tracking-[0.1em] text-dim";
+  "mb-1.25 text-xs font-semibold uppercase tracking-[0.1em] text-dim";
 export const runStatValue =
   "text-lg font-bold leading-[1.15] tracking-[-0.02em] tabular-nums";
-export const runStatNote = "mt-[3px] text-sm text-muted-foreground";
+export const runStatNote = "mt-0.75 text-xs text-muted-foreground";
 export const statStrip =
   "grid grid-cols-2 gap-3.5 md:[grid-template-columns:repeat(auto-fit,minmax(175px,1fr))]";

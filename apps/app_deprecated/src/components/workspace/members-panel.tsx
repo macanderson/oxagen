@@ -263,7 +263,7 @@ function AddMemberDialog({
             </div>
 
             {fieldError ? (
-              <p className="text-sm text-destructive">{fieldError}</p>
+              <p className="text-base text-destructive">{fieldError}</p>
             ) : null}
           </form>
         </DialogPanel>
@@ -431,7 +431,7 @@ function RoleSelector({
   return (
     <Select value={member.role} onValueChange={handleChange} disabled={pending}>
       <SelectTrigger
-        className="h-7 min-w-[7rem] text-xs max-md:h-11"
+        className="h-7 min-w-[7rem] text-sm max-md:h-11"
         aria-label={`Change role for ${member.displayName ?? member.email}`}
       >
         <SelectValue />
@@ -473,7 +473,7 @@ function MemberRow({
         <span className="font-medium">
           {member.displayName ?? member.email}
         </span>
-        <span className="text-xs text-muted-foreground">{member.email}</span>
+        <span className="text-sm text-muted-foreground">{member.email}</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {canManage && !isSelf ? (
@@ -495,7 +495,7 @@ function MemberRow({
           /* Non-privileged users see a read-only badge */
           <Badge variant="outline">{member.role}</Badge>
         )}
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           Joined {formatDate(member.joinedAt)}
         </span>
       </div>
@@ -559,7 +559,7 @@ function PendingInvitationsList({
           >
             <div className="flex flex-col">
               <span className="font-medium">{inv.email}</span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 Invited as {inv.role}
                 {inv.expiresAt ? ` · Expires ${formatDate(inv.expiresAt)}` : ""}
               </span>
@@ -611,7 +611,7 @@ export function MembersPanel({
         title={
           <>
             Organization members
-            <span className="ml-2 text-sm font-normal text-muted-foreground">
+            <span className="ml-2 text-base font-normal text-muted-foreground">
               {members.length} / {seatUsage.licenses}
             </span>
           </>

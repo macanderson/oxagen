@@ -121,12 +121,12 @@ function DenialChain({ agentKey }: { agentKey: string | null }) {
         >
           <span
             aria-hidden="true"
-            className="grid size-5 shrink-0 place-items-center rounded-full border border-border text-sm text-dim"
+            className="grid size-5 shrink-0 place-items-center rounded-full border border-border text-xs text-dim"
           >
             {index + 1}
           </span>
           <span className="flex min-w-0 flex-col">
-            <span className="text-sm font-semibold uppercase tracking-[0.09em] text-dim">
+            <span className="text-xs font-semibold uppercase tracking-[0.09em] text-dim">
               {t(step.key)}
             </span>
             <span className="text-sm">
@@ -202,14 +202,14 @@ export function MandatesSection({
     <section aria-labelledby="agent-mandates" className={`${panel} p-4`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 id="agent-mandates" className="text-base font-semibold">
+          <h2 id="agent-mandates" className="text-lg font-semibold">
             {read.ok && effective.length === 0
               ? blindSpot === null
                 ? t("noneTitle")
                 : t("noneListedTitle")
               : title}
           </h2>
-          <p className="mt-1 max-w-prose text-sm text-muted-foreground">
+          <p className="mt-1 max-w-prose text-base text-muted-foreground">
             {t("lead")}
           </p>
         </div>
@@ -227,7 +227,7 @@ export function MandatesSection({
         {retired ? (
           <p
             data-state="retired"
-            className="max-w-xs text-sm text-muted-foreground"
+            className="max-w-xs text-base text-muted-foreground"
           >
             {t("retired")}
           </p>
@@ -249,7 +249,7 @@ export function MandatesSection({
               <p
                 data-state="incomplete"
                 data-blind-spot={blindSpot}
-                className="max-w-prose text-sm text-foreground"
+                className="max-w-prose text-base text-foreground"
               >
                 {blindSpot === "truncated"
                   ? t("truncated", { shown: String(read.value.truncatedAt) })
@@ -257,7 +257,7 @@ export function MandatesSection({
               </p>
             )}
             {effective.length > 0 ? null : (
-              <div className="flex flex-col gap-2 text-sm">
+              <div className="flex flex-col gap-2 text-base">
                 <p data-state="empty" data-blind-spot={blindSpot ?? undefined}>
                   {blindSpot !== null
                     ? t("noneListed")
@@ -267,7 +267,7 @@ export function MandatesSection({
                         ? t("noneEffectiveUpcoming")
                         : t("noneEffective")}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   {blindSpot === null ? t("noneDetail") : t("noneListedDetail")}
                 </p>
                 {blindSpot === null ? (
@@ -278,8 +278,8 @@ export function MandatesSection({
             {held.length === 0 ? null : (
               <>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="text-xs uppercase tracking-wide text-muted-foreground">
+                  <table className="w-full text-left text-base">
+                    <thead className="text-sm uppercase tracking-wide text-muted-foreground">
                       <tr>
                         {COLUMNS.map((column) => (
                           <th
@@ -368,7 +368,7 @@ export function MandatesSection({
           </div>
         )}
       </div>
-      <p className="mt-3 max-w-prose text-xs text-muted-foreground">
+      <p className="mt-3 max-w-prose text-sm text-muted-foreground">
         {t("authority")}
       </p>
     </section>

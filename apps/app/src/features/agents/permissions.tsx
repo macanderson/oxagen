@@ -57,7 +57,7 @@ function WireNode({ label, sub }: { label: string; sub?: string }) {
     <li className="flex min-w-0 flex-col rounded-lg border border-border bg-hl px-3 py-2 text-sm">
       <span className={mono}>{label}</span>
       {sub === undefined ? null : (
-        <span className="text-xs text-dim">{sub}</span>
+        <span className="text-sm text-dim">{sub}</span>
       )}
     </li>
   );
@@ -110,7 +110,7 @@ function Roles({
                 })
               : t("beltUnread")}
           </span>
-          <span className="text-xs text-dim">{t("beltSub")}</span>
+          <span className="text-sm text-dim">{t("beltSub")}</span>
         </li>
       </ol>
       <Facts
@@ -126,7 +126,7 @@ function Roles({
                       {permissions === null ? (
                         <NotRecordedValue />
                       ) : (
-                        <span className={`${mono} text-sm`}>
+                        <span className={`${mono} text-xs`}>
                           {permissions.join(" · ")}
                         </span>
                       )}
@@ -159,7 +159,7 @@ function Roles({
                 ) : (
                   <span>
                     <Money value={detail.limits.perRun} />{" "}
-                    <span className="text-xs text-dim">
+                    <span className="text-sm text-dim">
                       {detail.limits.perRun.currency}
                     </span>
                   </span>
@@ -169,7 +169,7 @@ function Roles({
                   <>
                     <span>
                       <Money value={detail.limits.perDay} />{" "}
-                      <span className="text-xs text-dim">
+                      <span className="text-sm text-dim">
                         {detail.limits.perDay.currency}
                       </span>
                     </span>
@@ -233,7 +233,7 @@ function Meter({
           />
         )}
       </span>
-      <p className="text-xs text-dim">{note}</p>
+      <p className="text-sm text-dim">{note}</p>
     </div>
   );
 }
@@ -321,7 +321,7 @@ function Budgets({
       {/* No surface sets the agent's own budgets yet (ADR-204 §5). */}
       <p
         data-testid="agent-budget-field-later"
-        className="text-xs text-muted-foreground"
+        className="text-sm text-muted-foreground"
       >
         {t("fieldLater")}
       </p>

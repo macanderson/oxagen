@@ -50,11 +50,11 @@ export function RunLoading() {
         </div>
         <div aria-hidden="true" className={panel}>
           <div className={panelHeader}>
-            <span className={`${sk} h-[22px] w-[180px] rounded-[7px]`} />
+            <span className={`${sk} h-5.5 w-45 rounded-[7px]`} />
           </div>
           <div className={`${panelBody} flex flex-col gap-2`}>
             {ROWS.map((row) => (
-              <span key={row} className={`${sk} h-[38px] rounded-[9px]`} />
+              <span key={row} className={`${sk} h-9.5 rounded-[9px]`} />
             ))}
           </div>
         </div>

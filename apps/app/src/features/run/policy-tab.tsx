@@ -105,7 +105,7 @@ function DecidedBy({ source }: { source: string | null }) {
   return (
     <span
       data-testid="policy-decided-by"
-      className="max-w-full text-sm text-dim md:truncate"
+      className="max-w-full text-xs text-dim md:truncate"
     >
       {source === null
         ? t("decidedByUnrecorded")
@@ -218,7 +218,7 @@ function row(entry: TranscriptEntry, place: Place): ListRow {
         ) : (
           <span className={`${mono} text-foreground md:truncate`}>{call}</span>
         )}
-        <span className={`${mono} text-sm text-dim md:truncate`}>
+        <span className={`${mono} text-xs text-dim md:truncate`}>
           {decision?.type ?? entry.type}
         </span>
       </span>,
@@ -278,7 +278,7 @@ export function PolicyDecisions({
       <Panel title={t("title")} testId="run-policy">
         <p
           data-testid="run-policy-backfilled"
-          className="text-sm text-muted-foreground"
+          className="text-base text-muted-foreground"
         >
           {tb("policy")}
         </p>
@@ -299,11 +299,11 @@ export function PolicyDecisions({
     <Panel title={t("title")} flush testId="run-policy">
       {entries.length === 0 ? (
         <PanelBody>
-          <p className="text-sm text-muted-foreground">{t("empty")}</p>
+          <p className="text-base text-muted-foreground">{t("empty")}</p>
         </PanelBody>
       ) : decided.length === 0 ? (
         <PanelBody>
-          <p className="text-sm text-muted-foreground">{t("onlyChecks")}</p>
+          <p className="text-base text-muted-foreground">{t("onlyChecks")}</p>
         </PanelBody>
       ) : (
         <DecisionTable entries={decided} label={t("title")} place={place} />
@@ -311,7 +311,7 @@ export function PolicyDecisions({
       {checks.length === 0 ? null : (
         <PanelBody rule>
           <details data-testid="harness-checks">
-            <summary className="cursor-pointer text-sm text-muted-foreground">
+            <summary className="cursor-pointer text-base text-muted-foreground">
               {t("checks", { count: checks.length })}
             </summary>
             <div className="pt-2">
@@ -328,7 +328,7 @@ export function PolicyDecisions({
         <div className="flex flex-col gap-2">
           <Note>{t("note")}</Note>
           {isWhole(read.value) ? null : (
-            <p className="text-xs text-muted-foreground">{t("cut")}</p>
+            <p className="text-sm text-muted-foreground">{t("cut")}</p>
           )}
         </div>
       </PanelBody>

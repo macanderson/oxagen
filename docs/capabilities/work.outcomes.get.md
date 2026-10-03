@@ -1,6 +1,6 @@
 # get_work_outcomes
 
-Count the workspace's work accepted and merged, returned, and closed in a window of days, with lead time, review touches, cost coverage, and reopens.
+Count the workspace's work accepted and merged, returned, and closed in a window of days, with lead time, review touches, cost coverage, reopens, and reverts.
 
 **Surfaces:** api
 
@@ -31,6 +31,7 @@ Count the workspace's work accepted and merged, returned, and closed in a window
 | `touches` | object | A person's decisions on the accepted items, and the touches per item |
 | `cost` | `{ runs, known_runs, total }` | What the accepted items' runs cost |
 | `reopens` | `{ cohort, reopened, waiting }` | Reopens of items that finished 30 or more days ago |
+| `reverts` | `{ cohort, reverted, waiting }` | Reverts of the same items. `cohort` and `waiting` equal the ones in `reopens` |
 | `delivery` | `{ sends, claimed, rejected, withdrawn, waiting, claim_minutes, truncated }` | The sends a person made in the window, each in one bucket, and the minutes from send to claim |
 | `truncated` | `boolean` | True when more items finished than one read counts |
 | `weeks` | `{ week, accepted_merged, returned, median_lead_hours, entered, sent, full_flow }[]` | Each UTC week from Monday that overlaps the window |
@@ -44,7 +45,9 @@ Every figure is counted from the work records ([ADR-244](../adr/ADR-244-phase-1-
 - Lead time runs from the item's first source reading, collected or entered, to its done time. The median and the 90th percentile use the nearest rank: the value at position ceil(p × n) of the sorted sample. Both are null with no sample. A lead time that would run backwards, because the provider's clock and Oxagen's disagree, is left out of the sample.
 - Review touches count brief approvals, acceptances, returns, triage overrides, and triage corrections on the accepted items, over their whole life. `per_item` divides the total by the accepted items, and is null with none.
 - Cost sums the runs linked to the accepted items' sends whose cost the spend rollup recorded. A run with no recorded cost adds nothing and stays unknown. The total is null when no cost is known or the known costs are in different currencies. In-app triage spend is not here. It shows on Billing.
-- The reopen cohort is the items whose done time falls 30 to 30 plus `days` days ago. An item reopened when a reopen follows its done time. `waiting` counts the items done in the last 30 days, which wait to count. Reverts are not recorded.
+- The reopen cohort is the items whose done time falls 30 to 30 plus `days` days ago. An item reopened when a reopen follows its done time. `waiting` counts the items done in the last 30 days, which wait to count.
+- Reverts count over the same cohort, with the same `waiting`. An item counts as reverted when GitHub merged a pull request whose description has the line `Reverts <owner>/<repo>#<n>`, where `<n>` is the pull request that finished the item. GitHub's Revert button writes that line. Oxagen reads the line when the revert merges, so a later edit of the description changes nothing. A revert made by hand without that line is not counted, and neither is a line that names a pull request in another repository. A revert of the revert does not clear it.
+- A revert never moves an item out of done. The revert shows in the item's history, and a person decides whether to reopen the item.
 - A week's median lead time covers the items done in that week.
 - Delivery puts each send a person made in the window in one bucket. A send the runtime or Oxagen rejected is `rejected`. Otherwise, a send a runtime claimed is `claimed`, even when a person withdrew it later, because the runtime received it. Otherwise, a send a person withdrew is `withdrawn`, and the rest are `waiting`. The four buckets add up to `sends`.
 - `claim_minutes` runs from each claimed send to the runtime's first claim. The median and the 90th percentile use the nearest rank, as lead time does, and both are null with no sample. A claim time that would run backwards is left out of the sample.

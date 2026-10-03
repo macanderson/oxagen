@@ -55,7 +55,7 @@ function ProviderWeeklyPrice({ server }: { server: McpServer }) {
       <span
         data-testid={`provider-weekly-${server.id}`}
         data-state="absent"
-        className="text-xs text-muted-foreground"
+        className="text-sm text-muted-foreground"
       >
         {t("weeklyAbsent")}
       </span>
@@ -67,10 +67,10 @@ function ProviderWeeklyPrice({ server }: { server: McpServer }) {
       <span
         data-testid={`provider-weekly-${server.id}`}
         data-state="unpriced"
-        className="flex flex-col items-end gap-0.5 text-xs text-muted-foreground"
+        className="flex flex-col items-end gap-0.5 text-sm text-muted-foreground"
       >
         <span title={t("weeklyUnpricedTitle")}>{t("weeklyUnpriced")}</span>
-        <span className="text-sm">
+        <span className="text-xs">
           {t("weeklyTokenCount", { tokens: count })}
         </span>
       </span>
@@ -83,7 +83,7 @@ function ProviderWeeklyPrice({ server }: { server: McpServer }) {
       title={t("weeklyTitle", { tokens: count })}
     >
       <Money value={weeklyPrice} precision="exact" />
-      <span className="text-sm text-muted-foreground">
+      <span className="text-xs text-muted-foreground">
         {t("weeklyTokens", { tokens: count })}
       </span>
     </span>
@@ -121,7 +121,7 @@ export function ProviderRow({
           <span className="flex min-w-0 flex-col gap-0.5">
             <span className="font-semibold md:truncate">{server.name}</span>
             <span
-              className={`${mono} text-xs font-normal text-muted-foreground md:truncate`}
+              className={`${mono} text-sm font-normal text-muted-foreground md:truncate`}
             >
               {server.id}
             </span>
@@ -139,12 +139,12 @@ export function ProviderRow({
       <td className={cell}>
         <span className="flex flex-col gap-1">
           <span
-            className={`${mono} w-fit rounded border border-border px-1.5 py-0.5 text-sm`}
+            className={`${mono} w-fit rounded border border-border px-1.5 py-0.5 text-xs`}
           >
             {t("transportMcp")}
           </span>
           <span
-            className={`${mono} text-sm text-muted-foreground md:truncate`}
+            className={`${mono} text-xs text-muted-foreground md:truncate`}
           >
             {t("wireLine", {
               wire: server.transportType,
@@ -160,7 +160,7 @@ export function ProviderRow({
               ? formatCount(versions.length, locale)
               : t("atLeast", { count: versions.length })}
           </span>
-          <span className="text-sm text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {t("pinned", { count: server.toolCount })}
           </span>
         </span>

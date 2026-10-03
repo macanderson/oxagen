@@ -27,7 +27,7 @@ export default function CliLoginCompletePage() {
           <h1 className="text-xl font-semibold tracking-tight">
             Login complete
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             The Oxagen CLI has its token. You can close this tab and return to
             your terminal.
           </p>

@@ -31,7 +31,7 @@ export const Right: Story = {
           </SheetDescription>
         </SheetHeader>
         <SheetPanel>
-          <p className="text-sm text-muted-foreground">Sheet body content.</p>
+          <p className="text-base text-muted-foreground">Sheet body content.</p>
         </SheetPanel>
         <SheetFooter>
           <SheetClose render={<Button>Done</Button>} />
@@ -57,7 +57,7 @@ export const RightOpen: Story = {
           </SheetDescription>
         </SheetHeader>
         <SheetPanel>
-          <p className="text-sm text-muted-foreground">Sheet body content.</p>
+          <p className="text-base text-muted-foreground">Sheet body content.</p>
         </SheetPanel>
         <SheetFooter>
           <SheetClose render={<Button>Done</Button>} />

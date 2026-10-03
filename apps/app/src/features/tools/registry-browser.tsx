@@ -45,7 +45,7 @@ function AuthChip({ server }: { server: RegistryServer }) {
   return (
     <span
       data-auth={server.auth}
-      className="rounded border border-border px-1.5 py-0.5 text-sm text-foreground"
+      className="rounded border border-border px-1.5 py-0.5 text-xs text-foreground"
     >
       {label}
     </span>
@@ -94,13 +94,13 @@ function ResultCard({
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
           <span className="font-semibold text-foreground">{server.name}</span>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             {server.publisherVerified
               ? t("publisherVerified", { publisher: server.publisher })
               : t("publisher", { publisher: server.publisher })}
           </span>
           {server.source === "verified" ? (
-            <span className="rounded bg-muted px-1.5 py-0.5 text-sm font-medium text-foreground">
+            <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-foreground">
               {t("verified")}
             </span>
           ) : null}
@@ -114,7 +114,7 @@ function ResultCard({
           {server.transports.map((transport) => (
             <span
               key={transport}
-              className={`${mono} rounded border border-border px-1.5 py-0.5 text-sm text-muted-foreground`}
+              className={`${mono} rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground`}
             >
               {transport}
             </span>
@@ -122,12 +122,12 @@ function ResultCard({
           <AuthChip server={server} />
           <RegistryOfferChip server={server} />
           {server.version === null ? null : (
-            <span className={`${mono} text-sm text-muted-foreground`}>
+            <span className={`${mono} text-xs text-muted-foreground`}>
               {t("version", { version: server.version })}
             </span>
           )}
         </div>
-        <div className="flex flex-wrap gap-3 text-xs">
+        <div className="flex flex-wrap gap-3 text-sm">
           {links.map(({ key, to }) => (
             <ProviderLink
               key={key}
@@ -139,7 +139,7 @@ function ResultCard({
           ))}
         </div>
         {server.connectable ? null : (
-          <p className="text-xs text-muted-foreground">{unreachable}</p>
+          <p className="text-sm text-muted-foreground">{unreachable}</p>
         )}
       </div>
       {server.connectable || pickPackage !== null ? (
@@ -249,7 +249,7 @@ export function RegistryBrowser({
     <div data-testid={TESTID} className="flex flex-col gap-2.5">
       <label
         htmlFor={`${TESTID}-query`}
-        className="text-sm font-medium text-foreground"
+        className="text-base font-medium text-foreground"
       >
         {t("search")}
       </label>
@@ -264,31 +264,31 @@ export function RegistryBrowser({
         }}
         className={inputBase}
       />
-      <p className="text-xs text-muted-foreground">{t("sourceNote")}</p>
+      <p className="text-sm text-muted-foreground">{t("sourceNote")}</p>
       {failure === null ? null : (
         <FormAlert testId={`${TESTID}-failure`}>{failure}</FormAlert>
       )}
       {results?.registryReachable === false ? (
         <p
           data-testid={`${TESTID}-unreachable`}
-          className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground"
+          className="rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted-foreground"
         >
           {t("registryUnreachable")}
         </p>
       ) : null}
       {results === null ? (
-        <p role="status" className="text-sm text-muted-foreground">
+        <p role="status" className="text-base text-muted-foreground">
           {t("searching")}
         </p>
       ) : results.servers.length === 0 && !loading ? (
-        <p data-state="empty" className="text-sm text-muted-foreground">
+        <p data-state="empty" className="text-base text-muted-foreground">
           {t("empty", { query: query.trim() })}
         </p>
       ) : (
         <ul
           aria-label={t("results")}
           aria-busy={loading || undefined}
-          className="flex max-h-[26rem] flex-col gap-2 overflow-y-auto pr-1"
+          className="flex max-h-104 flex-col gap-2 overflow-y-auto pr-1"
         >
           {results.servers.map((server) => (
             <ResultCard

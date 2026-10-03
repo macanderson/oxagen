@@ -1004,7 +1004,7 @@ describe("assertGithubSteeringCommit", () => {
     });
   });
 
-  it("fails closed when the bounded deployment history contains no app anchor", async () => {
+  it("fails closed when the deployment history holds no app anchor", async () => {
     const gh = github({
       [DEPLOYMENTS]: ok(
         Array.from({ length: 30 }, () => ({
@@ -1012,10 +1012,45 @@ describe("assertGithubSteeringCommit", () => {
           performed_via_github_app: null,
         })),
       ),
+      [`${DEPLOYMENTS}&page=2`]: ok([]),
     });
     await expect(assertGithubSteeringCommit(gh.target, S1)).rejects.toMatchObject({
       reason: "steering_publication_missing",
     });
+  });
+});
+
+describe("published deployment paging (#4653)", () => {
+  const FOREIGN_PAGE = (count: number) =>
+    Array.from({ length: count }, () => ({
+      sha: X,
+      performed_via_github_app: { id: 77, slug: "deploy-bot" },
+    }));
+
+  it("finds the app's deployment on GitHub's second page", async () => {
+    const gh = github({
+      [DEPLOYMENTS]: ok(FOREIGN_PAGE(30)),
+      [`${DEPLOYMENTS}&page=2`]: ok(fixture("github-deployments")),
+    });
+    await expect(githubPublished(gh.target)).resolves.toEqual({ sha: P, version: 7 });
+    expect(gh.calls).toHaveLength(2);
+  });
+
+  it("stops at GitHub's first short page", async () => {
+    const gh = github({ [DEPLOYMENTS]: ok(FOREIGN_PAGE(29)) });
+    await expect(githubPublished(gh.target)).resolves.toBeNull();
+    expect(gh.calls).toHaveLength(1);
+  });
+
+  it("throws rather than answer none when GitHub holds more pages than Oxagen reads", async () => {
+    const routes: Record<string, Reply> = { [DEPLOYMENTS]: ok(FOREIGN_PAGE(30)) };
+    for (let page = 2; page <= 10; page++)
+      routes[`${DEPLOYMENTS}&page=${page}`] = ok(FOREIGN_PAGE(30));
+    const gh = github(routes);
+    await expect(githubPublished(gh.target)).rejects.toThrow(
+      /more than 300 deployments to the steering environment/,
+    );
+    expect(gh.calls).toHaveLength(10);
   });
 });
 
@@ -1077,7 +1112,7 @@ describe("githubOpenRevert", () => {
       [COMMIT_P]: ok(fixture("github-git-commit-published")),
       [REF]: ok({ ref: `refs/heads/${BRANCH}`, object: { sha: R, type: "commit" } }),
       [COMMIT_R]: REVERT_TIP,
-      [`GET ${GH}/pulls/12`]: ok(fixture("github-pull")),
+      [PULLS]: ok([fixture("github-pull")]),
       [CHECK_RUNS]: ok({
         total_count: 1,
         check_runs: [
@@ -1195,7 +1230,7 @@ describe("githubOpenRevert", () => {
       [REF]: fail(404, "Not Found"),
       [`POST ${GH}/git/commits`]: ok({ sha: R }, 201),
       [`POST ${GH}/git/refs`]: ok({ ref: `refs/heads/${BRANCH}` }, 201),
-      [`GET ${GH}/pulls/12`]: [ok(moved), ok({ ...moved, state: "closed" })],
+      [`GET ${GH}/pulls/12`]: ok({ ...moved, state: "closed" }),
       [PULLS]: ok([moved]),
       [`PATCH ${GH}/pulls/12`]: ok({ ...moved, state: "closed" }),
       [`POST ${GH}/pulls`]: ok(pull(13, BRANCH), 201),
@@ -1210,11 +1245,81 @@ describe("githubOpenRevert", () => {
       base: "main",
     });
     expect(gh.writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+      `PATCH ${GH}/pulls/12`,
       `POST ${GH}/git/commits`,
       `POST ${GH}/git/refs`,
-      `PATCH ${GH}/pulls/12`,
       `POST ${GH}/pulls`,
       `POST ${GH}/check-runs`,
+    ]);
+  });
+
+  // #4671: the branch write lands only after the retargeted pull request is
+  // closed and read back as closed. On the old order, the force-push came
+  // first, so auto-merge could land the app's commit on the other branch.
+  it("closes a retargeted pull request before it force-moves a tampered branch (#4671)", async () => {
+    const moved = { ...pull(12, BRANCH), base: { ref: "release" } };
+    const gh = github({
+      [PULLS]: ok([moved]),
+      [`PATCH ${GH}/pulls/12`]: ok({ ...moved, state: "closed" }),
+      [`GET ${GH}/pulls/12`]: ok({ ...moved, state: "closed" }),
+      [COMMIT_P]: ok(fixture("github-git-commit-published")),
+      // Someone pushed their own commit to the revert branch.
+      [REF]: ok({ ref: `refs/heads/${BRANCH}`, object: { sha: HEAD, type: "commit" } }),
+      [`GET ${GH}/git/commits/${HEAD}`]: ok({
+        sha: HEAD,
+        tree: { sha: TREE_OTHER },
+        parents: [{ sha: S2 }],
+      }),
+      [`POST ${GH}/git/commits`]: ok({ sha: R }, 201),
+      [`POST ${GH}/git/refs`]: fail(422, "Reference already exists"),
+      [`PATCH ${GH}/git/refs/heads/${BRANCH}`]: ok({ object: { sha: R } }),
+      [`POST ${GH}/pulls`]: ok(pull(13, BRANCH), 201),
+      [`POST ${GH}/check-runs`]: ok({ id: 83 }, 201),
+    });
+    await expect(
+      githubOpenRevert(gh.target, PUBLISHED, DIVERGENCE, 12),
+    ).resolves.toBe(13);
+    expect(gh.writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+      `PATCH ${GH}/pulls/12`,
+      `POST ${GH}/git/commits`,
+      `POST ${GH}/git/refs`,
+      `PATCH ${GH}/git/refs/heads/${BRANCH}`,
+      `POST ${GH}/pulls`,
+      `POST ${GH}/check-runs`,
+    ]);
+    // The read-back that proves the close happens before the first branch write.
+    const order = gh.calls.map((c) => `${c.method} ${c.path}`);
+    expect(order.indexOf(`GET ${GH}/pulls/12`)).toBeLessThan(
+      order.indexOf(`POST ${GH}/git/commits`),
+    );
+  });
+
+  it("writes nothing to the branch when GitHub refuses to close a retargeted pull request (#4671)", async () => {
+    const moved = { ...pull(12, BRANCH), base: { ref: "release" } };
+    const gh = github({
+      [PULLS]: ok([moved]),
+      [`PATCH ${GH}/pulls/12`]: fail(403, "Resource not accessible by integration"),
+    });
+    await expect(
+      githubOpenRevert(gh.target, PUBLISHED, DIVERGENCE, 12),
+    ).rejects.toThrow(/Resource not accessible by integration/);
+    expect(gh.writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+      `PATCH ${GH}/pulls/12`,
+    ]);
+  });
+
+  it("writes nothing to the branch when a closed pull request still reads as open (#4671)", async () => {
+    const moved = { ...pull(12, BRANCH), base: { ref: "release" } };
+    const gh = github({
+      [PULLS]: ok([moved]),
+      [`PATCH ${GH}/pulls/12`]: ok(moved),
+      [`GET ${GH}/pulls/12`]: ok(moved),
+    });
+    await expect(
+      githubOpenRevert(gh.target, PUBLISHED, DIVERGENCE, 12),
+    ).rejects.toThrow(/still shows pull request #12 .* as open, so Oxagen wrote nothing/);
+    expect(gh.writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+      `PATCH ${GH}/pulls/12`,
     ]);
   });
 
@@ -1342,6 +1447,16 @@ describe("gitlabPublished", () => {
     const deployments = fixture<GitlabDeploymentFixture[]>("gitlab-deployments");
     const gl = gitlab({ [GL_DEPLOYMENTS]: ok(deployments.slice(0, 1)) });
     await expect(gitlabPublished(gl.target)).resolves.toBeNull();
+  });
+
+  it("finds the bot's deployment on the second page (#4653)", async () => {
+    const others = Array.from({ length: 20 }, () => ({ sha: X, user: { id: 9 } }));
+    const gl = gitlab({
+      [GL_DEPLOYMENTS]: ok(others),
+      [`${GL_DEPLOYMENTS}&page=2`]: ok(fixture("gitlab-deployments")),
+      [`GET ${GL}/repository/commits/${P}`]: ok(fixture("gitlab-commit-published")),
+    });
+    await expect(gitlabPublished(gl.target)).resolves.toEqual({ sha: P, version: 7 });
   });
 });
 
@@ -1511,7 +1626,7 @@ describe("gitlabOpenRevert", () => {
     const gl = gitlab({
       [BRANCH_GET]: glBranch(BRANCH, R, [S2]),
       [`GET ${GL}/repository/compare?from=${R}&to=${P}&straight=true`]: sameFiles(),
-      [`GET ${GL}/merge_requests/5`]: ok(request(5, BRANCH)),
+      [REQUESTS]: ok([request(5, BRANCH)]),
       [STATUS]: fail(400, "Cannot transition status via :run from :success"),
     });
     await expect(
@@ -1555,7 +1670,7 @@ describe("gitlabOpenRevert", () => {
     const gl = gitlab({
       [BRANCH_GET]: glBranch(BRANCH, R, [S2]),
       [`GET ${GL}/repository/compare?from=${R}&to=${P}&straight=true`]: sameFiles(),
-      [`GET ${GL}/merge_requests/5`]: [ok(moved), ok(closed)],
+      [`GET ${GL}/merge_requests/5`]: ok(closed),
       [REQUESTS]: ok([moved]),
       [`PUT ${GL}/merge_requests/5`]: ok(closed),
       [`POST ${GL}/merge_requests`]: ok(request(6, BRANCH), 201),
@@ -1576,6 +1691,74 @@ describe("gitlabOpenRevert", () => {
     ]);
   });
 
+  // #4671: the revert commit force-moves the branch, so it lands only after
+  // the retargeted merge request is closed and read back as closed.
+  it("closes a retargeted merge request before it force-moves a tampered branch (#4671)", async () => {
+    const moved = request(5, BRANCH, "opened", "release");
+    const closed = request(5, BRANCH, "closed", "release");
+    const gl = gitlab({
+      [REQUESTS]: ok([moved]),
+      [`PUT ${GL}/merge_requests/5`]: ok(closed),
+      [`GET ${GL}/merge_requests/5`]: ok(closed),
+      // Someone pushed their own commit to the revert branch.
+      [BRANCH_GET]: glBranch(BRANCH, HEAD, [X]),
+      [REVERT_COMPARE]: ok(fixture("gitlab-compare-revert")),
+      [file("rules/release-notes.md")]: ok(fixture("gitlab-file")),
+      [file("rules/review-checklist.md")]: ok(fixture("gitlab-file")),
+      [file("rules/house-style.md")]: ok(fixture("gitlab-file")),
+      [`POST ${GL}/repository/commits`]: ok(glCommit(R, [S2], revertMessage(PUBLISHED)), 201),
+      [`POST ${GL}/merge_requests`]: ok(request(6, BRANCH), 201),
+      [STATUS]: ok({ id: 5 }, 201),
+    });
+    await expect(
+      gitlabOpenRevert(gl.target, PUBLISHED, DIVERGENCE, 5),
+    ).resolves.toBe(6);
+    expect(gl.sent(`POST ${GL}/repository/commits`)[0]!.body).toMatchObject({
+      branch: BRANCH,
+      start_sha: S2,
+      force: true,
+    });
+    expect(gl.writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+      `PUT ${GL}/merge_requests/5`,
+      `POST ${GL}/repository/commits`,
+      `POST ${GL}/merge_requests`,
+      STATUS,
+    ]);
+    const order = gl.calls.map((c) => `${c.method} ${c.path}`);
+    expect(order.indexOf(`GET ${GL}/merge_requests/5`)).toBeLessThan(
+      order.indexOf(`POST ${GL}/repository/commits`),
+    );
+  });
+
+  it("writes nothing to the branch when GitLab refuses to close a retargeted merge request (#4671)", async () => {
+    const moved = request(5, BRANCH, "opened", "release");
+    const gl = gitlab({
+      [REQUESTS]: ok([moved]),
+      [`PUT ${GL}/merge_requests/5`]: fail(403, "403 Forbidden"),
+    });
+    await expect(
+      gitlabOpenRevert(gl.target, PUBLISHED, DIVERGENCE, 5),
+    ).rejects.toThrow();
+    expect(gl.writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+      `PUT ${GL}/merge_requests/5`,
+    ]);
+  });
+
+  it("writes nothing to the branch when a closed merge request still reads as open (#4671)", async () => {
+    const moved = request(5, BRANCH, "opened", "release");
+    const gl = gitlab({
+      [REQUESTS]: ok([moved]),
+      [`PUT ${GL}/merge_requests/5`]: ok(moved),
+      [`GET ${GL}/merge_requests/5`]: ok(moved),
+    });
+    await expect(
+      gitlabOpenRevert(gl.target, PUBLISHED, DIVERGENCE, 5),
+    ).rejects.toThrow(/still shows merge request !5 .* as open, so Oxagen wrote nothing/);
+    expect(gl.writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+      `PUT ${GL}/merge_requests/5`,
+    ]);
+  });
+
   it("reuses a listed merge request into main without closing it", async () => {
     const gl = gitlab({
       [BRANCH_GET]: glBranch(BRANCH, R, [S2]),
@@ -1591,6 +1774,7 @@ describe("gitlabOpenRevert", () => {
 
   it("refuses to write an empty revert commit", async () => {
     const gl = gitlab({
+      [REQUESTS]: ok([]),
       [BRANCH_GET]: fail(404, "404 Branch Not Found"),
       [REVERT_COMPARE]: sameFiles(),
     });
@@ -1604,6 +1788,7 @@ describe("gitlabOpenRevert", () => {
     const compare = fixture<GitlabCompareFixture>("gitlab-compare-revert");
     compare.compare_timeout = true;
     const gl = gitlab({
+      [REQUESTS]: ok([]),
       [BRANCH_GET]: fail(404, "404 Branch Not Found"),
       [REVERT_COMPARE]: ok(compare),
     });

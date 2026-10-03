@@ -82,7 +82,7 @@ export function ProfileForm({
             aria-readonly="true"
             className="cursor-not-allowed opacity-60"
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Email address cannot be changed here. Contact support to update your
             email.
           </p>
@@ -127,22 +127,22 @@ export function ProfileForm({
             plain text (a disabled input reads as "editable but broken") and link
             out to where they're actually changed. */}
         <div className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-foreground">Regional</span>
+          <span className="text-base font-medium text-foreground">Regional</span>
           <dl className="divide-y divide-border rounded-md border border-border">
             <div className="flex items-center justify-between gap-4 px-3 py-2">
-              <dt className="text-sm text-muted-foreground">Timezone</dt>
-              <dd className="text-sm font-medium tabular-nums text-foreground">
+              <dt className="text-base text-muted-foreground">Timezone</dt>
+              <dd className="text-base font-medium tabular-nums text-foreground">
                 {timezone.replace(/_/g, " ")}
               </dd>
             </div>
             <div className="flex items-center justify-between gap-4 px-3 py-2">
-              <dt className="text-sm text-muted-foreground">Language</dt>
-              <dd className="text-sm font-medium text-foreground">
+              <dt className="text-base text-muted-foreground">Language</dt>
+              <dd className="text-base font-medium text-foreground">
                 {language}
               </dd>
             </div>
           </dl>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Timezone and language can be changed in{" "}
             <Link
               href={account.preferences()}
@@ -156,7 +156,7 @@ export function ProfileForm({
 
         {/* Errors */}
         {status === "error" && errorMsg && (
-          <p className="text-sm text-destructive" role="alert">
+          <p className="text-base text-destructive" role="alert">
             {errorMsg}
           </p>
         )}
@@ -167,7 +167,7 @@ export function ProfileForm({
             {isSaving ? "Saving…" : "Save changes"}
           </Button>
           {status === "saved" && (
-            <span className="text-xs text-muted-foreground" role="status">
+            <span className="text-sm text-muted-foreground" role="status">
               Saved
             </span>
           )}

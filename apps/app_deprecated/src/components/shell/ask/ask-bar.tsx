@@ -205,7 +205,7 @@ export function AskBar({ ctx, className }: AskBarProps) {
         placeholder="Ask anything… Press / to focus"
         className={cn(
           "h-full w-full rounded-lg",
-          "pl-8 pr-[4.5rem] text-sm",
+          "pl-8 pr-[4.5rem] text-base",
           "border border-input bg-background shadow-sm",
           "text-foreground placeholder:text-muted-foreground",
           "outline-none transition-[box-shadow,border-color]",
@@ -222,7 +222,7 @@ export function AskBar({ ctx, className }: AskBarProps) {
             className={cn(
               "hidden sm:inline-flex items-center gap-0.5 rounded-md",
               "border border-border/60 bg-muted/60 px-1.5 py-0.5",
-              "font-mono text-[10px] text-muted-foreground/70",
+              "font-mono text-xs text-muted-foreground/70",
             )}
           >
             {kbdHint}

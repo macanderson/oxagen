@@ -74,7 +74,7 @@ export function UsageBreakdownView({
     <div className="flex flex-col gap-6">
       {/* Chart metric toggle */}
       <div className="flex items-center justify-between gap-4">
-        <p className="text-sm font-medium text-foreground">Trends</p>
+        <p className="text-base font-medium text-foreground">Trends</p>
         <SegmentedControl
           value={metric}
           onValueChange={(v) => setMetric((v as UsageMetric) ?? "cost")}
@@ -87,7 +87,7 @@ export function UsageBreakdownView({
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Panel title={metric === "cost" ? "Daily cost" : "Daily tokens"}>
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-sm text-muted-foreground">
             {metric === "cost"
               ? "USD spent per day in this window."
               : "Input / output / cached tokens per day."}
@@ -96,7 +96,7 @@ export function UsageBreakdownView({
         </Panel>
 
         <Panel title={`Top models by ${metric === "cost" ? "cost" : "tokens"}`}>
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-sm text-muted-foreground">
             Highest-{metric === "cost" ? "spend" : "token"} models in this
             window.
           </p>
@@ -153,7 +153,7 @@ function BreakdownTable({
   emptyLabel: string;
 }) {
   if (rows.length === 0) {
-    return <p className="text-sm text-muted-foreground">{emptyLabel}</p>;
+    return <p className="text-base text-muted-foreground">{emptyLabel}</p>;
   }
 
   return (
@@ -176,7 +176,7 @@ function BreakdownTable({
               <TableCell>
                 <span className="font-medium text-foreground">{label(r)}</span>
                 {sub ? (
-                  <span className="ml-2 font-mono text-[11px] text-muted-foreground">
+                  <span className="ml-2 font-mono text-xs text-muted-foreground">
                     {sub}
                   </span>
                 ) : null}

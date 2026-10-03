@@ -206,7 +206,7 @@ function KindChips({
         className={chip}
       >
         {t("all")}
-        <span className="font-mono text-sm text-dim">
+        <span className="font-mono text-xs text-dim">
           {formatCount(all, locale)}
         </span>
       </PressLink>
@@ -220,7 +220,7 @@ function KindChips({
         >
           <KindIcon kind={k} className={`size-3.5 ${KIND_FACE[k].ink}`} />
           {record(`kinds.${k}`)}
-          <span className="font-mono text-sm text-dim">
+          <span className="font-mono text-xs text-dim">
             {formatCount(counts[k], locale)}
           </span>
         </PressLink>
@@ -251,7 +251,7 @@ function RecordShelfCard({
     <article
       data-kind={record.kind ?? "unclassified"}
       data-lineage={record.lineage}
-      className={`flex gap-3 border-b border-l-[3px] border-b-border px-4 py-3.5 max-md:flex-col ${face?.bar ?? "border-l-border"}`}
+      className={`flex gap-3 border-b border-l-3 border-b-border px-4 py-3.5 max-md:flex-col ${face?.bar ?? "border-l-border"}`}
     >
       <span
         aria-hidden="true"
@@ -265,7 +265,7 @@ function RecordShelfCard({
         <div className="flex flex-wrap items-center gap-1.5">
           <span
             data-term="kind"
-            className={`inline-flex items-center gap-1 rounded-md border px-[7px] py-0.5 text-sm font-semibold uppercase tracking-[0.04em] ${face === null ? "border-border text-muted-foreground" : `${face.tile} ${face.ink}`}`}
+            className={`inline-flex items-center gap-1 rounded-md border px-1.75 py-0.5 text-xs font-semibold uppercase tracking-[0.04em] ${face === null ? "border-border text-muted-foreground" : `${face.tile} ${face.ink}`}`}
           >
             {record.kind === null ? null : (
               <KindIcon kind={record.kind} className="size-3" />
@@ -355,7 +355,7 @@ function RecordShelfCard({
             its title stands in as the label. */}
         <p
           data-term="label"
-          className="text-sm font-semibold text-foreground"
+          className="text-base font-semibold text-foreground"
         >
           {record.label ?? record.title}
         </p>
@@ -381,13 +381,13 @@ function RecordShelfCard({
             {t("effectNotRecorded")}
           </span>
           <span
-            className="break-all font-mono text-sm"
+            className="break-all font-mono text-xs"
             data-term="lineage"
           >
             {record.lineage}
           </span>
           {record.commit === null ? null : (
-            <span className="font-mono text-sm" data-term="commit">
+            <span className="font-mono text-xs" data-term="commit">
               {record.commit.slice(0, 7)}
             </span>
           )}
@@ -478,7 +478,7 @@ export function RecordsList({
           <span id={sortLabelId}>{t("sort")}</span>
           <ListSelect
             size="sm"
-            className="max-md:min-h-11 max-md:text-base"
+            className="max-md:min-h-11 max-md:text-input-touch"
             aria-labelledby={sortLabelId}
             items={SORTS.map((s) => ({ value: s, label: t(`sorts.${s}`) }))}
             value={sort}

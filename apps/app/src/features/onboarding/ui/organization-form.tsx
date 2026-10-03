@@ -50,7 +50,7 @@ function refusalFields(result: Refusal): FieldErrors {
 }
 
 // Phone inputs are 16px so iOS does not zoom on focus.
-const phoneInput = "max-md:text-base";
+const phoneInput = "max-md:text-input-touch";
 
 export function OrganizationForm({
   initialName = "",
@@ -159,7 +159,7 @@ export function OrganizationForm({
         title={t("organization.title")}
         lead={t("organization.lead")}
       />
-      <div className={`${panel} flex flex-col gap-4 p-[18px] sm:p-5`}>
+      <div className={`${panel} flex flex-col gap-4 p-4.5 sm:p-5`}>
         {taken === null ? null : (
           <FormAlert testId="organization-namespace-taken">
             <span id="ob-ns-taken">

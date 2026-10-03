@@ -14,7 +14,7 @@ export function RiskBadge({ risk }: { risk: RiskLevel }) {
   if (risk === "low") return null;
   return (
     <span
-      className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+      className="inline-flex items-center gap-1 text-sm text-muted-foreground"
       data-testid="risk-badge"
       data-risk={risk}
     >

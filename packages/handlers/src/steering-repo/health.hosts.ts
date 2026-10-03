@@ -61,15 +61,45 @@ function seg(value: string | number): string {
   return encodeURIComponent(String(value));
 }
 
-/** Read every page of a list, up to `MAX_PAGES`. */
-async function allPages<T>(read: (page: number) => Promise<T[]>): Promise<T[]> {
-  const out: T[] = [];
+/** What a paged read found, and whether it reached the end of the list. */
+interface Pages<T> {
+  items: T[];
+  /**
+   * False when the read spent `MAX_PAGES` on full pages, so the host may hold
+   * more. The page cap is a budget, and a caller that needs the whole list
+   * must not treat a cut list as all of it (#4653).
+   */
+  complete: boolean;
+}
+
+/** Read every page of a list, up to `MAX_PAGES`, and say whether it ended. */
+async function allPages<T>(read: (page: number) => Promise<T[]>): Promise<Pages<T>> {
+  const items: T[] = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const items = await read(page);
-    out.push(...items);
-    if (items.length < PAGE) break;
+    const rows = await read(page);
+    items.push(...rows);
+    if (rows.length < PAGE) return { items, complete: true };
   }
-  return out;
+  return { items, complete: false };
+}
+
+/** `&page=N` for every page after the first, which keeps the first page's path as it was. */
+function pageParam(page: number): string {
+  return page === 1 ? "" : `&page=${page}`;
+}
+
+/**
+ * The newest of `results` by id, or undefined. Thrown when there is none and
+ * the read was cut, so the run counts the pull request as missed and keeps
+ * the health digest set until a later read finds the result (#4653).
+ */
+function newestResult<T extends { id: number }>(results: Pages<T>, head: string): T | undefined {
+  const last = [...results.items].sort((a, b) => b.id - a.id)[0];
+  if (last === undefined && !results.complete)
+    throw new Error(
+      `${head} carries more ${REQUIRED_CHECK_NAME} results than Oxagen reads, and none it read came from the steering checks.`,
+    );
+  return last;
 }
 
 /** A refusal about the repository itself, as opposed to a limit or an outage. */
@@ -147,7 +177,8 @@ export function githubHealthHost(input: GithubHealthHostInput): HealthHost {
   /** The app's own comment on a pull request, or null. */
   async function findComment(number: number): Promise<GithubComment | null> {
     const r = await rest();
-    const comments = await allPages(async (page) => {
+    // A cut read can miss the comment, and the cost is one more comment.
+    const { items: comments } = await allPages(async (page) => {
       const res = await r.request<GithubComment[]>(
         "GET",
         `${root()}/issues/${seg(number)}/comments?per_page=${PAGE}&page=${page}`,
@@ -226,18 +257,21 @@ export function githubHealthHost(input: GithubHealthHostInput): HealthHost {
 
     async openPullRequests() {
       const r = await rest();
-      const pulls = await allPages(async (page) => {
+      const { items, complete } = await allPages(async (page) => {
         const res = await r.request<GithubPull[]>(
           "GET",
           `${root()}/pulls?state=open&per_page=${PAGE}&page=${page}`,
         );
         return res.data ?? [];
       });
-      return pulls.map((p) => ({
-        number: p.number,
-        head_sha: p.head.sha,
-        head_ref: p.head.ref,
-      }));
+      return {
+        pulls: items.map((p) => ({
+          number: p.number,
+          head_sha: p.head.sha,
+          head_ref: p.head.ref,
+        })),
+        complete,
+      };
     },
 
     async failCheck(pr, report) {
@@ -254,18 +288,27 @@ export function githubHealthHost(input: GithubHealthHostInput): HealthHost {
 
     async restoreCheck(pr) {
       const r = await rest();
-      const res = await r.request<{ check_runs: GithubCheckRun[] }>(
-        "GET",
-        `${root()}/commits/${seg(pr.head_sha)}/check-runs?check_name=${seg(REQUIRED_CHECK_NAME)}&app_id=${seg(input.app.id)}&filter=all&per_page=${PAGE}`,
+      // Each health read adds a run, so the checks' own result can sit past
+      // the first page (#4653).
+      const runs = await allPages(async (page) => {
+        const res = await r.request<{ check_runs: GithubCheckRun[] }>(
+          "GET",
+          `${root()}/commits/${seg(pr.head_sha)}/check-runs?check_name=${seg(REQUIRED_CHECK_NAME)}&app_id=${seg(input.app.id)}&filter=all&per_page=${PAGE}${pageParam(page)}`,
+        );
+        return res.data?.check_runs ?? [];
+      });
+      const last = newestResult(
+        {
+          items: runs.items.filter(
+            (run) =>
+              run.external_id !== HEALTH_CHECK_EXTERNAL_ID &&
+              run.status === "completed" &&
+              run.conclusion !== null,
+          ),
+          complete: runs.complete,
+        },
+        pr.head_sha,
       );
-      const last = (res.data?.check_runs ?? [])
-        .filter(
-          (run) =>
-            run.external_id !== HEALTH_CHECK_EXTERNAL_ID &&
-            run.status === "completed" &&
-            run.conclusion !== null,
-        )
-        .sort((a, b) => b.id - a.id)[0];
       // The steering checks never finished on this head. They post their
       // result when they do, and that result is the one GitHub reads.
       if (last === undefined) return;
@@ -421,18 +464,21 @@ export function gitlabHealthHost(input: GitlabHealthHostInput): HealthHost {
 
     async openPullRequests() {
       const r = await rest();
-      const requests = await allPages(async (page) => {
+      const { items, complete } = await allPages(async (page) => {
         const res = await r.request<GitlabMergeRequest[]>(
           "GET",
           `${root}/merge_requests?state=opened&per_page=${PAGE}&page=${page}`,
         );
         return res.data ?? [];
       });
-      return requests.map((m) => ({
-        number: m.iid,
-        head_sha: m.sha,
-        head_ref: m.source_branch,
-      }));
+      return {
+        pulls: items.map((m) => ({
+          number: m.iid,
+          head_sha: m.sha,
+          head_ref: m.source_branch,
+        })),
+        complete,
+      };
     },
 
     async failCheck(pr, report) {
@@ -452,17 +498,26 @@ export function gitlabHealthHost(input: GitlabHealthHostInput): HealthHost {
 
     async restoreCheck(pr) {
       const r = await rest();
-      const res = await r.request<GitlabStatus[]>(
-        "GET",
-        `${root}/repository/commits/${seg(pr.head_sha)}/statuses?name=${seg(REQUIRED_CHECK_NAME)}&all=true&per_page=${PAGE}`,
+      // Each health read adds a status, so the checks' own result can sit
+      // past the first page (#4653).
+      const statuses = await allPages(async (page) => {
+        const res = await r.request<GitlabStatus[]>(
+          "GET",
+          `${root}/repository/commits/${seg(pr.head_sha)}/statuses?name=${seg(REQUIRED_CHECK_NAME)}&all=true&per_page=${PAGE}${pageParam(page)}`,
+        );
+        return res.data ?? [];
+      });
+      const last = newestResult(
+        {
+          items: statuses.items.filter(
+            (s) =>
+              !(s.description ?? "").startsWith(HEALTH_STATUS_PREFIX) &&
+              GITLAB_POSTABLE.has(s.status),
+          ),
+          complete: statuses.complete,
+        },
+        pr.head_sha,
       );
-      const last = (res.data ?? [])
-        .filter(
-          (s) =>
-            !(s.description ?? "").startsWith(HEALTH_STATUS_PREFIX) &&
-            GITLAB_POSTABLE.has(s.status),
-        )
-        .sort((a, b) => b.id - a.id)[0];
       // The steering checks never posted on this head. They post their
       // result when they do, and that result is the one GitLab reads.
       if (last === undefined) return;
@@ -482,7 +537,8 @@ export function gitlabHealthHost(input: GitlabHealthHostInput): HealthHost {
     async upsertComment(pr, body, onlyIfExists) {
       const r = await rest();
       const me = await steeringBot();
-      const notes = await allPages(async (page) => {
+      // A cut read can miss the note, and the cost is one more note.
+      const { items: notes } = await allPages(async (page) => {
         const res = await r.request<GitlabNote[]>(
           "GET",
           `${root}/merge_requests/${seg(pr.number)}/notes?sort=asc&order_by=created_at&per_page=${PAGE}&page=${page}`,

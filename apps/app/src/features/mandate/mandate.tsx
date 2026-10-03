@@ -72,7 +72,7 @@ function MandateStatusBadge({ status }: { status: MandateRow["status"] }) {
   return (
     <span
       data-status={status}
-      className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-foreground"
+      className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-foreground"
     >
       <span
         aria-hidden="true"
@@ -98,7 +98,7 @@ function Tile({
       <div className="text-lg font-semibold text-foreground">{children}</div>
       {/* Every money figure on this page carries its basis: where the number
           came from, in the same block as the number. */}
-      <p className="text-xs text-muted-foreground">{basis}</p>
+      <p className="text-sm text-muted-foreground">{basis}</p>
     </div>
   );
 }
@@ -162,7 +162,7 @@ function Header({
         >
           {mandate.id}
         </h1>
-        <div className="flex flex-wrap items-center gap-3 pt-1 text-xs">
+        <div className="flex flex-wrap items-center gap-3 pt-1 text-sm">
           <MandateStatusBadge status={mandate.status} />
           {mandate.grantedBy === null ? (
             <span className="text-muted-foreground">{t("notGranted")}</span>
@@ -193,7 +193,7 @@ function Header({
             </SafeLink>
           </span>
         </div>
-        <p className="max-w-prose pt-1 text-sm text-muted-foreground">
+        <p className="max-w-prose pt-1 text-base text-muted-foreground">
           {mandate.purpose}
         </p>
       </div>
@@ -231,13 +231,13 @@ function Reconciliation({ at }: { at: MandateAt }) {
       data-testid="mandate-reconciliation"
       className={`${panel} flex flex-col gap-2 p-4`}
     >
-      <h2 id="mandate-reconciliation" className="text-base font-semibold">
+      <h2 id="mandate-reconciliation" className="text-lg font-semibold">
         {t("title")}
       </h2>
-      <p className="max-w-prose text-sm text-muted-foreground">{t("body")}</p>
+      <p className="max-w-prose text-base text-muted-foreground">{t("body")}</p>
       <p
         data-state="not-recorded"
-        className="max-w-prose text-sm text-foreground"
+        className="max-w-prose text-base text-foreground"
       >
         {t("notRecorded")}
       </p>

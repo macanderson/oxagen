@@ -651,15 +651,20 @@ function fonts() {
  *
  * `house-tailwind.css` is the layer that turns the palette into something an
  * app can write: the `--color-ox-*` theme entries, the shadcn and Base UI
- * semantic names, the tracking scale, and the twelve type utilities
+ * semantic names, the tracking scale, and the thirteen type utilities
  * (`text-m-*` for a page read once, `text-a-*` for a dashboard read all day).
  * It imports `house-tokens.css` from beside it, which is why `globals.css`
  * imports this file rather than both.
+ *
+ * `house-text-scale.css` maps Tailwind's `text-xs` to `text-3xl` on the app
+ * steps. A site opts into it with its own import: the app and the archived
+ * app do, and the docs site does not.
  */
 function tokens(kit) {
   copy("tokens/house-tokens.css", "packages/ui/src/styles/house-tokens.css");
   copy("tokens/house-tokens.json", "packages/ui/src/styles/house-tokens.json");
   copy("tokens/house-tailwind.css", "packages/ui/src/styles/house-tailwind.css");
+  copy("tokens/house-text-scale.css", "packages/ui/src/styles/house-text-scale.css");
   emit("packages/ui/src/lib/house-grounds.ts", houseGroundsModule(kit.tokens));
 }
 

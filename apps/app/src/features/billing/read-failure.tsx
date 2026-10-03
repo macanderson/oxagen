@@ -33,7 +33,7 @@ export function BillingReadFailure({
   return (
     <p
       data-reason={read.reason}
-      className="max-w-prose text-sm text-muted-foreground"
+      className="max-w-prose text-base text-muted-foreground"
     >
       {text}
     </p>

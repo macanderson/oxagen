@@ -48,7 +48,7 @@ export function StubAction({
         title={title}
         testId={`${testId}-sheet`}
       >
-        <p className="text-sm text-muted-foreground" data-not-backed={gap}>
+        <p className="text-base text-muted-foreground" data-not-backed={gap}>
           {body}
         </p>
       </SheetDialog>

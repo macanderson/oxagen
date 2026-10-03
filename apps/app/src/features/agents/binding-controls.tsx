@@ -91,7 +91,7 @@ export function ToolbeltChoice({
         </SafeLink>
       }
     >
-      <div className="flex flex-col gap-3 px-4 py-3.5 text-sm">
+      <div className="flex flex-col gap-3 px-4 py-3.5 text-base">
         <p data-testid="agent-belt-current">
           {current === null
             ? t("currentNone")
@@ -202,14 +202,14 @@ export function RuntimeMove({
       lead={t("lead")}
       testId="agent-runtime-move"
     >
-      <div className="flex flex-col gap-3 px-4 py-3.5 text-sm">
+      <div className="flex flex-col gap-3 px-4 py-3.5 text-base">
         <p data-testid="agent-runtime-current">
           {current === null ? (
             t("currentNone")
           ) : (
             <>
               {t("current", { runtime: current.name })}{" "}
-              <span className={`${mono} text-xs text-muted-foreground`}>
+              <span className={`${mono} text-sm text-muted-foreground`}>
                 {current.slug}
               </span>
             </>
@@ -250,7 +250,7 @@ export function RuntimeMove({
                 };
               })}
             />
-            <p className="text-xs text-muted-foreground">{t("revokes")}</p>
+            <p className="text-sm text-muted-foreground">{t("revokes")}</p>
             {failure === null ? null : (
               <FormAlert testId="agent-runtime-failure">{failure}</FormAlert>
             )}

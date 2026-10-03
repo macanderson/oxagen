@@ -82,7 +82,7 @@ export default async function KnowledgeMemoriesPage({ params }: PageProps) {
         />
       </Section>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         Memory decay policy (half-life, confidence floor) is managed in{" "}
         <Link
           href={workspace.settings.agentDefaults({ orgSlug, workspaceSlug })}

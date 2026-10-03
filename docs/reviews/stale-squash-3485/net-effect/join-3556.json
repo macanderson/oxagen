@@ -1,0 +1,8077 @@
+{
+ "note": "Each #3556 integration record (candidates.json.gz in the parent folder, by index) and where each of its lost lines went in the net-effect audit.",
+ "totals": {
+  "inNetEffectCandidate": 2013,
+  "absentFromMainBeforeSquash": 4308,
+  "presentInSquashResult": 151,
+  "presentInSquashAtRenamedPath": 849,
+  "predatesForkPoint": 9
+ },
+ "records": [
+  {
+   "record": 0,
+   "prs": [
+    3517
+   ],
+   "merge": "f08d367fb294d1ea83ac6c521fb3d3588d2ea90a",
+   "path": "apps/app/ARCHITECTURE.md",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0726"
+   ]
+  },
+  {
+   "record": 1,
+   "prs": [
+    3517
+   ],
+   "merge": "f08d367fb294d1ea83ac6c521fb3d3588d2ea90a",
+   "path": "apps/app/capability-ui-map.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0728"
+   ]
+  },
+  {
+   "record": 2,
+   "prs": [
+    3517
+   ],
+   "merge": "f08d367fb294d1ea83ac6c521fb3d3588d2ea90a",
+   "path": "tools/scripts/check_ui_parity.mjs",
+   "lines": {
+    "inNetEffectCandidate": 28
+   },
+   "netEffectCandidates": [
+    "C0731"
+   ]
+  },
+  {
+   "record": 3,
+   "prs": [
+    3517
+   ],
+   "merge": "f08d367fb294d1ea83ac6c521fb3d3588d2ea90a",
+   "path": "tools/scripts/check_ui_parity.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 38
+   },
+   "netEffectCandidates": [
+    "C0732"
+   ]
+  },
+  {
+   "record": 4,
+   "prs": [
+    3516
+   ],
+   "merge": "213a1e4533276bd1d4c140b942f8aa55e2323bce",
+   "path": "tools/scripts/lib/versions.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0724"
+   ]
+  },
+  {
+   "record": 5,
+   "prs": [
+    3516
+   ],
+   "merge": "213a1e4533276bd1d4c140b942f8aa55e2323bce",
+   "path": "tools/scripts/release-artifacts.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0725"
+   ]
+  },
+  {
+   "record": 6,
+   "prs": [
+    3512
+   ],
+   "merge": "bdaa795ab58d6611166c74cb4d04ee32584f054c",
+   "path": "AGENTS.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0707"
+   ]
+  },
+  {
+   "record": 7,
+   "prs": [
+    3512
+   ],
+   "merge": "bdaa795ab58d6611166c74cb4d04ee32584f054c",
+   "path": "CONTRIBUTING.md",
+   "lines": {
+    "inNetEffectCandidate": 5
+   },
+   "netEffectCandidates": [
+    "C0708"
+   ]
+  },
+  {
+   "record": 8,
+   "prs": [
+    3512
+   ],
+   "merge": "bdaa795ab58d6611166c74cb4d04ee32584f054c",
+   "path": "apps/api/src/__tests__/github-oauth.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0709"
+   ]
+  },
+  {
+   "record": 9,
+   "prs": [
+    3512
+   ],
+   "merge": "bdaa795ab58d6611166c74cb4d04ee32584f054c",
+   "path": "apps/app/src/data/contracts/repository.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0710"
+   ]
+  },
+  {
+   "record": 10,
+   "prs": [
+    3512
+   ],
+   "merge": "bdaa795ab58d6611166c74cb4d04ee32584f054c",
+   "path": "apps/app/src/features/agents/definition-form.test.tsx",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0711"
+   ]
+  },
+  {
+   "record": 11,
+   "prs": [
+    3512
+   ],
+   "merge": "bdaa795ab58d6611166c74cb4d04ee32584f054c",
+   "path": "apps/app/src/features/agents/definition-form.tsx",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0712"
+   ]
+  },
+  {
+   "record": 12,
+   "prs": [
+    3512
+   ],
+   "merge": "bdaa795ab58d6611166c74cb4d04ee32584f054c",
+   "path": "apps/app/src/features/repositories/main-repository.test.tsx",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0713"
+   ]
+  },
+  {
+   "record": 13,
+   "prs": [
+    3512
+   ],
+   "merge": "bdaa795ab58d6611166c74cb4d04ee32584f054c",
+   "path": "apps/app/src/shared/toml-patch.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 9
+   },
+   "netEffectCandidates": [
+    "C0714"
+   ]
+  },
+  {
+   "record": 14,
+   "prs": [
+    3512
+   ],
+   "merge": "bdaa795ab58d6611166c74cb4d04ee32584f054c",
+   "path": "apps/app/src/shared/toml-subset.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 4
+   },
+   "netEffectCandidates": [
+    "C0715"
+   ]
+  },
+  {
+   "record": 15,
+   "prs": [
+    3512
+   ],
+   "merge": "bdaa795ab58d6611166c74cb4d04ee32584f054c",
+   "path": "apps/cli/src/commands/repo.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0716"
+   ]
+  },
+  {
+   "record": 16,
+   "prs": [
+    3512
+   ],
+   "merge": "bdaa795ab58d6611166c74cb4d04ee32584f054c",
+   "path": "apps/cli/src/commands/repo.ts",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0717"
+   ]
+  },
+  {
+   "record": 17,
+   "prs": [
+    3512
+   ],
+   "merge": "bdaa795ab58d6611166c74cb4d04ee32584f054c",
+   "path": "apps/docs/content/docs/releases/meta.json",
+   "lines": {
+    "inNetEffectCandidate": 4
+   },
+   "netEffectCandidates": [
+    "C0718"
+   ]
+  },
+  {
+   "record": 18,
+   "prs": [
+    3512
+   ],
+   "merge": "bdaa795ab58d6611166c74cb4d04ee32584f054c",
+   "path": "packages/github/src/__tests__/fetch-client-read.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0719"
+   ]
+  },
+  {
+   "record": 19,
+   "prs": [
+    3512
+   ],
+   "merge": "bdaa795ab58d6611166c74cb4d04ee32584f054c",
+   "path": "tools/scripts/release.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0720"
+   ]
+  },
+  {
+   "record": 20,
+   "prs": [
+    3506
+   ],
+   "merge": "4d6871c6e5d958a3ca310e84926eb38eb3d8d7a5",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0705"
+   ]
+  },
+  {
+   "record": 21,
+   "prs": [
+    3497
+   ],
+   "merge": "b6f8300e2d7f3deabd40ffd5ad850c2a7958bee3",
+   "path": ".claude/commands/mc-0-rebaseline.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0527"
+   ]
+  },
+  {
+   "record": 22,
+   "prs": [
+    3497
+   ],
+   "merge": "b6f8300e2d7f3deabd40ffd5ad850c2a7958bee3",
+   "path": ".claude/commands/mc-1-decide-and-act.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0528"
+   ]
+  },
+  {
+   "record": 23,
+   "prs": [
+    3497
+   ],
+   "merge": "b6f8300e2d7f3deabd40ffd5ad850c2a7958bee3",
+   "path": ".claude/commands/mc-2-tools-governance.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0529"
+   ]
+  },
+  {
+   "record": 24,
+   "prs": [
+    3497
+   ],
+   "merge": "b6f8300e2d7f3deabd40ffd5ad850c2a7958bee3",
+   "path": ".claude/commands/mc-3-agents-and-people.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0530"
+   ]
+  },
+  {
+   "record": 25,
+   "prs": [
+    3497
+   ],
+   "merge": "b6f8300e2d7f3deabd40ffd5ad850c2a7958bee3",
+   "path": ".claude/commands/mc-4-run-evidence.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0531"
+   ]
+  },
+  {
+   "record": 26,
+   "prs": [
+    3497
+   ],
+   "merge": "b6f8300e2d7f3deabd40ffd5ad850c2a7958bee3",
+   "path": ".claude/commands/mc-5-steering-hub.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0532"
+   ]
+  },
+  {
+   "record": 27,
+   "prs": [
+    3497
+   ],
+   "merge": "b6f8300e2d7f3deabd40ffd5ad850c2a7958bee3",
+   "path": ".claude/workflows/mc-0-rebaseline.js",
+   "lines": {
+    "inNetEffectCandidate": 4
+   },
+   "netEffectCandidates": [
+    "C0538"
+   ]
+  },
+  {
+   "record": 28,
+   "prs": [
+    3497
+   ],
+   "merge": "b6f8300e2d7f3deabd40ffd5ad850c2a7958bee3",
+   "path": ".claude/workflows/mc-1-decide-and-act.js",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0539"
+   ]
+  },
+  {
+   "record": 29,
+   "prs": [
+    3497
+   ],
+   "merge": "b6f8300e2d7f3deabd40ffd5ad850c2a7958bee3",
+   "path": ".claude/workflows/mc-2-tools-governance.js",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0540"
+   ]
+  },
+  {
+   "record": 30,
+   "prs": [
+    3497
+   ],
+   "merge": "b6f8300e2d7f3deabd40ffd5ad850c2a7958bee3",
+   "path": ".claude/workflows/mc-3-agents-and-people.js",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0541"
+   ]
+  },
+  {
+   "record": 31,
+   "prs": [
+    3497
+   ],
+   "merge": "b6f8300e2d7f3deabd40ffd5ad850c2a7958bee3",
+   "path": ".claude/workflows/mc-4-run-evidence.js",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0542"
+   ]
+  },
+  {
+   "record": 32,
+   "prs": [
+    3497
+   ],
+   "merge": "b6f8300e2d7f3deabd40ffd5ad850c2a7958bee3",
+   "path": ".claude/workflows/mc-5-steering-hub.js",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0543"
+   ]
+  },
+  {
+   "record": 33,
+   "prs": [
+    3497
+   ],
+   "merge": "b6f8300e2d7f3deabd40ffd5ad850c2a7958bee3",
+   "path": "apps/desktop/src/downloads.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0565"
+   ]
+  },
+  {
+   "record": 34,
+   "prs": [
+    3497
+   ],
+   "merge": "b6f8300e2d7f3deabd40ffd5ad850c2a7958bee3",
+   "path": "apps/docs/src/app/(home)/page.tsx",
+   "lines": {
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0587"
+   ]
+  },
+  {
+   "record": 35,
+   "prs": [
+    3497
+   ],
+   "merge": "b6f8300e2d7f3deabd40ffd5ad850c2a7958bee3",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0666"
+   ]
+  },
+  {
+   "record": 36,
+   "prs": [
+    3497
+   ],
+   "merge": "b6f8300e2d7f3deabd40ffd5ad850c2a7958bee3",
+   "path": "tools/scripts/lib/release-notes.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0676"
+   ]
+  },
+  {
+   "record": 37,
+   "prs": [
+    3497
+   ],
+   "merge": "b6f8300e2d7f3deabd40ffd5ad850c2a7958bee3",
+   "path": "tools/scripts/release-notes.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0677"
+   ]
+  },
+  {
+   "record": 38,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": ".claude/skills/oxagen-branding/SKILL.md",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0533"
+   ]
+  },
+  {
+   "record": 39,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": ".claude/skills/oxagen-branding/references/examples.md",
+   "lines": {
+    "inNetEffectCandidate": 5
+   },
+   "netEffectCandidates": [
+    "C0534"
+   ]
+  },
+  {
+   "record": 40,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": ".claude/skills/oxagen-branding/references/positioning.md",
+   "lines": {
+    "inNetEffectCandidate": 8
+   },
+   "netEffectCandidates": [
+    "C0535"
+   ]
+  },
+  {
+   "record": 41,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": ".claude/skills/oxagen-branding/references/voice.md",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0536"
+   ]
+  },
+  {
+   "record": 42,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": ".claude/skills/oxagen-branding/references/words.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0537"
+   ]
+  },
+  {
+   "record": 43,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": ".claude/workflows/mission-control-wizards-and-repositories.js",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0544"
+   ]
+  },
+  {
+   "record": 44,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "AGENTS.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0545"
+   ]
+  },
+  {
+   "record": 45,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "CLAUDE.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0546"
+   ]
+  },
+  {
+   "record": 46,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "CONTRIBUTING.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0547"
+   ]
+  },
+  {
+   "record": 47,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "README.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0548"
+   ]
+  },
+  {
+   "record": 48,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/app/messages/en.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0549"
+   ]
+  },
+  {
+   "record": 49,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/app/messages/mandate.json",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0550"
+   ]
+  },
+  {
+   "record": 50,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/app/public/brand/oxagen-avatar-dark.svg",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0551"
+   ]
+  },
+  {
+   "record": 51,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/app/public/brand/oxagen-avatar-light.svg",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0552"
+   ]
+  },
+  {
+   "record": 52,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/app/public/brand/stella-avatar-dark.svg",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0553"
+   ]
+  },
+  {
+   "record": 53,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/app/public/brand/stella-avatar-light.svg",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0554"
+   ]
+  },
+  {
+   "record": 54,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/app/public/social/og-image-dark-1200x630.png",
+   "lines": {},
+   "netEffectCandidates": []
+  },
+  {
+   "record": 55,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/app/public/social/og-image-light-1200x630.png",
+   "lines": {},
+   "netEffectCandidates": []
+  },
+  {
+   "record": 56,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/app/src/app/manifest.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0557"
+   ]
+  },
+  {
+   "record": 57,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/app_deprecated/public/brand/oxagen-avatar-dark.svg",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0558"
+   ]
+  },
+  {
+   "record": 58,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/app_deprecated/public/brand/oxagen-avatar-light.svg",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0559"
+   ]
+  },
+  {
+   "record": 59,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/app_deprecated/public/brand/stella-avatar-dark.svg",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0560"
+   ]
+  },
+  {
+   "record": 60,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/app_deprecated/public/brand/stella-avatar-light.svg",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0561"
+   ]
+  },
+  {
+   "record": 61,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/app_deprecated/public/social/og-image-dark-1200x630.png",
+   "lines": {},
+   "netEffectCandidates": []
+  },
+  {
+   "record": 62,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/app_deprecated/public/social/og-image-light-1200x630.png",
+   "lines": {},
+   "netEffectCandidates": []
+  },
+  {
+   "record": 63,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/app_deprecated/src/app/manifest.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0564"
+   ]
+  },
+  {
+   "record": 64,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/content/docs/enterprise/use-cases.mdx",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0566"
+   ]
+  },
+  {
+   "record": 65,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/content/docs/index.mdx",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0567"
+   ]
+  },
+  {
+   "record": 66,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/public/brand/oxagen-avatar-dark.svg",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0568"
+   ]
+  },
+  {
+   "record": 67,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/public/brand/oxagen-avatar-light.svg",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0569"
+   ]
+  },
+  {
+   "record": 68,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/public/brand/stella-avatar-dark.svg",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0570"
+   ]
+  },
+  {
+   "record": 69,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/public/brand/stella-avatar-light.svg",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0571"
+   ]
+  },
+  {
+   "record": 70,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/public/decks/architecture-deep-dive/README.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0572"
+   ]
+  },
+  {
+   "record": 71,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/public/decks/first-call-enterprise/README.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0573"
+   ]
+  },
+  {
+   "record": 72,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/public/decks/first-call-enterprise/index.html",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0574",
+    "C0575"
+   ]
+  },
+  {
+   "record": 73,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/public/decks/first-call-enterprise/script-data.js",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0576"
+   ]
+  },
+  {
+   "record": 74,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/public/decks/index.html",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0577"
+   ]
+  },
+  {
+   "record": 75,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/public/decks/investor/index.html",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0578",
+    "C0579"
+   ]
+  },
+  {
+   "record": 76,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/public/decks/investor/script-data.js",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0580"
+   ]
+  },
+  {
+   "record": 77,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/public/decks/mutation-verifier/README.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0581"
+   ]
+  },
+  {
+   "record": 78,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/public/pwa/manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0582"
+   ]
+  },
+  {
+   "record": 79,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/public/social/og-image-dark-1200x630.png",
+   "lines": {},
+   "netEffectCandidates": []
+  },
+  {
+   "record": 80,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/public/social/og-image-light-1200x630.png",
+   "lines": {},
+   "netEffectCandidates": []
+  },
+  {
+   "record": 81,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/src/app/(home)/page.tsx",
+   "lines": {
+    "inNetEffectCandidate": 3,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": [
+    "C0585",
+    "C0586"
+   ]
+  },
+  {
+   "record": 82,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/src/app/layout.tsx",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0588"
+   ]
+  },
+  {
+   "record": 83,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/src/app/llms.txt/route.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0589"
+   ]
+  },
+  {
+   "record": 84,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/docs/src/app/manifest.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0590"
+   ]
+  },
+  {
+   "record": 85,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/web/content/posts/steering-a-run-you-are-not-watching/index.mdx",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0591"
+   ]
+  },
+  {
+   "record": 86,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/web/content/posts/the-agent-time-horizon-is-doubling/index.mdx",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0592"
+   ]
+  },
+  {
+   "record": 87,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/web/content/posts/the-problem-is-not-slop-it-is-your-process/index.mdx",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0593"
+   ]
+  },
+  {
+   "record": 88,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/web/content/posts/what-an-agent-should-be-told-before-it-starts/index.mdx",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0594"
+   ]
+  },
+  {
+   "record": 89,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/web/index.html",
+   "lines": {
+    "inNetEffectCandidate": 4
+   },
+   "netEffectCandidates": [
+    "C0595"
+   ]
+  },
+  {
+   "record": 90,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/web/og.png",
+   "lines": {},
+   "netEffectCandidates": []
+  },
+  {
+   "record": 91,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "apps/web/oxagen.webmanifest",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0597"
+   ]
+  },
+  {
+   "record": 92,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/CODEMAPS/architecture.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0598"
+   ]
+  },
+  {
+   "record": 93,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/VISION.md",
+   "lines": {
+    "inNetEffectCandidate": 6
+   },
+   "netEffectCandidates": [
+    "C0599"
+   ]
+  },
+  {
+   "record": 94,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/specs/README.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0600"
+   ]
+  },
+  {
+   "record": 95,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/specs/app-parity-ui-overhaul/01-proposal.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0601"
+   ]
+  },
+  {
+   "record": 96,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/specs/app-parity-ui-overhaul/02-information-architecture.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0602"
+   ]
+  },
+  {
+   "record": 97,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/specs/app-parity-ui-overhaul/03-wireframes.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0603"
+   ]
+  },
+  {
+   "record": 98,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/specs/app-parity-ui-overhaul/04-build-plan-and-prompts.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0604"
+   ]
+  },
+  {
+   "record": 99,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/specs/app-parity-ui-overhaul/README.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0605"
+   ]
+  },
+  {
+   "record": 100,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/specs/application-shell/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0606"
+   ]
+  },
+  {
+   "record": 101,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/specs/command-menu/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0607"
+   ]
+  },
+  {
+   "record": 102,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/specs/information-architecture/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0608"
+   ]
+  },
+  {
+   "record": 103,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/specs/inventory/_index.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0609"
+   ]
+  },
+  {
+   "record": 104,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/specs/steering/README.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0610"
+   ]
+  },
+  {
+   "record": 105,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/specs/workspace-scoped-marketplace/PLAN.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0611"
+   ]
+  },
+  {
+   "record": 106,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/specs/workspace-scoped-marketplace/SPEC.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0612"
+   ]
+  },
+  {
+   "record": 107,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/README.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0613"
+   ]
+  },
+  {
+   "record": 108,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/account/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0614"
+   ]
+  },
+  {
+   "record": 109,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/auth/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0615"
+   ]
+  },
+  {
+   "record": 110,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/onboarding/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0616"
+   ]
+  },
+  {
+   "record": 111,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/org/access/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0617"
+   ]
+  },
+  {
+   "record": 112,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/org/billing/invoices/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0618"
+   ]
+  },
+  {
+   "record": 113,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/org/billing/subscription/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0619"
+   ]
+  },
+  {
+   "record": 114,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/org/billing/usage/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0620"
+   ]
+  },
+  {
+   "record": 115,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/org/developer/mcp/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0621"
+   ]
+  },
+  {
+   "record": 116,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/org/developer/tokens/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0622"
+   ]
+  },
+  {
+   "record": 117,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/org/governance/capabilities/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0623"
+   ]
+  },
+  {
+   "record": 118,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/org/governance/policies/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0624"
+   ]
+  },
+  {
+   "record": 119,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/org/governance/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0625"
+   ]
+  },
+  {
+   "record": 120,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/org/members/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0626"
+   ]
+  },
+  {
+   "record": 121,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/org/security/audit/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0627"
+   ]
+  },
+  {
+   "record": 122,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/org/security/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0628"
+   ]
+  },
+  {
+   "record": 123,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/org/settings/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0629"
+   ]
+  },
+  {
+   "record": 124,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/root/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0630"
+   ]
+  },
+  {
+   "record": 125,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/system/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0631"
+   ]
+  },
+  {
+   "record": 126,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/activity/fleet/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0632"
+   ]
+  },
+  {
+   "record": 127,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/activity/run/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0633"
+   ]
+  },
+  {
+   "record": 128,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/activity/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0634"
+   ]
+  },
+  {
+   "record": 129,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/ask/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0635"
+   ]
+  },
+  {
+   "record": 130,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/automations/automation/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0636"
+   ]
+  },
+  {
+   "record": 131,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/automations/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0637"
+   ]
+  },
+  {
+   "record": 132,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/automations/triggers/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0638"
+   ]
+  },
+  {
+   "record": 133,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/automations/workflows/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0639"
+   ]
+  },
+  {
+   "record": 134,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/evals/redesign.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0640"
+   ]
+  },
+  {
+   "record": 135,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/evals/run/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0641"
+   ]
+  },
+  {
+   "record": 136,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/evals/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0642"
+   ]
+  },
+  {
+   "record": 137,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/knowledge/graph/node/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0643"
+   ]
+  },
+  {
+   "record": 138,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/knowledge/graph/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0644"
+   ]
+  },
+  {
+   "record": 139,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/knowledge/inference/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0645"
+   ]
+  },
+  {
+   "record": 140,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/knowledge/memory/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0646"
+   ]
+  },
+  {
+   "record": 141,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/knowledge/ontology/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0647"
+   ]
+  },
+  {
+   "record": 142,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/knowledge/sources/connect/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0648"
+   ]
+  },
+  {
+   "record": 143,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/knowledge/sources/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0649"
+   ]
+  },
+  {
+   "record": 144,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/marketplace/agent-tools/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0650"
+   ]
+  },
+  {
+   "record": 145,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/marketplace/integrations/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0651"
+   ]
+  },
+  {
+   "record": 146,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/overview/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0652"
+   ]
+  },
+  {
+   "record": 147,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/settings/agent-defaults/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0653"
+   ]
+  },
+  {
+   "record": 148,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/settings/environments/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0654"
+   ]
+  },
+  {
+   "record": 149,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/settings/general/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0655"
+   ]
+  },
+  {
+   "record": 150,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/workbench/agents/builder/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0656"
+   ]
+  },
+  {
+   "record": 151,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/workbench/agents/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0657"
+   ]
+  },
+  {
+   "record": 152,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/workbench/repos/repo/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0658"
+   ]
+  },
+  {
+   "record": 153,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/workbench/repos/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0659"
+   ]
+  },
+  {
+   "record": 154,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/workbench/sandboxes/session/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0660"
+   ]
+  },
+  {
+   "record": 155,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/workbench/sandboxes/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0661"
+   ]
+  },
+  {
+   "record": 156,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/workbench/tools/capabilities/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0662"
+   ]
+  },
+  {
+   "record": 157,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/workbench/tools/mcp/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0663"
+   ]
+  },
+  {
+   "record": 158,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/workbench/tools/skills/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0664"
+   ]
+  },
+  {
+   "record": 159,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "docs/web-app-2.0/workspace/workbench/tools/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0665"
+   ]
+  },
+  {
+   "record": 160,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "packages/database/atlas/migrations/20260920130000_book_second_edition.sql",
+   "lines": {
+    "presentInSquashResult": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 161,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "presentInSquashResult": 1,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 162,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "packages/database/seed-assets/books/field-manual.html",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0667"
+   ]
+  },
+  {
+   "record": 163,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "packages/database/seed-assets/books/manuscript/author.html",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0668"
+   ]
+  },
+  {
+   "record": 164,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "packages/database/seed-assets/books/manuscript/p20.html",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0669"
+   ]
+  },
+  {
+   "record": 165,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "packages/database/seed-assets/books/page-flip-reader.html",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0670"
+   ]
+  },
+  {
+   "record": 166,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "packages/handlers/src/workspace.settings.read.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0671"
+   ]
+  },
+  {
+   "record": 167,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "packages/inngest-functions/src/functions/run.summarize.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 4
+   },
+   "netEffectCandidates": [
+    "C0672"
+   ]
+  },
+  {
+   "record": 168,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "packages/oxagen/src/contracts/context.steering.freshness.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0673"
+   ]
+  },
+  {
+   "record": 169,
+   "prs": [
+    3497
+   ],
+   "merge": "64bc4db11b96a8a3008581c1d7f6efb035fc9c83",
+   "path": "tools/scripts/check-prose.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0675"
+   ]
+  },
+  {
+   "record": 170,
+   "prs": [
+    3496
+   ],
+   "merge": "ea7aaeed6a826b3d83c5f2cbbf06ae9221516b0c",
+   "path": "apps/docs/src/app/(home)/page.tsx",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0522"
+   ]
+  },
+  {
+   "record": 171,
+   "prs": [
+    3489
+   ],
+   "merge": "bce730a99958191209fe470a391ff9b31dffa30b",
+   "path": "packages/oxagen/src/mandates/schemas.ts",
+   "lines": {
+    "inNetEffectCandidate": 27
+   },
+   "netEffectCandidates": [
+    "C0520"
+   ]
+  },
+  {
+   "record": 172,
+   "prs": [
+    3489
+   ],
+   "merge": "bce730a99958191209fe470a391ff9b31dffa30b",
+   "path": "tools/scripts/check-role-enforcement.mjs",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0521"
+   ]
+  },
+  {
+   "record": 173,
+   "prs": [
+    3486
+   ],
+   "merge": "99aef4b426da3858cd0fa07260730251788450e8",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0706"
+   ]
+  },
+  {
+   "record": 174,
+   "prs": [
+    3486
+   ],
+   "merge": "3c826995000118666d2a822b43947c44d067be4d",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 175,
+   "prs": [
+    3483
+   ],
+   "merge": "58c9bb06d35a43ee8906bc49ea32b2acea22d083",
+   "path": ".agent/memory/codex/lessons.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0523"
+   ]
+  },
+  {
+   "record": 176,
+   "prs": [
+    3483
+   ],
+   "merge": "4c974e66d94b485efac7f3bc05d312efdafb06c2",
+   "path": "apps/docs/src/app/(home)/page.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 177,
+   "prs": [
+    3481
+   ],
+   "merge": "59e8cac78755a9be0d0630c8636973e5443aa1b3",
+   "path": "docs/capabilities/_index.md",
+   "lines": {
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0511"
+   ]
+  },
+  {
+   "record": 178,
+   "prs": [
+    3480
+   ],
+   "merge": "0fccf5a9809ce3e0884b4653c89bc6ef14c9ce2e",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0518"
+   ]
+  },
+  {
+   "record": 179,
+   "prs": [
+    3480
+   ],
+   "merge": "aa033e571776b551a78274c4cab2363339bfdbfe",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0517"
+   ]
+  },
+  {
+   "record": 180,
+   "prs": [
+    3480
+   ],
+   "merge": "440a67d9fb62d750660cadcb5796be9454a90920",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 181,
+   "prs": [
+    3479
+   ],
+   "merge": "cad15048d82772f39915c4c41f068b613f9f2b64",
+   "path": "docs/capabilities/schemas/README.md",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0514"
+   ]
+  },
+  {
+   "record": 182,
+   "prs": [
+    3479
+   ],
+   "merge": "cad15048d82772f39915c4c41f068b613f9f2b64",
+   "path": "docs/capabilities/schemas/_index.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0515"
+   ]
+  },
+  {
+   "record": 183,
+   "prs": [
+    3465
+   ],
+   "merge": "118a0264b7469acad99f4ebd0e24d62cfa155548",
+   "path": "apps/api/src/routes/v1/tacho.events.ingest.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0504"
+   ]
+  },
+  {
+   "record": 184,
+   "prs": [
+    3465
+   ],
+   "merge": "118a0264b7469acad99f4ebd0e24d62cfa155548",
+   "path": "apps/docs/src/components/theme-switcher.tsx",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0505"
+   ]
+  },
+  {
+   "record": 185,
+   "prs": [
+    3465
+   ],
+   "merge": "118a0264b7469acad99f4ebd0e24d62cfa155548",
+   "path": "apps/web/assets/oxagen.js",
+   "lines": {
+    "inNetEffectCandidate": 5
+   },
+   "netEffectCandidates": [
+    "C0506"
+   ]
+  },
+  {
+   "record": 186,
+   "prs": [
+    3465
+   ],
+   "merge": "118a0264b7469acad99f4ebd0e24d62cfa155548",
+   "path": "packages/tacho/src/claude-code/recorder.ts",
+   "lines": {
+    "inNetEffectCandidate": 18
+   },
+   "netEffectCandidates": [
+    "C0507"
+   ]
+  },
+  {
+   "record": 187,
+   "prs": [
+    3462
+   ],
+   "merge": "3a0368c98383123824c04e82cb673a8e89b369ad",
+   "path": "tools/scripts/db-lint-migrations.test.ts",
+   "lines": {
+    "presentInSquashResult": 1,
+    "absentFromMainBeforeSquash": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 188,
+   "prs": [
+    3462
+   ],
+   "merge": "3a0368c98383123824c04e82cb673a8e89b369ad",
+   "path": "tools/scripts/db-lint-migrations.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 5
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 189,
+   "prs": [
+    3459
+   ],
+   "merge": "1f772bf14d415d6d475057394919294699c20f47",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0701"
+   ]
+  },
+  {
+   "record": 190,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "apps/api/src/lib/cms/attio.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 7
+   },
+   "netEffectCandidates": [
+    "C0678"
+   ]
+  },
+  {
+   "record": 191,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "apps/app/src/features/create/actions.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0679"
+   ]
+  },
+  {
+   "record": 192,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "apps/app/src/features/create/actions.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0680"
+   ]
+  },
+  {
+   "record": 193,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "apps/app/src/features/create/agent-file.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 5
+   },
+   "netEffectCandidates": [
+    "C0681"
+   ]
+  },
+  {
+   "record": 194,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "apps/app/src/features/shell/commands.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0683"
+   ]
+  },
+  {
+   "record": 195,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "apps/app/src/features/shell/mobile-nav.test.tsx",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0684"
+   ]
+  },
+  {
+   "record": 196,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "apps/app/src/features/shell/nav.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0686"
+   ]
+  },
+  {
+   "record": 197,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "apps/app/src/features/shell/nav.ts",
+   "lines": {
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0687"
+   ]
+  },
+  {
+   "record": 198,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "apps/app/src/features/shell/shell-client.test.tsx",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0689"
+   ]
+  },
+  {
+   "record": 199,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "apps/app/src/features/tools/actions.ts",
+   "lines": {
+    "inNetEffectCandidate": 5
+   },
+   "netEffectCandidates": [
+    "C0691"
+   ]
+  },
+  {
+   "record": 200,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "apps/app/src/features/tools/tools.test.tsx",
+   "lines": {
+    "inNetEffectCandidate": 7
+   },
+   "netEffectCandidates": [
+    "C0692"
+   ]
+  },
+  {
+   "record": 201,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "apps/app/src/shared/safe-path.ts",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0693"
+   ]
+  },
+  {
+   "record": 202,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "apps/app/src/test/intl.tsx",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0694"
+   ]
+  },
+  {
+   "record": 203,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "apps/mcp/src/tools/approval_rule.handlers.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0697"
+   ]
+  },
+  {
+   "record": 204,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "docs/capabilities/schemas/README.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0698"
+   ]
+  },
+  {
+   "record": 205,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "docs/capabilities/schemas/_index.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0699"
+   ]
+  },
+  {
+   "record": 206,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 207,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "packages/handlers/src/agent.propose.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0702"
+   ]
+  },
+  {
+   "record": 208,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "packages/handlers/src/approval_rule.handlers.pg.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0703"
+   ]
+  },
+  {
+   "record": 209,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "packages/oxagen/src/contracts/agent.propose.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 5
+   },
+   "netEffectCandidates": [
+    "C0704"
+   ]
+  },
+  {
+   "record": 210,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "packages/oxagen/src/mandates/schemas.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 27
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 211,
+   "prs": [
+    3459
+   ],
+   "merge": "e142a91ef728465ec83036c862f415191291a510",
+   "path": "tools/scripts/check-role-enforcement.mjs",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 212,
+   "prs": [
+    3459
+   ],
+   "merge": "b20b64ffd09de79678965d369f1edb75fa977481",
+   "path": "docs/capabilities/_index.md",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 213,
+   "prs": [
+    3459
+   ],
+   "merge": "b20b64ffd09de79678965d369f1edb75fa977481",
+   "path": "docs/capabilities/schemas/README.md",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 214,
+   "prs": [
+    3459
+   ],
+   "merge": "b20b64ffd09de79678965d369f1edb75fa977481",
+   "path": "docs/capabilities/schemas/_index.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 215,
+   "prs": [
+    3459
+   ],
+   "merge": "b20b64ffd09de79678965d369f1edb75fa977481",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 216,
+   "prs": [
+    3456
+   ],
+   "merge": "95cb5635cb8d39d9e9fefcc6de40f66e904c3bda",
+   "path": "tools/scripts/db-lint-migrations.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 4
+   },
+   "netEffectCandidates": [
+    "C0509"
+   ]
+  },
+  {
+   "record": 217,
+   "prs": [
+    3456
+   ],
+   "merge": "95cb5635cb8d39d9e9fefcc6de40f66e904c3bda",
+   "path": "tools/scripts/db-lint-migrations.ts",
+   "lines": {
+    "inNetEffectCandidate": 5
+   },
+   "netEffectCandidates": [
+    "C0510"
+   ]
+  },
+  {
+   "record": 218,
+   "prs": [
+    3456
+   ],
+   "merge": "a8e827f54ba57394fe08ef8ffa440e4118236b14",
+   "path": "apps/api/src/routes/v1/tacho.events.ingest.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 2,
+    "presentInSquashResult": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 219,
+   "prs": [
+    3456
+   ],
+   "merge": "a8e827f54ba57394fe08ef8ffa440e4118236b14",
+   "path": "apps/web/assets/oxagen.js",
+   "lines": {
+    "presentInSquashResult": 3,
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 220,
+   "prs": [
+    3456
+   ],
+   "merge": "a8e827f54ba57394fe08ef8ffa440e4118236b14",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "presentInSquashResult": 1,
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0508"
+   ]
+  },
+  {
+   "record": 221,
+   "prs": [
+    3456
+   ],
+   "merge": "4d492f897474c2d7e5631f0098e45aca4577278f",
+   "path": "apps/docs/src/components/theme-switcher.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 222,
+   "prs": [
+    3456
+   ],
+   "merge": "4d492f897474c2d7e5631f0098e45aca4577278f",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 223,
+   "prs": [
+    3442
+   ],
+   "merge": "fb92661843cdd6c86f6fa20249ddd7082edb4eca",
+   "path": "packages/handlers/src/mandate.handlers.pg.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0503"
+   ]
+  },
+  {
+   "record": 224,
+   "prs": [
+    3439
+   ],
+   "merge": "09c834e779fdbab654648f108f67797b81a7210a",
+   "path": "apps/app/src/features/tools/tools.builders.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0512"
+   ]
+  },
+  {
+   "record": 225,
+   "prs": [
+    3432
+   ],
+   "merge": "53095cb89630d899d5cfbee27489c3858547f7dd",
+   "path": "packages/tacho/src/claude-code/otel.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0501"
+   ]
+  },
+  {
+   "record": 226,
+   "prs": [
+    3432
+   ],
+   "merge": "53095cb89630d899d5cfbee27489c3858547f7dd",
+   "path": "packages/tacho/src/envelope.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0502"
+   ]
+  },
+  {
+   "record": 227,
+   "prs": [
+    3390
+   ],
+   "merge": "f7111bb46db6f80977445ad883022c1b1dc6c7ff",
+   "path": "apps/api/src/middleware/cors.ts",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0331"
+   ]
+  },
+  {
+   "record": 228,
+   "prs": [
+    3390
+   ],
+   "merge": "f7111bb46db6f80977445ad883022c1b1dc6c7ff",
+   "path": "apps/api/src/routes/v1/cms.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0333"
+   ]
+  },
+  {
+   "record": 229,
+   "prs": [
+    3390
+   ],
+   "merge": "f7111bb46db6f80977445ad883022c1b1dc6c7ff",
+   "path": "packages/database/src/schema/_schemas.ts",
+   "lines": {
+    "presentInSquashResult": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 230,
+   "prs": [
+    3390
+   ],
+   "merge": "d3d08a584d4328b32d5342964e72b1707544807c",
+   "path": "apps/app/src/features/shell/account-dialog.test.tsx",
+   "lines": {
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0334"
+   ]
+  },
+  {
+   "record": 231,
+   "prs": [
+    3390
+   ],
+   "merge": "d3d08a584d4328b32d5342964e72b1707544807c",
+   "path": "apps/app/src/features/shell/account-dialog.tsx",
+   "lines": {
+    "inNetEffectCandidate": 6
+   },
+   "netEffectCandidates": [
+    "C0335"
+   ]
+  },
+  {
+   "record": 232,
+   "prs": [
+    3390
+   ],
+   "merge": "d3d08a584d4328b32d5342964e72b1707544807c",
+   "path": "apps/app/src/ui/formatter.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0336"
+   ]
+  },
+  {
+   "record": 233,
+   "prs": [
+    3390
+   ],
+   "merge": "d3d08a584d4328b32d5342964e72b1707544807c",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "presentInSquashResult": 1,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 234,
+   "prs": [
+    3390
+   ],
+   "merge": "d3d08a584d4328b32d5342964e72b1707544807c",
+   "path": "packages/tacho/src/collector/transcript-tailer.ts",
+   "lines": {
+    "inNetEffectCandidate": 5
+   },
+   "netEffectCandidates": [
+    "C0344"
+   ]
+  },
+  {
+   "record": 235,
+   "prs": [
+    3390
+   ],
+   "merge": "01c48b3fdbf90a1ba46b2c1767d22ffaf53aa747",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 236,
+   "prs": [
+    3389
+   ],
+   "merge": "e1f0860a6b6d0abb89ec0e20973c92ff7dcfc695",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0326"
+   ]
+  },
+  {
+   "record": 237,
+   "prs": [
+    3389
+   ],
+   "merge": "7080b40aa160a71a6e14eb4647b6d42da5ed8a89",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0327"
+   ]
+  },
+  {
+   "record": 238,
+   "prs": [
+    3385
+   ],
+   "merge": "64916a428ecd7741089ed9b84dc56b6b6ebcfefd",
+   "path": "apps/app/ARCHITECTURE.md",
+   "lines": {
+    "presentInSquashResult": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 239,
+   "prs": [
+    3385
+   ],
+   "merge": "95a43238e2d9ec202dded3dbb6e7406bdc6a3212",
+   "path": "apps/web/read/index.html",
+   "lines": {
+    "inNetEffectCandidate": 6
+   },
+   "netEffectCandidates": [
+    "C0444"
+   ]
+  },
+  {
+   "record": 240,
+   "prs": [
+    3363
+   ],
+   "merge": "b304acbe8e7ee96cb0606f83e0447b3b97682577",
+   "path": "apps/api/src/routes/v1/tacho.events.ingest.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0311"
+   ]
+  },
+  {
+   "record": 241,
+   "prs": [
+    3363
+   ],
+   "merge": "b304acbe8e7ee96cb0606f83e0447b3b97682577",
+   "path": "apps/api/src/routes/v1/tacho.events.ingest.ts",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0313"
+   ]
+  },
+  {
+   "record": 242,
+   "prs": [
+    3363
+   ],
+   "merge": "b304acbe8e7ee96cb0606f83e0447b3b97682577",
+   "path": "apps/app/src/features/run/run.builders.ts",
+   "lines": {
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0314"
+   ]
+  },
+  {
+   "record": 243,
+   "prs": [
+    3363
+   ],
+   "merge": "b304acbe8e7ee96cb0606f83e0447b3b97682577",
+   "path": "apps/app/src/features/run/transcript-model.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 4
+   },
+   "netEffectCandidates": [
+    "C0315"
+   ]
+  },
+  {
+   "record": 244,
+   "prs": [
+    3363
+   ],
+   "merge": "b304acbe8e7ee96cb0606f83e0447b3b97682577",
+   "path": "docs/adr/ADR-100-frame-bodies-are-captured-by-default-redacted-at-the-host-capped-and-governed-by-retention.md",
+   "lines": {
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0316"
+   ]
+  },
+  {
+   "record": 245,
+   "prs": [
+    3363
+   ],
+   "merge": "b304acbe8e7ee96cb0606f83e0447b3b97682577",
+   "path": "packages/handlers/src/repository.binding-write.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0317"
+   ]
+  },
+  {
+   "record": 246,
+   "prs": [
+    3363
+   ],
+   "merge": "b304acbe8e7ee96cb0606f83e0447b3b97682577",
+   "path": "packages/handlers/src/repository.list.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0318"
+   ]
+  },
+  {
+   "record": 247,
+   "prs": [
+    3363
+   ],
+   "merge": "b304acbe8e7ee96cb0606f83e0447b3b97682577",
+   "path": "packages/tacho/src/collector/collector-units.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0319"
+   ]
+  },
+  {
+   "record": 248,
+   "prs": [
+    3363
+   ],
+   "merge": "b304acbe8e7ee96cb0606f83e0447b3b97682577",
+   "path": "packages/tacho/src/collector/spool.ts",
+   "lines": {
+    "inNetEffectCandidate": 36
+   },
+   "netEffectCandidates": [
+    "C0320"
+   ]
+  },
+  {
+   "record": 249,
+   "prs": [
+    3363
+   ],
+   "merge": "b304acbe8e7ee96cb0606f83e0447b3b97682577",
+   "path": "packages/tacho/src/wire.ts",
+   "lines": {
+    "inNetEffectCandidate": 8
+   },
+   "netEffectCandidates": [
+    "C0322"
+   ]
+  },
+  {
+   "record": 250,
+   "prs": [
+    3361
+   ],
+   "merge": "dc157d622691d2e4b577ac07a5946c13a67531b7",
+   "path": "packages/tacho/src/collector/daemon-transcript.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0307"
+   ]
+  },
+  {
+   "record": 251,
+   "prs": [
+    3361
+   ],
+   "merge": "dc157d622691d2e4b577ac07a5946c13a67531b7",
+   "path": "packages/tacho/src/collector/transcript-tailer.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 4
+   },
+   "netEffectCandidates": [
+    "C0308"
+   ]
+  },
+  {
+   "record": 252,
+   "prs": [
+    3361
+   ],
+   "merge": "dc157d622691d2e4b577ac07a5946c13a67531b7",
+   "path": "packages/tacho/src/collector/transcript-tailer.ts",
+   "lines": {
+    "inNetEffectCandidate": 9
+   },
+   "netEffectCandidates": [
+    "C0309"
+   ]
+  },
+  {
+   "record": 253,
+   "prs": [
+    3352
+   ],
+   "merge": "1a5d58c55db58632c633aee34228cab34b5e1d40",
+   "path": "docs/capabilities/schemas/README.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0485"
+   ]
+  },
+  {
+   "record": 254,
+   "prs": [
+    3352
+   ],
+   "merge": "1a5d58c55db58632c633aee34228cab34b5e1d40",
+   "path": "docs/capabilities/schemas/_index.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0486"
+   ]
+  },
+  {
+   "record": 255,
+   "prs": [
+    3352
+   ],
+   "merge": "1a5d58c55db58632c633aee34228cab34b5e1d40",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 13
+   },
+   "netEffectCandidates": [
+    "C0487"
+   ]
+  },
+  {
+   "record": 256,
+   "prs": [
+    3352
+   ],
+   "merge": "1a5d58c55db58632c633aee34228cab34b5e1d40",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0489"
+   ]
+  },
+  {
+   "record": 257,
+   "prs": [
+    3352
+   ],
+   "merge": "e77180416deccb8f3150f990b079d67bf3262cc8",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 5
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 258,
+   "prs": [
+    3352
+   ],
+   "merge": "e77180416deccb8f3150f990b079d67bf3262cc8",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 259,
+   "prs": [
+    3352
+   ],
+   "merge": "0dc458e48a25a1c2e4a73dec543c7dbe3b796a09",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 260,
+   "prs": [
+    3352
+   ],
+   "merge": "0dc458e48a25a1c2e4a73dec543c7dbe3b796a09",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 261,
+   "prs": [
+    3352
+   ],
+   "merge": "a191ff2bb81d34826ffba972e2852ed5256e7a07",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 262,
+   "prs": [
+    3352
+   ],
+   "merge": "b9a00f17231e33dae213e15ff07368e53d4e51f1",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 263,
+   "prs": [
+    3352
+   ],
+   "merge": "b9a00f17231e33dae213e15ff07368e53d4e51f1",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 264,
+   "prs": [
+    3352
+   ],
+   "merge": "d604fdba2fdc1c722ddbc1c12d7c12242f69c147",
+   "path": "apps/app/src/features/run/run.builders.ts",
+   "lines": {
+    "inNetEffectCandidate": 9
+   },
+   "netEffectCandidates": [
+    "C0472"
+   ]
+  },
+  {
+   "record": 265,
+   "prs": [
+    3352
+   ],
+   "merge": "d604fdba2fdc1c722ddbc1c12d7c12242f69c147",
+   "path": "packages/tacho/src/collector/transcript-tailer.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 5
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 266,
+   "prs": [
+    3352
+   ],
+   "merge": "252216209866b283707d0c98f41d7c7bd43034d4",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 267,
+   "prs": [
+    3352
+   ],
+   "merge": "597d3dbf58d54f435b15f3db3e048a862edf611c",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 268,
+   "prs": [
+    3352
+   ],
+   "merge": "f1b5692d3bf7e5289e53098ad8b74e7e737cc8a1",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 1,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": [
+    "C0488"
+   ]
+  },
+  {
+   "record": 269,
+   "prs": [
+    3352
+   ],
+   "merge": "f1b5692d3bf7e5289e53098ad8b74e7e737cc8a1",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 270,
+   "prs": [
+    3352
+   ],
+   "merge": "9b60d9966e866f23a87375af830ef714e3352090",
+   "path": "packages/run-ledger/src/frame-body.ts",
+   "lines": {},
+   "netEffectCandidates": []
+  },
+  {
+   "record": 271,
+   "prs": [
+    3352
+   ],
+   "merge": "9b60d9966e866f23a87375af830ef714e3352090",
+   "path": "packages/run-ledger/src/run-frames.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 8
+   },
+   "netEffectCandidates": [
+    "C0493"
+   ]
+  },
+  {
+   "record": 272,
+   "prs": [
+    3352
+   ],
+   "merge": "9b60d9966e866f23a87375af830ef714e3352090",
+   "path": "packages/run-ledger/src/run-frames.ts",
+   "lines": {
+    "inNetEffectCandidate": 3,
+    "presentInSquashResult": 6
+   },
+   "netEffectCandidates": [
+    "C0494"
+   ]
+  },
+  {
+   "record": 273,
+   "prs": [
+    3352
+   ],
+   "merge": "dabcf6e23dca78769c5aa712e5a12de171ef18a0",
+   "path": "apps/app/src/features/run/run.builders.ts",
+   "lines": {
+    "inNetEffectCandidate": 43,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": [
+    "C0471",
+    "C0472"
+   ]
+  },
+  {
+   "record": 274,
+   "prs": [
+    3352
+   ],
+   "merge": "dabcf6e23dca78769c5aa712e5a12de171ef18a0",
+   "path": "apps/app/src/features/run/transcript-model.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 4,
+    "inNetEffectCandidate": 11
+   },
+   "netEffectCandidates": [
+    "C0476"
+   ]
+  },
+  {
+   "record": 275,
+   "prs": [
+    3352
+   ],
+   "merge": "dabcf6e23dca78769c5aa712e5a12de171ef18a0",
+   "path": "apps/app/src/features/run/transcript-model.ts",
+   "lines": {
+    "inNetEffectCandidate": 13
+   },
+   "netEffectCandidates": [
+    "C0477"
+   ]
+  },
+  {
+   "record": 276,
+   "prs": [
+    3352
+   ],
+   "merge": "dabcf6e23dca78769c5aa712e5a12de171ef18a0",
+   "path": "apps/app/src/features/run/transcript-view.tsx",
+   "lines": {
+    "inNetEffectCandidate": 10
+   },
+   "netEffectCandidates": [
+    "C0478"
+   ]
+  },
+  {
+   "record": 277,
+   "prs": [
+    3352
+   ],
+   "merge": "dabcf6e23dca78769c5aa712e5a12de171ef18a0",
+   "path": "packages/handlers/src/run.transcript.get.ts",
+   "lines": {
+    "inNetEffectCandidate": 7
+   },
+   "netEffectCandidates": [
+    "C0490"
+   ]
+  },
+  {
+   "record": 278,
+   "prs": [
+    3352
+   ],
+   "merge": "b3c0b2f4873d16eeae7b67f9e60e742758efb1b4",
+   "path": "docs/capabilities/schemas/README.md",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 279,
+   "prs": [
+    3352
+   ],
+   "merge": "b3c0b2f4873d16eeae7b67f9e60e742758efb1b4",
+   "path": "docs/capabilities/schemas/_index.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 280,
+   "prs": [
+    3352
+   ],
+   "merge": "b3c0b2f4873d16eeae7b67f9e60e742758efb1b4",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 281,
+   "prs": [
+    3352
+   ],
+   "merge": "192555e07a0c4d22988cdcbce4532e9d6f8f08ad",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 282,
+   "prs": [
+    3351
+   ],
+   "merge": "ea82aa7ab7c6b01f6a577f9c65331fce073b9430",
+   "path": "packages/tacho/src/collector/daemon-bodies.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0293"
+   ]
+  },
+  {
+   "record": 283,
+   "prs": [
+    3351
+   ],
+   "merge": "ea82aa7ab7c6b01f6a577f9c65331fce073b9430",
+   "path": "packages/tacho/src/collector/transcript-tailer.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 5
+   },
+   "netEffectCandidates": [
+    "C0296"
+   ]
+  },
+  {
+   "record": 284,
+   "prs": [
+    3347
+   ],
+   "merge": "213b262fcc1ff5c5b8ba0fa774b7740934380494",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0300"
+   ]
+  },
+  {
+   "record": 285,
+   "prs": [
+    3347
+   ],
+   "merge": "23f44808ac0d4fab18282bfdc58e958cf9601d05",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 286,
+   "prs": [
+    3347
+   ],
+   "merge": "9eb6eb5c2de9126a8d1dee546b9f1a85498b2354",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 287,
+   "prs": [
+    3345
+   ],
+   "merge": "a7722e20e65eb89c003704e5b8af236d1bed921d",
+   "path": "apps/app/src/app/[org]/pages.test.tsx",
+   "lines": {
+    "inNetEffectCandidate": 6
+   },
+   "netEffectCandidates": [
+    "C0291"
+   ]
+  },
+  {
+   "record": 288,
+   "prs": [
+    3337
+   ],
+   "merge": "4ca4e7800e9dfa500967c8460dd700c4268039db",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "presentInSquashResult": 2,
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0325"
+   ]
+  },
+  {
+   "record": 289,
+   "prs": [
+    3337
+   ],
+   "merge": "eccaa82c01b7fc73781d06ad699673fff5de588a",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "presentInSquashResult": 1,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 290,
+   "prs": [
+    3337
+   ],
+   "merge": "f94b66990668a630bd2e911c64efe7f5a4241179",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 291,
+   "prs": [
+    3337
+   ],
+   "merge": "1a1490cc616b8d17527e7d2c3edf1752bd20f21e",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 292,
+   "prs": [
+    3332
+   ],
+   "merge": "b1745780777b8fd7dfbbcf48d77dc98f813e6720",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0371"
+   ]
+  },
+  {
+   "record": 293,
+   "prs": [
+    3332
+   ],
+   "merge": "b1745780777b8fd7dfbbcf48d77dc98f813e6720",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0373"
+   ]
+  },
+  {
+   "record": 294,
+   "prs": [
+    3332
+   ],
+   "merge": "c12510e8eaf9cf0ae33412f8e92601eb77846b18",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 1,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": [
+    "C0372"
+   ]
+  },
+  {
+   "record": 295,
+   "prs": [
+    3332
+   ],
+   "merge": "ec3e2ddea233db94637afedfca7998a8971d00b3",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 296,
+   "prs": [
+    3332
+   ],
+   "merge": "8a80c48d6864b05da71d95e4bfc7a9961a17f4ad",
+   "path": "packages/tacho/src/collector/spool.ts",
+   "lines": {
+    "presentInSquashResult": 1,
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0393"
+   ]
+  },
+  {
+   "record": 297,
+   "prs": [
+    3332
+   ],
+   "merge": "8a80c48d6864b05da71d95e4bfc7a9961a17f4ad",
+   "path": "packages/tacho/src/collector/transcript-tailer.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 5
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 298,
+   "prs": [
+    3332
+   ],
+   "merge": "bb51f6ab616011f47e3317d7420f359341c9998c",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 299,
+   "prs": [
+    3332
+   ],
+   "merge": "0cd275bc18ac96c6017933c8f276c857d2d29f91",
+   "path": "apps/desktop/src/app.tsx",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0366"
+   ]
+  },
+  {
+   "record": 300,
+   "prs": [
+    3332
+   ],
+   "merge": "0cd275bc18ac96c6017933c8f276c857d2d29f91",
+   "path": "apps/desktop/src/tacho-status.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0368"
+   ]
+  },
+  {
+   "record": 301,
+   "prs": [
+    3332
+   ],
+   "merge": "0cd275bc18ac96c6017933c8f276c857d2d29f91",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 302,
+   "prs": [
+    3332
+   ],
+   "merge": "0cd275bc18ac96c6017933c8f276c857d2d29f91",
+   "path": "packages/tacho/src/claude-code/cursor-adapter.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 80
+   },
+   "netEffectCandidates": [
+    "C0375"
+   ]
+  },
+  {
+   "record": 303,
+   "prs": [
+    3332
+   ],
+   "merge": "0cd275bc18ac96c6017933c8f276c857d2d29f91",
+   "path": "packages/tacho/src/claude-code/cursor-adapter.ts",
+   "lines": {
+    "inNetEffectCandidate": 103
+   },
+   "netEffectCandidates": [
+    "C0376"
+   ]
+  },
+  {
+   "record": 304,
+   "prs": [
+    3332
+   ],
+   "merge": "0cd275bc18ac96c6017933c8f276c857d2d29f91",
+   "path": "packages/tacho/src/claude-code/hook-client.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 10
+   },
+   "netEffectCandidates": [
+    "C0377"
+   ]
+  },
+  {
+   "record": 305,
+   "prs": [
+    3332
+   ],
+   "merge": "0cd275bc18ac96c6017933c8f276c857d2d29f91",
+   "path": "packages/tacho/src/claude-code/hook-client.ts",
+   "lines": {
+    "inNetEffectCandidate": 24
+   },
+   "netEffectCandidates": [
+    "C0378"
+   ]
+  },
+  {
+   "record": 306,
+   "prs": [
+    3332
+   ],
+   "merge": "0cd275bc18ac96c6017933c8f276c857d2d29f91",
+   "path": "packages/tacho/src/cli/cli.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 19
+   },
+   "netEffectCandidates": [
+    "C0379"
+   ]
+  },
+  {
+   "record": 307,
+   "prs": [
+    3332
+   ],
+   "merge": "0cd275bc18ac96c6017933c8f276c857d2d29f91",
+   "path": "packages/tacho/src/cli/deps.ts",
+   "lines": {
+    "inNetEffectCandidate": 11
+   },
+   "netEffectCandidates": [
+    "C0380"
+   ]
+  },
+  {
+   "record": 308,
+   "prs": [
+    3332
+   ],
+   "merge": "0cd275bc18ac96c6017933c8f276c857d2d29f91",
+   "path": "packages/tacho/src/cli/enroll.ts",
+   "lines": {
+    "inNetEffectCandidate": 16
+   },
+   "netEffectCandidates": [
+    "C0381"
+   ]
+  },
+  {
+   "record": 309,
+   "prs": [
+    3332
+   ],
+   "merge": "0cd275bc18ac96c6017933c8f276c857d2d29f91",
+   "path": "packages/tacho/src/cli/status.ts",
+   "lines": {
+    "inNetEffectCandidate": 7
+   },
+   "netEffectCandidates": [
+    "C0383"
+   ]
+  },
+  {
+   "record": 310,
+   "prs": [
+    3332
+   ],
+   "merge": "0cd275bc18ac96c6017933c8f276c857d2d29f91",
+   "path": "packages/tacho/src/cli/unenroll.ts",
+   "lines": {
+    "inNetEffectCandidate": 12
+   },
+   "netEffectCandidates": [
+    "C0384"
+   ]
+  },
+  {
+   "record": 311,
+   "prs": [
+    3332
+   ],
+   "merge": "0cd275bc18ac96c6017933c8f276c857d2d29f91",
+   "path": "packages/tacho/src/cli/verify.ts",
+   "lines": {
+    "inNetEffectCandidate": 5
+   },
+   "netEffectCandidates": [
+    "C0385"
+   ]
+  },
+  {
+   "record": 312,
+   "prs": [
+    3332
+   ],
+   "merge": "0cd275bc18ac96c6017933c8f276c857d2d29f91",
+   "path": "packages/tacho/src/collector/hook-handler.ts",
+   "lines": {
+    "inNetEffectCandidate": 6
+   },
+   "netEffectCandidates": [
+    "C0390"
+   ]
+  },
+  {
+   "record": 313,
+   "prs": [
+    3332
+   ],
+   "merge": "0cd275bc18ac96c6017933c8f276c857d2d29f91",
+   "path": "packages/tacho/src/host/cursor-writer.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 107,
+    "presentInSquashResult": 2
+   },
+   "netEffectCandidates": [
+    "C0395"
+   ]
+  },
+  {
+   "record": 314,
+   "prs": [
+    3332
+   ],
+   "merge": "0cd275bc18ac96c6017933c8f276c857d2d29f91",
+   "path": "packages/tacho/src/host/cursor-writer.ts",
+   "lines": {
+    "presentInSquashResult": 9,
+    "inNetEffectCandidate": 88
+   },
+   "netEffectCandidates": [
+    "C0396"
+   ]
+  },
+  {
+   "record": 315,
+   "prs": [
+    3332
+   ],
+   "merge": "0cd275bc18ac96c6017933c8f276c857d2d29f91",
+   "path": "packages/tacho/src/host/paths.ts",
+   "lines": {
+    "inNetEffectCandidate": 4
+   },
+   "netEffectCandidates": [
+    "C0398"
+   ]
+  },
+  {
+   "record": 316,
+   "prs": [
+    3332
+   ],
+   "merge": "0cd275bc18ac96c6017933c8f276c857d2d29f91",
+   "path": "packages/tacho/src/wire.ts",
+   "lines": {
+    "inNetEffectCandidate": 4
+   },
+   "netEffectCandidates": [
+    "C0400"
+   ]
+  },
+  {
+   "record": 317,
+   "prs": [
+    3332
+   ],
+   "merge": "d1ea6f7e3c72d0d95b1c3f05b7d48c7b5623b667",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 318,
+   "prs": [
+    3332
+   ],
+   "merge": "14fd496214809d24fe1541e072733a49503ffdf7",
+   "path": "packages/tacho/src/collector/daemon.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0389"
+   ]
+  },
+  {
+   "record": 319,
+   "prs": [
+    3332
+   ],
+   "merge": "14fd496214809d24fe1541e072733a49503ffdf7",
+   "path": "packages/tacho/src/evidence/frame-body.ts",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0394"
+   ]
+  },
+  {
+   "record": 320,
+   "prs": [
+    3327
+   ],
+   "merge": "d4b3c863c55166de0d3c78eac3eb638f8c987b49",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0362"
+   ]
+  },
+  {
+   "record": 321,
+   "prs": [
+    3327
+   ],
+   "merge": "111daeee2d2c34289ee65e2dc965eb2d14bc8bfd",
+   "path": "apps/app/messages/shell.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0347"
+   ]
+  },
+  {
+   "record": 322,
+   "prs": [
+    3326
+   ],
+   "merge": "3e49343615ada7fde902eea3ecda1c0d29f4b7f7",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0284"
+   ]
+  },
+  {
+   "record": 323,
+   "prs": [
+    3326
+   ],
+   "merge": "3e49343615ada7fde902eea3ecda1c0d29f4b7f7",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0285"
+   ]
+  },
+  {
+   "record": 324,
+   "prs": [
+    3326
+   ],
+   "merge": "ee5dbfa77b77946d8b726169f7e18616002970ad",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 325,
+   "prs": [
+    3326
+   ],
+   "merge": "ee5dbfa77b77946d8b726169f7e18616002970ad",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 326,
+   "prs": [
+    3326
+   ],
+   "merge": "405c0793ba364367853286bf11c62a1dbb118ab8",
+   "path": "packages/handlers/src/repository.main.bind.ts",
+   "lines": {
+    "inNetEffectCandidate": 13
+   },
+   "netEffectCandidates": [
+    "C0288"
+   ]
+  },
+  {
+   "record": 327,
+   "prs": [
+    3326,
+    3269
+   ],
+   "merge": "4a857b15a6523acfc4310542b4358cdc982cdc5d",
+   "path": "packages/handlers/src/repository.main.bind.ts",
+   "lines": {
+    "presentInSquashResult": 45,
+    "inNetEffectCandidate": 47
+   },
+   "netEffectCandidates": [
+    "C0263",
+    "C0288"
+   ]
+  },
+  {
+   "record": 328,
+   "prs": [
+    3325
+   ],
+   "merge": "bf13cfa08581363dd28f6d7a6d148316edb22268",
+   "path": "apps/app/src/app/[org]/pages.test.tsx",
+   "lines": {
+    "inNetEffectCandidate": 5
+   },
+   "netEffectCandidates": [
+    "C0297"
+   ]
+  },
+  {
+   "record": 329,
+   "prs": [
+    3325
+   ],
+   "merge": "4d961f5b092438a67d188265f35ecdd7163122ce",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0298"
+   ]
+  },
+  {
+   "record": 330,
+   "prs": [
+    3325
+   ],
+   "merge": "4d961f5b092438a67d188265f35ecdd7163122ce",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0299"
+   ]
+  },
+  {
+   "record": 331,
+   "prs": [
+    3325
+   ],
+   "merge": "f3d2d743efccffc35946049216e97a9e74f992bd",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 332,
+   "prs": [
+    3325
+   ],
+   "merge": "f3d2d743efccffc35946049216e97a9e74f992bd",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 333,
+   "prs": [
+    3325
+   ],
+   "merge": "8ff523ce0b844bcd4564a906d65420be32634d1f",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 334,
+   "prs": [
+    3325
+   ],
+   "merge": "8ff523ce0b844bcd4564a906d65420be32634d1f",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 335,
+   "prs": [
+    3322
+   ],
+   "merge": "83883c1174f3e2517dde5788eb85b3b3bf0f7586",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0282"
+   ]
+  },
+  {
+   "record": 336,
+   "prs": [
+    3322
+   ],
+   "merge": "83883c1174f3e2517dde5788eb85b3b3bf0f7586",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0283"
+   ]
+  },
+  {
+   "record": 337,
+   "prs": [
+    3321
+   ],
+   "merge": "97383e150d582c179197dc20dc311f68aeac1f1c",
+   "path": "packages/handlers/src/org.member_role.change.test.ts",
+   "lines": {
+    "presentInSquashResult": 1,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 338,
+   "prs": [
+    3321
+   ],
+   "merge": "97383e150d582c179197dc20dc311f68aeac1f1c",
+   "path": "packages/handlers/src/org.member_role.change.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 4,
+    "presentInSquashResult": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 339,
+   "prs": [
+    3321
+   ],
+   "merge": "97383e150d582c179197dc20dc311f68aeac1f1c",
+   "path": "packages/handlers/src/repository.main.bind.test.ts",
+   "lines": {
+    "presentInSquashResult": 2,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 340,
+   "prs": [
+    3319
+   ],
+   "merge": "4ce3ab50e61dd7c70120f59054eda45c7d55533b",
+   "path": "packages/handlers/src/org.member_role.change.test.ts",
+   "lines": {
+    "presentInSquashResult": 1,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 341,
+   "prs": [
+    3319
+   ],
+   "merge": "4ce3ab50e61dd7c70120f59054eda45c7d55533b",
+   "path": "packages/handlers/src/org.member_role.change.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 4,
+    "presentInSquashResult": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 342,
+   "prs": [
+    3319
+   ],
+   "merge": "4ce3ab50e61dd7c70120f59054eda45c7d55533b",
+   "path": "packages/handlers/src/repository.main.bind.test.ts",
+   "lines": {
+    "presentInSquashResult": 2,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 343,
+   "prs": [
+    3310
+   ],
+   "merge": "1d4296a16f169812b79a96a6229a9309074c7b52",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0269"
+   ]
+  },
+  {
+   "record": 344,
+   "prs": [
+    3310
+   ],
+   "merge": "1d4296a16f169812b79a96a6229a9309074c7b52",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0270"
+   ]
+  },
+  {
+   "record": 345,
+   "prs": [
+    3310
+   ],
+   "merge": "7f450c5f7761003881b067d5d3164e8e79e10899",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 346,
+   "prs": [
+    3310
+   ],
+   "merge": "7f450c5f7761003881b067d5d3164e8e79e10899",
+   "path": "packages/handlers/src/org.member_role.change.test.ts",
+   "lines": {
+    "presentInSquashResult": 1,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 347,
+   "prs": [
+    3310
+   ],
+   "merge": "7f450c5f7761003881b067d5d3164e8e79e10899",
+   "path": "packages/handlers/src/org.member_role.change.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 4,
+    "presentInSquashResult": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 348,
+   "prs": [
+    3310
+   ],
+   "merge": "7f450c5f7761003881b067d5d3164e8e79e10899",
+   "path": "packages/handlers/src/repository.main.bind.test.ts",
+   "lines": {
+    "presentInSquashResult": 2,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 349,
+   "prs": [
+    3308
+   ],
+   "merge": "764bc4193e149165d4ef14bdfce10161b96c574c",
+   "path": "apps/docs/content/docs/governance/byok-and-models.mdx",
+   "lines": {
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0272"
+   ]
+  },
+  {
+   "record": 350,
+   "prs": [
+    3308
+   ],
+   "merge": "764bc4193e149165d4ef14bdfce10161b96c574c",
+   "path": "packages/config/src/public-url.ts",
+   "lines": {
+    "inNetEffectCandidate": 7
+   },
+   "netEffectCandidates": [
+    "C0276"
+   ]
+  },
+  {
+   "record": 351,
+   "prs": [
+    3308
+   ],
+   "merge": "918cccc0d2af83ab9d7e6f3a026dadec337e3189",
+   "path": "apps/app/src/i18n/messages.d.ts",
+   "lines": {},
+   "netEffectCandidates": []
+  },
+  {
+   "record": 352,
+   "prs": [
+    3308
+   ],
+   "merge": "fc9eb88fad081a2f8d4d874b06e9b239a7ce2637",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 353,
+   "prs": [
+    3308
+   ],
+   "merge": "fc9eb88fad081a2f8d4d874b06e9b239a7ce2637",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 354,
+   "prs": [
+    3308,
+    3290
+   ],
+   "merge": "4c64b9a5cea6c47b9fff378f98a2ff3f1d0fe898",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 355,
+   "prs": [
+    3307
+   ],
+   "merge": "2017383cd241ab6e19d6f033d1e1f2018244a4e2",
+   "path": "docs/VISION.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0277"
+   ]
+  },
+  {
+   "record": 356,
+   "prs": [
+    3307
+   ],
+   "merge": "2017383cd241ab6e19d6f033d1e1f2018244a4e2",
+   "path": "packages/tacho/README.md",
+   "lines": {
+    "inNetEffectCandidate": 18
+   },
+   "netEffectCandidates": [
+    "C0281"
+   ]
+  },
+  {
+   "record": 357,
+   "prs": [
+    3307
+   ],
+   "merge": "5f2f68bd3b051c58779e256ed4e4fdb012acd703",
+   "path": "docs/specs/mission-control/spec.md",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0280"
+   ]
+  },
+  {
+   "record": 358,
+   "prs": [
+    3290
+   ],
+   "merge": "45e8b6a478c675aef9db2bfa7a666a4286a90ca8",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0264"
+   ]
+  },
+  {
+   "record": 359,
+   "prs": [
+    3290
+   ],
+   "merge": "45e8b6a478c675aef9db2bfa7a666a4286a90ca8",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0265"
+   ]
+  },
+  {
+   "record": 360,
+   "prs": [
+    3290
+   ],
+   "merge": "45e8b6a478c675aef9db2bfa7a666a4286a90ca8",
+   "path": "packages/handlers/src/org.member_role.change.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0266"
+   ]
+  },
+  {
+   "record": 361,
+   "prs": [
+    3290
+   ],
+   "merge": "45e8b6a478c675aef9db2bfa7a666a4286a90ca8",
+   "path": "packages/handlers/src/org.member_role.change.ts",
+   "lines": {
+    "inNetEffectCandidate": 7
+   },
+   "netEffectCandidates": [
+    "C0267"
+   ]
+  },
+  {
+   "record": 362,
+   "prs": [
+    3290
+   ],
+   "merge": "45e8b6a478c675aef9db2bfa7a666a4286a90ca8",
+   "path": "packages/handlers/src/repository.main.bind.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0268"
+   ]
+  },
+  {
+   "record": 363,
+   "prs": [
+    3276
+   ],
+   "merge": "677f6ed34432a582fb7a8a5d8a88f72ad1a4515c",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0305"
+   ]
+  },
+  {
+   "record": 364,
+   "prs": [
+    3276
+   ],
+   "merge": "6ca8403193bf4d7c660882c45fb70f0d87be9fd1",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 365,
+   "prs": [
+    3276
+   ],
+   "merge": "19ade1fee52c05a952f2c6f46432e7f4200d89b4",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 366,
+   "prs": [
+    3276
+   ],
+   "merge": "6bc32bf2e3702a0b876858cca9f1a5d837b285d4",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 367,
+   "prs": [
+    3271
+   ],
+   "merge": "a9dcc6092e47021ef3b84b3517e6a805bb03ddc1",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 5
+   },
+   "netEffectCandidates": [
+    "C0455"
+   ]
+  },
+  {
+   "record": 368,
+   "prs": [
+    3271
+   ],
+   "merge": "a9dcc6092e47021ef3b84b3517e6a805bb03ddc1",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0459"
+   ]
+  },
+  {
+   "record": 369,
+   "prs": [
+    3271
+   ],
+   "merge": "65e2af5c48cedb6c108c457971b27465990872ba",
+   "path": "docs/capabilities/schemas/README.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0452"
+   ]
+  },
+  {
+   "record": 370,
+   "prs": [
+    3271
+   ],
+   "merge": "65e2af5c48cedb6c108c457971b27465990872ba",
+   "path": "docs/capabilities/schemas/_index.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0453"
+   ]
+  },
+  {
+   "record": 371,
+   "prs": [
+    3271
+   ],
+   "merge": "65e2af5c48cedb6c108c457971b27465990872ba",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 372,
+   "prs": [
+    3271
+   ],
+   "merge": "65e2af5c48cedb6c108c457971b27465990872ba",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 373,
+   "prs": [
+    3271
+   ],
+   "merge": "7326f9376cc8b74344c294c568f9a3e8481071ef",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 374,
+   "prs": [
+    3271
+   ],
+   "merge": "fe4027048e0e4e1e03084a0d42cf63fb09bdcaf1",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 2,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": [
+    "C0458"
+   ]
+  },
+  {
+   "record": 375,
+   "prs": [
+    3271
+   ],
+   "merge": "fe4027048e0e4e1e03084a0d42cf63fb09bdcaf1",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": [
+    "C0460"
+   ]
+  },
+  {
+   "record": 376,
+   "prs": [
+    3271
+   ],
+   "merge": "f70aa0b71dbd14b50f7a159802125289654bb188",
+   "path": "docs/capabilities/schemas/README.md",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 377,
+   "prs": [
+    3271
+   ],
+   "merge": "f70aa0b71dbd14b50f7a159802125289654bb188",
+   "path": "docs/capabilities/schemas/_index.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 378,
+   "prs": [
+    3271
+   ],
+   "merge": "f70aa0b71dbd14b50f7a159802125289654bb188",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 379,
+   "prs": [
+    3271
+   ],
+   "merge": "b8d178b9a5c555f3c272c6db4e27f8e29fd743b9",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 2,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": [
+    "C0456"
+   ]
+  },
+  {
+   "record": 380,
+   "prs": [
+    3271
+   ],
+   "merge": "bbe50c27321c9ed5160dd20395b7115034f468ba",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 381,
+   "prs": [
+    3271
+   ],
+   "merge": "bbe50c27321c9ed5160dd20395b7115034f468ba",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 382,
+   "prs": [
+    3271
+   ],
+   "merge": "cae3037329bcaf34817fa465e9766ea81a77d916",
+   "path": "docs/capabilities/_index.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0451"
+   ]
+  },
+  {
+   "record": 383,
+   "prs": [
+    3271
+   ],
+   "merge": "cae3037329bcaf34817fa465e9766ea81a77d916",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 384,
+   "prs": [
+    3271
+   ],
+   "merge": "cae3037329bcaf34817fa465e9766ea81a77d916",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 385,
+   "prs": [
+    3271
+   ],
+   "merge": "51dbbb56b6caafa8337876432c8741a3435ba1ad",
+   "path": "packages/handlers/src/tacho.events.ingest.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 386,
+   "prs": [
+    3271
+   ],
+   "merge": "51dbbb56b6caafa8337876432c8741a3435ba1ad",
+   "path": "packages/tacho/src/claude-code/recorder.ts",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0462"
+   ]
+  },
+  {
+   "record": 387,
+   "prs": [
+    3271
+   ],
+   "merge": "51dbbb56b6caafa8337876432c8741a3435ba1ad",
+   "path": "packages/tacho/src/claude-code/transcript.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0463"
+   ]
+  },
+  {
+   "record": 388,
+   "prs": [
+    3271
+   ],
+   "merge": "51dbbb56b6caafa8337876432c8741a3435ba1ad",
+   "path": "packages/tacho/src/cli/cli.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0464"
+   ]
+  },
+  {
+   "record": 389,
+   "prs": [
+    3271
+   ],
+   "merge": "51dbbb56b6caafa8337876432c8741a3435ba1ad",
+   "path": "packages/tacho/src/collector/collector-units.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 390,
+   "prs": [
+    3271
+   ],
+   "merge": "51dbbb56b6caafa8337876432c8741a3435ba1ad",
+   "path": "packages/tacho/src/collector/detector-scan.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0465"
+   ]
+  },
+  {
+   "record": 391,
+   "prs": [
+    3271
+   ],
+   "merge": "51dbbb56b6caafa8337876432c8741a3435ba1ad",
+   "path": "packages/tacho/src/collector/detector.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 392,
+   "prs": [
+    3271
+   ],
+   "merge": "51dbbb56b6caafa8337876432c8741a3435ba1ad",
+   "path": "packages/tacho/src/collector/transcript-tailer.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 4,
+    "presentInSquashResult": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 393,
+   "prs": [
+    3271
+   ],
+   "merge": "51dbbb56b6caafa8337876432c8741a3435ba1ad",
+   "path": "packages/tacho/src/collector/transcript-tailer.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 6
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 394,
+   "prs": [
+    3271
+   ],
+   "merge": "51dbbb56b6caafa8337876432c8741a3435ba1ad",
+   "path": "packages/telemetry/src/cost-frames.test.ts",
+   "lines": {
+    "presentInSquashResult": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 395,
+   "prs": [
+    3271
+   ],
+   "merge": "2c35861643360587856e80095c9b8ac6fb40e245",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 396,
+   "prs": [
+    3271
+   ],
+   "merge": "2c35861643360587856e80095c9b8ac6fb40e245",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 397,
+   "prs": [
+    3271
+   ],
+   "merge": "4154c7e5758bbcd9b949e19d9808631a767751c9",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 398,
+   "prs": [
+    3271
+   ],
+   "merge": "4154c7e5758bbcd9b949e19d9808631a767751c9",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 399,
+   "prs": [
+    3271
+   ],
+   "merge": "daa5a8cfacbfc7afd8f75ae98fcafd572c796337",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 400,
+   "prs": [
+    3238
+   ],
+   "merge": "9bcc91dc6563cd7654a8d901240b01462f5a3b4a",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0241"
+   ]
+  },
+  {
+   "record": 401,
+   "prs": [
+    3238
+   ],
+   "merge": "9bcc91dc6563cd7654a8d901240b01462f5a3b4a",
+   "path": "packages/database/src/tenant-policy.manifest.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0242"
+   ]
+  },
+  {
+   "record": 402,
+   "prs": [
+    3238
+   ],
+   "merge": "9bcc91dc6563cd7654a8d901240b01462f5a3b4a",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0243"
+   ]
+  },
+  {
+   "record": 403,
+   "prs": [
+    3238
+   ],
+   "merge": "d98fcd4aa64c336dea6e2e2cb14eb6dc423afc1e",
+   "path": "packages/database/src/column-probe.test.ts",
+   "lines": {},
+   "netEffectCandidates": []
+  },
+  {
+   "record": 404,
+   "prs": [
+    3238
+   ],
+   "merge": "d98fcd4aa64c336dea6e2e2cb14eb6dc423afc1e",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 405,
+   "prs": [
+    3238
+   ],
+   "merge": "d98fcd4aa64c336dea6e2e2cb14eb6dc423afc1e",
+   "path": "packages/handlers/src/lib/tacho-gateway-columns.ts",
+   "lines": {},
+   "netEffectCandidates": []
+  },
+  {
+   "record": 406,
+   "prs": [
+    3238
+   ],
+   "merge": "d98fcd4aa64c336dea6e2e2cb14eb6dc423afc1e",
+   "path": "packages/iam/src/machine-key-scope.test.ts",
+   "lines": {
+    "presentInSquashResult": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 407,
+   "prs": [
+    3233
+   ],
+   "merge": "aa722188e4ddf59f75a194fb5a1225f5d5fd015a",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0257"
+   ]
+  },
+  {
+   "record": 408,
+   "prs": [
+    3233
+   ],
+   "merge": "cce265b317eca51911e579e1da5cbd92eb5e30d3",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 409,
+   "prs": [
+    3233
+   ],
+   "merge": "047bbfdf02cd88397b6bdc9bf2e0375ed743a6c0",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 410,
+   "prs": [
+    3233
+   ],
+   "merge": "61fe0d7b57c792afe886b10ea3a9432697514a0a",
+   "path": "apps/app/src/features/shell/mobile-nav.test.tsx",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0254"
+   ]
+  },
+  {
+   "record": 411,
+   "prs": [
+    3233
+   ],
+   "merge": "61fe0d7b57c792afe886b10ea3a9432697514a0a",
+   "path": "apps/app/src/features/shell/shell-client.test.tsx",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0255"
+   ]
+  },
+  {
+   "record": 412,
+   "prs": [
+    3233
+   ],
+   "merge": "61fe0d7b57c792afe886b10ea3a9432697514a0a",
+   "path": "apps/app/src/features/shell/shell-state.tsx",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0256"
+   ]
+  },
+  {
+   "record": 413,
+   "prs": [
+    3233
+   ],
+   "merge": "61fe0d7b57c792afe886b10ea3a9432697514a0a",
+   "path": "apps/mcp/src/context.cli-session.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 4
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 414,
+   "prs": [
+    3233
+   ],
+   "merge": "61fe0d7b57c792afe886b10ea3a9432697514a0a",
+   "path": "packages/oxagen/src/cli-session.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 415,
+   "prs": [
+    3209
+   ],
+   "merge": "93586824e9a8391014d00cca6369964d8e07b4da",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0191"
+   ]
+  },
+  {
+   "record": 416,
+   "prs": [
+    3209
+   ],
+   "merge": "c263bc582cc93d4cb9262a546897bd152a006a90",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 417,
+   "prs": [
+    3195
+   ],
+   "merge": "28f3e9f2056c62ecdc5784fe6e4f6d04d1a00e58",
+   "path": "package.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0164"
+   ]
+  },
+  {
+   "record": 418,
+   "prs": [
+    3195
+   ],
+   "merge": "28f3e9f2056c62ecdc5784fe6e4f6d04d1a00e58",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0165"
+   ]
+  },
+  {
+   "record": 419,
+   "prs": [
+    3195
+   ],
+   "merge": "4af8e4ec32a8b39e75dd5d54469404702969328e",
+   "path": "package.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 420,
+   "prs": [
+    3195
+   ],
+   "merge": "7dff0c421d51c3f8090cd10ef36b46bed7967486",
+   "path": "package.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 421,
+   "prs": [
+    3192
+   ],
+   "merge": "cf9dc105449fe7a05240c3b5f7c997d61f3798ab",
+   "path": "package.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0153"
+   ]
+  },
+  {
+   "record": 422,
+   "prs": [
+    3191
+   ],
+   "merge": "d78fff98b1a705c9edd2a7a5a36923f2573eaa8e",
+   "path": "apps/app/e2e/page-load.spec.ts",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0152"
+   ]
+  },
+  {
+   "record": 423,
+   "prs": [
+    3187
+   ],
+   "merge": "2b3c9c9f6fe4024790ba85b37f90559e41121334",
+   "path": "apps/mcp/src/context.cli-session.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 4
+   },
+   "netEffectCandidates": [
+    "C0227"
+   ]
+  },
+  {
+   "record": 424,
+   "prs": [
+    3187
+   ],
+   "merge": "2b3c9c9f6fe4024790ba85b37f90559e41121334",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0237"
+   ]
+  },
+  {
+   "record": 425,
+   "prs": [
+    3187
+   ],
+   "merge": "2b3c9c9f6fe4024790ba85b37f90559e41121334",
+   "path": "packages/oxagen/src/cli-session.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0240"
+   ]
+  },
+  {
+   "record": 426,
+   "prs": [
+    3187
+   ],
+   "merge": "cc4328a1b5d99a7b3d0d945eb8d6909ec4d5cb60",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0233"
+   ]
+  },
+  {
+   "record": 427,
+   "prs": [
+    3187
+   ],
+   "merge": "cc4328a1b5d99a7b3d0d945eb8d6909ec4d5cb60",
+   "path": "packages/database/src/column-probe.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 6
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 428,
+   "prs": [
+    3187
+   ],
+   "merge": "cc4328a1b5d99a7b3d0d945eb8d6909ec4d5cb60",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 429,
+   "prs": [
+    3187
+   ],
+   "merge": "cc4328a1b5d99a7b3d0d945eb8d6909ec4d5cb60",
+   "path": "packages/handlers/src/lib/tacho-gateway-columns.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 430,
+   "prs": [
+    3187
+   ],
+   "merge": "cc4328a1b5d99a7b3d0d945eb8d6909ec4d5cb60",
+   "path": "tools/scripts/check-main-verified.mjs",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 431,
+   "prs": [
+    3187
+   ],
+   "merge": "cc4328a1b5d99a7b3d0d945eb8d6909ec4d5cb60",
+   "path": "tools/scripts/check-main-verified.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 432,
+   "prs": [
+    3187
+   ],
+   "merge": "22d40a85264e9f675b03383d57ce90cb80cf84ad",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 1,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": [
+    "C0234"
+   ]
+  },
+  {
+   "record": 433,
+   "prs": [
+    3187
+   ],
+   "merge": "22d40a85264e9f675b03383d57ce90cb80cf84ad",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 434,
+   "prs": [
+    3187
+   ],
+   "merge": "d6cbbb274f0d1511b1b115e3079a83bb1006376e",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 435,
+   "prs": [
+    3187
+   ],
+   "merge": "a34363967d8cec028d9e1171f135b15acaf53844",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 436,
+   "prs": [
+    3187
+   ],
+   "merge": "a34363967d8cec028d9e1171f135b15acaf53844",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 437,
+   "prs": [
+    3187
+   ],
+   "merge": "a93c8a73dfa0d7f5a8f10982c9ed95023b0c395f",
+   "path": "packages/billing/src/stripe-provider.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0230"
+   ]
+  },
+  {
+   "record": 438,
+   "prs": [
+    3187
+   ],
+   "merge": "a93c8a73dfa0d7f5a8f10982c9ed95023b0c395f",
+   "path": "packages/billing/src/stripe-provider.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0231"
+   ]
+  },
+  {
+   "record": 439,
+   "prs": [
+    3187
+   ],
+   "merge": "a93c8a73dfa0d7f5a8f10982c9ed95023b0c395f",
+   "path": "packages/billing/src/test-utils/gau-fake-tx.ts",
+   "lines": {
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0232"
+   ]
+  },
+  {
+   "record": 440,
+   "prs": [
+    3187
+   ],
+   "merge": "a93c8a73dfa0d7f5a8f10982c9ed95023b0c395f",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 441,
+   "prs": [
+    3187
+   ],
+   "merge": "a93c8a73dfa0d7f5a8f10982c9ed95023b0c395f",
+   "path": "packages/database/src/tenant-policy.manifest.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0236"
+   ]
+  },
+  {
+   "record": 442,
+   "prs": [
+    3187
+   ],
+   "merge": "a93c8a73dfa0d7f5a8f10982c9ed95023b0c395f",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": [
+    "C0238"
+   ]
+  },
+  {
+   "record": 443,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "ac548f81605bb763eb5ebf57bd7ca262e2ab42eb",
+   "path": "apps/app/e2e/agent-tools-hub.spec.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 15,
+    "inNetEffectCandidate": 5
+   },
+   "netEffectCandidates": [
+    "C0016"
+   ]
+  },
+  {
+   "record": 444,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "ac548f81605bb763eb5ebf57bd7ca262e2ab42eb",
+   "path": "apps/app/src/components/shell/mobile-bottom-bar.test.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 33,
+    "presentInSquashAtRenamedPath": 11
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 445,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "ac548f81605bb763eb5ebf57bd7ca262e2ab42eb",
+   "path": "apps/app/src/lib/sidebar.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 18,
+    "presentInSquashAtRenamedPath": 6
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 446,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "apps/app/capability-ui-map.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 165,
+    "inNetEffectCandidate": 55
+   },
+   "netEffectCandidates": [
+    "C0014"
+   ]
+  },
+  {
+   "record": 447,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "apps/app/e2e/agent-tools-hub.spec.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 23,
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0017"
+   ]
+  },
+  {
+   "record": 448,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "apps/app/e2e/fleet.spec.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 165,
+    "inNetEffectCandidate": 55
+   },
+   "netEffectCandidates": [
+    "C0019"
+   ]
+  },
+  {
+   "record": 449,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "apps/app/src/app/[orgSlug]/[workspaceSlug]/fleet/actions.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 396,
+    "presentInSquashAtRenamedPath": 132
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 450,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "apps/app/src/app/[orgSlug]/[workspaceSlug]/fleet/actions.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 348,
+    "presentInSquashAtRenamedPath": 116
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 451,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "apps/app/src/app/[orgSlug]/[workspaceSlug]/fleet/page.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 534,
+    "presentInSquashAtRenamedPath": 178
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 452,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "apps/app/src/components/chat/budget-control.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 24,
+    "presentInSquashAtRenamedPath": 8
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 453,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "apps/app/src/components/chat/registry-components/billing-upgrade-inline.test.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 69,
+    "presentInSquashAtRenamedPath": 23
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 454,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "apps/app/src/components/chat/registry-components/billing-upgrade-inline.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 156,
+    "presentInSquashAtRenamedPath": 52
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 455,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "apps/app/src/components/shell/mobile-bottom-bar.test.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 60,
+    "presentInSquashAtRenamedPath": 4
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 456,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "apps/app/src/components/shell/shell-frame.test.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 33,
+    "presentInSquashAtRenamedPath": 11
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 457,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "apps/app/src/components/shell/shell-frame.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 9,
+    "presentInSquashAtRenamedPath": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 458,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "apps/app/src/lib/routes.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 6,
+    "presentInSquashAtRenamedPath": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 459,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "apps/app/src/lib/sidebar.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 86,
+    "presentInSquashAtRenamedPath": 22
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 460,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "apps/app/src/lib/sidebar.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 60,
+    "presentInSquashAtRenamedPath": 20
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 461,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "apps/cli/src/program.ts",
+   "lines": {},
+   "netEffectCandidates": []
+  },
+  {
+   "record": 462,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "docs/adr/ADR-068-stella-is-wrapped-through-its-hooks-until-it-speaks-the-tacho-contract-natively.md",
+   "lines": {
+    "absentFromMainBeforeSquash": 396,
+    "presentInSquashAtRenamedPath": 131,
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0045"
+   ]
+  },
+  {
+   "record": 463,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "docs/adr/ADR-078-wrapped-and-connected-are-two-enforcement-tiers-neither-dominates.md",
+   "lines": {
+    "absentFromMainBeforeSquash": 6,
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0043"
+   ]
+  },
+  {
+   "record": 464,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "docs/adr/README.md",
+   "lines": {
+    "absentFromMainBeforeSquash": 3,
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0047"
+   ]
+  },
+  {
+   "record": 465,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "docs/specs/mission-control/spec.md",
+   "lines": {
+    "absentFromMainBeforeSquash": 3,
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0056"
+   ]
+  },
+  {
+   "record": 466,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "docs/specs/tacho/spec.md",
+   "lines": {
+    "absentFromMainBeforeSquash": 3,
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0057"
+   ]
+  },
+  {
+   "record": 467,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "package.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 3,
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0058"
+   ]
+  },
+  {
+   "record": 468,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "packages/billing/src/plan-allowance.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 21,
+    "inNetEffectCandidate": 7
+   },
+   "netEffectCandidates": [
+    "C0062"
+   ]
+  },
+  {
+   "record": 469,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "packages/billing/src/pricing.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 15,
+    "inNetEffectCandidate": 5
+   },
+   "netEffectCandidates": [
+    "C0063"
+   ]
+  },
+  {
+   "record": 470,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 9,
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0065"
+   ]
+  },
+  {
+   "record": 471,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "485b7f0765ffcf6840b74bdf30f3a44b78b5857f",
+   "path": "packages/handlers/src/tacho.enrollment.create.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 339,
+    "presentInSquashResult": 12,
+    "inNetEffectCandidate": 117
+   },
+   "netEffectCandidates": [
+    "C0076"
+   ]
+  },
+  {
+   "record": 472,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "8c9946f74799afd26e05c8f05d0c5f130d18d003",
+   "path": "apps/docs/public/architecture/index.html",
+   "lines": {
+    "absentFromMainBeforeSquash": 4
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 473,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "5c884344fd8b2f42a9cf68b2d2fb8c3ff19c95a9",
+   "path": "apps/docs/public/architecture/architecture.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 128
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 474,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "5c884344fd8b2f42a9cf68b2d2fb8c3ff19c95a9",
+   "path": "apps/docs/public/architecture/index.html",
+   "lines": {
+    "absentFromMainBeforeSquash": 4
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 475,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "5c884344fd8b2f42a9cf68b2d2fb8c3ff19c95a9",
+   "path": "tools/scripts/lib/archdocs/flows.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 60,
+    "inNetEffectCandidate": 20
+   },
+   "netEffectCandidates": [
+    "C0114"
+   ]
+  },
+  {
+   "record": 476,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "cd536d0e706a50748f104bd2a1eaf55b9e86f3ba",
+   "path": "apps/app/src/app/(auth)/login/page.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 39,
+    "inNetEffectCandidate": 13
+   },
+   "netEffectCandidates": [
+    "C0021"
+   ]
+  },
+  {
+   "record": 477,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "cd536d0e706a50748f104bd2a1eaf55b9e86f3ba",
+   "path": "apps/app/src/app/(auth)/signup/page.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 42,
+    "inNetEffectCandidate": 14
+   },
+   "netEffectCandidates": [
+    "C0023"
+   ]
+  },
+  {
+   "record": 478,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "cd536d0e706a50748f104bd2a1eaf55b9e86f3ba",
+   "path": "apps/app/src/app/(auth)/two-factor/page.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 15,
+    "inNetEffectCandidate": 5
+   },
+   "netEffectCandidates": [
+    "C0025"
+   ]
+  },
+  {
+   "record": 479,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "cd536d0e706a50748f104bd2a1eaf55b9e86f3ba",
+   "path": "apps/app/src/app/(auth)/two-factor/two-factor-form.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 27,
+    "presentInSquashAtRenamedPath": 9
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 480,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "cd536d0e706a50748f104bd2a1eaf55b9e86f3ba",
+   "path": "apps/app/src/app/(onboarding)/new-organization/page.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 33,
+    "presentInSquashResult": 15,
+    "inNetEffectCandidate": 12
+   },
+   "netEffectCandidates": [
+    "C0027"
+   ]
+  },
+  {
+   "record": 481,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "cd536d0e706a50748f104bd2a1eaf55b9e86f3ba",
+   "path": "apps/app/src/app/cli/authorize/page.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 54,
+    "inNetEffectCandidate": 18
+   },
+   "netEffectCandidates": [
+    "C0032"
+   ]
+  },
+  {
+   "record": 482,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "cd536d0e706a50748f104bd2a1eaf55b9e86f3ba",
+   "path": "apps/app/src/components/auth/login-form.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 51,
+    "presentInSquashAtRenamedPath": 17
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 483,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "cd536d0e706a50748f104bd2a1eaf55b9e86f3ba",
+   "path": "apps/app/src/components/org/new-organization-form.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 18,
+    "presentInSquashAtRenamedPath": 6
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 484,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "cd536d0e706a50748f104bd2a1eaf55b9e86f3ba",
+   "path": "apps/app/src/lib/return-to.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 99,
+    "presentInSquashAtRenamedPath": 33
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 485,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "cd536d0e706a50748f104bd2a1eaf55b9e86f3ba",
+   "path": "apps/app/src/lib/return-to.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 78,
+    "presentInSquashAtRenamedPath": 26
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 486,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "cd536d0e706a50748f104bd2a1eaf55b9e86f3ba",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 4
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 487,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "c64440eda8505b145c8650ed6acae2f3634a31b7",
+   "path": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/mcp/page.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 9,
+    "presentInSquashAtRenamedPath": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 488,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "c64440eda8505b145c8650ed6acae2f3634a31b7",
+   "path": "apps/app/src/app/[orgSlug]/developer/mcp/mcp-install-snippets.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 87,
+    "inNetEffectCandidate": 29
+   },
+   "netEffectCandidates": [
+    "C0028"
+   ]
+  },
+  {
+   "record": 489,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "c64440eda8505b145c8650ed6acae2f3634a31b7",
+   "path": "apps/app/src/app/[orgSlug]/developer/mcp/mcp-install-snippets.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 132,
+    "inNetEffectCandidate": 8,
+    "presentInSquashAtRenamedPath": 36
+   },
+   "netEffectCandidates": [
+    "C0041"
+   ]
+  },
+  {
+   "record": 490,
+   "prs": [
+    3187,
+    3182,
+    3181,
+    2997
+   ],
+   "merge": "c64440eda8505b145c8650ed6acae2f3634a31b7",
+   "path": "apps/app/src/app/[orgSlug]/developer/mcp/page.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 3,
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0029"
+   ]
+  },
+  {
+   "record": 491,
+   "prs": [
+    3183
+   ],
+   "merge": "654161543501fe4d1eb5ab3b1d4c1a9a78707cb5",
+   "path": "package.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0219"
+   ]
+  },
+  {
+   "record": 492,
+   "prs": [
+    3183
+   ],
+   "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+   "path": ".env.example",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0200"
+   ]
+  },
+  {
+   "record": 493,
+   "prs": [
+    3183
+   ],
+   "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+   "path": "apps/api/src/lib/context.ts",
+   "lines": {
+    "inNetEffectCandidate": 42
+   },
+   "netEffectCandidates": [
+    "C0206"
+   ]
+  },
+  {
+   "record": 494,
+   "prs": [
+    3183
+   ],
+   "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+   "path": "apps/api/src/middleware/distributed-rate-limit.ts",
+   "lines": {
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0211"
+   ]
+  },
+  {
+   "record": 495,
+   "prs": [
+    3183
+   ],
+   "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+   "path": "apps/app/src/test/arch/timeout-budget.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 15
+   },
+   "netEffectCandidates": [
+    "C0213"
+   ]
+  },
+  {
+   "record": 496,
+   "prs": [
+    3183
+   ],
+   "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+   "path": "docs/capabilities/tacho.host.enroll.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0215"
+   ]
+  },
+  {
+   "record": 497,
+   "prs": [
+    3183
+   ],
+   "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+   "path": "docs/capabilities/telemetry.stella.ingest.md",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0216"
+   ]
+  },
+  {
+   "record": 498,
+   "prs": [
+    3183
+   ],
+   "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+   "path": "infra/tools/caddy/Caddyfile.alb",
+   "lines": {
+    "inNetEffectCandidate": 6
+   },
+   "netEffectCandidates": [
+    "C0218"
+   ]
+  },
+  {
+   "record": 499,
+   "prs": [
+    3183
+   ],
+   "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+   "path": "package.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 500,
+   "prs": [
+    3183
+   ],
+   "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+   "path": "packages/config/src/registry.ts",
+   "lines": {
+    "inNetEffectCandidate": 8
+   },
+   "netEffectCandidates": [
+    "C0222"
+   ]
+  },
+  {
+   "record": 501,
+   "prs": [
+    3183
+   ],
+   "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+   "path": "packages/tacho/src/collector/daemon.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 4
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 502,
+   "prs": [
+    3183
+   ],
+   "merge": "af36102e6bba6fd8aa6628548f35c31ce2f55733",
+   "path": ".env.example",
+   "lines": {
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 503,
+   "prs": [
+    3183
+   ],
+   "merge": "af36102e6bba6fd8aa6628548f35c31ce2f55733",
+   "path": "apps/api/src/__tests__/tacho.preauth-order.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 16
+   },
+   "netEffectCandidates": [
+    "C0203"
+   ]
+  },
+  {
+   "record": 504,
+   "prs": [
+    3183
+   ],
+   "merge": "af36102e6bba6fd8aa6628548f35c31ce2f55733",
+   "path": "apps/api/src/lib/context.ts",
+   "lines": {
+    "inNetEffectCandidate": 12,
+    "absentFromMainBeforeSquash": 51
+   },
+   "netEffectCandidates": [
+    "C0205",
+    "C0206"
+   ]
+  },
+  {
+   "record": 505,
+   "prs": [
+    3183
+   ],
+   "merge": "af36102e6bba6fd8aa6628548f35c31ce2f55733",
+   "path": "apps/api/src/middleware/distributed-rate-limit.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 14
+   },
+   "netEffectCandidates": [
+    "C0208"
+   ]
+  },
+  {
+   "record": 506,
+   "prs": [
+    3183
+   ],
+   "merge": "af36102e6bba6fd8aa6628548f35c31ce2f55733",
+   "path": "apps/api/src/middleware/distributed-rate-limit.ts",
+   "lines": {
+    "inNetEffectCandidate": 73,
+    "absentFromMainBeforeSquash": 3
+   },
+   "netEffectCandidates": [
+    "C0210"
+   ]
+  },
+  {
+   "record": 507,
+   "prs": [
+    3183
+   ],
+   "merge": "af36102e6bba6fd8aa6628548f35c31ce2f55733",
+   "path": "docs/capabilities/tacho.host.enroll.md",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 508,
+   "prs": [
+    3183
+   ],
+   "merge": "af36102e6bba6fd8aa6628548f35c31ce2f55733",
+   "path": "docs/capabilities/telemetry.stella.ingest.md",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 509,
+   "prs": [
+    3183
+   ],
+   "merge": "af36102e6bba6fd8aa6628548f35c31ce2f55733",
+   "path": "infra/tools/caddy/Caddyfile.alb",
+   "lines": {
+    "inNetEffectCandidate": 16,
+    "absentFromMainBeforeSquash": 6
+   },
+   "netEffectCandidates": [
+    "C0217"
+   ]
+  },
+  {
+   "record": 510,
+   "prs": [
+    3183
+   ],
+   "merge": "af36102e6bba6fd8aa6628548f35c31ce2f55733",
+   "path": "packages/config/src/registry.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 17
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 511,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/api/src/app.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 512,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/api/src/routes/v1/tacho.host.enroll.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0212"
+   ]
+  },
+  {
+   "record": 513,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/e2e/page-load.spec.ts",
+   "lines": {
+    "presentInSquashResult": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 514,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/e2e/pay.spec.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 515,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/src/data/live/mandates.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 516,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/src/data/live/mappers/steering.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 4
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 517,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/src/data/live/steering.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 5,
+    "presentInSquashResult": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 518,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/src/features/agents/agent.test.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 519,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/src/features/organization/create-key-dialog.test.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 520,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/src/features/spend/fleet-tiles.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 521,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/src/features/steering/action-failure.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 522,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/src/features/steering/actions.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 523,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/src/features/steering/context-pr-panel.test.tsx",
+   "lines": {
+    "presentInSquashResult": 6,
+    "absentFromMainBeforeSquash": 7
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 524,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/src/features/steering/context-pr-panel.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 525,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/src/features/steering/proposals.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 526,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/src/features/steering/records.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 527,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/src/features/steering/view.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 528,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/src/features/steering/write-controls.test.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 23
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 529,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/src/features/steering/write-controls.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 5
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 530,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/src/shared/pull-request-url.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 531,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/src/test/steering-outputs.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 532,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app/src/ui/navigation.test.tsx",
+   "lines": {
+    "absentFromMainBeforeSquash": 7
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 533,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/fleet/actions.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 534,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "apps/app_deprecated/src/app/api/v1/chat/stream/route.ts",
+   "lines": {
+    "predatesForkPoint": 9
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 535,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "packages/auth/src/auth-route.test.ts",
+   "lines": {
+    "presentInSquashResult": 1,
+    "inNetEffectCandidate": 6
+   },
+   "netEffectCandidates": [
+    "C0220"
+   ]
+  },
+  {
+   "record": 536,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "packages/auth/src/auth-route.ts",
+   "lines": {
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0221"
+   ]
+  },
+  {
+   "record": 537,
+   "prs": [
+    3183
+   ],
+   "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+   "path": "packages/oxagen/package.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0225"
+   ]
+  },
+  {
+   "record": 538,
+   "prs": [
+    3182
+   ],
+   "merge": "9e3921d1ee45d7c4e48664bd29ebd7e6e27398b6",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0168"
+   ]
+  },
+  {
+   "record": 539,
+   "prs": [
+    3182
+   ],
+   "merge": "2f2235562b118a9127937d49b6f2556c31aa7675",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 540,
+   "prs": [
+    3182
+   ],
+   "merge": "2f2235562b118a9127937d49b6f2556c31aa7675",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0169"
+   ]
+  },
+  {
+   "record": 541,
+   "prs": [
+    3182
+   ],
+   "merge": "9de890dd79465560c9240b7e628e7360c67203c1",
+   "path": "packages/handlers/src/api.key.revoke.ts",
+   "lines": {
+    "presentInSquashResult": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 542,
+   "prs": [
+    3182
+   ],
+   "merge": "9de890dd79465560c9240b7e628e7360c67203c1",
+   "path": "packages/handlers/src/lib/api-key-rotatable.ts",
+   "lines": {
+    "presentInSquashResult": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 543,
+   "prs": [
+    3178
+   ],
+   "merge": "d98301fa11af02d8848ec20aa95ae105ee4d1d43",
+   "path": "packages/iam/src/machine-key-scope.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 10
+   },
+   "netEffectCandidates": [
+    "C0187"
+   ]
+  },
+  {
+   "record": 544,
+   "prs": [
+    3178
+   ],
+   "merge": "d98301fa11af02d8848ec20aa95ae105ee4d1d43",
+   "path": "packages/iam/src/machine-key-scope.ts",
+   "lines": {
+    "inNetEffectCandidate": 5
+   },
+   "netEffectCandidates": [
+    "C0188"
+   ]
+  },
+  {
+   "record": 545,
+   "prs": [
+    3178
+   ],
+   "merge": "3952a0f66e6f922695b5a1dd31680fe5d4908f2d",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0176"
+   ]
+  },
+  {
+   "record": 546,
+   "prs": [
+    3178
+   ],
+   "merge": "3952a0f66e6f922695b5a1dd31680fe5d4908f2d",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0177"
+   ]
+  },
+  {
+   "record": 547,
+   "prs": [
+    3178
+   ],
+   "merge": "9301c67c0a0ffcf51f9032920cd0245b1083529f",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 548,
+   "prs": [
+    3178
+   ],
+   "merge": "c9dc9e4b6ed656c7b4085d15d383b74facb9e68e",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 549,
+   "prs": [
+    3178
+   ],
+   "merge": "c9dc9e4b6ed656c7b4085d15d383b74facb9e68e",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 550,
+   "prs": [
+    3178
+   ],
+   "merge": "318cedac7b0dc21217e3f44d4021afbc35ef906b",
+   "path": "packages/handlers/src/lib/tacho-host-revoke.ts",
+   "lines": {
+    "inNetEffectCandidate": 4
+   },
+   "netEffectCandidates": [
+    "C0182"
+   ]
+  },
+  {
+   "record": 551,
+   "prs": [
+    3178
+   ],
+   "merge": "318cedac7b0dc21217e3f44d4021afbc35ef906b",
+   "path": "packages/handlers/src/tacho.enrollment.revoke.ts",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0183"
+   ]
+  },
+  {
+   "record": 552,
+   "prs": [
+    3173
+   ],
+   "merge": "4c575696ed5dbc8deca6f53e8af095c90e4d0222",
+   "path": "package.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0158"
+   ]
+  },
+  {
+   "record": 553,
+   "prs": [
+    3173
+   ],
+   "merge": "312cd53b946aec5a6a5d69fedffa263b07500efe",
+   "path": "package.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 554,
+   "prs": [
+    3173
+   ],
+   "merge": "dcb8d83de2a97fd1cd5802993301b83e8302f4c3",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0159"
+   ]
+  },
+  {
+   "record": 555,
+   "prs": [
+    3171
+   ],
+   "merge": "adb2cf747c1abf7a9b544681800492b0532b6b0b",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0250"
+   ]
+  },
+  {
+   "record": 556,
+   "prs": [
+    3171
+   ],
+   "merge": "adb2cf747c1abf7a9b544681800492b0532b6b0b",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "inNetEffectCandidate": 1
+   },
+   "netEffectCandidates": [
+    "C0252"
+   ]
+  },
+  {
+   "record": 557,
+   "prs": [
+    3171
+   ],
+   "merge": "0fee3b3b5ab9e51a459a9a7baed34b998858686c",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "inNetEffectCandidate": 4,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": [
+    "C0251"
+   ]
+  },
+  {
+   "record": 558,
+   "prs": [
+    3171
+   ],
+   "merge": "0fee3b3b5ab9e51a459a9a7baed34b998858686c",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 559,
+   "prs": [
+    3171
+   ],
+   "merge": "3238a7f6b208b7bf22d2797ffb8dbec1a24ded9f",
+   "path": "apps/mcp/src/context.cli-session.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 4
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 560,
+   "prs": [
+    3171
+   ],
+   "merge": "3238a7f6b208b7bf22d2797ffb8dbec1a24ded9f",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 561,
+   "prs": [
+    3171
+   ],
+   "merge": "3238a7f6b208b7bf22d2797ffb8dbec1a24ded9f",
+   "path": "packages/oxagen/src/cli-session.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 562,
+   "prs": [
+    3171
+   ],
+   "merge": "d17ab4f00196401d773f48e6bb7f6b8e66fe61a2",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 563,
+   "prs": [
+    3171
+   ],
+   "merge": "d17ab4f00196401d773f48e6bb7f6b8e66fe61a2",
+   "path": "packages/database/src/column-probe.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 5,
+    "presentInSquashResult": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 564,
+   "prs": [
+    3171
+   ],
+   "merge": "d17ab4f00196401d773f48e6bb7f6b8e66fe61a2",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 565,
+   "prs": [
+    3171
+   ],
+   "merge": "d17ab4f00196401d773f48e6bb7f6b8e66fe61a2",
+   "path": "packages/handlers/src/lib/tacho-gateway-columns.ts",
+   "lines": {
+    "presentInSquashResult": 1,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 566,
+   "prs": [
+    3171
+   ],
+   "merge": "d17ab4f00196401d773f48e6bb7f6b8e66fe61a2",
+   "path": "tools/scripts/check-main-verified.mjs",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 567,
+   "prs": [
+    3171
+   ],
+   "merge": "d17ab4f00196401d773f48e6bb7f6b8e66fe61a2",
+   "path": "tools/scripts/check-main-verified.test.ts",
+   "lines": {
+    "absentFromMainBeforeSquash": 3
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 568,
+   "prs": [
+    3171
+   ],
+   "merge": "d4f2c5b8c5d7f115d0c8f13495af565edec2c485",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 569,
+   "prs": [
+    3171
+   ],
+   "merge": "d4f2c5b8c5d7f115d0c8f13495af565edec2c485",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 570,
+   "prs": [
+    3171
+   ],
+   "merge": "d19937cb500e834bf8c7807032267ad83dfb9f07",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 571,
+   "prs": [
+    3171
+   ],
+   "merge": "078802499c8cdc28338a9494d7f4aaaa0b4aea02",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 572,
+   "prs": [
+    3171
+   ],
+   "merge": "078802499c8cdc28338a9494d7f4aaaa0b4aea02",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 573,
+   "prs": [
+    3171
+   ],
+   "merge": "a77d35bd92e4472384b7d185e978d006dbd82672",
+   "path": "packages/billing/src/change-plan.test.ts",
+   "lines": {},
+   "netEffectCandidates": []
+  },
+  {
+   "record": 574,
+   "prs": [
+    3171
+   ],
+   "merge": "a77d35bd92e4472384b7d185e978d006dbd82672",
+   "path": "packages/database/atlas/migrations/atlas.sum",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 575,
+   "prs": [
+    3171
+   ],
+   "merge": "a77d35bd92e4472384b7d185e978d006dbd82672",
+   "path": "packages/database/storage-manifest.json",
+   "lines": {
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": []
+  },
+  {
+   "record": 576,
+   "prs": [
+    3169
+   ],
+   "merge": "e5d589bb924353d7d8c6ebf32b2826ff9e903fb2",
+   "path": "apps/api/src/app.ts",
+   "lines": {
+    "inNetEffectCandidate": 3
+   },
+   "netEffectCandidates": [
+    "C0124"
+   ]
+  },
+  {
+   "record": 577,
+   "prs": [
+    3169
+   ],
+   "merge": "e5d589bb924353d7d8c6ebf32b2826ff9e903fb2",
+   "path": "apps/api/src/middleware/distributed-rate-limit.ts",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0126"
+   ]
+  },
+  {
+   "record": 578,
+   "prs": [
+    3169
+   ],
+   "merge": "e5d589bb924353d7d8c6ebf32b2826ff9e903fb2",
+   "path": "apps/api/src/routes/v1/tacho.host.enroll.ts",
+   "lines": {
+    "inNetEffectCandidate": 7
+   },
+   "netEffectCandidates": [
+    "C0128"
+   ]
+  },
+  {
+   "record": 579,
+   "prs": [
+    3164
+   ],
+   "merge": "267be157d7ba88762ec31323067f75c7d05b9b69",
+   "path": "apps/app/src/components/shell/mobile-bottom-bar.test.tsx",
+   "lines": {
+    "inNetEffectCandidate": 2
+   },
+   "netEffectCandidates": [
+    "C0009"
+   ]
+  },
+  {
+   "record": 580,
+   "prs": [
+    3164
+   ],
+   "merge": "267be157d7ba88762ec31323067f75c7d05b9b69",
+   "path": "apps/app/src/lib/sidebar.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 4
+   },
+   "netEffectCandidates": [
+    "C0010"
+   ]
+  },
+  {
+   "record": 581,
+   "prs": [
+    3156,
+    3154
+   ],
+   "merge": "7bd1702fd82a1dd0cc280401399b42e625c1fb28",
+   "path": "apps/app/src/app/[orgSlug]/[workspaceSlug]/fleet/page.tsx",
+   "lines": {
+    "inNetEffectCandidate": 2,
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": [
+    "C0002"
+   ]
+  },
+  {
+   "record": 582,
+   "prs": [
+    3156,
+    3154
+   ],
+   "merge": "7bd1702fd82a1dd0cc280401399b42e625c1fb28",
+   "path": "apps/cli/src/commands/tacho.ts",
+   "lines": {
+    "inNetEffectCandidate": 7,
+    "presentInSquashResult": 5,
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": [
+    "C0003"
+   ]
+  },
+  {
+   "record": 583,
+   "prs": [
+    3156,
+    3154
+   ],
+   "merge": "7bd1702fd82a1dd0cc280401399b42e625c1fb28",
+   "path": "docs/adr/ADR-078-wrapped-and-connected-are-two-enforcement-tiers-neither-dominates.md",
+   "lines": {
+    "inNetEffectCandidate": 6,
+    "absentFromMainBeforeSquash": 6
+   },
+   "netEffectCandidates": [
+    "C0004"
+   ]
+  },
+  {
+   "record": 584,
+   "prs": [
+    3156,
+    3154
+   ],
+   "merge": "7bd1702fd82a1dd0cc280401399b42e625c1fb28",
+   "path": "packages/tacho/src/cli/enroll.ts",
+   "lines": {
+    "inNetEffectCandidate": 1,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": [
+    "C0005"
+   ]
+  },
+  {
+   "record": 585,
+   "prs": [
+    3156,
+    3154
+   ],
+   "merge": "7bd1702fd82a1dd0cc280401399b42e625c1fb28",
+   "path": "packages/tacho/src/collector/daemon.ts",
+   "lines": {
+    "inNetEffectCandidate": 2,
+    "presentInSquashResult": 1,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": [
+    "C0006"
+   ]
+  },
+  {
+   "record": 586,
+   "prs": [
+    3156,
+    3154
+   ],
+   "merge": "7bd1702fd82a1dd0cc280401399b42e625c1fb28",
+   "path": "packages/tacho/src/collector/mcp-gateway.test.ts",
+   "lines": {
+    "inNetEffectCandidate": 1,
+    "absentFromMainBeforeSquash": 1
+   },
+   "netEffectCandidates": [
+    "C0007"
+   ]
+  },
+  {
+   "record": 587,
+   "prs": [
+    3156,
+    3154
+   ],
+   "merge": "7bd1702fd82a1dd0cc280401399b42e625c1fb28",
+   "path": "packages/tacho/src/collector/mcp-gateway.ts",
+   "lines": {
+    "inNetEffectCandidate": 2,
+    "absentFromMainBeforeSquash": 2
+   },
+   "netEffectCandidates": [
+    "C0008"
+   ]
+  }
+ ]
+}

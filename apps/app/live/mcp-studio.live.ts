@@ -324,9 +324,6 @@ test("once the broker stops signing for the relay, the next call through it fail
   expect(callsTo(status, "grpc", "GetEntry"), describeRelay(status)).toHaveLength(before);
 });
 
-// The teardown archives the workspace, so a relay a failed run never revoked
-// is left registered where nothing routes to it. Stopping its process here
-// ends its connection before the job stops the sample servers.
-test.afterAll(async () => {
-  await control(readStudioSettings()).stopRelay();
-});
+// The global teardown (mcp-studio-teardown.ts) stops the relay once, after
+// every test. A test.afterAll here would run each time Playwright replaces
+// the worker after a failed test, and stop the relay a later test needs.

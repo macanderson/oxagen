@@ -99,7 +99,7 @@ export function SecretDialog({
           </DialogHeader>
           <DialogPanel>
             <div className="flex flex-col gap-1">
-              <Label htmlFor="mcp-secret-input" className="text-xs">
+              <Label htmlFor="mcp-secret-input" className="text-sm">
                 API key or token
               </Label>
               <Input
@@ -113,7 +113,7 @@ export function SecretDialog({
                 data-testid="mcp-secret-input"
               />
               {error && (
-                <p className="mt-1 text-xs text-destructive">{error}</p>
+                <p className="mt-1 text-sm text-destructive">{error}</p>
               )}
             </div>
           </DialogPanel>

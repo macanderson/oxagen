@@ -239,7 +239,7 @@ function KeysPanel({
           <h2 id="org-api-keys" className={panelTitle}>
             {t("title")}
           </h2>
-          <span className="text-xs text-dim">{t("caption")}</span>
+          <span className="text-sm text-dim">{t("caption")}</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone="quiet" dot={false} data-store="api-keys">
@@ -281,7 +281,7 @@ function Surfaces({ org }: { org: string }) {
         <p className="text-sm text-muted-foreground">{t("body")}</p>
         <pre
           data-testid="api-keys-cli"
-          className="overflow-x-auto rounded-lg border border-border bg-hl px-3.5 py-3 font-mono text-sm leading-relaxed"
+          className="overflow-x-auto rounded-lg border border-border bg-hl px-3.5 py-3 font-mono text-xs leading-relaxed"
         >
           {lines.join("\n")}
         </pre>
@@ -475,7 +475,7 @@ function Keys({
                   <div className="font-semibold text-foreground md:truncate">
                     {key.name}
                   </div>
-                  <div className={`${mono} text-sm text-dim md:truncate`}>
+                  <div className={`${mono} text-xs text-dim md:truncate`}>
                     {t("masked", { prefix: key.prefix })}
                   </div>
                 </div>,
@@ -484,7 +484,7 @@ function Keys({
                 <NotRecordedValue key="principal" />,
                 <NotRecordedValue key="grants" />,
                 <NotRecordedValue key="createdBy" />,
-                <span key="lastUsed" className={`${mono} text-sm text-dim`}>
+                <span key="lastUsed" className={`${mono} text-xs text-dim`}>
                   {key.lastUsedAt === null ? (
                     t("neverUsed")
                   ) : (
@@ -543,7 +543,7 @@ function RevokedFilter({
           data-show={option}
           data-touch-target=""
           aria-current={show === option ? "page" : undefined}
-          className="inline-flex min-h-9 max-md:min-h-11 items-center rounded-md border border-transparent px-3 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-[current=page]:border-border aria-[current=page]:text-foreground"
+          className="inline-flex min-h-9 max-md:min-h-11 items-center rounded-md border border-transparent px-3 text-base text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-[current=page]:border-border aria-[current=page]:text-foreground"
         >
           {option === "all" && ended > 0
             ? t("allWithCount", { ended })

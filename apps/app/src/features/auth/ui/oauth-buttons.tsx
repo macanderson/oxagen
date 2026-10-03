@@ -104,7 +104,7 @@ export function OAuthButtons({
       {outcome ? (
         <AuthAlert testId="oauth-outcome" message={t(`outcomes.${outcome}`)} />
       ) : null}
-      <div className="grid gap-[9px]">
+      <div className="grid gap-2.25">
         {(["google", "github"] as const).map((provider) => (
           <button
             key={provider}

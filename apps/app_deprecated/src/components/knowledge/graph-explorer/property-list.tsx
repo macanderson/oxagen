@@ -38,7 +38,7 @@ export function PropertyList({
   );
 
   if (entries.length === 0) {
-    return <p className="text-xs text-muted-foreground">No properties.</p>;
+    return <p className="text-sm text-muted-foreground">No properties.</p>;
   }
 
   return (
@@ -54,7 +54,7 @@ export function PropertyList({
           <dt
             className={cn(
               "truncate text-muted-foreground",
-              dense ? "text-[11px]" : "text-xs",
+              dense ? "text-xs" : "text-sm",
             )}
             title={humanizeKey(key)}
           >
@@ -63,7 +63,7 @@ export function PropertyList({
           <dd
             className={cn(
               "min-w-0 break-words text-foreground",
-              dense ? "text-[11px]" : "text-xs",
+              dense ? "text-xs" : "text-sm",
             )}
           >
             <PropertyValue value={value} />

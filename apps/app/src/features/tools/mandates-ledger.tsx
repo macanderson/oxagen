@@ -103,7 +103,7 @@ function Row({
         >
           {mandate.id}
         </SafeLink>
-        <div className="text-xs text-muted-foreground md:truncate">
+        <div className="text-sm text-muted-foreground md:truncate">
           {mandate.impacts.join(", ")}
         </div>
       </td>
@@ -131,7 +131,7 @@ function Row({
             {mandate.requestedBy === null ? null : (
               <div
                 data-requested-by={mandate.requestedBy}
-                className="text-xs text-muted-foreground md:truncate"
+                className="text-sm text-muted-foreground md:truncate"
               >
                 {t("requestedBy", { user: mandate.requestedBy })}
               </div>
@@ -141,7 +141,7 @@ function Row({
           <>
             <span className={mono}>{mandate.grantedBy}</span>
             {mandate.roleAtGrant === null ? null : (
-              <div className="text-xs text-muted-foreground md:truncate">
+              <div className="text-sm text-muted-foreground md:truncate">
                 {mandate.roleAtGrant}
               </div>
             )}
@@ -246,10 +246,10 @@ export function MandatesLedger({
     <section aria-labelledby="tools-mandates" className={`${panel} p-4`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 id="tools-mandates" className="text-base font-semibold">
+          <h2 id="tools-mandates" className="text-lg font-semibold">
             {title}
           </h2>
-          <p className="mt-1 max-w-prose text-sm text-muted-foreground">
+          <p className="mt-1 max-w-prose text-base text-muted-foreground">
             {t("lead")}
           </p>
         </div>
@@ -264,7 +264,7 @@ export function MandatesLedger({
               <p
                 data-state="incomplete"
                 data-blind-spot={blindSpot}
-                className="max-w-prose text-sm text-foreground"
+                className="max-w-prose text-base text-foreground"
               >
                 {blindSpot === "truncated"
                   ? t("truncated", { shown: String(read.value.truncatedAt) })
@@ -272,11 +272,11 @@ export function MandatesLedger({
               </p>
             )}
             {read.value.mandates.length > 0 ? null : (
-              <div className="flex flex-col gap-1 text-sm">
+              <div className="flex flex-col gap-1 text-base">
                 <p data-state="empty" data-blind-spot={blindSpot ?? undefined}>
                   {blindSpot === null ? t("empty") : t("emptyListed")}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   {blindSpot === null
                     ? t("emptyDetail")
                     : t("emptyListedDetail")}
@@ -285,8 +285,8 @@ export function MandatesLedger({
             )}
             {read.value.mandates.length === 0 ? null : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-3xl text-left text-sm">
-                  <thead className="text-xs uppercase tracking-wide text-muted-foreground">
+                <table className="w-full min-w-3xl text-left text-base">
+                  <thead className="text-sm uppercase tracking-wide text-muted-foreground">
                     <tr>
                       {COLUMNS.map((column) => (
                         <th

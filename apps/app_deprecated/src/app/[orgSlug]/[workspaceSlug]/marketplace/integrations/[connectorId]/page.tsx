@@ -70,7 +70,7 @@ export default async function ConnectorSetupPage({ params }: PageProps) {
       <div className="flex flex-col gap-3">
         <Link
           href={integrationsHref}
-          className="inline-flex w-fit items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
           Back to Integrations
@@ -83,10 +83,10 @@ export default async function ConnectorSetupPage({ params }: PageProps) {
             size={32}
           />
           <div>
-            <p className="text-sm font-semibold text-foreground">
+            <p className="text-base font-semibold text-foreground">
               Connect {connector.displayName}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {connector.description}
             </p>
           </div>
@@ -102,7 +102,7 @@ export default async function ConnectorSetupPage({ params }: PageProps) {
       />
 
       {!schemaResult.ok && (
-        <p className="text-xs text-muted-foreground" role="status">
+        <p className="text-sm text-muted-foreground" role="status">
           Couldn&apos;t preload this connector&apos;s configuration (
           {schemaResult.error}) — retrying in the browser.
         </p>

@@ -32,6 +32,7 @@ import {
   mergedBeforeReviewItem,
   needsInfoItem,
   noAnswerItem,
+  otherPullItem,
   noRequiredChecksItem,
   possibleDuplicateItem,
   readyItem,
@@ -42,6 +43,8 @@ import {
   triageDraftItem,
   triageFailedItem,
   triagingItem,
+  twoPullsItem,
+  unrecordedPullItem,
   viewerOnlyItem,
   waitingItem,
   workItem,
@@ -391,6 +394,60 @@ describe("WorkItemPage › states", () => {
     expect(screen.getByTestId("work-brief-claim-c2")).toHaveTextContent("no claim");
   });
 
+  it("in review with two pull requests: lists each with its forge state and keeps the facts' head and gate", async () => {
+    await renderDetail(twoPullsItem());
+    const review = screen.getByTestId("work-panel-review");
+    expect(within(review).getByText("Pull requests")).toBeInTheDocument();
+    const rows = within(review).getAllByTestId("work-review-pull");
+    expect(rows.map((row) => row.getAttribute("data-pull-request"))).toEqual(["642", "641"]);
+    const [, older] = rows;
+    if (older === undefined) throw new Error("the second pull request row is missing");
+    expect(rows[0]).toHaveTextContent("acme/platform#642");
+    expect(rows[0]?.querySelector('[data-pull-state="draft"]')).toHaveTextContent("Draft");
+    expect(within(older).getByRole("link", { name: "acme/platform#641" })).toHaveAttribute(
+      "href",
+      "https://github.com/acme/platform/pull/641",
+    );
+    expect(rows[1]?.querySelector('[data-pull-state="merged"]')).toHaveTextContent("Merged");
+    expect(rows[1]).toHaveTextContent("Retry the export on 429");
+    // The head, the merge row, and Accept still read the send's facts.
+    expect(within(review).getByTestId("work-review-head")).toHaveTextContent("3f9a2c1");
+    expect(within(review).getByTestId("work-review-merge")).toHaveTextContent("Open");
+    expect(screen.getByTestId("work-action-accept")).toBeEnabled();
+    await expectNoAxe(document.body);
+  });
+
+  it("forge pull request with no fact: lists it and says Accept waits for the record", async () => {
+    await renderDetail(unrecordedPullItem());
+    const review = screen.getByTestId("work-panel-review");
+    expect(within(review).getAllByTestId("work-review-pull")).toHaveLength(1);
+    expect(review).toHaveTextContent("Accept waits until the send's record names one of these pull requests.");
+    expect(review).not.toHaveTextContent("The run opened no pull request.");
+    expect(within(review).queryByTestId("work-review-head")).toBeNull();
+    await expectNoAxe(document.body);
+  });
+
+  it("in review with another forge pull request: keeps the facts' one beside it", async () => {
+    await renderDetail(otherPullItem());
+    const review = screen.getByTestId("work-panel-review");
+    expect(within(review).getByText("Pull requests")).toBeInTheDocument();
+    expect(within(review).getByTestId("work-review-fact-pull")).toHaveTextContent("acme/platform#641");
+    const [other] = within(review).getAllByTestId("work-review-pull");
+    expect(other).toHaveTextContent("acme/platform#700");
+    expect(other?.querySelector('[data-pull-state="closed"]')).toHaveTextContent("Closed");
+  });
+
+  it("in review with no forge row: shows the facts' pull request as before (negative)", async () => {
+    await renderDetail(inReviewItem());
+    const review = screen.getByTestId("work-panel-review");
+    expect(within(review).queryByTestId("work-review-pulls")).toBeNull();
+    expect(within(review).getByText("Pull request")).toBeInTheDocument();
+    expect(within(review).getByRole("link", { name: "acme/platform#641" })).toHaveAttribute(
+      "href",
+      "https://github.com/acme/platform/pull/641",
+    );
+  });
+
   it("check failed: Accept is disabled with the failing check as its reason", async () => {
     await renderDetail(checkFailedItem());
     const accept = screen.getByTestId("work-action-accept");
@@ -491,6 +548,34 @@ describe("WorkItemPage › states", () => {
       "brief_approved",
     ]);
     expect(entries[2]).toHaveTextContent("Marcus Bell approved brief revision 1.");
+  });
+
+  it("history: names the pull request that reverted a done item, and the item stays done", async () => {
+    const done = doneItem();
+    const [first] = done.history;
+    if (first === undefined) throw new Error("The done item has no history entry.");
+    await renderDetail({
+      ...done,
+      history: [
+        first,
+        {
+          ...first,
+          kind: "reverted",
+          source: "provider",
+          at: "2026-10-02T09:00:00Z",
+          send: 1,
+          pullRequest: "acme/platform#650",
+          mergeCommit: "4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e",
+        },
+      ],
+    });
+    const entries = screen.getAllByTestId("work-history-entry");
+    expect(entries.map((entry) => entry.getAttribute("data-kind"))).toEqual(["collected", "reverted"]);
+    expect(entries[1]).toHaveTextContent(
+      "Pull request acme/platform#650 reverted send 1 as 4d5e6f7.",
+    );
+    expect(screen.getByTestId("work-acceptance")).toHaveTextContent("3f9a2c1");
+    expect(screen.getByTestId("work-action-reopen")).toHaveTextContent("Reopen the item");
   });
 });
 

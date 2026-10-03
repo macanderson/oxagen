@@ -42,7 +42,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       type="button"
       onClick={() => void copy(text)}
       aria-label={copied ? `${label} copied` : `Copy ${label}`}
-      className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {copied ? (
         <>
@@ -109,7 +109,7 @@ export function McpInstallTabs({ entries }: McpInstallTabsProps) {
           <div className="ox-code-frame group relative overflow-hidden rounded-b-xl rounded-tr-xl shadow-md">
             {/* Header strip: ember gradient dot + language tag · always-visible copy. */}
             <div className="flex items-center justify-between border-b border-white/10 px-3 py-1.5">
-              <span className="flex items-center gap-2 font-mono text-[11px] text-white/50">
+              <span className="flex items-center gap-2 font-mono text-xs text-white/50">
                 <span
                   className="ox-grad-surface size-2.5 rounded-full"
                   aria-hidden="true"
@@ -131,7 +131,7 @@ export function McpInstallTabs({ entries }: McpInstallTabsProps) {
              * `.ox-code-frame` dark fill shows through.
              * `[&_pre]:overflow-x-auto` keeps long lines scrollable.
              * `[&_pre]:px-4 [&_pre]:py-3.5` sets the snippet padding.
-             * `[&_code]:text-[13px] [&_code]:font-mono [&_code]:leading-relaxed`
+             * `[&_code]:text-sm [&_code]:font-mono [&_code]:leading-relaxed`
              * sets the code typography. Token colours are baked inline by the
              * single dark Shiki theme; the frame's `--code-fg` covers the plain
              * text fallback if Shiki fails to load.
@@ -140,7 +140,7 @@ export function McpInstallTabs({ entries }: McpInstallTabsProps) {
               data-mcp-code
               aria-label={`${entry.client} install command`}
               dangerouslySetInnerHTML={{ __html: entry.highlightedHtml }}
-              className="[&_pre]:!bg-transparent [&_pre]:overflow-x-auto [&_pre]:px-4 [&_pre]:py-3.5 [&_code]:text-[13px] [&_code]:font-mono [&_code]:leading-relaxed"
+              className="[&_pre]:!bg-transparent [&_pre]:overflow-x-auto [&_pre]:px-4 [&_pre]:py-3.5 [&_code]:text-sm [&_code]:font-mono [&_code]:leading-relaxed"
             />
           </div>
         </TabsPanel>

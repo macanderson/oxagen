@@ -142,7 +142,7 @@ export function ConsentForm({
           <h1 className="text-xl font-semibold tracking-tight">
             Authorize the Oxagen CLI
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             <span className="font-medium text-foreground">{label}</span> is
             requesting access to your Oxagen workspace.
           </p>
@@ -194,18 +194,18 @@ export function ConsentForm({
             </SelectContent>
           </Select>
           {workspaces.length === 0 && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               No workspaces available in this organization.
             </p>
           )}
         </div>
 
         {/* Permission summary */}
-        <div className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground text-xs uppercase tracking-wide">
+        <div className="rounded-md border bg-muted/40 p-3 text-base text-muted-foreground space-y-1">
+          <p className="font-medium text-foreground text-sm uppercase tracking-wide">
             This will grant the CLI permission to:
           </p>
-          <ul className="list-disc list-inside space-y-0.5 text-xs">
+          <ul className="list-disc list-inside space-y-0.5 text-sm">
             <li>Create and manage API keys in the selected workspace</li>
             <li>Act on your behalf for CLI operations</li>
           </ul>
@@ -213,7 +213,7 @@ export function ConsentForm({
 
         {/* Error */}
         {error && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="text-base text-destructive">
             {error}
           </p>
         )}

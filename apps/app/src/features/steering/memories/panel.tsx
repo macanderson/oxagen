@@ -274,7 +274,7 @@ function Row({
       <td className={cell}>
         <SafeLink
           to={memoriesLink(at, view, { memory: memory.id })}
-          className={`${linkText} block max-w-[36ch] truncate`}
+          className={`${linkText} block max-w-cell-wide truncate`}
           data-truncate=""
           data-testid="memory-open"
         >
@@ -438,7 +438,7 @@ export function MemoriesPanel({
         <table
           aria-label={t("title")}
           data-testid="memory-table"
-          className="w-full min-w-[720px] border-collapse text-sm"
+          className="w-full min-w-180 border-collapse text-sm"
         >
           <thead>
             <tr className="border-b border-border">

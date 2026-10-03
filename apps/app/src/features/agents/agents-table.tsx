@@ -147,7 +147,7 @@ function initialsOf(name: string): string {
 function Owner({ row }: { row: AgentRow }) {
   if (row.operatorId === null) return <NotRecordedValue />;
   return (
-    <span className="flex min-w-0 items-center gap-[7px] whitespace-nowrap">
+    <span className="flex min-w-0 items-center gap-1.75 whitespace-nowrap">
       <Avatar
         value={row.operatorAvatarUrl}
         initials={initialsOf(row.operatorName ?? row.operatorId)}
@@ -169,7 +169,7 @@ function Owner({ row }: { row: AgentRow }) {
 
 function Sub({ children }: { children: ReactNode }) {
   return (
-    <span className="block font-mono text-sm text-muted-foreground md:truncate">
+    <span className="block font-mono text-xs text-muted-foreground md:truncate">
       {children}
     </span>
   );
@@ -329,10 +329,10 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
                 {row.runtime.name}
               </span>
             )}
-            <span className={`${mono} block text-sm md:truncate`}>
+            <span className={`${mono} block text-xs md:truncate`}>
               {row.host ?? t("list.cells.none")}
             </span>
-            <span className="block text-sm text-muted-foreground md:truncate">
+            <span className="block text-xs text-muted-foreground md:truncate">
               {/* With no host there is no runtime to have a kind, so the
                   line is the tier alone, as the design draws it. */}
               {row.host === null ? null : (
@@ -355,7 +355,7 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
         label: t("list.columns.principal"),
         sort: (row) => row.principalId,
         render: (row) => (
-          <span className={`${mono} text-sm text-muted-foreground`}>
+          <span className={`${mono} text-xs text-muted-foreground`}>
             {row.principalId ?? t("list.cells.principalPending")}
           </span>
         ),
@@ -690,7 +690,7 @@ export function AgentsTable({
           <h2 id={titleId} className={panelTitle}>
             {t("list.title", { workspace })}
           </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="mt-0.5 text-sm text-muted-foreground">
             {t(`list.lead.${set}`)}
           </p>
         </div>
@@ -762,7 +762,7 @@ export function AgentsTable({
         <table
           aria-label={t("list.tableLabel", { workspace })}
           data-column-set={set}
-          className="w-full min-w-[560px] border-collapse text-sm"
+          className="w-full min-w-140 border-collapse text-sm"
         >
           <thead>
             <tr className="border-b border-border">
@@ -903,7 +903,7 @@ export function AgentsTable({
       {more === null && first === null ? null : (
         <nav
           aria-label={t("list.controls.cursor")}
-          className="flex gap-4 px-4 pb-2.5 text-sm"
+          className="flex gap-4 px-4 pb-2.5 text-base"
         >
           {first === null ? null : (
             <SafeLink to={first} className={linkText}>

@@ -111,7 +111,7 @@ export function Invoices({
   if (items.length === 0 && cursor === null) {
     return (
       <Section id="billing-invoices" title={title}>
-        <p className="text-sm text-muted-foreground">{t("empty")}</p>
+        <p className="text-base text-muted-foreground">{t("empty")}</p>
       </Section>
     );
   }

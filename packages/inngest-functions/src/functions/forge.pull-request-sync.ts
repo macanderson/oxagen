@@ -46,6 +46,7 @@ export const forgePullRequestSyncSchema = z.object({
   link: z
     .object({ rootSessionUuid: z.string().uuid(), opened: z.boolean() })
     .optional(),
+  workOrderId: z.string().uuid().optional(),
 });
 
 /**
@@ -53,7 +54,8 @@ export const forgePullRequestSyncSchema = z.object({
  *
  *   1. `upsert-pull-request` writes the row from the delivery's facts, or
  *      reads the forge once when the event carried none, and writes the link
- *      to the run that named it and to that run's work orders.
+ *      to the run that named it, to that run's work orders, and to the work
+ *      order the event names.
  *   2. `capture-diff` reads the head commit's diff against its merge base and
  *      puts the bytes in object storage under a key that names the head, so a
  *      retry writes the same object. It runs only when that head has no

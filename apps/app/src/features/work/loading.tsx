@@ -19,7 +19,7 @@ const bone = "skeleton";
 
 function HeaderBones() {
   return (
-    <div aria-hidden="true" className="flex flex-col gap-2 pb-[18px]">
+    <div aria-hidden="true" className="flex flex-col gap-2 pb-4.5">
       <span className={`${bone} h-3 w-24 rounded-[5px]`} />
       <span className={`${bone} h-7 w-48 max-w-full rounded-[7px]`} />
       <span className={`${bone} h-4 w-96 max-w-full rounded-[5px]`} />
@@ -31,14 +31,14 @@ function RowsPanel({ rows }: { rows: number }) {
   return (
     <div aria-hidden="true" className={panel}>
       <div className={panelHeader}>
-        <span className={`${bone} h-[22px] w-[180px] max-w-full rounded-[7px]`} />
+        <span className={`${bone} h-5.5 w-45 max-w-full rounded-[7px]`} />
       </div>
       <div className={`${panelBody} flex flex-col gap-2`}>
         {Array.from({ length: rows }, (_, row) => (
           <span
             key={row}
             data-skeleton-row=""
-            className={`${bone} h-[38px] rounded-[9px]`}
+            className={`${bone} h-9.5 rounded-[9px]`}
           />
         ))}
       </div>

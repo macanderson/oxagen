@@ -4,7 +4,8 @@
 //
 // - `task`: the run's own task reference, `stated`.
 // - `resolves`: an issue a pull request the run recorded opening closes, as
-//   GitHub records the closing reference, `observed`. A wrapped run's
+//   the forge store's issue links record the closing reference (ADR-292),
+//   `observed`. A wrapped run's
 //   receipts are its `oxagen:pr_link` frames and a ledger run's are its
 //   `provider_publish.pull_request_opened` events. A pull request matched by
 //   branch or head commit adds nothing, because it does not show the run
@@ -89,7 +90,9 @@ const ROW_REF_MAX = 20;
  */
 const LIST_CUTTING = new Set([
   "closing_issue_limit",
+  "closing_issues_not_read",
   "closing_issues_read_failed",
+  "pull_request_not_stored",
   "recorded_repository_not_connected",
   "issue_frame_limit",
   "ledger_event_limit",

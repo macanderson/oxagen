@@ -90,7 +90,7 @@ export function RelationshipEditor({
             placeholder="WORKS_FOR"
             className="font-mono"
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Uppercase only, e.g. WORKS_FOR
           </p>
         </div>

@@ -22,12 +22,12 @@ export function NotFoundPage({ homeHref = "/" }: { homeHref?: string }) {
         <h1 className="mt-4 text-xl font-semibold tracking-tight">
           Page not found
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-base text-muted-foreground">
           The page you’re looking for doesn’t exist or has moved.
         </p>
         <a
           href={homeHref}
-          className="mt-8 inline-flex h-10 items-center justify-center rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90"
+          className="mt-8 inline-flex h-10 items-center justify-center rounded-md bg-primary px-5 text-base font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90"
         >
           Back to home
         </a>

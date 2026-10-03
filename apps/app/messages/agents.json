@@ -575,7 +575,7 @@
             "output": "Output",
             "reasoning": "Reasoning"
           },
-          "inputSplit": "Input is {input} tokens. Tool results, context frames, tool definitions and steering are the recorder's estimates summed over this agent's runs. Conversation and system are measured on each run's requests and not summed over 30 days yet.",
+          "inputSplit": "Input is {input} tokens. Each input class is an estimate summed over this agent's runs. Conversation and system come from the prompt each request sent. Conversation counts every earlier message a request sent again, tool results included, so the input classes overlap.",
           "cacheRate": "Cache hit rate",
           "cacheRateValue": "{rate} with {read} of {input} input tokens served from cache",
           "perRun": "Per run",

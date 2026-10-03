@@ -132,14 +132,14 @@ export function AutoReloadSettings({
         {/* Enable toggle */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex flex-col gap-1">
-            <Label htmlFor="autoreload-switch" className="text-sm font-medium">
+            <Label htmlFor="autoreload-switch" className="text-base font-medium">
               Enable automatic reload
             </Label>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Automatically buy credits when your balance runs low.
             </p>
             {noSubscription && (
-              <p className="text-xs text-destructive">
+              <p className="text-sm text-destructive">
                 Active subscription required to enable automatic reload.
               </p>
             )}
@@ -239,7 +239,7 @@ export function AutoReloadSettings({
 
         {/* Helper copy */}
         {enabled && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             When your balance falls below $
             {parseFloat(threshold || "0").toFixed(2)}, we&apos;ll automatically
             buy ${parseFloat(amount || "0").toFixed(2)} in credits.

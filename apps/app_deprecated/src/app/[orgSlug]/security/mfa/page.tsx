@@ -44,13 +44,13 @@ export default async function SecurityMfaPage({
         actions={
           <Badge
             variant={mfaRequired ? "success" : "muted"}
-            className="shrink-0 text-xs"
+            className="shrink-0 text-sm"
           >
             {mfaRequired ? "Enforced" : "Not enforced"}
           </Badge>
         }
       >
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p className="mb-4 text-base text-muted-foreground">
           Require multi-factor authentication for every member in this
           organization. Satisfies SOC 2 CC6.1 logical access controls and CC6.2
           authentication requirements.
@@ -66,7 +66,7 @@ export default async function SecurityMfaPage({
       {/* Evidence note */}
       <Panel title="Audit evidence">
         Every policy change is recorded as a{" "}
-        <code className="text-xs font-mono bg-muted px-1 rounded">
+        <code className="text-sm font-mono bg-muted px-1 rounded">
           security.mfa_policy_updated
         </code>{" "}
         event in the append-only audit log with actor, timestamp, and outcome —

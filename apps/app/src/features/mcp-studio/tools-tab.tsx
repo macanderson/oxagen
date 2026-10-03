@@ -540,7 +540,7 @@ export function ToolsTab({
           <div className="min-w-0 overflow-x-auto">
             <table
               aria-labelledby="studio-tools-h"
-              className="w-full min-w-[720px] border-collapse text-sm"
+              className="w-full min-w-180 border-collapse text-sm"
             >
               <thead>
                 <tr className="border-b border-border">

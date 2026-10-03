@@ -57,7 +57,7 @@ export function Panel({
           {title}
         </h3>
         {aside === undefined ? null : (
-          <div className="ml-auto flex min-w-0 flex-wrap items-center gap-[7px]">
+          <div className="ml-auto flex min-w-0 flex-wrap items-center gap-1.75">
             {aside}
           </div>
         )}
@@ -144,8 +144,8 @@ export function Meter({
   const width =
     share === null ? 0 : Math.max(1, Math.round(Math.min(1, share) * 100));
   return (
-    <div className="grid gap-[5px]" title={title}>
-      <div className="flex justify-between gap-2.5 text-xs text-muted-foreground">
+    <div className="grid gap-1.25" title={title}>
+      <div className="flex justify-between gap-2.5 text-sm text-muted-foreground">
         <span className="min-w-0">{label}</span>
         <b className="font-semibold tabular-nums text-foreground">{value}</b>
       </div>

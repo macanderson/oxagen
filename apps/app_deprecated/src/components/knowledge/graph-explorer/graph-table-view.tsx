@@ -128,7 +128,7 @@ export function GraphTableView({
             className="pl-8"
           />
         </div>
-        <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
+        <span className="ml-auto shrink-0 text-sm text-muted-foreground tabular-nums">
           {state.total.toLocaleString()} {state.total === 1 ? "node" : "nodes"}
         </span>
       </div>
@@ -144,9 +144,9 @@ export function GraphTableView({
             />
           </div>
         )}
-        <table className="w-full min-w-[36rem] border-collapse text-sm">
+        <table className="w-full min-w-[36rem] border-collapse text-base">
           <thead className="sticky top-0 z-[1] bg-card">
-            <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+            <tr className="border-b border-border text-left text-sm uppercase tracking-wide text-muted-foreground">
               <th className="px-4 py-2 font-medium">Name</th>
               <th className="px-4 py-2 font-medium">Type</th>
               <th className="px-4 py-2 font-medium">ID</th>
@@ -158,7 +158,7 @@ export function GraphTableView({
               <tr>
                 <td
                   colSpan={4}
-                  className="px-4 py-8 text-center text-sm text-destructive"
+                  className="px-4 py-8 text-center text-base text-destructive"
                 >
                   Failed to load nodes.
                 </td>
@@ -170,7 +170,7 @@ export function GraphTableView({
                 <tr>
                   <td
                     colSpan={4}
-                    className="px-4 py-8 text-center text-sm text-muted-foreground"
+                    className="px-4 py-8 text-center text-base text-muted-foreground"
                   >
                     No nodes match.
                   </td>
@@ -204,7 +204,7 @@ export function GraphTableView({
                 <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                   <CopyableId value={n.id} max={14} />
                 </td>
-                <td className="whitespace-nowrap px-4 py-2 text-xs text-muted-foreground">
+                <td className="whitespace-nowrap px-4 py-2 text-sm text-muted-foreground">
                   {n.createdAt ? formatPropertyValue(n.createdAt) : "—"}
                 </td>
               </tr>
@@ -214,7 +214,7 @@ export function GraphTableView({
       </div>
 
       <div className="flex items-center justify-between border-t border-border px-4 py-2.5">
-        <span className="text-xs text-muted-foreground tabular-nums">
+        <span className="text-sm text-muted-foreground tabular-nums">
           Page {page} of {pageCount}
         </span>
         <div className="flex items-center gap-1">

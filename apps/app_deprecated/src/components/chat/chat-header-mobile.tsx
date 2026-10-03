@@ -93,10 +93,10 @@ export function ChatHeaderMobile({
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         )}
       >
-        <span className="w-full truncate text-sm font-medium text-foreground">
+        <span className="w-full truncate text-base font-medium text-foreground">
           {agentName}
         </span>
-        <span className="w-full truncate text-[11px] text-muted-foreground">
+        <span className="w-full truncate text-xs text-muted-foreground">
           {subtitle}
         </span>
       </button>

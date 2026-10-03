@@ -45,7 +45,7 @@ export function ProviderStatusLight({ server }: { server: McpServer }) {
         name={light}
         label={t(`lights.${light}`)}
       />
-      <span className="text-sm text-muted-foreground">
+      <span className="text-xs text-muted-foreground">
         {t(`short.${reason}`)}
       </span>
     </span>
@@ -59,16 +59,16 @@ export function ProviderAuthorization({ server }: { server: McpServer }) {
   const auth = server.authorization;
   if (auth === null) {
     return (
-      <span className="text-xs text-foreground">
+      <span className="text-sm text-foreground">
         {t(`kinds.${server.authKind}`)}
       </span>
     );
   }
   return (
-    <span className="flex flex-col gap-0.5 text-xs">
+    <span className="flex flex-col gap-0.5 text-sm">
       <span className="text-foreground">{t(`states.${auth.state}`)}</span>
       {auth.expiresAt === null ? null : (
-        <span className="text-sm text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {t("expires", {
             when: format.dateTime(new Date(auth.expiresAt), {
               dateStyle: "medium",
@@ -77,7 +77,7 @@ export function ProviderAuthorization({ server }: { server: McpServer }) {
           })}
         </span>
       )}
-      <span className="text-sm text-muted-foreground">
+      <span className="text-xs text-muted-foreground">
         {auth.refreshable ? t("refreshable") : t("notRefreshable")}
       </span>
     </span>
@@ -123,7 +123,7 @@ export function ReconnectProvider({
       {phase.kind === "waiting" ? (
         <span
           role="status"
-          className="flex flex-col gap-1 text-xs text-muted-foreground"
+          className="flex flex-col gap-1 text-sm text-muted-foreground"
         >
           {phase.blockedUrl === null
             ? tOAuth("waiting", { name: server.name })

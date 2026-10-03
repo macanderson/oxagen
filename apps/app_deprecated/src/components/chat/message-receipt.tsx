@@ -87,7 +87,7 @@ export function MessageReceiptLine({
       aria-label={`Run receipt: ${summary}`}
       onClick={() => setExpanded((v) => !v)}
       className={cn(
-        "self-start text-left text-[11px] leading-relaxed text-muted-foreground/80",
+        "self-start text-left text-xs leading-relaxed text-muted-foreground/80",
         "rounded hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className,
       )}

@@ -54,7 +54,7 @@ export default async function KnowledgeCitationsPage({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           Which memories and graph nodes agents actually cite, how useful those
           citations were, and where promoted rules get violated.
         </p>

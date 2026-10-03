@@ -39,7 +39,7 @@ import { SheetDialog } from "@/ui/sheet-dialog";
 import { StellaIcon } from "@/ui/stella-mark";
 
 const slotClass =
-  "relative flex min-h-13 flex-col items-center justify-center gap-1 rounded-lg px-1 text-sm font-semibold focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring aria-[current=page]:text-app-topbar-fg";
+  "relative flex min-h-13 flex-col items-center justify-center gap-1 rounded-lg px-1 text-xs font-semibold focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring aria-[current=page]:text-app-topbar-fg";
 
 /**
  * `.mn .ct.hot`: the slot's count, in the approval ink. A null count is a
@@ -59,7 +59,7 @@ function SlotCount({
   return count === null ? (
     <span
       data-count-unrecorded=""
-      className="absolute left-[calc(50%+6px)] top-0.5 min-w-[18px] rounded-full border border-dashed border-border bg-app-raised-bg px-1 text-center font-mono text-sm text-muted-foreground"
+      className="absolute left-1/2 ml-1.5 top-0.5 min-w-4.5 rounded-full border border-dashed border-border bg-app-raised-bg px-1 text-center font-mono text-xs text-muted-foreground"
     >
       <span aria-hidden="true">?</span>
       <span className="sr-only">{label}</span>
@@ -67,7 +67,7 @@ function SlotCount({
   ) : (
     <span
       data-count={count}
-      className="absolute left-[calc(50%+6px)] top-0.5 min-w-[18px] rounded-full border border-info/40 bg-app-raised-bg px-1 text-center font-mono text-sm text-info"
+      className="absolute left-1/2 ml-1.5 top-0.5 min-w-4.5 rounded-full border border-info/40 bg-app-raised-bg px-1 text-center font-mono text-xs text-info"
     >
       <span aria-hidden="true">
         {count}
@@ -84,7 +84,7 @@ function CurrentMarker() {
     <span
       aria-hidden="true"
       data-current-marker=""
-      className="absolute -top-1.5 left-1/2 h-0.5 w-[26px] -translate-x-1/2 rounded-b-[2px] bg-gold"
+      className="absolute -top-1.5 left-1/2 h-0.5 w-6.5 -translate-x-1/2 rounded-b-[2px] bg-gold"
     />
   );
 }
@@ -152,13 +152,13 @@ function Tile({
         </span>
       )}
       <span className="min-w-0 flex-1">
-        <b className="block truncate text-sm font-semibold">{label}</b>
-        <span className="block truncate text-xs font-normal text-muted-foreground">
+        <b className="block truncate text-base font-semibold">{label}</b>
+        <span className="block truncate text-sm font-normal text-muted-foreground">
           {sub}
         </span>
       </span>
       {count === null ? null : (
-        <span className="flex-none rounded-[5px] border border-info/40 px-[5px] font-mono text-sm text-info">
+        <span className="flex-none rounded-[5px] border border-info/40 px-1.25 font-mono text-xs text-info">
           <span aria-hidden="true">{count}</span>
           <span className="sr-only">{countLabel}</span>
         </span>
@@ -522,7 +522,7 @@ export function NavDrawer({ data }: { data: ShellData }) {
         />
         <Dialog.Popup
           data-testid="nav-drawer"
-          className="fixed inset-y-0 left-0 z-50 flex w-[min(18.75rem,86vw)] flex-col overflow-y-auto border-r border-sidebar-border bg-sidebar-bg pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-sidebar-fg shadow-pop md:hidden"
+          className="fixed inset-y-0 left-0 z-50 flex w-(--drawer-w) flex-col overflow-y-auto border-r border-sidebar-border bg-sidebar-bg pt-safe-top pb-safe-bottom text-sidebar-fg shadow-pop md:hidden"
         >
           {/* The mock's drawer opens on the brand and the switchers; the
               scrim and Escape close it, so it carries no close row. */}

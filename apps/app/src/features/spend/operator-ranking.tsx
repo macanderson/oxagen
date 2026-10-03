@@ -294,14 +294,14 @@ function RankingRow({
             <ul className="mt-1 flex flex-col gap-1">
               {row.topDoneWorkOrders.map((order) => (
                 <li key={order.workOrderId} className="flex flex-col gap-0.5">
-                  <span className="font-mono text-sm">
+                  <span className="font-mono text-xs">
                     {order.workOrderId}
                   </span>
                   {order.runs.map((runId) => (
                     <SafeLink
                       key={runId}
                       to={routes.run(at.org, at.ws, runId, { tab: "cost" })}
-                      className={`${linkText} min-w-0 font-mono text-sm md:truncate`}
+                      className={`${linkText} min-w-0 font-mono text-xs md:truncate`}
                     >
                       {runId}
                     </SafeLink>
@@ -341,7 +341,7 @@ function RankingRow({
                         to={routes.run(at.org, at.ws, run.runId, {
                           tab: "cost",
                         })}
-                        className={`${linkText} min-w-0 font-mono text-sm md:truncate`}
+                        className={`${linkText} min-w-0 font-mono text-xs md:truncate`}
                       >
                         {run.runId}
                       </SafeLink>
@@ -385,7 +385,7 @@ function RankingRow({
                 >
                   <SafeLink
                     to={routes.run(at.org, at.ws, run.runId, { tab: "cost" })}
-                    className={`${linkText} min-w-0 font-mono text-sm md:truncate`}
+                    className={`${linkText} min-w-0 font-mono text-xs md:truncate`}
                   >
                     {run.runId}
                   </SafeLink>

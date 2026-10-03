@@ -72,6 +72,7 @@ export function sendSummary(
     runtime: { name: "CI runner 6", tier: "gateway" },
     requestedAt: "2026-09-30T13:02:00Z",
     pullRequest: null,
+    pullRequests: [],
     checks: "no_pull_request",
     gate: { open: false, block: "run_active", detail: null },
     accepted: false,
@@ -196,6 +197,7 @@ export function outcomes(
       total: { micros: "412370000", currency: "USD" },
     },
     reopens: { cohort: 14, reopened: 1, waiting: 9 },
+    reverts: { cohort: 14, reverted: 2, waiting: 9 },
     truncated: false,
     weeks: [
       { week: "2026-09-07", acceptedMerged: 5, returned: 2, medianLeadHours: 22 },

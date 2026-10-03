@@ -149,13 +149,13 @@ export default async function SecurityCompliancePage({
         actions={
           <Badge
             variant={pct >= 80 ? "success" : pct >= 50 ? "warning" : "error"}
-            className="shrink-0 text-sm font-semibold px-2.5"
+            className="shrink-0 text-base font-semibold px-2.5"
           >
             {pct}% ready
           </Badge>
         }
       >
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p className="mb-4 text-base text-muted-foreground">
           Trust Service Criteria control status — derived from live platform
           signals, not static declarations.
         </p>
@@ -165,7 +165,7 @@ export default async function SecurityCompliancePage({
             style={{ width: `${pct}%` }}
           />
         </div>
-        <div className="flex gap-4 text-xs text-muted-foreground">
+        <div className="flex gap-4 text-sm text-muted-foreground">
           <span>
             <span className="font-semibold text-success">{summary.active}</span>{" "}
             active
@@ -198,7 +198,7 @@ export default async function SecurityCompliancePage({
           </Button>
         }
       >
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p className="mb-4 text-base text-muted-foreground">
           Trust Service Criteria controls and their current status. Every status
           is derived from live system signals.
         </p>
@@ -207,7 +207,7 @@ export default async function SecurityCompliancePage({
           return (
             <div key={category}>
               {catIdx > 0 && <Separator className="my-5" />}
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
+              <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-3">
                 {category}
               </p>
               <div className="flex flex-col gap-2">
@@ -220,24 +220,24 @@ export default async function SecurityCompliancePage({
                       <ControlStatusIcon status={ctrl.status} />
                       <div className="flex flex-col gap-0.5 min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-xs font-semibold text-foreground">
+                          <span className="font-mono text-sm font-semibold text-foreground">
                             {ctrl.criterion}
                           </span>
-                          <span className="text-sm font-medium text-foreground">
+                          <span className="text-base font-medium text-foreground">
                             {ctrl.title}
                           </span>
                         </div>
-                        <p className="text-xs text-muted-foreground leading-snug">
+                        <p className="text-sm text-muted-foreground leading-snug">
                           {ctrl.description}
                         </p>
-                        <p className="text-xs text-muted-foreground/70 leading-snug italic mt-0.5">
+                        <p className="text-sm text-muted-foreground/70 leading-snug italic mt-0.5">
                           {ctrl.rationale}
                         </p>
                       </div>
                     </div>
                     <Badge
                       variant={STATUS_VARIANT[ctrl.status]}
-                      className="shrink-0 self-start text-xs"
+                      className="shrink-0 self-start text-sm"
                     >
                       {STATUS_LABEL[ctrl.status]}
                     </Badge>

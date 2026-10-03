@@ -113,8 +113,8 @@ function Row({
 }) {
   return (
     <>
-      <dt className={`${kvTerm} text-sm`}>{label}</dt>
-      <dd className={`${kvValue} text-xs`}>{children}</dd>
+      <dt className={`${kvTerm} text-xs`}>{label}</dt>
+      <dd className={`${kvValue} text-sm`}>{children}</dd>
     </>
   );
 }
@@ -163,7 +163,7 @@ function ChangesBody({
     ) : undefined;
   return (
     <Panel title={t("changes")} aside={head} testId="run-changes">
-      <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-[7px]">
+      <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1.75">
         <Row label={t("pullRequest")}>
           {!work.ok ? (
             <ReadFailure read={work} section={t("pullRequest")} />
@@ -323,7 +323,7 @@ function ChangesBody({
             {files.slice(0, FILE_ROWS).map((node) => (
               <li
                 key={`${node.chainRef ?? ""}:${node.seq ?? ""}:${node.name}`}
-                className="flex min-w-0 justify-between gap-2.5 border-b border-border py-[5px] text-sm"
+                className="flex min-w-0 justify-between gap-2.5 border-b border-border py-1.25 text-xs"
               >
                 <span className="min-w-0 truncate font-mono" data-truncate={node.name}>
                   {node.name}
@@ -335,7 +335,7 @@ function ChangesBody({
               </li>
             ))}
             {files.length > FILE_ROWS ? (
-              <li className="py-[5px] text-sm text-dim">
+              <li className="py-1.25 text-xs text-dim">
                 {t("more", { count: files.length - FILE_ROWS })}
               </li>
             ) : null}
@@ -346,7 +346,7 @@ function ChangesBody({
                 tab: "transcript",
                 kinds: "tools",
               })}
-              className={`${buttonSecondary} min-h-7 px-2.5 text-xs`}
+              className={`${buttonSecondary} min-h-7 px-2.5 text-sm`}
             >
               {t("openDiff")}
             </SafeLink>
@@ -383,7 +383,7 @@ export function ChangesLoading() {
       <p
         role="status"
         aria-busy="true"
-        className="text-xs text-muted-foreground"
+        className="text-sm text-muted-foreground"
       >
         {t("loading")}
       </p>

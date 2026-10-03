@@ -40,7 +40,7 @@ function oneLine(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-const sub = "mt-0.5 block max-w-[24ch] truncate text-sm text-dim";
+const sub = "mt-0.5 block max-w-cell-narrow truncate text-xs text-dim";
 
 function where(row: ResolvedRow): { line: number; file: string } {
   return { line: row.record.line, file: row.record.file };
@@ -183,7 +183,7 @@ function WordsCell({ row }: { row: ResolvedRow }) {
       ) : (
         <span
           data-truncate={words}
-          className="block max-w-[20ch] truncate text-foreground"
+          className="block max-w-cell-narrow truncate text-foreground"
         >
           {t("grid.quoted", { words })}
         </span>
@@ -310,7 +310,7 @@ function RecordRow({
       <td>
         <span
           data-truncate={record.statement}
-          className={`block max-w-[34ch] truncate ${row.action === "skip" ? "text-muted-foreground" : "text-foreground"}`}
+          className={`block max-w-cell-wide truncate ${row.action === "skip" ? "text-muted-foreground" : "text-foreground"}`}
         >
           {oneLine(record.statement)}
         </span>
@@ -406,7 +406,7 @@ function MemoryRow({
       <td>
         <span
           data-truncate={memory.statement}
-          className={`block max-w-[34ch] truncate ${row.action === "skip" ? "text-muted-foreground" : "text-foreground"}`}
+          className={`block max-w-cell-wide truncate ${row.action === "skip" ? "text-muted-foreground" : "text-foreground"}`}
         >
           {oneLine(memory.statement)}
         </span>

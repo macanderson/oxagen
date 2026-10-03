@@ -137,11 +137,19 @@ type ProposalPatch = Partial<
  * Guards on a proposal write, beyond its status. `headSha` ties the write to
  * the checks that ran on that head. `noClaimSince` refuses a proposal a merge
  * claimed after that instant (see MERGE_CLAIM_SECONDS), so nothing else moves
- * it while the merge lands.
+ * it while the merge lands. `claimedAt` applies the write only while the
+ * merge claim is still exactly that instant: the claim the caller wrote.
  */
 export interface ProposalGuard {
   headSha?: string;
   noClaimSince?: Date;
+  /**
+   * The claim's instant is its owner (#4567). Another merge can claim the row
+   * only once this claim has lapsed, ten minutes later, so two claims never
+   * share an instant, and a call that outlived its claim cannot clear a newer
+   * one.
+   */
+  claimedAt?: Date;
 }
 
 export type PublishedRecordRow = Omit<
@@ -550,6 +558,12 @@ export function refusedWrite(
     current.mergeClaimedAt.getTime() > guard.noClaimSince.getTime()
   )
     return mergeInProgress(current.publicId, current.mergeClaimedAt);
+  if (
+    guard?.claimedAt !== undefined &&
+    current.mergeClaimedAt !== null &&
+    current.mergeClaimedAt.getTime() !== guard.claimedAt.getTime()
+  )
+    return mergeInProgress(current.publicId, current.mergeClaimedAt);
   return proposalMoved(current.publicId, current.status);
 }
 
@@ -782,6 +796,9 @@ export const postgresSteeringStore: SteeringStore = {
               : undefined,
             guard?.noClaimSince !== undefined
               ? or(isNull(claimCol), lte(claimCol, guard.noClaimSince))
+              : undefined,
+            guard?.claimedAt !== undefined
+              ? eq(claimCol, guard.claimedAt)
               : undefined,
           ),
         )

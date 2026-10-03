@@ -4,12 +4,14 @@
 // Six tiles say how much a person accepted and merged, how much came back, how
 // much closed and why, how long it took, how often a person touched it, and
 // what it cost with the share of runs whose cost oxagen knows. Under them sit
-// the weekly trend, the touches by kind, the cost coverage, and the reopens.
+// the weekly trend, the touches by kind, the cost coverage, and the reopens and
+// reverts.
 //
 // The page keeps the spec's rules. Accepted, returned and closed never add up
 // into one rate. Lead time names its median, its p90 and its sample. An
-// unknown cost stays unknown and never reads as zero. Reopens count only items
-// merged 30 or more days ago, and the page says reverts are not recorded. In-app
+// unknown cost stays unknown and never reads as zero. Reopens and reverts count
+// only items merged 30 or more days ago. The page says a revert counts only
+// when GitHub links it, and a revert made by hand is not counted. In-app
 // triage spend is on Billing, outside these figures. No person is named or
 // ranked. Nothing on the page writes.
 import { useLocale, useTranslations } from "next-intl";
@@ -188,7 +190,7 @@ function WeeklyTrend({ weeks }: { weeks: WorkOutcomes["weeks"] }) {
         <h2 id="work-outcomes-weeks-title" className={panelTitle}>
           {t("weeks.title")}
         </h2>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           {t("weeks.caption", { count: weeks.length })}
         </span>
       </div>
@@ -315,7 +317,13 @@ function CostCoverage({
   );
 }
 
-function Reopens({ reopens }: { reopens: WorkOutcomes["reopens"] }) {
+function Reopens({
+  reopens,
+  reverts,
+}: {
+  reopens: WorkOutcomes["reopens"];
+  reverts: WorkOutcomes["reverts"];
+}) {
   const t = useTranslations("work.outcomes.reopens");
   const locale = useLocale();
   return (
@@ -338,6 +346,10 @@ function Reopens({ reopens }: { reopens: WorkOutcomes["reopens"] }) {
           <dt className={kvTerm}>{t("reopened")}</dt>
           <dd className={kvValue} data-figure="reopened">
             {formatCount(reopens.reopened, locale)}
+          </dd>
+          <dt className={kvTerm}>{t("reverted")}</dt>
+          <dd className={kvValue} data-figure="reverted">
+            {formatCount(reverts.reverted, locale)}
           </dd>
         </dl>
         <p className="text-sm text-muted-foreground">
@@ -407,7 +419,10 @@ function OutcomesView({
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
             <CostCoverage org={org} cost={read.value.cost} />
-            <Reopens reopens={read.value.reopens} />
+            <Reopens
+              reopens={read.value.reopens}
+              reverts={read.value.reverts}
+            />
           </div>
         </>
       )}

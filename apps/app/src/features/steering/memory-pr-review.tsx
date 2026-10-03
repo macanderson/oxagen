@@ -53,9 +53,9 @@ function Memory({ at, memory }: { at: SteeringAt; memory: MemoryPrMemory }) {
   const t = useTranslations("steering.pr.memory");
   const { runs, other } = evidenceOf(memory);
   return (
-    <li data-memory="" className="flex flex-col gap-0.5 text-sm">
+    <li data-memory="" className="flex flex-col gap-0.5 text-base">
       <span className="text-foreground">{memory.statement}</span>
-      <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-muted-foreground">
+      <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted-foreground">
         <span data-agent="">{memory.agent ?? t("unknownAgent")}</span>
         {runs.length === 0 && other.length === 0 ? null : (
           <>
@@ -100,16 +100,16 @@ export function MemoryPrReview({
           data-memory-record={record.path}
           className="flex flex-col gap-2 rounded-md border border-border p-3"
         >
-          <h4 className="text-sm font-semibold text-foreground">
+          <h4 className="text-base font-semibold text-foreground">
             {record.title}
           </h4>
-          <p className={`${mono} text-xs text-muted-foreground`}>
+          <p className={`${mono} text-sm text-muted-foreground`}>
             {record.path}
           </p>
-          <p className="text-sm text-foreground">{record.summary}</p>
+          <p className="text-base text-foreground">{record.summary}</p>
           {record.memories.length === 0 ? null : (
             <div className="flex flex-col gap-1">
-              <p className="text-xs font-medium text-muted-foreground">
+              <p className="text-sm font-medium text-muted-foreground">
                 {t("memories")}
               </p>
               <ul className="flex flex-col gap-2">

@@ -15,6 +15,9 @@
  * See packages/ui/src/styles/fonts/README.md for the family/weight map.
  */
 @import "@oxagen/ui/styles/globals.css";
+/* The kit's text scale, as in apps/app: text-base is the app base (14px),
+   text-sm and text-xs are smaller, and text-lg and up are larger. */
+@import "@oxagen/ui/styles/house-text-scale.css";
 
 /**
  * Streamdown streaming animation keyframes (sd-fadeIn, sd-blurIn, sd-slideUp).
@@ -34,6 +37,17 @@
 
 /* Scan the components folder located one directory up */
 @source "../components";
+
+/* The text steps above text-3xl, as in apps/app/src/app/globals.css: the
+   kit's base times a ratio, at Tailwind's stock 36px, 48px and 60px. */
+@theme inline {
+  --text-4xl: calc(var(--ox-a-base) * 18 / 7);
+  --text-4xl--line-height: var(--ox-a-h1-leading);
+  --text-5xl: calc(var(--ox-a-base) * 24 / 7);
+  --text-5xl--line-height: var(--ox-a-h1-leading);
+  --text-6xl: calc(var(--ox-a-base) * 30 / 7);
+  --text-6xl--line-height: var(--ox-a-h1-leading);
+}
 
 /* Headings used to be overridden here to borrow the wordmark's face back from
  * a separate display family. The house system is ONE face — --font-display and

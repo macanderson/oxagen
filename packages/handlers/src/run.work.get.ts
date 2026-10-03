@@ -31,7 +31,6 @@ import { githubConnectionFor } from "./lib/run-pull-request-backfill";
 import {
   readLedgerPrReceipts,
   readWorkPullRequests,
-  type RecordedRunPr,
 } from "./lib/run-work-prs";
 import { readWorkReleases } from "./lib/run-work-releases";
 import { runScope } from "./run.list";
@@ -71,10 +70,8 @@ export function createRunWorkGetHandler(
       const repositories = await deps.repositories(scope);
       const prs = await deps.pullRequests(
         scope,
-        [],
+        { runId: input.runId, checkouts: [], receipts: ledger.receipts },
         repositories,
-        undefined,
-        ledger.receipts,
       );
       return {
         runId: input.runId,
@@ -112,14 +109,16 @@ export function createRunWorkGetHandler(
       .slice(0, WORK_CONTEXT_CAP)
       .map((row) => checkoutOf(row, repositories));
     // A PR the harness linked is a receipt: it names the PR outright, so it
-    // is read by number and marked `recorded`, and a branch match that finds
-    // the same PR merges into it rather than listing it twice.
-    const receipts: RecordedRunPr[] = [];
+    // is looked up in the forge store by repository and number and marked
+    // `recorded`, and a branch match that finds the same PR merges into it
+    // rather than listing it twice (ADR-292).
+    const prLinks: { owner: string; name: string; number: number }[] = [];
     const linkWarnings = new Set<string>();
-    // A PR in a repository the workspace does not link is read through the
-    // workspace's own GitHub connection for its owner. Before #5296 every
-    // such link was dropped, and the section said "No pull request" for a
-    // run that opened several.
+    // A PR in a repository the workspace does not link lists from the forge
+    // store like any other, and its checks are read through the workspace's
+    // own GitHub connection for its owner. Before #5296 every such link was
+    // dropped, and the section said "No pull request" for a run that opened
+    // several.
     const unlinkedRepository = unlinkedRepositoryResolver(
       scope,
       deps.githubConnection,
@@ -131,35 +130,21 @@ export function createRunWorkGetHandler(
         linkWarnings.add("pr_link_unreadable");
         continue;
       }
-      const repo = repositories.find(
-        (candidate) =>
-          candidate.owner.toLowerCase() === link.owner.toLowerCase() &&
-          candidate.name.toLowerCase() === link.name.toLowerCase(),
-      );
-      if (repo?.providerRepositoryId) {
-        receipts.push({
-          repositoryId: repo.providerRepositoryId,
-          number: link.number,
-          headSha: null,
-        });
-        continue;
-      }
-      const other =
-        repo === undefined ? await unlinkedRepository(link) : "not_connected";
-      if (other === "lookup_failed") {
-        linkWarnings.add("pull_request_read_failed");
-        continue;
-      }
-      if (other === "not_connected") {
-        linkWarnings.add("recorded_repository_not_connected");
-        continue;
-      }
-      receipts.push({ repository: other, number: link.number, headSha: null });
+      prLinks.push(link);
     }
-    // The pull requests and the releases are separate GitHub reads, so they
-    // run side by side.
+    // The pull requests' checks and the releases are separate GitHub reads,
+    // so they run side by side.
     const [prs, releases] = await Promise.all([
-      deps.pullRequests(scope, checkouts, repositories, undefined, receipts),
+      deps.pullRequests(
+        scope,
+        {
+          runId: input.runId,
+          checkouts,
+          links: prLinks,
+          unlinked: unlinkedRepository,
+        },
+        repositories,
+      ),
       deps.releases(scope, frames, checkouts, repositories),
     ]);
     const warnings = [

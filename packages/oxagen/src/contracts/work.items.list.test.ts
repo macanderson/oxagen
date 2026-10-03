@@ -30,6 +30,19 @@ const ROW = {
     runtime: { name: "Laptop", tier: "gateway" },
     requested_at: "2026-10-01T10:04:00.000Z",
     pull_request: { repository: "acme/web", number: 12, url: "https://github.com/acme/web/pull/12", head: HEAD },
+    pull_requests: [
+      {
+        id: "fpr_01",
+        provider: "github",
+        repository: "acme/web",
+        number: 12,
+        url: "https://github.com/acme/web/pull/12",
+        title: "Fix the invite link",
+        state: "open",
+        head: HEAD,
+        state_seen_at: "2026-10-01T10:08:00.000Z",
+      },
+    ],
     checks: "passing",
     gate: { open: true, block: null, detail: null },
     accepted: false,
@@ -74,5 +87,19 @@ describe("list_work_items contract", () => {
     expect(withRow({ status: "proven" })).toBe(false);
     expect(withRow({ owner: "Dana" })).toBe(false);
     expect(withRow({ cost: { runs: 1, known_runs: 1, total: { micros: "1.5", currency: "USD" } } })).toBe(false);
+  });
+
+  it("lists every pull request the send has, a draft and a 64-character head included", () => {
+    const [first] = ROW.send.pull_requests;
+    const second = { ...first, id: "fpr_02", number: 13, title: null, state: "draft", head: "b".repeat(64) };
+    const withPulls = (pulls: unknown[]) =>
+      contract.output.safeParse({ ...OUTPUT, items: [{ ...ROW, send: { ...ROW.send, pull_requests: pulls } }] }).success;
+    expect(withPulls([second, first])).toBe(true);
+    expect(withPulls([])).toBe(true);
+    expect(withPulls([{ ...first, state: "closing" }])).toBe(false);
+    expect(withPulls([{ ...first, head: "B".repeat(40) }])).toBe(false);
+    expect(withPulls([{ ...first, checks: "passing" }])).toBe(false);
+    const withoutPulls = Object.fromEntries(Object.entries(ROW.send).filter(([key]) => key !== "pull_requests"));
+    expect(contract.output.safeParse({ ...OUTPUT, items: [{ ...ROW, send: withoutPulls }] }).success).toBe(false);
   });
 });

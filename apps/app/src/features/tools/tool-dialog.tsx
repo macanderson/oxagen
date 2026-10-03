@@ -89,7 +89,7 @@ function Select<T extends string>({
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-foreground">
+      <label htmlFor={id} className="text-base font-medium text-foreground">
         {label}
       </label>
       <select
@@ -170,7 +170,7 @@ function ClassificationForm({
 
   return (
     <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">{t("classify.lead")}</p>
+      <p className="text-base text-muted-foreground">{t("classify.lead")}</p>
       <div className="grid gap-3 sm:grid-cols-3">
         <Select
           id="riskGrade"
@@ -198,7 +198,7 @@ function ClassificationForm({
         <div className="flex min-w-0 flex-col gap-1.5">
           <label
             htmlFor="impacts"
-            className="text-sm font-medium text-foreground"
+            className="text-base font-medium text-foreground"
           >
             {t("classify.impacts")}
           </label>
@@ -211,14 +211,14 @@ function ClassificationForm({
             placeholder={t("classify.tagsPlaceholder")}
             className={`${inputBase} ${mono}`}
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t("classify.tagsHint")}
           </p>
         </div>
         <div className="flex min-w-0 flex-col gap-1.5">
           <label
             htmlFor="dataClasses"
-            className="text-sm font-medium text-foreground"
+            className="text-base font-medium text-foreground"
           >
             {t("classify.dataClasses")}
           </label>
@@ -232,13 +232,13 @@ function ClassificationForm({
             placeholder={t("classify.dataClassesPlaceholder")}
             className={`${textareaBase} ${mono}`}
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t("classify.dataClassesHint")}
           </p>
         </div>
       </div>
       <div className="flex min-w-0 flex-col gap-1.5">
-        <label htmlFor="reason" className="text-sm font-medium text-foreground">
+        <label htmlFor="reason" className="text-base font-medium text-foreground">
           {t("classify.reason")}
         </label>
         <textarea
@@ -249,7 +249,7 @@ function ClassificationForm({
           maxLength={500}
           className={textareaBase}
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {t("classify.reasonHint")}
         </p>
       </div>
@@ -272,7 +272,7 @@ type ToolTab = "overview" | "examples" | "details" | "classification";
 
 /** The tab style the Account dialog set, with room for a count. */
 const TAB_CLASS =
-  "inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring aria-selected:border-brand aria-selected:text-foreground";
+  "inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3 text-base font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring aria-selected:border-brand aria-selected:text-foreground";
 
 /**
  * A value copied to the clipboard. The clipboard can refuse (an insecure
@@ -305,7 +305,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
           <CopyIcon aria-hidden="true" className="size-3.5" />
         )}
       </button>
-      <span role="status" className="text-sm text-muted-foreground">
+      <span role="status" className="text-xs text-muted-foreground">
         {state === "copied"
           ? t("copied")
           : state === "failed"
@@ -340,8 +340,8 @@ function Tile({
     <div
       className={`flex min-w-0 flex-col gap-1 bg-dialog-bg px-3 py-2.5 ${wide ? "col-span-2 sm:col-span-1" : ""}`}
     >
-      <dt className="text-xs text-muted-foreground">{term}</dt>
-      <dd className="min-w-0 break-words text-sm text-foreground">
+      <dt className="text-sm text-muted-foreground">{term}</dt>
+      <dd className="min-w-0 break-words text-base text-foreground">
         {children}
       </dd>
     </div>
@@ -413,7 +413,7 @@ function Overview({
       {version.classification === null ? (
         <div
           data-testid="tool-unclassified"
-          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/50 bg-warning/10 px-3 py-2.5 text-sm text-foreground"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/50 bg-warning/10 px-3 py-2.5 text-base text-foreground"
         >
           <p>{t("overview.unclassified")}</p>
           {canClassify ? (
@@ -428,7 +428,7 @@ function Overview({
         </div>
       ) : null}
       {empty ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           {t("overview.noDescription")}
         </p>
       ) : prose === "" ? null : (
@@ -445,7 +445,7 @@ function Examples({ description }: { description: ToolDescription }) {
   const id = useId();
   return (
     <div className="flex flex-col gap-5">
-      <p className="text-sm text-muted-foreground">{t("examples.lead")}</p>
+      <p className="text-base text-muted-foreground">{t("examples.lead")}</p>
       {description.examples.map((example, index) => {
         const title =
           example.title ?? t("examples.untitled", { number: index + 1 });
@@ -711,7 +711,7 @@ export function ToolDialog({
               }}
             />
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               {t("classify.denied")}
             </p>
           ),

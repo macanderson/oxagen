@@ -71,10 +71,10 @@ export function MfaPolicyForm({
       {/* MFA required toggle */}
       <div className="flex flex-col gap-1 rounded-xl border border-border/60 bg-muted/30 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-0.5">
-          <span className="text-sm font-medium text-foreground">
+          <span className="text-base font-medium text-foreground">
             Require MFA for all members
           </span>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             When enabled, every member must enroll in multi-factor
             authentication. Members who have not enrolled are blocked after the
             grace period. (CC6.1 / CC6.2)
@@ -94,11 +94,11 @@ export function MfaPolicyForm({
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="grace-period"
-            className="text-sm font-medium text-foreground"
+            className="text-base font-medium text-foreground"
           >
             Enforcement grace period
           </label>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             How long a member without MFA can still access the org before being
             blocked. Applies from the moment the policy is enabled.
           </p>
@@ -109,7 +109,7 @@ export function MfaPolicyForm({
               canEdit && setMfaGraceHours(Number(e.target.value))
             }
             disabled={!canEdit}
-            className="w-full max-w-xs rounded-md border border-border/60 bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+            className="w-full max-w-xs rounded-md border border-border/60 bg-background px-3 py-2 text-base text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
           >
             {GRACE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -122,10 +122,10 @@ export function MfaPolicyForm({
 
       {/* Status feedback */}
       {status === "error" && errorMsg && (
-        <p className="text-sm text-destructive">{errorMsg}</p>
+        <p className="text-base text-destructive">{errorMsg}</p>
       )}
       {status === "saved" && (
-        <p className="text-sm text-success" role="status">
+        <p className="text-base text-success" role="status">
           Policy saved.
         </p>
       )}
@@ -141,7 +141,7 @@ export function MfaPolicyForm({
             {status === "saving" ? "Saving…" : "Save policy"}
           </Button>
           {!isDirty && status === "idle" && (
-            <Badge variant="muted" className="text-xs">
+            <Badge variant="muted" className="text-sm">
               No changes
             </Badge>
           )}
@@ -149,7 +149,7 @@ export function MfaPolicyForm({
       )}
 
       {!canEdit && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Owner or admin role required to change the MFA policy.
         </p>
       )}

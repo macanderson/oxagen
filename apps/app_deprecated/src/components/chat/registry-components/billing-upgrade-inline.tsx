@@ -123,7 +123,7 @@ export default function BillingUpgradeInline({
             className="h-5 w-5 shrink-0 text-success"
             aria-hidden="true"
           />
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-base font-medium text-foreground">
             Redirecting to checkout…
           </p>
         </div>
@@ -144,7 +144,7 @@ export default function BillingUpgradeInline({
           className="h-4 w-4 shrink-0 text-muted-foreground"
           aria-hidden="true"
         />
-        <span className="text-sm font-semibold text-foreground">
+        <span className="text-base font-semibold text-foreground">
           Upgrade plan
         </span>
       </div>
@@ -166,14 +166,14 @@ export default function BillingUpgradeInline({
             aria-pressed={selected === plan.slug}
           >
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">
+              <span className="text-base font-medium text-foreground">
                 {plan.label}
               </span>
-              <span className="text-xs font-medium text-muted-foreground">
+              <span className="text-sm font-medium text-muted-foreground">
                 {plan.price}
               </span>
             </div>
-            <p className="mt-0.5 text-xs text-muted-foreground">
+            <p className="mt-0.5 text-sm text-muted-foreground">
               {plan.description}
             </p>
           </button>
@@ -183,7 +183,7 @@ export default function BillingUpgradeInline({
       {formState === "error" && errorMessage !== null && (
         <p
           role="alert"
-          className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-base text-destructive"
         >
           {errorMessage}
         </p>

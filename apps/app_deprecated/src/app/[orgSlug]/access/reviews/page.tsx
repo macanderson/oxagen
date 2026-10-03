@@ -105,20 +105,20 @@ export default async function AccessReviewsPage({
         title={
           <>
             Access review{" "}
-            <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+            <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
               {members.length}
             </span>
           </>
         }
       >
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p className="mb-4 text-base text-muted-foreground">
           Quarterly review of all org members, roles, and last-active
           timestamps. Confirm or revoke each member&apos;s access to satisfy SOC
           2 CC6.3 access provisioning evidence.
         </p>
 
         {members.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No members found.</p>
+          <p className="text-base text-muted-foreground">No members found.</p>
         ) : (
           <>
             {/* Column headers */}
@@ -131,7 +131,7 @@ export default async function AccessReviewsPage({
               {["Member", "Role", "Joined", "Last active", ""].map((h) => (
                 <span
                   key={h}
-                  className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                  className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
                 >
                   {h}
                 </span>
@@ -142,7 +142,7 @@ export default async function AccessReviewsPage({
               {members.map((m) => (
                 <div
                   key={m.userId}
-                  className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm grid grid-cols-1 gap-y-1.5 sm:gap-4 sm:items-center"
+                  className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-base grid grid-cols-1 gap-y-1.5 sm:gap-4 sm:items-center"
                   style={{
                     gridTemplateColumns:
                       "minmax(0,1.8fr) 80px 140px 140px 180px",
@@ -154,7 +154,7 @@ export default async function AccessReviewsPage({
                       {m.userName ?? m.userEmail}
                     </span>
                     {m.userName && (
-                      <span className="text-xs text-muted-foreground truncate">
+                      <span className="text-sm text-muted-foreground truncate">
                         {m.userEmail}
                       </span>
                     )}
@@ -163,18 +163,18 @@ export default async function AccessReviewsPage({
                   {/* Role */}
                   <Badge
                     variant={ROLE_VARIANT[m.role] ?? "outline"}
-                    className="w-fit text-xs capitalize"
+                    className="w-fit text-sm capitalize"
                   >
                     {m.role}
                   </Badge>
 
                   {/* Joined */}
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-sm text-muted-foreground">
                     {formatDate(m.joinedAt)}
                   </span>
 
                   {/* Last active */}
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-sm text-muted-foreground">
                     {formatDate(m.lastActiveAt)}
                   </span>
 

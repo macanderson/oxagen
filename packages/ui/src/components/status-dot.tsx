@@ -76,7 +76,7 @@ function StatusDot({
         />
       </span>
       {label != null ? (
-        <span className="text-xs font-medium text-foreground">{label}</span>
+        <span className="text-sm font-medium text-foreground">{label}</span>
       ) : srLabel ? (
         <span className="sr-only">{srLabel}</span>
       ) : null}

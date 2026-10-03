@@ -64,7 +64,7 @@ export function RecordTypeSelector() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-foreground">
+        <p className="text-base font-medium text-foreground">
           Record types to sync
         </p>
         {recordTypes.selectionMode === "multi" &&
@@ -72,7 +72,7 @@ export function RecordTypeSelector() {
             <button
               type="button"
               onClick={toggleAll}
-              className="text-xs text-primary hover:underline"
+              className="text-sm text-primary hover:underline"
             >
               {allSelected ? "Deselect all" : "Select all"}
             </button>
@@ -114,11 +114,11 @@ export function RecordTypeSelector() {
                 )}
               </button>
               <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-sm font-medium text-foreground">
+                <span className="text-base font-medium text-foreground">
                   {rt.displayName}
                 </span>
                 {rt.description && (
-                  <span className="text-xs text-muted-foreground leading-relaxed">
+                  <span className="text-sm text-muted-foreground leading-relaxed">
                     {rt.description}
                   </span>
                 )}

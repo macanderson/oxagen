@@ -11,6 +11,8 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { MouseEvent, ReactNode } from "react";
@@ -566,7 +568,17 @@ describe("the other dialogs on a phone", () => {
     const menu = await screen.findByTestId("command-menu");
     expect(menu).toHaveAttribute("data-sheet");
     expect(menu.querySelector("[data-sheet-handle]")).not.toBeNull();
-    expect(style(within(menu).getByRole("combobox")).fontSize).toBe("16px");
+    // phone.css sets the field from the kit's touch size, max(16px, the
+    // base). jsdom does not resolve a custom property, so the test reads it.
+    expect(style(within(menu).getByRole("combobox")).fontSize).toBe(
+      "var(--text-input-touch)",
+    );
+    // Vitest runs from apps/app.
+    const kit = readFileSync(
+      path.join(process.cwd(), "../../packages/ui/src/styles/house-tailwind.css"),
+      "utf8",
+    );
+    expect(kit).toMatch(/--text-input-touch:\s*max\(16px,/);
   });
 
   it("the drawer opens over a scrim with the sidebar's nine links", async () => {

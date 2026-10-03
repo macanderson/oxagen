@@ -45,7 +45,7 @@ export function CreditBalance({ balanceCents, ledger }: CreditBalanceProps) {
         Recent ledger entries
       </Button>
       {open ? (
-        <ul className="mt-2 divide-y divide-border/60 text-sm">
+        <ul className="mt-2 divide-y divide-border/60 text-base">
           {ledger.length === 0 ? (
             <li className="py-2 text-muted-foreground">No ledger entries.</li>
           ) : (
@@ -53,7 +53,7 @@ export function CreditBalance({ balanceCents, ledger }: CreditBalanceProps) {
               <li key={e.id} className="flex items-center justify-between py-2">
                 <div>
                   <div className="font-medium">{e.reason}</div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-sm text-muted-foreground">
                     {formatDate(e.createdAt)}
                   </div>
                 </div>

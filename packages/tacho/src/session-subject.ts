@@ -17,6 +17,43 @@ export const SUMMARY_MAX_SENTENCES = 3;
 /** A run summary keeps this many code points at most. */
 export const SUMMARY_MAX_CHARS = 400;
 
+// The notes `run.enrich` ends an account with. They live beside
+// `clipSummary`, so a view that cuts a long summary keeps them, and the
+// writer and the view share one text (#4622).
+
+/** The account's last sentence when the budget stopped the job early. */
+export const ENRICHMENT_BUDGET_NOTE =
+  " The account covers only the start of the run: its enrichment budget ran out before the rest was read.";
+
+/** The account's sentence when its input reached a read limit. */
+export const ENRICHMENT_LIMIT_NOTE =
+  " The account covers only the start of the run because its transcript reached a read limit.";
+
+const PARTIAL_NOTE_HEAD = "Evidence is partial: ";
+const PARTIAL_NOTE_TAIL = " recorded bodies were unavailable.";
+
+/** The account's sentence when some recorded bodies could not be read. */
+export function partialEvidenceNote(missing: number): string {
+  return missing > 0
+    ? ` ${PARTIAL_NOTE_HEAD}${String(missing)}${PARTIAL_NOTE_TAIL}`
+    : "";
+}
+
+const escapeRegExp = (text: string): string =>
+  text.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+
+const NOTE_SOURCE = [
+  `${escapeRegExp(PARTIAL_NOTE_HEAD)}\\d+${escapeRegExp(PARTIAL_NOTE_TAIL)}`,
+  escapeRegExp(ENRICHMENT_BUDGET_NOTE.trim()),
+  escapeRegExp(ENRICHMENT_LIMIT_NOTE.trim()),
+].join("|");
+
+/** One or more notes at the end of a collapsed summary. */
+const TRAILING_NOTES = new RegExp(
+  `(?:^|\\s)((?:${NOTE_SOURCE})(?:\\s(?:${NOTE_SOURCE}))*)$`,
+  "u",
+);
+
 const GITHUB_REF_SOURCE =
   String.raw`\bhttps?:\/\/(?:www\.)?github\.com\/[\w.-]+\/[\w.-]+\/(pull|issues)\/(\d+)\S*`;
 
@@ -207,6 +244,12 @@ export function sessionSubject(prompt: string | null | undefined): string | null
  * within {@link SUMMARY_MAX_CHARS} code points. A summary written before the
  * cap existed can run to a page; this is how a view shows it in two or three
  * sentences without rewriting the stored row.
+ *
+ * A summary that ends in the notes `run.enrich` writes keeps them whole
+ * (#4622). Each note says the account is partial, so a cut that dropped one
+ * would show a partial account as complete. The model's sentences give way
+ * instead, the way the writer stores a new account: each note takes one of
+ * the sentences, and the first of the model's sentences always stays.
  */
 export function clipSummary(
   text: string | null | undefined,
@@ -215,6 +258,21 @@ export function clipSummary(
 ): string | null {
   const flat = collapse(text ?? "");
   if (!flat) return null;
+  const notes = TRAILING_NOTES.exec(flat);
+  if (!notes) return clipSentences(flat, maxSentences, maxChars);
+  const body = flat.slice(0, notes.index).trim();
+  const tail = notes[1] ?? "";
+  const room = maxChars - Array.from(tail).length - 1;
+  if (!body || room < 2) return tail;
+  const kept = Math.max(1, maxSentences - (tail.match(SENTENCE) ?? []).length);
+  return `${clipSentences(body, kept, room)} ${tail}`;
+}
+
+function clipSentences(
+  flat: string,
+  maxSentences: number,
+  maxChars: number,
+): string {
   const sentences = (flat.match(SENTENCE) ?? []).slice(0, maxSentences);
   let kept = "";
   for (const sentence of sentences) {

@@ -1,5 +1,6 @@
 import { runWorkGet } from "@oxagen/oxagen/contracts/run.work.get";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { RunPullRequest } from "./lib/forge-pull-requests/run-pulls";
 import type { CommandRefFrameRow } from "./lib/run-command-refs";
 import {
   checkoutId,
@@ -16,6 +17,7 @@ import { createRunWorkGetHandler, type RunWorkDeps } from "./run.work.get";
 import type { TachoSessionColumns } from "./run.list";
 import {
   ctx,
+  event,
   ledgerRun,
   memoryStores,
   summary,
@@ -132,44 +134,56 @@ function prLink(
   };
 }
 
-type PrInput = { owner: string; repo: string; number: number };
-
 /**
- * A fake GitHub for the real PR read. #5266 is merged, #5268 is closed, and
- * every other number is open. A branch search finds #9, which no run here
- * opened.
+ * A stored GitHub pull request, as the forge read returns it. #5266 is
+ * merged, #5268 is closed, and every other number is open.
  */
-function fakeGithub() {
-  const client = {
-    getRepoInfo: vi.fn().mockResolvedValue({ defaultBranch: "main" }),
-    listPullRequests: vi.fn().mockResolvedValue([{ number: 9 }]),
-    getPullRequest: vi.fn(async (input: PrInput) => ({
-      number: input.number,
-      title: `Change ${String(input.number)}`,
-      htmlUrl: `https://github.com/${input.owner}/${input.repo}/pull/${String(input.number)}`,
-      state: input.number === 5268 ? "closed" : "open",
-      merged: input.number === 5266,
-      headSha: `sha-${String(input.number)}`,
-      headRef: `fix/${String(input.number)}`,
+function stored(
+  repository: string,
+  number: number,
+  providerRepositoryId: string,
+): RunPullRequest {
+  return {
+    pull: {
+      provider: "github",
+      host: "github.com",
+      providerRepositoryId,
+      repository,
+      number,
+      url: `https://github.com/${repository}/pull/${String(number)}`,
+      title: `Change ${String(number)}`,
+      state: number === 5266 ? "merged" : number === 5268 ? "closed" : "open",
+      draft: false,
+      headSha: `sha-${String(number)}`,
+      headRef: `fix/${String(number)}`,
       baseRef: "main",
-      changedFiles: 0,
-    })),
-    listClosingIssues: vi.fn().mockResolvedValue({
-      issues: [],
-      complete: true,
-    }),
+      stateSeenAt: new Date("2026-10-02T22:00:00Z"),
+    } as RunPullRequest["pull"],
+    revision: null,
+    sources: ["recorded"],
+    issues: [],
+  };
+}
+
+/** A fake forge store for the real PR read, and a GitHub that lists checks. */
+function fakeForge(pullRequests: RunPullRequest[]) {
+  const client = {
     listCiChecks: vi.fn(async (input: { ref: string }) => ({
       sha: input.ref,
       complete: true,
       checkRuns: [],
       statuses: [],
     })),
-    listPullRequestFiles: vi.fn().mockResolvedValue([]),
   };
-  const deps: WorkPrDeps = {
-    client: vi.fn().mockResolvedValue(client),
-    now: () => "2026-10-02T22:00:00Z",
-  };
+  const deps = {
+    forge: vi.fn<WorkPrDeps["forge"]>().mockResolvedValue({
+      pullRequests,
+      unstored: 0,
+      trunks: [],
+    }),
+    store: () => null,
+    client: vi.fn<WorkPrDeps["client"]>().mockResolvedValue(client),
+  } satisfies WorkPrDeps;
   return { client, deps };
 }
 
@@ -432,19 +446,9 @@ describe("get_run_work", () => {
       },
     ]);
   });
-  it("passes each harness PR link to the PR read as a recorded receipt", async () => {
+  it("passes each harness PR link to the forge read by repository and number, connected or not", async () => {
     const { handler, deps } = setup();
-    vi.mocked(deps.repositories).mockResolvedValue([
-      {
-        connectionId: "conn_1",
-        providerRepositoryId: "R_1",
-        host: "github.com",
-        owner: "acme",
-        name: "app",
-        url: "https://github.com/acme/app",
-        connected: true,
-      },
-    ]);
+    vi.mocked(deps.repositories).mockResolvedValue([CONNECTED]);
     vi.mocked(deps.prLinks).mockResolvedValue([
       {
         url: "https://github.com/acme/app/pull/41",
@@ -467,14 +471,65 @@ describe("get_run_work", () => {
         first_seq: 40,
         first_ts: "2026-09-23 10:06:00.000",
       },
+      {
+        url: "not a url",
+        number: "",
+        repository: "",
+        first_seq: 50,
+        first_ts: "2026-09-23 10:07:00.000",
+      },
     ]);
     const result = await handler({ runId: RUN_ID }, ctx());
     const call = vi.mocked(deps.pullRequests).mock.calls[0]!;
-    expect(call[4]).toEqual([
-      { repositoryId: "R_1", number: 41, headSha: null },
-      { repositoryId: "R_1", number: 42, headSha: null },
-    ]);
-    expect(result.warnings).toContain("recorded_repository_not_connected");
+    expect(call[1]).toMatchObject({
+      runId: RUN_ID,
+      links: [
+        { owner: "acme", name: "app", number: 41 },
+        { owner: "Acme", name: "App", number: 42 },
+        { owner: "other", name: "repo", number: 7 },
+      ],
+    });
+    // The forge store decides which links it holds; a link to a repository
+    // this workspace does not connect is still looked up there.
+    expect(result.warnings).not.toContain("recorded_repository_not_connected");
+    expect(result.warnings).toContain("pr_link_unreadable");
+  });
+  it("passes a ledger run's receipts to the forge read under its public id", async () => {
+    const stores = memoryStores(
+      [ledgerRun({ publicId: LEDGER_ID, runId: LEDGER_UUID })],
+      [],
+    );
+    const { deps } = setup();
+    const handler = createRunWorkGetHandler({
+      ...deps,
+      queries: stores.queries,
+      readRunRollups: stores.readRunRollups,
+      readWitnessFor: stores.readWitnessFor,
+      store: {
+        getRunByPublicId: async (publicId) =>
+          publicId === LEDGER_ID ? summary() : null,
+        readAttemptEventsSince: async (_run: string, cursor: string) =>
+          cursor === "0"
+            ? [
+                event(1, {
+                  eventType: "provider_publish.pull_request_opened",
+                  payload: {
+                    provider_repository_id: "R_1",
+                    pull_request_number: 41,
+                    head_commit_sha: "abc",
+                  },
+                }),
+              ]
+            : [],
+      },
+    });
+    const result = await handler({ runId: LEDGER_ID }, ctx());
+    expect(vi.mocked(deps.pullRequests).mock.calls[0]?.[1]).toEqual({
+      runId: LEDGER_ID,
+      checkouts: [],
+      receipts: [{ repositoryId: "R_1", number: 41, headSha: "abc", seq: "1" }],
+    });
+    expect(result.warnings).toContain("checkout_context_not_recorded");
   });
   // #3791: the daemon seals a session's first hook before its first Git read,
   // so that frame names the path alone. As a checkout of its own it matched
@@ -528,18 +583,20 @@ describe("get_run_work", () => {
         connected: true,
       },
     ]);
-    // The real PR read over a GitHub that holds no PR for the branch, so
-    // every warning comes from the checkouts the handler passes it.
-    const github: WorkPrDeps = {
-      client: vi.fn().mockResolvedValue({
-        getRepoInfo: vi.fn().mockResolvedValue({ defaultBranch: "main" }),
-        listPullRequests: vi.fn().mockResolvedValue([]),
+    // The real PR read over a forge store that holds no PR for the branch,
+    // so every warning comes from the checkouts the handler passes it.
+    const forge: WorkPrDeps = {
+      forge: vi.fn().mockResolvedValue({
+        pullRequests: [],
+        unstored: 0,
+        trunks: [],
       }),
-      now: () => "2026-09-25T10:00:00Z",
+      store: () => null,
+      client: vi.fn(),
     };
     vi.mocked(deps.pullRequests).mockImplementation(
-      (scope, checkouts, repositories, _deps, recorded) =>
-        readWorkPullRequests(scope, checkouts, repositories, github, recorded),
+      (scope, sources, repositories) =>
+        readWorkPullRequests(scope, sources, repositories, forge),
     );
     const result = await handler({ runId: RUN_ID }, ctx());
     const merged = checkoutId(located);
@@ -572,14 +629,16 @@ describe("get_run_work", () => {
       },
     ]);
     vi.mocked(deps.pullRequests).mockImplementation(
-      (scope, checkouts, repositories, _deps, recorded) =>
-        readWorkPullRequests(
-          scope,
-          checkouts,
-          repositories,
-          { client: vi.fn(), now: () => "2026-09-25T10:00:00Z" },
-          recorded,
-        ),
+      (scope, sources, repositories) =>
+        readWorkPullRequests(scope, sources, repositories, {
+          forge: vi.fn().mockResolvedValue({
+            pullRequests: [],
+            unstored: 0,
+            trunks: [],
+          }),
+          store: () => null,
+          client: vi.fn(),
+        }),
     );
     const result = await handler({ runId: RUN_ID }, ctx());
     expect(result.checkouts).toMatchObject([{ path: "/tmp/scratch" }]);
@@ -671,59 +730,68 @@ describe("get_run_work", () => {
 
 // #5296: the GTM workspace's runs opened pull requests in oxageninc/product,
 // which that workspace does not link. The record named each one, and the
-// section said "No pull request" for every run, one PR or several.
+// section said "No pull request" for every run, one PR or several. The forge
+// store holds those pull requests, and their checks are read through the
+// workspace's own GitHub connection for the owner.
 describe("get_run_work pull requests in a repository the workspace does not link", () => {
   const product = (n: number) =>
     `https://github.com/oxageninc/product/pull/${String(n)}`;
-  /** A handler whose PR read is the real one over `fakeGithub()`. */
-  function wired() {
+  const STORED = [
+    stored("acme/app", 41, "R_1"),
+    stored("oxageninc/product", 5260, "R_9"),
+    stored("oxageninc/product", 5266, "R_9"),
+    stored("oxageninc/product", 5268, "R_9"),
+  ];
+  /** A handler whose PR read is the real one over `fakeForge()`. */
+  function wired(pullRequests: RunPullRequest[] = STORED) {
     const { handler, deps } = setup();
-    const gh = fakeGithub();
+    const forge = fakeForge(pullRequests);
+    // No checkout, so every warning comes from the pull requests.
+    vi.mocked(deps.contexts).mockResolvedValue([]);
     vi.mocked(deps.pullRequests).mockImplementation(
-      (scope, checkouts, repositories, _deps, recorded) =>
-        readWorkPullRequests(scope, checkouts, repositories, gh.deps, recorded),
-    );
-    return { handler, deps, gh };
-  }
-
-  it("lists each pull request the record names, with its state, through the owner's connection", async () => {
-    const { handler, deps, gh } = wired();
-    vi.mocked(deps.repositories).mockResolvedValue([CONNECTED]);
-    const connections: Record<string, string> = { oxageninc: "conn_owner" };
-    vi.mocked(deps.githubConnection).mockImplementation(
-      async (_scope, owner) => connections[owner] ?? null,
+      (scope, sources, repositories) =>
+        readWorkPullRequests(scope, sources, repositories, forge.deps),
     );
     vi.mocked(deps.prLinks).mockResolvedValue([
       prLink("https://github.com/acme/app/pull/41", "41", "acme/app", 20),
       prLink(product(5260), "5260", "oxageninc/product", 2955),
       prLink(product(5266), "5266", "oxageninc/product", 6013),
-      // The same pull request again, under a URL typed in another case.
-      prLink("https://github.com/Oxageninc/Product/pull/5266", "", "", 6100),
       prLink(product(5268), "5268", "oxageninc/product", 6263),
     ]);
+    return { handler, deps, forge };
+  }
+
+  it("lists each pull request the record names, and reads the unlinked ones' checks through the owner's connection", async () => {
+    const { handler, deps, forge } = wired();
+    vi.mocked(deps.repositories).mockResolvedValue([CONNECTED]);
+    const connections: Record<string, string> = { oxageninc: "conn_owner" };
+    vi.mocked(deps.githubConnection).mockImplementation(
+      async (_scope, owner) => connections[owner] ?? null,
+    );
     const result = await handler({ runId: RUN_ID }, ctx());
     expect(runWorkGet.output.parse(result)).toEqual(result);
     const listed = result.pullRequests.map((pr) => [
       `${pr.repository.owner}/${pr.repository.name}#${String(pr.number)}`,
       pr.state,
       pr.repository.connected,
+      pr.ci === null ? "no checks" : "checks",
     ]);
     expect(listed).toEqual([
-      ["acme/app#41", "open", true],
-      ["oxageninc/product#5260", "open", false],
-      ["oxageninc/product#5266", "merged", false],
-      ["oxageninc/product#5268", "closed", false],
+      ["acme/app#41", "open", true, "checks"],
+      ["oxageninc/product#5260", "open", false, "checks"],
+      ["oxageninc/product#5266", "merged", false, "checks"],
+      ["oxageninc/product#5268", "closed", false, "checks"],
     ]);
     for (const pr of result.pullRequests)
       expect(pr.association).toBe("recorded");
-    expect(result.warnings).not.toContain("recorded_repository_not_connected");
+    expect(result.warnings).not.toContain("repository_not_connected");
     // One lookup for the one unlinked owner, in lower case.
     expect(deps.githubConnection).toHaveBeenCalledTimes(1);
     expect(deps.githubConnection).toHaveBeenCalledWith(
       expect.anything(),
       "oxageninc",
     );
-    expect(gh.deps.client).toHaveBeenCalledWith(
+    expect(forge.deps.client).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         owner: "oxageninc",
@@ -734,68 +802,32 @@ describe("get_run_work pull requests in a repository the workspace does not link
     );
   });
 
-  it("keeps a link no connection reaches out of the list, and says so (negative)", async () => {
-    const { handler, deps, gh } = wired();
-    vi.mocked(deps.prLinks).mockResolvedValue([
-      prLink(product(5260), "5260", "oxageninc/product", 2955),
+  it("lists a pull request no connection reaches with no checks, and says so (negative)", async () => {
+    const { handler, deps, forge } = wired([
+      stored("oxageninc/product", 5260, "R_9"),
     ]);
     const result = await handler({ runId: RUN_ID }, ctx());
-    expect(result.pullRequests).toEqual([]);
-    expect(result.warnings).toContain("recorded_repository_not_connected");
+    expect(result.pullRequests).toMatchObject([
+      { number: 5260, ci: null, repository: { connected: false } },
+    ]);
+    expect(result.warnings).toContain("repository_not_connected");
     expect(result.complete).toBe(false);
-    expect(gh.client.getPullRequest).not.toHaveBeenCalled();
+    expect(forge.client.listCiChecks).not.toHaveBeenCalled();
   });
 
-  it("never asks a GitHub connection about a link on another forge (negative)", async () => {
-    const { handler, deps, gh } = wired();
-    vi.mocked(deps.githubConnection).mockResolvedValue("conn_any");
-    const mergeRequest = "https://gitlab.com/acme/app/-/merge_requests/3";
-    vi.mocked(deps.prLinks).mockResolvedValue([
-      prLink(mergeRequest, "3", "acme/app", 9),
+  it("names a failed connection lookup as a failed checks read, and still lists the pull requests (negative)", async () => {
+    const { handler, deps, forge } = wired([
+      stored("oxageninc/product", 5260, "R_9"),
+      stored("oxageninc/product", 5266, "R_9"),
     ]);
+    vi.mocked(deps.githubConnection).mockRejectedValue(
+      new Error("connection read failed"),
+    );
     const result = await handler({ runId: RUN_ID }, ctx());
-    expect(result.pullRequests).toEqual([]);
-    expect(result.warnings).toContain("recorded_repository_not_connected");
-    expect(deps.githubConnection).not.toHaveBeenCalled();
-    expect(gh.client.getPullRequest).not.toHaveBeenCalled();
-  });
-
-  it("names a failed connection lookup as a failed read, and still answers (negative)", async () => {
-    const { handler, deps } = wired();
-    const down = new Error("connection read failed");
-    vi.mocked(deps.githubConnection).mockRejectedValue(down);
-    vi.mocked(deps.prLinks).mockResolvedValue([
-      prLink(product(5260), "5260", "oxageninc/product", 2955),
-      prLink(product(5266), "5266", "oxageninc/product", 6013),
-    ]);
-    const result = await handler({ runId: RUN_ID }, ctx());
-    expect(result.pullRequests).toEqual([]);
-    expect(result.warnings).toContain("pull_request_read_failed");
-    expect(result.warnings).not.toContain("recorded_repository_not_connected");
+    expect(result.pullRequests.map((pr) => pr.number)).toEqual([5260, 5266]);
+    expect(result.warnings).toContain("ci_read_failed");
+    expect(result.warnings).not.toContain("repository_not_connected");
     expect(deps.githubConnection).toHaveBeenCalledTimes(1);
-  });
-
-  it("links no pull request to a run that only checked out the default branch (negative)", async () => {
-    const { handler, deps, gh } = wired();
-    vi.mocked(deps.repositories).mockResolvedValue([CONNECTED]);
-    vi.mocked(deps.contexts).mockResolvedValue([
-      {
-        path: "/repo",
-        branch: "main",
-        head: "abc",
-        remote: workDigest("github.com/acme/app"),
-        repository: "https://github.com/acme/app",
-        first_seq: 0,
-        last_seq: 7,
-      },
-    ]);
-    const result = await handler({ runId: RUN_ID }, ctx());
-    expect(result.checkouts).toMatchObject([
-      { branch: "main", repository: { connected: true } },
-    ]);
-    expect(result.pullRequests).toEqual([]);
-    expect(result.warnings).toContain("default_branch_not_linked");
-    expect(gh.client.listPullRequests).not.toHaveBeenCalled();
-    expect(deps.githubConnection).not.toHaveBeenCalled();
+    expect(forge.client.listCiChecks).not.toHaveBeenCalled();
   });
 });

@@ -99,7 +99,7 @@ function PlanForm({
             setChoice(event.currentTarget.value);
           }}
           data-touch-target=""
-          className={`${inputBase} w-full text-base font-normal text-foreground md:text-sm`}
+          className={`${inputBase} w-full text-input-touch font-normal text-foreground md:text-base`}
         >
           {plans.flatMap((plan) => [
             <option
@@ -192,7 +192,7 @@ export function ChangePlan({
             action={action}
           />
         ) : (
-          <p data-blocked={blocked.kind} className="text-sm text-foreground">
+          <p data-blocked={blocked.kind} className="text-base text-foreground">
             {blocked.kind === "role"
               ? t("denied")
               : t("subscribed", {

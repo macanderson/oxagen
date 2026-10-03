@@ -102,7 +102,7 @@ export function SteeringPrActivity({ pr }: { pr: SteeringPr }) {
   }
   return (
     <Section id="steering-pr-activity" title={t("title")}>
-      <ol className="flex flex-col divide-y divide-border text-sm">
+      <ol className="flex flex-col divide-y divide-border text-base">
         {steps.map((step) => (
           <li
             key={step.key}
@@ -112,14 +112,14 @@ export function SteeringPrActivity({ pr }: { pr: SteeringPr }) {
           >
             <span className="flex min-w-0 flex-col">
               <span className="text-foreground">{step.text}</span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 {step.origin === "host"
                   ? t("onHost", { host })
                   : t("inOxagen")}
                 {step.by === null ? null : ` ${t("by", { who: step.by })}`}
               </span>
             </span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               {step.at === null ? t("timeNotRecorded") : date(step.at)}
             </span>
           </li>

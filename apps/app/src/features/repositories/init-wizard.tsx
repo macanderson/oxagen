@@ -346,7 +346,7 @@ export function InitWizard({
     >
       <ol
         aria-label={t("stepsLabel")}
-        className="mb-4 flex flex-wrap gap-1.5 text-xs"
+        className="mb-4 flex flex-wrap gap-1.5 text-sm"
       >
         {WIZARD_STEPS.map((key, position) => {
           const done = opened !== null || position < index;
@@ -361,7 +361,7 @@ export function InitWizard({
             >
               <span
                 aria-hidden="true"
-                className={`grid size-4 place-items-center rounded-full border text-sm ${key === step && opened === null ? "border-gold bg-gold text-on-gold" : "border-border"}`}
+                className={`grid size-4 place-items-center rounded-full border text-xs ${key === step && opened === null ? "border-gold bg-gold text-on-gold" : "border-border"}`}
               >
                 {done ? <CheckIcon className="size-2.5" /> : position + 1}
               </span>
@@ -399,7 +399,7 @@ export function InitWizard({
           data-testid="init-wizard-repository"
           className="flex flex-col gap-3"
         >
-          <p className="text-sm leading-relaxed text-foreground">
+          <p className="text-base leading-relaxed text-foreground">
             {t("repository.lead")}
           </p>
           {connectNeeded && candidates.length === 0 ? (
@@ -449,7 +449,7 @@ export function InitWizard({
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-sm text-muted-foreground">
                   {t.rich("repository.hint", { code })}
                 </p>
               </div>
@@ -463,7 +463,7 @@ export function InitWizard({
         </div>
       ) : step === "branch" ? (
         <div data-testid="init-wizard-branch" className="flex flex-col gap-3.5">
-          <p className="text-sm leading-relaxed text-foreground">
+          <p className="text-base leading-relaxed text-foreground">
             {t("branch.lead")}
           </p>
           <div>
@@ -485,7 +485,7 @@ export function InitWizard({
                 setBranch(event.target.value);
               }}
             />
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
               {t.rich("branch.hint", { branch: suggestion, code })}
             </p>
           </div>
@@ -516,13 +516,13 @@ export function InitWizard({
                   >
                     {option}
                   </b>
-                  <span className="text-xs leading-relaxed text-muted-foreground">
+                  <span className="text-sm leading-relaxed text-muted-foreground">
                     {t(`branch.modes.${option}`)}
                   </span>
                 </label>
               ))}
             </div>
-            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
               {t.rich("branch.modeHint", { code })}
             </p>
           </fieldset>
@@ -532,7 +532,7 @@ export function InitWizard({
           data-testid="init-wizard-permissions"
           className="flex flex-col gap-3.5"
         >
-          <p className="text-sm font-semibold text-foreground">
+          <p className="text-base font-semibold text-foreground">
             {t("permissions.lead", { repository: repository?.fullName ?? "" })}
           </p>
           <PermissionTable />
@@ -557,7 +557,7 @@ export function InitWizard({
         </div>
       ) : step === "review" ? (
         <div data-testid="init-wizard-review" className="flex flex-col gap-3.5">
-          <p className="text-sm font-semibold text-foreground">
+          <p className="text-base font-semibold text-foreground">
             {t("review.lead", { repository: repository?.fullName ?? "" })}
           </p>
           <TomlField
@@ -579,7 +579,7 @@ export function InitWizard({
           data-testid="init-wizard-pull-request"
           className="flex flex-col gap-3.5"
         >
-          <p className="text-sm leading-relaxed text-foreground">
+          <p className="text-base leading-relaxed text-foreground">
             {t.rich("pullRequest.lead", {
               repository: repository?.fullName ?? "",
               code,
@@ -588,7 +588,7 @@ export function InitWizard({
           <div className="overflow-hidden rounded-[10px] border border-border">
             <div
               data-testid="init-wizard-pr-head"
-              className="flex flex-wrap items-center gap-2 border-b border-border bg-hl px-3.5 py-2.5 text-xs"
+              className="flex flex-wrap items-center gap-2 border-b border-border bg-hl px-3.5 py-2.5 text-sm"
             >
               <span
                 className={`${mono} rounded border border-border bg-card px-1.5 py-0.5`}
@@ -652,7 +652,7 @@ export function InitWizard({
           </section>
         </div>
       )}
-      <p className="mt-4 font-mono text-sm text-dim">
+      <p className="mt-4 font-mono text-xs text-dim">
         {t.rich("needs", { ws, code })}
       </p>
     </SheetDialog>
@@ -725,7 +725,7 @@ function TomlField({
         data-testid={testId}
         rows={9}
         spellCheck={false}
-        className={`min-h-40 font-mono text-base sm:text-xs ${textareaBase}`}
+        className={`min-h-40 font-mono text-lg sm:text-sm ${textareaBase}`}
         value={value}
         onChange={(event) => {
           onChange(event.target.value);
@@ -744,7 +744,7 @@ function OpenedPullRequest({ opened }: { opened: Opened }) {
       data-testid="init-wizard-opened"
       className="flex flex-col gap-3"
     >
-      <p className="text-sm font-semibold text-foreground">
+      <p className="text-base font-semibold text-foreground">
         {opened.reused
           ? t("reused", { number: opened.number, repository: opened.fullName })
           : t("opened", { number: opened.number, repository: opened.fullName })}

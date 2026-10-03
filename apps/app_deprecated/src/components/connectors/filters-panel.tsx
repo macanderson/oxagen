@@ -49,7 +49,7 @@ function LabelTagInput({
       {value.map((tag) => (
         <span
           key={tag}
-          className="flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-foreground"
+          className="flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-sm font-medium text-foreground"
         >
           {tag}
           <button
@@ -79,7 +79,7 @@ function LabelTagInput({
           if (inputVal.trim()) addTag(inputVal);
         }}
         placeholder={value.length === 0 ? placeholder : ""}
-        className="flex-1 min-w-[100px] bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        className="flex-1 min-w-[100px] bg-transparent text-base outline-none placeholder:text-muted-foreground"
         aria-label="Add label filter"
       />
     </div>
@@ -123,10 +123,10 @@ export function FiltersPanel() {
               setFieldValue(PATH_FILTERS_KEY, e.currentTarget.value)
             }
             placeholder={"node_modules/**\ndist/**\n*.lock"}
-            className="resize-y min-h-[80px] font-mono text-xs"
+            className="resize-y min-h-[80px] font-mono text-sm"
             rows={4}
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             One glob pattern per line. Matching paths will be excluded from
             sync.
             {filters.pathFilters?.appliesTo &&
@@ -146,7 +146,7 @@ export function FiltersPanel() {
             onChange={(v) => setFieldValue(LABEL_FILTERS_KEY, v)}
             placeholder="Type a label and press Enter…"
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Only sync items with these labels. Leave empty to sync all.
             {filters.labelFilters?.appliesTo &&
               filters.labelFilters.appliesTo.length > 0 && (

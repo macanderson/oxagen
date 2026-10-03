@@ -62,7 +62,7 @@ export function CloseDialog({
       pendingLabel={t("pending")}
       submit={submit}
     >
-      <p className="text-sm text-muted-foreground">
+      <p className="text-base text-muted-foreground">
         {t("body")}
         {detail.item.origin === "provider" ? ` ${t("github")}` : null}
       </p>
@@ -72,7 +72,7 @@ export function CloseDialog({
           {RESOLUTIONS.map((resolution) => (
             <label
               key={resolution}
-              className="flex min-h-9 cursor-pointer items-center gap-2 rounded-4xl border border-border px-3 text-sm text-foreground has-checked:border-gold has-checked:bg-hl"
+              className="flex min-h-9 cursor-pointer items-center gap-2 rounded-4xl border border-border px-3 text-base text-foreground has-checked:border-gold has-checked:bg-hl"
             >
               <input
                 type="radio"
@@ -123,7 +123,7 @@ export function ReopenDialog({ org, ws, detail, ...control }: Place & DialogCont
       pendingLabel={t("pending")}
       submit={submit}
     >
-      <p className="text-sm text-muted-foreground">{t("body")}</p>
+      <p className="text-base text-muted-foreground">{t("body")}</p>
       <ReasonField id="work-reopen-reason" label={t("reason")} hint={t("reasonHint")} />
     </WorkDialog>
   );

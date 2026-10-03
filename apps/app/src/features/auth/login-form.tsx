@@ -211,13 +211,13 @@ export function LoginForm({
             showLabel={t("fields.showPassword")}
             hideLabel={t("fields.hidePassword")}
             labelAside={
-              <Link href="/forgot-password" className={`${linkText} text-xs`}>
+              <Link href="/forgot-password" className={`${linkText} text-sm`}>
                 {t("login.forgot")}
               </Link>
             }
             error={errors.password ? t(`errors.${errors.password}`) : undefined}
           />
-          <label className="flex cursor-pointer items-start gap-[9px] text-sm text-foreground">
+          <label className="flex cursor-pointer items-start gap-2.25 text-sm text-foreground">
             <input
               type="checkbox"
               name="rememberMe"

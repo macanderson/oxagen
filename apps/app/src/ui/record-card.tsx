@@ -47,7 +47,7 @@ export function RecordCard({
       data-kind={kind ?? "unclassified"}
       className={`${panel} flex flex-col gap-2 p-4`}
     >
-      <div className="flex flex-wrap items-center gap-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
         <span data-term="kind" className={`${tag} font-medium`}>
           {kind === null ? t("unclassified") : t(`kinds.${kind}`)}
         </span>
@@ -67,9 +67,9 @@ export function RecordCard({
           </span>
         )}
       </div>
-      {label ? <h3 className="text-sm font-semibold">{label}</h3> : null}
-      <p className="text-sm font-medium text-foreground">{statement}</p>
-      <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      {label ? <h3 className="text-base font-semibold">{label}</h3> : null}
+      <p className="text-base font-medium text-foreground">{statement}</p>
+      <dl className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
         <div data-term="scope" className="flex gap-1">
           <dt>{t("scope")}</dt>
           <dd>{t(`scopes.${sharingScope}`)}</dd>

@@ -106,7 +106,7 @@ export function LowBalanceBanner({
             <Button
               variant="link"
               size="sm"
-              className="h-auto p-0 text-sm font-medium underline-offset-2"
+              className="h-auto p-0 text-base font-medium underline-offset-2"
               onClick={handleBuyCredits}
             >
               Buy credits

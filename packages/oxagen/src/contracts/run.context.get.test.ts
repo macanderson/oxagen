@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runCostGet } from "./run.cost";
 import { RUN_CONTEXT_WINDOW_MAX, runContextGet } from "./run.context.get";
 
 const window = (over: Record<string, unknown> = {}) => ({
@@ -52,6 +53,18 @@ describe("get_run_context contract", () => {
     expect(
       runContextGet.input.safeParse({ runId: "tse_abc123", seq: "4" }).success,
     ).toBe(false);
+  });
+
+  it("lets every org role that reads a run's cost read its context, Billing included (#5340)", () => {
+    // The Cost tab reads both, so a role allowed one and refused the other
+    // meets a refusal inside a tab it can open.
+    expect(runContextGet.defaultRoles?.org?.Billing).toBe("allow");
+    expect(runContextGet.defaultRoles?.org).toEqual(
+      runCostGet.defaultRoles?.org,
+    );
+    expect(runContextGet.defaultRoles?.workspace).toEqual(
+      runCostGet.defaultRoles?.workspace,
+    );
   });
 
   it("answers each window with its blocks and their token shares", () => {

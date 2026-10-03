@@ -116,7 +116,7 @@ const MAX_DOC_BYTES = 100_000;
 const ACCEPTED_EXTENSIONS = [".md", ".markdown", ".mdx", ".txt"];
 
 const FIELD_CLS =
-  "w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50";
+  "w-full rounded-md border border-border/60 bg-background px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50";
 
 // ---------------------------------------------------------------------------
 // A picked-but-not-yet-parsed local file
@@ -239,10 +239,10 @@ function SelectStage({
         }`}
       >
         <Upload className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
-        <p className="text-sm font-medium text-foreground">
+        <p className="text-base font-medium text-foreground">
           Drop markdown files here, or click to choose
         </p>
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Skill files, rule docs, runbooks — {ACCEPTED_EXTENSIONS.join(", ")} ·
           up to {MAX_DOCS} files
         </p>
@@ -262,7 +262,7 @@ function SelectStage({
       </div>
 
       {localNotice && (
-        <p className="text-[11px] text-amber-600 dark:text-amber-400">
+        <p className="text-xs text-amber-600 dark:text-amber-400">
           {localNotice}
         </p>
       )}
@@ -271,13 +271,13 @@ function SelectStage({
       {files.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {files.length} document{files.length === 1 ? "" : "s"} selected
             </span>
             <button
               type="button"
               onClick={() => setFiles([])}
-              className="text-[10px] text-muted-foreground hover:text-foreground"
+              className="text-xs text-muted-foreground hover:text-foreground"
             >
               Clear all
             </button>
@@ -295,13 +295,13 @@ function SelectStage({
                     aria-hidden="true"
                   />
                   <span
-                    className="flex-1 truncate text-xs text-foreground"
+                    className="flex-1 truncate text-sm text-foreground"
                     title={f.filename}
                   >
                     {f.filename}
                   </span>
                   <span
-                    className={`text-[10px] tabular-nums ${tooBig ? "text-destructive" : "text-muted-foreground"}`}
+                    className={`text-xs tabular-nums ${tooBig ? "text-destructive" : "text-muted-foreground"}`}
                   >
                     {formatBytes(f.bytes)}
                   </span>
@@ -318,13 +318,13 @@ function SelectStage({
             })}
           </ul>
           {atCap && (
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               At the {MAX_DOCS}-file limit. Remove a file to add another, or
               import in batches.
             </p>
           )}
           {oversized.length > 0 && (
-            <p className="text-[10px] text-destructive">
+            <p className="text-xs text-destructive">
               {oversized.length} file{oversized.length === 1 ? " is" : "s are"}{" "}
               over {formatBytes(MAX_DOC_BYTES)} and must be split before import.
             </p>
@@ -336,7 +336,7 @@ function SelectStage({
       <div className="flex flex-col gap-1.5">
         <label
           htmlFor="bulk-import-node-ref"
-          className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+          className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
         >
           Default anchor (optional)
         </label>
@@ -351,14 +351,14 @@ function SelectStage({
           disabled={isPending}
           className={FIELD_CLS}
         />
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           The graph node every imported memory anchors to. Defaults to the
           shared &ldquo;user-memory&rdquo; bucket.
         </p>
       </div>
 
       {error && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}
@@ -439,7 +439,7 @@ function ReviewStage({
       {/* Skipped documents notice */}
       {skipped.length > 0 && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2">
-          <p className="flex items-center gap-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+          <p className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
             <AlertTriangle className="h-3 w-3" aria-hidden="true" />
             {skipped.length} document{skipped.length === 1 ? "" : "s"} produced
             no memories
@@ -448,7 +448,7 @@ function ReviewStage({
             {skipped.map((s) => (
               <li
                 key={s.filename}
-                className="text-[10px] text-muted-foreground"
+                className="text-xs text-muted-foreground"
               >
                 <span className="font-mono">{s.filename}</span> — {s.reason}
               </li>
@@ -463,10 +463,10 @@ function ReviewStage({
             className="h-7 w-7 text-muted-foreground/50"
             aria-hidden="true"
           />
-          <p className="text-sm font-medium text-muted-foreground">
+          <p className="text-base font-medium text-muted-foreground">
             No memories were extracted
           </p>
-          <p className="max-w-xs text-xs text-muted-foreground/70">
+          <p className="max-w-xs text-sm text-muted-foreground/70">
             None of the uploaded documents contained durable rules. Try
             different files or add memories manually.
           </p>
@@ -475,7 +475,7 @@ function ReviewStage({
         <>
           {/* Grid toolbar */}
           <div className="flex items-center justify-between">
-            <label className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
+            <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <input
                 type="checkbox"
                 checked={allSelected}
@@ -485,7 +485,7 @@ function ReviewStage({
               />
               Select all
             </label>
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               {selectedCount} of {drafts.length} selected
             </span>
           </div>
@@ -494,7 +494,7 @@ function ReviewStage({
           <div className="overflow-x-auto rounded-lg border border-border/60">
             <div className="min-w-[900px]">
               {/* Header row */}
-              <div className="grid grid-cols-[2rem_minmax(0,1fr)_8rem_7rem_6rem_8rem] gap-2 border-b border-border/60 bg-muted/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="grid grid-cols-[2rem_minmax(0,1fr)_8rem_7rem_6rem_8rem] gap-2 border-b border-border/60 bg-muted/30 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 <span aria-hidden="true" />
                 <span>Lesson</span>
                 <span>Kind</span>
@@ -537,7 +537,7 @@ function ReviewStage({
                       />
                       {draft.sourceDocument && (
                         <span
-                          className="truncate text-[10px] text-muted-foreground"
+                          className="truncate text-xs text-muted-foreground"
                           title={draft.sourceDocument}
                         >
                           from {draft.sourceDocument}
@@ -608,7 +608,7 @@ function ReviewStage({
                         className={FIELD_CLS}
                       />
                     ) : (
-                      <span className="pt-1.5 text-[10px] text-muted-foreground">
+                      <span className="pt-1.5 text-xs text-muted-foreground">
                         {draft.memoryClass === "FACT" ? "100" : "—"}
                       </span>
                     )}
@@ -632,7 +632,7 @@ function ReviewStage({
       )}
 
       {error && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}
@@ -696,7 +696,7 @@ function ResultStage({
             <span className="text-lg font-semibold tabular-nums text-foreground">
               {imported}
             </span>
-            <span className="text-[10px] text-muted-foreground">imported</span>
+            <span className="text-xs text-muted-foreground">imported</span>
           </div>
         </div>
         {failed > 0 && (
@@ -709,7 +709,7 @@ function ResultStage({
               <span className="text-lg font-semibold tabular-nums text-foreground">
                 {failed}
               </span>
-              <span className="text-[10px] text-muted-foreground">failed</span>
+              <span className="text-xs text-muted-foreground">failed</span>
             </div>
           </div>
         )}
@@ -717,7 +717,7 @@ function ResultStage({
 
       {failures.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Failed rows
           </span>
           <ul className="flex flex-col gap-1 max-h-56 overflow-y-auto">
@@ -727,12 +727,12 @@ function ResultStage({
                 className="rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1.5"
               >
                 <p
-                  className="line-clamp-1 text-xs text-foreground"
+                  className="line-clamp-1 text-sm text-foreground"
                   title={f.lesson}
                 >
                   {f.lesson}
                 </p>
-                <p className="text-[10px] text-destructive">
+                <p className="text-xs text-destructive">
                   {f.error ?? "Unknown error"}
                 </p>
               </li>
@@ -742,7 +742,7 @@ function ResultStage({
       )}
 
       {imported > 0 && failed === 0 && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           All set — the imported memories now appear in the list.
         </p>
       )}
@@ -875,7 +875,7 @@ export function MemoriesBulkImport({
             {titleByStage[stage]}
           </SheetTitle>
           {descriptionByStage[stage] && (
-            <SheetDescription className="text-xs text-muted-foreground">
+            <SheetDescription className="text-sm text-muted-foreground">
               {descriptionByStage[stage]}
             </SheetDescription>
           )}

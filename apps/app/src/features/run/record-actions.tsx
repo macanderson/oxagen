@@ -76,19 +76,19 @@ function CopyDigest({ digest }: { digest: string }) {
       <code
         data-testid="export-digest"
         data-truncate={digest}
-        className={`${mono} rounded-md bg-muted px-2 py-1 text-xs`}
+        className={`${mono} rounded-md bg-muted px-2 py-1 text-sm`}
       >
         {short}
       </code>
       <button
         type="button"
-        className={`${buttonSecondary} h-8 px-2 text-xs`}
+        className={`${buttonSecondary} h-8 px-2 text-sm`}
         onClick={() => void copy()}
       >
         {state === "copied" ? t("copied") : t("copy")}
       </button>
       {state === "failed" ? (
-        <span className="text-xs text-muted-foreground">{t("copyFailed")}</span>
+        <span className="text-sm text-muted-foreground">{t("copyFailed")}</span>
       ) : null}
     </span>
   );
@@ -120,7 +120,7 @@ function ReadyExport({ status }: { status: RunExportStatus }) {
           {t("download")}
         </RunExportDownloadLink>
       )}
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-xs">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
         <dt className="text-muted-foreground">{t("size")}</dt>
         <dd data-testid="export-size">
           {size === null ? t("sizeUnknown") : size}
@@ -144,11 +144,11 @@ function ReadyExport({ status }: { status: RunExportStatus }) {
           </>
         )}
       </dl>
-      <p className="text-xs text-muted-foreground">{t("expiresHint")}</p>
-      <p className="text-xs font-medium">{t("verify")}</p>
+      <p className="text-sm text-muted-foreground">{t("expiresHint")}</p>
+      <p className="text-sm font-medium">{t("verify")}</p>
       <code
         data-testid="export-verify-command"
-        className={`${mono} break-all rounded-md bg-muted px-2 py-1 text-xs`}
+        className={`${mono} break-all rounded-md bg-muted px-2 py-1 text-sm`}
       >
         {command}
       </code>
@@ -390,7 +390,7 @@ function RecordDialog<O>({
             onSubmit={(e) => void submit(e)}
             className="flex flex-col gap-3"
           >
-            <p className="text-sm text-muted-foreground">{t(`${key}.body`)}</p>
+            <p className="text-base text-muted-foreground">{t(`${key}.body`)}</p>
             {failure === null ? null : (
               <FormAlert testId={`run-${action}-failure`}>{failure}</FormAlert>
             )}
@@ -401,11 +401,11 @@ function RecordDialog<O>({
             />
           </form>
         ) : (
-          <div role="status" className="flex flex-col gap-3 text-sm">
+          <div role="status" className="flex flex-col gap-3 text-base">
             <p>{t(`${key}.queued`)}</p>
             <code
               data-testid="queued-receipt"
-              className={`${mono} break-all rounded-md bg-muted px-2 py-1 text-xs`}
+              className={`${mono} break-all rounded-md bg-muted px-2 py-1 text-sm`}
             >
               {queued}
             </code>

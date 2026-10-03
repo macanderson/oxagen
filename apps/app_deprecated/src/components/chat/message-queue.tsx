@@ -106,7 +106,7 @@ export function MessageQueue({
       aria-label="Queued messages"
       className="flex flex-col gap-1.5 rounded-xl border border-border bg-muted/30 p-2"
     >
-      <header className="flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+      <header className="flex items-center gap-1.5 px-1 text-sm font-medium text-muted-foreground">
         <ListOrdered className="h-3.5 w-3.5" />
         <span>
           {items.length} {items.length === 1 ? "message" : "messages"} queued
@@ -122,12 +122,12 @@ export function MessageQueue({
           return (
             <li
               key={item.id}
-              className="flex items-start gap-1.5 rounded-lg border border-border bg-card px-2 py-1.5 text-sm"
+              className="flex items-start gap-1.5 rounded-lg border border-border bg-card px-2 py-1.5 text-base"
             >
               {/* Position badge */}
               <span
                 aria-hidden="true"
-                className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium tabular-nums text-muted-foreground"
+                className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium tabular-nums text-muted-foreground"
               >
                 {idx + 1}
               </span>
@@ -149,7 +149,7 @@ export function MessageQueue({
                       cancelEdit();
                     }
                   }}
-                  className="min-w-0 flex-1 resize-none rounded-md border border-input bg-background px-2 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="min-w-0 flex-1 resize-none rounded-md border border-input bg-background px-2 py-1 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
               ) : (
                 <button

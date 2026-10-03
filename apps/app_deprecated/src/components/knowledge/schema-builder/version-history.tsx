@@ -89,7 +89,7 @@ function DiffView({ diff }: { diff: VersionDiff }) {
 
   if (sections.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground py-4 text-center">
+      <p className="text-base text-muted-foreground py-4 text-center">
         No changes between versions.
       </p>
     );
@@ -99,7 +99,7 @@ function DiffView({ diff }: { diff: VersionDiff }) {
     <div className="space-y-3 max-h-96 overflow-y-auto">
       {sections.map((section) => (
         <div key={section.title}>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+          <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-1">
             {section.title}
           </p>
           <ul className="space-y-0.5">
@@ -108,10 +108,10 @@ function DiffView({ diff }: { diff: VersionDiff }) {
                 key={idx}
                 className={
                   section.sign === "+"
-                    ? "text-sm text-emerald-700 dark:text-emerald-400 font-mono"
+                    ? "text-base text-emerald-700 dark:text-emerald-400 font-mono"
                     : section.sign === "-"
-                      ? "text-sm text-red-700 dark:text-red-400 font-mono"
-                      : "text-sm text-amber-700 dark:text-amber-400 font-mono"
+                      ? "text-base text-red-700 dark:text-red-400 font-mono"
+                      : "text-base text-amber-700 dark:text-amber-400 font-mono"
                 }
               >
                 {section.sign} {item}
@@ -200,7 +200,7 @@ export function VersionHistory({
     <>
       <div className="rounded-xl border border-border overflow-hidden">
         {versions.length === 0 && (
-          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+          <div className="px-4 py-8 text-center text-base text-muted-foreground">
             No versions yet.
           </div>
         )}
@@ -211,33 +211,33 @@ export function VersionHistory({
           >
             <div className="space-y-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono text-sm font-medium">
+                <span className="font-mono text-base font-medium">
                   v{v.versionNumber}
                 </span>
                 {v.label && (
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-base text-muted-foreground">
                     — {v.label}
                   </span>
                 )}
                 <Badge
                   variant={v.status === "published" ? "default" : "secondary"}
-                  className="text-xs"
+                  className="text-sm"
                 >
                   {v.status}
                 </Badge>
                 {v.isPinned && (
-                  <Badge variant="outline" className="text-xs">
+                  <Badge variant="outline" className="text-sm">
                     pinned
                   </Badge>
                 )}
               </div>
               {v.changeSummary && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   {v.changeSummary}
                 </p>
               )}
               {v.publishedAt && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   {formatDate(v.publishedAt)}
                 </p>
               )}
