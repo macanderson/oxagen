@@ -295,6 +295,56 @@ describe("the token sources a rollup writes (#4493)", () => {
     ]);
   });
 
+  // #5339. A Claude Code session recorded through its hooks, OTel and
+  // transcript alone carries the steering and the context Oxagen's hooks
+  // handed it, and no tool definitions. A call made before any hook handed
+  // text carries no context count, and a session no hook handed text to
+  // keeps the sum null, never zero.
+  it("sums a hook-only session's context frames, and leaves them null when none were handed", async () => {
+    const hookOnly = (context: number | null): RunTokenSources => ({
+      toolDefinitionTokens: null,
+      contextFrameTokens: context,
+      steeringTokens: 80,
+    });
+    const handed = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+      modelCalls: [
+        measured("2026-10-03T10:01:00.000Z", hookOnly(null)),
+        measured("2026-10-03T10:02:00.000Z", hookOnly(42)),
+        measured("2026-10-03T10:03:00.000Z", hookOnly(54)),
+      ],
+    });
+    await rebuildRunTotals(WORKER, handed.d);
+    expect(handed.sourcesWritten).toEqual([
+      {
+        toolDefinitionTokens: null,
+        contextFrameTokens: 96,
+        steeringTokens: 240,
+      },
+    ]);
+    expect(handed.written[0]?.breakdown.standing?.contextFrameTokens).toEqual({
+      cached: 0,
+      uncached: 96,
+    });
+
+    const none = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+      modelCalls: [
+        measured("2026-10-03T10:01:00.000Z", hookOnly(null)),
+        measured("2026-10-03T10:02:00.000Z", hookOnly(null)),
+      ],
+    });
+    await rebuildRunTotals(WORKER, none.d);
+    expect(none.sourcesWritten).toEqual([
+      {
+        toolDefinitionTokens: null,
+        contextFrameTokens: null,
+        steeringTokens: 160,
+      },
+    ]);
+    expect(none.written[0]?.breakdown.standing?.contextFrameTokens).toBeNull();
+  });
+
   it("writes every source as null when no call measured any", async () => {
     const { d, sourcesWritten } = deps({
       runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },

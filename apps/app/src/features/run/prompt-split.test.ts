@@ -47,6 +47,33 @@ describe("promptSplit", () => {
     });
   });
 
+  // #5339. A Claude Code session recorded through its hooks alone carries
+  // the steering and the context Oxagen's hooks handed it, and no tool
+  // definitions, so Tool definitions stays null and never reads zero.
+  it("draws a hook-only session's context and steering, with tool definitions null (negative)", () => {
+    const hookOnly = {
+      toolDefinitionTokens: null,
+      contextFrameTokens: 1_200,
+      steeringTokens: 800,
+    };
+    expect(promptSplit(null, hookOnly, 50_000)).toEqual({
+      from: "sources",
+      parts: {
+        conversation: null,
+        context: 1_200,
+        definitions: null,
+        steering: 800,
+        system: null,
+      },
+      whole: 50_000,
+    });
+    // A session no hook handed text keeps Context null.
+    expect(
+      promptSplit(null, { ...hookOnly, contextFrameTokens: null }, 50_000)
+        ?.parts.context,
+    ).toBeNull();
+  });
+
   it("answers no split when nothing measured one (negative)", () => {
     expect(promptSplit(null, null, 50_000)).toBeNull();
   });

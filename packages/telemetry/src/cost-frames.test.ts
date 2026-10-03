@@ -716,6 +716,48 @@ describe("readModelCallFrames", () => {
     });
   });
 
+  // #5339. A session the proxy did not carry prices its OTel or transcript
+  // rows, and the recorder puts the context Oxagen's hooks handed it on
+  // those rows. A row from before any hook handed text carries none, and
+  // the read keeps it null rather than zero.
+  it("carries a hook-only session's context frames from its own rows, null where none were handed", async () => {
+    const row = (context: number | null) => ({
+      at: "2026-10-03T10:00:00.000Z",
+      model: "claude-opus-4-5",
+      provider: "anthropic",
+      input_uncached: "1000",
+      cache_read: "0",
+      cache_write_5m: "0",
+      cache_write_1h: "0",
+      output: "200",
+      reasoning: "0",
+      server_tool_request: "0",
+      cost_micros: null,
+      session_uuid: RUN,
+      tool_definition_tokens: null,
+      context_frame_tokens: context,
+      steering_tokens: "80",
+      system_context_digest: "",
+      proxy_observed: 0,
+    });
+    answer([row(null), row(42)]);
+    const frames = await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
+    });
+    expect(frames.map((frame) => frame.contextFrameTokens)).toEqual([
+      null,
+      42,
+    ]);
+    expect(frames.map((frame) => frame.toolDefinitionTokens)).toEqual([
+      null,
+      null,
+    ]);
+    expect(frames.map((frame) => frame.steeringTokens)).toEqual([80, 80]);
+    expect(frames[0]?.basis).toBe("client_attested");
+  });
+
   // #4508 item 1. Only the proxy recorded the request, so only its sighting
   // carries the token sources and the system context. When an OTel or
   // transcript row of the same call sealed first, the host stamps the proxy

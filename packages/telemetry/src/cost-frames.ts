@@ -54,11 +54,13 @@
  *
  * The token sources and the system context pull the same way (#4508). Only
  * the proxy recorded the request, so only the proxy's sighting carries
- * `tool_definition_tokens`, `context_frame_tokens`, and the system context
- * digest and parts. An OTel or transcript sighting that sealed first carries
- * `steering_tokens` alone, from the session's steering manifest, and only on
- * a call of the session's own conversation (ADR-062, amendment of
- * 2026-10-02). The proxy row is then the stamped one and the
+ * `tool_definition_tokens` and the system context digest and parts. An OTel
+ * or transcript sighting that sealed first carries `steering_tokens`, from
+ * the session's steering manifest, and `context_frame_tokens`, from the text
+ * Oxagen's hooks handed the session, and only on a call of the session's own
+ * conversation (ADR-062, amendments of 2026-10-02 and 2026-10-03). On a
+ * session the proxy did not carry, that row is the only one, and the read
+ * takes both counts from it. The proxy row is then the stamped one and the
  * filter drops it. The read joins it back on the same two ids
  * ({@link PROXY_SIGHTING}) and takes a member from it wherever the priced row
  * carries none. A side call declares no tools, so its proxy row carries no
