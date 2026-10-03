@@ -18,7 +18,7 @@ import { type RecorderState, SessionRecorder } from "../claude-code/recorder";
 import { isSha256Digest } from "../digest";
 import type { TachoEvent, TachoRuntime } from "../envelope";
 import type { RepositoryRemote } from "./git-facts";
-import type { PreexistingPaths } from "./session-changes";
+import type { PreexistingPaths, SessionCommitFacts } from "./session-changes";
 import { COMMAND_HOOK_TIMEOUTS_S } from "../host/settings-writer";
 import { toProtocolTimestamp } from "../timestamp";
 import {
@@ -243,6 +243,13 @@ export interface SessionFacts {
    * a squash merge comes back through a pull. Bounded like `baselines`.
    */
   sessionCommits?: Record<string, string[]>;
+  /**
+   * The merges a reconciliation counted as this session's, and the test
+   * each counted commit passed, per repository root. Kept apart from
+   * `sessionCommits`, which decides the reported paths (ADR-297). Bounded
+   * like `baselines`.
+   */
+  sessionCommitFacts?: Record<string, SessionCommitFacts>;
   /**
    * The directory of the file the agent last wrote. The session's `cwd` is
    * where it started. An agent working in a git worktree often keeps that
@@ -1670,6 +1677,9 @@ function optionalFacts(facts: SessionFacts): SessionFacts {
       : {}),
     ...(isRecord(facts.sessionCommits)
       ? { sessionCommits: { ...facts.sessionCommits } }
+      : {}),
+    ...(isRecord(facts.sessionCommitFacts)
+      ? { sessionCommitFacts: { ...facts.sessionCommitFacts } }
       : {}),
     ...(facts.workDir !== undefined ? { workDir: facts.workDir } : {}),
     ...(facts.closedIdle === true ? { closedIdle: true } : {}),

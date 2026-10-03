@@ -18,7 +18,7 @@ import {
   digestText,
   readDeliveredContext,
 } from "../claude-code/context";
-import { classifyShellEffect } from "../claude-code/tools";
+import { classifyShellEffect, commitsIn } from "../claude-code/tools";
 import type { TachoEvent } from "../envelope";
 import {
   type DeliveredPrompt,
@@ -52,6 +52,7 @@ import {
   type SessionRegistry,
 } from "./registry";
 import type { RepositoryRemote } from "./git-facts";
+import { noteToolActivity } from "./session-activity";
 import type { SessionSkills } from "./session-skills";
 import type {
   MemoryRecall,
@@ -1052,7 +1053,7 @@ async function routeHook(
     harness === "codex" && input.agent_id !== undefined
       ? undefined
       : input.transcript_path;
-  const { record, reopened } = deps.registry.ensure(input.session_id, {
+  const ensured = deps.registry.ensure(input.session_id, {
     ambient: false,
     lastHookEvent: input.hook_event_name,
     ...(harness !== undefined ? { harness } : {}),
@@ -1064,6 +1065,7 @@ async function routeHook(
     ...(pidFromEnv(env) !== undefined ? { pid: pidFromEnv(env) } : {}),
     ...(replay !== undefined ? { seenAt: replay.receivedAt } : {}),
   });
+  const { record, reopened, created } = ensured;
   if (inferredCwd && record.cwd === undefined && input.cwd !== undefined) {
     record.cwd = input.cwd;
   }
@@ -1129,6 +1131,7 @@ async function routeHook(
   // Stella's tool-use ids are derived from the call, so the daemon numbers
   // each invocation before anything reads the payload.
   const payload = invocationToolUseId(raw, input, record);
+  noteActivity(record, input, payload, at, created);
   const view = deps.policy();
   const events: TachoEvent[] = [...reopening];
   const replayed = replayAttrs(replay);
@@ -1852,6 +1855,16 @@ export function writtenDir(input: {
   tool_name?: string;
   tool_input?: Record<string, unknown>;
 }): string | undefined {
+  const path = writtenPath(input);
+  return path === undefined ? undefined : dirname(path);
+}
+
+/** The absolute path a write tool names at either tool hook. */
+function writtenPath(input: {
+  hook_event_name?: string;
+  tool_name?: string;
+  tool_input?: Record<string, unknown>;
+}): string | undefined {
   if (
     input.hook_event_name !== "PreToolUse" &&
     input.hook_event_name !== "PostToolUse"
@@ -1861,7 +1874,34 @@ export function writtenDir(input: {
   const path =
     input.tool_input?.["file_path"] ?? input.tool_input?.["notebook_path"];
   if (typeof path !== "string" || !isAbsolute(path)) return undefined;
-  return dirname(path);
+  return path;
+}
+
+/**
+ * Note the Bash calls that commit and the paths the session wrote, which
+ * the git lane reads to name the call behind each commit and to flag a
+ * commit holding a path the session never wrote (`session-activity.ts`).
+ */
+function noteActivity(
+  record: SessionRecord,
+  input: HookInput,
+  payload: unknown,
+  at: string,
+  created: boolean,
+): void {
+  const toolUseId = (payload as Record<string, unknown>)["tool_use_id"];
+  const command = input.tool_input?.["command"];
+  const path = writtenPath(input);
+  noteToolActivity(record, {
+    hookEvent: input.hook_event_name,
+    started: created && input.hook_event_name === "SessionStart",
+    ...(typeof toolUseId === "string" ? { toolUseId } : {}),
+    at: Date.parse(at),
+    ...(typeof command === "string" && commitsIn(command)
+      ? { commits: true }
+      : {}),
+    ...(path !== undefined ? { writtenPath: path } : {}),
+  });
 }
 
 /**

@@ -30,12 +30,14 @@ import {
   type SessionRegistry,
 } from "./registry";
 import type { HookEnvelope } from "./server";
+import { sessionActivity } from "./session-activity";
 import {
   MAX_PRE_SESSION_COPY_BYTES,
   readPreexistingPaths,
   readSessionChanges,
   type SessionChanges,
 } from "./session-changes";
+import { readSessionCommits, type SessionCommitList } from "./session-commits";
 import {
   readWorktreeSnapshot,
   type WorktreeSnapshot,
@@ -309,6 +311,7 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
       facts?: GitFacts;
       reading?: SessionChanges;
       snapshot?: WorktreeSnapshot;
+      commits?: SessionCommitList;
     }> = [];
     for (const harnessSessionId of work) {
       const want = gitPending.get(harnessSessionId);
@@ -424,23 +427,38 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
                   baseline: session.baselineCommit,
                   firstReadAt: session.gitFirstReadAt,
                   ownCommits: session.sessionCommits?.[cwd],
+                  commitFacts: session.sessionCommitFacts?.[cwd],
                   preexisting: session.preexistingPaths?.[cwd],
                 },
                 copies,
               );
-              return reading === undefined
-                ? {}
-                : {
-                    reading,
-                    // Each path's hunk against what its row was counted
-                    // from, so the patch and the rows describe one change.
-                    snapshot: await readWorktreeSnapshot(
-                      execAsync,
-                      cwd,
-                      session.baselineCommit,
-                      reading.measured,
-                    ),
-                  };
+              if (reading === undefined) return {};
+              const [snapshot, commits] = await Promise.all([
+                // Each path's hunk against what its row was counted from,
+                // so the patch and the rows describe one change.
+                readWorktreeSnapshot(
+                  execAsync,
+                  cwd,
+                  session.baselineCommit,
+                  reading.measured,
+                ),
+                // The commits the rule counted, which the frame seals so
+                // the control plane can credit each to this run
+                // (ADR-297). A read on the old measure counted none.
+                reading.basis === "session"
+                  ? readSessionCommits(execAsync, cwd, {
+                      own: reading.ownCommits,
+                      merges: reading.commitFacts.merges,
+                      tests: reading.commitFacts.tests,
+                      ...sessionActivity(session),
+                    })
+                  : undefined,
+              ]);
+              return {
+                reading,
+                snapshot,
+                ...(commits !== undefined ? { commits } : {}),
+              };
             })()
           : {}),
       });
@@ -470,6 +488,7 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
     facts,
     reading,
     snapshot,
+    commits,
     ending,
   }: {
     session: SessionRecord;
@@ -479,6 +498,7 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
     facts?: GitFacts;
     reading?: SessionChanges;
     snapshot?: WorktreeSnapshot;
+    commits?: SessionCommitList;
   }): boolean {
     if (session.sealed) return false;
     // The session moved while the probe ran, so this answer describes a
@@ -500,7 +520,7 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
         worktree_path: cwd,
       });
     if (reading !== undefined) {
-      recordReconciliation(session, reading, snapshot);
+      recordReconciliation(session, reading, snapshot, commits);
       if (
         reading.ownCommits.length > 0 ||
         session.sessionCommits?.[cwd] !== undefined
@@ -509,6 +529,16 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
           session.sessionCommits,
           cwd,
           reading.ownCommits,
+        );
+      if (
+        reading.commitFacts.merges.length > 0 ||
+        Object.keys(reading.commitFacts.tests).length > 0 ||
+        session.sessionCommitFacts?.[cwd] !== undefined
+      )
+        session.sessionCommitFacts = rememberForRoot(
+          session.sessionCommitFacts,
+          cwd,
+          reading.commitFacts,
         );
     }
     return (
@@ -547,12 +577,15 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
     session: SessionRecord,
     reading: SessionChanges,
     snapshot?: WorktreeSnapshot,
+    commits?: SessionCommitList,
   ): void {
     const mark = session.recorder.markChain();
     try {
       const reconciled = session.recorder.sealCollectorEvent(
         "oxagen:worktree_reconciled",
-        worktreeReconciledBody(reading.changes),
+        // The commits ride in the body beside the paths, so a reader of
+        // one frame sees which commits the session made (ADR-297).
+        { ...worktreeReconciledBody(reading.changes), ...commits },
         {
           attrs: {
             // What the list measures, so a reader can tell a list that

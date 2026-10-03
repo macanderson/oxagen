@@ -133,6 +133,11 @@ export interface WorktreeAttribution {
   firstReadAt?: number;
   /** Commits an earlier read counted as the session's own. */
   ownCommits?: readonly string[];
+  /**
+   * The merges an earlier read counted as the session's, and the test each
+   * counted commit and merge passed (ADR-297).
+   */
+  commitFacts?: SessionCommitFacts;
   /** The worktree's uncommitted state at the session's first read of it. */
   preexisting?: PreexistingPaths;
 }
@@ -170,6 +175,26 @@ export interface PreSessionCopies {
   capBytes: number;
 }
 
+/**
+ * Which ADR-188 test counted a commit as the session's: no remote-tracking
+ * ref reaches it, its committer email is the repository's, or the
+ * worktree's `HEAD` reflog records it as made there. A commit that passes
+ * several is named by the first, in that order (ADR-297).
+ */
+export type CommitTest = "unpushed" | "email" | "reflog";
+
+/**
+ * What a session keeps about its commits in one worktree beside
+ * `ownCommits`: the merges it made, which never join `ownCommits` because
+ * that list decides the reported paths, and the test each one passed.
+ */
+export interface SessionCommitFacts {
+  /** The session's merge commits, oldest first. */
+  merges: string[];
+  /** The test each commit in `ownCommits` and `merges` passed. */
+  tests: Record<string, CommitTest>;
+}
+
 /** One reconciliation's answer, and what the next one starts from. */
 export interface SessionChanges {
   changes: GitWorkingTreeChange[];
@@ -180,6 +205,8 @@ export interface SessionChanges {
    * `MAX_SESSION_COMMITS` of those counted as the session's.
    */
   ownCommits: string[];
+  /** The merges the next read starts from, and each commit's test. */
+  commitFacts: SessionCommitFacts;
   /**
    * `session`: the rule in `readSessionChanges`. `baseline`: every change
    * since the baseline commit, pulled commits and earlier edits included,
@@ -762,6 +789,34 @@ async function madeHere(
   return out;
 }
 
+/** The commits and merges one read counted, and the test each passed. */
+interface CountedCommits {
+  /** The session's own non-merge commits, oldest first. */
+  own: string[];
+  /** The session's merge commits, oldest first. They never join `own`. */
+  merges: string[];
+  tests: Map<string, CommitTest>;
+}
+
+/**
+ * Keep the commits an earlier read counted that `listed` no longer holds,
+ * then the listed ones, oldest first, newest `MAX_SESSION_COMMITS` carried.
+ */
+function carryOver(
+  known: readonly string[],
+  counted: ReadonlyMap<string, LoggedCommit>,
+): string[] {
+  // Oldest first. `git log` lists newest first, and the lists interleave, so
+  // they are merged by committer date, which a rebase sets in order.
+  const inRange = [...counted.values()]
+    .reverse()
+    .sort((a, b) => a.committedAt - b.committedAt)
+    .map((commit) => commit.sha);
+  const listed = new Set(inRange);
+  const carried = known.filter((sha) => !listed.has(sha));
+  return [...carried.slice(-MAX_SESSION_COMMITS), ...inRange];
+}
+
 /**
  * The commits this session made in one worktree, oldest first: the ones an
  * earlier read counted that `baseline..head` no longer lists (a squash merge
@@ -775,27 +830,37 @@ async function madeHere(
  * - No remote-tracking ref reaches it. A pull fetches before it merges, so
  *   every commit a pull brings in is on a remote-tracking ref by the time
  *   `HEAD` holds it. A commit made here is on none until it is pushed.
+ * - Its committer email is the one this repository stamps. This counts a
+ *   commit the session pushed in the same turn when the reflog is off.
  * - This worktree's `HEAD` reflog records it as made here since the first
  *   read (`madeHere`). This counts a commit the agent made under another
  *   email, such as a `GIT_COMMITTER_EMAIL` its shell exports, which tachod
  *   cannot see, after the agent pushed it in the same turn. A pull, a merge,
  *   and a reset write other reflog subjects, so a pulled commit is not one.
- * - Its committer email is the one this repository stamps. This counts a
- *   commit the session pushed in the same turn when the reflog is off.
+ *
+ * Each commit's test is the first of those that held, in that order, and a
+ * commit an earlier read counted keeps the test it passed then (ADR-297).
  *
  * The dates matter as well as the refs. A rebase, an amend, and a
  * cherry-pick stamp a new committer date on a commit someone wrote earlier,
  * so a commit from before the session that the session replayed would count
  * as its own. The author date survives all three.
  *
- * The two reads of the range, less the remote-tracking refs and by email,
- * are filtered and cut in git, so a long range stays a bounded read. The
- * reflog is read to `MAX_REFLOG_ENTRIES`, and each commit it names that the
- * other tests left out is checked against `HEAD` on its own, so an amended
- * or reset commit that left the history is not counted. Only the commits
- * carried over are bounded here. One still in the range is listed again on
- * every read, so leaving it out of the count would drop its files from one
- * frame and bring them back in the next.
+ * Merges are counted on their own, by the same dates and the first two
+ * tests, and returned apart from the commits. The commits decide which
+ * paths a reconciliation reports (`filesOfCommits`), and a merge in that
+ * list would report every path it brought in from the other branch, which
+ * is what ADR-188 stopped. The reflog test cannot count a merge, because a
+ * merge writes a subject `madeHere` does not read. A merge read that fails
+ * keeps the merges already counted rather than failing the commits.
+ *
+ * The reads of the range are filtered and cut in git, so a long range stays
+ * a bounded read. The reflog is read to `MAX_REFLOG_ENTRIES`, and each
+ * commit it names that the other tests left out is checked against `HEAD`
+ * on its own, so an amended or reset commit that left the history is not
+ * counted. Only the commits carried over are bounded here. One still in the
+ * range is listed again on every read, so leaving it out of the count would
+ * drop its files from one frame and bring them back in the next.
  */
 async function sessionCommits(
   exec: ExecAsync,
@@ -803,31 +868,38 @@ async function sessionCommits(
   baseline: string,
   head: string,
   firstReadAt: number,
-  known: readonly string[],
-): Promise<string[] | undefined> {
-  if (head === baseline) return [...known];
+  known: CountedCommits,
+): Promise<CountedCommits | undefined> {
+  if (head === baseline)
+    return {
+      own: [...known.own],
+      merges: [...known.merges],
+      tests: new Map(known.tests),
+    };
   // Git dates are whole seconds. A commit made in the same second as the
   // first read counts.
   const since = Math.floor(firstReadAt / 1000);
   const email = await committerEmail(exec, cwd);
-  const [local, byEmail, reflog] = await Promise.all([
+  const range = `${baseline}..${head}`;
+  const unpushed = (kind: "--no-merges" | "--merges") =>
     git(exec, cwd, [
       "log",
-      "--no-merges",
+      kind,
       "-z",
       `--max-count=${MAX_RANGE_COMMITS}`,
       LOG_FORMAT,
-      `${baseline}..${head}`,
+      range,
       "--not",
       "--remotes",
       "--",
-    ]),
+    ]);
+  const byEmail = (kind: "--no-merges" | "--merges") =>
     // No commit carries an email git cannot name.
     email === undefined
       ? ""
       : git(exec, cwd, [
           "log",
-          "--no-merges",
+          kind,
           "-z",
           // `--committer` matches a pattern anywhere in the ident, and the
           // brackets pin it to the email. The exact comparison is still made
@@ -837,20 +909,36 @@ async function sessionCommits(
           `--committer=<${email}>`,
           `--max-count=${MAX_RANGE_COMMITS}`,
           LOG_FORMAT,
-          `${baseline}..${head}`,
+          range,
           "--",
-        ]),
+        ]);
+  const [local, mine, reflog, localMerges, myMerges] = await Promise.all([
+    unpushed("--no-merges"),
+    byEmail("--no-merges"),
     madeHere(exec, cwd, since),
+    unpushed("--merges"),
+    byEmail("--merges"),
   ]);
-  if (local === undefined || byEmail === undefined) return undefined;
-  const counted = new Map<string, LoggedCommit>();
-  const count = (commits: LoggedCommit[]) => {
+  if (local === undefined || mine === undefined) return undefined;
+  const tests = new Map(known.tests);
+  const count = (
+    into: Map<string, LoggedCommit>,
+    commits: LoggedCommit[],
+    test: CommitTest,
+  ) => {
     for (const commit of commits)
-      if (commit.committedAt >= since && commit.authoredAt >= since)
-        counted.set(commit.sha, commit);
+      if (commit.committedAt >= since && commit.authoredAt >= since) {
+        into.set(commit.sha, commit);
+        if (!tests.has(commit.sha)) tests.set(commit.sha, test);
+      }
   };
-  count(parseLog(local));
-  count(parseLog(byEmail).filter((commit) => commit.email === email));
+  const counted = new Map<string, LoggedCommit>();
+  count(counted, parseLog(local), "unpushed");
+  count(
+    counted,
+    parseLog(mine).filter((commit) => commit.email === email),
+    "email",
+  );
   // The reflog names commits by what `HEAD` was after each one, including
   // commits an amend or a reset has since taken out of the history. Only
   // those still in `baseline..head` count. A commit made after the first
@@ -884,17 +972,26 @@ async function sessionCommits(
       }),
       UNTRACKED_COUNT_CONCURRENCY,
     );
-    count(candidates.filter((commit) => reached.has(commit.sha)));
+    count(
+      counted,
+      candidates.filter((commit) => reached.has(commit.sha)),
+      "reflog",
+    );
   }
-  // Oldest first. `git log` lists newest first, and the lists interleave, so
-  // they are merged by committer date, which a rebase sets in order.
-  const inRange = [...counted.values()]
-    .reverse()
-    .sort((a, b) => a.committedAt - b.committedAt)
-    .map((commit) => commit.sha);
-  const listed = new Set(inRange);
-  const carried = known.filter((sha) => !listed.has(sha));
-  return [...carried.slice(-MAX_SESSION_COMMITS), ...inRange];
+  const merges = new Map<string, LoggedCommit>();
+  if (localMerges !== undefined && myMerges !== undefined) {
+    count(merges, parseLog(localMerges), "unpushed");
+    count(
+      merges,
+      parseLog(myMerges).filter((commit) => commit.email === email),
+      "email",
+    );
+  }
+  return {
+    own: carryOver(known.own, counted),
+    merges: carryOver(known.merges, merges),
+    tests,
+  };
 }
 
 /**
@@ -933,6 +1030,28 @@ async function filesOfCommits(
     }
   }
   return { paths, present };
+}
+
+/**
+ * The commit names in a list the state file gave back. They end up as git
+ * arguments, so anything that is not a commit name is dropped.
+ */
+function commitNames(value: unknown): string[] {
+  return (Array.isArray(value) ? value : []).filter(
+    (sha): sha is string => typeof sha === "string" && COMMIT_NAME.test(sha),
+  );
+}
+
+const COMMIT_TESTS: readonly CommitTest[] = ["unpushed", "email", "reflog"];
+
+/** The tests in a record the state file gave back, the valid ones only. */
+function testsOf(value: unknown): Map<string, CommitTest> {
+  const out = new Map<string, CommitTest>();
+  if (typeof value !== "object" || value === null) return out;
+  for (const [sha, test] of Object.entries(value))
+    if (COMMIT_NAME.test(sha) && COMMIT_TESTS.includes(test as CommitTest))
+      out.set(sha, test as CommitTest);
+  return out;
 }
 
 /**
@@ -987,11 +1106,24 @@ export async function readSessionChanges(
 ): Promise<SessionChanges | undefined> {
   // Both come back from the state file, and both end up as git arguments,
   // so anything that is not a commit name is dropped rather than passed on.
-  const known = (
-    Array.isArray(start.ownCommits) ? start.ownCommits : []
-  ).filter(
-    (sha): sha is string => typeof sha === "string" && COMMIT_NAME.test(sha),
-  );
+  const known = commitNames(start.ownCommits);
+  const knownMerges = commitNames(start.commitFacts?.merges);
+  const knownTests = testsOf(start.commitFacts?.tests);
+  // What the next read starts from when this one counts nothing new.
+  const keptFacts = (
+    own: readonly string[],
+    merges: readonly string[],
+    tests: ReadonlyMap<string, CommitTest>,
+  ): SessionCommitFacts => {
+    const kept = merges.slice(-MAX_SESSION_COMMITS);
+    const named = new Set([...own, ...kept]);
+    return {
+      merges: kept,
+      tests: Object.fromEntries(
+        [...tests].filter(([sha]) => named.has(sha)),
+      ),
+    };
+  };
   const baseline =
     start.baseline !== undefined && COMMIT_NAME.test(start.baseline)
       ? start.baseline
@@ -1011,6 +1143,11 @@ export async function readSessionChanges(
       : {
           changes,
           ownCommits: known.slice(-MAX_SESSION_COMMITS),
+          commitFacts: keptFacts(
+            known.slice(-MAX_SESSION_COMMITS),
+            knownMerges,
+            knownTests,
+          ),
           basis: "baseline",
           preexisting: "none",
         };
@@ -1026,6 +1163,8 @@ export async function readSessionChanges(
   const head =
     headLine !== undefined && COMMIT_NAME.test(headLine) ? headLine : undefined;
   let own = known;
+  let merges = knownMerges;
+  let tests: ReadonlyMap<string, CommitTest> = knownTests;
   if (baseline !== undefined && head !== undefined) {
     const counted = await sessionCommits(
       exec,
@@ -1033,11 +1172,13 @@ export async function readSessionChanges(
       baseline,
       head,
       start.firstReadAt,
-      own,
+      { own, merges, tests: new Map(tests) },
     );
     // A range too long for the exec's buffer or its timeout lands here.
     if (counted === undefined) return sinceBaseline();
-    own = counted;
+    own = counted.own;
+    merges = counted.merges;
+    tests = counted.tests;
   }
   const touched = await filesOfCommits(exec, cwd, own);
   if (touched === undefined) return sinceBaseline();
@@ -1148,6 +1289,7 @@ export async function readSessionChanges(
       })),
     },
     ownCommits: own.slice(-MAX_SESSION_COMMITS),
+    commitFacts: keptFacts(own.slice(-MAX_SESSION_COMMITS), merges, tests),
     basis: "session",
     preexisting:
       preexisting === undefined

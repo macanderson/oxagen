@@ -530,6 +530,7 @@ describe("the tables this repository declares", () => {
         "0035_tacho_events_request_effort_policy_rules.sql",
         "0036_tacho_events_token_sources.sql",
         "0038_tacho_events_tool_result_tokens_basis.sql",
+        "0039_tacho_events_session_commits.sql",
       ],
       missing: ["tacho_events"],
     });
