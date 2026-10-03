@@ -1044,14 +1044,28 @@ export function normalizeHook(
     case "SessionEnd": {
       const reason =
         str(input["reason"]) ?? str(input["end_reason"]) ?? "other";
+      // The reasons that mean the session finished normally. Claude Code
+      // sends `prompt_input_exit`, `clear` and `other`, and it sends `resume`
+      // when the person switches to another session with `/resume`. Cursor
+      // sends `completed`, `window_close` and `user_close`. Every other reason
+      // seals `aborted`: Claude Code's `logout` and
+      // `bypass_permissions_disabled`, and Cursor's `aborted` and `error`.
+      // Cursor's `error` is not `crashed`, because the recorder keeps
+      // `crashed` for a chain whose harness never reported an end
+      // (`finalize` marks that tail unobserved). Cursor did report this end,
+      // and `session_end_reason` keeps its word.
+      const completed = [
+        "prompt_input_exit",
+        "clear",
+        "other",
+        "resume",
+        "completed",
+        "window_close",
+        "user_close",
+      ].includes(reason);
       const body: BodyOf<"agent_stop"> = {
         session_end_reason: reason,
-        session_outcome:
-          reason === "prompt_input_exit" ||
-          reason === "other" ||
-          reason === "clear"
-            ? "completed"
-            : "aborted",
+        session_outcome: completed ? "completed" : "aborted",
       };
       return [draft("agent_stop", body, { hook_source_kind: reason })];
     }
