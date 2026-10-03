@@ -17,7 +17,8 @@
 -- admitted is still admitted.
 --
 -- The stamp is later than the clock at writing (07:15 UTC), because main
--- already carried 20261003150000 and the gate applies migrations in order.
+-- already carried 20261003150000, an open pull request carried
+-- 20261003170000, and the gate applies migrations in order.
 
 ALTER TABLE work.item_facts
   DROP CONSTRAINT "item_facts_kind_check",

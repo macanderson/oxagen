@@ -121,7 +121,7 @@ with the immature counts. Work now records a revert, so the pilot reads both.
    pull request in its repository and pull request number. Its data names
    that pull request's merge commit and the number of the pull request it
    reverts, so the record says which merge it undid. Migration
-   `20261003153000_item_facts_reverted.sql` widens `item_facts_kind_check` and
+   `20261003171500_item_facts_reverted.sql` widens `item_facts_kind_check` and
    `item_facts_order_check`.
 2. **Work counts the revert GitHub links.** The `pull_request` webhook records
    `reverted` when a pull request merges with a description line that starts

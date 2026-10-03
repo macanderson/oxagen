@@ -552,7 +552,8 @@ describe("WorkItemPage › states", () => {
 
   it("history: names the pull request that reverted a done item, and the item stays done", async () => {
     const done = doneItem();
-    const first = done.history[0]!;
+    const [first] = done.history;
+    if (first === undefined) throw new Error("The done item has no history entry.");
     await renderDetail({
       ...done,
       history: [
