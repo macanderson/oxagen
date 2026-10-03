@@ -78,7 +78,17 @@ import {
   systemContextPartSchema,
   type SystemContextPart,
 } from "@oxagen/recorder";
+import {
+  ARRAY_PARAM_VALUES_MAX,
+  ARRAY_PARAMS_MAX,
+  sessionListFilter,
+  splitArrayParam,
+} from "./array-params";
 import { clickhouse } from "./clickhouse";
+
+// The run readers outside this package (packages/handlers) bound their
+// session lists with these.
+export { sessionBatches, sessionListFilter } from "./array-params";
 
 /**
  * How a frame's cost is known. `estimated` is a frame a backfill rebuilt from
@@ -376,23 +386,15 @@ function classBucketServerToolRequests(rowAlias: string): string {
 const FRAME_SERVER_TOOL_REQUESTS = classBucketServerToolRequests("c");
 
 /**
- * Sessions one array parameter carries at most. The client sends every query
- * parameter as one field of the request URL, and ClickHouse refuses a field
- * longer than `http_max_field_value_size` (128 KiB by default) with "HTML Form
- * Exception: Field value too long" before it reads the query. A UUID takes 45
- * bytes of that field once the client quotes it and the URL encodes it
- * (`%27`, 36 characters, `%27%2C`), so 1,000 of them take about 45 KB. A run
- * whose family held a few thousand subagent sessions failed every rollup and
- * every findings pass on this limit (#5311).
+ * Sessions one array parameter carries at most ({@link ARRAY_PARAM_VALUES_MAX}
+ * in ./array-params.ts). A run whose family held a few thousand subagent
+ * sessions failed every rollup and every findings pass on the URL field
+ * limit when its whole list went in one parameter (#5311).
  */
-export const RUN_SESSIONS_PER_PARAM = 1_000;
+export const RUN_SESSIONS_PER_PARAM = ARRAY_PARAM_VALUES_MAX;
 
-/**
- * Array parameters one read splits a run's sessions across at most. The whole
- * URL must stay under `http_max_uri_size` (1 MiB by default), and ten full
- * parameters take about 450 KB of it.
- */
-export const RUN_SESSIONS_PARAMS_MAX = 10;
+/** Array parameters one read splits a run's sessions across at most. */
+export const RUN_SESSIONS_PARAMS_MAX = ARRAY_PARAMS_MAX;
 
 /**
  * The sessions that carry a run's root in its workspace, named by ClickHouse
@@ -428,23 +430,9 @@ export function runSessionsFilter(sessions: readonly string[]): {
   sql: string;
   params: Record<string, string[]>;
 } {
-  if (sessions.length > RUN_SESSIONS_PER_PARAM * RUN_SESSIONS_PARAMS_MAX)
-    return { sql: RUN_FAMILY_SESSIONS, params: {} };
-  const count = Math.max(1, Math.ceil(sessions.length / RUN_SESSIONS_PER_PARAM));
-  const params: Record<string, string[]> = {};
-  const terms: string[] = [];
-  for (let i = 0; i < count; i += 1) {
-    const name = i === 0 ? "sessionUuids" : `sessionUuids${i}`;
-    params[name] = sessions.slice(
-      i * RUN_SESSIONS_PER_PARAM,
-      (i + 1) * RUN_SESSIONS_PER_PARAM,
-    );
-    terms.push(`session_uuid IN {${name}:Array(UUID)}`);
-  }
-  return {
-    sql: terms.length === 1 ? terms[0]! : `(${terms.join(" OR ")})`,
-    params,
-  };
+  return (
+    sessionListFilter(sessions) ?? { sql: RUN_FAMILY_SESSIONS, params: {} }
+  );
 }
 
 /**
@@ -1399,8 +1387,29 @@ function noteObservedModelBoundHit(args: {
  * one interval, so grouping by this index groups every row whose price-book
  * answer could not have differed.
  */
-function bucketIndexExpr(tsColumn: string): string {
-  return `arrayCount(b -> b <= ${tsColumn}, {boundaries:Array(DateTime64(3))})`;
+function bucketIndexExpr(tsColumn: string, parts: readonly string[]): string {
+  // The list comes split across array parameters (#5311). The parts are
+  // disjoint, so their counts add up to the count over the whole list.
+  const counts = parts.map(
+    (name) => `arrayCount(b -> b <= ${tsColumn}, {${name}:Array(DateTime64(3))})`,
+  );
+  return counts.length === 1 ? counts[0]! : `(${counts.join(" + ")})`;
+}
+
+/**
+ * The price boundaries split into array parameters that each fit one URL
+ * field ({@link splitArrayParam}). The hourly price book sync can move a
+ * model's rate every hour, and about 3,600 boundaries fill one field, so one
+ * parameter was not enough. Throws past the URL budget with the count, where
+ * ClickHouse would refuse the request with a form error that names nothing.
+ */
+function boundaryParams(boundaries: readonly string[]): [string, string[]][] {
+  const split = splitArrayParam("boundaries", boundaries);
+  if (split === null)
+    throw new RangeError(
+      `readObservedModels: ${boundaries.length} price boundaries pass the request URL budget of ${ARRAY_PARAM_VALUES_MAX * ARRAY_PARAMS_MAX}`,
+    );
+  return split;
 }
 
 /**
@@ -1634,7 +1643,9 @@ export async function readObservedModels(args: {
     args.boundariesFor === undefined
       ? (args.boundaries ?? [])
       : await args.boundariesFor(models);
-  const boundaries = boundaryDates.map(chDateTime);
+  const boundarySplit = boundaryParams(boundaryDates.map(chDateTime));
+  const boundaryNames = boundarySplit.map(([name]) => name);
+  const boundaries = Object.fromEntries(boundarySplit);
   const gatewayCacheWrite = "toInt64(coalesce(cache_write_tokens, 0))";
   const tachoCacheWrite = "toInt64(coalesce(c.cache_creation_tokens, 0))";
   const tachoCache1h = classBucketCache1h("c", tachoCacheWrite);
@@ -1655,7 +1666,7 @@ export async function readObservedModels(args: {
         SELECT
           c.model                                                      AS model,
           c.provider                                                   AS provider,
-          ${bucketIndexExpr("c.ts")}                                    AS bucket_index,
+          ${bucketIndexExpr("c.ts", boundaryNames)}                     AS bucket_index,
           toInt64(coalesce(c.input_tokens, 0))                         AS input_uncached,
           toInt64(coalesce(c.cache_read_tokens, 0))                    AS cache_read,
           ${tachoCache5m}                                               AS cache_write_5m,
@@ -1721,7 +1732,7 @@ export async function readObservedModels(args: {
         SELECT
           toString(model)                                              AS model,
           toString(provider)                                           AS provider,
-          ${bucketIndexExpr("toDateTime64(created_at, 3, 'UTC')")}      AS bucket_index,
+          ${bucketIndexExpr("toDateTime64(created_at, 3, 'UTC')", boundaryNames)} AS bucket_index,
           toInt64(greatest(0, toInt64(input_tokens) - toInt64(cached_tokens) - ${gatewayCacheWrite})) AS input_uncached,
           toInt64(coalesce(cached_tokens, 0))                          AS cache_read,
           ${gatewayCacheWrite}                                         AS cache_write_5m,
@@ -1759,7 +1770,7 @@ export async function readObservedModels(args: {
       GROUP BY model, class, bucket_index
       ORDER BY model, class, bucket_index
     `,
-    query_params: { ...baseParams, models, boundaries },
+    query_params: { ...baseParams, models, ...boundaries },
     format: "JSONEachRow",
   });
   type ClassRow = {
@@ -1792,7 +1803,8 @@ export async function readObservedModels(args: {
           tachoWhere,
           workspace,
           until,
-          params: { ...baseParams, models, boundaries },
+          boundaryNames,
+          params: { ...baseParams, models, ...boundaries },
         })
       : null;
 
@@ -1822,13 +1834,15 @@ async function readCallBuckets(args: {
   tachoWhere: string;
   workspace: string;
   until: string;
+  /** The array parameters the price boundaries are split across. */
+  boundaryNames: readonly string[];
   params: Record<string, unknown>;
 }): Promise<Map<string, ObservedCallBucketRow[]>> {
   const tachoCte = `,
       tc AS (
         SELECT
           c.model                                   AS model,
-          ${bucketIndexExpr("c.ts")}                 AS bucket_index,
+          ${bucketIndexExpr("c.ts", args.boundaryNames)} AS bucket_index,
           toInt64(coalesce(c.cache_read_tokens, 0)) AS cache_read,
           c.ts                                      AS ts
         FROM (
@@ -1846,7 +1860,7 @@ async function readCallBuckets(args: {
       WITH gw AS (
         SELECT
           toString(model)                                         AS model,
-          ${bucketIndexExpr("toDateTime64(created_at, 3, 'UTC')")} AS bucket_index,
+          ${bucketIndexExpr("toDateTime64(created_at, 3, 'UTC')", args.boundaryNames)} AS bucket_index,
           toInt64(coalesce(cached_tokens, 0))                     AS cache_read,
           toDateTime64(created_at, 3, 'UTC')                      AS ts
         FROM metered_token_usage

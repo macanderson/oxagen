@@ -1919,6 +1919,51 @@ describe("readObservedModels", () => {
     });
   });
 
+  // #5311: each query parameter is one URL field, ClickHouse refuses a field
+  // over 128 KiB, and about 3,600 boundaries fill one. The hourly price book
+  // sync can move a model's rate every hour.
+  describe("a long boundary list", () => {
+    const summary = {
+      model: "m",
+      provider: "",
+      calls: "1",
+      tokens: "10",
+      first_seen: "2026-09-10T00:00:00.000Z",
+      last_seen: "2026-09-10T00:00:00.000Z",
+    };
+    /** `n` boundaries a minute apart. */
+    const minutes = (n: number) =>
+      Array.from(
+        { length: n },
+        (_, i) => new Date(Date.UTC(2026, 8, 1) + i * 60_000),
+      );
+    const count = (ts: string, name: string) =>
+      `arrayCount(b -> b <= ${ts}, {${name}:Array(DateTime64(3))})`;
+
+    it("splits it across parameters and adds their counts for each bucket", async () => {
+      answerBoth([summary]);
+      const boundaries = minutes(1_001);
+      await readObservedModels({ orgId: ORG, since: SINCE, boundaries });
+      const classCall = queryMock.mock.calls[1]![0];
+      for (const ts of ["c.ts", "toDateTime64(created_at, 3, 'UTC')"])
+        expect(classCall.query).toContain(
+          `(${count(ts, "boundaries")} + ${count(ts, "boundaries1")})`,
+        );
+      expect(classCall.query_params["boundaries"]).toHaveLength(1_000);
+      expect(classCall.query_params["boundaries1"]).toEqual([
+        boundaries[1_000]!.toISOString().replace("T", " ").replace("Z", ""),
+      ]);
+    });
+
+    it("refuses a list past the URL budget with its count, before the class read", async () => {
+      answer([summary]);
+      await expect(
+        readObservedModels({ orgId: ORG, since: SINCE, boundaries: minutes(10_001) }),
+      ).rejects.toThrow(/10001 price boundaries/);
+      expect(queryMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // The boundary array is scanned once per frame, so a caller that hands in
   // a whole price catalog's history pays for every model's rate changes on
   // every frame and splits the report into buckets that answer identically.

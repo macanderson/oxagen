@@ -478,6 +478,43 @@ describe("run work reads", () => {
       sessionUuids: [SESSION, CHILD],
     });
   });
+  // #5311: a run with thousands of subagent chains named more than one URL
+  // field holds, and ClickHouse refused the read before it ran.
+  it("splits a long chain list across parameters, and reads by the root past the URL budget", async () => {
+    const chains = Array.from(
+      { length: 10_000 },
+      (_, i) => `0192d4a8-7c1e-7a00-8000-${i.toString(16).padStart(12, "0")}`,
+    );
+    const sent = () =>
+      chSelect.mock.calls[0]?.[0] as {
+        query: string;
+        params: Record<string, unknown>;
+      };
+    chSelect.mockClear();
+    // The run's own chain and 1,000 subagent chains: 1,001 in all.
+    await readRunPrLinks(SESSION, chains.slice(0, 1_000));
+    const split = sent();
+    expect(split.query).toContain(
+      "AND (session_uuid IN {sessionUuids:Array(UUID)} OR session_uuid IN {sessionUuids1:Array(UUID)})",
+    );
+    expect(split.params["sessionUuids"]).toEqual([
+      SESSION,
+      ...chains.slice(0, 999),
+    ]);
+    expect(split.params["sessionUuids1"]).toEqual([chains[999]]);
+    chSelect.mockClear();
+    // 10,001 chains pass the URL budget, and the root predicate alone reads them.
+    await readRunPrLinks(SESSION, chains);
+    const byRoot = sent();
+    expect(byRoot.query).not.toContain("sessionUuids");
+    expect(byRoot.query).toMatch(
+      /\(session_uuid = \{rootSessionUuid:UUID\}\s+OR root_session_uuid = \{rootSessionUuid:UUID\}\)/,
+    );
+    expect(byRoot.params).toEqual({
+      rootSessionUuid: SESSION,
+      limit: WORK_PR_LINK_CAP + 1,
+    });
+  });
   // The read grouped by chain and URL, so a PR the run and a subagent both
   // linked took two of the 51 rows the limit allows: 30 shared PRs filled
   // the cap, and a PR only another subagent linked never reached the spine.

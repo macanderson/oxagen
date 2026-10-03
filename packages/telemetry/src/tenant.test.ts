@@ -26,9 +26,12 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { chInsert, chSelect } from "./tenant";
 import {
   selectAgentDaySpend,
+  selectTachoChainHeads,
   selectTachoEventRecords,
   selectTachoEvents,
+  selectTachoSubagentEvents,
 } from "./tacho-events";
+import { selectTachoTurnFacts } from "./tacho-turns";
 
 const ORG = "00000000-0000-0000-0000-00000000a111";
 const WS = "00000000-0000-0000-0000-00000000b222";
@@ -216,6 +219,63 @@ describe("clickhouse tenant seam", () => {
         }),
       }),
     );
+  });
+
+  // A run with thousands of subagent chains named more than one URL field
+  // holds (#5311). The split shapes must still pass the fence: an OR of
+  // array parameters in one query, and one query per batch of chains.
+  describe("a long chain list through the source fence", () => {
+    const ROOT = "00000000-0000-4000-8000-00000000d444";
+    const chains = Array.from(
+      { length: 1_001 },
+      (_, i) => `00000000-0000-4000-8000-${i.toString(16).padStart(12, "0")}`,
+    );
+    const SCOPED =
+      "WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}) AS tacho_events";
+
+    it("splits the subagent read's list across parameters in one query", async () => {
+      await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+        selectTachoSubagentEvents({
+          rootSessionUuid: ROOT,
+          sessionUuids: chains,
+          after: null,
+          limit: 500,
+        }),
+      );
+      expect(query).toHaveBeenCalledOnce();
+      expect(query).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: expect.stringContaining(
+            "OR session_uuid IN {sessionUuids1:Array(UUID)})",
+          ),
+          query_params: expect.objectContaining({
+            sessionUuids1: [chains[1_000]],
+          }),
+        }),
+      );
+      expect(query).toHaveBeenCalledWith(
+        expect.objectContaining({ query: expect.stringContaining(SCOPED) }),
+      );
+    });
+
+    it.each([
+      [
+        "selectTachoChainHeads",
+        () => selectTachoChainHeads({ rootSessionUuid: ROOT, sessionUuids: chains }),
+      ],
+      [
+        "selectTachoTurnFacts",
+        () => selectTachoTurnFacts({ sessionUuids: chains }),
+      ],
+    ] as const)("reads %s in batches that each pass the fence", async (_name, read) => {
+      await runInTenantScope({ orgId: ORG, workspaceId: WS }, read);
+      expect(query).toHaveBeenCalledTimes(2);
+      for (const [call] of query.mock.calls as unknown as [
+        { query: string; query_params: Record<string, unknown> },
+      ][]) {
+        expect(call.query).toContain(SCOPED);
+      }
+    });
   });
 
   it("fails closed with no scope", async () => {
