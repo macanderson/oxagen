@@ -28,7 +28,7 @@ import {
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { phoneWidth } from "@/test/phone";
-import { expectTouchTarget } from "@/test/touch-target";
+import { expectTouchTarget, lengthPx } from "@/test/touch-target";
 import en from "../../../messages/en.json";
 import createMessages from "../../../messages/create.json";
 import shellMessages from "../../../messages/shell.json";
@@ -195,10 +195,14 @@ describe("thumb bar", () => {
       expectTouchTarget(style(slot).minHeight);
       expectTouchTarget(style(slot).minWidth);
     }
-    // Six px of air over the home indicator, on the spacing scale (#5283).
-    expect(style(bar).paddingBottom).toBe(
-      "calc(var(--spacing) * 1.5 + env(safe-area-inset-bottom))",
+    // Six px of air over the home indicator, on the spacing scale (#5283),
+    // plus the safe area. jsdom computes neither, so the test splits the two
+    // and resolves the spacing step to px.
+    const padding = /^calc\((.+) \+ env\(safe-area-inset-bottom\)\)$/.exec(
+      style(bar).paddingBottom,
     );
+    expect(padding).not.toBeNull();
+    expect(lengthPx(`calc(${padding?.[1] ?? ""})`)).toBe(6);
   });
 
   const waitingIn = (count: number, more = false) =>
