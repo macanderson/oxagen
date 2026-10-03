@@ -66,6 +66,7 @@ import {
   modelProxyPortFor,
   sessionScopeOf,
   withRecordedHarnessFiles,
+  writeHostFile,
 } from "../host/host-file";
 import { claudeCodeSessionHasOxagenTools } from "../host/claude-code-mcp-writer";
 import { readModelBaseUrlState } from "../host/model-base-url";
@@ -109,6 +110,7 @@ import {
 import { keepWorkOrder as keepPendingWorkOrder } from "../host/work-orders";
 import { sessionUuid as deriveSessionUuid, ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
+import { TACHO_VERSION } from "../version";
 import {
   tachoHarnessSchema,
   TACHO_ENFORCEMENT_TIER_ATTR,
@@ -705,7 +707,30 @@ async function initializeDaemon(
       `no enrollment at ${paths.hostFile}; run \`oxagen agent enroll\` first`,
     );
   }
-  let host: HostFile = loaded;
+  // host.json records the version that enrolled, and an upgrade in place runs
+  // newer code against the same file (#5365). Every event, the health report
+  // and the user agent read the version from `host`, so it names the code
+  // running now, and host.json is brought up to date for `oxagen agent
+  // status` and the desktop app. Only a file that still holds this
+  // enrollment is written.
+  let host: HostFile =
+    loaded.wrapper_version === TACHO_VERSION
+      ? loaded
+      : { ...loaded, wrapper_version: TACHO_VERSION };
+  const onDisk = readHostFileLenient(paths.hostFile).host;
+  if (
+    onDisk !== undefined &&
+    onDisk.host_enrollment_id === host.host_enrollment_id &&
+    onDisk.wrapper_version !== TACHO_VERSION
+  ) {
+    log(
+      `host.json now records version ${TACHO_VERSION} (was ${onDisk.wrapper_version})`,
+    );
+    writeHostFile(paths.hostFile, {
+      ...onDisk,
+      wrapper_version: TACHO_VERSION,
+    });
+  }
   for (const dir of [paths.dir, paths.wal, paths.spool, paths.quarantine])
     ensureDir(dir);
   // The memories each live prompt recalls, asked of the control plane with
@@ -1530,8 +1555,8 @@ async function initializeDaemon(
       bundle_etag: host.bundle.etag,
       // What this daemon's `policyBundleSchema` names, so the control plane
       // can send a gated bundle field without breaking hosts that predate it.
-      // Reported from the running code rather than from `host.json`, which
-      // `enroll` writes once and no upgrade rewrites.
+      // Reported from the running code rather than read off `version`, which
+      // a daemon older than #5365 took from the enrollment, not the upgrade.
       bundle_features: [...TACHO_BUNDLE_FEATURES],
       // Omitted until a read succeeds: absent means nothing was said, and a
       // daemon that could not read the files has nothing to say.

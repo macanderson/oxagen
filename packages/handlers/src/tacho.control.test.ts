@@ -559,9 +559,9 @@ describe("fetch_commands", () => {
   it("records the bundle fields the daemon says it can parse", async () => {
     // The gate on a new bundle field reads this column, and it has to track
     // the code the host is *running*: `wrapper_version` and `daemon_version`
-    // both come from `host.json`, which `enroll` writes once and no upgrade
-    // rewrites, so a host that upgrades in place would otherwise never be
-    // recognised as able to parse the field.
+    // both come from `host.json`, and a daemon older than #5365 reports the
+    // version it enrolled with, so a host that upgrades in place would
+    // otherwise never be recognised as able to parse the field.
     const db: Fake = {
       hosts: [host({ bundleFeatures: [] })],
       sessions: [],

@@ -376,27 +376,37 @@ function requestedMcpEndpoint(
 }
 
 /**
- * `host` with its three command fields moved to the binary running now, or
- * undefined when they already name it. All three move together: the hook,
- * the daemon and the MCP shim are computed from one bin dir, and a host.json
- * naming two layouts would run a hook from one install and a daemon from
- * another.
+ * `host` with its three command fields and its version moved to the binary
+ * running now, or undefined when they already name it. All three commands
+ * move together: the hook, the daemon and the MCP shim are computed from one
+ * bin dir, and a host.json naming two layouts would run a hook from one
+ * install and a daemon from another. The version moves with them, and on its
+ * own when an upgrade keeps the same paths, because the daemon stamps it on
+ * every event and reports it to the control plane (#5365).
  */
 export function repointCommands(
   host: HostFile,
   runtime: CliDeps["runtime"],
+  wrapperVersion: string,
 ): HostFile | undefined {
-  const same =
-    host.hook_command === runtime.hookCommand &&
-    sameArgv(host.daemon_command, runtime.daemonCommand) &&
-    sameArgv(host.mcp_stdio_command ?? [], runtime.mcpStdioCommand);
-  if (same) return undefined;
+  if (sameCommands(host, runtime) && host.wrapper_version === wrapperVersion)
+    return undefined;
   return {
     ...host,
     hook_command: runtime.hookCommand,
     daemon_command: runtime.daemonCommand,
     mcp_stdio_command: runtime.mcpStdioCommand,
+    wrapper_version: wrapperVersion,
   };
+}
+
+/** Whether `host` already runs the hook, daemon and MCP shim of `runtime`. */
+function sameCommands(host: HostFile, runtime: CliDeps["runtime"]): boolean {
+  return (
+    host.hook_command === runtime.hookCommand &&
+    sameArgv(host.daemon_command, runtime.daemonCommand) &&
+    sameArgv(host.mcp_stdio_command ?? [], runtime.mcpStdioCommand)
+  );
 }
 
 function sameArgv(a: readonly string[], b: readonly string[]): boolean {
@@ -791,7 +801,7 @@ async function enrollSteps(
     // to upgrade; that only works if the running binary wins. The transient
     // guard the fresh-enrollment path applies below holds here too: a bin
     // dir that is gone once this process exits must not be recorded.
-    const repointed = repointCommands(host, deps.runtime);
+    const repointed = repointCommands(host, deps.runtime, deps.wrapperVersion);
     if (repointed !== undefined) {
       if (deps.runtime.transient !== undefined) {
         warnings.push(
@@ -806,9 +816,14 @@ async function enrollSteps(
         // the environment it later runs in says.
         host = { ...repointed, harness_files: harnessFilesRecord(deps.paths) };
         writeHostFile(deps.paths.hostFile, host);
-        deps.out(
-          `      service and hooks now run from ${deps.runtime.binDir} (was ${existing.hook_command})`,
-        );
+        if (!sameCommands(existing, deps.runtime))
+          deps.out(
+            `      service and hooks now run from ${deps.runtime.binDir} (was ${existing.hook_command})`,
+          );
+        if (existing.wrapper_version !== deps.wrapperVersion)
+          deps.out(
+            `      host.json now records version ${deps.wrapperVersion} (was ${existing.wrapper_version})`,
+          );
       }
     }
   } else {
