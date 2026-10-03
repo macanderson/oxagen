@@ -118,6 +118,10 @@ export function removeWorkOrder(
  * is alive. A file left by a process that died (a crash, a killed terminal)
  * does not block: the person may start again, and the server refuses the
  * claim if a run already linked.
+ *
+ * The file also names the order's work item, from the claim, so
+ * `oxagen work claim` run inside the harness can name it too. A file an
+ * older `start` wrote has no item.
  */
 export const runningWorkOrderSchema = z
   .object({
@@ -126,6 +130,8 @@ export const runningWorkOrderSchema = z
     pid: z.number().int().positive(),
     /** When the harness started, ISO 8601. */
     started_at: z.string(),
+    /** The work item the order is for (`wi_…`). */
+    item: z.string().regex(WORK_ITEM_ID_PATTERN).optional(),
   })
   .passthrough();
 
@@ -147,15 +153,45 @@ export function processIsAlive(pid: number): boolean {
   }
 }
 
-/** Record that a harness for `id` started, waited on by process `pid`. */
+/**
+ * Record that a harness for `id` started, waited on by process `pid`, with
+ * the order's work item. An item that is not a work item id is left out, so
+ * the file still reads and still guards a second start.
+ */
 export function markWorkOrderRunning(
   paths: Pick<TachoPaths, "workOrders">,
   id: string,
   pid: number,
   startedAt: string,
+  item?: string,
 ): void {
-  const record: RunningWorkOrder = { work_order: id, pid, started_at: startedAt };
+  const record: RunningWorkOrder = {
+    work_order: id,
+    pid,
+    started_at: startedAt,
+    ...(item !== undefined && WORK_ITEM_ID_PATTERN.test(item) ? { item } : {}),
+  };
   writeSensitiveFileAtomic(runningFile(paths, id), `${JSON.stringify(record)}\n`);
+}
+
+/**
+ * The running mark for `id`, whether or not its process is alive, or
+ * undefined when there is no file or it does not read.
+ */
+export function readRunningWorkOrder(
+  paths: Pick<TachoPaths, "workOrders">,
+  id: string,
+): RunningWorkOrder | undefined {
+  let raw: unknown;
+  try {
+    raw = readJsonFileIfExists(runningFile(paths, id));
+  } catch {
+    return undefined;
+  }
+  const parsed = runningWorkOrderSchema.safeParse(raw);
+  return parsed.success && parsed.data.work_order === id
+    ? parsed.data
+    : undefined;
 }
 
 /**
@@ -167,15 +203,8 @@ export function runningWorkOrder(
   id: string,
   isAlive: (pid: number) => boolean = processIsAlive,
 ): RunningWorkOrder | undefined {
-  let raw: unknown;
-  try {
-    raw = readJsonFileIfExists(runningFile(paths, id));
-  } catch {
-    return undefined;
-  }
-  const parsed = runningWorkOrderSchema.safeParse(raw);
-  if (!parsed.success || parsed.data.work_order !== id) return undefined;
-  return isAlive(parsed.data.pid) ? parsed.data : undefined;
+  const mark = readRunningWorkOrder(paths, id);
+  return mark !== undefined && isAlive(mark.pid) ? mark : undefined;
 }
 
 /** Clear the running mark for `id`. Nothing happens when there is none. */

@@ -260,3 +260,10 @@ accepts nothing: a person still ticks every criterion and accepts the head.
   the claim and the rejection of a work order. The local MCP gateway's key
   still serves only tools that change nothing, so the gateway does not carry
   it.
+- **How the agent calls it.** The host's control client posts the claim to
+  `POST /v1/tacho/work-orders/criteria/claim`, under the same per-host limit as
+  the claim and the rejection of a work order. Inside the run, the agent runs
+  `oxagen work claim <criterion> --text <how>`: it reads the work order from
+  `OXAGEN_WORK_ORDER_ID`, the item from the mark `oxagen work start` keeps
+  while the harness runs, and the head from `git rev-parse HEAD`. The first
+  prompt tells the agent to claim each criterion after it pushes.

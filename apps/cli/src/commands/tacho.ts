@@ -15,6 +15,7 @@
  *   oxagen agent detect     which harnesses this machine has, and which are enrolled
  *   oxagen work list        the work orders waiting on this machine
  *   oxagen work start       claim a work order and start its agent here
+ *   oxagen work claim       claim, from inside the run, that a criterion of the brief is met
  *
  * The hidden `oxagen tacho <verb>` group calls the same handlers. The work
  * lives in `@oxagen/recorder/cli`; this module supplies the CLI's own
@@ -427,6 +428,22 @@ export async function handleWorkStart(
   const { workStart } = await import("@oxagen/recorder/cli");
   const deps = await tachoDeps(writer);
   return workStart(workOrderId, { ...deps, cwd: process.cwd() });
+}
+
+/**
+ * `oxagen work claim <criterion> --text <how>`: the agent working a send,
+ * inside the run `work start` started, claims that the head commit in this
+ * directory meets one criterion of the brief (`workClaim` in the recorder,
+ * ADR-251). A person still decides.
+ */
+export async function handleWorkClaim(
+  criterionId: string,
+  opts: { text: string },
+  writer: CommandWriter = stdoutWriter,
+): Promise<number> {
+  const { workClaim } = await import("@oxagen/recorder/cli");
+  const deps = await tachoDeps(writer);
+  return workClaim(criterionId, opts, { ...deps, cwd: process.cwd() });
 }
 
 export interface TachoHostsOptions {

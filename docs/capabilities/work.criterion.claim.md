@@ -7,8 +7,9 @@ Claim, as the agent working a send, that one criterion of the brief is met on th
 ## Surface
 
 - API: `POST /v1/:org_slug/:workspace_slug/work/orders/criteria/claim`, returns 200
+- API (host): `POST /v1/tacho/work-orders/criteria/claim`, returns 200. It takes the enrolled host's API key and at most 16 KiB of `application/json`, under the host's work order rate limit. `oxagen work claim <criterion> --text <how>` calls it from inside the run.
 - MCP: `claim_work_criterion`
-- Not on the CLI or agent surface.
+- Not on the governance CLI or agent surface. The host's `oxagen work claim` is the agent's way in.
 - Authentication: the run linked to the send, or the API key of the enrolled host that claimed the send. A signed-in person and any other API key are refused before anything is read.
 - Roles: the host key's creator must still be an org Owner or Admin, as for [claim_work_order](work.order.claim.md)
 - Billing: `noBillingGate: true`

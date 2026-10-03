@@ -802,7 +802,8 @@ tachoScoped.use(
     bucketKey: enrolledMachineBucketKey,
   }),
 );
-// The work order claim and rejection (ADR-251) share one bucket.
+// The work order claim, its rejection, and the criterion claim (ADR-251)
+// share one bucket.
 tachoScoped.use(
   "/work-orders/*",
   distributedRateLimiter({
