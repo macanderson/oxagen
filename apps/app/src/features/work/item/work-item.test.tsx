@@ -400,9 +400,11 @@ describe("WorkItemPage › states", () => {
     expect(within(review).getByText("Pull requests")).toBeInTheDocument();
     const rows = within(review).getAllByTestId("work-review-pull");
     expect(rows.map((row) => row.getAttribute("data-pull-request"))).toEqual(["642", "641"]);
+    const [, older] = rows;
+    if (older === undefined) throw new Error("the second pull request row is missing");
     expect(rows[0]).toHaveTextContent("acme/platform#642");
     expect(rows[0]?.querySelector('[data-pull-state="draft"]')).toHaveTextContent("Draft");
-    expect(within(rows[1]!).getByRole("link", { name: "acme/platform#641" })).toHaveAttribute(
+    expect(within(older).getByRole("link", { name: "acme/platform#641" })).toHaveAttribute(
       "href",
       "https://github.com/acme/platform/pull/641",
     );
