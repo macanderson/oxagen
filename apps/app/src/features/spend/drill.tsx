@@ -493,7 +493,9 @@ export function DrillSection({
             label: t("tabs.findings"),
           }
         : {
-            to: routes.spend(at.org, at.ws, { tab: "month" }),
+            // The Month tab opens on Work item, so the crumb names the
+            // grouping it goes back to.
+            to: routes.spend(at.org, at.ws, { tab: "month", by: "agent" }),
             label: t("month.by.titles.agent"),
           };
   return (

@@ -9966,6 +9966,10 @@ type Messages = {
         label: string;
         note: string;
       };
+      notMetered: {
+        label: string;
+        reported: string;
+      };
       moreRuns: string;
       showRuns: string;
       reported: string;
