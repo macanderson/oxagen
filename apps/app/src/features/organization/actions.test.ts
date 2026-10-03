@@ -309,20 +309,31 @@ const GOVERNANCE = {
   proposalId: null,
 };
 
+/**
+ * A plain rename's draft: no mode picked, and nothing to say about the spend
+ * settings, so the write carries the name and slug alone.
+ */
+const RENAME = {
+  name: "Research",
+  slug: "research",
+  mode: "",
+  applyImmediately: false,
+  runEnrichmentEnabled: null,
+  dailyBudgetUsd: {},
+};
+
 describe("editWorkspace", () => {
   it("renames and re-slugs the workspace the section names", async () => {
     invoke.mockResolvedValue(SETTINGS);
-    expect(
-      await editWorkspace("acme", "wrk_1", {
-        name: "Research",
-        slug: "research",
-        mode: "",
-        applyImmediately: false,
-      }),
-    ).toEqual({ ok: true, value: { slug: "research", governance: null } });
+    expect(await editWorkspace("acme", "wrk_1", RENAME)).toEqual({
+      ok: true,
+      value: { slug: "research", governance: null },
+    });
     // One capability, because no mode was picked: the governance half costs a
     // GitHub round trip and must not run on a plain rename.
     expect(invoke).toHaveBeenCalledTimes(1);
+    // Name and slug alone: nothing about the spend settings rides a rename
+    // that had nothing to say about them.
     expect(invoke).toHaveBeenCalledWith(
       "update_workspace_settings",
       { workspaceId: "wrk_1", name: "Research", slug: "research" },
@@ -330,15 +341,79 @@ describe("editWorkspace", () => {
     );
   });
 
-  it("refuses an id that is not a workspace's before the kernel runs (negative)", async () => {
+  it("sends the enrichment switch and the budget patch in the rename's own call", async () => {
+    invoke.mockResolvedValue({
+      ...SETTINGS,
+      runEnrichmentEnabled: false,
+      dailyBudgetUsd: { runEnrichment: 2.5, assistant: null, work: 0 },
+    });
     expect(
-      await editWorkspace("acme", "rol_1", {
+      await editWorkspace("acme", "wrk_1", {
+        ...RENAME,
+        runEnrichmentEnabled: false,
+        dailyBudgetUsd: { runEnrichment: 2.5, work: 0 },
+      }),
+    ).toEqual({ ok: true, value: { slug: "research", governance: null } });
+    // One write: the rename and the spend settings are one audit record, and
+    // a lane left out of the patch is left alone by the handler.
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledWith(
+      "update_workspace_settings",
+      {
+        workspaceId: "wrk_1",
         name: "Research",
         slug: "research",
-        mode: "",
-        applyImmediately: false,
+        runEnrichmentEnabled: false,
+        dailyBudgetUsd: { runEnrichment: 2.5, work: 0 },
+      },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("sends null for a lane whose limit was removed", async () => {
+    invoke.mockResolvedValue(SETTINGS);
+    await editWorkspace("acme", "wrk_1", {
+      ...RENAME,
+      dailyBudgetUsd: { assistant: null },
+    });
+    expect(invoke.mock.calls[0]?.[1]).toEqual({
+      workspaceId: "wrk_1",
+      name: "Research",
+      slug: "research",
+      dailyBudgetUsd: { assistant: null },
+    });
+  });
+
+  it("refuses a budget the contract does not admit on its lane before the kernel runs (negative)", async () => {
+    expect(
+      await editWorkspace("acme", "wrk_1", {
+        ...RENAME,
+        dailyBudgetUsd: { work: -1 },
       }),
-    ).toMatchObject({ ok: false, reason: "invalid", field: "workspaceId" });
+    ).toMatchObject({
+      ok: false,
+      reason: "invalid",
+      field: "dailyBudgetUsd.work",
+    });
+    expect(
+      await editWorkspace("acme", "wrk_1", {
+        ...RENAME,
+        dailyBudgetUsd: { assistant: 100_001 },
+      }),
+    ).toMatchObject({
+      ok: false,
+      reason: "invalid",
+      field: "dailyBudgetUsd.assistant",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("refuses an id that is not a workspace's before the kernel runs (negative)", async () => {
+    expect(await editWorkspace("acme", "rol_1", RENAME)).toMatchObject({
+      ok: false,
+      reason: "invalid",
+      field: "workspaceId",
+    });
     expect(invoke).not.toHaveBeenCalled();
   });
 
@@ -346,8 +421,7 @@ describe("editWorkspace", () => {
     invoke.mockResolvedValueOnce(SETTINGS).mockResolvedValueOnce(GOVERNANCE);
     expect(
       await editWorkspace("acme", "wrk_1", {
-        name: "Research",
-        slug: "research",
+        ...RENAME,
         mode: "solo",
         applyImmediately: true,
       }),
@@ -383,12 +457,7 @@ describe("editWorkspace", () => {
       new kernel.HandlerError({ code: "conflict", reason: "slug_taken" }),
     );
     expect(
-      await editWorkspace("acme", "wrk_1", {
-        name: "Research",
-        slug: "research",
-        mode: "solo",
-        applyImmediately: false,
-      }),
+      await editWorkspace("acme", "wrk_1", { ...RENAME, mode: "solo" }),
     ).toMatchObject({ ok: false, reason: "conflict", code: "slug_taken" });
     expect(invoke).toHaveBeenCalledTimes(1);
   });
@@ -403,12 +472,7 @@ describe("editWorkspace", () => {
     // ok, not a refusal: the rename happened, and answering `denied` for the
     // whole edit would claim otherwise.
     expect(
-      await editWorkspace("acme", "wrk_1", {
-        name: "Research",
-        slug: "research",
-        mode: "team",
-        applyImmediately: false,
-      }),
+      await editWorkspace("acme", "wrk_1", { ...RENAME, mode: "team" }),
     ).toMatchObject({
       ok: true,
       value: {
@@ -421,12 +485,7 @@ describe("editWorkspace", () => {
   it("refuses an unknown mode without invoking governance (negative)", async () => {
     invoke.mockResolvedValue(SETTINGS);
     expect(
-      await editWorkspace("acme", "wrk_1", {
-        name: "Research",
-        slug: "research",
-        mode: "permissive",
-        applyImmediately: false,
-      }),
+      await editWorkspace("acme", "wrk_1", { ...RENAME, mode: "permissive" }),
     ).toMatchObject({
       ok: true,
       value: { governance: { ok: false, reason: "invalid" } },

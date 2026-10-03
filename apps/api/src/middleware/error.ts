@@ -23,6 +23,8 @@ import type { AppEnv } from "../app";
 //                            plan"
 //   - assistant_spend_cap  — the org spent its monthly cap of platform-paid
 //                            assistant tokens (metering.ts, ADR-053 §3)
+//   - workspace_budget_spent — the workspace spent its own daily budget on
+//                            the lane (workspace-lane-budget.ts, #5426)
 // The list is a hand-maintained mirror of the throwing classes in
 // @oxagen/billing; BILLING_ERROR_CODES is exported so a test can assert the
 // mirror stays complete rather than discovering a gap as a production 500.
@@ -32,6 +34,7 @@ export const BILLING_ERROR_CODES = [
   "budget_exceeded",
   "gau_exhausted",
   "assistant_spend_cap",
+  "workspace_budget_spent",
 ] as const;
 type BillingErrorCode = (typeof BILLING_ERROR_CODES)[number];
 interface BillingError extends Error {

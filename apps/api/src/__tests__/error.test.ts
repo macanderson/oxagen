@@ -731,6 +731,11 @@ describe("errorMiddleware billing errors", () => {
     expect(BILLING_ERROR_CODES).toContain("gau_exhausted");
   });
 
+  it("BILLING_ERROR_CODES lists workspace_budget_spent (#5426)", async () => {
+    const { BILLING_ERROR_CODES } = await import("../middleware/error");
+    expect(BILLING_ERROR_CODES).toContain("workspace_budget_spent");
+  });
+
   // The middleware's BILLING_ERROR_CODES list is a hand-maintained mirror of the
   // error classes @oxagen/billing throws. This asserts against the REAL classes,
   // so adding a fifth billing error without mapping it fails here rather than

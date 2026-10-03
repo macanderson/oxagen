@@ -19,7 +19,11 @@
 import { GOVERNANCE_MODES } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import type { Workspace, WorkspaceFacts } from "@/data/contracts/org";
+import type {
+  Workspace,
+  WorkspaceFacts,
+  WorkspaceSpendSettings,
+} from "@/data/contracts/org";
 import {
   defaultRepoName,
   SteeringRepoDestinationFields,
@@ -41,6 +45,12 @@ import {
 } from "./actions";
 import { textValue, WriteDialog } from "./dialog";
 import { note, warn } from "./parts";
+import {
+  BUDGET_FIELDS,
+  BUDGET_LANES,
+  type BudgetLane,
+  budgetPatchOf,
+} from "./workspace-budget-form";
 
 /** The create form's draft: the name, and the steering repo's place and name. */
 function newDraftOf(form: FormData): NewWorkspaceDraft {
@@ -163,6 +173,124 @@ function GovernanceField({ idPrefix }: { idPrefix: string }) {
 }
 
 /**
+ * One lane's daily budget: a number input in US dollars with cents, blank for
+ * no limit. The stored value is its default, so a value left as it opened is
+ * read back as blank or as the same number, and `budgetPatchOf` says which
+ * means what. The ceiling is the contract's, so the browser refuses a value
+ * past it before the write does.
+ */
+function BudgetField({
+  idPrefix,
+  lane,
+  stored,
+}: {
+  idPrefix: string;
+  lane: BudgetLane;
+  /** The stored limit, or null for none; also null when the settings were not read. */
+  stored: number | null;
+}) {
+  const t = useTranslations("organization.actions.spend");
+  return (
+    <Field
+      id={`${idPrefix}-${BUDGET_FIELDS[lane]}`}
+      name={BUDGET_FIELDS[lane]}
+      label={t(lane)}
+      hint={t("unit")}
+      type="number"
+      min="0"
+      max="100000"
+      step="0.01"
+      inputMode="decimal"
+      placeholder={t("noLimit")}
+      defaultValue={stored ?? ""}
+      data-testid={`${idPrefix}-${BUDGET_FIELDS[lane]}`}
+      className="max-md:text-input-touch"
+    />
+  );
+}
+
+/**
+ * The Model spend section of Edit workspace (#5426): whether Stella names and
+ * summarizes the workspace's runs, and the daily budget of each lane its own
+ * model calls spend on. Billing is pass-through, so these are the customer's
+ * own controls over the workspace's spend.
+ *
+ * The switch is controlled rather than read off the form, because an unticked
+ * checkbox is absent from `FormData` and so cannot be told from one that was
+ * never drawn. Its state starts as the stored value, or null when the
+ * settings could not be read, and null is what the write reads as "nothing
+ * to send": the dialog still opens on a workspace whose settings the viewer
+ * cannot read, to rename it, and must not then switch its enrichment on.
+ */
+function SpendFields({
+  idPrefix,
+  settings,
+  enrichment,
+  onEnrichment,
+}: {
+  idPrefix: string;
+  /** What `get_workspace_settings` answered; null when it could not be read. */
+  settings: WorkspaceSpendSettings | null;
+  enrichment: boolean | null;
+  onEnrichment: (next: boolean) => void;
+}) {
+  const t = useTranslations("organization.actions.spend");
+  return (
+    <fieldset
+      className="flex min-w-0 flex-col gap-3 border-0 p-0"
+      data-testid={`${idPrefix}-spend`}
+    >
+      <legend className="mb-1 text-base font-medium text-foreground">
+        {t("heading")}
+      </legend>
+      {settings === null ? (
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid={`${idPrefix}-spend-unread`}
+        >
+          {t("unread")}
+        </p>
+      ) : null}
+      <label
+        data-touch-target=""
+        className="flex min-h-11 items-start gap-2.5 text-base"
+      >
+        <input
+          type="checkbox"
+          className="mt-1"
+          name="runEnrichmentEnabled"
+          value="yes"
+          checked={enrichment ?? true}
+          onChange={(event) => {
+            onEnrichment(event.target.checked);
+          }}
+          aria-describedby={`${idPrefix}-enrichment-hint`}
+          data-testid={`${idPrefix}-enrichment`}
+        />
+        <span>
+          <b className="block font-medium">{t("enrichment")}</b>
+          <span
+            id={`${idPrefix}-enrichment-hint`}
+            className="block text-sm text-muted-foreground"
+          >
+            {t("enrichmentHint")}
+          </span>
+        </span>
+      </label>
+      {BUDGET_LANES.map((lane) => (
+        <BudgetField
+          key={lane}
+          idPrefix={idPrefix}
+          lane={lane}
+          stored={settings?.dailyBudgetUsd[lane] ?? null}
+        />
+      ))}
+      <p className="text-sm text-muted-foreground">{t("hint")}</p>
+    </fieldset>
+  );
+}
+
+/**
  * A field the design draws whose value no contract records or takes yet:
  * shown read-only with the words "not recorded" and a hint saying why, so the
  * form never implies it set something it did not.
@@ -235,7 +363,8 @@ function BranchSelect({ id, branch }: { id: string; branch: string | null }) {
 /**
  * The workspace facts the Edit dialog lists under its fields. The agent count
  * is `list_agents`', when the tab could read inside the workspace; nothing
- * records a toolbelt limit or a default budget per workspace yet (#3933).
+ * records a toolbelt limit per workspace yet (#3933). The daily budgets are
+ * the Model spend section's inputs above, not a fact here.
  */
 function WorkspaceFactList({ agents }: { agents: number | null }) {
   const t = useTranslations("organization.actions.editWorkspace.facts");
@@ -244,8 +373,6 @@ function WorkspaceFactList({ agents }: { agents: number | null }) {
   return (
     <dl className="grid grid-cols-dl gap-x-4 gap-y-1.5 text-base">
       <dt className={term}>{t("toolbelt")}</dt>
-      <dd className="text-dim">{tOrg("notRecorded")}</dd>
-      <dt className={term}>{t("budget")}</dt>
       <dd className="text-dim">{tOrg("notRecorded")}</dd>
       <dt className={term}>{t("agents")}</dt>
       {agents === null ? (
@@ -446,6 +573,12 @@ export function EditWorkspace({
   const tg = useTranslations("organization.actions.governance");
   const navigate = useNavigate();
   const main = facts?.repositories.find((repo) => repo.role === "main");
+  const settings = facts?.settings ?? null;
+  // The enrichment switch, as `SpendFields` says: the stored value, or null
+  // while the settings were not read and the switch is untouched.
+  const [enrichment, setEnrichment] = useState<boolean | null>(
+    settings?.runEnrichmentEnabled ?? null,
+  );
   return (
     <WriteDialog
       copy={{
@@ -457,8 +590,12 @@ export function EditWorkspace({
         receipt: tr("workspaceSaved", { name: workspace.name }),
       }}
       testId={`edit-workspace-${workspace.id}`}
-      submit={(form) =>
-        editWorkspace(org, workspace.id, {
+      submit={async (form) => {
+        // A bad budget is refused here, on its input, before any write: the
+        // dialog names it the way it names every invalid field.
+        const budgets = budgetPatchOf(form, settings?.dailyBudgetUsd ?? null);
+        if (!budgets.ok) return budgets;
+        return editWorkspace(org, workspace.id, {
           // The design's Edit form has no slug field: the slug the workspace
           // has is sent back, so a rename never moves its URLs.
           name: textValue(form, "name"),
@@ -467,8 +604,10 @@ export function EditWorkspace({
           // The checkbox only reaches the form when it is ticked, and it is
           // disabled until a mode is picked, so anything else is false.
           applyImmediately: textValue(form, "applyImmediately") === "yes",
-        })
-      }
+          runEnrichmentEnabled: enrichment,
+          dailyBudgetUsd: budgets.patch,
+        });
+      }}
       done={{
         close: tg("done.close"),
         render: (edited) =>
@@ -498,6 +637,12 @@ export function EditWorkspace({
         branch={main?.defaultRef ?? null}
       />
       <GovernanceField idPrefix={`edit-workspace-${workspace.id}`} />
+      <SpendFields
+        idPrefix={`edit-workspace-${workspace.id}`}
+        settings={settings}
+        enrichment={enrichment}
+        onEnrichment={setEnrichment}
+      />
       <UnrecordedField
         id={`edit-workspace-${workspace.id}-namespace`}
         label={tf("namespace")}

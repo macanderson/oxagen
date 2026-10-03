@@ -162,6 +162,7 @@ const CORE_FACTS: WorkspaceFacts = {
   ],
   agents: 64,
   archiveBlockers: { count: 0, more: false },
+  settings: null,
 };
 
 const ROSTER: MemberList = {

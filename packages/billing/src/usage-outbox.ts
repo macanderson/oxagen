@@ -20,7 +20,7 @@ import {
   type ChargeUsageArgs,
 } from "./metering";
 import { withBillingDb } from "./internal/platform-db";
-import { recordSpend } from "./spend-counter";
+import { recordSpend, spendLaneOf } from "./spend-counter";
 import { logger } from "./logger";
 
 type Entry = typeof schema.usageOutbox.$inferSelect;
@@ -160,6 +160,7 @@ async function settle(tx: Tx, entry: Entry): Promise<void> {
       workspaceId: entry.workspaceId,
       at: new Date(row.created_at),
       micros: BigInt(Math.max(0, Math.round(row.cost_usd_micros))),
+      lane: spendLaneOf(row),
     },
     tx,
   );
