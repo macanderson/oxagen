@@ -47,7 +47,7 @@ vi.mock("@oxagen/github/workspace-token", () => ({
 const { approveBrief, readWorkItem, recordSource, saveBrief } = await import("../work-records/store");
 const { enterWorkItem, prioritiesSummary, readTriageStanding, reviseTriage } = await import("./actions");
 const { upsertProviderItem } = await import("./items");
-const { listCollectorViews, setCollector } = await import("./collectors");
+const { listCollectorViews, renderGithubCollectorFile, setCollector } = await import("./collectors");
 const { postgresCollectorStore } = await import("./collector-store");
 const { routeGithubWorkDelivery, defaultWorkDeliveryDeps } = await import("./delivery");
 const { intakePorts } = await import("./ports");
@@ -201,7 +201,7 @@ describe.skipIf(!enabled)("work intake and triage against Postgres", () => {
       },
       deliveryDeps,
     );
-    const changes: Array<{ publicId: string; change: string; digest: string }> = [];
+    const changes: Array<{ publicId: string; change: string; digest: string; revision?: number }> = [];
     for (const event of [...sent]) {
       const eventScope = { orgId: String(event.data.org_id), workspaceId: String(event.data.workspace_id) };
       const opened = await runner.openDelivery(eventScope, String(event.data.inbound_event_id));
@@ -393,7 +393,9 @@ describe.skipIf(!enabled)("work intake and triage against Postgres", () => {
     const [view] = await inScope(r.scope, (tx) => listCollectorViews(tx, r.scope));
     expect(view).toMatchObject({ name: "github", connection_id: r.connectionPublicId, repos: [recorded.RECORDED_REPO], health: "healthy" });
     const [row] = await inScope(r.scope, (tx) => tx.select().from(schema.workCollectors).where(eq(schema.workCollectors.id, result.collectorId)));
-    expect(row!.fileHash).toMatch(/^sha256:[0-9a-f]{64}$/);
+    // The row holds the SHA-256 of the collector/v1 document it mirrors.
+    const document = renderGithubCollectorFile({ name: "github", connection: r.connectionPublicId, repos: [recorded.RECORDED_REPO] });
+    expect(row!.fileHash).toBe(`sha256:${createHash("sha256").update(document, "utf8").digest("hex")}`);
   });
 
   it("creates one work item from a signed issues.opened delivery, fetched by id and screened", async () => {
@@ -403,6 +405,7 @@ describe.skipIf(!enabled)("work intake and triage against Postgres", () => {
     expect(routing).toMatchObject({ stored: 1, duplicates: 0, rejected: 0 });
     expect(changes).toHaveLength(1);
     expect(changes[0]!.change).toBe("new");
+    expect(changes[0]!.revision).toBe(1);
     const publicId = changes[0]!.publicId;
     expect(github.state.requests).toEqual(["POST /graphql", `GET /repos/${recorded.RECORDED_REPO}/issues/7`]);
 
@@ -480,6 +483,8 @@ describe.skipIf(!enabled)("work intake and triage against Postgres", () => {
     github.state.issue = { ...github.state.issue, title: "Invite links expire after one hour, not seven days", updatedAt: minutesAgo(60) };
     const { changes } = await deliver(r, "delivery-edited-2", "edited");
     expect(changes.map((change) => change.change)).toEqual(["updated"]);
+    // The change names the revision it made, and work/item.received carries it.
+    expect(changes.map((change) => change.revision)).toEqual([2]);
     const record = await itemRecord(r.scope, publicId);
     expect(record.facts.map((fact) => fact.kind)).toEqual(["collected", "source_changed"]);
     expect(record.projection.revision).toBe(2);
@@ -541,6 +546,7 @@ describe.skipIf(!enabled)("work intake and triage against Postgres", () => {
     expect(page).toMatchObject({ kind: "page", handled: 1, missed: 1, hasMore: false });
     if (page.kind !== "page") throw new Error("expected a page");
     expect(page.changes.map((change) => change.publicId)).toEqual([publicId]);
+    expect(page.changes.map((change) => change.revision)).toEqual([2]);
     const health = await runner.finishReconcile(r.scope, collectorId, { ok: true, pages: 1, handled: 1, missed: page.missed });
     expect(health).toEqual({ health: "lagging" });
 
@@ -622,6 +628,80 @@ describe.skipIf(!enabled)("work intake and triage against Postgres", () => {
     const narrowed = await inScope(r.scope, (tx) => setCollector(tx, r.scope, { name: "github", repos: [recorded.RECORDED_REPO], actorUserId: AMARA }));
     expect(narrowed.reconcile).toBe(true);
     expect(await cursorOf()).toBe("2026-10-02T00:00:00Z");
+  });
+
+  // ADR-250: a changed connection reads from the start. The cursor is a time
+  // the old connection read to, and the new one has read nothing yet.
+  it("reads a collector from the start again when its repository moves to another GitHub connection", async () => {
+    const r = await newRig();
+    const collectorId = await addCollector(r);
+    const collectorRow = async () => {
+      const [row] = await inScope(r.scope, (tx) =>
+        tx
+          .select({ cursor: schema.workCollectors.cursor, connectionId: schema.workCollectors.connectionId })
+          .from(schema.workCollectors)
+          .where(eq(schema.workCollectors.id, collectorId)),
+      );
+      return row!;
+    };
+    // A reconcile has read the repository up to this time through the first connection.
+    await inScope(r.scope, (tx) =>
+      tx.update(schema.workCollectors).set({ cursor: "2026-10-02T00:00:00Z" }).where(eq(schema.workCollectors.id, collectorId)),
+    );
+    expect(await collectorRow()).toEqual({ cursor: "2026-10-02T00:00:00Z", connectionId: r.connectionId });
+
+    // The workspace links the repository again through a second GitHub connection.
+    const second = await inScope(r.scope, async (tx) => {
+      const [row] = await tx
+        .insert(schema.sourceConnections)
+        .values({
+          orgId: r.scope.orgId,
+          workspaceId: r.scope.workspaceId,
+          connectorId: "github",
+          displayName: "GitHub (second installation)",
+          authScheme: "github_app",
+          deliveryMethod: "webhook",
+          status: "connected",
+          deliveryConfig: { installationId: String(Number(r.installation) + 1), owner: "aintel-test", repo: "work-intake" },
+        })
+        .returning({ id: schema.sourceConnections.id });
+      return row!;
+    });
+    const [owner, name] = recorded.RECORDED_REPO.split("/") as [string, string];
+    const providerRepositoryId = r.linkedIds.get(recorded.RECORDED_REPO)!;
+    await withSystemDb(async (tx) => {
+      const [binding] = await tx
+        .insert(schema.repositoryBindings)
+        .values({
+          ...r.scope,
+          connectionId: second.id,
+          provider: "github",
+          providerRepositoryId,
+          providerOwner: owner,
+          providerName: name,
+          providerFullName: recorded.RECORDED_REPO,
+          configuredDefaultRef: "main",
+          observedAt: new Date(),
+          version: 1,
+        })
+        .returning({ id: schema.repositoryBindings.id });
+      await tx
+        .update(schema.repositoryBindingHeads)
+        .set({ connectionId: second.id, currentBindingId: binding!.id })
+        .where(
+          and(
+            eq(schema.repositoryBindingHeads.orgId, r.scope.orgId),
+            eq(schema.repositoryBindingHeads.workspaceId, r.scope.workspaceId),
+            eq(schema.repositoryBindingHeads.providerRepositoryId, providerRepositoryId),
+          ),
+        );
+    });
+
+    const moved = await inScope(r.scope, (tx) =>
+      setCollector(tx, r.scope, { name: "github", repos: [recorded.RECORDED_REPO], actorUserId: AMARA }),
+    );
+    expect(moved).toMatchObject({ created: false, reconcile: true });
+    expect(await collectorRow()).toEqual({ cursor: null, connectionId: second.id });
   });
 
   it("refuses a repository the workspace does not link, and stops reading one it unlinks", async () => {
@@ -860,9 +940,83 @@ describe.skipIf(!enabled)("work intake and triage against Postgres", () => {
         reviseTriage(s, { itemPublicId: item.publicId, expectedVersion: record.version, reason: "Set it", fields: { priority: "P1" }, actorUserId: AMARA }),
       ),
     ).rejects.toMatchObject({ code: "not_allowed" });
-    // The on-failure job records an outage the same way.
-    await runInTenantScope(s, () => recordTriageFailure(s, item.publicId, "Triage could not run: the gateway refused the call.", new Date()));
+    // The on-failure job records an outage the same way, on a revision with
+    // no triage fact yet, or for a person's retry. A late failure on a
+    // revision that already shows one records nothing more.
+    await runInTenantScope(s, () =>
+      recordTriageFailure(s, item.publicId, "Triage could not run: the gateway refused the call.", new Date(), { revision: 1 }),
+    );
+    expect((await itemRecord(s, item.publicId)).facts.filter((fact) => fact.kind === "triage_failed")).toHaveLength(1);
+    await runInTenantScope(s, () =>
+      recordTriageFailure(s, item.publicId, "Triage could not run: the gateway refused the call.", new Date(), { revision: 1, retry: true }),
+    );
     expect((await itemRecord(s, item.publicId)).facts.filter((fact) => fact.kind === "triage_failed")).toHaveLength(2);
+  });
+
+  // ADR-250: a failure that lands after the item moved to a newer revision
+  // belongs to the revision the event was about. Recording it on the newer
+  // revision would make that revision's own run skip as already triaged.
+  it("records no failure for a revision the item moved past, so the newer revision's run still triages", async () => {
+    const s = newScope();
+    await addPriorities(s);
+    const item = await entered(s);
+    // A person edits the item before the failure for revision 1 lands.
+    await inScope(s, (tx) =>
+      recordSource(tx, s, {
+        itemId: item.id,
+        material: { subject: "Invite links expire after one hour on mobile", description: null, labels: ["Bug"] },
+        source: "person",
+        actor: AMARA,
+        occurredAt: new Date().toISOString(),
+        dedupeKey: "edit-before-failure",
+        actorUserId: AMARA,
+      }),
+    );
+    await runner.recordTriageFailure(s, item.publicId, "Triage could not run: the gateway refused the call.", { revision: 1, retry: false });
+    await runner.recordTriageFailure(s, item.publicId, "Triage could not run: the gateway refused the call.", { revision: 1, retry: true });
+    const moved = await itemRecord(s, item.publicId);
+    expect(moved.projection).toMatchObject({ state: "new", revision: 2, triage: { outcome: null } });
+    expect(moved.facts.filter((fact) => fact.kind === "triage_failed")).toEqual([]);
+
+    const { model, calls } = scriptedModel([suggestion(item.publicId)]);
+    expect(await triage(s, item.publicId, model)).toMatchObject({ kind: "recorded", outcome: "triaged" });
+    expect(calls()).toBe(1);
+    const record = await itemRecord(s, item.publicId);
+    expect(record.facts.filter((fact) => fact.kind === "triage_recorded").map((fact) => fact.itemRevision)).toEqual([2]);
+    expect(record.facts.filter((fact) => fact.kind === "triage_failed")).toEqual([]);
+  });
+
+  it("records no late failure after triage recorded a result on the same revision", async () => {
+    const s = newScope();
+    await addPriorities(s);
+    const item = await entered(s);
+    const { model } = scriptedModel([suggestion(item.publicId)]);
+    expect(await triage(s, item.publicId, model)).toMatchObject({ kind: "recorded", outcome: "triaged" });
+    const before = await itemRecord(s, item.publicId);
+    await runner.recordTriageFailure(s, item.publicId, "Triage could not run: the gateway refused the call.", { revision: 1, retry: false });
+    // An event sent before events carried a revision is held to the same rule.
+    await runInTenantScope(s, () => recordTriageFailure(s, item.publicId, "Triage could not run.", new Date()));
+    const record = await itemRecord(s, item.publicId);
+    expect(record.facts.filter((fact) => fact.kind === "triage_failed")).toEqual([]);
+    expect(record.projection.triage).toMatchObject({ outcome: "triaged", by: "oxagen" });
+    expect(record.version).toBe(before.version);
+  });
+
+  // A person's retry runs past an earlier result on purpose. Its failure is
+  // recorded, and the version it moves gives the next retry a new event id
+  // (work.triage.retry.ts), so Inngest does not drop that retry as a repeat.
+  it("records the failure of a person's retry on a revision triage already ran, and moves the version", async () => {
+    const s = newScope();
+    await addPriorities(s);
+    const item = await entered(s);
+    const { model } = scriptedModel([suggestion(item.publicId)]);
+    expect((await triage(s, item.publicId, model)).kind).toBe("recorded");
+    const before = await itemRecord(s, item.publicId);
+    await runner.recordTriageFailure(s, item.publicId, "Triage could not run: the gateway refused the call.", { revision: 1, retry: true });
+    const after = await itemRecord(s, item.publicId);
+    expect(after.facts.filter((fact) => fact.kind === "triage_failed").map((fact) => fact.itemRevision)).toEqual([1]);
+    expect(after.projection.triage.outcome).toBe("failed");
+    expect(after.version).toBeGreaterThan(before.version);
   });
 
   it("leaves an item whose source issue closed out of triage", async () => {

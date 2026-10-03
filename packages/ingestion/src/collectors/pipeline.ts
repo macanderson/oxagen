@@ -158,12 +158,14 @@ export interface CollectorStore {
   findItem(collectorId: string, providerId: string): Promise<StoredWorkItem | null>;
   /**
    * Insert or update the workspace's item for this provider id. A new item
-   * gets the workspace's next number. The input is already screened.
+   * gets the workspace's next number. The input is already screened. A store
+   * that keeps item revisions (ADR-244) returns the revision the write left
+   * the item on, and the change carries it.
    */
   upsertItem(
     collector: CollectorRecord,
     input: WorkItemInput,
-  ): Promise<{ item: StoredWorkItem; created: boolean }>;
+  ): Promise<{ item: StoredWorkItem; created: boolean; revision?: number }>;
   setCursor(collectorId: string, cursor: string): Promise<void>;
   setHealth(collectorId: string, health: CollectorHealth): Promise<void>;
   /** A collector's reconcile or count result rows, newest first. */
@@ -305,6 +307,12 @@ export interface ItemChange {
   change: ItemChangeKind;
   /** Short digest of the fields the change covers, for the event's idempotency key. */
   digest: string;
+  /**
+   * The item revision this write left the item on. Absent when the store
+   * keeps no revisions. Triage uses it to tell a late failure from a failure
+   * on the revision it was about.
+   */
+  revision?: number;
 }
 
 export interface CollectResult {
@@ -416,7 +424,7 @@ export async function collectItem(
     requester: screened.requester,
     tainted: taintedFields(mapped),
   };
-  const { item: stored, created } = await ports.store.upsertItem(collector, input);
+  const { item: stored, created, revision } = await ports.store.upsertItem(collector, input);
   let kind: ItemChangeKind | null = null;
   if (created) kind = "new";
   else if (
@@ -426,10 +434,15 @@ export async function collectItem(
       !sameLabels(before.labels, input.labels))
   )
     kind = "updated";
-  const change =
+  const change: ItemChange | null =
     kind === null || stored.deleted
       ? null
-      : { publicId: stored.publicId, change: kind, digest: changeDigest(input) };
+      : {
+          publicId: stored.publicId,
+          change: kind,
+          digest: changeDigest(input),
+          ...(revision === undefined ? {} : { revision }),
+        };
   return { providerId: mapped.providerId, change, before, stale: false, skipped: false };
 }
 

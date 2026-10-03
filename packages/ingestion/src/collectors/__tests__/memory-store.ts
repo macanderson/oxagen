@@ -1,7 +1,8 @@
 // An in-memory CollectorStore and ports for the framework's tests. It keeps
 // the same rules as the Postgres adapter: one inbound event per collector and
-// delivery id, one work item per collector and provider id, and result rows
-// read newest first.
+// delivery id, one work item per collector and provider id, result rows read
+// newest first, and an item revision that starts at 1 and moves when the
+// subject, description, or label set changes.
 import type { CollectorHealth } from "../health";
 import {
   COUNT_KEY_PREFIX,
@@ -22,6 +23,18 @@ export interface MemoryItem extends StoredWorkItem {
   providerId: string;
   number: number;
   input: WorkItemInput;
+  /** The item revision. A changed subject, description, or label set moves it. */
+  revision: number;
+}
+
+/** True when the material fields differ, labels compared as a set. */
+function materialChanged(item: MemoryItem, input: WorkItemInput): boolean {
+  const labels = (list: readonly string[]) => JSON.stringify([...new Set(list)].sort());
+  return (
+    item.subject !== input.subject ||
+    item.description !== input.description ||
+    labels(item.labels) !== labels(input.labels)
+  );
 }
 
 export const TEST_ORG = "00000000-0000-4000-8000-000000000001";
@@ -102,15 +115,16 @@ export class MemoryCollectorStore implements CollectorStore {
   async upsertItem(
     collector: CollectorRecord,
     input: WorkItemInput,
-  ): Promise<{ item: StoredWorkItem; created: boolean }> {
+  ): Promise<{ item: StoredWorkItem; created: boolean; revision: number }> {
     const existing = this.items.find((row) => row.providerId === input.providerId);
     if (existing) {
+      if (materialChanged(existing, input)) existing.revision += 1;
       existing.subject = input.subject;
       existing.description = input.description;
       existing.labels = [...input.labels];
       existing.sourceUpdatedAt = input.sourceUpdatedAt;
       existing.input = input;
-      return { item: stored(existing), created: false };
+      return { item: stored(existing), created: false, revision: existing.revision };
     }
     const number = this.items.length + 1;
     const item: MemoryItem = {
@@ -125,9 +139,10 @@ export class MemoryCollectorStore implements CollectorStore {
       providerId: input.providerId,
       number,
       input,
+      revision: 1,
     };
     this.items.push(item);
-    return { item: stored(item), created: true };
+    return { item: stored(item), created: true, revision: item.revision };
   }
 
   async setCursor(collectorId: string, cursor: string): Promise<void> {

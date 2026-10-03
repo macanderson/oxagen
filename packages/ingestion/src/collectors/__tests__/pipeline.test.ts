@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { COLLECTOR_COUNT_TYPE, COLLECTOR_RECONCILE_TYPE } from "../cloudevent";
 import {
   type CollectorRecord,
+  type CollectorStore,
   type CountResult,
   type DeliveryResult,
   collectRef,
@@ -176,7 +177,9 @@ describe("the collector pipeline, through the fake collector", () => {
     const processed = await processInboundEvent(h.ports, "ie-1");
     expect(processed).toEqual({
       kind: "collected",
-      changes: [{ publicId: "wi_1", change: "new", digest: expect.stringMatching(/^[0-9a-f]{16}$/) as string }],
+      changes: [
+        { publicId: "wi_1", change: "new", digest: expect.stringMatching(/^[0-9a-f]{16}$/) as string, revision: 1 },
+      ],
     });
     const item = at(h.store.items, 0);
     expect(item.description).toBe(`The log shows ${REDACTED} in the request`);
@@ -197,7 +200,7 @@ describe("the collector pipeline, through the fake collector", () => {
     h.advance(MINUTE);
     putRecord(fake, { id: "101", title: "Checkout fails on retry", updatedAt: h.now().toISOString() });
     const updated = await s.deliverAndProcess(["101"], "d-2");
-    expect(updated).toMatchObject({ kind: "collected", changes: [{ publicId: "wi_1", change: "updated" }] });
+    expect(updated).toMatchObject({ kind: "collected", changes: [{ publicId: "wi_1", change: "updated", revision: 2 }] });
     expect(h.store.items).toHaveLength(1);
 
     // The first reconcile finds nothing the doorbell missed: 101 came through it.
@@ -222,13 +225,13 @@ describe("the collector pipeline, through the fake collector", () => {
     putRecord(fake, { id: "101", title: "Checkout fails every time", updatedAt: s.ago(8) });
     expect(await s.deliverAndProcess(["101"], "d-3")).toMatchObject({
       kind: "collected",
-      changes: [{ publicId: "wi_1", change: "updated" }],
+      changes: [{ publicId: "wi_1", change: "updated", revision: 3 }],
     });
     const lagging = finished(await reconcileCollector(h.ports, COLLECTOR_ID));
     expect(lagging.summary).toEqual({ ok: true, pages: 2, handled: 3, missed: 1 });
-    expect(lagging.changes.map((c) => [c.publicId, c.change])).toEqual([
-      ["wi_2", "new"],
-      ["wi_3", "new"],
+    expect(lagging.changes.map((c) => [c.publicId, c.change, c.revision])).toEqual([
+      ["wi_2", "new", 1],
+      ["wi_3", "new", 1],
     ]);
     expect(lagging.health).toEqual({ previous: "healthy", health: "lagging" });
     expect(s.collector().health).toBe("lagging");
@@ -596,6 +599,26 @@ describe("processInboundEvent", () => {
       kind: "collected",
       changes: [{ publicId: "wi_1", change: "updated" }],
     });
+  });
+
+  it("reports the revision the write left the item on, and none when the store keeps no revisions", async () => {
+    const s = setup();
+    putRecord(s.fake, { id: "101", labels: ["a"], updatedAt: s.ago(3) });
+    expect(await s.deliverAndProcess(["101"])).toMatchObject({ changes: [{ change: "new", revision: 1 }] });
+    putRecord(s.fake, { id: "101", labels: ["a", "b"], updatedAt: s.ago(2) });
+    expect(await s.deliverAndProcess(["101"])).toMatchObject({ changes: [{ change: "updated", revision: 2 }] });
+
+    // A store that keeps no revisions returns none, and the change carries none.
+    const upsert = s.h.store.upsertItem.bind(s.h.store);
+    vi.spyOn(s.h.store as CollectorStore, "upsertItem").mockImplementation(async (collector, input) => {
+      const { item, created } = await upsert(collector, input);
+      return { item, created };
+    });
+    putRecord(s.fake, { id: "101", labels: ["a", "b", "c"], updatedAt: s.ago(1) });
+    const processed = await s.deliverAndProcess(["101"]);
+    if (processed.kind !== "collected") throw new Error(`the event was ${processed.kind}`);
+    expect(processed.changes).toHaveLength(1);
+    expect(processed.changes[0]).not.toHaveProperty("revision");
   });
 
   it("leaves a newer stored item alone when a late read brings an older copy", async () => {

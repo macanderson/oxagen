@@ -17,7 +17,8 @@
 //    work/item.received again, and that run triages the newer text.
 //
 // A model or store error throws, so the durable step retries. When its retries
-// run out, the job's on-failure companion calls recordTriageFailure.
+// run out, the job's on-failure companion calls recordTriageFailure with the
+// revision the event was about. A failure that lands late records nothing.
 import { CREDIT_REASONS, generateObjectFor, modelIdOf, selectModelForOrg } from "@oxagen/ai";
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import {
@@ -329,13 +330,45 @@ export async function runTriage(deps: TriageRunDeps, scope: WorkScope, itemPubli
   });
 }
 
-/** Record that triage could not run, after the durable retries ran out. A deleted or unknown item records nothing. */
-export async function recordTriageFailure(scope: WorkScope, itemPublicId: string, reason: string, now: Date): Promise<void> {
+/** What the event of a failed triage run said about the item. */
+export interface TriageFailedRun {
+  /** The item revision the event was about. Absent on an event sent before events carried it. */
+  revision?: number;
+  /** True when a person asked for the run. */
+  retry?: boolean;
+}
+
+/**
+ * Record that triage could not run, after the durable retries ran out, on the
+ * item's current revision. It records nothing for an unknown or deleted item,
+ * or one past triage. It also records nothing for a failure that lands late:
+ *
+ * - The event was about a revision the item has moved past. A source change
+ *   that moved it sent its own work/item.received, and that run triages the
+ *   newer text. A failure recorded there would make that run skip.
+ * - Triage already recorded a result or a failure on the current revision,
+ *   such as a person's retry that finished first. A person's own retry is the
+ *   exception: it ran past the earlier result on purpose, and its failure
+ *   moves the item's version, so the next retry is not dropped as a repeat.
+ */
+export async function recordTriageFailure(
+  scope: WorkScope,
+  itemPublicId: string,
+  reason: string,
+  now: Date,
+  run: TriageFailedRun = {},
+): Promise<void> {
   await withTenantDb(async (tx) => {
     const row = await readItemRow(tx, scope, itemPublicId);
     if (row === null || row.deletedAt !== null) return;
+    // Hold the item's row, so no triage run or source change commits between
+    // the checks below and the failure this records.
+    await tx.select({ id: items.id }).from(items).where(eq(items.id, row.id)).for("update");
     const record = await readWorkItem(tx, scope, row.id);
-    if (!TRIAGE_STATES_OPEN.includes(record.projection.state)) return;
-    await appendFailure(tx, scope, row.id, record.projection.revision, reason, now.toISOString());
+    const { state, revision } = record.projection;
+    if (!TRIAGE_STATES_OPEN.includes(state)) return;
+    if (run.revision !== undefined && run.revision !== revision) return;
+    if (run.retry !== true && triagedAt(record.facts, revision)) return;
+    await appendFailure(tx, scope, row.id, revision, reason, now.toISOString());
   });
 }

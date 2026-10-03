@@ -118,7 +118,9 @@ open, and once per item revision unless a person asks for a retry. A second inva
 `triage_failed`. When the item moved to a newer revision while triage read the
 older one, nothing is stored, and the change that moved it queues triage
 again. When the run's retries run out, its on-failure job records
-`triage_failed`. The model call goes through `@oxagen/ai` on the
+`triage_failed` on the revision its event named. It records nothing when the
+item moved past that revision or triage already recorded a result on it,
+unless the run was a person's retry (amended 2026-10-03). The model call goes through `@oxagen/ai` on the
 organization's fast tier and is charged as in-app assistant spend, so it shows
 on Billing. `@oxagen/ai` records the cost on the usage row and does not
 return it, so the decision's cost stays null.

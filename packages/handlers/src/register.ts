@@ -348,7 +348,7 @@ registerHandlersOnce("@oxagen/handlers", () => {
     finishReconcile: async (scope, collectorId, summary) => (await workIntake()).finishReconcile(scope, collectorId, summary),
     count: async (scope, collectorId) => (await workIntake()).count(scope, collectorId),
     triage: async (scope, item, retry) => (await workIntake()).triage(scope, item, retry),
-    recordTriageFailure: async (scope, item, reason) => (await workIntake()).recordTriageFailure(scope, item, reason),
+    recordTriageFailure: async (scope, item, reason, run) => (await workIntake()).recordTriageFailure(scope, item, reason, run),
     prune: async (now) => (await workIntake()).prune(now),
   });
   registerHandler("create_work_item", () =>

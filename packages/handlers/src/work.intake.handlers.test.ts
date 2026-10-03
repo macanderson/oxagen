@@ -80,11 +80,12 @@ describe("create_work_item", () => {
       repository: "acme/web",
       actorUserId: ACTOR,
     });
+    // The event names the revision the item was entered on, and the id stays the same.
     expect(send).toHaveBeenCalledWith([
       {
         name: "work/item.received",
         id: "work-item-wi_01-new",
-        data: { org_id: SCOPE.orgId, workspace_id: SCOPE.workspaceId, item_id: "wi_01", change: "new" },
+        data: { org_id: SCOPE.orgId, workspace_id: SCOPE.workspaceId, item_id: "wi_01", change: "new", revision: 1 },
       },
     ]);
     expect(out).toEqual({ item_id: "wi_01", number: "WI-4", state: "new", revision: 1, version: 1 });
@@ -180,20 +181,30 @@ describe("revise_work_triage", () => {
 });
 
 describe("retry_work_triage", () => {
-  it("queues a triage run for an item triage may change", async () => {
+  it("queues a triage run for an item triage may change, naming the revision the person retried", async () => {
     const send = vi.fn(async () => undefined);
-    const state = vi.fn(async () => ({ state: "new" as const, version: 3 }));
+    const state = vi.fn(async () => ({ state: "new" as const, version: 3, revision: 2 }));
     const out = await createWorkTriageRetryHandler({ state, send })({ item_id: "wi_01" }, ctx);
     expect(mocks.role).toHaveBeenCalledWith(workTriageRetry, ctx);
     expect(state).toHaveBeenCalledWith(SCOPE, "wi_01");
+    // The revision is in the data, and the id still names only the version.
     expect(send).toHaveBeenCalledWith([
       {
         name: "work/item.received",
         id: "work-item-wi_01-retry-v3",
-        data: { org_id: SCOPE.orgId, workspace_id: SCOPE.workspaceId, item_id: "wi_01", change: "retry" },
+        data: { org_id: SCOPE.orgId, workspace_id: SCOPE.workspaceId, item_id: "wi_01", change: "retry", revision: 2 },
       },
     ]);
     expect(out).toEqual({ item_id: "wi_01", state: "new", queued: true });
+  });
+
+  it("sends no revision when the state read names none", async () => {
+    const send = vi.fn(async (_events: readonly WorkEvent[]) => undefined);
+    await createWorkTriageRetryHandler({ state: async () => ({ state: "triaged" as const, version: 3 }), send })({ item_id: "wi_01" }, ctx);
+    const event = send.mock.calls[0]?.[0][0];
+    expect(event?.id).toBe("work-item-wi_01-retry-v3");
+    expect(event?.data).toEqual({ org_id: SCOPE.orgId, workspace_id: SCOPE.workspaceId, item_id: "wi_01", change: "retry" });
+    expect(event?.data).not.toHaveProperty("revision");
   });
 
   // A double click or a client retry must not start a second model call. The

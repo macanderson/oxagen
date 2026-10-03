@@ -22,8 +22,11 @@ import type { WorkScope } from "./lib/work-records/store";
 const TRIAGE_OPEN: readonly WorkItemState[] = ["new", "held", "triaged", "needs_info", "changed"];
 
 export interface WorkTriageRetryDeps {
-  /** The item's state and version. Null when the workspace has no such live item. */
-  state(scope: WorkScope, itemPublicId: string): Promise<{ state: WorkItemState; version: number } | null>;
+  /**
+   * The item's state, version, and revision. Null when the workspace has no
+   * such live item. The event names the revision only when this returns one.
+   */
+  state(scope: WorkScope, itemPublicId: string): Promise<{ state: WorkItemState; version: number; revision?: number } | null>;
   send(events: readonly WorkEvent[]): Promise<void>;
 }
 
@@ -39,7 +42,7 @@ export const defaultWorkTriageRetryDeps: WorkTriageRetryDeps = {
       const item = await findItem(tx, scope, itemPublicId);
       if (item === null) return null;
       const record = await readWorkItem(tx, scope, item.id);
-      return { state: record.projection.state, version: record.version };
+      return { state: record.projection.state, version: record.version, revision: record.projection.revision };
     });
   },
   send: sendWorkEvents,
@@ -80,9 +83,18 @@ export function createWorkTriageRetryHandler(deps: WorkTriageRetryDeps): Capabil
         // repeated request, such as a double click or a client retry, sends
         // the same id, and Inngest drops it. Every triage run that stores a
         // result or a failure moves the version, so a retry after that run
-        // sends a new id.
+        // sends a new id. The revision stays out of the id: the version
+        // already moves with it.
         id: `work-item-${input.item_id}-retry-v${found.version}`,
-        data: { org_id: scope.orgId, workspace_id: scope.workspaceId, item_id: input.item_id, change: "retry" },
+        data: {
+          org_id: scope.orgId,
+          workspace_id: scope.workspaceId,
+          item_id: input.item_id,
+          change: "retry",
+          // The revision the person retried, so a failure that lands after
+          // the item moved on records nothing.
+          ...(found.revision === undefined ? {} : { revision: found.revision }),
+        },
       },
     ]);
     return { item_id: input.item_id, state: found.state, queued: true };
