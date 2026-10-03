@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -235,6 +236,58 @@ describe("apply then restore", () => {
     expect(readFileSync(settingsPath(), "utf8")).toBe(SETTINGS);
     expect(readFileSync(tomlPath(), "utf8")).toBe(TOML);
   });
+
+  it("drops the first original when the hooks changed enrollment before a port change", async () => {
+    const OLD = "tch_aaaaaaaaaaaaaaaaaaaaaa";
+    const NEW = "tch_bbbbbbbbbbbbbbbbbbbbbb";
+    const hooked = (id: string) =>
+      `${JSON.stringify(
+        {
+          hooks: {
+            Stop: [
+              {
+                hooks: [
+                  {
+                    type: "command",
+                    command: `/opt/tacho/tacho hook --enrollment ${id}`,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        null,
+        2,
+      )}\n`;
+    const claude = { ...both(), harnesses: ["claude-code" as const] };
+    // Enroll writes the hooks before the first apply, so the original holds
+    // the first enrollment's.
+    seed(settingsPath(), hooked(OLD));
+    await applyModelBaseUrls(claude, internals());
+    // A new enrollment id: enroll swaps the hooks and leaves the base URL.
+    writeFileSync(
+      settingsPath(),
+      readFileSync(settingsPath(), "utf8").replace(OLD, NEW),
+    );
+    await applyModelBaseUrls({ ...claude, port: 5000 }, internals());
+    await restoreModelBaseUrls({ ...claude, port: 5000 }, internals());
+    // Our keys come out and the current hooks stay for the strip; the old
+    // enrollment's hooks do not come back.
+    expect(readFileSync(settingsPath(), "utf8")).toBe(hooked(NEW));
+  });
+
+  it("keeps the original when the apply that wrote the sidecar never reached the file", async () => {
+    seed(settingsPath(), SETTINGS);
+    await applyModelBaseUrls(both(), internals());
+    // The sidecar lands first, so a crash can leave it beside the original,
+    // or beside no file at all where apply was creating one.
+    writeFileSync(settingsPath(), SETTINGS);
+    rmSync(tomlPath());
+    await applyModelBaseUrls(both(), internals());
+    await restoreModelBaseUrls(both(), internals());
+    expect(readFileSync(settingsPath(), "utf8")).toBe(SETTINGS);
+    expect(existsSync(tomlPath())).toBe(false);
+  });
 });
 
 describe("restore after somebody else edited the file", () => {
@@ -408,13 +461,18 @@ describe("ENABLE_TOOL_SEARCH beside the base URL", () => {
     seed(settingsPath(), SETTINGS);
     const first = await applyModelBaseUrls(claude(), internals());
     // An enrollment from the build that wrote the base URL alone: the key is
-    // missing from the file and from the sidecar.
+    // missing from the file and from the sidecar, and the sidecar holds the
+    // digest of the file that build wrote.
     const file = JSON.parse(readFileSync(settingsPath(), "utf8"));
     delete file.env.ENABLE_TOOL_SEARCH;
-    writeFileSync(settingsPath(), `${JSON.stringify(file, null, 4)}\n`);
+    const old = `${JSON.stringify(file, null, 4)}\n`;
+    writeFileSync(settingsPath(), old);
     const backup = first.harnesses[0]!.backup;
     const sidecar = JSON.parse(readFileSync(backup, "utf8"));
     delete sidecar.previous_tool_search;
+    sidecar.written_sha256 = createHash("sha256")
+      .update(old, "utf8")
+      .digest("hex");
     writeFileSync(backup, `${JSON.stringify(sidecar, null, 2)}\n`);
     const before = await readModelBaseUrlState(claude(), internals());
     expect(before.harnesses[0]!.ours).toBe(true);
