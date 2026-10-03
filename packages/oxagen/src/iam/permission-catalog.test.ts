@@ -96,6 +96,10 @@ describe("the run and work permissions", () => {
     expect(capabilitiesOf(["work.approve"])).toEqual(["accept_work_order", "approve_work_brief", "refresh_work_order_checks"]);
   });
 
+  it("keep budget.set to the spend budget, with no per-turn assistant budget (ADR-277)", () => {
+    expect(capabilitiesOf(["budget.set"])).toEqual(["get_spend_budget", "set_spend_budget"]);
+  });
+
   it("put the Work reads and intake writes in permissions of their own, leaving run.read as it was", () => {
     expect(capabilitiesOf(["work.read"])).toEqual([
       "get_work_item",
