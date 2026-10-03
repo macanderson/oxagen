@@ -92,7 +92,10 @@ const FAMILIES: readonly (readonly [prefix: string, id: ProviderId])[] = [
 ];
 
 /** Services that route to other companies' models. A model's maker wins over them. */
-const ROUTERS: ReadonlySet<ProviderId> = new Set(["openrouter", "vercel"]);
+const ROUTERS: ReadonlySet<ProviderId> = new Set<ProviderId>([
+  "openrouter",
+  "vercel",
+]);
 
 function lookup(name: string | null | undefined): ProviderId | null {
   if (!name) return null;
