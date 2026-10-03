@@ -293,6 +293,12 @@
     --button-default-border: var(--border);
     --button-default-hover-bg: var(--hl);
     --button-default-active-bg: var(--hl);
+    /* `.dlg { background:var(--panel) }`. The kit fills a dialog with its
+       popover, which on ink is the row wash (#27272A), a step lighter than
+       the mockup's panel (#18181B). Paper is unchanged: both are white. The
+       system-dark block below sets it again, because the kit's selector
+       there outranks this one. */
+    --dialog-bg: var(--panel);
     /* `.tab[aria-selected] { border-bottom-color: var(--gold) }` */
     --tab-border-active: var(--gold);
     /* `.navitem { color: var(--muted) }`; current and hover take the ink.
@@ -404,6 +410,7 @@
       --button-disabled-bg: var(--hl);
       --input-disabled-bg: var(--hl);
       --app-panel-bg: var(--ink);
+      --dialog-bg: var(--panel);
     }
   }
 }

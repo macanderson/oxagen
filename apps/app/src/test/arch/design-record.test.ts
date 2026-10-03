@@ -185,6 +185,18 @@ describe("design record: the recipes carry the mockup's rules", () => {
     expect(lightRoot()).toMatch(/--button-default-bg:\s*var\(--panel\)/);
     expect(buttonSecondary).toContain("bg-button-default-bg");
   });
+
+  it("`.dlg` is the panel fill, not the kit's popover wash", () => {
+    // The kit points --dialog-bg at its popover, which on ink is #27272A, the
+    // row wash. The mockup's dialog is the panel (#18181B).
+    const css = read("src/app/globals.css");
+    expect(lightRoot()).toMatch(/--dialog-bg:\s*var\(--panel\)/);
+    // The light :root and the no-JS `prefers-color-scheme` block, whose
+    // selector outranks the root's.
+    expect(css.match(/--dialog-bg:\s*var\(--panel\)/g)).toHaveLength(2);
+    const sheet = read("src/ui/sheet-dialog.tsx");
+    expect(sheet).toContain("bg-dialog-bg");
+  });
 });
 
 /**

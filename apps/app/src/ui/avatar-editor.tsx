@@ -101,10 +101,16 @@ const SHAPE: Record<AvatarSubject, AvatarShape> = {
   organization: "agent",
 };
 
+// The mockup's colours (`.seg`, `.acc-ic`, `.acc-tone`): every control sits on
+// the panel with a hairline border, the hover is a part-wash, and the picked one
+// takes the row wash. A picked tile also takes the gold border. Only the
+// preview and the text inputs sit on the ink.
 const segment =
-  "inline-flex max-w-full overflow-hidden rounded-lg border border-input-border bg-input-bg";
+  "inline-flex max-w-full overflow-hidden rounded-lg border border-border bg-card";
 const segmentButton =
-  "min-h-9 border-r border-input-border px-3 text-base font-medium text-muted-foreground last:border-r-0 aria-pressed:bg-secondary aria-pressed:font-semibold aria-pressed:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring";
+  "min-h-9 border-r border-border bg-card px-3 text-base font-medium text-muted-foreground last:border-r-0 hover:bg-hl/60 hover:text-foreground aria-pressed:bg-hl aria-pressed:font-semibold aria-pressed:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring";
+const pickTile =
+  "border border-border bg-card text-muted-foreground hover:bg-hl/60 hover:text-foreground aria-pressed:border-gold aria-pressed:bg-hl aria-pressed:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring";
 
 const FONT_FACE: Record<AvatarFont, string> = {
   sans: "font-sans",
@@ -404,7 +410,7 @@ function AvatarEditor({
                       aria-label={icon}
                       title={icon}
                       data-testid={`avatar-icon-${icon}`}
-                      className="grid h-9 place-items-center rounded-lg border border-transparent bg-input-bg text-muted-foreground hover:border-input-border hover:text-foreground aria-pressed:border-foreground aria-pressed:bg-secondary aria-pressed:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                      className={`grid h-9 place-items-center rounded-lg ${pickTile}`}
                       onClick={() => {
                         edit({ icon });
                       }}
@@ -501,8 +507,7 @@ function AvatarEditor({
                     data-testid={`avatar-tone-${tone}`}
                     aria-pressed={draft.tone === tone}
                     aria-label={t(`tones.${tone}`)}
-                    title={t(`tones.${tone}`)}
-                    className="grid place-items-center rounded-xl border border-transparent p-0.75 hover:border-input-border aria-pressed:border-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                    className={`flex min-w-16 flex-col items-center gap-1.5 rounded-xl px-1.5 pb-1.5 pt-2 text-xs ${pickTile}`}
                     onClick={() => {
                       edit({ tone });
                     }}
@@ -513,6 +518,7 @@ function AvatarEditor({
                       size={32}
                       shape={shape}
                     />
+                    <span>{t(`tones.${tone}`)}</span>
                   </button>
                 ))}
               </div>
