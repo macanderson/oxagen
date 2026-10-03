@@ -957,9 +957,11 @@ export function createSteeringGitLab(
 
     commitFiles(repo, args) {
       return call(repo, async (gl, project) => {
-        // GitLab's commits API takes no expected head, so the branch is read
-        // first. A push that lands between this read and the commit is not
-        // caught here; the merge, pinned to the stamped SHA, still refuses it.
+        // GitLab's commits API takes no expected head. `start_sha` on a branch
+        // that exists is refused unless `force` is set, and `force` overwrites
+        // whatever the branch holds, an author's push included. So the branch
+        // is read first, and the new commit's parents are read from GitLab's
+        // answer after the write.
         const branch = await gl.getBranch({ project, branch: args.branch });
         if (branch?.commitSha !== args.parent)
           throw new HandlerError({
@@ -987,12 +989,25 @@ export function createSteeringGitLab(
         }
         // GitLab refuses a commit that changes nothing.
         if (actions.length === 0) return { sha: args.parent };
-        return gl.commitFiles({
+        const out = await gl.commitFiles({
           project,
           branch: args.branch,
           message: args.message,
           actions,
         });
+        // GitLab writes on the branch's tip at the moment of the write. A
+        // push that landed between the read above and the write sits under
+        // the new commit, and a merge pinned to that commit would carry the
+        // push with no check and no approval of it. So the commit counts only
+        // when its one parent is `parent`. Otherwise the call refuses and
+        // leaves the branch as it is: moving it back could discard the push.
+        if (out.parentIds.length !== 1 || out.parentIds[0] !== args.parent)
+          throw new HandlerError({
+            code: "conflict",
+            reason: "head_moved",
+            message: `Someone pushed to ${args.branch} while Oxagen was writing "${args.message.split("\n")[0]}", so GitLab wrote commit ${out.sha} on ${out.parentIds.join(", ") || "no parent"} in place of ${args.parent}. Oxagen left the branch as it is, so the push stays. Remove commit ${out.sha} from the branch, then try again.`,
+          });
+        return { sha: out.sha };
       });
     },
 
