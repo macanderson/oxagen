@@ -14,7 +14,8 @@
 import { CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react";
 import { type ComponentProps, type ReactNode, useId } from "react";
 import type { SafePath } from "@/shared/safe-path";
-import { Button, buttonVariants } from "@/ui/button";
+import { Button } from "@/ui/button";
+import { buttonVariants } from "@/ui/button-variants";
 import { cn } from "@/ui/cn";
 import { SafeLink } from "@/ui/navigation";
 import {

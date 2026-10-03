@@ -17,7 +17,8 @@ import {
   skillSourceName,
 } from "@/shared/skill-source-identity";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
-import { buttonSecondary, mono } from "@/ui/control-styles";
+import { mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { PullRequestLink } from "@/ui/navigation";
 import { type ProposedSkill, proposeSkill } from "./actions";
@@ -378,16 +379,16 @@ function ReviewStep({ api, ctx }: StepProps<SkillDraft>) {
           },
         }}
         bar={
-          <button
+          <Button
             type="button"
-            className={`${buttonSecondary} min-h-8 px-3 py-1 text-sm`}
+            variant="outline" className="min-h-8 px-3 py-1 text-sm"
             disabled={!file.edited}
             onClick={() => {
               file.set(file.seed);
             }}
           >
             {t("revert")}
-          </button>
+          </Button>
         }
       />
       <p className="text-muted-foreground">{t("cost")}</p>

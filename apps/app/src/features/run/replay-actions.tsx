@@ -29,7 +29,8 @@ import { chooseRuns } from "@/features/shell/client";
 import type { OrgRole, WsRole } from "@/server/viewer";
 import { canForkRun } from "@/shared/run-command-roles";
 import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
-import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
+import { inputBase, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { RecordPicker } from "@/ui/record-picker";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -95,16 +96,16 @@ function ForkDialog({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={testId}
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {label ?? t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={openChange}
@@ -205,16 +206,16 @@ export function BisectDialog({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={testId}
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {label ?? t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={openChange}
@@ -343,16 +344,16 @@ export function ForkAction({
   const text = label ?? t("fork.open");
   return (
     <>
-      <button
+      <Button
         type="button"
         disabled
         title={reason}
         aria-describedby={reasonId}
         data-testid={testId}
-        className={buttonSecondary}
+        variant="outline"
       >
         {text}
-      </button>
+      </Button>
       <span
         id={reasonId}
         data-testid={

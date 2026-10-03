@@ -11,7 +11,8 @@
 // OAuth sign-in is replaced through the Reconnect link beside this form.
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useId, useState } from "react";
-import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
+import { inputBase, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import type { StudioAt } from "./route";
 import {
@@ -229,15 +230,15 @@ export function CredentialForm({
             : t("failed", { code: outcome.code })}
         </FormAlert>
       )}
-      <button
+      <Button
         type="submit"
         aria-disabled={busy || undefined}
         data-capability={credential.name}
         data-testid="studio-credential-replace"
-        className={`${buttonSecondary} self-start`}
+        variant="outline" className="self-start"
       >
         {busy ? t("saving") : t("replace")}
-      </button>
+      </Button>
     </form>
   );
 }

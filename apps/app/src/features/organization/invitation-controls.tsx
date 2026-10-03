@@ -8,7 +8,7 @@
 // table's controls can tell one invitation's Resend from another's.
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
-import { buttonDanger, buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -88,18 +88,18 @@ export function InvitationControls({
   return (
     <div className="flex flex-col gap-2" data-testid="invitation-controls">
       <div data-actions="" className="flex gap-2 max-md:flex-wrap">
-        <button
+        <Button
           type="button"
-          className={buttonSecondary}
+          variant="outline"
           disabled={ended}
           aria-label={t("resendFor", { email })}
           onClick={() => void act("resend")}
         >
           {t("resend")}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className={buttonDanger}
+          variant="destructive-outline"
           disabled={ended}
           aria-label={t("revokeFor", { email })}
           onClick={() => {
@@ -108,7 +108,7 @@ export function InvitationControls({
           }}
         >
           {t("revoke")}
-        </button>
+        </Button>
       </div>
       <SheetDialog
         open={confirming}

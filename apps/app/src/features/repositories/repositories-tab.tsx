@@ -21,6 +21,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Badge } from "@/ui/badge";
 import { mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import {
   ListBar,
   type ListFilter,
@@ -32,7 +33,7 @@ import { cell, headCell } from "@/ui/table";
 import { type IssueCollection, setIssueCollection } from "./actions";
 import { UNANSWERED, useRepositoriesFailure } from "./failure";
 import { REPOSITORY_GAPS } from "./gaps";
-import { buttonSmall, code, type Load, note, Panel } from "./parts";
+import { code, type Load, note, Panel } from "./parts";
 import { type RepositoryRow, treeState, type TreeState } from "./view";
 
 /** A `.oxagen/` state as a dot and a word. */
@@ -166,8 +167,14 @@ function IssuesSwitch({
 
   return (
     <div className="flex flex-col items-start gap-1">
-      <button
+      {/*
+        The switch keeps its pointer events while it is aria-disabled: it
+        sits in a row that opens the dialog, and its own click stops that.
+      */}
+      <Button
         type="button"
+        variant="ghost"
+        size="sm"
         role="switch"
         aria-checked={on}
         aria-disabled={pending || !allowed || undefined}
@@ -178,7 +185,7 @@ function IssuesSwitch({
           event.stopPropagation();
           void flip();
         }}
-        className="inline-flex min-h-8 items-center gap-2 rounded-md px-1 text-base text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11"
+        className="gap-2 px-1 max-md:min-h-11 aria-disabled:pointer-events-auto"
       >
         <span
           aria-hidden="true"
@@ -193,7 +200,7 @@ function IssuesSwitch({
           />
         </span>
         {pending ? t("saving") : !known ? t("unknown") : on ? t("stateOn") : t("stateOff")}
-      </button>
+      </Button>
       {known && !allowed ? (
         <span
           className="text-sm text-muted-foreground"
@@ -282,17 +289,17 @@ export function RepositoriesTab({
             </b>{" "}
             {t.rich("bannerBody", { code })}
           </div>
-          <button
+          <Button
             type="button"
             data-testid="repositories-ungoverned-add"
             aria-haspopup="dialog"
             onClick={() => {
               onAddOxagen(bare[0]?.fullName ?? null);
             }}
-            className={buttonSmall}
+            variant="outline" size="sm"
           >
             {t("addOxagenShort")}
-          </button>
+          </Button>
         </div>
       )}
       <Panel
@@ -301,17 +308,17 @@ export function RepositoriesTab({
         title={t("title")}
         subtitle={t("subtitle")}
         action={
-          <button
+          <Button
             type="button"
             data-testid="repositories-panel-add"
             aria-haspopup="dialog"
             onClick={() => {
               onAddOxagen(null);
             }}
-            className={buttonSmall}
+            variant="outline" size="sm"
           >
             {page("addOxagen")}
-          </button>
+          </Button>
         }
       >
         <ListBar
@@ -442,8 +449,9 @@ function Row({
             aria-hidden="true"
             className="size-3.5 flex-none text-dim"
           />
-          <button
+          <Button
             type="button"
+            variant="ghost"
             aria-haspopup="dialog"
             aria-label={t("open", { repository: row.fullName })}
             data-testid={`repository-open-${row.fullName}`}
@@ -452,10 +460,10 @@ function Row({
               event.stopPropagation();
               open();
             }}
-            className={`${mono} min-w-0 text-left font-semibold text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11 md:truncate`}
+            className={`${mono} h-auto min-w-0 shrink justify-start p-0 text-left font-semibold whitespace-normal text-foreground hover:underline max-md:min-h-11`}
           >
-            {row.fullName}
-          </button>
+            <span className="min-w-0 md:truncate">{row.fullName}</span>
+          </Button>
         </span>
         {row.visibility === null ? null : (
           <span className="mt-0.5 block text-base text-dim md:truncate">
@@ -532,7 +540,7 @@ function Row({
           <span className="text-base text-dim">{t("nothingWaiting")}</span>
         ) : row.role === "main" ||
           (state !== "absent" && state !== "unknown") ? null : (
-          <button
+          <Button
             type="button"
             data-testid={`repository-add-${row.fullName}`}
             aria-haspopup="dialog"
@@ -540,10 +548,10 @@ function Row({
               event.stopPropagation();
               onAddOxagen(row.fullName);
             }}
-            className={buttonSmall}
+            variant="outline" size="sm"
           >
             {t("addOxagenShort")}
-          </button>
+          </Button>
         )}
       </td>
     </tr>

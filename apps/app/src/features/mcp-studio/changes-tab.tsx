@@ -20,18 +20,8 @@
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, useId, useMemo, useState } from "react";
 import { Badge, type BadgeTone } from "@/ui/badge";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  kvList,
-  kvTerm,
-  kvValue,
-  mono,
-  panel,
-  panelBody,
-  panelHeader,
-  panelTitle,
-} from "@/ui/control-styles";
+import { kvList, kvTerm, kvValue, mono, panel, panelBody, panelHeader, panelTitle } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { formatCount } from "@/ui/money-format";
 import { PullRequestLink } from "@/ui/navigation";
@@ -592,7 +582,7 @@ export function ChangesTab({
                     <OpLabel op={op} />
                   </span>
                   {canEdit ? (
-                    <button
+                    <Button
                       type="button"
                       data-testid={`studio-unstage-${String(index)}`}
                       aria-label={
@@ -601,13 +591,13 @@ export function ChangesTab({
                           : t("edits.unstageNamed", { tool: op.tool })
                       }
                       disabled={busy}
-                      className={buttonSecondary}
+                      variant="outline"
                       onClick={() => {
                         draft.unstage(index);
                       }}
                     >
                       {t("edits.unstage")}
-                    </button>
+                    </Button>
                   ) : null}
                 </li>
               ))}
@@ -648,31 +638,31 @@ export function ChangesTab({
         ) : null}
         {canEdit ? (
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            <Button
               type="button"
               data-testid="studio-pr-open"
               disabled={empty || serverName === null}
               aria-disabled={busy || undefined}
-              className={buttonPrimary}
+              variant="primary"
               onClick={() => {
                 if (busy || empty || serverName === null) return;
                 void openPr(serverName);
               }}
             >
               {busy ? t("pr.opening") : t("pr.open")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               data-testid="studio-draft-discard"
               disabled={empty || busy}
-              className={buttonSecondary}
+              variant="outline"
               onClick={() => {
                 draft.discard();
                 setOutcome(null);
               }}
             >
               {t("pr.discard")}
-            </button>
+            </Button>
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">{t("pr.readOnly")}</p>

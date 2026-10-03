@@ -21,7 +21,8 @@ import type { RepositoryChange } from "@/data/contracts/repository";
 import { type SteeringPr, isSteeringPrKind } from "@/data/contracts/steering";
 import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
-import { buttonPrimary, buttonSecondary, mono } from "@/ui/control-styles";
+import { mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
 import { SafeLink } from "@/ui/navigation";
@@ -35,7 +36,7 @@ import {
 import { CiLight, openerKind, STATUS_TONE } from "./changes";
 import { UNANSWERED, useRepositoriesFailure } from "./failure";
 import { REPOSITORY_GAPS } from "./gaps";
-import { buttonDanger, code, kv, type Load, note, SectionLabel } from "./parts";
+import { code, kv, type Load, note, SectionLabel } from "./parts";
 
 type Check = SteeringPr["checks"][number];
 
@@ -181,15 +182,15 @@ export function ChangeDetail({
       className="overflow-hidden rounded-xl border border-border bg-card"
     >
       <div className="flex flex-wrap items-center gap-3 border-b border-border bg-hl px-4 py-3">
-        <button
+        <Button
           type="button"
           data-testid="change-back"
           data-touch-target=""
-          className={`${buttonSecondary} min-h-7 px-2.5 py-1 text-sm`}
+          variant="outline" className="min-h-7 px-2.5 py-1 text-sm"
           onClick={onBack}
         >
           {t("back")}
-        </button>
+        </Button>
         <h2
           id="change-title"
           className="min-w-0 flex-1 break-all text-sm font-semibold text-foreground"
@@ -481,28 +482,28 @@ function Loaded({
           </p>
         ) : settled ? null : (
           <div className="mt-3.5 flex flex-wrap items-center gap-2.5 max-sm:flex-col max-sm:items-stretch">
-            <button
+            <Button
               type="button"
               data-testid="change-merge"
               data-touch-target=""
               disabled={!mergeable || merging}
               aria-disabled={!mergeable || merging}
-              className={mergeable ? buttonPrimary : buttonSecondary}
+              variant={mergeable ? "primary" : "outline"}
               onClick={onMerge}
             >
               {merging ? t("merging") : t("mergeButton")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               data-testid="change-close"
               data-touch-target=""
               aria-haspopup="dialog"
               disabled={pr.pr === null}
-              className={buttonDanger}
+              variant="destructive-outline"
               onClick={onClose}
             >
               {t("closeButton")}
-            </button>
+            </Button>
             <span data-testid="change-governance" className="text-sm text-dim">
               {!reported || failed !== null
                 ? t("waiting")
@@ -588,18 +589,18 @@ function ClosePullRequestDialog({
       closeLabel={t("cancel")}
       testId="closepr-dialog"
       footer={
-        <button
+        <Button
           type="button"
+          variant="destructive"
           data-testid="closepr-submit"
           data-touch-target=""
           disabled={pending}
-          className="inline-flex min-h-9 items-center justify-center rounded-xl border border-error bg-error px-3.25 py-1.5 text-sm font-medium text-error-foreground hover:bg-error/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-45"
           onClick={() => {
             void submit();
           }}
         >
           {pending ? t("pending") : t("submit")}
-        </button>
+        </Button>
       }
     >
       <div className="flex flex-col gap-3">

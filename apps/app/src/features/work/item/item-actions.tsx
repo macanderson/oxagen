@@ -17,7 +17,8 @@ import type { CloseResolution, WorkTargetList } from "@/data/contracts/work";
 import type { ActionResult } from "@/server/kernel";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { routes } from "@/shared/safe-path";
-import { buttonDanger, buttonPrimary, buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
+import { buttonSecondary } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { PullRequestLink, SafeLink, useNavigate } from "@/ui/navigation";
 import { approveBrief, retryTriage, saveAndApproveBrief } from "../actions";
@@ -42,11 +43,12 @@ import {
 } from "./view";
 import type { DialogName } from "./work-dialog";
 
-const TONE: Record<HeadAction["tone"], string> = {
-  primary: buttonPrimary,
-  secondary: buttonSecondary,
-  danger: buttonDanger,
-};
+/** Each tone's kit Button variant; the status offers at most one primary. */
+const TONE = {
+  primary: "primary",
+  secondary: "outline",
+  danger: "destructive-outline",
+} as const satisfies Record<HeadAction["tone"], string>;
 
 function ActionButton({
   name,
@@ -65,11 +67,11 @@ function ActionButton({
   const reasonId = useId();
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={`work-action-${name}`}
         data-tone={tone}
-        className={TONE[tone]}
+        variant={TONE[tone]}
         disabled={reason !== null || busy}
         aria-busy={busy || undefined}
         title={reason ?? undefined}
@@ -77,7 +79,7 @@ function ActionButton({
         onClick={onClick}
       >
         {label}
-      </button>
+      </Button>
       {reason === null ? null : (
         <span id={reasonId} hidden>
           {reason}

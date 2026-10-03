@@ -8,7 +8,8 @@
 // every run there is.
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { buttonSecondary, mono } from "@/ui/control-styles";
+import { mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { GateBanner } from "./banner";
 
 export function FirstRunBanner({
@@ -29,16 +30,16 @@ export function FirstRunBanner({
       tone="quiet"
       title={t("title")}
       action={
-        <button
+        <Button
           type="button"
           data-testid="first-run-dismiss"
-          className={`${buttonSecondary} px-2.5 py-1 text-sm`}
+          variant="outline" className="px-2.5 py-1 text-sm"
           onClick={() => {
             setShown(false);
           }}
         >
           {t("dismiss")}
-        </button>
+        </Button>
       }
     >
       <p>

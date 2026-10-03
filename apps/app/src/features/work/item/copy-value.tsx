@@ -6,6 +6,7 @@
 import { CopyIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { Button } from "@/ui/button";
 
 export function CopyValue({
   value,
@@ -30,17 +31,19 @@ export function CopyValue({
   }
   return (
     <span className="inline-flex items-center gap-1.5">
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="icon-xs"
         data-testid={testId}
         onClick={() => {
           void copy();
         }}
         aria-label={t("label", { label })}
-        className="grid size-6 flex-none place-items-center rounded-md text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring max-md:size-11"
+        className="flex-none max-md:size-11"
       >
         <CopyIcon aria-hidden="true" className="size-3.5" />
-      </button>
+      </Button>
       <span role="status" className="text-xs text-muted-foreground">
         {state === "copied" ? t("copied") : state === "failed" ? t("failed") : ""}
       </span>

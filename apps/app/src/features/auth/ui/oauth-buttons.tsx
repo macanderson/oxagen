@@ -6,7 +6,7 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
-import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import type { AuthOutcomeKey } from "../auth-errors";
 import {
   liveSignInSocial,
@@ -106,7 +106,7 @@ export function OAuthButtons({
       ) : null}
       <div className="grid gap-2.25">
         {(["google", "github"] as const).map((provider) => (
-          <button
+          <Button
             key={provider}
             type="button"
             aria-disabled={pending !== null || undefined}
@@ -114,11 +114,11 @@ export function OAuthButtons({
               if (pending === null) void start(provider);
             }}
             data-touch-target=""
-            className={`${buttonSecondary} w-full justify-start`}
+            variant="outline" className="w-full justify-start"
           >
             <ProviderMark provider={provider} />
             <span>{tSso(provider)}</span>
-          </button>
+          </Button>
         ))}
       </div>
       <AuthOr label={tSso("or")} />

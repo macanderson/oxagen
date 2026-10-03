@@ -11,6 +11,7 @@
 import { useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
 import type { ConnectionDetail } from "@/data/contracts/tools";
+import { Button } from "@/ui/button";
 import { mono } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -138,18 +139,20 @@ export function ConnectionDrawer({
 
   return (
     <>
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="xs"
         aria-label={t("open")}
         data-testid={`connection-open-${connectionId}`}
         onClick={() => {
           setOpen(true);
           void load();
         }}
-        className="block min-w-0 max-w-full rounded-sm text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        className="block h-auto min-w-0 max-w-full rounded-sm p-0 text-left whitespace-normal"
       >
         {children}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}

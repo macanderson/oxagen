@@ -9,6 +9,7 @@
 // the reason as the option's description whether or not the popover is open.
 // Choosing a taken option does nothing.
 import { type ReactNode, useId, useState } from "react";
+import { Button } from "./button";
 import { popoverSurface } from "./control-styles";
 
 type ChoiceOption<V extends string> = {
@@ -37,8 +38,9 @@ function Option<V extends string>({
   const disabled = reason !== null;
   return (
     <span className="relative flex min-w-0">
-      <button
+      <Button
         type="button"
+        variant="outline"
         role="radio"
         aria-checked={checked}
         aria-disabled={disabled || undefined}
@@ -64,21 +66,13 @@ function Option<V extends string>({
         onKeyDown={(event) => {
           if (event.key === "Escape") setOpen(false);
         }}
-        className={[
-          "flex w-full min-w-0 flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left text-sm focus-visible:outline-2 focus-visible:outline-ring",
-          checked
-            ? "border-gold bg-hl text-foreground"
-            : "border-border bg-app-panel-bg text-foreground",
-          disabled
-            ? "cursor-not-allowed text-muted-foreground opacity-70"
-            : "hover:border-rule",
-        ].join(" ")}
+        className="flex h-auto w-full min-w-0 flex-col items-start justify-start gap-0.5 whitespace-normal rounded-lg px-3 py-2 text-left text-sm font-normal aria-checked:border-gold aria-checked:bg-hl aria-checked:text-foreground aria-disabled:pointer-events-auto aria-disabled:cursor-not-allowed aria-disabled:text-muted-foreground aria-disabled:opacity-70"
       >
         <span className="font-medium">{option.label}</span>
         {option.sub === undefined ? null : (
           <span className="text-sm text-muted-foreground">{option.sub}</span>
         )}
-      </button>
+      </Button>
       {disabled ? (
         <span
           id={reasonId}

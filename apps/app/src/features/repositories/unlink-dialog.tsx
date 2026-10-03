@@ -16,12 +16,13 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { UnlinkedRepository } from "@/data/contracts/repository";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { unlinkWorkspaceRepository } from "./actions";
 import { UNANSWERED, useRepositoriesFailure } from "./failure";
 import { REPOSITORY_GAPS } from "./gaps";
-import { buttonDanger, code, note } from "./parts";
+import { code, note } from "./parts";
 import { SteeringProposal } from "./steering-proposal";
 import { type RepositoryRow, treeState } from "./view";
 
@@ -82,18 +83,18 @@ export function UnlinkDialog({
       testId="unlink-dialog"
       footer={
         proposed === null ? (
-          <button
+          <Button
             type="button"
             data-testid="unlink-submit"
             data-touch-target=""
             disabled={pending}
-            className={buttonDanger}
+            variant="destructive-outline"
             onClick={() => {
               void submit();
             }}
           >
             {pending ? t("pending") : t("submit")}
-          </button>
+          </Button>
         ) : null
       }
     >
