@@ -37,7 +37,9 @@
  *      (ADR-184). The sync reads the branch itself.
  *   2d. `pull_request` → store the state the delivery reports on every run
  *      row that names the pull request, in the workspaces connected to this
- *      installation (ADR-192).
+ *      installation (ADR-192), ask the forge sync for the pull request
+ *      (ADR-288), and record its head, merge, or close on every work order
+ *      whose run linked it (ADR-251).
  *   2e. `issues` / `issue_comment` → hand the delivery to every work
  *      collector that reads the repository (P1-03, #5103). Each verifies it
  *      again, stores it once by delivery id, and a durable job fetches the
@@ -46,6 +48,10 @@
  *   2f. `pull_request` → ask for the Oxagen check once per workspace that
  *      links the repository (S2b, #5058). A steering repo's pull requests
  *      are left to the steering check.
+ *   2g. `check_run` / `check_suite` / `status` → every open work order whose
+ *      pull request's current head is the commit reads its checks from
+ *      GitHub again (ADR-251). A failure never fails the delivery: Accept
+ *      reads the checks again at the press.
  *   3. Resolve connected GitHub connection(s) for this installation + repo.
  *   4. Ask the connector to extract ingestable (sourceRecordType, record) pairs.
  *   5. Fan out one `ingestion/entity.received` per (connection × record). The
@@ -65,7 +71,10 @@ import {
   githubPullRequestStateDeps,
   recordGithubPullRequestState,
 } from "@oxagen/handlers/github.pull-request.webhook";
-import { recordWorkOrderPullRequest } from "@oxagen/handlers/work.pull-request.webhook";
+import {
+  recordWorkOrderChecks,
+  recordWorkOrderPullRequest,
+} from "@oxagen/handlers/work.pull-request.webhook";
 import { requestForgePullRequestSync } from "@oxagen/handlers/forge.pull-request.webhook";
 import {
   findHealthScopes,
@@ -88,6 +97,13 @@ import { logger } from "../../middleware/logger";
 import type { AppEnv } from "../../app";
 
 export const githubAppWebhookRoute = new Hono<AppEnv>();
+
+/** The deliveries that report a check result on a commit (ADR-251). */
+const WORK_CHECK_EVENTS: ReadonlySet<string> = new Set([
+  "check_run",
+  "check_suite",
+  "status",
+]);
 
 /**
  * Ask for the discovery of every on-change MCP server whose definition a
@@ -444,6 +460,22 @@ githubAppWebhookRoute.post("/", async (c) => {
   // requests, and this asks nothing for them.
   if (eventName === "pull_request" && installationId)
     await requestCodeRepoCheck(body, installationId);
+
+  // ── Work order checks (ADR-251) ─────────────────────────────────────────
+  // A check result on a commit reaches every open send whose pull request's
+  // current head is that commit, and the send reads its checks from GitHub
+  // again. A failure never fails the delivery: Accept reads the checks again
+  // at the press, and Read checks reads them on request.
+  if (WORK_CHECK_EVENTS.has(eventName) && installationId) {
+    try {
+      await recordWorkOrderChecks({ body, installationId });
+    } catch (err) {
+      logger.error(
+        { err, eventName },
+        "GitHub App webhook: could not record a check result on its work orders; Accept reads the checks again at the press",
+      );
+    }
+  }
 
   // ── Work intake (P1-03, #5103) ──────────────────────────────────────────
   // An issue delivery reaches every work collector that reads its
