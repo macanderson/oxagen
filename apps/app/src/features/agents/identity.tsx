@@ -192,12 +192,12 @@ function Credentials({ org, ws }: { org: string; ws: string }) {
         {PROVIDER_CREDENTIALS.map((key) => (
           <li key={key} className={pair}>
             <span>{t(key)}</span>
-            <span className="text-sm text-dim">{t("none")}</span>
+            <span className="text-sm text-muted-foreground">{t("none")}</span>
           </li>
         ))}
         <li className={pair}>
           <span>{t("runToken")}</span>
-          <span className="text-sm text-dim">{t("runTokenValue")}</span>
+          <span className="text-sm text-muted-foreground">{t("runTokenValue")}</span>
         </li>
       </ul>
       <p className="text-sm">{t("body")}</p>
@@ -370,7 +370,7 @@ function TrustRelationships({
             term: t("workspace"),
             value: (
               <>
-                {wsName} <span className={`${mono} text-dim`}>{wsSlug}</span>
+                {wsName} <span className={`${mono} text-muted-foreground`}>{wsSlug}</span>
                 <Sub>{t("workspaceSub")}</Sub>
               </>
             ),

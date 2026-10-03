@@ -66,7 +66,7 @@ export function CopyId({
   return (
     <span
       data-copy-id={value}
-      className="inline-flex max-w-full items-center gap-0.5 text-xs text-dim"
+      className="inline-flex max-w-full items-center gap-0.5 text-xs text-muted-foreground"
     >
       <code className={`${mono} min-w-0 select-all truncate`} data-truncate={value}>
         {value}

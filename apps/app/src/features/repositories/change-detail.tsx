@@ -305,7 +305,7 @@ function Loaded({
                 ? changes("kinds.steering_pr")
                 : changes("kinds.steering_record")}
             </Badge>
-            <span className={`${mono} text-xs text-dim`}>
+            <span className={`${mono} text-xs text-muted-foreground`}>
               {isSteeringPrKind(pr.kind)
                 ? pr.onMerge.path
                 : changes("kindPaths.steering_record")}
@@ -330,7 +330,7 @@ function Loaded({
           <dt>{t("facts.openedBy")}</dt>
           <dd>
             {row === null ? (
-              <span data-state="not-recorded" className="text-dim">
+              <span data-state="not-recorded" className="text-muted-foreground">
                 {t("whyNotRecorded")}
               </span>
             ) : (
@@ -338,7 +338,7 @@ function Loaded({
                 {openerKind(row.openedBy) === "person"
                   ? changes("openedBy.person")
                   : row.openedBy}
-                <span className="text-dim">
+                <span className="text-muted-foreground">
                   {" · "}
                   {format.dateTime(new Date(row.openedAt), {
                     dateStyle: "medium",
@@ -351,7 +351,7 @@ function Loaded({
           <dt>{t("facts.why")}</dt>
           <dd data-testid="change-why">
             {row === null || row.why.trim() === "" ? (
-              <span data-state="not-recorded" className="text-dim">
+              <span data-state="not-recorded" className="text-muted-foreground">
                 {t("whyNotRecorded")}
               </span>
             ) : (
@@ -504,7 +504,7 @@ function Loaded({
             >
               {t("closeButton")}
             </Button>
-            <span data-testid="change-governance" className="text-sm text-dim">
+            <span data-testid="change-governance" className="text-sm text-muted-foreground">
               {!reported || failed !== null
                 ? t("waiting")
                 : pr.governanceMode === null
@@ -628,7 +628,7 @@ function ClosePullRequestDialog({
         <p
           data-state="not-recorded"
           data-gap={REPOSITORY_GAPS.lifecycle}
-          className="text-sm text-dim"
+          className="text-sm text-muted-foreground"
         >
           {t("notPosted")}
         </p>

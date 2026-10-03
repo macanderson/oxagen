@@ -85,7 +85,7 @@ function TokenClasses({
       flush
       aside={
         tokens === null ? undefined : (
-          <span className="font-mono text-xs text-dim">
+          <span className="font-mono text-xs text-muted-foreground">
             {t("classes.tally", { count: count(tokens.total) })}
           </span>
         )
@@ -145,7 +145,7 @@ function TokenClasses({
                           <Money value={part} precision="exact" />
                         )}
                       </td>
-                      <td className={`${numericCell} text-dim`}>
+                      <td className={`${numericCell} text-muted-foreground`}>
                         {share === null ? (
                           <NoValue />
                         ) : (
@@ -176,7 +176,7 @@ function TokenClasses({
                         <Money value={searches.cost} precision="exact" />
                       )}
                     </td>
-                    <td className={`${numericCell} text-dim`}>
+                    <td className={`${numericCell} text-muted-foreground`}>
                       {searchShare === null ? (
                         <NoValue />
                       ) : (
@@ -200,7 +200,7 @@ function TokenClasses({
                       <Money value={prices.total} precision="exact" />
                     )}
                   </td>
-                  <td className={`${numericCell} font-normal text-dim`}>
+                  <td className={`${numericCell} font-normal text-muted-foreground`}>
                     {prices.total === null ? (
                       <NoValue />
                     ) : (
@@ -307,7 +307,7 @@ function PromptComposition({
       testId="prompt-composition"
       aside={
         perModelCall === null ? undefined : (
-          <span className="font-mono text-xs text-dim">
+          <span className="font-mono text-xs text-muted-foreground">
             {t("tally", { count: formatCount(perModelCall, locale) })}
           </span>
         )

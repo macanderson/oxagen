@@ -364,7 +364,7 @@ export function RepositoriesTab({
             <tbody className="divide-y divide-border">
               {list.shown.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className={`${cell} text-dim`}>
+                  <td colSpan={8} className={`${cell} text-muted-foreground`}>
                     {t("nothing")}
                   </td>
                 </tr>
@@ -396,7 +396,7 @@ export function RepositoriesTab({
         {reachableUnread || truncated ? (
           <p
             data-testid="repositories-reachable-note"
-            className="px-4 pb-3 text-sm text-dim"
+            className="px-4 pb-3 text-sm text-muted-foreground"
           >
             {reachableUnread ? t("reachableUnread") : t("truncated")}
           </p>
@@ -466,7 +466,7 @@ function Row({
           </Button>
         </span>
         {row.visibility === null ? null : (
-          <span className="mt-0.5 block text-base text-dim md:truncate">
+          <span className="mt-0.5 block text-base text-muted-foreground md:truncate">
             {t(`visibility.${row.visibility}`)}
           </span>
         )}
@@ -485,7 +485,7 @@ function Row({
       <td className={cell}>
         <span className={mono}>{row.productionBranch}</span>
         {ready?.head ? (
-          <span className={`${mono} block text-base text-dim md:truncate`}>
+          <span className={`${mono} block text-base text-muted-foreground md:truncate`}>
             {ready.head.slice(0, 7)}
           </span>
         ) : null}
@@ -494,7 +494,7 @@ function Row({
         <TreeBadge state={state} testId={`repository-tree-${row.fullName}`} />
         {ready !== null && ready.oxagen.present ? (
           <span
-            className={`${mono} mt-0.5 block text-base text-dim md:truncate`}
+            className={`${mono} mt-0.5 block text-base text-muted-foreground md:truncate`}
           >
             {t("tree.files", { count: ready.oxagen.files.length })}
           </span>
@@ -518,7 +518,7 @@ function Row({
             <span
               data-state="not-recorded"
               data-gap={REPOSITORY_GAPS.lifecycle}
-              className="block text-base text-dim md:truncate"
+              className="block text-base text-muted-foreground md:truncate"
             >
               {t("deliveries")}
             </span>
@@ -526,7 +526,7 @@ function Row({
         )}
       </td>
       <td
-        className={`${cell} text-right text-sm text-dim`}
+        className={`${cell} text-right text-sm text-muted-foreground`}
         data-state={row.role === "available" ? undefined : "not-recorded"}
       >
         {row.role === "available" ? t("none") : t("notRecorded")}
@@ -537,7 +537,7 @@ function Row({
             through the steering repo setup, so neither takes Add Oxagen
             (#5082). */}
         {state === "governed" ? (
-          <span className="text-base text-dim">{t("nothingWaiting")}</span>
+          <span className="text-base text-muted-foreground">{t("nothingWaiting")}</span>
         ) : row.role === "main" ||
           (state !== "absent" && state !== "unknown") ? null : (
           <Button

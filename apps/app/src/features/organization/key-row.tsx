@@ -79,7 +79,7 @@ function KeyExpiry({
   return (
     <>
       {badge}
-      <div className={`${mono} text-xs text-dim md:truncate`}>
+      <div className={`${mono} text-xs text-muted-foreground md:truncate`}>
         {apiKey.expiresAt === null ? (
           t("never")
         ) : (

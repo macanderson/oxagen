@@ -51,7 +51,7 @@ const sectionTitle = "text-lg font-semibold text-foreground";
 function Permissions({ role }: { role: Role }) {
   const t = useTranslations("organization.roleCatalog");
   if (role.permissions.length === 0) {
-    return <span className="text-dim">{t("noPermissions")}</span>;
+    return <span className="text-muted-foreground">{t("noPermissions")}</span>;
   }
   const rest = role.permissions.length - CHIPS;
   return (
@@ -62,7 +62,7 @@ function Permissions({ role }: { role: Role }) {
         </Badge>
       ))}
       {rest > 0 ? (
-        <span className="text-xs text-dim">
+        <span className="text-xs text-muted-foreground">
           {t("more", { count: rest })}
         </span>
       ) : null}
@@ -72,7 +72,7 @@ function Permissions({ role }: { role: Role }) {
 
 function HeldBy({ role }: { role: Role }) {
   const t = useTranslations("organization.roleCatalog.heldBy");
-  if (role.heldBy === 0) return <span className="text-dim">{t("nobody")}</span>;
+  if (role.heldBy === 0) return <span className="text-muted-foreground">{t("nobody")}</span>;
   return (
     <span className="whitespace-nowrap">
       {role.kind === "human"
@@ -109,7 +109,7 @@ function Origin({ role, origin }: { role: Role; origin: string }) {
       </Badge>
     );
   }
-  return <span className="text-xs text-dim">{origin}</span>;
+  return <span className="text-xs text-muted-foreground">{origin}</span>;
 }
 
 export function RolesTab({
@@ -159,7 +159,7 @@ export function RolesTab({
           {role.name}
         </span>
         {role.description === null ? null : (
-          <span className="block text-xs text-dim md:truncate">
+          <span className="block text-xs text-muted-foreground md:truncate">
             {role.description}
           </span>
         )}
@@ -268,7 +268,7 @@ function Enforcement({
   return (
     <p
       data-enforced={enforcement.enforced ? "true" : "false"}
-      className="text-sm text-dim"
+      className="text-sm text-muted-foreground"
     >
       {enforcement.enforced
         ? t("enforced")

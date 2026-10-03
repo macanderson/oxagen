@@ -228,10 +228,10 @@ export function ProposeDialog({
                           : ""
                     }`}
                   >
-                    <span className="text-right text-dim">
+                    <span className="text-right text-muted-foreground">
                       {row.before ?? ""}
                     </span>
-                    <span className="text-right text-dim">
+                    <span className="text-right text-muted-foreground">
                       {row.after ?? ""}
                     </span>
                     <span aria-hidden="true">
@@ -244,7 +244,7 @@ export function ProposeDialog({
                 ))}
               </div>
             ) : (
-              <p className="px-4 py-3.5 text-sm text-dim">
+              <p className="px-4 py-3.5 text-sm text-muted-foreground">
                 {t("nothingChanged")}
               </p>
             )}

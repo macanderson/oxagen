@@ -482,7 +482,7 @@ function UnrecordedField({
         disabled
         value={value ?? t("notRecorded")}
         aria-describedby={`${id}-hint`}
-        className={`${inputBase} max-md:text-input-touch ${value === undefined ? "text-dim" : "font-mono"}`}
+        className={`${inputBase} max-md:text-input-touch ${value === undefined ? "text-muted-foreground" : "font-mono"}`}
       />
       <p id={`${id}-hint`} className="text-sm text-muted-foreground">
         {hint}
@@ -512,7 +512,7 @@ function BranchSelect({ id, branch }: { id: string; branch: string | null }) {
         disabled
         aria-describedby={`${id}-hint`}
         data-testid="edit-workspace-branch"
-        className={`${inputBase} max-md:text-input-touch ${branch === null ? "text-dim" : "font-mono"}`}
+        className={`${inputBase} max-md:text-input-touch ${branch === null ? "text-muted-foreground" : "font-mono"}`}
       >
         <option>{branch ?? t("notRecorded")}</option>
       </select>
@@ -536,10 +536,10 @@ function WorkspaceFactList({ agents }: { agents: number | null }) {
   return (
     <dl className="grid grid-cols-dl gap-x-4 gap-y-1.5 text-base">
       <dt className={term}>{t("toolbelt")}</dt>
-      <dd className="text-dim">{tOrg("notRecorded")}</dd>
+      <dd className="text-muted-foreground">{tOrg("notRecorded")}</dd>
       <dt className={term}>{t("agents")}</dt>
       {agents === null ? (
-        <dd className="text-dim">{tOrg("notRecorded")}</dd>
+        <dd className="text-muted-foreground">{tOrg("notRecorded")}</dd>
       ) : (
         <dd className="tabular-nums" data-testid="edit-workspace-agents">
           {t("agentsCount", { count: agents })}

@@ -139,7 +139,7 @@ export function PageFailure({
               <p
                 id="record-denied-request"
                 data-state="not-recorded"
-                className="mt-3 max-w-measure-narrow text-sm text-dim"
+                className="mt-3 max-w-measure-narrow text-sm text-muted-foreground"
               >
                 {t("denied.requestNotRecorded", { needed })}
               </p>
@@ -208,13 +208,13 @@ export function PageFailure({
               <p
                 id="record-error-incident"
                 data-state="not-recorded"
-                className="mt-3 max-w-measure-narrow text-sm text-dim"
+                className="mt-3 max-w-measure-narrow text-sm text-muted-foreground"
               >
                 {t("error.incidentNotRecorded")}
               </p>
               <p
                 data-testid="record-error-trace"
-                className="mt-4 font-mono text-xs text-dim"
+                className="mt-4 font-mono text-xs text-muted-foreground"
               >
                 {t("error.trace", { at: readAt })}
               </p>

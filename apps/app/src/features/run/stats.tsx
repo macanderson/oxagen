@@ -91,7 +91,7 @@ function Involved({
         notRecorded={t("notRecorded")}
         sub={sub === "" ? t("header.harnessNotRecorded") : sub}
       />
-      <span className="font-mono text-xs text-dim">
+      <span className="font-mono text-xs text-muted-foreground">
         {t("summary.onBehalfOf")}
       </span>
       <span
@@ -127,7 +127,7 @@ function Involved({
                     t(`facts.operatorKind.${run.operatorKind}`)
                   ))}
               </b>
-              <span className="truncate font-mono text-xs text-dim">
+              <span className="truncate font-mono text-xs text-muted-foreground">
                 {/* A wrapped session's operator can be the person who
                     enrolled the host rather than one who started the run,
                     and the record says which. */}
@@ -227,7 +227,7 @@ export function SummaryPanel({
           {t("summaryFailed", { reason: run.enrichmentError })}
         </p>
       )}
-      <div className="mt-3.25 flex flex-wrap items-center gap-2.5 border-t border-border pt-2.75 font-mono text-xs text-dim">
+      <div className="mt-3.25 flex flex-wrap items-center gap-2.5 border-t border-border pt-2.75 font-mono text-xs text-muted-foreground">
         <span className="min-w-0 flex-1">
           {summary === null ? (
             t("summary.notGenerated")
@@ -376,7 +376,7 @@ export function StatRow({
         label={t("cost")}
         note={
           displayedCost === null ? undefined : (
-            <span className="font-mono text-xs text-dim">
+            <span className="font-mono text-xs text-muted-foreground">
               {metrics.cost === null
                 ? t("provisional")
                 : // A rebuilt run's cost is the rollup's price-book

@@ -340,7 +340,7 @@ export function ListTable({
             setPage(1);
           }}
           data-touch-target=""
-          className="min-w-35 grow basis-50 rounded-lg border border-input-border bg-input-bg px-2.5 py-1.5 text-sm text-input-fg placeholder:text-dim focus-visible:border-input-border-focus focus-visible:outline-none max-md:basis-full max-md:text-input-touch"
+          className="min-w-35 grow basis-50 rounded-lg border border-input-border bg-input-bg px-2.5 py-1.5 text-sm text-input-fg placeholder:text-muted-foreground focus-visible:border-input-border-focus focus-visible:outline-none max-md:basis-full max-md:text-input-touch"
         />
         {filters}
         {facets.map(({ column, values }) => {
@@ -422,7 +422,7 @@ export function ListTable({
               <tr data-list-empty="">
                 <td
                   colSpan={columns.length}
-                  className="px-3 py-4.5 text-center text-dim"
+                  className="px-3 py-4.5 text-center text-muted-foreground"
                 >
                   {empty ?? t("noMatch")}
                 </td>

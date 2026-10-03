@@ -239,7 +239,7 @@ function KeysPanel({
           <h2 id="org-api-keys" className={panelTitle}>
             {t("title")}
           </h2>
-          <span className="text-sm text-dim">{t("caption")}</span>
+          <span className="text-sm text-muted-foreground">{t("caption")}</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone="quiet" dot={false} data-store="api-keys">
@@ -475,7 +475,7 @@ function Keys({
                   <div className="font-semibold text-foreground md:truncate">
                     {key.name}
                   </div>
-                  <div className={`${mono} text-xs text-dim md:truncate`}>
+                  <div className={`${mono} text-xs text-muted-foreground md:truncate`}>
                     {t("masked", { prefix: key.prefix })}
                   </div>
                 </div>,
@@ -484,7 +484,7 @@ function Keys({
                 <NotRecordedValue key="principal" />,
                 <NotRecordedValue key="grants" />,
                 <NotRecordedValue key="createdBy" />,
-                <span key="lastUsed" className={`${mono} text-xs text-dim`}>
+                <span key="lastUsed" className={`${mono} text-xs text-muted-foreground`}>
                   {key.lastUsedAt === null ? (
                     t("neverUsed")
                   ) : (

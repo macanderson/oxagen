@@ -120,7 +120,7 @@ function CategoryChips({
       >
         {filtered || complete ? t("allCategories") : t("allOnPage")}
         {filtered ? null : (
-          <span className={`${mono} text-xs text-dim`}>
+          <span className={`${mono} text-xs text-muted-foreground`}>
             {formatCount(items.length, locale)}
           </span>
         )}
@@ -145,7 +145,7 @@ function CategoryChips({
           className={chip}
         >
           <span className={mono}>{tag}</span>
-          <span className={`${mono} text-xs text-dim`}>
+          <span className={`${mono} text-xs text-muted-foreground`}>
             {formatCount(count, locale)}
           </span>
         </ToggleLink>
@@ -215,7 +215,7 @@ function ProviderChips({
           <ProviderIcon name={server.name} iconUrl={server.iconUrl} size={16} />
           <span>{server.name}</span>
           {complete ? (
-            <span className={`${mono} text-xs text-dim`}>
+            <span className={`${mono} text-xs text-muted-foreground`}>
               {formatCount(versions.length, locale)}
             </span>
           ) : null}

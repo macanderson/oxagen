@@ -94,7 +94,7 @@ function useDetails(plane: DataPlane): Record<PlaneMode, ReactNode> {
     <span className="inline-flex flex-wrap items-center gap-1.5">
       <StatusBadge plane={plane} />
       <span className={mono}>{t(`modes.${plane.mode}`)}</span>
-      <span className="text-sm text-dim">
+      <span className="text-sm text-muted-foreground">
         {plane.lastVerifiedAt === null ? (
           t("neverVerified")
         ) : (
@@ -187,7 +187,7 @@ function useDetails(plane: DataPlane): Record<PlaneMode, ReactNode> {
             [f("nextBundle"), nr],
           ]}
         />
-        <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-widest text-dim">
+        <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           {t("outbound.title")}
         </p>
         <Table
@@ -296,7 +296,7 @@ function Isolation({
               t("workspaceScoping"),
               <Fragment key="workspaceScoping">
                 {t("workspaceScopingValue")}{" "}
-                <span className={`${mono} text-dim`}>({slugs})</span>
+                <span className={`${mono} text-muted-foreground`}>({slugs})</span>
               </Fragment>,
             ],
             [t("crossTenant"), t("crossTenantValue")],

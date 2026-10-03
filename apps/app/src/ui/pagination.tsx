@@ -236,7 +236,7 @@ export function RowsPager({
         {range === undefined ? null : (
           <span
             data-range=""
-            className="font-mono text-sm whitespace-nowrap text-dim tabular-nums"
+            className="font-mono text-sm whitespace-nowrap text-muted-foreground tabular-nums"
           >
             {range}
           </span>

@@ -211,7 +211,7 @@ function Body({
     <span
       data-state="not-recorded"
       data-gap={REPOSITORY_GAPS.lifecycle}
-      className="text-dim"
+      className="text-muted-foreground"
     >
       {t("notRecorded")}
     </span>
@@ -267,7 +267,7 @@ function Body({
         <dd>
           <TreeBadge state={state} testId="repository-dialog-tree" />
           {ready !== null && ready.head !== null && ready.oxagen.present ? (
-            <span className="ms-1.5 text-dim">
+            <span className="ms-1.5 text-muted-foreground">
               {t.rich("facts.filesAt", {
                 count: ready.oxagen.files.length,
                 sha: ready.head.slice(0, 7),
@@ -285,7 +285,7 @@ function Body({
         <dt>{t("facts.codeGraph")}</dt>
         <dd>
           {row.role === "available" ? (
-            <span className="text-dim">{t("notIndexed")}</span>
+            <span className="text-muted-foreground">{t("notIndexed")}</span>
           ) : (
             notRecorded
           )}

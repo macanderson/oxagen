@@ -137,7 +137,7 @@ function CustomerKey({
               {t("customer.keyHint", { hint: credential.keyHint })}
             </span>
           ) : (
-            <span className="text-dim">{t("customer.keyNone")}</span>
+            <span className="text-muted-foreground">{t("customer.keyNone")}</span>
           )}
         </dd>
         <dt className={term}>{t("facts.billing")}</dt>
@@ -161,10 +161,10 @@ function CustomerKey({
 function MintedKey({ orgName }: { orgName: string }) {
   const t = useTranslations("organization.modelFunding.funding");
   const heading =
-    "text-xs font-semibold uppercase tracking-widest text-dim";
+    "text-xs font-semibold uppercase tracking-widest text-muted-foreground";
   return (
     <div className="flex flex-col gap-4" data-issue="4005">
-      <p className="text-sm text-dim">{t("minted.unrecorded")}</p>
+      <p className="text-sm text-muted-foreground">{t("minted.unrecorded")}</p>
       <section aria-labelledby="funding-minted-held" data-key-state="held">
         <h3 id="funding-minted-held" className={`${heading} mb-2`}>
           {t("minted.heldTitle")}
@@ -252,7 +252,7 @@ function Reconciliation() {
     >
       <h4
         id="funding-reconciliation"
-        className="mb-2 text-xs font-semibold uppercase tracking-widest text-dim"
+        className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground"
       >
         {t("title")}
       </h4>
@@ -345,7 +345,7 @@ function ModelRoutes() {
           <h2 id="org-model-routes" className={panelTitle}>
             {t("title")}
           </h2>
-          <span className="text-sm text-dim" data-caption="">
+          <span className="text-sm text-muted-foreground" data-caption="">
             {t("caption")}
           </span>
         </div>
@@ -366,7 +366,7 @@ function ModelRoutes() {
           <tr key={tier} data-route={tier}>
             <td className={cell}>
               <span className={mono}>{tier}</span>
-              <div className="text-xs text-dim md:truncate">
+              <div className="text-xs text-muted-foreground md:truncate">
                 {t(`tiers.${tier}`)}
               </div>
             </td>
@@ -399,12 +399,12 @@ function ModelRoutes() {
           <td className={cell} colSpan={5}>
             <b>{t("total")}</b>{" "}
             <span
-              className="text-xs text-dim"
+              className="text-xs text-muted-foreground"
               data-basis="client_attested"
             >
               {t("basis")}
             </span>{" "}
-            <span className="text-xs text-dim">{t("currency")}</span>
+            <span className="text-xs text-muted-foreground">{t("currency")}</span>
           </td>
           <td className={numericCell}>
             <NotRecordedValue />

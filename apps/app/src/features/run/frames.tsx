@@ -69,7 +69,7 @@ const listItem =
 const listItemOn = "bg-hl text-foreground shadow-rail";
 /** `.navitem .ct { margin-left:auto; font-family:var(--mono); font-size:10.5px; color:var(--dim); background:var(--panel); border:1px solid var(--border); border-radius:5px; padding:0 5px }` */
 const costChip =
-  "ml-auto whitespace-nowrap rounded-sm border border-border bg-card px-1.25 font-mono text-xs text-dim";
+  "ml-auto whitespace-nowrap rounded-sm border border-border bg-card px-1.25 font-mono text-xs text-muted-foreground";
 
 const DECISION_TONE: Record<string, BadgeTone> = {
   allow: "allowed",
@@ -351,7 +351,7 @@ export function FramePanel({
         <div className="ml-auto flex min-w-0 flex-wrap items-center gap-1.75">
           <EnforcementTierBadge tier={tier} />
           {at === null ? null : (
-            <time dateTime={at} className={`${mono} text-xs text-dim`}>
+            <time dateTime={at} className={`${mono} text-xs text-muted-foreground`}>
               {format.dateTime(new Date(at), {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -411,7 +411,7 @@ export function FramePanel({
           </StepLink>
           <span
             data-testid="frame-position"
-            className={`${mono} ml-auto text-xs text-dim`}
+            className={`${mono} ml-auto text-xs text-muted-foreground`}
           >
             {open.index < 0
               ? t("positionOff", {
@@ -457,7 +457,7 @@ export function FrameList({
         <h3 className={panelTitle}>{t("title")}</h3>
         <span
           data-testid="frame-list-state"
-          className="ml-auto text-xs text-dim"
+          className="ml-auto text-xs text-muted-foreground"
         >
           {t(`state.${state}`)}
         </span>
@@ -479,7 +479,7 @@ export function FrameList({
                   aria-current={on ? "true" : undefined}
                   className={`${listItem} ${on ? listItemOn : ""}`}
                 >
-                  <span className="min-w-5.5 flex-none text-right font-mono text-dim">
+                  <span className="min-w-5.5 flex-none text-right font-mono text-muted-foreground">
                     {frame.seq}
                   </span>
                   {/* `.fp-dot { width:6px; height:6px; border-radius:50% }` */}

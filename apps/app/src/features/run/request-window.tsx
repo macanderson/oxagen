@@ -185,7 +185,7 @@ function Section({
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className={`${eyebrowQuiet} m-0`}>{title}</p>
         {aside === undefined ? null : (
-          <span className="text-xs text-dim">{aside}</span>
+          <span className="text-xs text-muted-foreground">{aside}</span>
         )}
       </div>
       {children}
@@ -298,10 +298,10 @@ export function RequestWindow({
               <b className={`${mono} text-foreground`}>
                 {t(`block.${block.kind}`)}
               </b>
-              <span className="min-w-0 truncate text-dim">
+              <span className="min-w-0 truncate text-muted-foreground">
                 {t(`items.${block.kind}`, { count: block.items })}
               </span>
-              <span className={`${mono} ml-auto flex-none text-dim`}>
+              <span className={`${mono} ml-auto flex-none text-muted-foreground`}>
                 {block.tokens === null
                   ? t("bytes", { count: formatCount(block.bytes, locale) })
                   : t("tokens", { count: formatCount(block.tokens, locale) })}

@@ -153,7 +153,7 @@ function TokenUse({
                 ) : (
                   <span className={`${mono} font-semibold`}>
                     {n(value)}
-                    <span className="font-normal text-dim">
+                    <span className="font-normal text-muted-foreground">
                       {" · "}
                       {r.total === 0
                         ? "0%"

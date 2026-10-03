@@ -105,7 +105,7 @@ function DecidedBy({ source }: { source: string | null }) {
   return (
     <span
       data-testid="policy-decided-by"
-      className="max-w-full text-xs text-dim md:truncate"
+      className="max-w-full text-xs text-muted-foreground md:truncate"
     >
       {source === null
         ? t("decidedByUnrecorded")
@@ -218,7 +218,7 @@ function row(entry: TranscriptEntry, place: Place): ListRow {
         ) : (
           <span className={`${mono} text-foreground md:truncate`}>{call}</span>
         )}
-        <span className={`${mono} text-xs text-dim md:truncate`}>
+        <span className={`${mono} text-xs text-muted-foreground md:truncate`}>
           {decision?.type ?? entry.type}
         </span>
       </span>,
