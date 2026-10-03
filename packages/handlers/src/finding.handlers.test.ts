@@ -226,6 +226,7 @@ describe("list_findings", () => {
     expect(readFindings).toHaveBeenCalledWith(
       { orgId: ORG, workspaceId: WS },
       { status: "open" },
+      null,
     );
     // A read that names no run answers no citation.
     for (const f of out.findings) expect(f).not.toHaveProperty("citation");
@@ -714,9 +715,12 @@ describe("list_findings by page and by subject (#5303)", () => {
     expect(decided?.sql).toMatch(
       /order by date_trunc\('milliseconds', "cost"\."findings"\."decided_at"\) desc, "cost"\."findings"\."id" asc/,
     );
+    // The instant is bound as text and cast: a Date compared with an
+    // expression reaches the driver unconverted.
     expect(decided?.sql).toMatch(
-      /date_trunc\('milliseconds', "cost"\."findings"\."decided_at"\) < \$\d+/,
+      /date_trunc\('milliseconds', "cost"\."findings"\."decided_at"\) < \$\d+::timestamptz/,
     );
+    expect(decided?.params).toContain("2026-08-16T00:03:00.000Z");
     // The totals cover every finding the filter matches: no cursor, no limit.
     expect(totals?.sql).toMatch(/"cost"\."findings"\."subject" = \$\d+/);
     expect(totals?.sql).toMatch(/"cost"\."findings"\."kind" = \$\d+/);
@@ -761,6 +765,7 @@ describe("list_findings for one run (#4001)", () => {
     expect(readFindings).toHaveBeenCalledWith(
       { orgId: ORG, workspaceId: WS },
       { status: "open", runId: RUN },
+      null,
     );
     expect(out.findings[0]?.citation).toEqual({
       runId: RUN,

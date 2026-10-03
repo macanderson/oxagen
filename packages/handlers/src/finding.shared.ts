@@ -330,7 +330,9 @@ function afterCursor(cursor: FindingCursor | null): SQL | undefined {
       and(isNull(findings.decidedAt), gt(findings.id, cursor.id)),
       isNotNull(findings.decidedAt),
     );
-  const at = new Date(cursor.key);
+  // Bound as text with a cast, as list_runs binds its instant: compared with
+  // an expression rather than a column, a Date would reach the driver as is.
+  const at = sql`${cursor.key}::timestamptz`;
   return or(
     lt(decidedAtMs, at),
     and(eq(decidedAtMs, at), gt(findings.id, cursor.id)),
