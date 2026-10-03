@@ -341,6 +341,7 @@ describe("toWorkTargetList and toWorkOutcomes", () => {
       touches: { per_item: null, brief_approvals: 0, acceptances: 0, returns: 1, triage_overrides: 0, triage_corrections: 0 },
       cost: { runs: 1, known_runs: 0, total: null },
       reopens: { cohort: 0, reopened: 0, waiting: 0 },
+      reverts: { cohort: 3, reverted: 1, waiting: 2 },
       delivery: {
         sends: 2,
         claimed: 1,
@@ -357,5 +358,6 @@ describe("toWorkTargetList and toWorkOutcomes", () => {
     expect(view.leadTime).toEqual({ medianHours: null, p90Hours: null, sample: 0 });
     expect(view.cost).toEqual({ runs: 1, knownRuns: 0, total: null });
     expect(view.closed).toEqual({ cancelled: 0, declined: 1, duplicate: 2 });
+    expect(view.reverts).toEqual({ cohort: 3, reverted: 1, waiting: 2 });
   });
 });

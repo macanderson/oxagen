@@ -37,7 +37,7 @@ function Mark({ n, state }: { n: number; state: "done" | "current" | "todo" }) {
   return (
     <span
       aria-hidden="true"
-      className={`inline-flex size-[22px] flex-none items-center justify-center rounded-full border text-xs ${tone}`}
+      className={`inline-flex size-5.5 flex-none items-center justify-center rounded-full border text-xs ${tone}`}
     >
       {state === "done" ? "✓" : n}
     </span>
@@ -146,8 +146,8 @@ export function GateShell({
   const bodyClass = "flex min-w-0 flex-col gap-5 pt-7";
   return (
     <div className="min-h-dvh bg-background px-4 pb-14 sm:px-5">
-      <div className="mx-auto flex w-full max-w-[772px] flex-col">
-        <header className="flex items-center gap-3 pt-[18px]">
+      <div className="mx-auto flex w-full max-w-193 flex-col">
+        <header className="flex items-center gap-3 pt-4.5">
           <OxagenWordmark className="h-6" />
           <div className="ml-auto flex min-w-0 items-center gap-3">
             {email === null ? null : (
@@ -201,7 +201,7 @@ export function GateHeader({
       <h1 className="text-xl font-bold tracking-tight text-foreground">
         {title}
       </h1>
-      <p className="max-w-[560px] text-base leading-relaxed text-muted-foreground">
+      <p className="max-w-140 text-base leading-relaxed text-muted-foreground">
         {lead}
       </p>
     </div>

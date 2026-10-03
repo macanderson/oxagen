@@ -521,7 +521,7 @@ function RunRowView({
             {operatorLabel === null ? (
               notRecorded
             ) : (
-              <span className="flex min-w-0 items-center gap-[7px]">
+              <span className="flex min-w-0 items-center gap-1.75">
                 <Avatar
                   value={run.operatorAvatarUrl}
                   initials={initialsOf(run.operatorName ?? operatorLabel)}
@@ -1000,7 +1000,7 @@ function PauseDialog({
           ) : (
             <p className="text-sm text-muted-foreground">{t("body")}</p>
           )}
-          <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-[7px] text-sm">
+          <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1.75 text-sm">
             <dt className="text-dim">{t("run")}</dt>
             <dd className={mono}>{run.id}</dd>
             <dt className="text-dim">{t("position")}</dt>
@@ -1251,7 +1251,7 @@ export function FleetBoard({
             aria-labelledby="fleet-runs"
             aria-busy={reading}
             data-testid="runs-table"
-            className={`w-full min-w-[560px] border-collapse text-sm ${reading ? "opacity-60" : ""}`}
+            className={`w-full min-w-140 border-collapse text-sm ${reading ? "opacity-60" : ""}`}
           >
             <thead>
               <tr className="border-b border-border">
@@ -1334,7 +1334,7 @@ export function FleetBoard({
                   <td
                     colSpan={columns.length + 1}
                     data-testid="runs-none"
-                    className="px-4 py-[18px] text-center text-dim"
+                    className="px-4 py-4.5 text-center text-dim"
                   >
                     {emptyText}
                   </td>

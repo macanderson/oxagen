@@ -409,6 +409,7 @@ const HISTORY_KINDS = [
   "accepted",
   "merged",
   "pr_closed",
+  "reverted",
   "closed",
   "reopened",
 ] as const;

@@ -280,7 +280,7 @@ export function InstallerScreens({
             {t("notPublished")}
           </span>
         </div>
-        <div className="px-[18px] py-4">{body}</div>
+        <div className="px-4.5 py-4">{body}</div>
       </section>
       {rejected !== null ? null : (
         <div

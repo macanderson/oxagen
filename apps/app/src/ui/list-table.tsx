@@ -323,7 +323,7 @@ export function ListTable({
     <div className="flex min-w-0 flex-col">
       <div
         data-list-controls=""
-        className="flex flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-[9px]"
+        className="flex flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-2.25"
       >
         <label htmlFor={searchId} className="sr-only">
           {t("search")}
@@ -339,7 +339,7 @@ export function ListTable({
             setPage(1);
           }}
           data-touch-target=""
-          className="min-w-[140px] flex-[1_1_200px] rounded-lg border border-input-border bg-input-bg px-2.5 py-1.5 text-sm text-input-fg placeholder:text-dim focus-visible:border-input-border-focus focus-visible:outline-none max-md:basis-full max-md:text-input-touch"
+          className="min-w-35 flex-[1_1_200px] rounded-lg border border-input-border bg-input-bg px-2.5 py-1.5 text-sm text-input-fg placeholder:text-dim focus-visible:border-input-border-focus focus-visible:outline-none max-md:basis-full max-md:text-input-touch"
         />
         {filters}
         {facets.map(({ column, values }) => {
@@ -359,7 +359,7 @@ export function ListTable({
               }}
               size="sm"
               data-touch-target=""
-              className={`${listSelect} max-w-[220px]`}
+              className={`${listSelect} max-w-55`}
             />
           );
         })}
@@ -367,7 +367,7 @@ export function ListTable({
       <div className="min-w-0 overflow-x-auto">
         <table
           aria-label={label}
-          className="w-full min-w-[560px] border-collapse text-sm"
+          className="w-full min-w-140 border-collapse text-sm"
         >
           <thead>
             <tr className="border-b border-border">
@@ -403,7 +403,7 @@ export function ListTable({
                         toggle(i);
                       }}
                       data-sort={state}
-                      className="inline-flex cursor-pointer select-none items-center uppercase tracking-[inherit] hover:text-muted-foreground data-[sort=ascending]:text-foreground data-[sort=descending]:text-foreground after:ml-[5px] after:text-xs after:text-rule after:content-['↕'] data-[sort=ascending]:after:text-accent-text data-[sort=ascending]:after:content-['↑'] data-[sort=descending]:after:text-accent-text data-[sort=descending]:after:content-['↓']"
+                      className="inline-flex cursor-pointer select-none items-center uppercase tracking-[inherit] hover:text-muted-foreground data-[sort=ascending]:text-foreground data-[sort=descending]:text-foreground after:ml-1.25 after:text-xs after:text-rule after:content-['↕'] data-[sort=ascending]:after:text-accent-text data-[sort=ascending]:after:content-['↑'] data-[sort=descending]:after:text-accent-text data-[sort=descending]:after:content-['↓']"
                     >
                       {column.label}
                     </button>
@@ -419,7 +419,7 @@ export function ListTable({
               <tr data-list-empty="">
                 <td
                   colSpan={columns.length}
-                  className="px-3 py-[18px] text-center text-dim"
+                  className="px-3 py-4.5 text-center text-dim"
                 >
                   {empty ?? t("noMatch")}
                 </td>

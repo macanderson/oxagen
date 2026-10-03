@@ -825,7 +825,7 @@ export function RecordMultiPicker({
             setOpen(false);
           }}
           onKeyDown={onKeyDown}
-          className="min-w-[8ch] flex-1 bg-transparent py-0.5 outline-none placeholder:text-input-placeholder"
+          className="min-w-16 flex-1 bg-transparent py-0.5 outline-none placeholder:text-input-placeholder"
         />
       </div>
       {name === undefined ? null : (

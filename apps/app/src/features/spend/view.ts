@@ -36,16 +36,21 @@ export const SPEND_TABS = [
 export type SpendTab = (typeof SPEND_TABS)[number];
 
 /**
- * The groupings the Month tab offers, the first one the default. The design's
- * By work item is not here: no run records the work item it served (#2962).
+ * The groupings the Month tab offers, in the design's order (#2962). Work
+ * item reads each run's work order from the rollup. Agent is the default
+ * this build opens on, where the design opens on Work item.
  */
 export const SPEND_MONTH_BY = [
+  "work_item",
   "agent",
   "operator",
   "model",
   "mcp_server",
 ] as const;
 export type SpendMonthBy = (typeof SPEND_MONTH_BY)[number];
+
+/** The grouping a Month address with no `by` opens on. */
+export const SPEND_MONTH_DEFAULT_BY: SpendMonthBy = "agent";
 
 export type SpendView =
   /** The month's spend, grouped one way. */
@@ -104,7 +109,7 @@ function isTab(value: string | undefined): value is SpendTab {
 }
 
 function monthBy(value: string | undefined): SpendMonthBy {
-  return SPEND_MONTH_BY.find((by) => by === value) ?? "agent";
+  return SPEND_MONTH_BY.find((by) => by === value) ?? SPEND_MONTH_DEFAULT_BY;
 }
 
 /**

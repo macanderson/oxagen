@@ -186,7 +186,7 @@ function HashChain({ chain }: { chain: RunChain }) {
           <Gaps gaps={chain.gaps} />
         </Fact>
       </Facts>
-      <div className="mt-[13px] flex flex-col gap-2">
+      <div className="mt-3.25 flex flex-col gap-2">
         <Note>{t(`note.${rule}`)}</Note>
         {chain.complete ? null : (
           <p

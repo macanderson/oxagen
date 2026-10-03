@@ -13,7 +13,7 @@
   bypass), `packages/handlers/src/repository.link.write.ts`,
   `packages/handlers/src/lib/repository-heads-anywhere.ts`,
   `packages/handlers/src/tacho.github_token.issue.ts`,
-  `packages/database/atlas/migrations/20261003170000_repository_binding_heads_links_unrestricted.sql`.
+  `packages/database/atlas/migrations/20261003190000_repository_binding_heads_links_unrestricted.sql`.
 
 ## Context
 
@@ -66,7 +66,7 @@ Mac decided on 2026-10-03:
    repository steers one workspace, across every organization). The second is
    kept on purpose. Two workspaces steered by one repository would read their
    records from the same files.
-3. **The trigger is dropped.** Migration 20261003170000 drops
+3. **The trigger is dropped.** Migration 20261003190000 drops
    `repository_binding_heads_exclusive_main` and its function. The partial
    unique index refuses a second steering head for a repository on its own.
    A racing insert waits for the first one to commit, then fails under the

@@ -215,7 +215,7 @@ function ChangeTable({
         <table
           aria-label={t("label")}
           data-testid="changes-table"
-          className="w-full min-w-[760px] border-collapse text-sm"
+          className="w-full min-w-190 border-collapse text-sm"
         >
           <thead>
             <tr className="border-b border-border">

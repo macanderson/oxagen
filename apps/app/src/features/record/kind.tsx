@@ -92,7 +92,7 @@ export function KindBadge({ kind }: { kind: RecordKind }) {
       data-term="kind"
       data-kind={kind}
       title={t(kind)}
-      className={`inline-flex items-center gap-[5px] whitespace-nowrap rounded-md border py-0.5 pr-2 pl-1.5 text-xs font-semibold uppercase leading-normal tracking-[0.05em] ${badge}`}
+      className={`inline-flex items-center gap-1.25 whitespace-nowrap rounded-md border py-0.5 pr-2 pl-1.5 text-xs font-semibold uppercase leading-normal tracking-[0.05em] ${badge}`}
     >
       <Icon aria-hidden="true" className="size-3" />
       {term(`kinds.${kind}`)}
@@ -110,14 +110,14 @@ export function KindTile({
 }) {
   const { icon: Icon, tile } = KIND_FACE[kind];
   const box =
-    size === "md" ? "size-9 rounded-[9px]" : "size-[34px] rounded-[9px]";
+    size === "md" ? "size-9 rounded-[9px]" : "size-8.5 rounded-[9px]";
   return (
     <span
       aria-hidden="true"
       data-kind={kind}
       className={`mt-0.5 grid flex-none place-items-center border ${box} ${tile}`}
     >
-      <Icon className={size === "md" ? "size-[18px]" : "size-[17px]"} />
+      <Icon className={size === "md" ? "size-4.5" : "size-4.25"} />
     </span>
   );
 }

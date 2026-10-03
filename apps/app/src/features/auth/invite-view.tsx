@@ -141,7 +141,7 @@ export async function InvitationBody({
               <>
                 <span
                   aria-hidden
-                  className="grid size-[38px] flex-none place-items-center rounded-full bg-foreground text-sm font-semibold text-background"
+                  className="grid size-9.5 flex-none place-items-center rounded-full bg-foreground text-sm font-semibold text-background"
                 >
                   {initialsOf(invitation.inviterName)}
                 </span>

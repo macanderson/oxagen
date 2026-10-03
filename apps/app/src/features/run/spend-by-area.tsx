@@ -153,7 +153,7 @@ function listedTools(
  * padding:5px 0; border-bottom:1px solid var(--border); font-size:11.5px }`
  */
 const toolRow =
-  "flex min-w-0 justify-between gap-2.5 border-b border-border py-[5px] text-xs last:border-b-0";
+  "flex min-w-0 justify-between gap-2.5 border-b border-border py-1.25 text-xs last:border-b-0";
 
 /** `.meter .lab b .dim { font-weight:500 }`: the token count beside an area's money. */
 const areaTokens = "font-medium text-dim";
@@ -376,7 +376,7 @@ export function SpendByArea({
       }
     >
       <PanelBody>
-        <div className="grid gap-[9px]">
+        <div className="grid gap-2.25">
           {INPUT_AREAS.map((area) => (
             <div key={area} data-testid="area-row" data-area={area}>
               {meter(area)}

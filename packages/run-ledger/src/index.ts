@@ -322,11 +322,16 @@ export {
 // assembler's manifests beside them (ADR-200).
 export {
   assemblyOf,
+  createWindowComposition,
   isContextWindowEvent,
   isLaterLlmCallSighting,
   ledgerContextWindows,
+  streamedWindowComposition,
   tachoContextWindow,
+  walkLedgerContextWindows,
   windowComposition,
+  wrappedContextWindows,
+  type ContextWindowReading,
   type RecordedAssembly,
   type RecordedWindow,
   type RecordedWindowBlock,

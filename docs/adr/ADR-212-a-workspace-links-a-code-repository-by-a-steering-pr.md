@@ -1,7 +1,7 @@
 # ADR-212: A workspace links a code repository by a steering PR
 
 - **Status:** Accepted. Superseded in part by ADR-293 on 2026-10-03:
-  migration 20261003170000 drops the trigger in decision 1, and decision 4's
+  migration 20261003190000 drops the trigger in decision 1, and decision 4's
   checks no longer include another workspace's steering claim. A `steering`
   head stays exclusive across workspaces, and a `linked` head may name a
   repository another workspace steers by.

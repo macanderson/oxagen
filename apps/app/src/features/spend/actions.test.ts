@@ -176,7 +176,26 @@ describe("exportStatementAction", () => {
     });
     expect(invoke).toHaveBeenCalledWith(
       spendStatementExport.name,
-      { month: "2026-09", format: "csv" },
+      { month: "2026-09", format: "csv", rows: "groups" },
+      expect.objectContaining({ workspaceId: ctx.workspaceId }),
+    );
+  });
+
+  it("asks export_statement for one line per run when the run file is chosen (#2962)", async () => {
+    invoke.mockResolvedValue({
+      month: "2026-09",
+      filename: "spend-runs-2026-09.csv",
+      mediaType: "text/csv",
+      content: "line,run_id\n",
+      lines: 0,
+    });
+    expect(await exportStatementAction(at, "2026-09", "runs")).toEqual({
+      ok: true,
+      value: { filename: "spend-runs-2026-09.csv", content: "line,run_id\n" },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      spendStatementExport.name,
+      { month: "2026-09", format: "csv", rows: "runs" },
       expect.objectContaining({ workspaceId: ctx.workspaceId }),
     );
   });

@@ -356,7 +356,7 @@ function AgentsPanel({
               { label: t("columns.agent") },
               {
                 label: t("columns.operator"),
-                className: `${cell} relative z-[1]`,
+                className: `${cell} relative z-1`,
               },
               { label: t("columns.tier") },
               { label: t("columns.principal") },

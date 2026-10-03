@@ -72,7 +72,7 @@ export function Toaster() {
         <Toast.Viewport
           aria-label={t("region")}
           data-testid="toasts"
-          className="pointer-events-none fixed inset-x-4 bottom-[70px] z-[60] mx-auto w-auto max-w-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:bottom-[calc(88px+env(safe-area-inset-bottom))]"
+          className="pointer-events-none fixed inset-x-4 bottom-17.5 z-60 mx-auto w-auto max-w-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:bottom-(--toast-bottom-mobile)"
         >
           <ToastList closeLabel={t("close")} />
         </Toast.Viewport>

@@ -35,7 +35,7 @@ function Price({
     <tr data-price={name}>
       <th
         scope="row"
-        className={`${cell} w-[42%] text-left align-top text-sm font-normal`}
+        className={`${cell} w-5/12 text-left align-top text-sm font-normal`}
       >
         {term}
       </th>

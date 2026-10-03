@@ -16,11 +16,11 @@
  * needs a state the guard refuses turns the trigger off for its seed and on
  * again before the apply.
  *
- * 20261003170000 dropped that trigger and its function (ADR-293), so the CI
+ * 20261003190000 dropped that trigger and its function (ADR-293), so the CI
  * database holds neither. The earlier file recreates the function, and the
  * fixture recreates the trigger from 20260918200000's own statement, so the
  * tests below still apply 20260927185600 to the schema it was written for.
- * The last describe applies 20261003170000 on top and checks the rules that
+ * The last describe applies 20261003190000 on top and checks the rules that
  * hold now: any workspace may link any repository, and a repository still
  * steers one workspace.
  *
@@ -61,7 +61,7 @@ const PREVIOUS = migrationFile(
   "20260926120000_repository_binding_heads_steering_role.sql",
 );
 const UNRESTRICTED = migrationFile(
-  "20261003170000_repository_binding_heads_links_unrestricted.sql",
+  "20261003190000_repository_binding_heads_links_unrestricted.sql",
 );
 
 /**
@@ -223,7 +223,7 @@ async function bindingCount(tx: Tx): Promise<number> {
 /**
  * Puts the table back in the state 20260927185600 was written against. The
  * earlier file recreates the trigger's function, and the trigger itself comes
- * from 20260918200000, because 20261003170000 dropped both.
+ * from 20260918200000, because 20261003190000 dropped both.
  */
 async function restorePreviousSchema(tx: Tx): Promise<void> {
   await tx`DROP INDEX IF EXISTS ingestion.repository_binding_heads_workspace_steering_uq`;
@@ -334,7 +334,7 @@ async function withMigratedFixture(
 }
 
 /**
- * The migrated fixture with 20261003170000 applied on top: the schema CI
+ * The migrated fixture with 20261003190000 applied on top: the schema CI
  * migrates to today. Rolled back like the fixture above.
  */
 async function withCurrentFixture(
@@ -455,7 +455,7 @@ describe("20260927185600: every main head becomes steering or linked", () => {
   });
 
   // The next two refusals belong to the trigger as 20260927185600 left it.
-  // 20261003170000 lifts both, and the last describe in this file checks that.
+  // 20261003190000 lifts both, and the last describe in this file checks that.
   it("refuses to link a steering repository into another workspace", async () => {
     await withMigratedFixture(async (tx) => {
       await expectRefusal(
@@ -523,7 +523,7 @@ describe("20260927185600 on a state the old guard refuses", () => {
   });
 });
 
-describe("20261003170000: any workspace may link any repository", () => {
+describe("20261003190000: any workspace may link any repository", () => {
   it("drops the trigger and its function", async () => {
     await withCurrentFixture(async (tx) => {
       const triggers = await tx<{ n: string }[]>`

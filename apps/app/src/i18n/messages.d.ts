@@ -9719,6 +9719,10 @@ type Messages = {
           label: string;
           hint: string;
         };
+        runs: {
+          label: string;
+          hint: string;
+        };
       };
       month: string;
       monthHint: string;
@@ -9955,6 +9959,10 @@ type Messages = {
         label: string;
         note: string;
       };
+      noWorkItem: {
+        label: string;
+        note: string;
+      };
       moreRuns: string;
       showRuns: string;
       reported: string;
@@ -9977,12 +9985,14 @@ type Messages = {
       by: {
         label: string;
         options: {
+          work_item: string;
           agent: string;
           operator: string;
           model: string;
           mcp_server: string;
         };
         titles: {
+          work_item: string;
           agent: string;
           operator: string;
           model: string;
@@ -13116,6 +13126,7 @@ type Messages = {
         title: string;
         cohort: string;
         reopened: string;
+        reverted: string;
         waiting: string;
         reverts: string;
       };
@@ -13482,6 +13493,7 @@ type Messages = {
         accepted: string;
         merged: string;
         pr_closed: string;
+        reverted: string;
         closed: string;
         reopened: string;
       };

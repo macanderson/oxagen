@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 
 /** `.ob-panel { border-radius:14px; padding:20px 22px; gap:16px }` on the house panel tokens. */
 const authPanel =
-  "flex min-w-0 flex-col gap-4 rounded-[14px] border border-border bg-card px-[22px] py-5 text-card-foreground";
+  "flex min-w-0 flex-col gap-4 rounded-[14px] border border-border bg-card px-5.5 py-5 text-card-foreground";
 
 export function AuthPanel({
   children,

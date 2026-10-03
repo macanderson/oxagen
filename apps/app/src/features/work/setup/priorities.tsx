@@ -108,7 +108,7 @@ export function PrioritiesTab({
             problem === null ? undefined : (
               <p
                 data-testid="work-priorities-problem"
-                className="mx-auto max-w-[52ch] text-base text-muted-foreground [overflow-wrap:anywhere]"
+                className="mx-auto max-w-measure-narrow text-base text-muted-foreground [overflow-wrap:anywhere]"
               >
                 {problem}
               </p>

@@ -129,7 +129,7 @@ export function StepRail({
             <>
               <span
                 aria-hidden="true"
-                className={`inline-flex size-[22px] flex-none items-center justify-center rounded-full border text-xs ${SEGMENT_MARK[step.state]}`}
+                className={`inline-flex size-5.5 flex-none items-center justify-center rounded-full border text-xs ${SEGMENT_MARK[step.state]}`}
               >
                 {step.state === "done" ? "✓" : index + 1}
               </span>

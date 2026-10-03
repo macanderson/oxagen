@@ -64,7 +64,7 @@ function StateWrap({
       role={tone === "failed" ? "alert" : undefined}
       aria-labelledby={`${testId}-title`}
       data-testid={testId}
-      className="grid place-items-center px-5 py-[60px] text-center"
+      className="grid place-items-center px-5 py-15 text-center"
     >
       <div
         aria-hidden="true"
@@ -74,14 +74,14 @@ function StateWrap({
       </div>
       <h2
         id={`${testId}-title`}
-        className="mb-[7px] text-lg font-semibold text-foreground"
+        className="mb-1.75 text-lg font-semibold text-foreground"
       >
         {title}
       </h2>
-      <p className="mx-auto mb-4 max-w-[52ch] text-sm leading-relaxed text-muted-foreground">
+      <p className="mx-auto mb-4 max-w-measure-narrow text-sm leading-relaxed text-muted-foreground">
         {children}
       </p>
-      <div className="flex flex-wrap justify-center gap-[9px] max-sm:w-full max-sm:flex-col">
+      <div className="flex flex-wrap justify-center gap-2.25 max-sm:w-full max-sm:flex-col">
         {actions}
       </div>
       {after}
@@ -169,7 +169,7 @@ export function ErrorBody({
           <p
             id="repositories-error-incident"
             data-state="not-recorded"
-            className="mt-3 max-w-[52ch] text-sm text-dim"
+            className="mt-3 max-w-measure-narrow text-sm text-dim"
           >
             {t("incidentNotRecorded")}
           </p>
@@ -237,11 +237,11 @@ export function DeniedBody({
           <p
             id="repositories-denied-request"
             data-state="not-recorded"
-            className="mt-3 max-w-[52ch] text-sm text-dim"
+            className="mt-3 max-w-measure-narrow text-sm text-dim"
           >
             {t("requestNotRecorded", { needed })}
           </p>
-          <dl className="mt-5 grid max-w-[420px] grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-left text-sm [&>dd]:text-foreground [&>dt]:text-muted-foreground">
+          <dl className="mt-5 grid max-w-105 grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-left text-sm [&>dd]:text-foreground [&>dt]:text-muted-foreground">
             <dt>{t("signedInTerm")}</dt>
             <dd data-testid="repositories-denied-roles">
               {t.rich("signedIn", {

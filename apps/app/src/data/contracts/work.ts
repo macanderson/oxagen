@@ -625,6 +625,8 @@ export const WorkOutcomes = z.object({
   }),
   cost: CostCoverage,
   reopens: z.object({ cohort: Count, reopened: Count, waiting: Count }),
+  /** Reverts over the same items as reopens. Only a revert GitHub links by `Reverts <owner>/<repo>#<n>` counts. */
+  reverts: z.object({ cohort: Count, reverted: Count, waiting: Count }),
   /** More items finished than one read counts. The figures cover the newest of them. */
   truncated: z.boolean(),
   weeks: z.array(

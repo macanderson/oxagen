@@ -67,20 +67,20 @@ export function WorkItemHead({
             <WorkStatusBadge status={item.status} />
           </span>
         </div>
-        <p data-testid="work-item-wait" className="max-w-[72ch] pt-1">
+        <p data-testid="work-item-wait" className="max-w-measure pt-1">
           <WaitLine wait={item.wait} />
         </p>
         {readsOnly ? (
           <p
             role="note"
             data-testid="work-viewer-note"
-            className="mt-1.5 max-w-[72ch] border-l-2 border-dashed border-border pl-2 text-sm text-muted-foreground"
+            className="mt-1.5 max-w-measure border-l-2 border-dashed border-border pl-2 text-sm text-muted-foreground"
           >
             {t("viewerNote")}
           </p>
         ) : null}
       </div>
-      <div className="flex shrink-0 sm:max-w-[50%]">
+      <div className="flex shrink-0 sm:max-w-1/2">
         <ItemActions
           org={org}
           ws={ws}

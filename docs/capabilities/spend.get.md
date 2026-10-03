@@ -1,6 +1,6 @@
 # get_spend
 
-The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-060). Reads `cost.daily_totals` for the active workspace over an inclusive day range, grouped by operator, agent, model, tool, task, or cost center, and answers one row per group plus the period's total over every run: the month strip. The rows are a derived index rebuilt from frames by the rollup jobs (`cost.run-progress` while a run records frames, `cost.run-rollup` after each seal, `cost.daily-rollup` nightly); nothing here reads ClickHouse. A run still open is in every figure at its running estimate, and `estimatedRuns` says how many of the period's runs that is (ADR-159).
+The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-060). Reads `cost.daily_totals` for the active workspace over an inclusive day range, grouped by operator, agent, model, tool, task, cost center, MCP server, or work item, and answers one row per group plus the period's total over every run: the month strip. The rows are a derived index rebuilt from frames by the rollup jobs (`cost.run-progress` while a run records frames, `cost.run-rollup` after each seal, `cost.daily-rollup` nightly); nothing here reads ClickHouse. A run still open is in every figure at its running estimate, and `estimatedRuns` says how many of the period's runs that is (ADR-159).
 
 ## Mode
 
@@ -22,7 +22,7 @@ The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-0
 | Field | Type | Required | Constraint |
 |---|---|---|---|
 | `period` | object | yes | `{ from, to }`, UTC days `YYYY-MM-DD`, `to` on or after `from`, at most 92 days (`SPEND_RANGE_DAYS_MAX`): one read folds at most a quarter of the workspace's runs |
-| `groupBy` | enum | yes | `operator`, `agent`, `model`, `tool`, `task`, `cost_center` |
+| `groupBy` | enum | yes | `operator`, `agent`, `model`, `tool`, `task`, `cost_center`, `mcp_server`, `work_item` |
 
 ## Output
 
@@ -54,6 +54,8 @@ A row adds `key` (an operator's principal public id `prn_…`, the `operatorId` 
 
 A row that holds whole runs, on the `operator`, `agent`, `task` and `cost_center` levels and the assistant row of those levels, also carries `tokenSources`: `{ toolDefinitionTokens, contextFrameTokens, steeringTokens, toolResultTokens }`, the tokens the row's runs spent on each prompt source, summed (#5295). The first three are each run's `cost.run_totals` sums, the recorder's estimates over every counted call. `toolResultTokens` is each run's tools' result tokens. A source no run of the row measured is null, never zero. The `tokens` classes already count all four. A `model`, `tool` or `mcp_server` row holds part of a run, and the sources are not split by model or tool, so it carries no `tokenSources`.
 
+The same rows carry `windows`: `{ runs, requests, requestsWithoutTokens, promptTokens, blocks: { system, steering, tools, context, conversation } }`, the request windows of the row's runs summed block by block (#5341). The rollup stores each run's window composition in `cost.run_totals.breakdown`, read from the windows the run recorded the way [`get_run_context`](run.context.get.md) reads them, and `runs` counts the runs that stored one. Each block is its byte share of the prompt total each request reported, so the blocks sum to `promptTokens`. The windows are the only record of a run's conversation and system tokens. The conversation block counts every message a request sent again, tool results included. `windows` is null when no run of the row stored a composition: a run that recorded no window, and a run rolled up before the composition was kept, are not measured, never zero. A block none of the runs carried is null.
+
 ## Basis
 
 `basis` says who observed the money: `gateway_observed` (the `@oxagen/ai` gateway priced the call), `client_attested` (the harness reported it), `mixed` (the group holds both), `estimated` (a frame's model had no price entry, so the figure is the frame's own reported cost or the classes the book could price). A number never reads stronger than its basis, and a group with no priced frame answers `cost: null`, never `0`. Proven and accepted are never folded together (spec §12.8).
@@ -73,3 +75,11 @@ A harness whose model calls pass through neither the Oxagen gateway nor the loca
 ## Cost center
 
 The `cost_center` level charges each run to the cost center the rollup resolved when it rolled the run up (ADR-142): the agent's label first, then the workspace's. A run with neither lands on the `~none` key, so the level's rows sum to the period's total. A label deleted from the organization's list claims no new run. Runs already rolled up keep the cost center they had. `list_cost_centers` answers the organization's labels, and `export_cost_center_statement` answers the organization-wide chargeback statement.
+
+## Work item
+
+The `work_item` level puts each run on the work item it served (#2962). The cost rollup stores each run's work order on `cost.run_totals`: a send names its work item, and a direct work order names one once a person attaches it. A run with no work order, or a direct work order nobody has attached, lands on the `~no_work_item` key. So every run is on one row, and the rows sum to the period's total. A work item's row key is its public id (`wi_…`), and the row carries `workItem`: `{ id, number, subject }`, where `number` is the one people say out loud, such as `OPS-88`. `workItem` is null on the `~no_work_item` row, and absent on the assistant row and on every other level. The daily rollup does not store this level, so it is folded from the run rows, as `mcp_server` is. Each row holds whole runs, so it carries `tokenSources` as the `agent` level's rows do. No `get_spend_drill` kind takes a work item.
+
+## Run lines
+
+Each row's `topRuns` lists its costliest runs, at most eight. Each run carries `operatorKey` and `operator`: who the key names (`{ id, name, email, avatarUrl, role }`), so a run line prints a person and never the id (#2962). `operator` is null for a run with no operator and for a principal nobody can name. One read names the operator rows and every listed run's operator.

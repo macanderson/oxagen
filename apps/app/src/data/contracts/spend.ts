@@ -30,6 +30,7 @@ export const SpendGroupKind = z.enum([
   "task",
   "cost_center",
   "mcp_server",
+  "work_item",
 ]);
 export type SpendGroupKind = z.infer<typeof SpendGroupKind>;
 
@@ -44,6 +45,12 @@ export const UNASSIGNED_COST_CENTER_KEY = "~none";
  * results carried. A server name has no `~`, so no server collides with it.
  */
 export const OTHER_SPEND_KEY = "~other";
+
+/**
+ * The key of the `work_item` row that holds the runs that served no work
+ * item (#2962). A work item's key is its public id, so none collides with it.
+ */
+export const NO_WORK_ITEM_KEY = "~no_work_item";
 
 /**
  * The key of the row that holds the in-app assistant's spend, in every
@@ -103,6 +110,12 @@ const SpendTopRun = z.object({
   harness: z.string().nullable().optional(),
   /** The operator's principal public id; null for a run with no operator. */
   operatorKey: z.string().nullable(),
+  /**
+   * Who `operatorKey` names, so the run line prints a person (#2962). Null
+   * for a run with no operator and for one nobody can name; absent from a
+   * view built before get_spend answered it.
+   */
+  operator: OperatorFacts.nullable().optional(),
   cost: Cost.nullable(),
   calls: Count,
 });
@@ -112,14 +125,28 @@ const SpendRow = SpendFigure.extend({
   tokens: SpendTokens,
   /**
    * A principal public id, an agent key, a model id, a tool name, a task
-   * reference, a cost-center label, an MCP server name,
-   * {@link OTHER_SPEND_KEY}, or {@link ASSISTANT_SPEND_KEY}.
+   * reference, a cost-center label, an MCP server name, a work item's public
+   * id, {@link OTHER_SPEND_KEY}, {@link NO_WORK_ITEM_KEY}, or
+   * {@link ASSISTANT_SPEND_KEY}.
    */
   key: z.string().min(1),
   /** The model's provider on a model row; null elsewhere. */
   provider: z.string().nullable(),
   /** The person an operator row names; null on every other row. */
   operator: OperatorFacts.nullable(),
+  /**
+   * The work item a `work_item` row names (#2962); null on the
+   * {@link NO_WORK_ITEM_KEY} row, absent on the assistant row and on every
+   * other grouping.
+   */
+  workItem: z
+    .object({
+      id: PublicId,
+      number: z.string().min(1),
+      subject: z.string(),
+    })
+    .nullable()
+    .optional(),
   /**
    * The row's costliest runs, at most eight. Absent from a view built
    * before get_spend listed them. Always empty on the
@@ -139,6 +166,29 @@ const SpendRow = SpendFigure.extend({
       steeringTokens: Count.nullable(),
       toolResultTokens: Count.nullable(),
     })
+    .optional(),
+  /**
+   * The row's runs' request windows summed block by block (#5341), the one
+   * record of their conversation and system tokens. Each block is its byte
+   * share of the prompt total each request reported. Null when no run of the
+   * row stored a window composition, and absent where `tokenSources` is.
+   */
+  windows: z
+    .object({
+      /** The runs whose rollup stored windows; every sum covers these alone. */
+      runs: Count,
+      requests: Count,
+      requestsWithoutTokens: Count,
+      promptTokens: Count,
+      blocks: z.object({
+        system: Count.nullable(),
+        steering: Count.nullable(),
+        tools: Count.nullable(),
+        context: Count.nullable(),
+        conversation: Count.nullable(),
+      }),
+    })
+    .nullable()
     .optional(),
 });
 

@@ -89,10 +89,10 @@ describe("PageSkeleton", () => {
       expect(tile.className).not.toMatch(/\bborder\b/);
     }
     for (const row of status.querySelectorAll("[data-skeleton-row]")) {
-      expect(row).toHaveClass("h-[38px]", "rounded-[9px]");
+      expect(row).toHaveClass("h-9.5", "rounded-[9px]");
     }
-    const bar = bones.find((bone) => bone.classList.contains("h-[22px]"));
-    expect(bar).toHaveClass("w-[180px]", "rounded-[7px]");
+    const bar = bones.find((bone) => bone.classList.contains("h-5.5"));
+    expect(bar).toHaveClass("w-45", "rounded-[7px]");
     // No pulse: the shimmer is the one loading motion.
     expect(status.querySelector(".animate-pulse")).toBeNull();
   });
@@ -302,7 +302,7 @@ describe("PageDenied", () => {
     expect(icon).toHaveAttribute("data-state-icon", "denied");
     expect(icon).toHaveClass("border-warning/40", "text-warning");
     expect(icon).not.toHaveClass("border-border");
-    expect(state).toHaveClass("grid", "place-items-center", "py-[60px]");
+    expect(state).toHaveClass("grid", "place-items-center", "py-15");
   });
 });
 

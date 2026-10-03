@@ -201,7 +201,7 @@ function CommandPalette({
       data-testid="command-menu"
       data-sheet=""
       initialFocus={inputRef}
-      className={`${commandSurface} fixed left-1/2 top-[10vh] z-50 flex max-h-[76dvh] w-[calc(100%-1.5rem)] max-w-xl -translate-x-1/2 flex-col`}
+      className={`${commandSurface} fixed left-1/2 top-(--command-top) z-50 flex max-h-(--overlay-max-h) w-(--overlay-w) max-w-xl -translate-x-1/2 flex-col`}
     >
       <SheetHandle />
       <Dialog.Title className="sr-only">{t("commands.title")}</Dialog.Title>

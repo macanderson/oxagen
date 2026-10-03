@@ -291,7 +291,7 @@ export function CellOverflow() {
         collisionPadding={8}
         role="tooltip"
         data-testid="whole-value"
-        className="pointer-events-none w-auto max-w-[min(34rem,calc(100vw-16px))] px-3 py-2 break-words whitespace-pre-line"
+        className="pointer-events-none w-auto max-w-(--popover-max-w) px-3 py-2 break-words whitespace-pre-line"
       >
         {shown?.text}
       </HoverCardContent>

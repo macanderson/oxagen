@@ -251,7 +251,7 @@ function RecordShelfCard({
     <article
       data-kind={record.kind ?? "unclassified"}
       data-lineage={record.lineage}
-      className={`flex gap-3 border-b border-l-[3px] border-b-border px-4 py-3.5 max-md:flex-col ${face?.bar ?? "border-l-border"}`}
+      className={`flex gap-3 border-b border-l-3 border-b-border px-4 py-3.5 max-md:flex-col ${face?.bar ?? "border-l-border"}`}
     >
       <span
         aria-hidden="true"
@@ -265,7 +265,7 @@ function RecordShelfCard({
         <div className="flex flex-wrap items-center gap-1.5">
           <span
             data-term="kind"
-            className={`inline-flex items-center gap-1 rounded-md border px-[7px] py-0.5 text-xs font-semibold uppercase tracking-[0.04em] ${face === null ? "border-border text-muted-foreground" : `${face.tile} ${face.ink}`}`}
+            className={`inline-flex items-center gap-1 rounded-md border px-1.75 py-0.5 text-xs font-semibold uppercase tracking-[0.04em] ${face === null ? "border-border text-muted-foreground" : `${face.tile} ${face.ink}`}`}
           >
             {record.kind === null ? null : (
               <KindIcon kind={record.kind} className="size-3" />

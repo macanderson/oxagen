@@ -540,7 +540,7 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
           <div className="min-w-0 overflow-x-auto">
             <table
               aria-label={t("title")}
-              className="w-full min-w-[720px] border-collapse text-sm"
+              className="w-full min-w-180 border-collapse text-sm"
             >
               <thead>
                 <tr className="border-b border-border">

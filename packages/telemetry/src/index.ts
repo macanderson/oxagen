@@ -29,6 +29,7 @@ export * from "./tacho-turns";
 export * from "./tacho-events-ddl";
 export * from "./tacho-events-retention";
 export * from "./cost-frames";
+export * from "./context-window-frames";
 export * from "./run-work-order-claims";
 export * from "./claude-telemetry";
 export { chInsert, chSelect, scopeSelectSource } from "./tenant";

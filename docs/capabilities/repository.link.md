@@ -70,7 +70,7 @@ When the steering PR merges, the push to the production branch triggers the stee
 
 The reason codes that name `main_repo` keep their names because the contract fixes them. They refer to the steering repository.
 
-No refusal depends on another workspace. Until 2026-10-03, `main_repo_claimed` refused another workspace's steering repository, and `main_repo_plane_unsupported` refused a link on a dedicated Postgres plane, where that cross-workspace check could not run. ADR-293 removed both, and migration 20261003170000 dropped the store trigger that refused the same link a second time. Linking another workspace's steering repository gives this workspace no write to it: a linked repository receives no steering PR, because every record lives in the steering repository (ADR-212).
+No refusal depends on another workspace. Until 2026-10-03, `main_repo_claimed` refused another workspace's steering repository, and `main_repo_plane_unsupported` refused a link on a dedicated Postgres plane, where that cross-workspace check could not run. ADR-293 removed both, and migration 20261003190000 dropped the store trigger that refused the same link a second time. Linking another workspace's steering repository gives this workspace no write to it: a linked repository receives no steering PR, because every record lives in the steering repository (ADR-212).
 
 ## What this write does not do
 

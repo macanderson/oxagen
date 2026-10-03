@@ -535,7 +535,7 @@ export const repositoryBindings = ingestionSchema.table(
 // repository, and one of them may also hold it as its steering repository.
 // Two partial unique indexes below carry the only rules left: a workspace
 // has one steering repository, and a repository steers one workspace.
-// 20261003170000 dropped the trigger `repository_binding_heads_exclusive_main`,
+// 20261003190000 dropped the trigger `repository_binding_heads_exclusive_main`,
 // which also refused a linked head beside another workspace's steering head.
 export const repositoryBindingHeads = ingestionSchema.table(
   "repository_binding_heads",
@@ -579,7 +579,7 @@ export const repositoryBindingHeads = ingestionSchema.table(
     // link. The name predates the steering role and stays. See
     // 20260918040000_repository_main_binding_is_exclusive.sql,
     // 20260927185600_repository_binding_heads_main_to_steering.sql and
-    // 20261003170000_repository_binding_heads_links_unrestricted.sql.
+    // 20261003190000_repository_binding_heads_links_unrestricted.sql.
     mainRepositoryUniq: uniqueIndex(
       "repository_binding_heads_main_repository_uq",
     )
@@ -604,7 +604,7 @@ export const repositoryBindingHeads = ingestionSchema.table(
     // asks whether any workspace steers by it. The unique indexes above
     // cannot serve that read: one leads with the connection, and the others
     // are partial on the steering role. It was built for the trigger's
-    // lookup (#3340 finding 4), which 20261003170000 dropped.
+    // lookup (#3340 finding 4), which 20261003190000 dropped.
     repositoryLookupIdx: index("repository_binding_heads_repository_idx").on(
       t.provider,
       t.providerRepositoryId,

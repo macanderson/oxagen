@@ -23,7 +23,7 @@ Migration 20260927185600 moved every earlier `main` head. In each workspace,
 an existing `steering` head, or else the oldest `main` head, became
 `steering`. Every other `main` head became `linked`. The role check now
 admits `steering` and `linked` only. The unique index that keeps `steering`
-exclusive kept its name. Migration 20261003170000 dropped the trigger that
+exclusive kept its name. Migration 20261003190000 dropped the trigger that
 also refused a link to another workspace's steering repo, and no handler
 answers `main_repo_claimed` any more (ADR-293).
 

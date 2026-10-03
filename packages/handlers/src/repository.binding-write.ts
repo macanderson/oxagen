@@ -66,7 +66,7 @@ export interface BindableRepository {
  * steering head write can break it. A linked head is outside the index's
  * predicate, so no other workspace's heads can refuse a link.
  *
- * 20261003170000 dropped the trigger `repository_binding_heads_exclusive_main`
+ * 20261003190000 dropped the trigger `repository_binding_heads_exclusive_main`
  * and the two names it raised for a linked head beside another workspace's
  * steering head. Neither name can reach a writer now.
  */

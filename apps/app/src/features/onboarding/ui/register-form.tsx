@@ -357,7 +357,7 @@ export function RegisterAgentForm({
       onSubmit={(e) => void onSubmit(e)}
       className="flex min-w-0 flex-col gap-4"
     >
-      <div className={`${panel} flex flex-col gap-5 p-[18px]`}>
+      <div className={`${panel} flex flex-col gap-5 p-4.5`}>
         {failure === null ? null : (
           <FormAlert testId="register-failure">{failure}</FormAlert>
         )}

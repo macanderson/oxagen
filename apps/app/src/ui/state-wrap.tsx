@@ -99,20 +99,20 @@ function StateIcon({ tone, glyph }: { tone: StateTone; glyph: StateGlyph }) {
 
 /** `code { font-family:var(--mono); font-size:.9em; background:var(--hl); padding:.12em .38em; border-radius:4px }` */
 export const stateCode =
-  "rounded bg-hl px-[0.38em] py-[0.12em] font-mono";
+  "rounded bg-hl px-1.25 py-0.5 font-mono";
 
 /**
  * The trace line under an error's actions: `.mono.dim` at 11.5px, 16px below
  * them. It is a `.state-wrap p` too, so it keeps the paragraph's measure.
  */
 export const stateTrace =
-  "mx-auto mt-4 max-w-[52ch] font-mono text-xs text-dim";
+  "mx-auto mt-4 max-w-measure-narrow font-mono text-xs text-dim";
 
 /**
  * The denied state's facts: `.kv` with `margin-top:20px; text-align:left;
  * max-width:420px`. Its terms and values take `kvTerm` and `kvValue`.
  */
-export const stateFacts = `${kvList} mt-5 max-w-[420px] text-left`;
+export const stateFacts = `${kvList} mt-5 max-w-105 text-left`;
 
 type DataAttributes = { [key: `data-${string}`]: string | undefined };
 
@@ -160,22 +160,22 @@ export function StateWrap({
       {...data}
       data-testid={testId}
       aria-labelledby={id}
-      className="grid place-items-center px-5 py-[60px] text-center"
+      className="grid place-items-center px-5 py-15 text-center"
     >
       <StateIcon tone={tone} glyph={glyph ?? DEFAULT_GLYPH[tone]} />
       <Heading
         id={id}
-        className="mb-[7px] text-lg font-semibold tracking-[-0.015em] text-foreground"
+        className="mb-1.75 text-lg font-semibold tracking-[-0.015em] text-foreground"
       >
         {title}
       </Heading>
       {children === undefined ? null : (
-        <p className="mx-auto mb-4 max-w-[52ch] text-sm text-muted-foreground">
+        <p className="mx-auto mb-4 max-w-measure-narrow text-sm text-muted-foreground">
           {children}
         </p>
       )}
       {actions === undefined || actions === null ? null : (
-        <div className="flex flex-wrap justify-center gap-[9px]">{actions}</div>
+        <div className="flex flex-wrap justify-center gap-2.25">{actions}</div>
       )}
       {after}
     </section>

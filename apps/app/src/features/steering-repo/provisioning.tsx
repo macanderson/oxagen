@@ -536,7 +536,7 @@ export function SteeringRepoProvisioning({
               </span>
             </span>
             {step === "pick_connection" && view.connection !== null ? (
-              <div className="ml-[22px] flex flex-wrap items-center gap-2">
+              <div className="ml-5.5 flex flex-wrap items-center gap-2">
                 <p
                   data-testid="steering-repo-connection"
                   data-kind={place ?? undefined}
@@ -568,7 +568,7 @@ export function SteeringRepoProvisioning({
             ) : null}
             {(state === "failed" || state === "blocked") &&
             view.error !== null ? (
-              <div className="ml-[22px] flex flex-col items-start gap-2">
+              <div className="ml-5.5 flex flex-col items-start gap-2">
                 <p
                   data-testid="steering-repo-step-error"
                   className="text-sm text-muted-foreground"

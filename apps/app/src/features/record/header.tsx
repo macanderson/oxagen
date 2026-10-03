@@ -31,7 +31,7 @@ import { KindBadge, KindTile } from "./kind";
 
 /** `.btn.danger`: the red outline a destructive action takes. */
 export const buttonDanger =
-  "inline-flex min-h-8 max-md:min-h-11 items-center justify-center gap-1.5 rounded-[9px] border border-error/45 bg-card px-[13px] py-1.5 text-sm font-medium text-error-ink transition-colors hover:bg-error/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45";
+  "inline-flex min-h-8 max-md:min-h-11 items-center justify-center gap-1.5 rounded-[9px] border border-error/45 bg-card px-3.25 py-1.5 text-sm font-medium text-error-ink transition-colors hover:bg-error/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45";
 
 const code = (chunks: ReactNode) => <span className={mono}>{chunks}</span>;
 
@@ -73,7 +73,7 @@ export function Header({
   return (
     <header
       data-testid="record-header"
-      className="flex flex-col gap-4 pb-[18px] md:flex-row md:items-start md:justify-between"
+      className="flex flex-col gap-4 pb-4.5 md:flex-row md:items-start md:justify-between"
     >
       <div className="flex min-w-0 flex-col">
         {/* Plain text, not a link: the breadcrumb above already links back
@@ -84,7 +84,7 @@ export function Header({
         <div className="flex items-start gap-3">
           {record.kind === null ? null : <KindTile kind={record.kind} />}
           <div className="min-w-0">
-            <h1 className="min-w-0 max-w-[62ch] text-lg font-semibold leading-[1.35] text-foreground md:text-xl">
+            <h1 className="min-w-0 max-w-measure text-lg font-semibold leading-[1.35] text-foreground md:text-xl">
               {label}
             </h1>
             <p
@@ -176,7 +176,7 @@ export function Header({
             request will merge. */}
         <p
           data-testid="record-in-force"
-          className="mt-2.5 max-w-[70ch] text-sm text-muted-foreground"
+          className="mt-2.5 max-w-measure text-sm text-muted-foreground"
         >
           {commit === null
             ? t("inForceNoCommit", { kindLine })
@@ -212,7 +212,7 @@ export function Header({
           data-testid="record-propose-open"
           aria-haspopup="dialog"
           onClick={onPropose}
-          className={`${buttonPrimary} max-md:flex-[2]`}
+          className={`${buttonPrimary} max-md:flex-2`}
         >
           {t("propose")}
         </button>

@@ -35,6 +35,10 @@
 --     serves that read.
 --
 -- No row changes. Every head the trigger admitted is still allowed.
+--
+-- This file was first stamped 20261003170000. Main merged 20261003171500
+-- first, and the gate applies migrations in order, so the stamp moved after
+-- it.
 
 DROP TRIGGER IF EXISTS "repository_binding_heads_exclusive_main"
   ON "ingestion"."repository_binding_heads";

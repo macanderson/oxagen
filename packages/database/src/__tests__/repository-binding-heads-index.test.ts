@@ -8,7 +8,7 @@
  * index on the same columns is partial on the steering role, and the other
  * unique index leads with the connection. The index was built for the
  * trigger `repository_binding_heads_exclusive_main` (#3340 finding 4), which
- * 20261003170000 dropped, and stays for this read.
+ * 20261003190000 dropped, and stays for this read.
  *
  * Operates on the Drizzle table definition through `getTableConfig`: no live
  * database.

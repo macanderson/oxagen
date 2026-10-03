@@ -83,7 +83,7 @@ export function DropZone({
       }}
       className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-rule px-4 py-3.5 text-muted-foreground transition-colors data-[over]:border-gold data-[over]:bg-hl"
     >
-      <UploadSimpleIcon aria-hidden="true" className="size-[18px] flex-none" />
+      <UploadSimpleIcon aria-hidden="true" className="size-4.5 flex-none" />
       <span className="min-w-44 grow text-sm font-medium text-foreground">
         {t("label")}
       </span>
@@ -307,7 +307,7 @@ export function FilesTable({
               {status.note === null ? null : (
                 <span
                   data-truncate={status.note}
-                  className="mt-0.5 block max-w-[28ch] truncate text-xs text-dim"
+                  className="mt-0.5 block max-w-cell truncate text-xs text-dim"
                 >
                   {status.note}
                 </span>

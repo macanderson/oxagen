@@ -18,7 +18,13 @@
  *     rollup recorded. A run with no recorded cost stays unknown and adds
  *     nothing. In-app triage spend is not here: it shows on Billing.
  *   - Reopens count only items that finished 30 or more days ago, and say how
- *     many newer items wait for their 30 days. Reverts are not recorded.
+ *     many newer items wait for their 30 days.
+ *   - Reverts count over the same items as reopens, with the same waiting
+ *     count. An item counts as reverted when GitHub merged a pull request
+ *     whose body names the pull request that finished it as
+ *     `Reverts <owner>/<repo>#<n>`, the line GitHub's Revert button writes. A
+ *     revert made by hand without that line is not counted. A revert never
+ *     moves an item out of done: a person reopens it.
  *   - Delivery counts the sends a person made in the window, each in one
  *     bucket: rejected, claimed, withdrawn before a claim, or waiting. The
  *     four buckets add up to the sends.
@@ -43,7 +49,7 @@ export const workOutcomesGet = registerCapability({
   name: "get_work_outcomes",
   domain: "work",
   description:
-    "Count the workspace's work accepted and merged, returned, and closed in a window of days, with lead time, review touches, cost coverage, and reopens.",
+    "Count the workspace's work accepted and merged, returned, and closed in a window of days, with lead time, review touches, cost coverage, reopens, and reverts.",
   mode: "sync",
   surfaces: ["api"],
   layers: ["schema", "api", "unit", "docs", "app"],
@@ -105,6 +111,21 @@ export const workOutcomesGet = registerCapability({
           cohort: z.number().int().nonnegative(),
           reopened: z.number().int().nonnegative(),
           /** Items that finished in the last 30 days and wait to count. */
+          waiting: z.number().int().nonnegative(),
+        })
+        .strict(),
+      /**
+       * Reverts over the reopen cohort. A revert counts only when GitHub
+       * merged a pull request whose body names the one that finished the item
+       * as `Reverts <owner>/<repo>#<n>`.
+       */
+      reverts: z
+        .object({
+          /** Items that finished 30 or more days ago, the same items as `reopens.cohort`. */
+          cohort: z.number().int().nonnegative(),
+          /** Cohort items whose finishing pull request a merged revert names. */
+          reverted: z.number().int().nonnegative(),
+          /** Items that finished in the last 30 days and wait to count, as `reopens.waiting`. */
           waiting: z.number().int().nonnegative(),
         })
         .strict(),

@@ -313,7 +313,7 @@ function PromptComposition({
         )
       }
     >
-      <div className="grid gap-[11px]">
+      <div className="grid gap-2.75">
         {PARTS.map((part) => {
           const value = split?.parts[part.key] ?? null;
           const share = shareOf(value, split?.whole ?? null);

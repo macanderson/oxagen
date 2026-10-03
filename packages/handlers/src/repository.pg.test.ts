@@ -998,7 +998,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     // ── the steering index, past every handler pre-check ─────────────────
     // A direct write under the system seam, which is how a racing writer
     // looks to the store: only the global steering index stands between the
-    // write and the table. 20261003170000 dropped the trigger that also
+    // write and the table. 20261003190000 dropped the trigger that also
     // refused a linked head beside another workspace's steering head.
     const headOf = async (workspaceId: string, repo: string) => {
       const [row] = await withSystemDb((tx) =>
