@@ -55,6 +55,16 @@ export const OXAGEN_DIR = `${LEGACY_OXAGEN_DIR}/`;
 const STEERING_PREFIX = `${STEERING_DIR}/`;
 export const WORKSPACE_TOML_PATH = LEGACY_WORKSPACE_TOML_PATH;
 
+/**
+ * What the read needs from the repository's token: its metadata, its branch,
+ * tree and files, and the open pull request it looks for (#4753).
+ */
+export const TREE_READ_PERMISSIONS = {
+  metadata: "read",
+  contents: "read",
+  pull_requests: "read",
+};
+
 export interface RepositoryTreeDeps {
   github: WorkspaceGithub;
   readBound: typeof readBoundRepository;
@@ -89,7 +99,8 @@ export function createRepositoryTreeGetHandler(
     const gh = await requireWorkspaceGithub(
       deps.github,
       scope,
-      bound.connectionId,
+      bound,
+      TREE_READ_PERMISSIONS,
     );
     const at = { owner: bound.owner, repo: bound.name };
 

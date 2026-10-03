@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HandlerError } from "@oxagen/oxagen";
 import { repositoryInstallationList } from "@oxagen/oxagen/contracts/repository.installation.list";
 import type { GitHubInstallationRepo } from "@oxagen/github";
@@ -23,7 +23,14 @@ vi.mock("@oxagen/iam/org-role", () => ({
   resolveActorWorkspaceRole: async () => null,
 }));
 
-import { createInstallationRepositoriesHandler } from "./repository.installation.list";
+import {
+  createInstallationRepositoriesHandler,
+  githubInstallationRepositoriesDeps,
+} from "./repository.installation.list";
+import {
+  githubTokenFetch,
+  TEST_APP_PRIVATE_KEY,
+} from "./test-utils/github-token-mint";
 
 function repo(fullName: string, over: Partial<GitHubInstallationRepo> = {}) {
   const [owner = "", name = ""] = fullName.split("/");
@@ -213,5 +220,46 @@ describe("list_installation_repositories", () => {
         },
       })({}, makeCTX()),
     ).rejects.toThrow("GitHub API error 403");
+  });
+});
+
+// The picker must list the whole installation, so its token names no
+// repository. It holds only the metadata read the listing needs (#4753). The
+// real mint runs in front of a fake api.github.com that records the body.
+describe("githubInstallationRepositoriesDeps.repositories", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("asks for a whole-installation token with metadata read only", async () => {
+    vi.stubEnv("GITHUB_APP_ID", "101");
+    vi.stubEnv("GITHUB_APP_PRIVATE_KEY", TEST_APP_PRIVATE_KEY);
+    const github = githubTokenFetch({
+      routes: {
+        "/installation/repositories?per_page=100&page=1": {
+          total_count: 1,
+          repositories: [
+            {
+              id: 9001,
+              owner: { login: "acme" },
+              name: "widgets",
+              full_name: "acme/widgets",
+              html_url: "https://github.com/acme/widgets",
+              default_branch: "main",
+              private: true,
+            },
+          ],
+        },
+      },
+    });
+    vi.stubGlobal("fetch", github.fetch);
+    const listed = await githubInstallationRepositoriesDeps.repositories("47551");
+    expect(listed.repositories.map((r) => r.fullName)).toEqual([
+      "acme/widgets",
+    ]);
+    expect(github.mints).toEqual([
+      { installationId: "47551", body: { permissions: { metadata: "read" } } },
+    ]);
   });
 });

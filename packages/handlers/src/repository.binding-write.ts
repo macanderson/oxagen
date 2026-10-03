@@ -20,6 +20,7 @@ import { schema, type Tx } from "@oxagen/database";
 import { createGitHubClient, getInstallationToken } from "@oxagen/github";
 import type { GitHubRepoInfo } from "@oxagen/github";
 import { and, desc, eq, sql } from "drizzle-orm";
+import { isInstallationTokenRefused } from "./repository.bound";
 import { GITHUB_PROVIDER } from "./repository.github-connection";
 
 /**
@@ -133,11 +134,23 @@ export const githubMainRepositoryDeps: MainRepositoryDeps = {
         "GitHub App is not configured: GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY unset",
       );
     }
-    const { token } = await getInstallationToken({
-      appId,
-      privateKey,
-      installationId,
-    });
+    // The token reaches the one repository the link names, with the
+    // metadata read `getRepoInfo` needs and nothing more (#4753). A
+    // repository the installation does not include is refused at the mint,
+    // which is the same answer as the 404 below.
+    let token: string;
+    try {
+      ({ token } = await getInstallationToken({
+        appId,
+        privateKey,
+        installationId,
+        repositories: [name],
+        permissions: { metadata: "read" },
+      }));
+    } catch (err) {
+      if (isInstallationTokenRefused(err)) return null;
+      throw err;
+    }
     try {
       return await createGitHubClient({ token }).getRepoInfo({
         owner,
