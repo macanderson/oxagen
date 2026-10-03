@@ -1,7 +1,7 @@
 {
   "name": "get_spend",
   "domain": "spend",
-  "description": "Read this workspace's spend over a day range, rolled up by operator, agent, model, tool, task, cost center or MCP server, with every figure in micros and the basis that says who observed it, the period total with proven and accepted spend kept apart, the spend by day, each row's costliest runs, and on a row of whole runs the tokens those runs spent on tool definitions, context frames, steering and tool results.",
+  "description": "Read this workspace's spend over a day range, rolled up by operator, agent, model, tool, task, cost center or MCP server, with every figure in micros and the basis that says who observed it, the period total with proven and accepted spend kept apart, the spend by day, each row's costliest runs, and on a row of whole runs the tokens those runs spent on tool definitions, context frames, steering and tool results, and their request windows summed block by block, conversation and system included.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -797,6 +797,110 @@
                 "toolResultTokens"
               ],
               "additionalProperties": false
+            },
+            "windows": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "runs": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "requests": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "requestsWithoutTokens": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "promptTokens": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "blocks": {
+                      "type": "object",
+                      "properties": {
+                        "system": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "steering": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "tools": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "context": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "conversation": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "system",
+                        "steering",
+                        "tools",
+                        "context",
+                        "conversation"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "runs",
+                    "requests",
+                    "requestsWithoutTokens",
+                    "promptTokens",
+                    "blocks"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [

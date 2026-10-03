@@ -129,6 +129,53 @@ describe("Overview › 30-day token use", () => {
     expect(tile("Spend")).toHaveTextContent("basis not recorded");
   });
 
+  it("draws conversation and system from the runs' request windows, each a share of the row's tokens (#5341)", () => {
+    const row = spendRow({
+      windows: {
+        runs: 2,
+        requests: 12,
+        requestsWithoutTokens: 1,
+        promptTokens: 4_200,
+        blocks: {
+          system: 600,
+          steering: null,
+          tools: 1_200,
+          context: null,
+          conversation: 2_400,
+        },
+      },
+    });
+    renderOverview({ spend: spendReport([row]), spendRow: row });
+    const classes = within(screen.getByTestId("token-classes")).getAllByRole(
+      "listitem",
+    );
+    const byClass = (key: string) =>
+      classes.find((li) => li.getAttribute("data-class") === key);
+    expect(byClass("conversation")).toHaveTextContent("Conversation2,400 · 40%");
+    expect(byClass("system")).toHaveTextContent("System600 · 10%");
+    // The windows' tools block does not stand in for the measured sources.
+    expect(byClass("toolDefinitions")).toHaveTextContent("not recorded");
+    expect(region("30-day token use")).toHaveTextContent(
+      "Conversation and system come from the prompt each request sent.",
+    );
+    expect(
+      within(region("30-day token use")).queryByTestId("not-backed"),
+    ).toBeNull();
+  });
+
+  it("leaves conversation and system not recorded when no run stored windows, never zero (negative)", () => {
+    const row = spendRow({ windows: null });
+    renderOverview({ spend: spendReport([row]), spendRow: row });
+    const classes = within(screen.getByTestId("token-classes")).getAllByRole(
+      "listitem",
+    );
+    for (const key of ["conversation", "system"]) {
+      const li = classes.find((item) => item.getAttribute("data-class") === key);
+      expect(li).toHaveTextContent("not recorded");
+      expect(li?.textContent).not.toMatch(/\d/);
+    }
+  });
+
   it("fills each prompt source the agent's runs measured, and leaves conversation, system and an unmeasured source not recorded (#5295)", () => {
     const row = spendRow({
       tokenSources: {

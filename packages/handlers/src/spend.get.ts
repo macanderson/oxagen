@@ -60,6 +60,7 @@ import {
   spendOnBasis,
   sumFigures,
   sumStanding,
+  sumWindows,
   ZERO_TOKENS,
 } from "./spend.shared";
 
@@ -282,6 +283,18 @@ export function tokenSourcesOf(
   // The drill sums the same sources with the same helpers, so a row and the
   // drill it opens agree.
   return { ...sumStanding(runs), toolResultTokens: resultTokensOf(runs) };
+}
+
+/**
+ * What a row of whole runs carries about its prompts (#5295, #5341): the
+ * measured sources, and the request windows summed, which hold the
+ * conversation and system tokens no source measures. Windows no run stored
+ * read null, never zero.
+ */
+export function wholeRunTokens(
+  runs: readonly SpendRunRecord[],
+): Pick<SpendRow, "tokenSources" | "windows"> {
+  return { tokenSources: tokenSourcesOf(runs), windows: sumWindows(runs) };
 }
 
 /** Each run of `list` once, in the order first seen. */
@@ -628,7 +641,7 @@ export function createSpendGetHandler(
           operator: facts.get(row.key) ?? null,
           topRuns: topRuns(row.key),
           ...(wholeRuns
-            ? { tokenSources: tokenSourcesOf(runsOf(byKey.get(row.key) ?? [])) }
+            ? wholeRunTokens(runsOf(byKey.get(row.key) ?? []))
             : {}),
         })),
         // Last, after the workspace's own ranked rows and the rest, so the
@@ -640,9 +653,7 @@ export function createSpendGetHandler(
               wholeRuns
                 ? {
                     ...assistant,
-                    tokenSources: tokenSourcesOf(
-                      runsOf([...inAppByKey.values()].flat()),
-                    ),
+                    ...wholeRunTokens(runsOf([...inAppByKey.values()].flat())),
                   }
                 : assistant,
             ]),

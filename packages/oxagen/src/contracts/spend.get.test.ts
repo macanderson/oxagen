@@ -184,4 +184,60 @@ describe("get_spend contract", () => {
         .success,
     ).toBe(false);
   });
+
+  it("carries a row's request windows summed, null where no run measured them (#5341)", () => {
+    const row = {
+      ...figure,
+      key: "acme.core.cc",
+      provider: null,
+      operator: null,
+      tokens: {
+        input_uncached: 0,
+        cache_read: 0,
+        cache_write_5m: 0,
+        cache_write_1h: 0,
+        output: 0,
+        reasoning: 0,
+        server_tool_request: 0,
+      },
+      topRuns: [],
+    };
+    const windows = {
+      runs: 2,
+      requests: 9,
+      requestsWithoutTokens: 1,
+      promptTokens: 40_000,
+      blocks: {
+        system: 4_000,
+        steering: null,
+        tools: 12_000,
+        context: null,
+        conversation: 24_000,
+      },
+    };
+    expect(spendRowSchema.parse({ ...row, windows })).toEqual({
+      ...row,
+      windows,
+    });
+    // Null says no run measured them; an answer built before the field
+    // leaves it out.
+    expect(spendRowSchema.parse({ ...row, windows: null }).windows).toBeNull();
+    expect(spendRowSchema.parse(row)).not.toHaveProperty("windows");
+    // A block is a count or null, never a fraction or a missing key.
+    expect(
+      spendRowSchema.safeParse({
+        ...row,
+        windows: { ...windows, blocks: { ...windows.blocks, system: 0.5 } },
+      }).success,
+    ).toBe(false);
+    expect(
+      spendRowSchema.safeParse({
+        ...row,
+        windows: {
+          ...windows,
+          blocks: { system: 4_000, steering: null, tools: 12_000, context: null },
+        },
+      }).success,
+    ).toBe(false);
+  });
 });

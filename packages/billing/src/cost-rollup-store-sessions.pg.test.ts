@@ -10,7 +10,7 @@ import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-const { readModelCallFrames, readTachoToolCallFrames } = vi.hoisted(() => {
+const { readModelCallFrames, readTachoToolCallFrames, readTachoWindowFrames } = vi.hoisted(() => {
   /** One priced proxy call as the frame read returns it (#4493). */
   const frame = (at: string, tools: number, steering: number) => ({
     at,
@@ -38,6 +38,25 @@ const { readModelCallFrames, readTachoToolCallFrames } = vi.hoisted(() => {
       return [];
     }),
     readTachoToolCallFrames: vi.fn(async () => []),
+    // One windowed proxy call on the root chain (#5341).
+    readTachoWindowFrames: vi.fn(
+      async (_args: unknown, consume: (rows: unknown[]) => Promise<void>) => {
+        await consume([
+          {
+            seq: 2,
+            kind: "llm_call",
+            attrs: { "oxagen.window": "system=250:1;conversation=750:3" },
+            model: "claude-sonnet-5",
+            provider: "anthropic",
+            requestId: "req_2",
+            inputTokens: 1000,
+            cacheReadTokens: null,
+            cacheCreationTokens: null,
+            body: "",
+          },
+        ]);
+      },
+    ),
   };
 });
 
@@ -45,6 +64,7 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/telemetry")>()),
   readModelCallFrames,
   readTachoToolCallFrames,
+  readTachoWindowFrames,
 }));
 
 import { rebuildRunTotals } from "./cost-rollup-store";
@@ -126,6 +146,37 @@ describe.skipIf(!enabled)("a wrapped run's session list against Postgres", () =>
       rootSessionUuid: uuids.root,
       sessionUuids: [uuids.root, uuids.child],
     }, expect.any(Function));
+    // The windows are read on the same chains as the priced calls (#5341).
+    expect(readTachoWindowFrames).toHaveBeenCalledWith({
+      ...scope,
+      rootSessionUuid: uuids.root,
+      sessionUuids: [uuids.root, uuids.child],
+    }, expect.any(Function));
+  });
+
+  it("stores the run's window composition in the breakdown and reads it back (#5341)", async () => {
+    await rebuildRunTotals(publicId("root"));
+    const rows = await withSystemDb((tx) =>
+      tx
+        .select({ breakdown: schema.runTotals.breakdown })
+        .from(schema.runTotals)
+        .where(eq(schema.runTotals.runId, publicId("root"))),
+    );
+    expect(
+      (rows[0]?.breakdown as { windows?: unknown } | undefined)?.windows,
+    ).toEqual({
+      requests: 1,
+      requestsWithoutTokens: 0,
+      promptTokens: 1000,
+      blocks: {
+        system: 250,
+        steering: null,
+        tools: null,
+        context: null,
+        conversation: 750,
+      },
+      initialConversationTokens: 750,
+    });
   });
 
   it("stores the sources summed over its priced calls, with an unmeasured one as null (#4493)", async () => {
