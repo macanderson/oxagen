@@ -429,9 +429,9 @@ function isRpcErrorObject(value: unknown): value is JsonRpcError {
  *     matched no request, and the client waited 30 seconds for an answer.
  *   - A non-2xx status with no JSON-RPC error becomes an internal error that
  *     names the status and quotes the start of the body. So does a body that
- *     is not a JSON-RPC answer at all: empty, not JSON, or an object with
- *     neither `result` nor `error`.
- *   - A 2xx `result` passes through unchanged.
+ *     is not a JSON-RPC answer to this request: empty, not JSON, an object
+ *     with neither `result` nor `error`, or a `result` for another id.
+ *   - A 2xx `result` with the request's id passes through unchanged.
  *
  * The HTTP status stays the hosted server's when it was not 2xx. It becomes
  * 502 when a 2xx carried no answer. A notification has no id and wants no
@@ -456,13 +456,13 @@ export function answerFor(
     };
   }
   if (ok && message !== undefined && "result" in message) {
-    return { status, body };
+    if (message["id"] === id) return { status, body };
   }
   const flat = upstream.text.replace(/\s+/g, " ").trim();
   const what =
     flat.length === 0
       ? "with no body"
-      : `with a body that is not a JSON-RPC answer: ${flat.slice(0, UPSTREAM_EXCERPT_MAX)}`;
+      : `with a body that is not a JSON-RPC answer to this request: ${flat.slice(0, UPSTREAM_EXCERPT_MAX)}`;
   return {
     status: ok ? 502 : status,
     body: rpcError(
@@ -748,6 +748,12 @@ export function createMcpGateway(deps: McpGatewayDeps): McpGateway {
         const said = (response.body as JsonRpcResponse).error?.message;
         log(
           `mcp gateway gave ${request.method} an error with the request's id after HTTP ${upstream.status}: ${said ?? "no message"}`,
+        );
+      } else if (upstream.status < 200 || upstream.status >= 300) {
+        // A notification gets no answer, so the log is the only place its
+        // failure shows.
+        log(
+          `mcp gateway: the control plane answered ${request.method} with HTTP ${upstream.status}`,
         );
       }
 

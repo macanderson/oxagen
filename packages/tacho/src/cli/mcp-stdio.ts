@@ -123,17 +123,20 @@ export async function runMcpStdio(
     const text = line.trim();
     if (text.length === 0) continue;
     let id: unknown;
+    let method: unknown;
     try {
-      id = (JSON.parse(text) as { id?: unknown }).id;
+      ({ id, method } = JSON.parse(text) as { id?: unknown; method?: unknown });
     } catch {
       deps.stdout.write(
         `${JSON.stringify(shimError(null, "the shim received a line that is not JSON"))}\n`,
       );
       continue;
     }
-    // JSON-RPC: a message with no id is a notification and is never answered,
-    // with a result or with an error.
-    const expectsReply = id !== undefined;
+    // JSON-RPC: only a request is answered, with a result or with an error. A
+    // notification has no id. A client's answer to a server request has an id
+    // but no method, and its id belongs to the server's numbering, so a reply
+    // with that id could match one of the client's own requests.
+    const expectsReply = id !== undefined && typeof method === "string";
     const reply = (document: Record<string, unknown>) => {
       if (expectsReply) deps.stdout.write(`${JSON.stringify(document)}\n`);
     };
@@ -179,7 +182,7 @@ export async function runMcpStdio(
           // client would wait out its own timeout (#5356). It answers this
           // line, so it takes this line's id.
           reply({ ...(parsed as Record<string, unknown>), id });
-        } else if (expectsReply || response.ok) {
+        } else if (expectsReply) {
           deps.stdout.write(`${body}\n`);
         }
       } else if (!response.ok || (expectsReply && body.length > 0)) {

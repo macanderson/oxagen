@@ -946,6 +946,24 @@ describe("the hosted server's transport rules (#5356)", () => {
     expect(logs.join(" ")).not.toContain("error with the request's id");
   });
 
+  it("logs a notification the hosted server refused, since no answer shows it", async () => {
+    const fetch: GatewayFetch = async () => ({
+      ok: false,
+      status: 503,
+      text: async () => "<html>Service Unavailable</html>",
+    });
+    const { gw, logs } = gateway({ fetch });
+    const response = await gw.handle(
+      { jsonrpc: "2.0", method: "notifications/initialized" },
+      CTX,
+    );
+    // No id, so no JSON-RPC answer: the status alone goes back.
+    expect(response).toEqual({ status: 503, body: undefined });
+    expect(logs.join(" ")).toContain(
+      "answered notifications/initialized with HTTP 503",
+    );
+  });
+
   it("gives a null-id error from the hosted server the request's id", async () => {
     const fetch: GatewayFetch = async () => ({
       ok: false,
@@ -997,7 +1015,7 @@ describe("the hosted server's transport rules (#5356)", () => {
     expect(body.id).toBe(7);
     expect(body.error.code).toBe(RPC_INTERNAL_ERROR);
     expect(body.error.message).toBe(
-      "the Oxagen control plane answered HTTP 502 with a body that is not a JSON-RPC answer: <html> <body>502 Bad Gateway</body> </html>",
+      "the Oxagen control plane answered HTTP 502 with a body that is not a JSON-RPC answer to this request: <html> <body>502 Bad Gateway</body> </html>",
     );
     // The server answered, so this is an error, and no "could not be reached".
     expect(body.error.message).not.toContain("could not be reached");
@@ -1048,6 +1066,16 @@ describe("the hosted server's transport rules (#5356)", () => {
       status: 502,
       body: { id: 3, error: { code: RPC_INTERNAL_ERROR } },
     });
+    // A result for another id, or for none, answers some other request.
+    for (const other of [4, null, undefined]) {
+      const stray = { jsonrpc: "2.0", id: other, result: {} };
+      expect(
+        answerFor(3, { status: 200, body: stray, text: text(stray) }),
+      ).toMatchObject({
+        status: 502,
+        body: { id: 3, error: { code: RPC_INTERNAL_ERROR } },
+      });
+    }
     // An error that already carries the request's id is left as it is.
     const matched = {
       jsonrpc: "2.0",

@@ -293,6 +293,23 @@ describe("what the shim writes back is always something the client can parse", (
     expect(kept.out).toEqual([`${matched}\n`]);
   });
 
+  it("never answers a client's answer to a server request, so no reply takes a server-numbered id", async () => {
+    // The line has an id but no method: it answers a request the server
+    // sent. Its id is the server's, and a reply with that id could match one
+    // of the client's own requests.
+    for (const status of [200, 400]) {
+      const d = deps({
+        stdin: lines({ jsonrpc: "2.0", id: 1, result: {} }),
+        fetch: respond(
+          status,
+          '{"jsonrpc":"2.0","error":{"code":-32600,"message":"expected a method"},"id":null}',
+        ),
+      });
+      await runMcpStdio({ port: 1 }, d);
+      expect(d.out).toEqual([]);
+    }
+  });
+
   it("writes nothing for a notification the gateway refused with a null id", async () => {
     const d = deps({
       stdin: lines({ jsonrpc: "2.0", method: "notifications/initialized" }),
