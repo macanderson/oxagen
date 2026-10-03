@@ -21,6 +21,8 @@ const snapshot = (n: number) => ({ digest: digest(100 + n), subject: `Fix invite
 export const f = {
   collected: () =>
     newFact({ kind: "collected", source: "provider", itemRevision: 1, actor: "github", occurredAt: at(0), dedupeKey: "collected", data: snapshot(1) }),
+  entered: () =>
+    newFact({ kind: "entered", source: "person", itemRevision: 1, actor: "amara", occurredAt: at(0), dedupeKey: "entered", data: snapshot(1) }),
   sourceChanged: (revision: number, minute: number) =>
     newFact({
       kind: "source_changed",
@@ -97,6 +99,8 @@ export const f = {
     if (kind === "run_ended") return newFact({ kind, ...common, runId: "tse_run1", data: { outcome: "stopped" } });
     return newFact({ kind, ...common, data: {} });
   },
+  delivered: (order: string, minute: number) =>
+    newFact({ kind: "send_delivered", source: "oxagen", itemRevision: 1, actor: "oxagen", occurredAt: at(minute), dedupeKey: `delivered:${order}`, orderId: order, data: { command_id: "cmd_1" } }),
   rejected: (order: string, minute: number) =>
     newFact({ kind: "send_rejected", source: "runtime", itemRevision: 1, actor: "tch_runner", occurredAt: at(minute), dedupeKey: `rejected:${order}`, orderId: order, data: { reason: "Signed out." } }),
   withdrawn: (order: string, minute: number) =>
@@ -105,16 +109,31 @@ export const f = {
     newFact({ kind: "stop_requested", source: "person", itemRevision: 1, actor: "marcus", occurredAt: at(minute), dedupeKey: `stop:${order}`, orderId: order, data: { reason: "Scope changed." } }),
   prLinked: (order: string, minute: number) =>
     newFact({ kind: "pr_linked", source: "runtime", itemRevision: 1, actor: "tch_runner", occurredAt: at(minute), dedupeKey: `pr:${order}`, orderId: order, repository: "aintel/platform", prNumber: 612, data: {} }),
+  /** The key names the provider's time, as evidence.ts does, so a head that comes back is a new fact. */
   head: (order: string, sha: string, minute: number, itemRevision = 1) =>
-    newFact({ kind: "head_observed", source: "provider", itemRevision, actor: "github", occurredAt: at(minute), dedupeKey: `head:${order}:${sha}`, orderId: order, repository: "aintel/platform", prNumber: 612, headSha: sha, data: {} }),
+    newFact({ kind: "head_observed", source: "provider", itemRevision, actor: "github", occurredAt: at(minute), dedupeKey: `head:${order}:${sha}:${minute}`, orderId: order, repository: "aintel/platform", prNumber: 612, headSha: sha, data: {} }),
   required: (order: string, sha: string, names: string[], minute: number) =>
     newFact({ kind: "checks_required", source: "provider", itemRevision: 1, actor: "github", occurredAt: at(minute), dedupeKey: `required:${order}:${sha}:${minute}`, orderId: order, headSha: sha, data: { names } }),
   check: (order: string, sha: string, name: string, conclusion: CheckConclusion, minute: number) =>
     newFact({ kind: "check_observed", source: "provider", itemRevision: 1, actor: "github", occurredAt: at(minute), dedupeKey: `check:${order}:${sha}:${name}:${minute}`, orderId: order, headSha: sha, data: { name, conclusion } }),
   claim: (order: string, criterion: string, sha: string | null, minute: number) =>
     newFact({ kind: "criterion_claimed", source: "agent", itemRevision: 1, actor: "agent-1", occurredAt: at(minute), dedupeKey: `claim:${order}:${criterion}:${minute}`, orderId: order, criterionId: criterion, headSha: sha, data: { text: "Covered by a test." } }),
+  /** Bound to the pull request and the send's run, as the store records an acceptance. */
   accepted: (order: string, sha: string, briefRevision: number, minute: number, itemRevision = 1) =>
-    newFact({ kind: "accepted", source: "person", itemRevision, actor: "marcus", occurredAt: at(minute), dedupeKey: `accept:${order}:${sha}`, orderId: order, headSha: sha, briefDigest: digest(briefRevision), data: { criteria: ["c1"], required_checks: ["test"] } }),
+    newFact({
+      kind: "accepted",
+      source: "person",
+      itemRevision,
+      actor: "marcus",
+      occurredAt: at(minute),
+      dedupeKey: `accept:${order}:${sha}:${minute}`,
+      orderId: order,
+      repository: "aintel/platform",
+      prNumber: 612,
+      headSha: sha,
+      briefDigest: digest(briefRevision),
+      data: { criteria: ["c1"], required_checks: ["test"], run_ids: ["tse_run1"] },
+    }),
   returned: (order: string, minute: number) =>
     newFact({ kind: "returned", source: "person", itemRevision: 1, actor: "marcus", occurredAt: at(minute), dedupeKey: `returned:${order}`, orderId: order, data: { reason: "The test is missing." } }),
   merged: (order: string, sha: string, minute: number) =>

@@ -201,9 +201,18 @@ export interface FactDataByKind {
   checks_required: { names: string[] };
   check_observed: { name: string; conclusion: CheckConclusion };
   criterion_claimed: { text: string };
-  returned: { reason: string };
-  /** `criteria` is every criterion id the person ticked. `required_checks` is what the base branch required. */
-  accepted: { criteria: string[]; required_checks: string[] };
+  /**
+   * `run_ids` is every run linked to the send when the person returned it.
+   * The store always writes it. A return recorded before 2026-10-03 has none.
+   */
+  returned: { reason: string; run_ids?: string[] };
+  /**
+   * `criteria` is every criterion id the person ticked. `required_checks` is
+   * what the base branch required. `run_ids` is every run linked to the send
+   * at the acceptance. The store always writes it. An acceptance recorded
+   * before 2026-10-03 has none.
+   */
+  accepted: { criteria: string[]; required_checks: string[]; run_ids?: string[] };
   merged: { merge_commit: string };
   pr_closed: Record<string, never>;
 }
@@ -284,6 +293,14 @@ function need(fact: WorkFact, column: keyof FactBase<FactKind>, label: string): 
   }
 }
 
+/** A person's decision on a send names every run linked to it, so the decision is bound to those runs. */
+function runIds(value: unknown, decision: string): void {
+  if (!Array.isArray(value)) throw invalid(`${decision} lists the runs linked to the send.`);
+  for (const id of value) {
+    if (typeof id !== "string" || !RUN_ID_PATTERN.test(id)) throw invalid(`"${String(id)}" is not a run id.`);
+  }
+}
+
 function checkData(fact: WorkFact): void {
   switch (fact.kind) {
     case "collected":
@@ -317,9 +334,12 @@ function checkData(fact: WorkFact): void {
       text(fact.data.reason, "The reason for reopening");
       return;
     case "stop_requested":
-    case "returned":
     case "send_withdrawn":
       text(fact.data.reason, "The reason");
+      return;
+    case "returned":
+      text(fact.data.reason, "The reason");
+      runIds(fact.data.run_ids, "A return");
       return;
     case "send_requested":
       if (!(RUNTIME_TIERS as readonly string[]).includes(fact.data.runtime_tier)) {
@@ -343,6 +363,7 @@ function checkData(fact: WorkFact): void {
       if (!Array.isArray(fact.data.criteria) || !Array.isArray(fact.data.required_checks)) {
         throw invalid("An acceptance lists the criteria a person ticked and the checks the base branch required.");
       }
+      runIds(fact.data.run_ids, "An acceptance");
       return;
     case "merged":
       if (!HEAD_SHA_PATTERN.test(fact.data.merge_commit)) throw invalid("A merge names its merge commit as 40 hex characters.");
@@ -403,6 +424,8 @@ export function checkFact(fact: WorkFact): void {
     case "accepted":
       need(fact, "headSha", "the head commit it accepts");
       need(fact, "briefDigest", "the brief it accepts against");
+      need(fact, "repository", "the repository of the pull request it accepts");
+      need(fact, "prNumber", "the pull request it accepts");
       break;
     default:
       break;

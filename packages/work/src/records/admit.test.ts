@@ -163,6 +163,12 @@ describe("withdraw, stop, and return", () => {
       repeat: false,
     });
   });
+
+  it("refuses Return on a send accepted on its current head, and admits it once a new head voids the acceptance", () => {
+    const accepted = [...IN_REVIEW, f.accepted("o1", SHA1, 1, 12)];
+    expect(refused(accepted, { kind: "return", orderId: "o1" }, "not_allowed")).toContain(`accepted on ${SHA1.slice(0, 7)}`);
+    expect(admit([...accepted, f.head("o1", SHA2, 13)], { kind: "return", orderId: "o1" })).toEqual({ repeat: false });
+  });
 });
 
 describe("accept", () => {
@@ -198,6 +204,8 @@ describe("accept", () => {
     const none = [...READY, f.send("o1", 1, 1, 1, 4), f.prLinked("o1", 5), f.head("o1", SHA1, 6), f.runtime("run_ended", "o1", 7), f.required("o1", SHA1, [], 8)];
     expect(admit(none, accept())).toEqual({ repeat: false });
     expect(refused(none, accept({ criteria: ["c1"] }), "not_allowed")).toContain("c2");
+    // A new head with nothing required still binds the acceptance to the head it names.
+    refused([...none, f.head("o1", SHA2, 9), f.required("o1", SHA2, [], 10)], accept(), "stale_head");
   });
 
   it("refuses a tick on a criterion the brief does not have", () => {
@@ -217,6 +225,181 @@ describe("accept", () => {
     const accepted = [...IN_REVIEW, f.accepted("o1", SHA1, 1, 12)];
     expect(admit(accepted, accept())).toEqual({ repeat: true });
     refused(DONE, accept(), "not_allowed");
+  });
+});
+
+describe("each action from each state", () => {
+  const NEW = [f.collected()];
+  const HELD = [f.collected(), f.triage("duplicate")];
+  const NEEDS_INFO = [f.collected(), f.triage("needs_info")];
+  const TRIAGED = [f.collected(), f.triage("triaged")];
+  const CHANGED = [...READY, f.sourceChanged(2, 5)];
+  const SENT = [...READY, f.send("o1", 1, 1, 1, 4)];
+  const CLAIMED = [...SENT, f.runtime("claimed", "o1", 5)];
+  const RUNNING = [...CLAIMED, f.runtime("run_linked", "o1", 6)];
+  const STOPPING = [...RUNNING, f.stopRequested("o1", 7)];
+  const ACCEPTED = [...IN_REVIEW, f.accepted("o1", SHA1, 1, 12)];
+  /** Running, with a pull request a person merged before the run ended. */
+  const MERGED_WHILE_RUNNING = [
+    ...RUNNING,
+    f.prLinked("o1", 7),
+    f.head("o1", SHA1, 8),
+    f.required("o1", SHA1, ["test"], 9),
+    f.check("o1", SHA1, "test", "success", 10),
+    f.merged("o1", SHA1, 11),
+  ];
+  const stop: WorkItemDecision = { kind: "stop", orderId: "o1" };
+  const withdraw: WorkItemDecision = { kind: "withdraw", orderId: "o1" };
+  const giveBack: WorkItemDecision = { kind: "return", orderId: "o1" };
+
+  it("starts each case in the state it names", () => {
+    expect([NEW, HELD, NEEDS_INFO, TRIAGED, CHANGED, SENT, RUNNING, STOPPING, ACCEPTED, MERGED_WHILE_RUNNING].map((facts) => reduceWorkItem(facts).state)).toEqual([
+      "new",
+      "held",
+      "needs_info",
+      "triaged",
+      "changed",
+      "sent",
+      "running",
+      "running",
+      "review",
+      "review",
+    ]);
+  });
+
+  it.each<[string, WorkFact[], number]>([
+    ["new", NEW, 1],
+    ["held", HELD, 1],
+    ["needs_info", NEEDS_INFO, 1],
+    ["changed", CHANGED, 2],
+    ["ready", READY, 1],
+    ["sent", SENT, 1],
+    ["running", RUNNING, 1],
+    ["review", IN_REVIEW, 1],
+  ])("save_brief admits an edit of a %s item at its current revision", (_state, facts, itemRevision) => {
+    expect(admit(facts, { kind: "save_brief", itemRevision })).toEqual({ repeat: false });
+  });
+
+  it("approve_brief admits revision 2's brief on a changed item, and refuses an item held as out of scope", () => {
+    expect(admit([...CHANGED, f.saved(2, 2, 6)], approve({ itemRevision: 2, briefRevision: 2, briefDigest: digest(2) }))).toEqual({ repeat: false });
+    refused([f.collected(), f.triage("out_of_scope"), f.saved(1, 1, 2)], approve(), "not_allowed");
+  });
+
+  it.each<[string, WorkFact[], WorkItemDecision]>([
+    ["done", DONE, approve()],
+    ["sent, for a second brief", SENT, approve({ briefDigest: digest(9) })],
+    ["running, for a second brief", RUNNING, approve({ briefDigest: digest(9) })],
+  ])("approve_brief refuses an approval on a %s item", (_state, facts, decision) => {
+    refused(facts, decision, "not_allowed");
+  });
+
+  it.each<[string, WorkFact]>([
+    ["rejected", f.rejected("o1", 5)],
+    ["withdrawn", f.withdrawn("o1", 5)],
+    ["stopped", f.runtime("stopped", "o1", 6)],
+  ])("send admits the next send after the last one was %s", (_end, ended) => {
+    expect(admit([...SENT, ended], send({ key: "wi_x:r1:s2" }))).toEqual({ repeat: false });
+  });
+
+  it.each<[string, WorkFact[]]>([
+    ["new", NEW],
+    ["triaged", TRIAGED],
+    ["held", HELD],
+    ["needs_info", NEEDS_INFO],
+  ])("send refuses a %s item, which has no approved brief", (_state, facts) => {
+    expect(refused(facts, send(), "not_allowed")).toContain("no approved brief");
+  });
+
+  it.each<[string, WorkFact[]]>([
+    ["running", RUNNING],
+    ["in review", IN_REVIEW],
+  ])("send refuses a second send while the first is %s", (_state, facts) => {
+    expect(refused(facts, send({ key: "wi_x:r1:s2" }), "not_allowed")).toContain("Send 1");
+  });
+
+  it.each<[string, WorkFact[]]>([
+    ["running", RUNNING],
+    ["over its run", IN_REVIEW],
+    ["returned", [...IN_REVIEW, f.returned("o1", 12)]],
+    ["rejected", [...SENT, f.rejected("o1", 5)]],
+    ["on a closed item", [...SENT, f.closed(1, 5)]],
+  ])("withdraw refuses a send that is %s", (_state, facts) => {
+    refused(facts, withdraw, "not_allowed");
+  });
+
+  it("stop admits a running send, and answers a stop of a stopped send as a repeat", () => {
+    expect(admit(RUNNING, stop)).toEqual({ repeat: false });
+    expect(admit([...CLAIMED, f.runtime("stopped", "o1", 6)], stop)).toEqual({ repeat: true });
+  });
+
+  it.each<[string, WorkFact[]]>([
+    ["withdrawn", [...SENT, f.withdrawn("o1", 5)]],
+    ["returned", [...IN_REVIEW, f.returned("o1", 12)]],
+  ])("stop refuses a send that was %s", (_state, facts) => {
+    expect(refused(facts, stop, "not_allowed")).toContain("over");
+  });
+
+  it("return admits a send whose pull request merged while the run still goes", () => {
+    expect(admit(MERGED_WHILE_RUNNING, giveBack)).toEqual({ repeat: false });
+  });
+
+  it.each<[string, WorkFact[]]>([
+    ["waiting for its claim", SENT],
+    ["running", RUNNING],
+    ["stopping", STOPPING],
+  ])("return refuses a send that is %s", (_state, facts) => {
+    expect(refused(facts, giveBack, "not_allowed")).toContain("has not ended");
+  });
+
+  it("accept admits a pull request merged before the run ended", () => {
+    expect(admit(MERGED_WHILE_RUNNING, accept())).toEqual({ repeat: false });
+  });
+
+  it("accept refuses on a closed item, and on a pull request with no head commit", () => {
+    expect(refused([...IN_REVIEW, f.closed(1, 12)], accept(), "not_allowed")).toContain("closed");
+    expect(refused([...SENT, f.prLinked("o1", 5), f.runtime("run_ended", "o1", 6)], accept(), "not_allowed")).toContain("no head commit");
+  });
+
+  it.each<[string, WorkFact[]]>([
+    ["new", NEW],
+    ["held", HELD],
+    ["needs_info", NEEDS_INFO],
+    ["triaged", TRIAGED],
+    ["changed", CHANGED],
+    ["in review after the run ended", IN_REVIEW],
+    ["in review after a merge nobody accepted", [...IN_REVIEW, f.merged("o1", SHA1, 12)]],
+    ["in review, accepted on its head", ACCEPTED],
+  ])("close admits a %s item", (_state, facts) => {
+    expect(admit(facts, { kind: "close" })).toEqual({ repeat: false });
+  });
+
+  it("close refuses an item whose send waits for its claim", () => {
+    expect(refused(SENT, { kind: "close" }, "not_allowed")).toContain("Withdraw or stop");
+  });
+
+  it.each<[string, WorkFact[]]>([
+    ["new", NEW],
+    ["held", HELD],
+    ["triaged", TRIAGED],
+    ["needs_info", NEEDS_INFO],
+    ["changed", CHANGED],
+    ["sent", SENT],
+    ["running", RUNNING],
+    ["review", IN_REVIEW],
+  ])("reopen refuses a %s item", (_state, facts) => {
+    refused(facts, { kind: "reopen" }, "not_allowed");
+  });
+
+  it.each<[string, WorkFact[]]>([
+    ["new", NEW],
+    ["held", HELD],
+    ["needs_info", NEEDS_INFO],
+  ])("override_triage admits a %s item", (_state, facts) => {
+    expect(admit(facts, { kind: "override_triage" })).toEqual({ repeat: false });
+  });
+
+  it("override_triage refuses a done item", () => {
+    refused(DONE, { kind: "override_triage" }, "not_allowed");
   });
 });
 

@@ -73,8 +73,18 @@ const VALID: WorkFact[] = [
   newFact({ kind: "checks_required", source: "provider", ...base("k22"), orderId: "o1", headSha: SHA, data: { names: ["test"] } }),
   newFact({ kind: "check_observed", source: "provider", ...base("k23"), orderId: "o1", headSha: SHA, data: { name: "test", conclusion: "success" } }),
   newFact({ kind: "criterion_claimed", source: "agent", ...base("k24"), orderId: "o1", criterionId: "c1", headSha: SHA, data: { text: "Done." } }),
-  newFact({ kind: "returned", source: "person", ...base("k25"), orderId: "o1", data: { reason: "Missing test." } }),
-  newFact({ kind: "accepted", source: "person", ...base("k26"), orderId: "o1", headSha: SHA, briefDigest: DIGEST, data: { criteria: ["c1"], required_checks: [] } }),
+  newFact({ kind: "returned", source: "person", ...base("k25"), orderId: "o1", data: { reason: "Missing test.", run_ids: ["tse_abc"] } }),
+  newFact({
+    kind: "accepted",
+    source: "person",
+    ...base("k26"),
+    orderId: "o1",
+    repository: "aintel/platform",
+    prNumber: 7,
+    headSha: SHA,
+    briefDigest: DIGEST,
+    data: { criteria: ["c1"], required_checks: [], run_ids: ["tse_abc", "arun_def"] },
+  }),
   newFact({ kind: "merged", source: "provider", ...base("k27"), orderId: "o1", headSha: SHA, data: { merge_commit: "c".repeat(40) } }),
   newFact({ kind: "pr_closed", source: "provider", ...base("k28"), orderId: "o1", data: {} }),
 ];
@@ -153,6 +163,8 @@ describe("checkFact", () => {
     ["criterion_claimed", "criterionId"],
     ["accepted", "headSha"],
     ["accepted", "briefDigest"],
+    ["accepted", "repository"],
+    ["accepted", "prNumber"],
   ] as const)("refuses a %s fact with no %s", (kind, column) => {
     const fact = VALID.find((entry) => entry.kind === kind)!;
     refusal({ ...fact, [column]: null } as WorkFact);
@@ -177,7 +189,15 @@ describe("checkFact", () => {
     refusal({ ...find("checks_required"), data: { names: [""] } });
     refusal({ ...find("criterion_claimed"), data: { text: "" } });
     refusal({ ...find("accepted"), data: { criteria: "c1" as unknown as string[], required_checks: [] } });
+    refusal({ ...find("returned"), data: { reason: "Missing test.", run_ids: ["run_1"] } });
     refusal({ ...find("merged"), data: { merge_commit: "abc" } });
+  });
+
+  it("refuses a return or an acceptance that does not list the runs linked to the send", () => {
+    const find = <K extends WorkFact["kind"]>(kind: K) => VALID.find((fact) => fact.kind === kind) as Extract<WorkFact, { kind: K }>;
+    expect(refusal({ ...find("accepted"), data: { criteria: ["c1"], required_checks: [] } })).toContain("lists the runs");
+    expect(refusal({ ...find("returned"), data: { reason: "Missing test." } })).toContain("lists the runs");
+    expect(refusal({ ...find("accepted"), data: { criteria: ["c1"], required_checks: [], run_ids: ["tse_abc", 7 as unknown as string] } })).toContain("not a run id");
   });
 });
 

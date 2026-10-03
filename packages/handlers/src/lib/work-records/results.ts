@@ -72,7 +72,7 @@ async function rootRunOf(tx: Tx, scope: WorkScope, rootSessionUuid: string): Pro
 }
 
 /** Read GitHub for one send and record what it found. Never fails the caller's write. */
-async function recordSendEvidence(scope: WorkScope, itemId: string, orderId: string, reader: EvidenceReader, now: Date): Promise<number> {
+export async function recordSendEvidence(scope: WorkScope, itemId: string, orderId: string, reader: EvidenceReader, now: Date): Promise<number> {
   const order = await withTenantDb(async (tx) => {
     const record = await readWorkItem(tx, scope, itemId);
     return record.projection.orders.find((entry) => entry.orderId === orderId) ?? null;

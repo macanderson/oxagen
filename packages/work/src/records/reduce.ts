@@ -11,7 +11,9 @@
 //   - An agent stopping is not acceptance. A claim is the agent's word and
 //     moves nothing.
 //   - An acceptance counts only for the head commit it names. A newer head
-//     voids it, and an older head's late results stay on that head.
+//     voids it, and an older head's late results stay on that head. A head
+//     that moves away and comes back to the accepted commit voids it too: a
+//     new head invalidates every acceptance made before it.
 //   - Done means accepted and merged, in either order. A pull request closed
 //     without merging is not done.
 //   - A material source or brief change after approval leaves the item
@@ -26,6 +28,7 @@ import {
   type RuntimeTier,
   type TriageOutcome,
   type WorkFact,
+  compareFacts,
   sortFacts,
 } from "./facts";
 
@@ -149,9 +152,13 @@ export interface OrderProjection {
   requiredChecks: string[] | null;
   checks: CheckRef[];
   claims: ClaimRef[];
-  /** The acceptance that names the current head. */
+  /** The acceptance that names the current head, made after the pull request last had another head. */
   acceptance: AcceptanceRef | null;
-  /** The latest acceptance on an older head. It counts for nothing and stays visible. */
+  /**
+   * The latest acceptance that no longer counts: it names an older head, or a
+   * head the pull request left and came back to. It counts for nothing and
+   * stays visible.
+   */
   staleAcceptance: AcceptanceRef | null;
   merge: { headSha: string; mergeCommit: string; at: string } | null;
   /** The pull request closed without merging. */
@@ -263,7 +270,8 @@ function reduceOrder(
   const merge = mergeFact
     ? { headSha: mergeFact.headSha as string, mergeCommit: mergeFact.data.merge_commit, at: mergeFact.occurredAt }
     : null;
-  const headFact = last(ofKind(facts, "head_observed").filter(onPullRequest));
+  const headFacts = ofKind(facts, "head_observed").filter(onPullRequest);
+  const headFact = last(headFacts);
   const head = merge?.headSha ?? headFact?.headSha ?? null;
 
   const requiredFact = head === null ? undefined : last(ofKind(facts, "checks_required").filter((f) => f.headSha === head));
@@ -287,11 +295,25 @@ function reduceOrder(
       current: fact.headSha !== null && fact.headSha === head,
     }));
 
+  // A new head voids every acceptance made before it, even when the pull
+  // request later comes back to the accepted commit (agent-work-phase-1.html,
+  // Data contract). So an acceptance counts only when it names the current
+  // head, belongs to the current pull request, and no other head was observed
+  // after it, in the canonical order. A merge fixes the head, so a head
+  // reported after the merge voids nothing and a done send stays done.
+  const movedAway = headFacts.filter(
+    (fact) => fact.headSha !== head && (mergeFact === undefined || compareFacts(fact, mergeFact) < 0),
+  );
+  const counts = (fact: FactOf<"accepted">): boolean =>
+    head !== null &&
+    fact.headSha === head &&
+    onPullRequest(fact) &&
+    !movedAway.some((moved) => compareFacts(moved, fact) > 0);
   const accepted = ofKind(facts, "accepted");
-  const onHead = last(accepted.filter((fact) => fact.headSha === head));
-  const offHead = last(accepted.filter((fact) => fact.headSha !== head));
-  const acceptance = head !== null && onHead ? acceptanceOf(onHead) : null;
-  const staleAcceptance = offHead ? acceptanceOf(offHead) : null;
+  const current = last(accepted.filter(counts));
+  const voided = last(accepted.filter((fact) => !counts(fact)));
+  const acceptance = current ? acceptanceOf(current) : null;
+  const staleAcceptance = voided ? acceptanceOf(voided) : null;
 
   const prClosed = merge === null && facts.some((fact) => fact.kind === "pr_closed" && onPullRequest(fact));
   const returnFact = last(ofKind(facts, "returned"));

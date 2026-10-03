@@ -8,10 +8,16 @@
 //     claim gets the same claim and prompt back, and a second machine on the
 //     same runtime is refused
 //   - stale-head invalidation: a new head on the pull request voids the
-//     acceptance, and an acceptance that names the old head is refused
-//   - fail-closed review checks: a required list Oxagen could not read, a
-//     failing, missing, skipped, or cancelled required check, and an unticked
+//     acceptance, and an acceptance that names the old head is refused, also
+//     when the head comes back to an earlier commit and when the base branch
+//     requires no check: Accept names the head, and the server checks it
+//     against GitHub's head at the press (oxagen-roadmap#279)
+//   - fail-closed review checks: a required list or check results Oxagen
+//     could not read in full, a pull request it could not read, a failing,
+//     missing, skipped, or cancelled required check, and an unticked
 //     criterion each refuse Accept, and the evidence read at the press stays
+//   - retry safety for Accept, Return, Withdraw, and Close: a retry is a
+//     repeat and records nothing twice
 //   - acceptance separated from merge: accepting merges nothing, and the item
 //     is done once it is accepted and merged, in either order
 //   - the drain gate: a host that does not advertise work orders is never
@@ -94,15 +100,19 @@ interface GitHubState {
   required: RequiredChecksRead;
   checks: Record<string, Conclusion>;
   checkedAt: string;
+  /** How the pull request reads, when not in full: not at all, or with no head commit. */
+  pull?: "unreadable" | "no_head";
+  /** How the check results read, when not in full: not at all, or cut short. */
+  checksRead?: "failed" | "partial";
 }
 
 /** A `pull_request` webhook body for the pull request, read by workPullRequestDeliveryOf. */
-function webhook(head: string, updatedAt: string, merge: { commit: string; at: string } | null = null) {
+function webhook(head: string, updatedAt: string, merge: { commit: string; at: string } | null = null, number = PR_NUMBER) {
   const delivery = workPullRequestDeliveryOf({
     action: merge === null ? "synchronize" : "closed",
     repository: { full_name: REPOSITORY },
     pull_request: {
-      number: PR_NUMBER,
+      number,
       head: { sha: head },
       base: { ref: "main" },
       state: merge === null ? "open" : "closed",
@@ -405,7 +415,7 @@ describe.skipIf(!enabled)("work order dispatch against Postgres", { timeout: 30_
   const acks = (host: ClaimingHost, acked: AckedCommand[]) => inScope((tx) => recordWorkOrderAcks(tx, scope, host, acked, new Date()));
 
   /** The pull request the run named, recorded on the send the way results.ts records it. */
-  function linkPullRequest(item: Item, sent: Sent, run: Run) {
+  function linkPullRequest(item: Item, sent: Sent, run: Run, number: number) {
     return inScope((tx) =>
       appendFacts(tx, scope, {
         itemId: item.itemId,
@@ -416,11 +426,11 @@ describe.skipIf(!enabled)("work order dispatch against Postgres", { timeout: 30_
             itemRevision: 1,
             orderId: sent.orderId,
             repository: REPOSITORY,
-            prNumber: PR_NUMBER,
+            prNumber: number,
             runId: run.runId,
             actor: run.runId,
             occurredAt: at(5),
-            dedupeKey: `pr_linked:${sent.orderId}:${REPOSITORY}#${PR_NUMBER}`,
+            dedupeKey: `pr_linked:${sent.orderId}:${REPOSITORY}#${number}`,
             data: {},
           },
         ],
@@ -432,15 +442,20 @@ describe.skipIf(!enabled)("work order dispatch against Postgres", { timeout: 30_
     run: Run;
   }
 
-  /** A ready item sent to the rig's agent, claimed, run, and ended, with its pull request linked unless asked not to. */
-  async function inReview(r: Rig, options: { pullRequest: boolean } = { pullRequest: true }): Promise<InReview> {
+  /**
+   * A ready item sent to the rig's agent, claimed, run, and ended, with its
+   * pull request linked unless asked not to. Every send that links the same
+   * pull request records a webhook for it, so a case that delivers webhooks
+   * names a pull request of its own.
+   */
+  async function inReview(r: Rig, options: { pullRequest: boolean; number?: number } = { pullRequest: true }): Promise<InReview> {
     const item = await readyItem();
     const sent = await send(item, r);
     await claim(r.hostA, sent.orderPublicId);
     const run = await openRun(r);
     expect(await link(r.hostA, sent.orderPublicId, run.runId)).toBe("linked");
     expect(await endRun(run.runId)).toBe(1);
-    if (options.pullRequest) await linkPullRequest(item, sent, run);
+    if (options.pullRequest) await linkPullRequest(item, sent, run, options.number ?? PR_NUMBER);
     return { ...item, ...sent, run };
   }
 
@@ -457,8 +472,9 @@ describe.skipIf(!enabled)("work order dispatch against Postgres", { timeout: 30_
     };
     const reader: EvidenceReader = {
       async readPullRequest() {
+        if (github.pull === "unreadable") return null;
         return {
-          headSha: github.head,
+          headSha: github.pull === "no_head" ? null : github.head,
           baseRef: "main",
           state: github.merge === null ? "open" : "closed",
           merged: github.merge !== null,
@@ -471,7 +487,9 @@ describe.skipIf(!enabled)("work order dispatch against Postgres", { timeout: 30_
         return github.required;
       },
       async readChecks(_scope, _repository, sha) {
+        if (github.checksRead === "failed") return null;
         return {
+          complete: github.checksRead !== "partial",
           sha,
           statuses: [],
           checkRuns: Object.entries(github.checks).map(([name, conclusion]) => ({
@@ -688,6 +706,23 @@ describe.skipIf(!enabled)("work order dispatch against Postgres", { timeout: 30_
     expect(await close(withdrawn.version)).toMatchObject({ repeat: false, item: { state: "closed" } });
   });
 
+  it("answers a retried Withdraw and a retried Close as repeats, and records each once", async () => {
+    const r = await rig();
+    const item = await readyItem();
+    const sent = await send(item, r);
+    const out = await read(item.itemId);
+    const withdraw = { item_id: item.publicId, version: out.version, work_order_id: sent.orderPublicId, reason: "Wrong agent." };
+    expect(await inScope((tx) => cancelWork(tx, scope, actor, withdraw))).toMatchObject({ repeat: false, order: { delivery: "withdrawn" } });
+    expect(await inScope((tx) => cancelWork(tx, scope, actor, withdraw))).toMatchObject({ repeat: true, order: { delivery: "withdrawn" } });
+    const withdrawn = await read(item.itemId);
+    expect(factsOf(withdrawn, "send_withdrawn")).toHaveLength(1);
+
+    const close = { item_id: item.publicId, version: withdrawn.version, resolution: "declined" as const, reason: "Not this quarter." };
+    expect(await inScope((tx) => closeWork(tx, scope, actor, close))).toMatchObject({ repeat: false, item: { state: "closed" } });
+    expect(await inScope((tx) => closeWork(tx, scope, actor, close))).toMatchObject({ repeat: true, item: { state: "closed" } });
+    expect(factsOf(await read(item.itemId), "closed")).toHaveLength(1);
+  });
+
   it("records a host's rejection once, and refuses a rejection from another host or after a run links", async () => {
     const r = await rig();
     const reject = (host: ClaimingHost, orderPublicId: string) =>
@@ -880,6 +915,8 @@ describe.skipIf(!enabled)("work order dispatch against Postgres", { timeout: 30_
     const refusals: {
       name: string;
       github: Partial<GitHubState>;
+      /** Read GitHub in full first, so the head and its checks are on record before the press. */
+      prior?: boolean;
       criteria?: string[];
       /** The required checks on record for the head after the refusal. */
       recorded: string[] | null;
@@ -902,12 +939,32 @@ describe.skipIf(!enabled)("work order dispatch against Postgres", { timeout: 30_
       { name: "a required check was skipped", github: { checks: { test: "skipped" } }, recorded: ["test"], checks: [["test", "skipped"]] },
       { name: "a required check was cancelled", github: { checks: { test: "cancelled" } }, recorded: ["test"], checks: [["test", "cancelled"]] },
       { name: "a criterion is not ticked", github: {}, criteria: ["c1"], recorded: ["test"], checks: [["test", "success"]] },
+      { name: "the check results could not be read", github: { checksRead: "failed" }, recorded: ["test"], checks: [] },
+      { name: "GitHub returned only part of the check results", github: { checksRead: "partial" }, recorded: ["test"], checks: [["test", "success"]] },
+      {
+        name: "the pull request could not be read at the press, with its head on record",
+        github: { pull: "unreadable" },
+        prior: true,
+        recorded: ["test"],
+        checks: [["test", "success"]],
+      },
+      {
+        name: "the pull request read at the press has no head commit, with a head on record",
+        github: { pull: "no_head" },
+        prior: true,
+        recorded: ["test"],
+        checks: [["test", "success"]],
+      },
     ];
 
-    it.each(refusals)("refuses Accept when $name, and keeps the evidence it read", async ({ github, criteria, recorded, checks }) => {
+    it.each(refusals)("refuses Accept when $name, and keeps the evidence it read", async ({ github: state, prior, criteria, recorded, checks }) => {
       const r = await rig();
       const sent = await inReview(r);
-      const { deps } = fakeGitHub(github);
+      const { github, deps } = fakeGitHub(prior ? {} : state);
+      if (prior) {
+        expect(await refreshWorkChecks(deps, scope, { item_id: sent.publicId, work_order_id: sent.orderPublicId })).toMatchObject({ head_sha: SHA1, unread_reason: null });
+        Object.assign(github, state);
+      }
       const before = await read(sent.itemId);
       expect(await refusal(acceptWork(deps, scope, actor, acceptance(before, sent.orderPublicId, SHA1, criteria)))).toBe("not_allowed");
 
@@ -945,14 +1002,18 @@ describe.skipIf(!enabled)("work order dispatch against Postgres", { timeout: 30_
         required_checks: [],
       });
       const after = await read(sent.itemId);
+      // The acceptance is bound to the pull request, its head, the brief, and the run it judged.
       expect(factsOf(after, "accepted")).toEqual([
         expect.objectContaining({
           source: "person",
           actor: MARCUS,
           orderId: sent.orderId,
+          repository: REPOSITORY,
+          prNumber: PR_NUMBER,
           headSha: SHA1,
+          briefId: before.projection.approvedBrief!.briefId,
           briefDigest: before.projection.approvedBrief!.digest,
-          data: { criteria: CRITERIA, required_checks: [] },
+          data: { criteria: CRITERIA, required_checks: [], run_ids: [sent.run.runId] },
         }),
       ]);
       expect(orderIn(after, sent.orderId)).toMatchObject({ requiredChecks: [], acceptance: { headSha: SHA1, requiredChecks: [] } });
@@ -1011,6 +1072,118 @@ describe.skipIf(!enabled)("work order dispatch against Postgres", { timeout: 30_
     expect(await acceptWork(deps, scope, actor, acceptance(after, sent.orderPublicId, SHA1))).toMatchObject({ item: { state: "review" } });
   });
 
+  it("answers a retried Accept of the same head as a repeat, and records one acceptance", async () => {
+    const r = await rig();
+    const sent = await inReview(r);
+    const { deps } = fakeGitHub();
+    const before = await read(sent.itemId);
+    const input = acceptance(before, sent.orderPublicId, SHA1);
+    expect(await acceptWork(deps, scope, actor, input)).toMatchObject({ repeat: false, item: { state: "review" } });
+    // The page retries with the version it read before the first try landed.
+    expect(await acceptWork(deps, scope, actor, input)).toMatchObject({ repeat: true, item: { state: "review" }, required_checks: ["test"] });
+    expect(factsOf(await read(sent.itemId), "accepted")).toHaveLength(1);
+  });
+
+  it("refuses an acceptance of a head the pull request left for an earlier commit, and accepts that commit once reviewed", async () => {
+    const PR = 801;
+    const r = await rig();
+    const sent = await inReview(r, { pullRequest: true, number: PR });
+    const { github, deps } = fakeGitHub();
+    const refresh = () => refreshWorkChecks(deps, scope, { item_id: sent.publicId, work_order_id: sent.orderPublicId });
+    expect(await refresh()).toMatchObject({ head_sha: SHA1, unread_reason: null });
+
+    // The agent pushes SHA2, and its checks pass.
+    expect(await recordWorkPullRequestDelivery(scope, webhook(SHA2, at(20), null, PR), new Date())).toBe(1);
+    Object.assign(github, { head: SHA2, updatedAt: at(20), checkedAt: at(21) });
+    expect(await refresh()).toMatchObject({ head_sha: SHA2, required_checks: ["test"], unread_reason: null });
+    const onSecond = await read(sent.itemId);
+    expect(orderIn(onSecond, sent.orderId)).toMatchObject({ head: SHA2, requiredChecks: ["test"] });
+
+    // Someone force-pushes the branch back to SHA1, and no webhook arrives before the press.
+    Object.assign(github, { head: SHA1, updatedAt: at(30), checkedAt: at(31) });
+    expect(await refusal(acceptWork(deps, scope, actor, acceptance(onSecond, sent.orderPublicId, SHA2)))).toBe("stale_head");
+    const back = await read(sent.itemId);
+    expect(factsOf(back, "accepted")).toEqual([]);
+    // The read at the press records the return to SHA1 as a new head.
+    expect(factsOf(back, "head_observed").map((fact) => fact.headSha)).toEqual([SHA1, SHA2, SHA1]);
+    expect(orderIn(back, sent.orderId)).toMatchObject({ head: SHA1, acceptance: null });
+
+    // The person reviews SHA1 again, and its checks pass there.
+    expect(await acceptWork(deps, scope, actor, acceptance(back, sent.orderPublicId, SHA1))).toMatchObject({ repeat: false, item: { state: "review" } });
+    expect(orderIn(await read(sent.itemId), sent.orderId)).toMatchObject({ head: SHA1, acceptance: { headSha: SHA1 } });
+  });
+
+  it("refuses Accept when GitHub's head at the press is not the head the person reviewed, even when the record keeps that head", async () => {
+    const PR = 802;
+    const r = await rig();
+    const sent = await inReview(r, { pullRequest: true, number: PR });
+    const { github, deps } = fakeGitHub();
+    const refresh = () => refreshWorkChecks(deps, scope, { item_id: sent.publicId, work_order_id: sent.orderPublicId });
+    await refresh();
+    expect(await recordWorkPullRequestDelivery(scope, webhook(SHA2, at(20), null, PR), new Date())).toBe(1);
+    Object.assign(github, { head: SHA2, updatedAt: at(20), checkedAt: at(21) });
+    expect(await refresh()).toMatchObject({ head_sha: SHA2, unread_reason: null });
+    const onSecond = await read(sent.itemId);
+
+    // GitHub now reports SHA1, under an update time older than the SHA2 on record, so the record keeps SHA2.
+    Object.assign(github, { head: SHA1, updatedAt: at(15) });
+    expect(await refusal(acceptWork(deps, scope, actor, acceptance(onSecond, sent.orderPublicId, SHA2)))).toBe("stale_head");
+    const after = await read(sent.itemId);
+    expect(orderIn(after, sent.orderId)).toMatchObject({ head: SHA2, acceptance: null });
+    expect(factsOf(after, "accepted")).toEqual([]);
+  });
+
+  it("refuses an acceptance of the old head when the base branch requires no check and a new head arrived", async () => {
+    const PR = 803;
+    const r = await rig();
+    const sent = await inReview(r, { pullRequest: true, number: PR });
+    const { github, deps } = fakeGitHub({ required: required([]), checks: {} });
+    expect(await refreshWorkChecks(deps, scope, { item_id: sent.publicId, work_order_id: sent.orderPublicId })).toMatchObject({
+      head_sha: SHA1,
+      required_checks: [],
+    });
+
+    // The agent pushes again. Nothing is required, so only the head binding stands between the old head and an acceptance.
+    expect(await recordWorkPullRequestDelivery(scope, webhook(SHA2, at(20), null, PR), new Date())).toBe(1);
+    Object.assign(github, { head: SHA2, updatedAt: at(20) });
+    const moved = await read(sent.itemId);
+    expect(await refusal(acceptWork(deps, scope, actor, acceptance(moved, sent.orderPublicId, SHA1)))).toBe("stale_head");
+    expect(factsOf(await read(sent.itemId), "accepted")).toEqual([]);
+  });
+
+  it("refuses Return while the send is accepted on its head, and returns the work once a new head voids the acceptance", async () => {
+    const PR = 804;
+    const r = await rig();
+    const sent = await inReview(r, { pullRequest: true, number: PR });
+    const { deps } = fakeGitHub();
+    const before = await read(sent.itemId);
+    await acceptWork(deps, scope, actor, acceptance(before, sent.orderPublicId, SHA1));
+    const giveBack = (version: number) =>
+      inScope((tx) =>
+        returnWork(tx, scope, actor, { item_id: sent.publicId, version, work_order_id: sent.orderPublicId, reason: RETURN_REASON, resend: false }, null),
+      );
+
+    const accepted = await read(sent.itemId);
+    expect(await refusal(giveBack(accepted.version))).toBe("not_allowed");
+    expect(factsOf(await read(sent.itemId), "returned")).toEqual([]);
+
+    // The agent pushes again, which voids the acceptance.
+    expect(await recordWorkPullRequestDelivery(scope, webhook(SHA2, at(20), null, PR), new Date())).toBe(1);
+    const moved = await read(sent.itemId);
+    expect(orderIn(moved, sent.orderId)).toMatchObject({ head: SHA2, acceptance: null });
+    expect(await giveBack(moved.version)).toMatchObject({ repeat: false, item: { state: "ready" }, order: { delivery: "returned" } });
+    // The return is bound to the pull request, the head it rejected, and the run.
+    expect(factsOf(await read(sent.itemId), "returned")).toEqual([
+      expect.objectContaining({
+        source: "person",
+        repository: REPOSITORY,
+        prNumber: PR,
+        headSha: SHA2,
+        data: { reason: RETURN_REASON, run_ids: [sent.run.runId] },
+      }),
+    ]);
+  });
+
   // -------------------------------------------------------------------------
   // Return and resend
   // -------------------------------------------------------------------------
@@ -1059,6 +1232,24 @@ describe.skipIf(!enabled)("work order dispatch against Postgres", { timeout: 30_
     expect(after.projection).toMatchObject({ state: "ready", orders: [expect.objectContaining({ send: 1, delivery: "returned" })] });
     expect(await commandsByKey(workOrderKey(sent.publicId, 1, 2))).toEqual([]);
     expect((await read(other.itemId)).projection.state).toBe("sent");
+  });
+
+  it("answers a retried Return with resend as a repeat, and opens no second send", async () => {
+    const r = await rig();
+    const sent = await inReview(r);
+    const before = await read(sent.itemId);
+    const input = { item_id: sent.publicId, version: before.version, work_order_id: sent.orderPublicId, reason: RETURN_REASON, resend: true };
+    const first = await inScope((tx) => returnWork(tx, scope, actor, input, null));
+    expect(first).toMatchObject({ repeat: false, resent: { send: 2 }, resend_refused: null });
+    // The page retries with the version it read before the first try landed.
+    const again = await inScope((tx) => returnWork(tx, scope, actor, input, null));
+    expect(again).toMatchObject({ repeat: true, order: { delivery: "returned" }, resent: null, resend_refused: null });
+
+    expect(await commandsByKey(workOrderKey(sent.publicId, 1, 2))).toHaveLength(1);
+    expect(await commandsByKey(workOrderKey(sent.publicId, 1, 3))).toEqual([]);
+    const after = await read(sent.itemId);
+    expect(after.projection.orders).toHaveLength(2);
+    expect(factsOf(after, "returned")).toHaveLength(1);
   });
 
   // -------------------------------------------------------------------------

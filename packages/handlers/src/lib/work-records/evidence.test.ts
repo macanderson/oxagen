@@ -26,7 +26,7 @@ const pull = (over: Partial<PullRequestRead> = {}): PullRequestRead => ({
   ...over,
 });
 
-const ORDER = { orderId: "o1", pullRequest: { repository: "aintel/platform", number: 612 }, head: SHA1, requiredChecks: null };
+const ORDER = { orderId: "o1", pullRequest: { repository: "aintel/platform", number: 612 }, head: SHA1, requiredChecks: null, merge: null };
 
 describe("observedChecksOf", () => {
   it("reads an unfinished check run as pending", () => {
@@ -103,6 +103,29 @@ describe("evidenceFacts", () => {
       ["head_observed", SHA2],
       ["check_observed", SHA2],
     ]);
+  });
+
+  it("names the pull request's update time in a head's key, so a return to an earlier head is recorded again", () => {
+    const first = evidenceFacts({ ...ORDER, head: null }, { pull: pull({ updatedAt: "2026-10-02T09:10:00Z" }), required: null, checks: null }, NOW).facts;
+    // The head moves to SHA2, then comes back to SHA1 at a later update.
+    const back = evidenceFacts({ ...ORDER, head: SHA2 }, { pull: pull({ updatedAt: "2026-10-02T09:30:00Z" }), required: null, checks: null }, NOW).facts;
+    const redelivered = evidenceFacts({ ...ORDER, head: SHA2 }, { pull: pull({ updatedAt: "2026-10-02T09:30:00Z" }), required: null, checks: null }, NOW).facts;
+    expect(first.map((fact) => [fact.kind, fact.headSha, fact.occurredAt])).toEqual([["head_observed", SHA1, "2026-10-02T09:10:00Z"]]);
+    expect(back.map((fact) => [fact.kind, fact.headSha, fact.occurredAt])).toEqual([["head_observed", SHA1, "2026-10-02T09:30:00Z"]]);
+    expect(back[0]?.dedupeKey).not.toBe(first[0]?.dedupeKey);
+    expect(redelivered[0]?.dedupeKey).toBe(back[0]?.dedupeKey);
+    // A read of the head on record adds no head.
+    expect(evidenceFacts(ORDER, { pull: pull({ updatedAt: "2026-10-02T09:50:00Z" }), required: null, checks: null }, NOW).facts).toEqual([]);
+  });
+
+  it("records no head after the merge, which fixes the head", () => {
+    const merged = { ...ORDER, head: SHA2, merge: { headSha: SHA2, mergeCommit: MERGE, at: "2026-10-02T09:45:00Z" } };
+    // A late delivery for the older head, at its first update time and at another.
+    for (const updatedAt of ["2026-10-02T09:30:00Z", "2026-10-02T09:50:00Z"]) {
+      const { facts, summary } = evidenceFacts(merged, { pull: pull({ updatedAt }), required: null, checks: null }, NOW);
+      expect(facts).toEqual([]);
+      expect(summary.head).toBe(SHA1);
+    }
   });
 
   it("names a check's conclusion and time in its key, so a flip back is recorded again", () => {

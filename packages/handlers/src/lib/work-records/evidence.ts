@@ -21,7 +21,11 @@
 // Dedupe keys make a repeated read a repeat and a real change a new fact: a
 // check's key names its conclusion and the provider's time for it, so a
 // re-run that flips back to success is recorded again, and a required list
-// is appended only when it differs from the one recorded for the head.
+// is appended only when it differs from the one recorded for the head. A
+// head's key names the pull request's update time, so a head that moves away
+// and comes back to an earlier commit is recorded again, while a redelivery
+// of the same event is a repeat. A head is recorded only when it differs from
+// the head on record, and never after the merge, which fixes the head.
 import { createHash } from "node:crypto";
 import { schema, type Tx } from "@oxagen/database";
 import { createGitHubClient, GitHubApiError, type GitHubCiChecks, type RequiredChecksRead } from "@oxagen/github";
@@ -141,7 +145,7 @@ function sameList(a: readonly string[] | null, b: readonly string[]): boolean {
  * facts, and facts the order holds come back with keys it already has.
  */
 export function evidenceFacts(
-  order: Pick<OrderProjection, "orderId" | "pullRequest" | "head" | "requiredChecks">,
+  order: Pick<OrderProjection, "orderId" | "pullRequest" | "head" | "requiredChecks" | "merge">,
   read: EvidenceRead,
   now: string,
 ): { facts: FactInput<FactKind>[]; summary: EvidenceSummary } {
@@ -155,8 +159,17 @@ export function evidenceFacts(
   // to another, and each one's head, merge, and close are its own.
   const prKey = `${order.orderId}:${pr.repository.toLowerCase()}#${pr.number}`;
   const head = read.pull.headSha;
-  if (head !== null && head !== order.head) {
-    facts.push({ ...base, kind: "head_observed", headSha: head, occurredAt: read.pull.updatedAt, dedupeKey: `head_observed:${prKey}:${head}`, data: {} });
+  // A merged pull request keeps its merged head, so a later delivery that
+  // names another head (a late one for an older commit) records nothing.
+  if (head !== null && head !== order.head && order.merge === null) {
+    facts.push({
+      ...base,
+      kind: "head_observed",
+      headSha: head,
+      occurredAt: read.pull.updatedAt,
+      dedupeKey: `head_observed:${prKey}:${head}:${read.pull.updatedAt}`,
+      data: {},
+    });
   }
   if (read.pull.merged && read.pull.mergeCommitSha !== null && head !== null) {
     facts.push({

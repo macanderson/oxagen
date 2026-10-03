@@ -213,6 +213,15 @@ export function admitDecision(item: WorkItemProjection, action: WorkItemDecision
       const order = findOrder(item, action.orderId);
       if (order.delivery === "returned") return REPEAT;
       if (order.closed) refuse("not_allowed", "This send is over.");
+      // A person accepts or returns the work, not both. An acceptance holds
+      // until a new head voids it, so a return waits for that head. (An
+      // accepted send that merged is done, and so over, above.)
+      if (order.acceptance !== null) {
+        refuse(
+          "not_allowed",
+          `This send is accepted on ${order.acceptance.headSha.slice(0, 7)}. Push a new head to void the acceptance before you return the work.`,
+        );
+      }
       if (order.delivery !== "run_ended" && order.merge === null && !order.prClosed) {
         refuse("not_allowed", "The run has not ended. Stop it before you return the work.");
       }
