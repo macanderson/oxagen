@@ -9328,6 +9328,12 @@ type Messages = {
         previous: string;
         next: string;
       };
+      pages: {
+        label: string;
+        first: string;
+        next: string;
+        empty: string;
+      };
       card: {
         amount: string;
         estimatedAmount: string;

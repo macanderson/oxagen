@@ -488,12 +488,19 @@ export const routes = {
    * tab and the drill are path segments (`/spend/agent/<key>`), as the mockup's
    * route names them, and the first tab, Month, is the bare path. A finding's
    * evidence is a dialog over the Findings tab and `by` is the Month tab's
-   * grouping, so both are query values.
+   * grouping, so both are query values. `cursor` opens a later page of the
+   * Findings tab's list (#5303).
    */
   spend: (
     org: string,
     ws: string,
-    view: { tab: string; drill?: string; finding?: string; by?: string },
+    view: {
+      tab: string;
+      drill?: string;
+      finding?: string;
+      by?: string;
+      cursor?: string;
+    },
   ): SafePath =>
     withQuery(
       view.drill !== undefined
@@ -501,7 +508,7 @@ export const routes = {
         : view.tab === "month"
           ? pathOf(org, ws, "spend")
           : pathOf(org, ws, "spend", view.tab),
-      { finding: view.finding, by: view.by },
+      { finding: view.finding, by: view.by, cursor: view.cursor },
     ),
   /**
    * Skills, the Skills shelf of the Steering library (roadmap pages/skills.md);

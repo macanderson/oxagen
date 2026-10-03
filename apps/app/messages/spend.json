@@ -156,7 +156,7 @@
       "attributionMissing": "The operator and agent behind a tool or workspace finding, and each finding’s trend, are not recorded yet.",
       "evidenceLine": "evidence {runs} runs · {calls} calls · {from} to {to}",
       "list": "Findings ranked by savings",
-      "truncated": "The list shows the {shown} largest of {total} open findings.",
+      "truncated": "The list shows open findings {from} to {to} of {total}.",
       "filters": {
         "label": "Filter findings",
         "level": "Level",
@@ -177,6 +177,12 @@
         "range": "{from} to {to} of {total}",
         "previous": "Previous",
         "next": "Next"
+      },
+      "pages": {
+        "label": "Pages of open findings",
+        "first": "Open the first page",
+        "next": "Open the next page",
+        "empty": "This page holds no open findings."
       },
       "card": {
         "amount": "Amount at stake",

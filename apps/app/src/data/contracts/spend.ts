@@ -638,9 +638,10 @@ export const SpendFinding = z.object({
 export type SpendFinding = z.infer<typeof SpendFinding>;
 
 /**
- * `list_findings`: the open findings largest saving first, with the totals the
- * page leads with. The list holds at most 50 findings. The counts and totals
- * cover every open finding, listed or not (#5262).
+ * `list_findings`: one page of the open findings, largest saving first, with
+ * the totals the page leads with. A page holds at most 50 findings. The
+ * counts and totals cover every open finding the read matches, listed or
+ * not (#5262), and `nextCursor` reads the next page (#5303).
  */
 export const SpendFindings = z.object({
   /** The span every open finding covers; null when none is open. */
@@ -662,8 +663,23 @@ export const SpendFindings = z.object({
   findings: z.array(SpendFinding),
   /** True when the workspace holds more open findings than `findings` lists. */
   truncated: z.boolean(),
+  /** The cursor that reads the next page; null on the last page. */
+  nextCursor: z.string().min(1).nullable(),
+  /** The findings before this page: a finding's rank is this plus its place on the page. */
+  offset: Count,
 });
 export type SpendFindings = z.infer<typeof SpendFindings>;
+
+/**
+ * Which page of the open findings a read asks for, and which findings (#5303).
+ * A level and a subject narrow the read to the findings about one agent,
+ * operator or tool, and a cursor reads the page after the one that named it.
+ */
+export type SpendFindingsQuery = {
+  level?: SpendFinding["level"];
+  subject?: string;
+  cursor?: string;
+};
 
 /** `get_finding_evidence`: the arithmetic the job wrote with one finding. */
 export const SpendFindingEvidence = z.object({

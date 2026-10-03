@@ -124,6 +124,12 @@ export const listFindings = defineTool({
     sinceHours: telemetryErrorCluster.input.shape.sinceHours,
     // Carried: the 1-100 page bound, for the same reason.
     limit: telemetryErrorCluster.input.shape.limit,
+    /**
+     * The `nextCursor` of the page before, as the live `list_findings` takes
+     * it (#5303). It keeps its place in the ranking, so a page read with it
+     * starts after the last finding of the page before.
+     */
+    cursor: z.string().min(1).max(256).optional(),
 
     // New, from §12.8: a finding names a level, so the reader filters by it.
     level: findingLevel.optional(),
@@ -186,6 +192,8 @@ export const listFindings = defineTool({
 
     // Carried: truncation is explicit rather than inferred from a full page.
     truncated: telemetryErrorCluster.output.shape.truncated,
+    /** The cursor that reads the next page; null on the last page (#5303). */
+    nextCursor: z.string().min(1).max(256).nullable(),
     // Carried: the effective window, so a defaulted lookback is never guessed at.
     window: telemetryErrorCluster.output.shape.window,
   }),

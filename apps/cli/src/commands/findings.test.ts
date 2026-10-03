@@ -1,8 +1,9 @@
 /**
  * `oxagen findings list`. Pins the wire contract through the apiPostOrThrow
- * seam (route and body, with `runId` only when `--run` is given), the flag
- * validation that refuses before a request leaves the process, and the two
- * output modes (#4001).
+ * seam (route and body, with `runId`, `level`, `subject` and `cursor` only
+ * when their flags are given), the flag validation that refuses before a
+ * request leaves the process, the page line and its cursor (#5303), and the
+ * two output modes (#4001).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -124,19 +125,101 @@ describe("findings list", () => {
     expect(c.output()).toBe(`No open findings citing ${RUN}.`);
   });
 
-  it("says how many findings the list shows when the API cut it (#5262)", async () => {
+  it("says which findings the page shows and gives the cursor for the next (#5262, #5303)", async () => {
     const [finding] = result().findings;
     apiPostOrThrow.mockResolvedValueOnce(
       result({
         counts: { findings: 62, high: 62, medium: 0, operators: 1 },
         findings: Array.from({ length: 50 }, () => finding!),
         truncated: true,
+        nextCursor: "c2",
+        offset: 0,
       }),
     );
     const c = captureWriter();
     await findingsList({}, c.writer);
     expect(c.output()).toContain("62 open finding(s)");
-    expect(c.output()).toContain("The list shows the first 50 of 62 open findings.");
+    expect(c.output()).toContain(
+      "The list shows findings 1 to 50 of 62 open findings.",
+    );
+    expect(c.output()).toContain(
+      "Run the command again with --cursor c2 to list the next page.",
+    );
+  });
+
+  it("sends the cursor and numbers the last page from where the first ended (#5303)", async () => {
+    const [finding] = result().findings;
+    apiPostOrThrow.mockResolvedValueOnce(
+      result({
+        counts: { findings: 62, high: 62, medium: 0, operators: 1 },
+        findings: Array.from({ length: 12 }, () => finding!),
+        truncated: true,
+        nextCursor: null,
+        offset: 50,
+      }),
+    );
+    const c = captureWriter();
+    await findingsList({ cursor: "c2" }, c.writer);
+    expect(apiPostOrThrow).toHaveBeenCalledWith("spend/findings", {
+      status: "open",
+      cursor: "c2",
+    });
+    expect(c.output()).toContain(
+      "The list shows findings 51 to 62 of 62 open findings.",
+    );
+    expect(c.output()).not.toContain("--cursor");
+  });
+
+  it("sends the level and the subject and names the subject when none is open (#5303)", async () => {
+    apiPostOrThrow.mockResolvedValueOnce(
+      result({
+        counts: { findings: 0, high: 0, medium: 0, operators: 0 },
+        findings: [],
+      }),
+    );
+    const c = captureWriter();
+    await findingsList(
+      { level: "agent", subject: "acme.core.release-bot" },
+      c.writer,
+    );
+    expect(apiPostOrThrow).toHaveBeenCalledWith("spend/findings", {
+      status: "open",
+      level: "agent",
+      subject: "acme.core.release-bot",
+    });
+    expect(c.output()).toBe(
+      "No open findings about acme.core.release-bot.",
+    );
+  });
+
+  it("sends the kind and names it when none is open (#5303)", async () => {
+    apiPostOrThrow.mockResolvedValueOnce(
+      result({
+        counts: { findings: 0, high: 0, medium: 0, operators: 0 },
+        findings: [],
+      }),
+    );
+    const c = captureWriter();
+    await findingsList({ kind: "retry_loops" }, c.writer);
+    expect(apiPostOrThrow).toHaveBeenCalledWith("spend/findings", {
+      status: "open",
+      kind: "retry_loops",
+    });
+    expect(c.output()).toBe("No open findings of kind retry_loops.");
+  });
+
+  it("says no more findings follow a cursor past the last page (#5303)", async () => {
+    apiPostOrThrow.mockResolvedValueOnce(
+      result({
+        counts: { findings: 50, high: 50, medium: 0, operators: 0 },
+        findings: [],
+        nextCursor: null,
+        offset: 50,
+      }),
+    );
+    const c = captureWriter();
+    await findingsList({ cursor: "c2" }, c.writer);
+    expect(c.output()).toBe("No more open findings.");
   });
 
   it("adds no line when the list holds every finding", async () => {
@@ -160,6 +243,18 @@ describe("findings list", () => {
     expect(process.exitCode).toBe(2);
     process.exitCode = undefined;
     await findingsList({ run: "run-9" }, c.writer);
+    expect(process.exitCode).toBe(2);
+    process.exitCode = undefined;
+    await findingsList({ level: "run" }, c.writer);
+    expect(process.exitCode).toBe(2);
+    process.exitCode = undefined;
+    await findingsList({ subject: "" }, c.writer);
+    expect(process.exitCode).toBe(2);
+    process.exitCode = undefined;
+    await findingsList({ cursor: "x".repeat(257) }, c.writer);
+    expect(process.exitCode).toBe(2);
+    process.exitCode = undefined;
+    await findingsList({ kind: "Retry Loops" }, c.writer);
     expect(process.exitCode).toBe(2);
     expect(apiPostOrThrow).not.toHaveBeenCalled();
   });
