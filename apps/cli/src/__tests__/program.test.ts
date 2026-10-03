@@ -128,6 +128,60 @@ describe("the agent group after the wrapping commands moved onto it", () => {
   });
 });
 
+// The recorder refuses root unless --allow-root is passed. Each command that
+// can reach that refusal offers the flag, under both groups.
+describe("--allow-root", () => {
+  const program = buildProgram();
+  const flags = (group: string, name: string) =>
+    program.commands
+      .find((c) => c.name() === group)
+      ?.commands.find((c) => c.name() === name)
+      ?.options.map((option) => option.long) ?? [];
+
+  it.each([
+    ["agent", "enroll"],
+    ["agent", "reassign"],
+    ["tacho", "enroll"],
+    ["tacho", "reassign"],
+  ])("is offered on `%s %s`", (group, name) => {
+    expect(flags(group, name)).toContain("--allow-root");
+  });
+});
+
+// host.json accepts a port from 1024 to 65535, and enroll mints the
+// enrollment before it writes the port there. Any other value is refused at
+// parse time, before anything is minted.
+describe("--port on the enroll commands", () => {
+  const program = buildProgram();
+  const port = (group: string) =>
+    program.commands
+      .find((c) => c.name() === group)
+      ?.commands.find((c) => c.name() === "enroll")
+      ?.options.find((option) => option.long === "--port");
+
+  it.each(["agent", "tacho"])(
+    "takes a port tachod may listen on without privilege (%s enroll)",
+    (group) => {
+      const option = port(group);
+      expect(option, "--port must be offered").toBeDefined();
+      expect(option?.parseArg?.("47123", undefined)).toBe(47123);
+      expect(option?.parseArg?.("1024", undefined)).toBe(1024);
+      expect(option?.parseArg?.("65535", undefined)).toBe(65535);
+    },
+  );
+
+  it.each(["agent", "tacho"])(
+    "refuses a value host.json would not accept (%s enroll, negative)",
+    (group) => {
+      const option = port(group);
+      for (const bad of ["80", "1023", "65536", "abc", "", "4.5", "-1", "1e4"])
+        expect(() => option?.parseArg?.(bad, undefined), bad).toThrow(
+          /1024 to 65535/,
+        );
+    },
+  );
+});
+
 // #4879: the commands the recorder writes into a machine run under the
 // `oxagen` name, and no person types them, so `--help` does not list them.
 describe("the machine commands", () => {

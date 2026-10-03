@@ -52,6 +52,8 @@ export interface TachoEnrollOptions {
   /** `claude-code`, `codex`, `cursor`, `stella`, or a comma list. */
   harness?: string;
   verify?: boolean;
+  /** Enroll even when running as root (`--allow-root`). */
+  allowRoot?: boolean;
 }
 
 export interface TachoReassignOptions {
@@ -67,6 +69,8 @@ export interface TachoReassignOptions {
    * file; @oxagen/recorder only ever writes host.json.
    */
   default?: boolean;
+  /** Reassign even when running as root (`--allow-root`). */
+  allowRoot?: boolean;
 }
 
 export interface TachoUnenrollOptions {
@@ -128,13 +132,21 @@ async function tachoDeps(writer: CommandWriter, recorded = false) {
   return recordedCliDeps(overrides);
 }
 
+/**
+ * Who this process runs as, for the recorder's root guard on `enroll` and
+ * `reassign`. Without it the guard never fired, and `sudo oxagen agent
+ * enroll` on macOS, which keeps the user's HOME, wrote root-owned files there
+ * that the user's own agents could not read.
+ */
+const getuid = (): number | undefined => process.getuid?.();
+
 export async function handleTachoEnroll(
   opts: TachoEnrollOptions,
   writer: CommandWriter = stdoutWriter,
 ): Promise<boolean> {
   const { enroll, parseCredentialMode, parseHarnesses, verify } =
     await import("@oxagen/recorder/cli");
-  const deps = await tachoDeps(writer);
+  const deps = { ...(await tachoDeps(writer)), getuid };
   // Without the CLI's default `apiUrl`: the recorder reads the same env and
   // config.json when the machine has no host yet, and on an enrolled host its
   // own `api_url` must win, which an implicit value here would override. An
@@ -160,10 +172,14 @@ export async function handleTachoEnroll(
       ...(opts.service !== undefined ? { service: opts.service } : {}),
       ...(opts.force !== undefined ? { force: opts.force } : {}),
       ...(harnesses !== undefined ? { harnesses } : {}),
+      ...(opts.allowRoot !== undefined ? { allowRoot: opts.allowRoot } : {}),
     },
     deps,
   );
   if (!result.ok) return false;
+  // Every hook can be written while the new daemon never reaches Oxagen, and
+  // then nothing ships. The exit status says so, as `tacho enroll`'s does.
+  const shipping = result.shipping?.healthy !== false;
   // The other agents on this machine move to the new names too, unless this
   // run only printed the managed settings document.
   if (opts.printManaged !== true) await moveOffTacho(writer);
@@ -181,9 +197,9 @@ export async function handleTachoEnroll(
         ? `Verified: ${verified.detail}`
         : `Verify failed: ${verified.detail}`,
     );
-    return verified.ok;
+    return verified.ok && shipping;
   }
-  return true;
+  return shipping;
 }
 
 export async function handleTachoStatus(
@@ -273,8 +289,9 @@ export async function handleTachoReassign(
       ...(opts.harness !== undefined
         ? { harnesses: parseHarnesses(opts.harness) }
         : {}),
+      ...(opts.allowRoot !== undefined ? { allowRoot: opts.allowRoot } : {}),
     },
-    await tachoDeps(writer, true),
+    { ...(await tachoDeps(writer, true)), getuid },
   );
   if (!result.ok) return false;
   if (opts.default === true && result.to !== undefined) {

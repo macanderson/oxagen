@@ -18,7 +18,7 @@
  * as a stub (commands/retired.ts) so a stale invocation fails with guidance
  * instead of an unknown-command error.
  */
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 import pkg from "../package.json" with { type: "json" };
 import {
   printRetiredNotice,
@@ -59,6 +59,23 @@ function refusesMisplacedFlags(
 }
 
 /**
+ * `--port` on the enroll commands: a whole number tachod may listen on
+ * without privilege. host.json accepts 1024 to 65535, and enroll wrote any
+ * other value after it had minted the enrollment, so every later read of
+ * host.json threw and unenroll found nothing to revoke. The recorder's own
+ * `parsePort` holds the same rule. It is repeated here because importing the
+ * recorder's program would load all of it for every `oxagen` command.
+ */
+function parsePort(value: string): number {
+  const port = Number(value);
+  if (!/^\d+$/.test(value) || port < 1024 || port > 65535)
+    throw new InvalidArgumentError(
+      "expected a whole number from 1024 to 65535",
+    );
+  return port;
+}
+
+/**
  * The four wrapping subcommands whose names collide with nothing, attached to
  * whichever group asks for them.
  *
@@ -95,6 +112,7 @@ function addHostWrapCommands(parent: Command): void {
       "--default",
       "Also make the new org and workspace the CLI default (config.json)",
     )
+    .option("--allow-root", "Reassign even when running as root")
     .action(
       async (opts: {
         token?: string;
@@ -104,6 +122,7 @@ function addHostWrapCommands(parent: Command): void {
         harness?: string;
         reason?: string;
         default?: boolean;
+        allowRoot?: boolean;
       }) => {
         const { handleTachoReassign } = await import("./commands/tacho.js");
         if (!(await handleTachoReassign(opts))) process.exitCode = 1;
@@ -1629,8 +1648,8 @@ export function buildProgram(): Command {
     )
     .option(
       "--port <n>",
-      "Loopback port for the collector daemon",
-      (v: string) => Number(v),
+      "Loopback port for the collector daemon (1024 to 65535)",
+      parsePort,
     )
     .option("--no-service", "Do not install the user service")
     .option("--managed", "Also print the managed settings document for MDM")
@@ -1644,6 +1663,7 @@ export function buildProgram(): Command {
       "Harnesses to hook: claude-code, codex, cursor, stella, or a comma list such as claude-code,cursor",
     )
     .option("--verify", "Run a headless Claude Code turn afterwards")
+    .option("--allow-root", "Enroll even when running as root")
     .action(
       async (opts: {
         token?: string;
@@ -1656,6 +1676,7 @@ export function buildProgram(): Command {
         force?: boolean;
         harness?: string;
         verify?: boolean;
+        allowRoot?: boolean;
       }) => {
         const { handleTachoEnroll } = await import("./commands/tacho.js");
         if (!(await handleTachoEnroll(opts))) process.exitCode = 1;
@@ -1990,8 +2011,8 @@ export function buildProgram(): Command {
     .option("--api-url <url>", "Oxagen API base URL")
     .option(
       "--port <n>",
-      "Loopback port for the collector daemon",
-      (v: string) => Number(v),
+      "Loopback port for the collector daemon (1024 to 65535)",
+      parsePort,
     )
     .option("--no-service", "Do not install the user service")
     .option("--managed", "Also print the managed settings document for MDM")
@@ -2014,6 +2035,7 @@ export function buildProgram(): Command {
       (v: string) => Number(v),
     )
     .option("--verify", "Run a headless Claude Code turn afterwards")
+    .option("--allow-root", "Enroll even when running as root")
     .action(
       async (opts: {
         token?: string;
@@ -2029,6 +2051,7 @@ export function buildProgram(): Command {
         credentials?: string;
         validityDays?: number;
         verify?: boolean;
+        allowRoot?: boolean;
       }) => {
         const token = opts.token;
         if (token !== undefined && token.startsWith(ENROLLMENT_TOKEN_PREFIX)) {
@@ -2060,6 +2083,7 @@ export function buildProgram(): Command {
             apiUrl: opts.apiUrl,
             credentials: opts.credentials,
             validityDays: opts.validityDays,
+            allowRoot: opts.allowRoot,
           });
           if (!enrolled) process.exitCode = 1;
           return;

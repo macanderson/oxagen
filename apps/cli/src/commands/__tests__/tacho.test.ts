@@ -24,7 +24,11 @@ const calls: Array<{ name: string; args: unknown[] }> = [];
 const lastCall = (name: string) =>
   calls.filter((call) => call.name === name).at(-1);
 const outcomes = {
-  enroll: { ok: true, warnings: [] as string[] },
+  enroll: { ok: true, warnings: [] as string[] } as {
+    ok: boolean;
+    warnings: string[];
+    shipping?: { healthy: boolean; detail: string };
+  },
   verify: { ok: true, detail: "chained" },
   status: { enrolled: true } as {
     enrolled: boolean;
@@ -302,6 +306,55 @@ describe("oxagen tacho", () => {
       handleTachoEnroll({ credentials: "borrowed" }, writer),
     ).rejects.toThrow(/unknown credential mode "borrowed"/);
     expect(calls).toEqual([]);
+  });
+
+  it("enroll fails when the new daemon never reaches Oxagen, verified or not", async () => {
+    const { writer } = captureWriter();
+    outcomes.enroll = {
+      ok: true,
+      warnings: [],
+      shipping: {
+        healthy: false,
+        detail: "tachod has not reached Oxagen after 30s",
+      },
+    };
+    expect(await handleTachoEnroll({}, writer)).toBe(false);
+    // Every hook is written, so the other agents still move to the new names.
+    expect(calls.map((c) => c.name)).toEqual(["enroll", "move"]);
+    // A turn chained on this machine does not make up for nothing shipping.
+    expect(await handleTachoEnroll({ verify: true }, writer)).toBe(false);
+    expect(calls.at(-1)?.name).toBe("verify");
+    outcomes.enroll = {
+      ok: true,
+      warnings: [],
+      shipping: { healthy: true, detail: "shipping" },
+    };
+    expect(await handleTachoEnroll({}, writer)).toBe(true);
+    expect(await handleTachoEnroll({ verify: true }, writer)).toBe(true);
+  });
+
+  it("enroll and reassign tell the recorder who runs them, and pass --allow-root", async () => {
+    const { writer } = captureWriter();
+    // The recorder refuses root from `getuid`; without it the guard never ran.
+    await handleTachoEnroll({}, writer);
+    const enrollDeps = lastCall("enroll")?.args[1] as {
+      getuid?: () => number | undefined;
+    };
+    expect(typeof enrollDeps.getuid).toBe("function");
+    expect(enrollDeps.getuid?.()).toBe(process.getuid?.());
+    expect(lastCall("enroll")?.args[0]).not.toHaveProperty("allowRoot");
+    await handleTachoEnroll({ allowRoot: true }, writer);
+    expect(lastCall("enroll")?.args[0]).toMatchObject({ allowRoot: true });
+
+    await handleTachoReassign({ workspace: "edge", allowRoot: true }, writer);
+    expect(lastCall("reassign")?.args[0]).toMatchObject({ allowRoot: true });
+    const reassignDeps = lastCall("reassign")?.args[1] as {
+      recorded?: boolean;
+      getuid?: () => number | undefined;
+    };
+    expect(reassignDeps.recorded).toBe(true);
+    expect(typeof reassignDeps.getuid).toBe("function");
+    expect(reassignDeps.getuid?.()).toBe(process.getuid?.());
   });
 
   it("says on stderr which agents it moved off the tacho names, and which it could not", async () => {
