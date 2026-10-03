@@ -702,7 +702,7 @@ describe("list_findings by page and by subject (#5303)", () => {
     expect(open?.sql).toMatch(/"cost"\."findings"\."level" = \$\d+/);
     expect(open?.sql).toMatch(/"cost"\."findings"\."subject" = \$\d+/);
     expect(open?.params).toEqual(
-      expect.arrayContains(["agent", "acme.core.release-bot", id]),
+      expect.arrayContaining(["agent", "acme.core.release-bot", id]),
     );
     // The rows after the cursor: a smaller saving, or the same and a later id.
     expect(open?.sql).toMatch(
