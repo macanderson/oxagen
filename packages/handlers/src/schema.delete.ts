@@ -3,11 +3,16 @@ import { schemaDelete } from "@oxagen/oxagen/contracts/schema.delete";
 import { schema as db, withTenantDb } from "@oxagen/database";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { getOrCreateRegistry } from "./schema.versioning";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 export const schemaDeleteHandler: CapabilityHandler<
   typeof schemaDelete
 > = async (input, ctx) => {
+  // The kernel allows every call below Enterprise, so the handler checks the
+  // contract's roles itself: a workspace Viewer may not delete (#3458).
+  await assertContractRole(schemaDelete, ctx);
+
   const registry = await getOrCreateRegistry(
     ctx.orgId,
     ctx.workspaceId,

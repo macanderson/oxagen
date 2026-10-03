@@ -26,6 +26,7 @@ import {
   resolveRun,
   type RunReadDeps,
 } from "./lib/run-read";
+import { assertContractRole } from "./lib/capability-role-guard";
 
 export type RunFrameBodyGetDeps = RunReadDeps & {
   /**
@@ -81,10 +82,23 @@ export function createRunFrameBodyGetHandler(
   };
 }
 
-export const runFrameBodyGetHandler = createRunFrameBodyGetHandler({
+const readFrameBody = createRunFrameBodyGetHandler({
   ...defaultRunReadDeps(),
   tachoSubagentFrames: selectTachoSubagentEvents,
   get bodies() {
     return evidenceStore();
   },
 });
+
+/**
+ * The registered handler. The kernel allows every call below Enterprise, so
+ * this checks the contract's roles before any read: a workspace Viewer may
+ * not read a body (#3458). The check sits here and not in the factory, so the
+ * factory's tests build a reader with no role fixture.
+ */
+export const runFrameBodyGetHandler: CapabilityHandler<
+  typeof runFrameBodyGet
+> = async (input, ctx) => {
+  await assertContractRole(runFrameBodyGet, ctx);
+  return readFrameBody(input, ctx);
+};

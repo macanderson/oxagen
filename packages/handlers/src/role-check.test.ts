@@ -186,6 +186,16 @@ const ROLE_CHECKED_CONTRACTS = [
   "get_work_item",
   "list_work_targets",
   "get_work_outcomes",
+  // #3458: high-sensitivity contracts that grant the workspace Member role.
+  // A workspace Viewer and an org Billing member ran them until the handler
+  // asserted the roles.
+  "delete_schema",
+  "delete_schema_label",
+  "delete_schema_property",
+  "delete_schema_relationship",
+  "install_integration",
+  "get_run_frame_body",
+  "get_run_transcript",
 ] as const;
 
 const AGENT_ROLE_CHECKED_CONTRACTS = [

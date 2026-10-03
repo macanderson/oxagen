@@ -41,6 +41,7 @@ A caller can recompute `digest` over the decoded bytes: what it read is what was
 
 ## Errors
 
+- `forbidden` (`org_role_required`): the caller holds none of the roles the contract grants: org Owner, Admin or Member, or workspace Owner or Member. A workspace's Owner or Admin passes too (#5228). The handler checks on every plan.
 - `not_found` (404): `run_not_found` (no run with that id in the caller's workspace, whichever store minted it); `frame_not_found` (no frame at `seq` on the chain named; also a `sessionUuid` that is not a subagent chain under this run, and any `sessionUuid` on a ledger run, which has one chain); `frame_has_no_body` (the frame carried no content).
 - 500: the stored object does not hash to the recorded digest. The store answered something the record does not vouch for, and the bytes are not returned.
 
