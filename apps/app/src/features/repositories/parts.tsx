@@ -18,15 +18,15 @@ export type Load<T> =
   | { kind: "failed"; failure: RepositoriesFailure }
   | { kind: "ready"; value: T };
 
-export const prose = "text-[13px] leading-relaxed text-muted-foreground";
+export const prose = "text-sm leading-relaxed text-muted-foreground";
 
 /** `.note`: a gold rule on the left and muted prose beside it. */
 export const note =
-  "border-l-2 border-gold py-0.5 pl-3 text-[12.5px] leading-relaxed text-muted-foreground";
+  "border-l-2 border-gold py-0.5 pl-3 text-sm leading-relaxed text-muted-foreground";
 
 /** `.btn.danger`: the red outline a destructive action takes. */
 export const buttonDanger =
-  "inline-flex min-h-8 max-md:min-h-11 items-center justify-center gap-1.5 rounded-[9px] border border-error/45 bg-card px-[13px] py-1.5 text-[13px] font-medium text-error-ink transition-colors hover:bg-error/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45";
+  "inline-flex min-h-8 max-md:min-h-11 items-center justify-center gap-1.5 rounded-[9px] border border-error/45 bg-card px-[13px] py-1.5 text-sm font-medium text-error-ink transition-colors hover:bg-error/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45";
 
 /** `.btn.sm`: the small secondary a table cell or a panel header carries. */
 export const buttonSmall =
@@ -34,7 +34,7 @@ export const buttonSmall =
 
 /** `.kv`: a two-column definition list. */
 export const kv =
-  "grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px] [&>dd]:min-w-0 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:text-muted-foreground";
+  "grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm [&>dd]:min-w-0 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:text-muted-foreground";
 
 export const code = (chunks: ReactNode) => (
   <span className={mono}>{chunks}</span>
@@ -89,7 +89,7 @@ export function CheckRows({
   return (
     <ul
       data-testid={testId}
-      className="overflow-hidden rounded-[10px] border border-border text-[13px]"
+      className="overflow-hidden rounded-[10px] border border-border text-sm"
     >
       {rows.map((row) => (
         <li
@@ -116,7 +116,7 @@ export function SectionLabel({
   return (
     <h3
       id={id}
-      className="mb-2 text-[12.5px] font-semibold text-muted-foreground"
+      className="mb-2 text-sm font-semibold text-muted-foreground"
     >
       {children}
     </h3>

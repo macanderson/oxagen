@@ -62,7 +62,7 @@ function FindingsPanel({
                 data-repository={repository.repositoryId}
                 className="flex flex-col gap-2"
               >
-                <p className="text-[13px] font-medium text-foreground">
+                <p className="text-sm font-medium text-foreground">
                   {repository.fullName}
                 </p>
                 <InstructionDriftWarning

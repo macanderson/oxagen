@@ -232,7 +232,7 @@ export function DrillSection({
           };
   return (
     <>
-      <nav aria-label={t("drill.crumbLabel")} className="text-[13px]">
+      <nav aria-label={t("drill.crumbLabel")} className="text-sm">
         <SafeLink to={back.to} className={linkText}>
           {t("drill.crumb", { tab: back.label })}
         </SafeLink>
@@ -263,7 +263,7 @@ export function DrillSection({
               {name}
             </h2>
           )}
-          <p className="text-[13px] text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t("drill.counts", {
               runs: formatCount(drill.total.runs, locale),
               calls: formatCount(drill.total.calls, locale),
@@ -273,7 +273,7 @@ export function DrillSection({
           </p>
           <UnmeteredNote
             unmetered={drill.unmeteredRuns}
-            className="block text-[13px] text-muted-foreground"
+            className="block text-sm text-muted-foreground"
             testId="spend-drill-unmetered"
           />
         </div>
@@ -320,7 +320,7 @@ export function DrillSection({
           )}
         </span>
         {saving === null ? null : <BasisLabel basis={saving.basis} />}
-        <span className="text-[12.5px] text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           {own === null
             ? t("drill.findingsFailed")
             : t("drill.direct", {
@@ -400,7 +400,7 @@ export function DrillSection({
                   <span className="font-semibold">
                     {t(`findings.kind.${finding.kind}`)}
                   </span>
-                  <span className="text-[12px] text-muted-foreground">
+                  <span className="text-sm text-muted-foreground">
                     {finding.why}
                   </span>
                 </span>
@@ -424,7 +424,7 @@ export function DrillSection({
         )}
       </Panel>
       {drill.share === null ? null : (
-        <p className="text-[12px] text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {t("drill.share", { share: formatRatio(drill.share, locale) })}
         </p>
       )}

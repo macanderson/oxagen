@@ -179,7 +179,7 @@ const PROVIDER_CREDENTIALS = [
 function Credentials({ org, ws }: { org: string; ws: string }) {
   const t = useTranslations("agents.detail.identity.credentials");
   const pair =
-    "flex flex-col rounded-lg border border-border bg-hl px-3 py-2 text-[13px]";
+    "flex flex-col rounded-lg border border-border bg-hl px-3 py-2 text-sm";
   return (
     <Panel
       id="agent-credentials"
@@ -200,7 +200,7 @@ function Credentials({ org, ws }: { org: string; ws: string }) {
           <span className="text-xs text-dim">{t("runTokenValue")}</span>
         </li>
       </ul>
-      <p className="text-[13px]">{t("body")}</p>
+      <p className="text-sm">{t("body")}</p>
       <SafeLink
         to={routes.tools(org, ws, { tab: "providers" })}
         className={`${buttonSecondary} self-start`}

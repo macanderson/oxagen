@@ -61,7 +61,7 @@ function Legend({ frames }: { frames: readonly RunFrame[] }) {
     // `.rt-leg { display:flex; gap:4px 12px; flex-wrap:wrap; font-size:11px; color:var(--muted); margin-left:auto }`
     <ul
       aria-label={t("legendLabel")}
-      className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground"
+      className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground"
     >
       {kindCounts(frames).map(({ kind, count }) => (
         <li
@@ -144,7 +144,7 @@ export function RunTimeline({
         </h3>
         <span
           data-testid="timeline-shown"
-          className={`${mono} text-[11px] text-dim`}
+          className={`${mono} text-sm text-dim`}
         >
           {t("shown", {
             shown: formatCount(frames.length, locale),
@@ -158,7 +158,7 @@ export function RunTimeline({
         {/* `.rt-turns { position:relative; height:16px; font-family:var(--mono); font-size:10px; color:var(--dim); letter-spacing:.06em; text-transform:uppercase }` */}
         <div
           aria-hidden="true"
-          className="relative h-4 font-mono text-[10px] uppercase tracking-[0.06em] text-dim"
+          className="relative h-4 font-mono text-sm uppercase tracking-[0.06em] text-dim"
         >
           {bands.map((band) => (
             <span
@@ -227,7 +227,7 @@ export function RunTimeline({
             // `.rt-axis { position:absolute; left:0; right:0; bottom:0; height:14px; border-top:1px solid var(--border); display:flex; justify-content:space-between; font-family:var(--mono); font-size:10px; color:var(--dim); padding-top:2px }`
             <div
               data-testid="timeline-axis"
-              className="absolute inset-x-0 bottom-0 flex h-3.5 justify-between border-t border-border pt-0.5 font-mono text-[10px] text-dim"
+              className="absolute inset-x-0 bottom-0 flex h-3.5 justify-between border-t border-border pt-0.5 font-mono text-sm text-dim"
             >
               <span>{clock(first.observedAt)}</span>
               <span>
@@ -256,7 +256,7 @@ export function RunTimeline({
               key={`${mark.kind}:${String(mark.at)}`}
               data-testid={`timeline-mark-${mark.kind}`}
               // `.rt-mark { position:absolute; top:0; transform:translateX(-50%); font-family:var(--mono); font-size:10px; color:var(--muted); white-space:nowrap }`, `.right { transform:translateX(-100%) }`
-              className={`pointer-events-none absolute top-0 whitespace-nowrap font-mono text-[10px] text-muted-foreground ${mark.kind === "parked" ? "-translate-x-full" : "-translate-x-1/2"}`}
+              className={`pointer-events-none absolute top-0 whitespace-nowrap font-mono text-sm text-muted-foreground ${mark.kind === "parked" ? "-translate-x-full" : "-translate-x-1/2"}`}
               style={{ left: ratioWidth(mark.at / 100) }}
             >
               {t(mark.kind)}
@@ -264,7 +264,7 @@ export function RunTimeline({
           ))}
         </div>
         {/* `.rt-foot { display:flex; gap:12px; flex-wrap:wrap; font-size:11px; color:var(--dim); margin-top:8px }` */}
-        <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-dim">
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-dim">
           <span className="min-w-0 flex-1">{t("foot")}</span>
           {bands.length === 0 ? null : (
             <span data-testid="timeline-turns">

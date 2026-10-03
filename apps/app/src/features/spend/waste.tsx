@@ -54,7 +54,7 @@ function RetryLoops({
       <li
         data-cause="retryLoops"
         data-recorded="false"
-        className="flex flex-wrap items-baseline justify-between gap-2 text-[13px]"
+        className="flex flex-wrap items-baseline justify-between gap-2 text-sm"
       >
         <span className="font-semibold">{t("designCause.retryLoops")}</span>
         <NotRecordedValue />
@@ -69,11 +69,11 @@ function RetryLoops({
       data-recorded="true"
       className="flex flex-col gap-1.5"
     >
-      <span className="flex flex-wrap items-baseline justify-between gap-2 text-[13px]">
+      <span className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
         <span>
           <span className="font-semibold">{t("designCause.retryLoops")}</span>{" "}
           {loops.length === 0 ? null : (
-            <span className={`${mono} text-[11px] text-muted-foreground`}>
+            <span className={`${mono} text-sm text-muted-foreground`}>
               {t("causeRuns", { runs: formatCount(runs, locale) })}
             </span>
           )}
@@ -92,7 +92,7 @@ function RetryLoops({
           </span>
         )}
       </span>
-      <span className="text-[12px] text-muted-foreground">
+      <span className="text-sm text-muted-foreground">
         {t("retryLoopsWhy")}{" "}
         <SafeLink
           to={routes.spend(at.org, at.ws, { tab: "findings" })}
@@ -145,7 +145,7 @@ export function WasteSection({
               <Money value={waste.wasted} />
             </span>
           )}
-          <span className="flex flex-wrap gap-x-1 text-[11.5px] font-normal text-muted-foreground">
+          <span className="flex flex-wrap gap-x-1 text-sm font-normal text-muted-foreground">
             <BasisLabel basis={waste.wasted?.basis ?? null} />
             {waste.wasted === null ? null : (
               <span>{t("currency", { currency: waste.wasted.currency })}</span>
@@ -173,7 +173,7 @@ export function WasteSection({
               : t("largestNote", { runs: formatCount(largest.runs, locale) })
           }
         >
-          <span className="text-[17px]">
+          <span className="text-lg">
             {largest === null ? t("noCause") : t(`cause.${largest.cause}`)}
           </span>
         </Tile>
@@ -195,13 +195,13 @@ export function WasteSection({
                 data-cause={cause.cause}
                 className="flex flex-col gap-1.5"
               >
-                <span className="flex flex-wrap items-baseline justify-between gap-2 text-[13px]">
+                <span className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
                   <span>
                     <span className="font-semibold">
                       {t(`cause.${cause.cause}`)}
                     </span>{" "}
                     <span
-                      className={`${mono} text-[11px] text-muted-foreground`}
+                      className={`${mono} text-sm text-muted-foreground`}
                     >
                       {t("causeRuns", {
                         runs: formatCount(cause.runs, locale),
@@ -222,7 +222,7 @@ export function WasteSection({
                     style={{ width: ratioWidth(share ?? 0) }}
                   />
                 </span>
-                <span className="text-[12px] text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   {t(`why.${cause.cause}`)}
                 </span>
               </li>
@@ -234,7 +234,7 @@ export function WasteSection({
               key={cause}
               data-cause={cause}
               data-recorded="false"
-              className="flex flex-wrap items-baseline justify-between gap-2 text-[13px]"
+              className="flex flex-wrap items-baseline justify-between gap-2 text-sm"
             >
               <span className="font-semibold">{t(`designCause.${cause}`)}</span>
               <NotRecordedValue />
@@ -266,18 +266,18 @@ export function WasteSection({
                   <span className="flex min-w-0 flex-col">
                     <span
                       title={run.name ?? undefined}
-                      className="truncate text-[13px] font-semibold"
+                      className="truncate text-sm font-semibold"
                     >
                       {run.name ?? t("untitled")}
                     </span>
                     <span
                       data-testid="run-id"
-                      className={`${mono} truncate text-[11px] text-dim`}
+                      className={`${mono} truncate text-sm text-dim`}
                     >
                       {run.runId}
                     </span>
                   </span>
-                  <span className="inline-flex w-fit items-center gap-1.5 rounded-md border border-destructive/40 px-1.5 py-0.5 text-[11px] font-semibold text-destructive">
+                  <span className="inline-flex w-fit items-center gap-1.5 rounded-md border border-destructive/40 px-1.5 py-0.5 text-sm font-semibold text-destructive">
                     <span
                       aria-hidden="true"
                       className="size-1.5 rounded-full bg-destructive"

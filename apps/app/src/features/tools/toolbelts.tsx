@@ -152,7 +152,7 @@ export function Toolbelts({
           ) : (
             <ReadFailure read={list} section={t("title")} />
           )}
-          <p className="max-w-prose border-l-2 border-gold pl-3 text-[13px] text-muted-foreground">
+          <p className="max-w-prose border-l-2 border-gold pl-3 text-sm text-muted-foreground">
             {t("note")}
           </p>
         </div>
@@ -173,7 +173,7 @@ export function Toolbelts({
           <ReadFailure read={open} section={t("title")} />
           <SafeLink
             to={toolsLink(at, { tab: "toolbelts" })}
-            className={`${linkText} text-[13px]`}
+            className={`${linkText} text-sm`}
           >
             {t("belt.close")}
           </SafeLink>

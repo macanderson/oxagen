@@ -85,10 +85,10 @@ function DraftFields({
       data-testid="promote-draft"
       className="flex flex-col gap-3 rounded-md border border-border p-3"
     >
-      <legend className="px-1 text-[13px] font-semibold text-foreground">
+      <legend className="px-1 text-sm font-semibold text-foreground">
         {t("draft", { number: String(index + 1) })}
       </legend>
-      <p className="text-[12.5px] text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         {t("from", { count: draft.ids.length, agents: format.list(names) })}
       </p>
       <div>
@@ -166,7 +166,7 @@ function DraftFields({
         <div>
           <span className={fieldLabel}>{t("scope")}</span>
           <p
-            className="text-[13px] text-foreground"
+            className="text-sm text-foreground"
             data-testid="promote-scope"
           >
             {draft.repos.length === 0 ? (
@@ -308,7 +308,7 @@ export function PromoteDialog({
     >
       <div className="flex flex-col gap-3">
         {empty ? (
-          <p className="text-[13px] text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t("noneWaiting")}
           </p>
         ) : (

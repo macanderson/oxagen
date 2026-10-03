@@ -125,7 +125,7 @@ function Pane({
         <h2 id={id} className={eyebrow}>
           {title}
         </h2>
-        <span className={`${mono} text-[11px] text-muted-foreground`}>
+        <span className={`${mono} text-sm text-muted-foreground`}>
           {source}
         </span>
       </div>
@@ -158,7 +158,7 @@ function FrameRow({
         <span className="text-muted-foreground">{summary}</span>
       </span>
       {at === null ? null : (
-        <span className={`${mono} shrink-0 text-[11px] text-muted-foreground`}>
+        <span className={`${mono} shrink-0 text-sm text-muted-foreground`}>
           {clock(at, true)}
         </span>
       )}
@@ -212,16 +212,16 @@ function Header({
       <div className="flex min-w-0 flex-col gap-1.5">
         <p className="flex flex-wrap items-baseline gap-2">
           <span className={eyebrow}>{t("eyebrow")}</span>
-          <span className={`${mono} text-[12px] text-muted-foreground`}>
+          <span className={`${mono} text-sm text-muted-foreground`}>
             {run.id}
           </span>
         </p>
-        <h1 className="text-[22px] font-bold leading-tight text-foreground [overflow-wrap:anywhere]">
+        <h1 className="text-2xl font-bold leading-tight text-foreground [overflow-wrap:anywhere]">
           {run.name ?? run.taskRef ?? run.id}
         </h1>
         <ul
           aria-label={t("meta")}
-          className={`${mono} flex flex-wrap gap-x-3 gap-y-1 text-[12.5px] text-muted-foreground`}
+          className={`${mono} flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground`}
         >
           {facts.map((fact) => (
             <li key={fact} className="[overflow-wrap:anywhere]">
@@ -330,7 +330,7 @@ function AgentView({
               {t("question.label")}
             </Badge>
           </span>
-          <span className={`${mono} text-[11px] text-muted-foreground`}>
+          <span className={`${mono} text-sm text-muted-foreground`}>
             {clock(row?.raisedAt ?? interject.observedAt)}
           </span>
         </p>
@@ -384,7 +384,7 @@ function AgentView({
                 {t("reply.label")}
               </Badge>
             </span>
-            <span className={`${mono} text-[11px] text-muted-foreground`}>
+            <span className={`${mono} text-sm text-muted-foreground`}>
               {clock(row.answeredAt)}
             </span>
           </p>
@@ -442,7 +442,7 @@ function AnswerRecord({
             {t("answer.closed")}
           </Badge>
         </span>
-        <span className={`${mono} text-[11px] text-muted-foreground`}>
+        <span className={`${mono} text-sm text-muted-foreground`}>
           {clock(answeredAt)}
         </span>
       </div>
@@ -512,7 +512,7 @@ function OperatorQuestion({
               </Badge>
             ) : null}
           </span>
-          <span className={`${mono} text-[11px] text-muted-foreground`}>
+          <span className={`${mono} text-sm text-muted-foreground`}>
             {clock(interject.observedAt)}
           </span>
         </p>

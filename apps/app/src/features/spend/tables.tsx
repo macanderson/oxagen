@@ -117,7 +117,7 @@ function Savings({
       <span className="max-w-full text-link md:truncate">
         <Money value={saving} />
       </span>
-      <span className="max-w-full font-sans text-[11px] text-muted-foreground md:truncate">
+      <span className="max-w-full font-sans text-sm text-muted-foreground md:truncate">
         {t("findings", {
           count: own.length,
           n: formatCount(own.length, locale),
@@ -370,7 +370,7 @@ export function BudgetsTable({
               <td className={cell}>
                 <span
                   data-mode={budget.enabled ? "hard" : "off"}
-                  className="inline-flex items-center gap-1.5 text-[12px]"
+                  className="inline-flex items-center gap-1.5 text-sm"
                 >
                   <span
                     aria-hidden="true"
@@ -396,7 +396,7 @@ export function BudgetsTable({
                         style={{ width: ratioWidth(budget.ratio) }}
                       />
                     </span>
-                    <span className="text-[11px] text-muted-foreground md:truncate">
+                    <span className="text-sm text-muted-foreground md:truncate">
                       {t("budgets.position", {
                         ratio: formatRatio(budget.ratio, locale),
                         state: t(`budgets.state.${budget.state}`),

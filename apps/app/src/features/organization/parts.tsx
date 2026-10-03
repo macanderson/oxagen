@@ -8,14 +8,14 @@ export const emptyLine = "text-sm text-muted-foreground";
 
 /** A note under a table: the mockup's `.note`, a gold rule and one fact. */
 export const note =
-  "border-l-2 border-gold pl-3 text-[13px] leading-relaxed text-muted-foreground";
+  "border-l-2 border-gold pl-3 text-sm leading-relaxed text-muted-foreground";
 
 /**
  * A warning in a dialog: the mockup's `.warn`, the critical hue as a hairline
  * and a wash behind body ink, for what a write would end or refuse.
  */
 export const warn =
-  "rounded-[10px] border border-critical/45 bg-critical/10 px-3.5 py-[11px] text-[12.5px] text-foreground";
+  "rounded-[10px] border border-critical/45 bg-critical/10 px-3.5 py-[11px] text-sm text-foreground";
 
 export function DateCell({ iso }: { iso: string }) {
   const format = useFormatter();
@@ -34,7 +34,7 @@ export function DateCell({ iso }: { iso: string }) {
 export function NotRecordedValue() {
   const t = useTranslations("organization");
   return (
-    <span data-not-recorded="" className="text-[11.5px] text-dim">
+    <span data-not-recorded="" className="text-sm text-dim">
       {t("notRecorded")}
     </span>
   );

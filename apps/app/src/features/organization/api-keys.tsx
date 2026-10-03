@@ -278,10 +278,10 @@ function Surfaces({ org }: { org: string }) {
         </Badge>
       </div>
       <div className={`${panelBody} flex flex-col gap-2.5`}>
-        <p className="text-[12.5px] text-muted-foreground">{t("body")}</p>
+        <p className="text-sm text-muted-foreground">{t("body")}</p>
         <pre
           data-testid="api-keys-cli"
-          className="overflow-x-auto rounded-lg border border-border bg-hl px-3.5 py-3 font-mono text-[11.5px] leading-relaxed"
+          className="overflow-x-auto rounded-lg border border-border bg-hl px-3.5 py-3 font-mono text-sm leading-relaxed"
         >
           {lines.join("\n")}
         </pre>
@@ -475,7 +475,7 @@ function Keys({
                   <div className="font-semibold text-foreground md:truncate">
                     {key.name}
                   </div>
-                  <div className={`${mono} text-[11px] text-dim md:truncate`}>
+                  <div className={`${mono} text-sm text-dim md:truncate`}>
                     {t("masked", { prefix: key.prefix })}
                   </div>
                 </div>,
@@ -484,7 +484,7 @@ function Keys({
                 <NotRecordedValue key="principal" />,
                 <NotRecordedValue key="grants" />,
                 <NotRecordedValue key="createdBy" />,
-                <span key="lastUsed" className={`${mono} text-[11px] text-dim`}>
+                <span key="lastUsed" className={`${mono} text-sm text-dim`}>
                   {key.lastUsedAt === null ? (
                     t("neverUsed")
                   ) : (

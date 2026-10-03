@@ -64,12 +64,12 @@ const inst =
   "grid min-w-0 content-start gap-2 rounded-xl border border-border bg-card px-[15px] pb-3 pt-[13px] text-card-foreground";
 /** `.inst .ih .k { font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); font-weight:600 }` */
 const instKey =
-  "m-0 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-dim";
+  "m-0 text-sm font-semibold uppercase tracking-[0.1em] text-dim";
 /** `.inst .ih .basis { margin-left:auto; font-family:var(--mono); font-size:10px; color:var(--dim) }` */
-const instBasis = "ml-auto font-mono text-[10px] text-dim";
+const instBasis = "ml-auto font-mono text-sm text-dim";
 /** `.inst .iv { font-size:26px; font-weight:700; letter-spacing:-.02em; line-height:1.1 }` */
 const instValue =
-  "text-[26px] font-bold leading-[1.1] tracking-[-0.02em] text-foreground tabular-nums";
+  "text-2xl font-bold leading-[1.1] tracking-[-0.02em] text-foreground tabular-nums";
 /** `.inst .iv small { font-size:12px; font-weight:500; color:var(--muted); letter-spacing:0; margin-left:6px }` */
 const instUnit =
   "ml-1.5 text-xs font-medium tracking-normal text-muted-foreground";
@@ -77,7 +77,7 @@ const instUnit =
 const instSep = "mx-[5px] font-normal text-dim";
 /** `.inst .is { font-size:11.5px; color:var(--muted); line-height:1.45 }` and `.is b { color:var(--fg); font-weight:600 }` */
 const instLine =
-  "text-[11.5px] leading-[1.45] text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground";
+  "text-sm leading-[1.45] text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground";
 /** `.cols { display:flex; align-items:flex-end; gap:2px; height:46px; padding-top:14px; position:relative }` */
 const cols = "relative flex h-[46px] items-end gap-0.5 pt-3.5";
 /** `.cols .c { flex:1; max-width:24px; height:100%; flex-direction:column; justify-content:flex-end; gap:2px }` */
@@ -86,7 +86,7 @@ const col = "relative flex h-full max-w-6 flex-1 flex-col justify-end gap-0.5";
 const colFill = "block min-h-0.5 w-full first:rounded-t";
 /** `.cols .c .lab { bottom:calc(100% + 3px); font-family:var(--mono); font-size:10px; color:var(--muted) }` */
 const colLabel =
-  "absolute bottom-[calc(100%+3px)] left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[10px] tabular-nums text-muted-foreground";
+  "absolute bottom-[calc(100%+3px)] left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-sm tabular-nums text-muted-foreground";
 /** `.cols .c.cur::after`: the 4px dot under the column a live run is still adding to. */
 const colCurrent =
   "after:absolute after:-bottom-1.5 after:left-1/2 after:size-1 after:-translate-x-1/2 after:rounded-full after:bg-foreground";
@@ -94,13 +94,13 @@ const colCurrent =
 const colBase = "absolute inset-x-0 bottom-0 h-px bg-border";
 /** `.ax { justify-content:space-between; font-family:var(--mono); font-size:10px; color:var(--dim); margin-top:3px }` */
 const axis =
-  "mt-[3px] flex justify-between font-mono text-[10px] text-dim tabular-nums";
+  "mt-[3px] flex justify-between font-mono text-sm text-dim tabular-nums";
 /** `.stk { display:flex; gap:2px; height:8px; border-radius:4px; margin-top:4px }`, its first and last `i` rounded. */
 const stack = "relative mt-1 flex h-2 gap-0.5 rounded";
 const stackPart = "block h-full min-w-0.5 first:rounded-l last:rounded-r";
 /** `.leg { gap:10px; font-size:10.5px; color:var(--muted) }`, `.leg i { 9px; border-radius:2px }`, `.leg b { color:var(--fg) }` */
 const legend =
-  "flex flex-wrap gap-x-2.5 gap-y-1 text-[10.5px] text-muted-foreground tabular-nums";
+  "flex flex-wrap gap-x-2.5 gap-y-1 text-sm text-muted-foreground tabular-nums";
 const legendSwatch = "size-[9px] flex-none rounded-[2px]";
 /** `.fams { display:grid; gap:5px }` */
 const families = "grid gap-[5px]";
@@ -111,10 +111,10 @@ const familyRow =
 const familyIcon =
   "grid size-5 place-items-center rounded-[5px] bg-muted-foreground/15 text-muted-foreground";
 /** `.frow .fl { font-size:11.5px; text-overflow:ellipsis }` */
-const familyLabel = "min-w-0 truncate text-[11.5px]";
+const familyLabel = "min-w-0 truncate text-sm";
 /** `.frow .fn { font-family:var(--mono); font-size:11px; color:var(--fg); min-width:18px; text-align:right }` */
 const familyCount =
-  "min-w-[18px] text-right font-mono text-[11px] tabular-nums text-foreground";
+  "min-w-[18px] text-right font-mono text-sm tabular-nums text-foreground";
 /** `.fb { height:7px; border-radius:4px; background:var(--hl) }` and `.fb i { background:var(--fk-model) }` */
 export const fillBar = "block h-[7px] min-w-0 overflow-hidden rounded bg-hl";
 export const fillBarFill = "block h-full rounded bg-fk-model";
@@ -130,7 +130,7 @@ const MIN_COLUMN = 0.04;
 
 /** `.inst .iv small .delta.down { font-size:11px; font-weight:600; color:var(--st-denied) }`: calls that failed. */
 const failedUnit =
-  "ml-1.5 text-[11px] font-semibold tracking-normal text-warning tabular-nums";
+  "ml-1.5 text-sm font-semibold tracking-normal text-warning tabular-nums";
 
 /** The agent's 30 days before the run, as `get_run_cost` answers them; null when too thin. */
 type Baseline = NonNullable<RunCost["baseline"]>;

@@ -190,7 +190,7 @@ function Filters({
         }}
       />
       <span
-        className="ml-auto text-[12.5px] text-muted-foreground"
+        className="ml-auto text-sm text-muted-foreground"
         data-testid="memory-count"
       >
         {t("count", { count: matched })}
@@ -390,7 +390,7 @@ export function MemoriesPanel({
           role="group"
           aria-label={t("selection.label")}
           data-testid="memory-selection"
-          className="flex flex-wrap items-center gap-2 border-b border-border bg-hl px-4 py-2.5 text-[13px]"
+          className="flex flex-wrap items-center gap-2 border-b border-border bg-hl px-4 py-2.5 text-sm"
         >
           <b className="font-semibold text-foreground">
             {t("selection.count", { count: picked.length })}
@@ -438,7 +438,7 @@ export function MemoriesPanel({
         <table
           aria-label={t("title")}
           data-testid="memory-table"
-          className="w-full min-w-[720px] border-collapse text-[13px]"
+          className="w-full min-w-[720px] border-collapse text-sm"
         >
           <thead>
             <tr className="border-b border-border">

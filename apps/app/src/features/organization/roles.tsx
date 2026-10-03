@@ -62,7 +62,7 @@ function Permissions({ role }: { role: Role }) {
         </Badge>
       ))}
       {rest > 0 ? (
-        <span className="text-[11px] text-dim">
+        <span className="text-sm text-dim">
           {t("more", { count: rest })}
         </span>
       ) : null}
@@ -109,7 +109,7 @@ function Origin({ role, origin }: { role: Role; origin: string }) {
       </Badge>
     );
   }
-  return <span className="text-[11.5px] text-dim">{origin}</span>;
+  return <span className="text-sm text-dim">{origin}</span>;
 }
 
 export function RolesTab({
@@ -155,11 +155,11 @@ export function RolesTab({
     },
     cells: [
       <span key="role">
-        <span className={`${mono} text-[12.5px] font-medium text-foreground`}>
+        <span className={`${mono} text-sm font-medium text-foreground`}>
           {role.name}
         </span>
         {role.description === null ? null : (
-          <span className="block text-[11.5px] text-dim md:truncate">
+          <span className="block text-sm text-dim md:truncate">
             {role.description}
           </span>
         )}
@@ -171,7 +171,7 @@ export function RolesTab({
       >
         {t(`kind.${role.kind}`)}
       </Badge>,
-      <span key="scope" className={`${mono} text-[11.5px]`}>
+      <span key="scope" className={`${mono} text-sm`}>
         {t(`scope.${role.scope}`)}
       </span>,
       <Permissions key="permissions" role={role} />,
@@ -268,7 +268,7 @@ function Enforcement({
   return (
     <p
       data-enforced={enforcement.enforced ? "true" : "false"}
-      className="text-[12px] text-dim"
+      className="text-sm text-dim"
     >
       {enforcement.enforced
         ? t("enforced")

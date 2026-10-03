@@ -38,7 +38,7 @@ export function DesktopDownloads() {
           ),
         })}
       </p>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13px]">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
         {DESKTOP_DOWNLOADS.map((group) => (
           <Fragment key={group.platform}>
             <dt className="text-muted-foreground">

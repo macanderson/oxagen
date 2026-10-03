@@ -47,7 +47,7 @@ export function AssistantAnswering({
         <p
           key={tool.id}
           data-testid="assistant-tool-running"
-          className="mt-1 font-mono text-[11px] text-muted-foreground"
+          className="mt-1 font-mono text-sm text-muted-foreground"
         >
           {t("tool", { capability: tool.capability })}
         </p>
@@ -84,7 +84,7 @@ export function AssistantDropped({
       {text === "" ? null : <AssistantMarkdown>{text}</AssistantMarkdown>}
       <p
         data-testid="assistant-dropped-note"
-        className="mt-1.5 rounded-md border border-border px-2 py-1.5 text-[12px] text-muted-foreground"
+        className="mt-1.5 rounded-md border border-border px-2 py-1.5 text-sm text-muted-foreground"
       >
         {runId === null ? t("dropped.noRun") : t("dropped.body")}
       </p>
@@ -94,13 +94,13 @@ export function AssistantDropped({
           data-testid="assistant-retry"
           disabled={retryDisabled}
           onClick={onRetry}
-          className={`mt-1.5 text-[12px] ${linkText} disabled:opacity-60`}
+          className={`mt-1.5 text-sm ${linkText} disabled:opacity-60`}
         >
           {t("retry")}
         </button>
       ) : (
         <>
-          <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+          <p className="mt-1 font-mono text-sm text-muted-foreground">
             {t("recordedAs")}{" "}
             <SafeLink
               to={routes.run(org, ws, runId)}
@@ -118,7 +118,7 @@ export function AssistantDropped({
               disabled={load === "loading"}
               aria-busy={load === "loading" || undefined}
               onClick={onLoad}
-              className={`mt-1.5 text-[12px] ${linkText} disabled:opacity-60`}
+              className={`mt-1.5 text-sm ${linkText} disabled:opacity-60`}
             >
               {load === "loading" ? t("dropped.loading") : t("dropped.load")}
             </button>
@@ -143,7 +143,7 @@ function DroppedLoadLine({ load }: { load: DroppedLoad }) {
   return line === null ? null : (
     <p
       data-testid={`assistant-dropped-${load}`}
-      className="mt-1 text-[12px] text-muted-foreground"
+      className="mt-1 text-sm text-muted-foreground"
     >
       {line}
     </p>

@@ -65,7 +65,7 @@ function Option<V extends string>({
           if (event.key === "Escape") setOpen(false);
         }}
         className={[
-          "flex w-full min-w-0 flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left text-[13px] focus-visible:outline-2 focus-visible:outline-ring",
+          "flex w-full min-w-0 flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left text-sm focus-visible:outline-2 focus-visible:outline-ring",
           checked
             ? "border-gold bg-hl text-foreground"
             : "border-border bg-app-panel-bg text-foreground",

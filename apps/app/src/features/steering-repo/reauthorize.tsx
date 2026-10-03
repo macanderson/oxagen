@@ -75,11 +75,11 @@ export function ReauthorizeNotice({
     >
       <h3
         id={headingId}
-        className="text-[13.5px] font-semibold text-foreground"
+        className="text-sm font-semibold text-foreground"
       >
         {t("heading")}
       </h3>
-      <p className="text-[13px] text-muted-foreground">{t("body")}</p>
+      <p className="text-sm text-muted-foreground">{t("body")}</p>
       {canAct ? (
         <ReauthorizeLink
           org={org}

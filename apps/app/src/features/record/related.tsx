@@ -53,7 +53,7 @@ export function Related({
       <Frame>
         <p
           data-state="not-recorded"
-          className="px-4 py-3.5 text-[13px] text-muted-foreground"
+          className="px-4 py-3.5 text-sm text-muted-foreground"
         >
           {t("unclassified")}
         </p>
@@ -87,7 +87,7 @@ export function Related({
   if (items.length === 0) {
     return (
       <Frame>
-        <p data-state="empty" className="px-4 py-3.5 text-[13px] text-dim">
+        <p data-state="empty" className="px-4 py-3.5 text-sm text-dim">
           {t("only", { kind: term(`kinds.${kind}`), workspace })}
         </p>
       </Frame>

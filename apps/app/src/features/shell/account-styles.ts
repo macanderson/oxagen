@@ -11,7 +11,7 @@ export {
 
 /** A `dl` of label → value pairs, the mockup's `.kv`. */
 export const kv =
-  "grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1.5 text-[12.5px]";
+  "grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1.5 text-sm";
 export const kvTerm = "whitespace-nowrap text-muted-foreground";
 export const kvValue = "m-0 min-w-0 font-mono text-xs [overflow-wrap:anywhere]";
 
@@ -23,7 +23,7 @@ export const listIcon =
   "mt-px grid size-[22px] flex-none place-items-center rounded-md bg-secondary text-muted-foreground";
 export const listBody = "flex min-w-0 flex-1 flex-col gap-0.5";
 export const listTitle =
-  "flex flex-wrap items-center gap-1.5 text-[12.5px] font-medium text-foreground";
+  "flex flex-wrap items-center gap-1.5 text-sm font-medium text-foreground";
 export const listText = "text-xs leading-snug text-muted-foreground";
 export const listTime =
-  "mt-1 flex-none whitespace-nowrap font-mono text-[10px] text-muted-foreground";
+  "mt-1 flex-none whitespace-nowrap font-mono text-sm text-muted-foreground";

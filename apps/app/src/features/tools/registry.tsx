@@ -80,7 +80,7 @@ function categoryCounts(
 }
 
 const chip =
-  "inline-flex min-h-8 max-md:min-h-11 items-center gap-2 rounded-md border border-border px-3 text-[13px] text-muted-foreground hover:text-foreground aria-pressed:border-foreground aria-pressed:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+  "inline-flex min-h-8 max-md:min-h-11 items-center gap-2 rounded-md border border-border px-3 text-sm text-muted-foreground hover:text-foreground aria-pressed:border-foreground aria-pressed:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
 function CategoryChips({
   at,
@@ -118,7 +118,7 @@ function CategoryChips({
       >
         {filtered || complete ? t("allCategories") : t("allOnPage")}
         {filtered ? null : (
-          <span className={`${mono} text-[10.5px] text-dim`}>
+          <span className={`${mono} text-sm text-dim`}>
             {formatCount(items.length, locale)}
           </span>
         )}
@@ -142,7 +142,7 @@ function CategoryChips({
           className={chip}
         >
           <span className={mono}>{tag}</span>
-          <span className={`${mono} text-[10.5px] text-dim`}>
+          <span className={`${mono} text-sm text-dim`}>
             {formatCount(count, locale)}
           </span>
         </ToggleLink>
@@ -210,7 +210,7 @@ function ProviderChips({
           <ProviderIcon name={server.name} iconUrl={server.iconUrl} size={16} />
           <span>{server.name}</span>
           {complete ? (
-            <span className={`${mono} text-[10.5px] text-dim`}>
+            <span className={`${mono} text-sm text-dim`}>
               {formatCount(versions.length, locale)}
             </span>
           ) : null}
@@ -274,7 +274,7 @@ function NamesToggle({
           })}
           pressed={names === style}
           data-names={style}
-          className="inline-flex min-h-7 max-md:min-h-11 items-center rounded-md px-2.5 text-[13px] text-muted-foreground hover:text-foreground aria-pressed:bg-hl aria-pressed:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="inline-flex min-h-7 max-md:min-h-11 items-center rounded-md px-2.5 text-sm text-muted-foreground hover:text-foreground aria-pressed:bg-hl aria-pressed:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           {t(`names.${style}`)}
         </ToggleLink>
@@ -297,8 +297,8 @@ function CategoriesDialog() {
       wide
       testId="tools-categories"
     >
-      <p className="text-[13px] text-foreground">{t("lead")}</p>
-      <dl className="grid gap-x-4 gap-y-1.5 text-[13px] sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+      <p className="text-sm text-foreground">{t("lead")}</p>
+      <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
         {(
           [
             "moves_money",
@@ -503,7 +503,7 @@ export function Registry({
             />
             <span
               data-testid="tools-shown"
-              className={`${mono} rounded border border-border px-1.5 py-0.5 text-[10.5px] text-muted-foreground`}
+              className={`${mono} rounded border border-border px-1.5 py-0.5 text-sm text-muted-foreground`}
             >
               {totalKnown
                 ? t("shownOf", {
@@ -646,7 +646,7 @@ export function Registry({
                 : t("categoriesNote")
               : t("categoriesFilteredNote")}
           </p>
-          <p className="max-w-prose border-l-2 border-gold pl-3 text-[13px] text-muted-foreground">
+          <p className="max-w-prose border-l-2 border-gold pl-3 text-sm text-muted-foreground">
             {t("gateNote")}
           </p>
         </div>

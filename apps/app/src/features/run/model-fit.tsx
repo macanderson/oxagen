@@ -33,7 +33,7 @@ const buttonSmall = `${buttonSecondary} min-h-7 rounded-[7px] px-[9px] py-1 text
 
 /** `.panel-b b` over `p.muted { margin:6px 0 0; font-size:12.5px }`: a card's title and its reading. */
 const cardTitle = "m-0 text-sm font-bold text-foreground";
-const cardReading = "mb-0 mt-1.5 text-[12.5px] text-muted-foreground";
+const cardReading = "mb-0 mt-1.5 text-sm text-muted-foreground";
 
 /**
  * The move a card argues for, drawn as a stub. No contract makes it from
@@ -62,7 +62,7 @@ function MoveStub({
       </button>
       <span
         id={whyId}
-        className="min-w-0 text-[11.5px] text-muted-foreground"
+        className="min-w-0 text-sm text-muted-foreground"
       >
         {why}
       </span>
@@ -221,7 +221,7 @@ export function ModelFitPanel({ run }: { run: RunRow }) {
       flush
       aside={
         <Badge tone="quiet" dot={false}>
-          <span className="text-[10.5px]">{tRun("summary.generated")}</span>
+          <span className="text-sm">{tRun("summary.generated")}</span>
         </Badge>
       }
     >

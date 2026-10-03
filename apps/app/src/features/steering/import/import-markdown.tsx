@@ -288,7 +288,7 @@ function ImportDialog({
         role="alert"
         data-testid="import-failure"
         data-reason={failed.failure.reason}
-        className="flex flex-col gap-1 text-[13px] text-error-ink"
+        className="flex flex-col gap-1 text-sm text-error-ink"
       >
         <p>{sentenceOf(failed.failure, failed.file)}</p>
         {failed.failure.reason === "exhausted" ? (
@@ -317,7 +317,7 @@ function ImportDialog({
       <div
         role="status"
         data-testid="import-done"
-        className="flex flex-col gap-2 text-[13px]"
+        className="flex flex-col gap-2 text-sm"
       >
         {pullRequest === null ? null : (
           <>
@@ -355,10 +355,10 @@ function ImportDialog({
     const groups = groupsOf(parsed.result, rows, memories);
     body = (
       <div className="flex flex-col gap-3">
-        <p className="text-[13px] text-muted-foreground">{t("grid.intro")}</p>
+        <p className="text-sm text-muted-foreground">{t("grid.intro")}</p>
         {memories.length > 0 ? (
           <p
-            className="text-[13px] text-muted-foreground"
+            className="text-sm text-muted-foreground"
             data-testid="import-memories-intro"
           >
             {t("grid.memoriesIntro")}
@@ -366,7 +366,7 @@ function ImportDialog({
         ) : null}
         {counts.tokens > 0 ? (
           <p
-            className="text-[12.5px] text-muted-foreground"
+            className="text-sm text-muted-foreground"
             data-testid="import-tokens"
           >
             {t("grid.tokens", { count: counts.tokens })}
@@ -374,14 +374,14 @@ function ImportDialog({
         ) : null}
         {parsed.unmatched ? (
           <p
-            className="text-[12.5px] text-muted-foreground"
+            className="text-sm text-muted-foreground"
             data-testid="import-unmatched"
           >
             {t("grid.unmatched")}
           </p>
         ) : null}
         {groups.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">{t("grid.empty")}</p>
+          <p className="text-sm text-muted-foreground">{t("grid.empty")}</p>
         ) : (
           <StatementGrid
             groups={groups}
@@ -394,7 +394,7 @@ function ImportDialog({
           <p
             role="alert"
             data-testid="import-too-many"
-            className="text-[13px] text-error-ink"
+            className="text-sm text-error-ink"
           >
             {t("grid.tooMany", {
               count: prFiles,
@@ -459,7 +459,7 @@ function ImportDialog({
   } else {
     body = (
       <div className="flex flex-col gap-3">
-        <p className="text-[13px] text-muted-foreground">{t("intro")}</p>
+        <p className="text-sm text-muted-foreground">{t("intro")}</p>
         <DropZone
           disabled={busy}
           onPicked={take}
@@ -471,7 +471,7 @@ function ImportDialog({
           <p
             role="alert"
             data-testid="import-pick-problem"
-            className="text-[13px] text-error-ink"
+            className="text-sm text-error-ink"
           >
             {problem === "none"
               ? t("drop.none")
@@ -481,14 +481,14 @@ function ImportDialog({
           </p>
         )}
         {reading ? (
-          <p role="status" className="text-[13px] text-muted-foreground">
+          <p role="status" className="text-sm text-muted-foreground">
             {t("drop.reading")}
           </p>
         ) : null}
         {picked === null ? null : (
           <>
             {picked.ignored > 0 ? (
-              <p className="text-[12.5px] text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {t("drop.ignored", { count: picked.ignored })}
               </p>
             ) : null}
@@ -504,7 +504,7 @@ function ImportDialog({
           <p
             role="status"
             data-testid="import-progress"
-            className="text-[13px] text-muted-foreground"
+            className="text-sm text-muted-foreground"
           >
             {t("parsing", { done: progress.done, total: progress.total })}
           </p>

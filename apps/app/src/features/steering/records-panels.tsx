@@ -18,7 +18,7 @@ import { Badge } from "@/ui/badge";
 import { panel, panelBody, panelHeader, panelTitle } from "@/ui/control-styles";
 
 const note =
-  "border-l-2 border-gold py-0.5 pl-3 text-[12.5px] text-muted-foreground";
+  "border-l-2 border-gold py-0.5 pl-3 text-sm text-muted-foreground";
 
 /** What a path under the tree's root is for, keyed by the path or its directory. */
 type Comment =
@@ -78,7 +78,7 @@ function TreeState({ tree }: { tree: Read<OxagenTree> }) {
   const t = useTranslations("steering.records.disk");
   if (!tree.ok) {
     return (
-      <p data-tree="failed" className="text-[13px] text-muted-foreground">
+      <p data-tree="failed" className="text-sm text-muted-foreground">
         {t("failed", {
           code: tree.reason === "error" ? tree.code : tree.reason,
         })}
@@ -88,19 +88,19 @@ function TreeState({ tree }: { tree: Read<OxagenTree> }) {
   const value = tree.value;
   if (value.state === "unbound") {
     return (
-      <p data-tree="unbound" className="text-[13px] text-muted-foreground">
+      <p data-tree="unbound" className="text-sm text-muted-foreground">
         {t("unbound")}
       </p>
     );
   }
   if (value.files.length === 0) {
     return (
-      <p data-tree="absent" className="text-[13px] text-muted-foreground">
+      <p data-tree="absent" className="text-sm text-muted-foreground">
         {t.rich("absent", {
           repository: value.repository,
           branch: value.branch,
           code: (chunks) => (
-            <code className="font-mono text-[12px]">{chunks}</code>
+            <code className="font-mono text-sm">{chunks}</code>
           ),
         })}
       </p>
@@ -116,7 +116,7 @@ function TreeState({ tree }: { tree: Read<OxagenTree> }) {
       : t(`comments.${comment}`);
   return (
     <>
-      <p className="mb-2 font-mono text-[11.5px] text-dim" data-tree="at">
+      <p className="mb-2 font-mono text-sm text-dim" data-tree="at">
         {t("at", {
           repository: value.repository,
           branch: value.branch,
@@ -125,7 +125,7 @@ function TreeState({ tree }: { tree: Read<OxagenTree> }) {
       </p>
       <pre
         data-tree="read"
-        className="max-h-[420px] overflow-auto rounded-lg border border-border bg-hl px-3.5 py-3 font-mono text-[12px] leading-[1.6] text-foreground"
+        className="max-h-[420px] overflow-auto rounded-lg border border-border bg-hl px-3.5 py-3 font-mono text-sm leading-[1.6] text-foreground"
       >
         {`${value.root}/\n`}
         {lines.map((line, index) => {
@@ -168,7 +168,7 @@ export function OnDisk({ tree }: { tree: Read<OxagenTree> }) {
         <p className={note}>
           {t.rich("note", {
             code: (chunks) => (
-              <code className="font-mono text-[12px]">{chunks}</code>
+              <code className="font-mono text-sm">{chunks}</code>
             ),
           })}
         </p>
@@ -182,7 +182,7 @@ const POINTS = ["1", "2", "3", "4", "5"] as const;
 export function InjectionPoints() {
   const t = useTranslations("steering.records.injection");
   const code = (chunks: ReactNode) => (
-    <code className="font-mono text-[12px]">{chunks}</code>
+    <code className="font-mono text-sm">{chunks}</code>
   );
   return (
     <section
@@ -199,7 +199,7 @@ export function InjectionPoints() {
         </Badge>
       </div>
       <div className={panelBody}>
-        <p className="mb-3 text-[12.5px] text-muted-foreground">{t("lead")}</p>
+        <p className="mb-3 text-sm text-muted-foreground">{t("lead")}</p>
         <ol className="flex flex-col gap-3">
           {POINTS.map((point) => (
             <li
@@ -207,11 +207,11 @@ export function InjectionPoints() {
               data-point={point}
               className="relative pl-5 before:absolute before:left-0 before:top-[5px] before:size-2 before:rounded-full before:bg-gold"
             >
-              <span className="flex gap-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-dim">
+              <span className="flex gap-2 text-sm font-semibold uppercase tracking-[0.1em] text-dim">
                 <span className="font-mono">{point}</span>
                 {t(`points.${point}.head`)}
               </span>
-              <span className="text-[13px] text-foreground">
+              <span className="text-sm text-foreground">
                 {t.rich(`points.${point}.body`, { code })}
               </span>
             </li>

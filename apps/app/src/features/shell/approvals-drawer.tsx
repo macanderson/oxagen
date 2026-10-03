@@ -162,7 +162,7 @@ function PendingRow({
       >
         <Glyph agent={agent} harness={harness} />
         <span className="min-w-0 flex-1">
-          <b className="block break-all font-mono text-[13px] font-semibold">
+          <b className="block break-all font-mono text-sm font-semibold">
             {item.tool}
           </b>
           <span className="block text-xs text-muted-foreground">
@@ -172,7 +172,7 @@ function PendingRow({
         <span
           data-countdown={item.id}
           data-warn={warn ? "" : undefined}
-          className={`flex-none font-mono text-[13px] font-semibold ${
+          className={`flex-none font-mono text-sm font-semibold ${
             warn ? "text-critical" : "text-info"
           }`}
         >
@@ -208,7 +208,7 @@ function ResolvedRow({
       >
         <Glyph agent={agent} harness={harness} />
         <span className="min-w-0 flex-1">
-          <b className="block break-all font-mono text-[13px] font-semibold">
+          <b className="block break-all font-mono text-sm font-semibold">
             {item.tool}
           </b>
           <span className="block text-xs text-muted-foreground">
@@ -316,7 +316,7 @@ function ResolvedCard({
 }
 
 const eyebrow =
-  "mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground";
+  "mb-2 text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground";
 
 export function ApprovalsDrawer({
   data,
@@ -444,7 +444,7 @@ export function ApprovalsDrawer({
         }`}
       >
         <div className="flex items-center gap-2.5 border-b border-border px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-          <h3 className="text-[15px] font-semibold">{t("title")}</h3>
+          <h3 className="text-base font-semibold">{t("title")}</h3>
           {waitingLabel === null ? null : (
             <Badge tone={n !== null && n > 0 ? "approval" : "quiet"}>
               {t("waiting", { count: waitingLabel })}
@@ -548,11 +548,11 @@ export function ApprovalsDrawer({
                 <div className="px-1.5 py-6 text-center">
                   <p
                     data-testid="apdrawer-empty"
-                    className="text-[12.5px] text-muted-foreground"
+                    className="text-sm text-muted-foreground"
                   >
                     {waitingUnread ? t("emptyRead") : t("empty")}
                   </p>
-                  <p className="mt-2 text-[11.5px] text-muted-foreground">
+                  <p className="mt-2 text-sm text-muted-foreground">
                     {t.rich("emptyDetail", {
                       code: (chunks) => (
                         <span className="font-mono">{chunks}</span>
@@ -591,7 +591,7 @@ export function ApprovalsDrawer({
                   </ul>
                 </>
               ) : null}
-              <p className="mt-4 rounded-lg border border-border bg-hl px-3 py-2.5 text-[11.5px] text-muted-foreground">
+              <p className="mt-4 rounded-lg border border-border bg-hl px-3 py-2.5 text-sm text-muted-foreground">
                 {t("note")}
               </p>
             </>

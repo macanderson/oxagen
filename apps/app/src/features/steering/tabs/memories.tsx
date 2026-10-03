@@ -56,7 +56,7 @@ function Frame({ children }: { children: ReactNode }) {
         <h3 id="memories-title" className={panelTitle}>
           {t("title")}
         </h3>
-        <span className="text-[12.5px] text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           {t("lead")}
         </span>
       </div>

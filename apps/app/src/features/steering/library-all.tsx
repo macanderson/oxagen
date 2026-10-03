@@ -51,7 +51,7 @@ const FORCE_ORDER: Record<RecordForce, number> = {
 };
 
 const note =
-  "border-l-2 border-gold py-0.5 pl-3 text-[12.5px] text-muted-foreground";
+  "border-l-2 border-gold py-0.5 pl-3 text-sm text-muted-foreground";
 
 type Row = RecordPage["records"][number];
 
@@ -100,7 +100,7 @@ export function LibraryAll({
   const issue = String(STEERING_GAPS.registry);
   const record = useTranslations("ui.record");
   const notRecorded = (
-    <span className="text-[15px] font-medium text-muted-foreground">
+    <span className="text-base font-medium text-muted-foreground">
       {t("notRecorded")}
     </span>
   );
@@ -137,14 +137,14 @@ export function LibraryAll({
             {row.statement === null ? null : (
               <span
                 data-term="statement"
-                className="block text-[12.5px] text-muted-foreground md:truncate"
+                className="block text-sm text-muted-foreground md:truncate"
               >
                 {row.statement}
               </span>
             )}
             <SafeLink
               to={routes.steeringRecord(at.org, at.ws, row.lineage)}
-              className={`${linkText} font-mono text-[12px]`}
+              className={`${linkText} font-mono text-sm`}
             >
               {row.lineage}
             </SafeLink>
@@ -167,7 +167,7 @@ export function LibraryAll({
             {row.sharingScope}
             {row.sharingScope === "repository" ? (
               <span
-                className="block text-[12px] text-muted-foreground md:truncate"
+                className="block text-sm text-muted-foreground md:truncate"
                 title={t("scopeTargetTitle", { issue })}
                 data-scope-target="not-recorded"
               >
@@ -192,7 +192,7 @@ export function LibraryAll({
               {t("notRecorded")}
             </span>
           </td>
-          <td className={`${cell} font-mono text-[11px]`}>
+          <td className={`${cell} font-mono text-sm`}>
             {source ?? (
               <span className="font-sans text-muted-foreground">
                 {t("sourceNone")}
@@ -217,7 +217,7 @@ export function LibraryAll({
           testId="tile-by-kind"
           term={t("byKind")}
           value={
-            <span className="font-mono text-[15px]">
+            <span className="font-mono text-base">
               {t("kindRecord")} {page.total}
             </span>
           }

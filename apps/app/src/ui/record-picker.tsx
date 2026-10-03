@@ -123,7 +123,7 @@ const NO_NAMESPACES: readonly PickerNamespace[] = [];
 
 /** The multi picker's box: the input recipe, lit by the focus inside it. */
 const chipBox =
-  "flex w-full min-w-0 flex-wrap items-center gap-1.5 rounded-md border border-input-border bg-input-bg px-2 py-1.5 text-[13px] text-input-fg " +
+  "flex w-full min-w-0 flex-wrap items-center gap-1.5 rounded-md border border-input-border bg-input-bg px-2 py-1.5 text-sm text-input-fg " +
   "hover:border-input-border-hover focus-within:border-input-border-focus focus-within:outline-2 focus-within:outline-offset-0 focus-within:outline-input-ring " +
   "aria-disabled:bg-input-disabled-bg aria-disabled:text-input-disabled-fg";
 

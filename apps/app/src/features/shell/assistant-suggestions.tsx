@@ -156,7 +156,7 @@ export function AssistantSuggestions() {
   if (org === null || ws === null || keys.length === 0) return null;
   return (
     <div className="mt-2 flex flex-col gap-2">
-      <p id={titleId} className="text-[12px] font-medium text-muted-foreground">
+      <p id={titleId} className="text-sm font-medium text-muted-foreground">
         {t("title")}
       </p>
       <ul
@@ -178,7 +178,7 @@ export function AssistantSuggestions() {
                     ?.querySelector("textarea")
                     ?.focus();
                 }}
-                className="w-full rounded-lg border border-border px-3 py-2 text-left text-[13px] text-foreground transition-colors hover:border-rule hover:bg-button-default-hover-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11"
+                className="w-full rounded-lg border border-border px-3 py-2 text-left text-sm text-foreground transition-colors hover:border-rule hover:bg-button-default-hover-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11"
               >
                 {question}
               </button>
