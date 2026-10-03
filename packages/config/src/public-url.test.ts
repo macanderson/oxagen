@@ -349,6 +349,9 @@ describe("redactUrlSecrets", () => {
     ["sig", "https://mcp.example.com/mcp?sig=abc"],
     ["x-goog-token", "https://mcp.example.com/mcp?x-goog-token=abc"],
     ["api%5Fkey", "https://mcp.example.com/mcp?api%5Fkey=abc"],
+    ["%74oken", "https://mcp.example.com/mcp?%74oken=abc"],
+    ["subscription-key", "https://apim.example.com/v1?subscription-key=abc"],
+    ["a fragment's access_token", "https://mcp.example.com/cb#access_token=abc"],
   ])("hides the value of %s", (_name, url) => {
     const out = redactUrlSecrets(url);
     expect(out).not.toContain("abc");
@@ -360,7 +363,7 @@ describe("redactUrlSecrets", () => {
     for (const url of [
       "https://host.example/v1?api-version=2024-10-01",
       "https://host.example/v1?owner=a@b.example#models",
-      "https://host.example/v1?flag&monkey=1",
+      "https://host.example/v1?flag&region=eu",
       "https://host.example/v1",
       "not a url at all",
     ]) {
