@@ -197,7 +197,7 @@ Each commit item:
 | `removed` | whole number | | Lines removed across every file of the commit, before the file cut. Zero for a merge. |
 | `files_total` | whole number | | How many files the commit touched, before the cut. Zero for a merge. |
 | `files` | list of file items | at most 16 | The files, sorted by path, then cut. Empty for a merge. |
-| `test` | `unpushed`, `reflog`, or `email` | | The ADR-188 test that held (below). |
+| `test` | `unpushed`, `email`, or `reflog` | | The ADR-188 test that held (below). Absent only for a commit a daemon counted before it kept tests. |
 | `tool_use_id` | string | at most 512 characters | Optional. The Bash tool call that made the commit (below). |
 | `files_outside_session` | boolean | | Optional. True when the commit touched a path the session never wrote or edited (below). |
 
@@ -237,18 +237,23 @@ The rules behind the fields:
   (its committer email is the one the repository stamps), then `reflog` (the
   worktree's `HEAD` reflog records it as made there). The reflog is read only
   for commits the other two left out. A commit carried from an earlier read
-  keeps the test it passed when it was first counted.
-- **`tool_use_id` is present only when one tool call matches.** The commit's
-  `HEAD` reflog entry is dated inside exactly one `git_commit` effect the
-  daemon recorded for the session, between the tool call's start and its end.
-  It is absent when the reflog has no entry for the commit, or when no effect
-  or more than one effect matches.
+  keeps the test it passed when it was first counted. The daemon keeps each
+  commit's test beside the commit in its state, and a commit an older daemon
+  counted has none, so its item leaves `test` out.
+- **`tool_use_id` is present only when one tool call matches.** The moment
+  the `HEAD` reflog first named the commit falls inside exactly one Bash tool
+  call whose line runs `git commit`, between the call's `PreToolUse` and its
+  `PostToolUse`. A line such as `git commit && git push` counts, although its
+  effect kind is `git_push`. It is absent when the reflog has no entry for
+  the commit, when no call or more than one call matches, and after a daemon
+  restart, because the daemon keeps the calls in memory only.
 - **`files_outside_session` compares against the session's own writes.** It
   is true when at least one path the commit touched, counted over every file
   and not just the cut list, is not a path the session's tool calls wrote or
   edited. Those are the attested file facts behind the `tacho.session_files`
-  counters. It is absent when the daemon holds no such record, as for a
-  session restored from an older state file. A `true` value flags a commit
+  counters. It is absent when the daemon does not hold every path the
+  session wrote: a session it did not see start, one past 4,096 written
+  paths, or one read after a daemon restart. A `true` value flags a commit
   that may hold another run's edits, as `git add -A` does in a shared
   checkout.
 
