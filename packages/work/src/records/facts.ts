@@ -189,7 +189,12 @@ export interface FactDataByKind {
   source_changed: SourceSnapshot & { previous_digest: Sha256Digest | null };
   /** `decision` is the triage decision's public id. */
   triage_recorded: { decision: string; outcome: TriageOutcome; duplicate_of: string | null };
-  triage_failed: { reason: string };
+  /**
+   * `code` names a known cause. `platform_provider_balance`: Oxagen's own
+   * provider account was out of balance, so triage runs again on its own
+   * (#5408).
+   */
+  triage_failed: { reason: string; code?: string };
   /** A null outcome clears an earlier override, so triage decides again. */
   triage_overridden: { outcome: TriageOutcome | null; duplicate_of: string | null; reason: string };
   /** `revises` is true when the save replaced an approved brief and moved the item revision. */

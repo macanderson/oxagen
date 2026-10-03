@@ -52,7 +52,8 @@ const { postgresCollectorStore } = await import("./collector-store");
 const { routeGithubWorkDelivery, defaultWorkDeliveryDeps } = await import("./delivery");
 const { intakePorts } = await import("./ports");
 const { createWorkIntakeRunner, githubFileTrees } = await import("./runner");
-const { TRIAGE_OPEN_WORK_LIMIT, recordTriageFailure, runTriage } = await import("./triage-run");
+const { PROVIDER_BALANCE_REASON, TRIAGE_OPEN_WORK_LIMIT, recordTriageFailure, runTriage } = await import("./triage-run");
+const { PlatformProviderBalanceError } = await import("@oxagen/ai");
 const recorded = await import("./github-recorded.test-support");
 
 const enabled = Boolean(process.env.DATABASE_URL);
@@ -1084,6 +1085,50 @@ describe.skipIf(!enabled)("work intake and triage against Postgres", () => {
     expect(record.facts.map((fact) => fact.kind)).toEqual(["entered"]);
     expect(record.projection.triage.outcome).toBeNull();
     expect(await decisionsFor(s, item.id)).toEqual([]);
+  });
+
+  // #5408: Oxagen's own provider balance ran out, and the provider's
+  // "Insufficient credits" reached the item as if it were the organization's.
+  // The run now says whose balance it is, once per revision, and answers
+  // retryable instead of throwing. That failure does not count as triage
+  // having run, so the job's next run triages the item once the balance is back.
+  it("records an exhausted platform balance once, answers retryable, and triages on the next run", async () => {
+    const s = newScope();
+    await addPriorities(s);
+    const item = await entered(s);
+    const outOfBalance = (): TriageModelClient => ({
+      complete: async () => {
+        throw new PlatformProviderBalanceError();
+      },
+    });
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      expect(await triage(s, item.publicId, outOfBalance)).toEqual({ kind: "failed", reason: PROVIDER_BALANCE_REASON, retryable: true });
+    }
+    const waiting = await itemRecord(s, item.publicId);
+    const failures = waiting.facts.filter((fact) => fact.kind === "triage_failed");
+    expect(failures).toHaveLength(1);
+    expect(failures[0]!.data).toEqual({ reason: PROVIDER_BALANCE_REASON, code: "platform_provider_balance" });
+    expect(PROVIDER_BALANCE_REASON).toContain("Oxagen's account with its model provider is out of balance");
+    expect(PROVIDER_BALANCE_REASON).toContain("your organization's credits are not affected");
+    expect(waiting.projection.triage.outcome).toBe("failed");
+
+    const { model, calls } = scriptedModel([suggestion(item.publicId)]);
+    expect(await triage(s, item.publicId, model)).toMatchObject({ kind: "recorded", outcome: "triaged" });
+    expect(calls()).toBe(1);
+  });
+
+  // Any other failure on the revision still counts as triage having run, so a
+  // run nobody asked for leaves it alone.
+  it("still skips a revision whose latest failure is not the platform balance", async () => {
+    const s = newScope();
+    await addPriorities(s);
+    const item = await entered(s);
+    await runInTenantScope(s, () =>
+      recordTriageFailure(s, item.publicId, "Triage could not run: the gateway refused the call.", new Date(), { revision: 1 }),
+    );
+    const { model, calls } = scriptedModel([suggestion(item.publicId)]);
+    expect(await triage(s, item.publicId, model)).toEqual({ kind: "skipped", reason: "Triage already ran on revision 1." });
+    expect(calls()).toBe(0);
   });
 
   // ADR-250: when the item moves to a newer revision while triage reads it,

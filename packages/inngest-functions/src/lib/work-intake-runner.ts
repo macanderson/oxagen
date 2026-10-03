@@ -68,7 +68,11 @@ export interface WorkCollectorTarget extends WorkIntakeScope {
 /** What one triage run did. */
 export type WorkTriageOutcome =
   | { kind: "recorded"; decision: string; outcome: string }
-  | { kind: "failed"; reason: string }
+  /**
+   * `retryable` when the cause is Oxagen's and passes on its own, such as the
+   * platform's provider balance running out (#5408). The job runs triage again.
+   */
+  | { kind: "failed"; reason: string; retryable?: true }
   | { kind: "skipped"; reason: string };
 
 export interface WorkIntakeRunner {

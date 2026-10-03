@@ -13,6 +13,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   resolveModelFundingSource: vi.fn(),
   selectModel: vi.fn(),
+  withSystemDb: vi.fn(),
+  captureError: vi.fn(),
 }));
 
 vi.mock("./funding-source", () => ({
@@ -23,11 +25,26 @@ vi.mock("./models", () => ({
   selectModel: mocks.selectModel,
 }));
 
+// The shared key's refusal raises an alert through the rate-limit counter and
+// the error stream. Both are replaced, so a case can say what they saw.
+vi.mock("@oxagen/database", () => ({
+  schema: { rateLimitCounters: {} },
+  withSystemDb: mocks.withSystemDb,
+}));
+
+vi.mock("@oxagen/telemetry", () => ({
+  captureError: mocks.captureError,
+}));
+
 // `wrapLanguageModel` is the real one: the minted-key test below drives the
 // wrapped model's `doGenerate` and `doStream` to prove the refusal mapping.
 
 import { APICallError } from "@ai-sdk/provider";
 import { AssistantModelKeyLimitError } from "./assistant-model-key-limit";
+import {
+  PlatformProviderBalanceError,
+  resetPlatformBalanceAlertForTests,
+} from "./platform-provider-balance";
 import {
   selectModelForOrg,
   selectModelFromFunding,
@@ -61,6 +78,9 @@ const MINTED_KEY = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.selectModel.mockReturnValue({ modelId: "a-model" });
+  // The counter answers "first in this hour" unless a case says otherwise.
+  mocks.withSystemDb.mockResolvedValue([{ count: 1 }]);
+  resetPlatformBalanceAlertForTests();
 });
 
 describe("selectModelForOrg", () => {
@@ -78,10 +98,9 @@ describe("selectModelForOrg", () => {
     expect(mocks.selectModel.mock.calls[0]![0]).not.toHaveProperty(
       "credential",
     );
-    expect(selection).toEqual({
-      model: { modelId: "a-model" },
-      fundedBy: "platform",
-    });
+    // The shared model comes back wrapped (#5408), so its id is what holds.
+    expect(selection.fundedBy).toBe("platform");
+    expect(selection.model).toMatchObject({ modelId: "a-model" });
   });
 
   it("builds on the customer's key AND bills the customer, never one without the other", async () => {
@@ -213,15 +232,118 @@ describe("selectModelForOrg", () => {
       const { model } = await selectModelForOrg(ORG);
       expect(model).toBe(raw);
     });
+  });
 
-    it("leaves the shared key unwrapped", async () => {
-      const raw = refusingModel();
-      mocks.selectModel.mockReturnValue(raw);
+  // #5408: on 2026-10-03 Oxagen's own provider balance ran out. The shared
+  // key's 402 reached 130 work items as "Insufficient credits", which reads
+  // as the organisation's credits, and nothing alerted. The shared key is now
+  // wrapped, so the refusal names whose balance ran out and raises the alert.
+  describe("the shared key's spend refusal (#5408)", () => {
+    function refusingModel(refusal: Error) {
+      return {
+        specificationVersion: "v4" as const,
+        provider: "openrouter",
+        modelId: "a-model",
+        supportedUrls: {},
+        doGenerate: vi.fn(async () => {
+          throw refusal;
+        }),
+        doStream: vi.fn(async () => {
+          throw refusal;
+        }),
+      };
+    }
+    const outOfCredit = () =>
+      new APICallError({
+        message:
+          "Insufficient credits. Add more using https://openrouter.ai/settings/credits",
+        url: "https://openrouter.ai/api/v1/chat/completions",
+        requestBodyValues: {},
+        statusCode: 402,
+        responseBody:
+          '{"error":{"message":"Insufficient credits. Add more using https://openrouter.ai/settings/credits","code":402}}',
+      });
+
+    it("reaches the caller as a named error that says the balance is Oxagen's", async () => {
+      mocks.selectModel.mockReturnValue(refusingModel(outOfCredit()));
+      mocks.resolveModelFundingSource.mockResolvedValue({
+        fundedBy: "platform",
+      });
+      const { model } = await selectModelForOrg(ORG, { tier: "fast" });
+      const wrapped = callable(model);
+      for (const call of [wrapped.doGenerate, wrapped.doStream]) {
+        const err: unknown = await call
+          .call(wrapped, { prompt: [] })
+          .catch((e: unknown) => e);
+        expect(err).toBeInstanceOf(PlatformProviderBalanceError);
+        expect(err).toMatchObject({ code: "platform_provider_balance" });
+        expect(err).toHaveProperty(
+          "message",
+          expect.stringMatching(/Oxagen's account with its model provider/),
+        );
+        expect(err).toHaveProperty(
+          "message",
+          expect.stringMatching(/credits are not affected/),
+        );
+        expect(err).not.toHaveProperty(
+          "message",
+          expect.stringMatching(/Insufficient credits|openrouter\.ai/i),
+        );
+      }
+    });
+
+    it("alerts once an hour, however many calls the provider refuses", async () => {
+      mocks.selectModel.mockReturnValue(refusingModel(outOfCredit()));
       mocks.resolveModelFundingSource.mockResolvedValue({
         fundedBy: "platform",
       });
       const { model } = await selectModelForOrg(ORG);
-      expect(model).toBe(raw);
+      for (let i = 0; i < 3; i += 1) {
+        await callable(model)
+          .doGenerate({ prompt: [] })
+          .catch(() => undefined);
+      }
+      expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
+      expect(mocks.captureError).toHaveBeenCalledTimes(1);
+      expect(mocks.captureError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orgId: ORG,
+          severity: "error",
+          context: expect.stringContaining("platform_provider_balance"),
+        }),
+      );
+    });
+
+    it("passes a refusal that names an affordable ceiling through, so the budget retry can ask again", async () => {
+      const affordable = new APICallError({
+        message:
+          "This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 2048.",
+        url: "https://openrouter.ai/api/v1/chat/completions",
+        requestBodyValues: {},
+        statusCode: 402,
+      });
+      mocks.selectModel.mockReturnValue(refusingModel(affordable));
+      mocks.resolveModelFundingSource.mockResolvedValue({
+        fundedBy: "platform",
+      });
+      const { model } = await selectModelForOrg(ORG);
+      await expect(callable(model).doGenerate({ prompt: [] })).rejects.toBe(
+        affordable,
+      );
+      expect(mocks.captureError).not.toHaveBeenCalled();
+    });
+
+    it("passes every other error through untouched", async () => {
+      const outage = new Error("upstream 503");
+      mocks.selectModel.mockReturnValue(refusingModel(outage));
+      mocks.resolveModelFundingSource.mockResolvedValue({
+        fundedBy: "platform",
+      });
+      const { model } = await selectModelForOrg(ORG);
+      await expect(callable(model).doGenerate({ prompt: [] })).rejects.toBe(
+        outage,
+      );
+      expect(mocks.captureError).not.toHaveBeenCalled();
     });
   });
 

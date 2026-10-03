@@ -240,6 +240,7 @@ describe("ask_assistant — the same gates on both adapters", () => {
     ["engine_aborted", 409],
     ["model_call_failed", 502],
     ["assistant_model_key_limit", 402],
+    ["platform_provider_balance", 503],
   ] as const)(
     "POST /assistant/ask answers the turn failure %s with %i and its code, never a 500",
     async (code, status) => {

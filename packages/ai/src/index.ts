@@ -40,6 +40,14 @@ export {
   isSpendRefusal,
 } from "./assistant-model-key-limit";
 
+// The same refusal on Oxagen's shared key: the platform's own provider balance
+// ran out, which is Oxagen's to fix and alerts once an hour (#5408).
+export {
+  PlatformProviderBalanceError,
+  PLATFORM_PROVIDER_BALANCE_CODE,
+  isPlatformProviderBalanceError,
+} from "./platform-provider-balance";
+
 // Which provider serves the platform's own language-model calls, and so
 // whether a minted key can serve here at all (ADR-131 §9).
 export {

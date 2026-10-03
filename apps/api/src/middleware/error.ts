@@ -75,7 +75,10 @@ const HANDLER_ERROR_STATUS: Record<HandlerErrorCode, 403 | 404 | 409> = {
 // so a 502; its message names the provider's status and nothing the vendor
 // said. The key Oxagen minted for the organisation reaching its daily ceiling
 // (`AssistantModelKeyLimitError`, @oxagen/ai, ADR-131 §3) is a payment
-// decision, so a 402; it used to fall through to the 500 catch-all.
+// decision, so a 402; it used to fall through to the 500 catch-all. Oxagen's
+// own provider account running out of balance on the shared key
+// (`PlatformProviderBalanceError`, @oxagen/ai, #5408) is the service unable to
+// answer, so a 503; the caller's organization did nothing wrong.
 export const ASSISTANT_TURN_ERROR_STATUS: Record<
   string,
   402 | 409 | 502 | 503
@@ -85,6 +88,7 @@ export const ASSISTANT_TURN_ERROR_STATUS: Record<
   engine_aborted: 409,
   model_call_failed: 502,
   assistant_model_key_limit: 402,
+  platform_provider_balance: 503,
 };
 
 // A store that is up and refusing work it cannot take right now
