@@ -766,6 +766,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       },
     },
     steeringRepo: { get: refuse },
+    changes: { changeSet: refuse, revisionDiff: refuse },
     tools: {
       versions: refuse,
       grants: refuse,

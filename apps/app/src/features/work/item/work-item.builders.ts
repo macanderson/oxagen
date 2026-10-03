@@ -13,8 +13,10 @@ import type {
   WorkTarget,
   WorkTargetList,
 } from "@/data/contracts/work";
+import type { ChangeSet } from "@/data/contracts/changes";
 import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
+import { emptyChangeSet } from "@/test/change-views";
 
 /** A full commit id that shortens to `prefix` (seven hex characters). */
 function sha(prefix: string): string {
@@ -856,9 +858,16 @@ export function workTargets(): WorkTargetList {
 export function workItemSource(
   read: Read<WorkItemDetail>,
   targets: Read<WorkTargetList> = readOk(workTargets()),
+  /**
+   * `get_change_set` for the item, which its Changes panel reads once the
+   * item read answers (ADR-292). A test that says nothing about it gets an
+   * item with no pull request on record.
+   */
+  changes: Read<ChangeSet> = readOk(emptyChangeSet("work_item")),
 ) {
   const calls: unknown[][] = [];
   const targetCalls: unknown[][] = [];
+  const changeCalls: unknown[][] = [];
   const refuse = () => Promise.reject(new Error("not a Work item read"));
   const source: DataSource = {
     runtimes: { list: refuse, agents: refuse, named: refuse },
@@ -963,6 +972,13 @@ export function workItemSource(
       tree: refuse,
     },
     steeringRepo: { get: refuse },
+    changes: {
+      changeSet: (...args: unknown[]) => {
+        changeCalls.push(args);
+        return Promise.resolve(changes);
+      },
+      revisionDiff: refuse,
+    },
     tools: {
       versions: refuse,
       grants: refuse,
@@ -975,5 +991,5 @@ export function workItemSource(
     },
     mandates: { list: refuse, get: refuse },
   };
-  return { source, calls, targetCalls };
+  return { source, calls, targetCalls, changeCalls };
 }

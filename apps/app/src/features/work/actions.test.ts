@@ -10,11 +10,22 @@
 // the ones the page read, so a change by anyone else between the two writes
 // is refused as stale. A refusal comes back as the seam classified it, with
 // nothing invented.
+//
+// The two reads the Changes panel makes when a person opens a send or a file
+// read the `changes` port, faked here, and check their input first (ADR-292).
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { changeSet, revisionDiff } from "@/test/change-views";
 
-const { requireViewer, kernelWrite } = vi.hoisted(() => ({
+const { requireViewer, kernelWrite, changeSetRead, revisionDiffRead } = vi.hoisted(() => ({
   requireViewer: vi.fn(),
   kernelWrite: vi.fn(),
+  changeSetRead: vi.fn(),
+  revisionDiffRead: vi.fn(),
+}));
+vi.mock("@/data/source", () => ({
+  dataSource: () => ({
+    changes: { changeSet: changeSetRead, revisionDiff: revisionDiffRead },
+  }),
 }));
 vi.mock("@oxagen/telemetry", () => ({ captureError: vi.fn() }));
 vi.mock("@oxagen/handlers/register", () => ({}));
@@ -74,6 +85,8 @@ const INVALID = { ok: false, reason: "invalid", code: "invalid_input", field: "r
 beforeEach(() => {
   requireViewer.mockReset().mockResolvedValue(CTX);
   kernelWrite.mockReset();
+  changeSetRead.mockReset();
+  revisionDiffRead.mockReset();
 });
 
 describe("createWorkItem", () => {
@@ -798,5 +811,62 @@ describe("setCollector and syncCollector", () => {
       }),
     ).toEqual(DENIED);
     expect(await actions.syncCollector("acme", "core-platform", { name: "x" })).toEqual(INVALID);
+  });
+});
+
+describe("readChangeSet and readRevisionDiff", () => {
+  it("reads a send's change set by its work order through the changes port", async () => {
+    const value = changeSet({ scope: "work_order" });
+    changeSetRead.mockResolvedValue({ ok: true, value });
+    expect(await actions.readChangeSet("acme", "core-platform", "work_order", ORDER_ID)).toEqual({
+      ok: true,
+      value,
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(changeSetRead).toHaveBeenCalledWith(CTX, "work_order", ORDER_ID);
+  });
+
+  it("refuses a scope the work pages do not read and an empty id, before any read (negative)", async () => {
+    expect(
+      // A server action is an endpoint: the page's types do not bind a caller.
+      await Reflect.apply(actions.readChangeSet, undefined, ["acme", "core-platform", "run", "tse_1"]),
+    ).toEqual({ ok: false, reason: "invalid", code: "change_set_scope", field: "scope" });
+    expect(await actions.readChangeSet("acme", "core-platform", "work_item", "")).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "change_set_id",
+      field: "id",
+    });
+    expect(changeSetRead).not.toHaveBeenCalled();
+  });
+
+  it("answers a refused change set read as the seam classified it (negative)", async () => {
+    changeSetRead.mockResolvedValue({ ok: false, reason: "denied", permission: "run.read" });
+    expect(await actions.readChangeSet("acme", "core-platform", "work_item", ITEM_ID)).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "run.read",
+    });
+  });
+
+  it("reads one revision's opened path through the changes port", async () => {
+    const value = revisionDiff("prv_482a", "src/app.ts", "@@ -1,1 +1,1 @@\n-old\n+new");
+    revisionDiffRead.mockResolvedValue({ ok: true, value });
+    expect(
+      await actions.readRevisionDiff("acme", "core-platform", "prv_482a", ["src/app.ts"]),
+    ).toEqual({ ok: true, value });
+    expect(revisionDiffRead).toHaveBeenCalledWith(CTX, "prv_482a", ["src/app.ts"]);
+  });
+
+  it("refuses no path, too many paths, and an empty path, before any read (negative)", async () => {
+    for (const paths of [[], Array.from({ length: 101 }, (_, i) => `f${String(i)}`), [""]]) {
+      expect(await actions.readRevisionDiff("acme", "core-platform", "prv_482a", paths)).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "revision_diff_paths",
+        field: "paths",
+      });
+    }
+    expect(revisionDiffRead).not.toHaveBeenCalled();
   });
 });

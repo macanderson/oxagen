@@ -353,6 +353,7 @@ export function onboardingSource(reads: Reads): {
       tree: refuse("steering.tree"),
     },
     steeringRepo: { get: refuse("steeringRepo.get") },
+    changes: { changeSet: refuse("changes.changeSet"), revisionDiff: refuse("changes.revisionDiff") },
     tools: {
       versions: refuse("tools.versions"),
       grants: refuse("tools.grants"),

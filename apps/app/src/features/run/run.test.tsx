@@ -47,6 +47,7 @@ import {
   transcriptEntry,
   transcriptFigures,
 } from "./run.builders";
+import { changeSet } from "@/test/change-views";
 import { runIssue, runIssues } from "./issues.builders";
 import { releaseTranscript } from "./transcript.builders";
 import { TRANSCRIPT_PAGE } from "./transcript-rows";
@@ -92,6 +93,8 @@ vi.mock("./actions", () => ({
   readRunExport: vi.fn(),
   sealRun: vi.fn(),
   answerInterjection: vi.fn(),
+  readChangeSet: vi.fn(),
+  readRevisionDiff: vi.fn(),
 }));
 vi.mock("next-intl/server", async () => {
   const { translator } = await import("@/test/intl");
@@ -3598,6 +3601,41 @@ describe("the work", () => {
     const changes = within(await screen.findByTestId("run-changes"));
     expect(changes.queryByText("none")).toBeNull();
     expect(changes.getByText(/github_unreachable/)).toBeTruthy();
+  });
+
+  // ADR-292: the run's change set comes from Oxagen's own pull request store.
+  it("reads the run's change set by the run's public id and draws it in Changes", async () => {
+    const { calls, container } = await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      changes: ok(changeSet()),
+    });
+    const changes = within(await screen.findByTestId("run-changes"));
+    expect(calls.changeSet).toEqual([[ctx, "run", runRow().id]]);
+    const set = within(changes.getByTestId("run-change-set"));
+    expect(
+      set.getAllByTestId("change-pull").map((row) => row.dataset.state),
+    ).toEqual(["open", "merged"]);
+    expect(set.getAllByTestId("change-file")).toHaveLength(2);
+    await expectNoAxe(container);
+  });
+
+  it("names a change set read that threw in Changes and keeps the rest of the page (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(runWork()),
+      changes: () => Promise.reject(new Error("forge store down")),
+    });
+    const changes = within(await screen.findByTestId("run-changes"));
+    expect(
+      within(changes.getByTestId("run-change-set")).getByText(
+        /frame_store_unreachable/,
+      ),
+    ).toBeTruthy();
+    expect(
+      changes.getByRole("link", { name: "acme/platform#482" }),
+    ).toBeTruthy();
   });
 
   it("names a running check by its status, marks a partial outputs read's file count as a floor, and folds files past eight into a count", async () => {

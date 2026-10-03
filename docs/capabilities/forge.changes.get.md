@@ -14,6 +14,8 @@
 
 The pull requests a run, a work order, a work item, or an issue produced, each with its latest stored revision and files, and their change rolled up by repository ([ADR-292](../adr/ADR-292-every-pull-request-read-comes-from-the-forge-store.md)). Every fact comes from Oxagen's own pull request store ([ADR-288](../adr/ADR-288-pull-requests-and-their-diffs-are-stored-in-the-forge-schema-and-s3.md)). Nothing is read from GitHub or GitLab.
 
+In the app, the Run page's Changes panel draws a run's change set, and Changes by issue under its Issues tab opens each issue's. The work item page's Changes panel draws the item's, and Changes by send opens each work order's.
+
 ## Input
 
 `{ scope: run | work_order | work_item | issue, id }`

@@ -425,6 +425,46 @@
       "verifiedAt": "2026-10-02",
       "verifiedBy": "session_01B5MzP4EGjHSj52UKpWTxyz"
     },
+    "get_change_set": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "The Run page's Changes panel draws the run's change set, and Changes by issue under the Issues tab opens each issue's (features/run/run.tsx, features/run/work.tsx, features/run/issues-tab.tsx, features/run/change-sets.tsx, features/run/actions.ts)",
+      "testid": "run-change-set",
+      "proof": "apps/app/src/features/run/run.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "pr-diff-views (#5284)",
+      "also": [
+        {
+          "route": "/[org]/[ws]/work/[item]",
+          "page": "apps/app/src/app/[org]/[ws]/work/[item]/page.tsx",
+          "entry": "The work item page's Changes panel draws the item's change set, and Changes by send opens each send's work order (features/work/item/work-item-page.tsx, features/work/item/changes-panel.tsx, features/work/item/change-sets.tsx, features/work/actions.ts)",
+          "testid": "work-panel-changes",
+          "proof": "apps/app/src/features/work/item/work-item.test.tsx",
+          "verifiedAt": "2026-10-03",
+          "verifiedBy": "pr-diff-views (#5284)"
+        }
+      ]
+    },
+    "get_revision_diff": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "Opening a file in a change set on the Run page reads its hunks from each pull request that changed it (features/run/change-sets.tsx, features/run/actions.ts, ui/change-set.tsx, ui/diff-view.tsx)",
+      "testid": "change-file",
+      "proof": "apps/app/src/features/run/work.test.tsx",
+      "verifiedAt": "2026-10-03",
+      "verifiedBy": "pr-diff-views (#5284)",
+      "also": [
+        {
+          "route": "/[org]/[ws]/work/[item]",
+          "page": "apps/app/src/app/[org]/[ws]/work/[item]/page.tsx",
+          "entry": "Opening a file in a change set on the work item page reads its hunks from each pull request that changed it (features/work/item/change-sets.tsx, features/work/actions.ts, ui/change-set.tsx, ui/diff-view.tsx)",
+          "testid": "change-file",
+          "proof": "apps/app/src/features/work/item/work-item.test.tsx",
+          "verifiedAt": "2026-10-03",
+          "verifiedBy": "pr-diff-views (#5284)"
+        }
+      ]
+    },
     "refresh_steering_pr": {
       "route": "/[org]/[ws]/steering/proposals/prs/[proposal]",
       "page": "apps/app/src/app/[org]/[ws]/steering/proposals/prs/[proposal]/page.tsx",

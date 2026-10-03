@@ -254,6 +254,7 @@ export function steeringRepoSource(read: Read<SteeringRepoView>) {
         );
       },
     },
+    changes: { changeSet: refuse, revisionDiff: refuse },
     tools: {
       versions: refuse,
       grants: refuse,

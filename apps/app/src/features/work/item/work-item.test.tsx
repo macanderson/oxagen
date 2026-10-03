@@ -5,12 +5,17 @@
 // panel shows in that state, each with an axe check (INV-26). The read
 // failures (404, denied, error) and the read-only viewer are here too. The
 // dialogs and the writes they make are in work-item.dialogs.test.tsx, and the
-// actions' capability input in ../actions.test.ts.
-import { cleanup, render, screen, within } from "@testing-library/react";
+// actions' capability input in ../actions.test.ts. The Changes panel draws
+// the item's change set from Oxagen's own pull request store, and each send
+// opens its own through the lane's action (ADR-292).
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ChangeSet } from "@/data/contracts/changes";
 import { WorkItemDetail, WorkTargetList } from "@/data/contracts/work";
 import { type Read, readError, readOk } from "@/data/read";
+import { changeSet, revisionDiff } from "@/test/change-views";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
@@ -58,7 +63,13 @@ vi.mock("next/navigation", () => ({
     throw new Error("NEXT_NOT_FOUND");
   },
 }));
+const { readChangeSet, readRevisionDiff } = vi.hoisted(() => ({
+  readChangeSet: vi.fn(),
+  readRevisionDiff: vi.fn(),
+}));
 vi.mock("../actions", () => ({
+  readChangeSet,
+  readRevisionDiff,
   reviseTriage: vi.fn(),
   retryTriage: vi.fn(),
   saveBrief: vi.fn(),
@@ -94,9 +105,17 @@ const ctx = unsafeMint(WsCtx, {
 
 async function renderRead(
   read: Read<WorkItemDetail>,
-  options: { targets?: Read<WorkTargetList>; dialog?: "send" | null } = {},
+  options: {
+    targets?: Read<WorkTargetList>;
+    dialog?: "send" | null;
+    changes?: Read<ChangeSet>;
+  } = {},
 ) {
-  const { source, calls, targetCalls } = workItemSource(read, options.targets);
+  const { source, calls, targetCalls, changeCalls } = workItemSource(
+    read,
+    options.targets,
+    options.changes,
+  );
   const element = await WorkItemPage({
     ctx,
     source,
@@ -104,7 +123,7 @@ async function renderRead(
     dialog: options.dialog ?? null,
   });
   const view = render(<IntlProvider>{element}</IntlProvider>);
-  return { calls, targetCalls, ...view };
+  return { calls, targetCalls, changeCalls, ...view };
 }
 
 const renderDetail = (detail: WorkItemDetail) => renderRead(readOk(detail));
@@ -578,5 +597,87 @@ describe("work-item.builders", () => {
       expect(() => WorkItemDetail.parse(build())).not.toThrow();
     }
     expect(() => WorkTargetList.parse(workTargets())).not.toThrow();
+  });
+});
+
+// ADR-292: the item's change set, and one per send, from the pull request store.
+describe("WorkItemPage › changes", () => {
+  it("reads the item's change set by its public id and draws its pull requests", async () => {
+    const { changeCalls } = await renderRead(readOk(runningItem()), {
+      changes: readOk(changeSet({ scope: "work_item" })),
+    });
+    expect(changeCalls).toEqual([[ctx, "work_item", "wi_12ab"]]);
+    const panel = within(screen.getByTestId("work-panel-changes"));
+    expect(panel.getByRole("heading", { level: 2, name: "Changes" })).toBeInTheDocument();
+    expect(
+      panel.getByRole("heading", { level: 3, name: "Pull requests" }),
+    ).toBeInTheDocument();
+    expect(panel.getAllByTestId("change-pull")).toHaveLength(2);
+    expect(panel.getAllByTestId("change-file")).toHaveLength(2);
+  });
+
+  it("opens each send's change set by its work order, read once when it opens", async () => {
+    const user = userEvent.setup();
+    readChangeSet.mockReset();
+    readChangeSet.mockResolvedValue({
+      ok: true,
+      value: changeSet({ scope: "work_order" }),
+    });
+    await renderRead(readOk(runningItem()));
+    const sends = within(screen.getByTestId("work-changes-sends"));
+    const toggle = sends.getByRole("button", { name: "Changes from send 1" });
+    expect(readChangeSet).not.toHaveBeenCalled();
+    await user.click(toggle);
+    expect(readChangeSet).toHaveBeenCalledExactlyOnceWith(
+      "acme",
+      "core-platform",
+      "work_order",
+      "wo_1a",
+    );
+    const set = within(await sends.findByTestId("change-set"));
+    expect(set.getAllByTestId("change-pull")).toHaveLength(2);
+  });
+
+  it("reads an opened file's diff through the lane's action, once per pull request", async () => {
+    const user = userEvent.setup();
+    readRevisionDiff.mockReset();
+    readRevisionDiff.mockImplementation(
+      (_org: string, _ws: string, revisionId: string, paths: string[]) =>
+        Promise.resolve({
+          ok: true,
+          value: revisionDiff(revisionId, paths[0] ?? "", "@@ -1,1 +1,1 @@\n-old\n+new"),
+        }),
+    );
+    await renderRead(readOk(runningItem()), {
+      changes: readOk(changeSet({ scope: "work_item" })),
+    });
+    const panel = within(screen.getByTestId("work-panel-changes"));
+    await user.click(panel.getByRole("button", { name: /src\/app\.ts/ }));
+    expect(readRevisionDiff.mock.calls).toEqual([
+      ["acme", "core-platform", "prv_482a", ["src/app.ts"]],
+      ["acme", "core-platform", "prv_490a", ["src/app.ts"]],
+    ]);
+    await waitFor(() => {
+      expect(panel.getAllByText("+new")).toHaveLength(2);
+    });
+  });
+
+  it("says the item has no pull request on record and lists no sends before the first send", async () => {
+    await renderDetail(readyItem());
+    const panel = within(screen.getByTestId("work-panel-changes"));
+    expect(panel.getByTestId("change-set-empty")).toHaveTextContent(
+      "No pull request is on record yet.",
+    );
+    expect(panel.queryByTestId("work-changes-sends")).toBeNull();
+  });
+
+  it("names a failed change set read in its panel and keeps the page (negative)", async () => {
+    await renderRead(readOk(runningItem()), {
+      changes: readError("work_records_unavailable", 503),
+    });
+    expect(screen.getByTestId("work-panel-changes")).toHaveTextContent(
+      "work_records_unavailable",
+    );
+    expect(screen.getByTestId("work-panel-delivery")).toBeInTheDocument();
   });
 });

@@ -24,7 +24,7 @@ export const revisionDiffGet = registerCapability({
     "Get one pull request revision's diff from Oxagen's own store, split into files, checked against the digest recorded when it was captured. A revision whose diff is not kept answers its file list and the reason.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,
