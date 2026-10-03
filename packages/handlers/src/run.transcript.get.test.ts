@@ -5016,6 +5016,70 @@ describe("get_run_transcript follows a live run from inside its turn (#4340)", (
     expect(a.entries.at(-1)?.cumulativeCost?.micros).toBe(String(10 + 5 * 18));
   }, 30_000);
 
+  it.each([
+    // The proxy's sighting kept the whole reply, so it stays and the copy goes.
+    { first: "collector", starts: [30, 30, 33, 36] },
+    // A sighting that kept no body gives way to the transcript's copy, which
+    // takes its cost. A read that started past the first sighting would show
+    // the copy without the cost, so no read starts inside the turn.
+    { first: "otel_log", starts: [2, 2, 2, 2] },
+  ])(
+    "follows a run that records each model call twice, the first from $first",
+    async ({ first, starts }) => {
+      let clock = NOW;
+      /** A model call seen by `first` and then by the transcript, and one tool call. */
+      const twice = (seq: number, receivedAt: string): TachoFrameRow[] => {
+        const body = JSON.stringify({ request_id: `req_${seq}` });
+        return [
+          tachoRow(seq, {
+            kind: "llm_call",
+            ...bare,
+            source: first,
+            body,
+            costUsdMicros: 5,
+            turnSeq: 2,
+            ...(first === "collector" ? stored(`Proxy ${seq}.`) : {}),
+          }),
+          tachoRow(seq + 1, {
+            kind: "llm_call",
+            ...bare,
+            source: "transcript",
+            body,
+            attrs: { "oxagen.llm_call_duplicate_of": first },
+            costUsdMicros: 5,
+            turnSeq: 2,
+            ...stored(`Transcript ${seq}.`),
+          }),
+          tachoRow(seq + 2, { turnSeq: 2 }),
+        ].map((row) => ({ ...row, ts: ts(row.seq), receivedAt }));
+      };
+      const rows = longTurn(0);
+      for (let k = 0; k < 10; k += 1) rows.push(...twice(rows.length, settled));
+      const tailing = harness(rows, live, [], { chains: [], now: () => clock });
+      const whole = harness(rows, live, [], { now: () => clock });
+      let a = await follow(tailing);
+      let b = await follow(whole);
+      expect(a.entries).toEqual(b.entries);
+      const read: number[] = [];
+      for (let poll = 0; poll < 4; poll += 1) {
+        clock += 90_000;
+        rows.push(...twice(rows.length, receipt(clock - 1_000)));
+        tailing.tachoFrames.mockClear();
+        a = await follow(tailing, a.cursor);
+        b = await follow(whole, b.cursor);
+        expect(a.entries).toEqual(b.entries);
+        expect(a.cursor).toBe(b.cursor);
+        read.push(afterSeqs(tailing)[0] ?? -2);
+      }
+      expect(read).toEqual(starts);
+      // Each model call is counted once, at its first sighting's cost.
+      expect(a.entries.at(-1)?.cumulativeCost?.micros).toBe(
+        String(10 + 5 * 14),
+      );
+    },
+    30_000,
+  );
+
   it("follows a run that is one turn from its first frame, whose cursor names no window", async () => {
     let clock = NOW;
     const rows: TachoFrameRow[] = [

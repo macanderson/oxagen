@@ -1780,6 +1780,11 @@ function nextWindow(facts: WindowFacts): TranscriptWindowFrom | null {
  *   (`RECEIPT_SETTLE_MS`). A chain's batches are received in seq order, so
  *   every frame before it on the run's own chain was readable by this read,
  *   and none of them can land late behind the tail start.
+ * - It lies past every later sighting of a model call that the read shows
+ *   on the run's own chain. Such a copy stands in for a first sighting the
+ *   read hides, and took that sighting's cost. On a run whose every model
+ *   call shows as a copy, no frame qualifies and the read keeps reading the
+ *   turn's window.
  * - On a run that counts turns by their recorded index rather than by the
  *   frames that open them, it carries an index, so the read from it counts
  *   from that index (`turnOrdinals`).
@@ -1826,6 +1831,23 @@ function nextTailStart(
     nextAt === -1 &&
     step.opening.chain === undefined &&
     step.opening.seq === facts.start?.seq;
+  // The last later sighting of a model call on the run's own chain that this
+  // read shows (`withoutDuplicateModelCalls` kept it and hid the first, giving
+  // it the first's cost). That first sighting can lie anywhere before it, and
+  // a read from a start between them would show the copy without the cost,
+  // so the start lies past every such copy. A sighting that continues its own
+  // source's reply is a further part, not a copy.
+  let copiedAt = -1;
+  shown.forEach((frame, at) => {
+    const call = frame.llmCall;
+    if (
+      frame.chain === undefined &&
+      call !== undefined &&
+      call.duplicateOf !== null &&
+      call.duplicateOf !== call.source
+    )
+      copiedAt = at;
+  });
   let q: number | null = null;
   for (const step of facts.steps) {
     const at = step.span.open;
@@ -1834,6 +1856,7 @@ function nextTailStart(
       step.node === "model" &&
       (at >= 1 || keeps(step)) &&
       at > nextAt &&
+      at > copiedAt &&
       clean[at] === true &&
       (facts.byOpeners || step.opening.turnIndex !== null)
     ) {

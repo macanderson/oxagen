@@ -216,6 +216,7 @@ The tail start is the first frame of a model step on the run's own chain. It is 
 - it lies at or before the first frame of the last entry the reader was sent, before any entry the page had no room for, and before any call still waiting on its result;
 - no entry spans it;
 - the server received it before the read's settle margin (60 seconds, `RECEIPT_SETTLE_MS`). A chain's frames are received in seq order, so every frame before it was readable by that read and none can land late behind it;
+- it lies past every later sighting of a model call the read shows on the run's own chain. When a second source kept a richer body, the read shows that copy in place of the first sighting and moves the first one's cost onto it, and a read that started between the two would show the copy without that cost. So a run whose model calls each show as such a copy, as a harness recorded with no proxy can, gets no tail start and reads the turn's window;
 - on a run that counts its turns by their recorded index, it carries one.
 
 The latest model step the reader was sent, or an earlier one, is the start, so a reply's echo check (see Words) compares it with a model step the read holds.
