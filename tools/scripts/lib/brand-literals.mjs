@@ -287,19 +287,22 @@ export function tokenSizes(tokensCss) {
   )) {
     sizes.set(name, Number(n) * (unit === "rem" ? 16 : 1));
   }
-  const base = sizes.get("--ox-radius-base");
-  if (base !== undefined) {
-    for (const [, name, k] of tokensCss.matchAll(
-      /(--ox-radius-[\w]+):\s*calc\(var\(--ox-radius-base\)\s*\*\s*(\d*\.?\d+)\)/g,
-    )) {
-      sizes.set(name, base * Number(k));
+  // A step the kit writes as a multiple of a base, such as the radius steps
+  // (`calc(var(--ox-radius-base) * 0.6)`) and, since oxageninc/brand#85, the
+  // type steps (`calc(var(--ox-m-base) * 0.875)`), and an alias of a known
+  // size (`--ox-m-body: var(--ox-m-base)`). A pass resolves what the last
+  // one found, so a chain of them resolves too.
+  const steps = [
+    ...tokensCss.matchAll(/(--ox-[\w-]+):\s*calc\(var\((--ox-[\w-]+)\)\s*\*\s*(\d*\.?\d+)\)\s*;/g),
+  ].map(([, name, base, k]) => [name, base, Number(k)]);
+  const aliases = [...tokensCss.matchAll(/(--ox-[\w-]+):\s*var\((--ox-[\w-]+)\)\s*;/g)].map(
+    ([, name, target]) => [name, target, 1],
+  );
+  for (let pass = 0; pass < 4; pass++) {
+    for (const [name, base, k] of [...steps, ...aliases]) {
+      const size = sizes.get(base);
+      if (size !== undefined && !sizes.has(name)) sizes.set(name, size * k);
     }
-  }
-  for (const [, name, target] of tokensCss.matchAll(
-    /(--ox-[\w-]+):\s*var\((--ox-[\w-]+)\)\s*;/g,
-  )) {
-    const size = sizes.get(target);
-    if (size !== undefined) sizes.set(name, size);
   }
   return sizes;
 }
@@ -319,7 +322,7 @@ function nearest(px, names, sizes, fallback) {
 const RADIUS_STEPS = ["xs", "sm", "md", "lg", "xl", "2xl", "3xl", "4xl"].map(
   (step) => `--ox-radius-${step}`,
 );
-const TYPE_STEPS = ["h1", "h2", "h3", "h4", "body", "micro"];
+const TYPE_STEPS = ["h1", "h2", "h3", "h4", "body", "micro", "2xs"];
 
 /**
  * What to write instead of a literal, for the guard's message.

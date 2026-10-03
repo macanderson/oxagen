@@ -242,6 +242,16 @@ describe("naming the token", () => {
     expect(sizes.get("--ox-radius-card")).toBeCloseTo(12.96);
   });
 
+  it("reads a type step written as a multiple of its scale's base (oxageninc/brand#85)", () => {
+    const steps = tokenSizes(
+      "--ox-a-base: 0.875rem;\n--ox-a-body: var(--ox-a-base);\n--ox-a-micro: calc(var(--ox-a-base) * 0.857143);\n--ox-a-2xs: calc(var(--ox-a-base) * 0.714286);",
+    );
+    expect(steps.get("--ox-a-body")).toBe(14);
+    expect(steps.get("--ox-a-micro")).toBeCloseTo(12);
+    expect(steps.get("--ox-a-2xs")).toBeCloseTo(10);
+    expect(suggestion("font-size", "10px", "a", steps)).toBe("var(--ox-a-2xs) (10px)");
+  });
+
   it("reads no step without the base it multiplies, and no alias of an unknown token", () => {
     expect(tokenSizes("--ox-radius-lg: calc(var(--ox-radius-base) * 1);").size).toBe(0);
     expect(tokenSizes("--ox-radius-card: var(--ox-radius-2xl);").size).toBe(0);
