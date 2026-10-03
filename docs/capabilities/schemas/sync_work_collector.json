@@ -4,8 +4,7 @@
   "description": "Queue a reconcile of one work collector now, even when it is failing, such as after reconnecting GitHub.",
   "mode": "sync",
   "surfaces": [
-    "api",
-    "mcp"
+    "api"
   ],
   "sensitivity": "medium",
   "agent": null,

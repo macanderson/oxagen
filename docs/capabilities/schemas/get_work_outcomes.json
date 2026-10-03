@@ -333,6 +333,9 @@
             },
             "full_flow": {
               "type": "boolean"
+            },
+            "complete": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -342,7 +345,8 @@
             "median_lead_hours",
             "entered",
             "sent",
-            "full_flow"
+            "full_flow",
+            "complete"
           ],
           "additionalProperties": false
         }

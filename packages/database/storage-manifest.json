@@ -317,6 +317,16 @@
     },
     {
       "domain": "work",
+      "name": "claim_work_criterion",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "work",
       "name": "claim_work_order",
       "reads": [],
       "surfaces": [
@@ -3796,8 +3806,7 @@
       "name": "retry_work_triage",
       "reads": [],
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "writes": []
     },
@@ -4656,8 +4665,7 @@
       "name": "sync_work_collector",
       "reads": [],
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "writes": []
     },
