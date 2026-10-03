@@ -30,6 +30,7 @@ import type {
 import type { MandateList } from "@/data/contracts/mandates";
 import type {
   ContextAssembly,
+  ContextComposition,
   ContextWindow,
   RunContext,
 } from "@/data/contracts/run-context";
@@ -679,6 +680,31 @@ export function runContext(overrides: Partial<RunContext> = {}): RunContext {
     unmeasured: 0,
     assemblies: [],
     complete: true,
+    composition: null,
+    ...overrides,
+  };
+}
+
+/**
+ * The composition `get_run_context` sums over `contextWindow` and a second,
+ * later request of the same shape whose conversation grew to 9,600 tokens:
+ * two in-app requests, 30,000 prompt tokens in all (#5295).
+ */
+export function contextComposition(
+  overrides: Partial<ContextComposition> = {},
+): ContextComposition {
+  return {
+    requests: 2,
+    requestsWithoutTokens: 0,
+    promptTokens: 30_000,
+    blocks: {
+      system: 3_600,
+      steering: 1_800,
+      tools: 14_400,
+      context: 3_600,
+      conversation: 6_600,
+    },
+    initialConversationTokens: 1_200,
     ...overrides,
   };
 }
@@ -892,9 +918,10 @@ type RunReads = {
    */
   findings?: Read<RunFindings>;
   /**
-   * `get_run_context`, read by the Context tab and by the Governed actions
-   * tab when a model request or a manifest is open (#3894). A test that says
-   * nothing about it gets a run that recorded no window.
+   * `get_run_context`, read by the Context tab, by the Cost tab for the
+   * run's prompt composition (#5295), and by the Governed actions tab when a
+   * model request or a manifest is open (#3894). A test that says nothing
+   * about it gets a run that recorded no window.
    */
   context?: Read<RunContext>;
   /**
