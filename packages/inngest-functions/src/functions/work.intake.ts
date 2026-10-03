@@ -223,10 +223,13 @@ function failedItem(
   }
   const error = (data.error ?? null) as { message?: unknown } | null;
   const message = typeof error?.message === "string" && error.message !== "" ? error.message : "an unknown error";
+  // A budget refusal (#5426) ends its sentence with a full stop. Drop it, so
+  // the reason reads "settings. Retry" with one stop, as a person wrote it.
+  const said = message.slice(0, 500).replace(/[\s.]+$/, "") || "an unknown error";
   return {
     scope: { orgId: inner.org_id, workspaceId: inner.workspace_id },
     item: inner.item_id,
-    reason: `Triage could not run: ${message.slice(0, 500)}. Retry triage, or set the priority yourself.`,
+    reason: `Triage could not run: ${said}. Retry triage, or set the priority yourself.`,
     run: {
       ...(isRevision(inner.revision) ? { revision: inner.revision } : {}),
       retry: inner.change === "retry",

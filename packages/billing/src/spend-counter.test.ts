@@ -8,9 +8,11 @@
 // `withTenantDb` and `withSystemDb` publish it through.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runOnPlane, type Tx } from "@oxagen/database";
+import { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 const mocks = vi.hoisted(() => ({
-  sharedExecute: vi.fn(async () => undefined),
+  sharedExecute: vi.fn(async (_query?: unknown) => undefined),
   sharedSelect: vi.fn(),
   withSystemDb: vi.fn(),
 }));
@@ -142,6 +144,65 @@ describe("sumLaneSpendForDay", () => {
     });
     expect(total).toBe(150_000n);
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
+  });
+
+  // #5426: a lane's budget resets at 00:00 UTC. The counter files a call
+  // under the UTC day of the instant it settled, and the gate's read asks for
+  // the UTC day of its own instant, so a lane spent on one day reads nothing
+  // spent on the next.
+  describe("the UTC day", () => {
+    const LAST_INSTANT = new Date("2026-10-03T23:59:59.999Z");
+    const NEXT_DAY = new Date("2026-10-04T00:00:00.000Z");
+
+    /** The bound parameters of the day read for an instant. */
+    async function dayReadParams(at: Date): Promise<unknown[]> {
+      const where = vi.fn(async (_cond?: SQL) => [{ micros: "0" }]);
+      mocks.sharedSelect.mockReturnValue({ from: () => ({ where }) });
+      await sumLaneSpendForDay({ orgId: ORG, workspaceId: WS, lane: "work", at });
+      const cond = where.mock.calls[0]?.[0];
+      if (cond === undefined) throw new Error("the day read named no condition");
+      return new PgDialect().sqlToQuery(cond).params;
+    }
+
+    it("reads the day an instant falls on, up to its last millisecond", async () => {
+      const params = await dayReadParams(LAST_INSTANT);
+      expect(params).toContain("2026-10-03");
+      expect(params).not.toContain("2026-10-04");
+      expect(params).toContain("work");
+    });
+
+    it("reads only the next day from 00:00 UTC, so the day before's spend is not counted", async () => {
+      const params = await dayReadParams(NEXT_DAY);
+      expect(params).toContain("2026-10-04");
+      expect(params).not.toContain("2026-10-03");
+    });
+
+    it("takes the day in UTC when the process runs in another zone", async () => {
+      // 20:30 on 3 October in Los Angeles (UTC-7) is 03:30 on 4 October in
+      // UTC. CI runs in UTC, so the zone is moved for this case alone: a read
+      // by the local calendar would ask for the 3rd.
+      const zone = process.env.TZ;
+      process.env.TZ = "America/Los_Angeles";
+      try {
+        const at = new Date("2026-10-03T20:30:00-07:00");
+        expect(at.getDate()).toBe(3);
+        const params = await dayReadParams(at);
+        expect(params).toContain("2026-10-04");
+        expect(params).not.toContain("2026-10-03");
+      } finally {
+        if (zone === undefined) delete process.env.TZ;
+        else process.env.TZ = zone;
+      }
+    });
+
+    it("files a call at the last millisecond of a day under that day", async () => {
+      await recordSpend({ ...spend, at: LAST_INSTANT, lane: "work" });
+      const query = mocks.sharedExecute.mock.calls[0]?.[0];
+      if (!(query instanceof SQL)) throw new Error("the counter write ran no query");
+      const { params } = new PgDialect().sqlToQuery(query);
+      expect(params).toContain("2026-10-03");
+      expect(params).not.toContain("2026-10-04");
+    });
   });
 });
 

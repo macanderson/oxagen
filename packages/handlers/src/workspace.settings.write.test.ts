@@ -542,6 +542,20 @@ describe("workspace.settings.write handler", () => {
       expect(out.dailyBudgetUsd).toEqual({ runEnrichment: 2, assistant: null, work: 0.5 });
     });
 
+    // `jsonb ||` keeps the right side's value for a key both sides hold. The
+    // stored block goes on the left and the patch on the right, so the lane
+    // the patch names takes the new value and every other lane keeps its own.
+    // With the two sides swapped the stored value would win and the edit
+    // would do nothing; with the patch alone the other lanes would be lost.
+    it("merges a one-lane patch over the stored block, so the lanes it leaves out keep their values", async () => {
+      const { sql, params } = await budgetQuery({ assistant: 3 });
+      expect(sql.replace(/\s+/g, " ")).toContain(
+        `THEN ${SETTINGS} -> 'dailyBudgetUsd' ELSE '{}'::jsonb END || $1::jsonb )`,
+      );
+      // Only the named lane is sent, so the merge cannot overwrite the others.
+      expect(params).toEqual([JSON.stringify({ assistant: 3 })]);
+    });
+
     it("writes null to remove a lane's limit", async () => {
       const { params } = await budgetQuery({ work: null });
       expect(params).toContain(JSON.stringify({ work: null }));

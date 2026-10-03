@@ -312,6 +312,31 @@ describe("work/intake-triage", () => {
     );
   });
 
+  // #5426: once the workspace's daily budget for work orders is spent, triage
+  // throws the gate's refusal. Its message is a full sentence written for a
+  // person, so the item shows it as it stands, with one full stop.
+  it("records a spent work budget on the item in the refusal's own words", async () => {
+    const { WorkspaceBudgetSpentError } = await import("@oxagen/billing");
+    const spent = new WorkspaceBudgetSpentError("work", 1, 1.25);
+    const { onFailure } = job("work/intake-triage").config;
+    if (!onFailure) throw new Error("work/intake-triage has no onFailure");
+    await onFailure({
+      event: {
+        data: {
+          error: { name: spent.name, message: spent.message },
+          event: { data: { ...SCOPE, item_id: "wi_a", change: "new", revision: 1 } },
+        },
+      },
+      step,
+    });
+    expect(runner.recordTriageFailure).toHaveBeenCalledWith(
+      { orgId: "org-1", workspaceId: "ws-1" },
+      "wi_a",
+      "Triage could not run: The workspace's daily budget for work orders is spent: $1.25 of $1.00 today. It resets at 00:00 UTC. A workspace owner can raise it in the workspace's settings. Retry triage, or set the priority yourself.",
+      { revision: 1, retry: false },
+    );
+  });
+
   it("says when the failed run was a person's retry", async () => {
     const onFailure = job("work/intake-triage").config.onFailure as Handler;
     await onFailure({ event: { data: { event: { data: { ...SCOPE, item_id: "wi_a", change: "retry", revision: 3 } } } }, step });

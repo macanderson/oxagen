@@ -1,11 +1,13 @@
 // #5426: the workspace's own daily budget on each lane of its model calls.
 // The gate reads the setting and today's counter row, refuses once the lane's
 // spend reaches the limit, and fails open when it cannot read.
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   settings: null as unknown,
   spentMicros: 0n,
+  /** What the counter answers for one exact instant, ahead of spentMicros. */
+  spentAt: new Map<string, bigint>(),
   settingsRead: vi.fn(),
   counterRead: vi.fn(),
   loggerError: vi.fn(),
@@ -32,9 +34,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...original, withTenantDb, withOrgDb: withTenantDb };
 });
 vi.mock("./spend-counter", () => ({
-  sumLaneSpendForDay: async (args: unknown) => {
+  sumLaneSpendForDay: async (args: { at: Date }) => {
     await mocks.counterRead(args);
-    return mocks.spentMicros;
+    return mocks.spentAt.get(args.at.toISOString()) ?? mocks.spentMicros;
   },
 }));
 vi.mock("./logger", () => ({
@@ -57,6 +59,7 @@ const scope = {
 beforeEach(() => {
   mocks.settings = null;
   mocks.spentMicros = 0n;
+  mocks.spentAt.clear();
   mocks.settingsRead.mockReset().mockResolvedValue(undefined);
   mocks.counterRead.mockReset().mockResolvedValue(undefined);
   mocks.loggerError.mockReset();
@@ -135,6 +138,41 @@ describe("assertUnderWorkspaceLaneBudget", () => {
     expect(mocks.loggerError).toHaveBeenCalledWith(
       expect.objectContaining({ alert: "billing_workspace_lane_budget_failed_open" }),
       expect.any(String),
+    );
+  });
+});
+
+// The budget resets at 00:00 UTC. The gate reads the clock each time it is
+// called and hands that instant to the counter, which reads the instant's UTC
+// day (spend-counter.test.ts holds the day itself). So a lane spent at the
+// last millisecond of one day admits the first call of the next.
+describe("the next UTC day", () => {
+  const LAST_INSTANT = new Date("2026-10-03T23:59:59.999Z");
+  const NEXT_DAY = new Date("2026-10-04T00:00:00.000Z");
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("admits a lane again at 00:00 UTC after it was spent the day before", async () => {
+    mocks.settings = { dailyBudgetUsd: { runEnrichment: 2, assistant: null, work: null } };
+    mocks.spentAt.set(LAST_INSTANT.toISOString(), 2_000_000n);
+    vi.useFakeTimers({ now: LAST_INSTANT, toFake: ["Date"] });
+    await expect(
+      assertUnderWorkspaceLaneBudget({ ...scope, lane: "run_enrichment" }),
+    ).rejects.toBeInstanceOf(WorkspaceBudgetSpentError);
+
+    vi.setSystemTime(NEXT_DAY);
+    await expect(
+      assertUnderWorkspaceLaneBudget({ ...scope, lane: "run_enrichment" }),
+    ).resolves.toBeUndefined();
+    expect(mocks.counterRead).toHaveBeenCalledTimes(2);
+    expect(mocks.counterRead).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ at: LAST_INSTANT }),
+    );
+    expect(mocks.counterRead).toHaveBeenLastCalledWith(
+      expect.objectContaining({ at: NEXT_DAY, lane: "run_enrichment" }),
     );
   });
 });
