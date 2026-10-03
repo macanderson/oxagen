@@ -16,6 +16,14 @@
  * needs a state the guard refuses turns the trigger off for its seed and on
  * again before the apply.
  *
+ * 20261003170000 dropped that trigger and its function (ADR-293), so the CI
+ * database holds neither. The earlier file recreates the function, and the
+ * fixture recreates the trigger from 20260918200000's own statement, so the
+ * tests below still apply 20260927185600 to the schema it was written for.
+ * The last describe applies 20261003170000 on top and checks the rules that
+ * hold now: any workspace may link any repository, and a repository still
+ * steers one workspace.
+ *
  * This file replaces repository-heads-reconcile.test.ts. That witness seeded
  * role `main` rows in a committed transaction, and the role check now refuses
  * them.
@@ -52,6 +60,31 @@ const MIGRATION = migrationFile(
 const PREVIOUS = migrationFile(
   "20260926120000_repository_binding_heads_steering_role.sql",
 );
+const UNRESTRICTED = migrationFile(
+  "20261003170000_repository_binding_heads_links_unrestricted.sql",
+);
+
+/**
+ * The statements in 20260918200000 that create the trigger, from its file.
+ * The rest of that file deletes rows across the whole table, so only this
+ * tail is applied.
+ */
+function triggerStatements(): string {
+  const file = migrationFile(
+    "20260918200000_repository_binding_heads_exclusive_across_roles.sql",
+  );
+  const start = file.indexOf(
+    'DROP TRIGGER IF EXISTS "repository_binding_heads_exclusive_main"',
+  );
+  if (start < 0) {
+    throw new Error("20260918200000 no longer creates the exclusive-main trigger");
+  }
+  const tail = file.slice(start);
+  if (!tail.includes('CREATE TRIGGER "repository_binding_heads_exclusive_main"')) {
+    throw new Error("the trigger statement in 20260918200000 moved");
+  }
+  return tail;
+}
 
 /**
  * The migration's `DO $$ ... $$;` block that moves the heads. The file holds a
@@ -187,10 +220,15 @@ async function bindingCount(tx: Tx): Promise<number> {
   return Number(row?.n ?? 0);
 }
 
-/** Puts the table back in the state 20260927185600 was written against. */
+/**
+ * Puts the table back in the state 20260927185600 was written against. The
+ * earlier file recreates the trigger's function, and the trigger itself comes
+ * from 20260918200000, because 20261003170000 dropped both.
+ */
 async function restorePreviousSchema(tx: Tx): Promise<void> {
   await tx`DROP INDEX IF EXISTS ingestion.repository_binding_heads_workspace_steering_uq`;
   await tx.unsafe(PREVIOUS);
+  await tx.unsafe(triggerStatements());
   await tx`ALTER TABLE ingestion.repository_binding_heads ALTER COLUMN role SET DEFAULT 'main'`;
 }
 
@@ -295,6 +333,26 @@ async function withMigratedFixture(
   ).rejects.toBe(rollback);
 }
 
+/**
+ * The migrated fixture with 20261003170000 applied on top: the schema CI
+ * migrates to today. Rolled back like the fixture above.
+ */
+async function withCurrentFixture(
+  body: (tx: Tx) => Promise<void>,
+): Promise<void> {
+  await withMigratedFixture(async (tx) => {
+    await tx.unsafe(UNRESTRICTED);
+    await body(tx);
+  });
+}
+
+/** The heads one repository has, by workspace, in the order orgHeads reads them. */
+async function headsOfRepo(tx: Tx, repo: string): Promise<[string, string][]> {
+  return (await orgHeads(tx))
+    .filter((h) => h.provider_repository_id === repo)
+    .map((h) => [h.workspace_id, h.role]);
+}
+
 /** Expects `write` to fail with `code` on `constraint`, in a savepoint. */
 async function expectRefusal(
   tx: Tx,
@@ -396,6 +454,8 @@ describe("20260927185600: every main head becomes steering or linked", () => {
     });
   });
 
+  // The next two refusals belong to the trigger as 20260927185600 left it.
+  // 20261003170000 lifts both, and the last describe in this file checks that.
   it("refuses to link a steering repository into another workspace", async () => {
     await withMigratedFixture(async (tx) => {
       await expectRefusal(
@@ -460,5 +520,87 @@ describe("20260927185600 on a state the old guard refuses", () => {
         throw rollback;
       }),
     ).rejects.toBe(rollback);
+  });
+});
+
+describe("20261003170000: any workspace may link any repository", () => {
+  it("drops the trigger and its function", async () => {
+    await withCurrentFixture(async (tx) => {
+      const triggers = await tx<{ n: string }[]>`
+        SELECT count(*)::text AS n
+          FROM pg_trigger
+         WHERE tgname = 'repository_binding_heads_exclusive_main'
+      `;
+      expect(triggers[0]?.n).toBe("0");
+      const functions = await tx<{ n: string }[]>`
+        SELECT count(*)::text AS n
+          FROM pg_proc AS p
+          JOIN pg_namespace AS n ON n.oid = p.pronamespace
+         WHERE n.nspname = 'ingestion'
+           AND p.proname = 'repository_binding_heads_guard_exclusive_main'
+      `;
+      expect(functions[0]?.n).toBe("0");
+    });
+  });
+
+  it("links a repository another workspace steers by", async () => {
+    await withCurrentFixture(async (tx) => {
+      await writeHead(tx, WS_NEW, R_A, "linked");
+      expect(await headsOfRepo(tx, R_A)).toEqual([
+        [WS_MAIN, "steering"],
+        [WS_NEW, "linked"],
+      ]);
+    });
+  });
+
+  it("takes a repository other workspaces link as a steering repository", async () => {
+    await withCurrentFixture(async (tx) => {
+      await writeHead(tx, WS_NEW, R_SHARED, "steering");
+      expect(await headsOfRepo(tx, R_SHARED)).toEqual([
+        [WS_MAIN, "linked"],
+        [WS_LINKED, "linked"],
+        [WS_NEW, "steering"],
+      ]);
+    });
+  });
+
+  it("promotes a linked head to steering while another workspace links the repository", async () => {
+    await withCurrentFixture(async (tx) => {
+      // WS_LINKED has no steering head, and WS_MAIN links R_SHARED too.
+      await tx`
+        UPDATE ingestion.repository_binding_heads
+           SET role = 'steering'
+         WHERE org_id = ${ORG}
+           AND workspace_id = ${WS_LINKED}
+           AND provider_repository_id = ${R_SHARED}
+      `;
+      expect(await headsOfRepo(tx, R_SHARED)).toEqual([
+        [WS_MAIN, "linked"],
+        [WS_LINKED, "steering"],
+      ]);
+    });
+  });
+
+  it("still refuses a second workspace steered by one repository (negative)", async () => {
+    await withCurrentFixture(async (tx) => {
+      await expectRefusal(
+        tx,
+        (sp) => writeHead(sp, WS_NEW, R_A, "steering"),
+        "23505",
+        "repository_binding_heads_main_repository_uq",
+      );
+      expect(await headsOfRepo(tx, R_A)).toEqual([[WS_MAIN, "steering"]]);
+    });
+  });
+
+  it("still refuses a second steering repository in one workspace (negative)", async () => {
+    await withCurrentFixture(async (tx) => {
+      await expectRefusal(
+        tx,
+        (sp) => writeHead(sp, WS_MAIN, R_FRESH, "steering"),
+        "23505",
+        "repository_binding_heads_workspace_steering_uq",
+      );
+    });
   });
 });

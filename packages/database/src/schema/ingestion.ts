@@ -531,15 +531,12 @@ export const repositoryBindings = ingestionSchema.table(
 // head afterwards can never rewrite what an admitted run claims. Deleting a
 // head is how a repository is unlinked; the versions it pointed at stay.
 //
-// Not declared here: the trigger `repository_binding_heads_exclusive_main`
-// (20260918200000_repository_binding_heads_exclusive_across_roles.sql). It
-// serialises every writer of a head for one repository on a repository-keyed
-// advisory lock and refuses, as a 23505 carrying a constraint name, a
-// steering head where another workspace holds any head for the repository,
-// and a linked head where another workspace holds it as its steering head
-// (20260927185600 narrowed both from "main or steering" to steering). The
-// partial index below holds the steering-against-steering half on its own;
-// the trigger holds the rest.
+// Linking is unrestricted (ADR-293). Any number of workspaces may link one
+// repository, and one of them may also hold it as its steering repository.
+// Two partial unique indexes below carry the only rules left: a workspace
+// has one steering repository, and a repository steers one workspace.
+// 20261003170000 dropped the trigger `repository_binding_heads_exclusive_main`,
+// which also refused a linked head beside another workspace's steering head.
 export const repositoryBindingHeads = ingestionSchema.table(
   "repository_binding_heads",
   {
@@ -549,13 +546,15 @@ export const repositoryBindingHeads = ingestionSchema.table(
     provider: text("provider").notNull(),
     providerRepositoryId: text("provider_repository_id").notNull(),
     currentBindingId: uuid("current_binding_id").notNull(),
-    // 'steering': the workspace's steering record source, of which it has
-    // exactly one and which no other workspace holds. Lane S1 provisions it
-    // as the steering repo Oxagen creates and holds, and 20260927185600 moved
-    // every former 'main' head here (ADR-212). 'linked': a code repository
-    // the workspace can see but is not steered by, of which it may have many
-    // and which many workspaces may link. No default: the one writer,
-    // writeRepositoryHead, always names the role.
+    // 'steering': the workspace's steering record source. A workspace has
+    // exactly one, and no other workspace holds the same repository as its
+    // steering source. Lane S1 provisions it as the steering repo Oxagen
+    // creates and holds, and 20260927185600 moved every former 'main' head
+    // here (ADR-212). 'linked': a code repository the workspace can see but
+    // is not steered by. A workspace may link many, and many workspaces may
+    // link one, including a repository another workspace steers by
+    // (ADR-293). No default: the one writer, writeRepositoryHead, always
+    // names the role.
     role: text("role").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
@@ -570,15 +569,17 @@ export const repositoryBindingHeads = ingestionSchema.table(
       t.providerRepositoryId,
     ),
     // A repository is the steering repository of at most one workspace
-    // ANYWHERE. Global on purpose, with no org_id or workspace_id in the key,
-    // because the case that matters most is one repository claimed by two
-    // ORGANISATIONS: both would write their steering into the same files and
-    // read each other's records back as their own. `provider` is in the key
-    // because `provider_repository_id` is only unique within a provider. The
-    // name predates the steering role and stays, because the handlers map a
-    // 23505 on it to `main_repo_claimed`. See
-    // 20260918040000_repository_main_binding_is_exclusive.sql and
-    // 20260927185600_repository_binding_heads_main_to_steering.sql.
+    // ANYWHERE. Kept on purpose when linking became unrestricted (ADR-293):
+    // an agent is steered by one steering repository, so two workspaces must
+    // never read their steering records from the same files. Global, with no
+    // org_id or workspace_id in the key, because the case that matters most
+    // is one repository claimed by two ORGANISATIONS. `provider` is in the
+    // key because `provider_repository_id` is only unique within a provider.
+    // A linked head is outside the predicate, so this index never refuses a
+    // link. The name predates the steering role and stays. See
+    // 20260918040000_repository_main_binding_is_exclusive.sql,
+    // 20260927185600_repository_binding_heads_main_to_steering.sql and
+    // 20261003170000_repository_binding_heads_links_unrestricted.sql.
     mainRepositoryUniq: uniqueIndex(
       "repository_binding_heads_main_repository_uq",
     )
@@ -596,12 +597,14 @@ export const repositoryBindingHeads = ingestionSchema.table(
       t.orgId,
       t.workspaceId,
     ),
-    // The trigger's cross-tenant lookup: every head for one repository, in
-    // every workspace and of either role (#3340 finding 4). It runs on every
-    // head insert and relevant update while the writer holds the
-    // repository's advisory lock. The two indexes above cannot serve it: one
-    // leads with the connection, the other is partial on the steering role.
-    // Without this one each head write scans the table under that lock.
+    // Every head for one repository, in every workspace and of either role.
+    // `headsAnywhere` (packages/handlers/src/lib/repository-heads-anywhere.ts)
+    // reads by these two columns across tenants: the code repository check
+    // finds each workspace that links a repository, and `create_github_token`
+    // asks whether any workspace steers by it. The unique indexes above
+    // cannot serve that read: one leads with the connection, and the others
+    // are partial on the steering role. It was built for the trigger's
+    // lookup (#3340 finding 4), which 20261003170000 dropped.
     repositoryLookupIdx: index("repository_binding_heads_repository_idx").on(
       t.provider,
       t.providerRepositoryId,
