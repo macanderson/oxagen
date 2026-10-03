@@ -68,8 +68,10 @@ function byZoom(
 const notFound = vi.fn();
 const refresh = vi.fn();
 const replace = vi.fn();
-// jsdom has no layout, so it has no scrollIntoView; playback calls it.
-Element.prototype.scrollIntoView = vi.fn();
+// jsdom has no layout, so it has no scrollIntoView; playback calls it, and
+// so does the Details drawer when it opens at a section.
+const scrollIntoView = vi.fn();
+Element.prototype.scrollIntoView = scrollIntoView;
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
     <a {...rest}>{children}</a>
@@ -2228,7 +2230,7 @@ describe("header", () => {
   });
 
   it("titles the drawer Run details under the run's title, and scrolls to the section asked for", async () => {
-    const scroll = vi.mocked(Element.prototype.scrollIntoView);
+    const scroll = scrollIntoView;
     scroll.mockClear();
     await renderRun(
       {
