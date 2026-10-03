@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // A run a backfill rebuilt, on the Run page (ADR-161, #4028). The header
-// marks it "Backfilled" with one line that says how it was rebuilt. The
+// marks it "Backfilled", and the Details drawer says how it was rebuilt. The
 // governance panels it draws (the header's tier, the Policy tab's decisions,
 // the seal's tier) read "not recorded", the seal reads "sealed at backfill",
 // and the cost reads as the price book's estimate. A run a live session
@@ -89,7 +89,11 @@ function backfilledRun(over: Partial<RunRow> = {}): RunRow {
   });
 }
 
-async function renderRun(run: RunRow, tab: string | null = null) {
+async function renderRun(
+  run: RunRow,
+  tab: string | null = null,
+  details: string | null = "run",
+) {
   const { source } = runSource({
     detail: readOk(runDetail({ run })),
     transcript: readOk(runTranscript()),
@@ -105,6 +109,7 @@ async function renderRun(run: RunRow, tab: string | null = null) {
     body: null,
     reads: null,
     spine: null,
+    details,
     now: NOW,
   });
   let container!: HTMLElement;
@@ -112,18 +117,21 @@ async function renderRun(run: RunRow, tab: string | null = null) {
     ({ container } = render(<IntlProvider>{element}</IntlProvider>));
     await Promise.resolve();
   });
+  // The Details drawer, which holds the tier and the note, mounts after the
+  // first render.
+  if (details !== null) await screen.findByTestId("run-details");
   return container;
 }
 
 afterEach(cleanup);
 
 describe("a backfilled run", () => {
-  it("marks the header, dates the rebuild, and shows no tier", async () => {
+  it("marks the header, dates the rebuild in Details, and shows no tier", async () => {
     const container = await renderRun(backfilledRun());
-    const header = within(screen.getByTestId("run-header"));
-    expect(header.getByTestId("run-backfilled")).toHaveTextContent(
-      /^Backfilled$/,
-    );
+    expect(
+      within(screen.getByTestId("run-header")).getByTestId("run-backfilled"),
+    ).toHaveTextContent(/^Backfilled$/);
+    const header = within(screen.getByTestId("run-details-run"));
     expect(header.getByTestId("run-backfill-note")).toHaveTextContent(
       /^Rebuilt from the Claude Code transcript on .*2026\. Nothing was enforced during this run\.$/,
     );
