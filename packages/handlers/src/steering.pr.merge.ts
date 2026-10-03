@@ -76,6 +76,12 @@
 // each registry record whose file it deleted. A PR merged on the host without
 // a claim is refused `merged_outside_oxagen`, as a governance PR is.
 //
+// A call that stops between the stamp and the host merge leaves the stamp as
+// the PR's head. Once its claim lapses, the next call drops that stamp, after
+// it proves the commit changes nothing a stamp does not, and merges from the
+// checked head (dropStrandedStamp, #4498). A person's push still refuses
+// `head_moved`.
+//
 // One window stays open: a crash or a timeout after the stamp merged and
 // before the row moved to the stamp commit leaves the row at the checked
 // head. Once the claim lapses, the next call reads a merged PR at another
@@ -138,6 +144,7 @@ import {
 import {
   assertHealthy,
   checkBase,
+  dropStrandedStamp,
   inMergeQueue,
   landSteeringPr,
   mergeApproval,
@@ -329,7 +336,7 @@ export function createMergeSteeringPrHandler(
       }
 
       // The commit the checks ran on is the only one that merges.
-      const pr = await deps.github.getPullRequest(repo, prNumber);
+      let pr = await deps.github.getPullRequest(repo, prNumber);
       // Another call is landing this PR. Its stamp commit is the PR's head
       // until the host merges it, and the row moves to that commit only once
       // it has, so the head check below would misread either.
@@ -338,6 +345,24 @@ export function createMergeSteeringPrHandler(
         (!pr.merged || pr.headSha !== recorded.headSha)
       ) {
         throw mergeInProgress(recorded.publicId, recorded.mergeClaimedAt);
+      }
+      // A merge that stopped between its stamp and the host merge left the
+      // stamp as the PR's head, and its claim has lapsed. Drop the stamp and
+      // merge from the checked head (#4498). A person's push still refuses.
+      if (
+        !pr.merged &&
+        pr.headSha !== null &&
+        pr.headSha !== recorded.headSha &&
+        layout.layout === "steering" &&
+        (await dropStrandedStamp({
+          host: deps.github,
+          repo,
+          branch,
+          checkedHead: recorded.headSha,
+          head: pr.headSha,
+        }))
+      ) {
+        pr = { ...pr, headSha: recorded.headSha };
       }
       if (pr.headSha !== recorded.headSha) {
         // Merged on the host after the head moved: running the checks again

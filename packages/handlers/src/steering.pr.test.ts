@@ -2937,6 +2937,97 @@ describe("merge_steering_pr", () => {
     });
   });
 
+  // #4498: a merge that stops between its stamp and the host merge leaves the
+  // stamp as the PR's head. Before the fix, every later merge refused
+  // head_moved and nothing put the branch back.
+  describe("a stamp a stopped merge left on the branch (#4498)", () => {
+    /** Push the stamp, then stop the way a dying process does: no cleanup. */
+    async function stopAfterStamp(h: Harness, id: string) {
+      const commitFiles = h.github.commitFiles.bind(h.github);
+      let stop = true;
+      h.github.commitFiles = async (repo, args) => {
+        const out = await commitFiles(repo, args);
+        if (stop) {
+          stop = false;
+          throw new Error("the process stopped");
+        }
+        return out;
+      };
+      await expect(
+        createMergeSteeringPrHandler(h, {
+          publisher: () => s5Publisher().publisher,
+        })({ proposalId: id }, ctx({ userId: REVIEWER })),
+      ).rejects.toThrow("the process stopped");
+      // The claim lapses after MERGE_CLAIM_SECONDS.
+      Object.assign(h.store.proposals[0]!, {
+        mergeClaimedAt: new Date(h.now().getTime() - (MERGE_CLAIM_SECONDS + 1) * 1000),
+      });
+      const stamp = h.github.stamps[0]!;
+      expect(h.github.heads.get(BRANCH)).toBe(stamp.sha);
+      expect(h.github.resets).toEqual([]);
+      return stamp;
+    }
+
+    it("drops the stamp on the next merge and merges the steering PR", async () => {
+      const h = steeringHarness();
+      const { id, head } = await steeringPrPassed(h);
+      await stopAfterStamp(h, id);
+
+      const out = await createMergeSteeringPrHandler(h, {
+        publisher: () => s5Publisher().publisher,
+      })({ proposalId: id }, ctx({ userId: REVIEWER }));
+
+      expect(out.status).toBe("merged");
+      expect(h.github.resets[0]).toEqual({ branch: BRANCH, sha: head });
+      // The merge stamped the checked head again and merged that stamp.
+      expect(h.github.stamps).toHaveLength(2);
+      expect(h.github.stamps[1]!.parent).toBe(head);
+      expect(h.github.merges).toEqual([
+        expect.objectContaining({ number: 519, sha: h.github.stamps[1]!.sha }),
+      ]);
+    });
+
+    it("still refuses head_moved for a person's push on top of the checked head", async () => {
+      const h = steeringHarness();
+      const { id, recordAt } = await steeringPrPassed(h);
+      h.github.commit(BRANCH, recordAt, "---\nlineage: edited\n---\nEdited on the PR.\n");
+
+      await expect(
+        createMergeSteeringPrHandler(h, {
+          publisher: () => s5Publisher().publisher,
+        })({ proposalId: id }, ctx({ userId: REVIEWER })),
+      ).rejects.toMatchObject({ code: "conflict", reason: "head_moved" });
+      expect(h.github.resets).toEqual([]);
+      expect(h.github.merges).toEqual([]);
+    });
+
+    it("still refuses head_moved for a commit that changes more of a record than its stamp", async () => {
+      const h = steeringHarness();
+      const { id, head, recordAt } = await steeringPrPassed(h);
+      const stamp = await stopAfterStamp(h, id);
+      // The same files as the stamp, with one more line in the record.
+      h.github.heads.set(BRANCH, head);
+      await h.github.commitFiles(REPO, {
+        branch: BRANCH,
+        parent: head,
+        message: stamp.message,
+        files: stamp.files.map((file) =>
+          file.path === recordAt && file.content !== null
+            ? { ...file, content: `${file.content}One more line.\n` }
+            : file,
+        ),
+      });
+
+      await expect(
+        createMergeSteeringPrHandler(h, {
+          publisher: () => s5Publisher().publisher,
+        })({ proposalId: id }, ctx({ userId: REVIEWER })),
+      ).rejects.toMatchObject({ code: "conflict", reason: "head_moved" });
+      expect(h.github.resets).toEqual([]);
+      expect(h.github.merges).toEqual([]);
+    });
+  });
+
   it("refuses a merge, a check rerun, and a dismissal while another merge's claim stands, and touches nothing until it lapses", async () => {
     const h = harness();
     const id = await opened(h);
