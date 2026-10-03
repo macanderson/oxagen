@@ -39,7 +39,7 @@ export interface OrderPullRequest {
 }
 
 /** A pull request a work order's `pr_linked` fact names. */
-export interface OrderPullKey {
+interface OrderPullKey {
   /** `work.orders.id`. */
   orderId: string;
   /** owner/name as the fact recorded it. */
