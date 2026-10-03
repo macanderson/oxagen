@@ -848,6 +848,113 @@ describe("callServed kill switches", () => {
   });
 });
 
+/** The fixture policies with rate rules on billing__list_charges, shaped like the spec's slack.rate. */
+function rateLimited(): PublishedTools {
+  return published({
+    policies: [
+      ...POLICIES,
+      {
+        path: "policy/rate.cedar",
+        text: `@id("charges.hourly")
+forbid (principal, action == Action::"billing__list_charges", resource)
+when { context.rate.calls_last_hour >= 20 };
+
+@id("charges.burst")
+forbid (principal, action == Action::"billing__list_charges", resource)
+when { context.rate.calls_last_minute >= 5 };
+
+@id("refunds.approved-rate")
+forbid (principal, action == Action::"billing__create_refund", resource)
+when { context.approval.granted && context.rate.calls_last_hour >= 20 };`,
+      },
+    ],
+  });
+}
+
+function callsSoFar(lastHour: number, lastMinute: number): PortOptions {
+  return { callRate: () => Promise.resolve({ calls_last_hour: lastHour, calls_last_minute: lastMinute }) };
+}
+
+describe("callServed call rates", () => {
+  it("denies a call once the tool's calls in the last hour reach a rate rule's limit", async () => {
+    const { call, recorded } = await setup(callsSoFar(20, 0), rateLimited());
+    const result = await call("billing__list_charges");
+    expect(textOf(result)).toBe(
+      "The policy charges.hourly denied billing__list_charges for aintel.finops.release-bot. Ask a workspace admin to change it in a steering PR if this call is needed.",
+    );
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__list_charges denied"]);
+  });
+
+  it("sends a call while the tool's calls stay under every rate rule's limit", async () => {
+    const { call, recorded } = await setup(callsSoFar(19, 4), rateLimited());
+    const result = await call("billing__list_charges");
+    expect(result?.isError).not.toBe(true);
+    expectCarried(recorded, "http");
+    expect(outcomes(recorded)).toEqual(["call billing__list_charges allowed"]);
+  });
+
+  it("denies a burst that a rule on the last minute caps", async () => {
+    const { call, recorded } = await setup(callsSoFar(5, 5), rateLimited());
+    const result = await call("billing__list_charges");
+    expect(textOf(result)).toContain("The policy charges.burst denied billing__list_charges");
+    nothingSent(recorded);
+  });
+
+  it("reads the rate once, for the tool called, on the decision's clock", async () => {
+    const { call, recorded } = await setup({}, rateLimited());
+    await call("billing__list_charges");
+    expect(recorded.rates).toEqual([{ run: run(), call: { server: "billing", tool: "billing__list_charges" }, now: NOW }]);
+  });
+
+  it("reads the rate of the tool a search-mode call names", async () => {
+    const { call, recorded } = await setup({}, searchBilling());
+    await call("billing__call", { tool: "list_charges", arguments: {} });
+    expect(recorded.rates.map((read) => read.call)).toEqual([{ server: "billing", tool: "billing__list_charges" }]);
+  });
+
+  it("decides an approved call again on the same rate, and leaves the approval unused", async () => {
+    const { call, recorded } = await setup(
+      { ...callsSoFar(20, 0), approval: () => Promise.resolve({ state: "approved", id: "apr_3", approvers: 1 }) },
+      rateLimited(),
+    );
+    const result = await call("billing__create_refund", REFUND);
+    expect(textOf(result)).toContain("The policy refunds.approved-rate denied billing__create_refund");
+    expect(recorded.approvals).toHaveLength(1);
+    expect(recorded.rates).toHaveLength(1);
+    expect(recorded.claims).toEqual([]);
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund denied"]);
+  });
+
+  it("does not count calls for a call a kill switch stopped", async () => {
+    const { call, recorded } = await setup({
+      emergencyDeny: () => Promise.resolve({ id: "emd_1", targetKind: "org", targetId: "org_1", reason: "Paused." }),
+    });
+    await call("billing__list_charges");
+    expect(recorded.rates).toEqual([]);
+  });
+
+  it("fails a call when the rate cannot be read, and logs only the error's name", async () => {
+    const { call, recorded } = await setup({
+      callRate: () => Promise.reject(new Error("served_tool_calls for org_1 timed out")),
+    });
+    const result = await call("billing__create_refund", REFUND);
+    expect(textOf(result)).toBe(
+      "Oxagen could not count the recent calls to billing__create_refund for the workspace's policies, so it did not send the call. Call it again in a minute.",
+    );
+    expect(recorded.logs).toEqual([
+      {
+        message: "Oxagen could not count the tool's recent calls, so the call was not sent.",
+        fields: { tool: "billing__create_refund", error: "Error" },
+      },
+    ]);
+    expect(recorded.approvals).toEqual([]);
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund failed"]);
+  });
+});
+
 describe("callServed routes", () => {
   it("sends a relay route's call through the transport its network names", async () => {
     const version = published({ servers: [...SOURCES.map(server), server(RELAY)] });
