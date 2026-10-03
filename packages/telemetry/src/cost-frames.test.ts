@@ -1132,6 +1132,40 @@ describe("readGroupModelCallFrames", () => {
     expect(frames.get(RUN)?.[0]).not.toHaveProperty("run_root");
   });
 
+  // #5462: each table read decoded every column for every row of the
+  // granules its sessions touched, before it dropped another session's rows.
+  it("names the workspace and the sessions in PREWHERE in all five table reads, and keeps every other condition after FINAL", async () => {
+    answer([]);
+    await readGroupModelCallFrames({ orgId: ORG, workspaceId: WS, runs });
+    const { query } = lastQuery();
+    const prewhere =
+      /FROM tacho_events FINAL\s+PREWHERE org_id = \{orgId:UUID\}\s+AND workspace_id = \{workspaceId:UUID\}\s+AND session_uuid IN \{sessionUuids:Array\(UUID\)\}\s+WHERE root_session_uuid IN \{rootSessionUuids:Array\(UUID\)\}\s+AND kind = 'llm_call'/g;
+    expect(query.match(prewhere)).toHaveLength(5);
+    expect(query.match(/FROM tacho_events FINAL/g)).toHaveLength(5);
+    // Only sort key columns run before FINAL's merge.
+    for (const clause of query.match(/PREWHERE[\s\S]*?(?=\bWHERE\b)/g) ?? [])
+      expect(clause).not.toMatch(/root_session_uuid|kind|source|attrs|model/);
+  });
+
+  it("names the sessions of a run too large for the URL by its root, in PREWHERE too", async () => {
+    const [huge, ...chains] = Array.from(
+      { length: 10_001 },
+      (_, i) => `000000c2-0000-4000-8000-${i.toString(16).padStart(12, "0")}`,
+    );
+    answer([]);
+    await readGroupModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      runs: [{ rootSessionUuid: huge!, sessionUuids: [huge!, ...chains] }],
+    });
+    const { query } = lastQuery();
+    expect(
+      query.match(
+        /FROM tacho_events FINAL\s+PREWHERE org_id = \{orgId:UUID\}\s+AND workspace_id = \{workspaceId:UUID\}\s+AND session_uuid IN \(\s+SELECT session_uuid FROM tacho_events/g,
+      ),
+    ).toHaveLength(5);
+  });
+
   it("selects every column the run read selects, in its order, and then the root", async () => {
     answer([]);
     await readModelCallFrames({
