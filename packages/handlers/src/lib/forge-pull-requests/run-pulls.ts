@@ -15,7 +15,7 @@
 // reads as nothing here and is counted, so the caller can say so. Each query
 // reads one schema, and the joins happen in code.
 import { schema, type Tx } from "@oxagen/database";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   idsForKeys,
   type PullKey,
@@ -138,42 +138,53 @@ async function idsForBranches(
   if (branches.length === 0) return { ids: [], trunks: [] };
   const wanted = new Set(branches.map(branchKeyOf));
   const names = [...new Set(branches.map((key) => key.branch))];
-  const rows = await db
+  const fence = and(
+    eq(pulls.orgId, scope.orgId),
+    eq(pulls.workspaceId, scope.workspaceId),
+    inArray(pulls.repository, [
+      ...new Set(branches.map((key) => key.repository.toLowerCase())),
+    ]),
+  );
+  // Two reads, so the many pull requests that merge into a trunk never fill
+  // the cap the head branch matches are read under.
+  const heads = await db
     .select({
       id: pulls.id,
       provider: pulls.provider,
       repository: pulls.repository,
-      headRef: pulls.headRef,
-      baseRef: pulls.baseRef,
+      branch: pulls.headRef,
     })
     .from(pulls)
-    .where(
-      and(
-        eq(pulls.orgId, scope.orgId),
-        eq(pulls.workspaceId, scope.workspaceId),
-        inArray(pulls.repository, [
-          ...new Set(branches.map((key) => key.repository.toLowerCase())),
-        ]),
-        or(inArray(pulls.headRef, names), inArray(pulls.baseRef, names)),
-      ),
-    )
+    .where(and(fence, inArray(pulls.headRef, names)))
     .limit(BRANCH_MATCH_ROWS);
-  const keyOf = (row: (typeof rows)[number], branch: string | null) =>
-    branch === null
+  const bases = await db
+    .selectDistinct({
+      provider: pulls.provider,
+      repository: pulls.repository,
+      branch: pulls.baseRef,
+    })
+    .from(pulls)
+    .where(and(fence, inArray(pulls.baseRef, names)));
+  const keyOf = (row: {
+    provider: string;
+    repository: string;
+    branch: string | null;
+  }) =>
+    row.branch === null
       ? null
       : branchKeyOf({
           provider: row.provider as BranchKey["provider"],
           repository: row.repository,
-          branch,
+          branch: row.branch,
         });
   const trunks = new Set(
-    rows.flatMap((row) => {
-      const key = keyOf(row, row.baseRef);
+    bases.flatMap((row) => {
+      const key = keyOf(row);
       return key !== null && wanted.has(key) ? [key] : [];
     }),
   );
-  const ids = rows.flatMap((row) => {
-    const key = keyOf(row, row.headRef);
+  const ids = heads.flatMap((row) => {
+    const key = keyOf(row);
     return key !== null && wanted.has(key) && !trunks.has(key) ? [row.id] : [];
   });
   return { ids, trunks: [...trunks] };

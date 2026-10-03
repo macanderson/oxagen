@@ -3958,7 +3958,7 @@ describe("issues", () => {
           runIssues({
             issues: [],
             complete: false,
-            warnings: ["closing_issues_read_failed"],
+            warnings: ["closing_issues_not_read"],
           }),
         ),
       },
