@@ -6,7 +6,14 @@
 // change set from Oxagen's own pull request store sits above the recorded
 // files (ADR-292), and opening one of its files reads that file's diff
 // through the lane's action.
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { type ReactNode, Suspense } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -275,7 +282,9 @@ describe("the Changes panel's change set", () => {
       ["acme", "core-platform", "prv_482a", ["src/app.ts"]],
       ["acme", "core-platform", "prv_490a", ["src/app.ts"]],
     ]);
-    expect(await within(panel).findAllByText("+new")).toHaveLength(2);
+    await waitFor(() => {
+      expect(within(panel).getAllByText("+new")).toHaveLength(2);
+    });
     await expectNoAxe(panel);
   });
 

@@ -8,7 +8,7 @@
 // actions' capability input in ../actions.test.ts. The Changes panel draws
 // the item's change set from Oxagen's own pull request store, and each send
 // opens its own through the lane's action (ADR-292).
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -657,7 +657,9 @@ describe("WorkItemPage › changes", () => {
       ["acme", "core-platform", "prv_482a", ["src/app.ts"]],
       ["acme", "core-platform", "prv_490a", ["src/app.ts"]],
     ]);
-    expect(await panel.findAllByText("+new")).toHaveLength(2);
+    await waitFor(() => {
+      expect(panel.getAllByText("+new")).toHaveLength(2);
+    });
   });
 
   it("says the item has no pull request on record and lists no sends before the first send", async () => {
