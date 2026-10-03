@@ -841,6 +841,7 @@ describe("the prepared turn", () => {
       surface: "app",
       messageId: "msg-user",
       userId: "user-1",
+      capabilityName: "ask_assistant",
     });
 
     // The reply is persisted with the run it was recorded as, and the
