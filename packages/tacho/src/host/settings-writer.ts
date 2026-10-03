@@ -111,8 +111,9 @@ export interface HookInstallConfig {
  *
  * `absentAnswer` is for a harness that blocks when a hook cannot run
  * (Cursor, Stella): the command then prints it and exits 0 when the
- * collector's executable is not installed (`skipWhenCollectorAbsent`,
- * ADR-230). Left out, the command runs the collector and nothing else.
+ * collector's executable, or the interpreter that runs it, is not installed
+ * (`skipWhenCollectorAbsent`, ADR-230). Left out, the command runs the
+ * collector and nothing else.
  */
 export function commandHookEntry(
   config: HookInstallConfig,
@@ -482,7 +483,11 @@ export function tachoHookPresence(
   const missing: HookEventName[] = [];
   const stale: HookEventName[] = [];
   for (const event of ALL_HOOK_EVENTS) {
-    const groups = settings.hooks?.[event] ?? [];
+    // A value that is not a list is read as no groups. `oxagen agent status`
+    // reads a hand-edited file through here, and `{"Stop": {}}` threw on the
+    // `.filter` instead of reporting the event missing.
+    const raw: unknown = settings.hooks?.[event];
+    const groups = Array.isArray(raw) ? (raw as HookGroup[]) : [];
     const ours = groups.filter((group) => isTachoGroup(group, enrollmentId));
     if (ours.length > 0) {
       present.push(event);
