@@ -176,3 +176,31 @@ still answers `invalid` on `after`.
   module, where it passes, and the directive-less `imports-data-source.ts`
   probe there, where it fails.
 - The list now has five entries.
+
+## Amendment 2026-10-03: the change sets on the Run and work item pages (ADR-292)
+
+`features/work/actions.ts` joins the list, with the same terms:
+`"use server"`, `requireViewer` before the read, and an `ActionResult`
+answer. `features/run/actions.ts` stays on the list and reads one more port.
+
+ADR-292 draws the change of a run, a work order, a work item, and an issue
+from Oxagen's own pull request store. Each page reads its own change set
+through the `changes` port when the route renders. The rest are read when a
+person opens them:
+
+- On the Run page, an issue's change set under the Issues tab, and a file's
+  diff in either change set, read by `features/run/actions.ts`.
+- On the work item page, each send's change set, and a file's diff, read by
+  `features/work/actions.ts`.
+
+No render can make these reads. A work item can hold many sends, a change
+set can hold hundreds of files, and a diff is read one file at a time. Both
+actions read the `changes` port, so every change set and every diff goes
+through the mapper and the view-model check the page's own read uses.
+
+- `layers.ts` names `features/work/actions` in `PORT_READING_ACTIONS` with
+  this reason.
+- `import-graph.test.ts` places the `data-source-use-server.ts` probe at the
+  module, where it passes, and the directive-less `imports-data-source.ts`
+  probe there, where it fails.
+- The list now has six entries.

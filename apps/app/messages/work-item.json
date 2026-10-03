@@ -289,6 +289,11 @@
       "acceptance": "{by} accepted {head} on {at}.",
       "consequence": "Accept records your acceptance of {head} and merges nothing. The item is done once the pull request merges. Return sends it back to the agent with your reason, as a new send."
     },
+    "changes": {
+      "heading": "Changes",
+      "sendsHeading": "Changes by send",
+      "send": "Changes from send {number}"
+    },
     "refresh": {
       "submit": "Read the checks again",
       "unread": "GitHub could not be read. {reason}"

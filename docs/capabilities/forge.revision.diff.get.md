@@ -14,6 +14,8 @@
 
 One pull request revision's diff from Oxagen's own store, split into files ([ADR-292](../adr/ADR-292-every-pull-request-read-comes-from-the-forge-store.md)). The bytes are checked against the sha256 recorded when they were captured before any is answered.
 
+In the app, opening a file in a change set on the Run page or the work item page reads that file from each pull request that changed it, one read per revision, and draws each pull request's hunks under its own name.
+
 ## Input
 
 `{ revisionId: prv_…, paths?: string[] }`. `paths` reads only those files, at most 100.

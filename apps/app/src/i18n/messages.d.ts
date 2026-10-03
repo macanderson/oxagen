@@ -13361,6 +13361,11 @@ type Messages = {
       acceptance: string;
       consequence: string;
     };
+    changes: {
+      heading: string;
+      sendsHeading: string;
+      send: string;
+    };
     refresh: {
       submit: string;
       unread: string;
