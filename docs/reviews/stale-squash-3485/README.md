@@ -51,6 +51,8 @@ The collector is a bounded candidate detector. It does not prove semantic equiva
 
 The 501 records without an independent disposition remain to be reviewed or explicitly scoped by a maintainer. This report makes no blanket claim that the frozen tip has no live merge regression. #3485's issue-update requirement also remains with the coordinating maintainer. This PR references the issue and does not close it.
 
+The net-effect audit of 2026-10-03 in [net-effect/](net-effect/) answers those records. `join-3556.json` there maps each of the 588 records onto its results, and ADR-110's addendum gives the outcome.
+
 The old audit's 19-hit total cannot be reconstructed from its prose. Its six categories total 21, and neither the raw rows nor a frozen endpoint was retained. An explicit first-parent log through #3482 from midnight UTC on 2026-09-17 returns 119 commits, rather than the claimed 87. That difference cannot identify the original cutoff or duplicate rows. ADR-110 withdraws those counts instead of inventing a reconciliation.
 
 ## Verification
