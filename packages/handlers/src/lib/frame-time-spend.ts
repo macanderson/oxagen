@@ -17,9 +17,20 @@
 // the read, so the figures beside it still answer.
 //
 // A run's last priced frame is bounded by its seal, or by its last rollup
-// when that came first. An unsealed run's bound is its last rollup, so a
-// price-book rebuild that rolls old unsealed runs up again makes each of them
-// a crossing run until it seals. Past the cap, the shares that need them read
+// when that came first. A wrapped run's frame is also bounded by the last
+// batch that landed on any session of its tree (`last_event_at`, the server's
+// clock when the batch arrived), since a frame reaches the server in a batch
+// after it ran. A frame's instant is the harness's clock, so a harness clock
+// that runs ahead of the server's can put a frame a little past either bound.
+//
+// That last bound keeps an unsealed wrapped run out of a later window
+// (#5294). Without it, an unsealed run's bound is its last rollup, and the
+// price-book reprice rolls up a run with an incomplete cost again every
+// night. So each unsealed run from the 30 days before a window that the
+// reprice touched read as a crossing run. Past `CROSSING_RUNS_PRICED_MAX` of
+// them the period had no share, while the Spend tile priced the same runs.
+// A ledger run has no session, so its bound is its seal and its rollup
+// alone. Past the cap, the shares that need the crossing runs still read
 // null for the period.
 import {
   divideHalfEven,
@@ -49,6 +60,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 export type SpendScope = { orgId: string; workspaceId: string };
 export type SpendWindow = { start: Date; end: Date };
@@ -176,6 +188,30 @@ export async function readFrameTimeSpend(
   return { rows: [...totals.values()], partial };
 }
 
+/**
+ * The last batch that landed on any session of a wrapped run's tree, or null
+ * for a run with no root session (a ledger run). Every session of a run
+ * names the root in `root_session_uuid`, the root itself included.
+ */
+function treeLastEventAt(): SQL {
+  const totals = schema.runTotals;
+  const sessions = schema.tachoSessions;
+  const root = alias(sessions, "frame_time_root");
+  const tree = alias(sessions, "frame_time_tree");
+  return sql`(
+    select max(${tree.lastEventAt})
+    from ${sessions} as ${root}
+    join ${sessions} as ${tree}
+      on ${tree.rootSessionUuid} = ${root.sessionUuid}
+      and ${tree.orgId} = ${root.orgId}
+      and ${tree.workspaceId} = ${root.workspaceId}
+    where ${root.publicId} = ${totals.runId}::citext
+      and ${root.orgId} = ${totals.orgId}
+      and ${root.workspaceId} = ${totals.workspaceId}
+      and ${root.parentSessionUuid} is null
+  )`;
+}
+
 async function readRuns(
   scope: SpendScope,
   window: SpendWindow,
@@ -183,8 +219,10 @@ async function readRuns(
 ): Promise<{ contained: FrameTimeSpend[]; crossing: CrossingRun[] }> {
   const totals = schema.runTotals;
   // The latest instant a priced frame of the run can carry: a rollup prices
-  // only the frames it has seen, and a sealed run has no frame past its seal.
-  const lastFrameBound = sql`least(coalesce(${totals.sealedAt}, ${totals.rolledUpAt}), ${totals.rolledUpAt})`;
+  // only the frames it has seen, a sealed run has no frame past its seal, and
+  // a wrapped run has none past the last batch its tree sent. `least` skips
+  // the null a ledger run's tree gives.
+  const lastFrameBound = sql`least(coalesce(${totals.sealedAt}, ${totals.rolledUpAt}), ${totals.rolledUpAt}, ${treeLastEventAt()})`;
   const start = window.start.toISOString();
   const end = window.end.toISOString();
   const overlaps: (SQL | undefined)[] = [

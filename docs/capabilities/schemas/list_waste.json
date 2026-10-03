@@ -1,7 +1,7 @@
 {
   "name": "list_waste",
   "domain": "spend",
-  "description": "List this workspace's wasted spend over a day range by cause, each cause a pattern read off the cost rollup with the runs that prove it: the total wasted with its basis, its share of spend, and the largest cause.",
+  "description": "List this workspace's wasted spend over a day range by cause, with the runs that prove each cause: the model calls open findings claim, which sum to the unproductive spend headline, and the cache writes no call read. Answers the total wasted with its basis, its share of spend, the largest cause, and how many open findings claim calls outside the range.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -126,7 +126,12 @@
           {
             "type": "string",
             "enum": [
-              "cache_write_never_read"
+              "cache_write_never_read",
+              "spin_loops",
+              "retry_loops",
+              "repeated_calls",
+              "recurring_runs",
+              "spend_with_no_outcome"
             ]
           },
           {
@@ -142,7 +147,12 @@
             "cause": {
               "type": "string",
               "enum": [
-                "cache_write_never_read"
+                "cache_write_never_read",
+                "spin_loops",
+                "retry_loops",
+                "repeated_calls",
+                "recurring_runs",
+                "spend_with_no_outcome"
               ]
             },
             "wasted": {
@@ -220,6 +230,10 @@
           ],
           "additionalProperties": false
         }
+      },
+      "findingsOutsidePeriod": {
+        "type": "integer",
+        "minimum": 0
       }
     },
     "required": [
@@ -228,7 +242,8 @@
       "share",
       "runsWithWaste",
       "largestCause",
-      "causes"
+      "causes",
+      "findingsOutsidePeriod"
     ],
     "additionalProperties": false
   }

@@ -1,7 +1,7 @@
 {
   "name": "get_spend_drill",
   "domain": "spend",
-  "description": "Read one operator, agent or tool's spend over a trailing window in this workspace: the daily series, the average per call and per run, its share of the workspace's spend, and the tools its runs called, every figure in micros with its basis.",
+  "description": "Read one operator, agent or tool's spend over a trailing window in this workspace: the daily series, the average per call and per run, its share of the workspace's spend, its tokens by class with the cache hit rate, the tools its runs called, and its spend split by agent, operator and model, every figure in micros with its basis. A tool's spend is what its results cost as input to later calls, an estimate its runs already paid.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -329,6 +329,143 @@
           }
         ]
       },
+      "tokens": {
+        "type": "object",
+        "properties": {
+          "input_uncached": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cache_read": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cache_write_5m": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cache_write_1h": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "output": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reasoning": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "server_tool_request": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "input_uncached",
+          "cache_read",
+          "cache_write_5m",
+          "cache_write_1h",
+          "output",
+          "reasoning",
+          "server_tool_request"
+        ],
+        "additionalProperties": false
+      },
+      "cacheHitRate": {
+        "anyOf": [
+          {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "modelCalls": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "observed": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "micros": {
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "micros",
+              "currency"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "standing": {
+        "type": "object",
+        "properties": {
+          "toolDefinitionTokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contextFrameTokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "steeringTokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "toolDefinitionTokens",
+          "contextFrameTokens",
+          "steeringTokens"
+        ],
+        "additionalProperties": false
+      },
+      "resultTokens": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 0
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "byTool": {
         "type": "array",
         "items": {
@@ -344,12 +481,643 @@
             "runs": {
               "type": "integer",
               "minimum": 0
+            },
+            "resultTokens": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "cost": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "micros": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "basis": {
+                      "type": "string",
+                      "enum": [
+                        "gateway_observed",
+                        "client_attested",
+                        "mixed",
+                        "estimated"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "micros",
+                    "currency",
+                    "basis"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
             "name",
             "calls",
-            "runs"
+            "runs",
+            "resultTokens",
+            "cost"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "byAgent": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "provider": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "operator": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "name": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "email": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "avatarUrl": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "role": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "email",
+                    "avatarUrl",
+                    "role"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "runs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "calls": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "cost": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "micros": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "basis": {
+                      "type": "string",
+                      "enum": [
+                        "gateway_observed",
+                        "client_attested",
+                        "mixed",
+                        "estimated"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "micros",
+                    "currency",
+                    "basis"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tokens": {
+              "type": "object",
+              "properties": {
+                "input_uncached": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cache_read": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cache_write_5m": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cache_write_1h": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "output": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "reasoning": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "server_tool_request": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "input_uncached",
+                "cache_read",
+                "cache_write_5m",
+                "cache_write_1h",
+                "output",
+                "reasoning",
+                "server_tool_request"
+              ],
+              "additionalProperties": false
+            },
+            "resultTokens": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "key",
+            "provider",
+            "operator",
+            "runs",
+            "calls",
+            "cost",
+            "tokens",
+            "resultTokens"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "byOperator": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "provider": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "operator": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "name": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "email": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "avatarUrl": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "role": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "email",
+                    "avatarUrl",
+                    "role"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "runs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "calls": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "cost": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "micros": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "basis": {
+                      "type": "string",
+                      "enum": [
+                        "gateway_observed",
+                        "client_attested",
+                        "mixed",
+                        "estimated"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "micros",
+                    "currency",
+                    "basis"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tokens": {
+              "type": "object",
+              "properties": {
+                "input_uncached": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cache_read": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cache_write_5m": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cache_write_1h": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "output": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "reasoning": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "server_tool_request": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "input_uncached",
+                "cache_read",
+                "cache_write_5m",
+                "cache_write_1h",
+                "output",
+                "reasoning",
+                "server_tool_request"
+              ],
+              "additionalProperties": false
+            },
+            "resultTokens": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "key",
+            "provider",
+            "operator",
+            "runs",
+            "calls",
+            "cost",
+            "tokens",
+            "resultTokens"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "byModel": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "provider": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "operator": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "name": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "email": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "avatarUrl": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "role": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "email",
+                    "avatarUrl",
+                    "role"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "runs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "calls": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "cost": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "micros": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "basis": {
+                      "type": "string",
+                      "enum": [
+                        "gateway_observed",
+                        "client_attested",
+                        "mixed",
+                        "estimated"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "micros",
+                    "currency",
+                    "basis"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tokens": {
+              "type": "object",
+              "properties": {
+                "input_uncached": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cache_read": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cache_write_5m": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cache_write_1h": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "output": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "reasoning": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "server_tool_request": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "input_uncached",
+                "cache_read",
+                "cache_write_5m",
+                "cache_write_1h",
+                "output",
+                "reasoning",
+                "server_tool_request"
+              ],
+              "additionalProperties": false
+            },
+            "resultTokens": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "key",
+            "provider",
+            "operator",
+            "runs",
+            "calls",
+            "cost",
+            "tokens",
+            "resultTokens"
           ],
           "additionalProperties": false
         }
@@ -397,7 +1165,16 @@
       "series",
       "averages",
       "share",
-      "byTool"
+      "tokens",
+      "cacheHitRate",
+      "modelCalls",
+      "observed",
+      "standing",
+      "resultTokens",
+      "byTool",
+      "byAgent",
+      "byOperator",
+      "byModel"
     ],
     "additionalProperties": false
   }

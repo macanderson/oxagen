@@ -102,7 +102,9 @@ request, as detector 3 does.
 10. **The job reads frames for at most 200 runs a pass.** It reads the runs
     with the most repeats first. A run past the cap, or one whose frames did
     not load, has its repeats cited with no price. They do not count toward a
-    finding's coverage, and they claim no frame.
+    finding's coverage, and they claim no frame. ADR-210 now sets the cap: 200
+    reads a pass, where one read covers a run or a recurring group's runs
+    (#5168).
 11. **The caps never cut a counting finding.** A pass writes every finding of
     detectors 1, 7, and 8, however many there are. The caps apply only to the
     advisory findings, the ones that claim no frame: at most 10 per kind and

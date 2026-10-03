@@ -28,6 +28,7 @@ import {
   RECURRING_RUNS_MIN,
   recurringRuns,
   runChange,
+  runsByJob,
 } from "./recurring-runs";
 import { claimKey } from "./requests";
 import { spendWithNoOutcome } from "./spend-with-no-outcome";
@@ -1017,6 +1018,25 @@ describe("recurring runs", () => {
         fileChanges: new Map(),
       }),
     ).toEqual([]);
+  });
+});
+
+describe("runsByJob (#5168)", () => {
+  it("groups runs by digest, source, and origin, in the order given, and leaves out a person's prompt and a run with no prompt", () => {
+    const nightly = job(3);
+    const hooked = job(2);
+    const typed = job(2);
+    const unread = job(1);
+    let input = reads({ [DIGEST]: [...nightly, ...hooked, ...typed] });
+    input = withPrompt(input, hooked, { source: "hook" });
+    input = withPrompt(input, typed, { source: "typed" });
+    const byJob = runsByJob(
+      [...unread, ...nightly, ...hooked, ...typed],
+      input.firstPrompts,
+    );
+    expect([...byJob.values()].map((runs) => runs.map((r) => r.runId))).toEqual(
+      [nightly.map((r) => r.runId), hooked.map((r) => r.runId)],
+    );
   });
 });
 
