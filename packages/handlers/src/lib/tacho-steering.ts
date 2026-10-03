@@ -7,10 +7,11 @@
  * Every active record is a candidate; `@oxagen/steering-assembler` ranks the
  * candidates by tier and then by recency, fits the `must` and `should` ones
  * to the budget, and says in the manifest what happened to each: included,
- * or cut for its tier, for the budget, or because a newer version of its
- * lineage won. The collector hands `context.system` to the agent at session
- * start (Claude Code's `SessionStart` `additionalContext`) and seals the
- * manifest into the run's chain as a `steering.manifest` frame, so a record
+ * or cut for its tier, for the budget, because a newer version of its
+ * lineage won, or because it has no force or no statement. The collector
+ * hands `context.system` to the agent at session start (Claude Code's
+ * `SessionStart` `additionalContext`) and seals the manifest into the run's
+ * chain as a `steering.manifest` frame, so a record
  * reaches a run the moment the host next fetches its bundle, and the run
  * record says whether it did.
  *
@@ -53,6 +54,7 @@
  */
 import {
   classificationOf,
+  incompleteRecord,
   readSteeringRows,
   readSteeringVersion,
   recordCandidate,
@@ -63,6 +65,7 @@ import {
 import { ambientPlaneKey } from "@oxagen/database";
 import {
   assembleSteering,
+  type IncompleteSteeringItem,
   PREFIX_BUDGET_TOKENS,
   type SteeringCandidate,
   type SteeringManifest,
@@ -73,6 +76,7 @@ import {
 // did not move with it.
 export {
   classificationOf,
+  incompleteRecord,
   recordCandidate,
   type SteeringRecord,
   type SteeringRow,
@@ -133,8 +137,9 @@ export interface WorkspaceSteering {
  * The bundle's steering for these records: the `must` and `should` ones
  * ranked and fitted to the budget, every one accounted for in the manifest,
  * whose list is capped at `STEERING_MANIFEST_MAX_ITEMS` by dropping the
- * oldest cut items. Deterministic in its input set, whatever order it
- * arrives in: the text is part of the bundle etag, and an etag that moved
+ * oldest cut items. A record with no force or no statement is listed as cut
+ * for `incomplete` (#3296). Deterministic in its input set, whatever order
+ * it arrives in: the text is part of the bundle etag, and an etag that moved
  * with the database's row order would make every host refetch an unchanged
  * bundle.
  */
@@ -144,11 +149,15 @@ export function assembleWorkspaceSteering(
   records: readonly SteeringRecord[],
   budgetTokens: number = CONTEXT_SYSTEM_BUDGET_TOKENS,
 ): WorkspaceSteering {
-  const candidates = records
-    .map(recordCandidate)
-    .filter((c): c is SteeringCandidate => c !== null);
+  const candidates: SteeringCandidate[] = [];
+  const incomplete: IncompleteSteeringItem[] = [];
+  for (const record of records) {
+    const candidate = recordCandidate(record);
+    if (candidate === null) incomplete.push(incompleteRecord(record));
+    else candidates.push(candidate);
+  }
   const { text, manifest } = assembleSteering(
-    { orgId, workspaceId, candidates },
+    { orgId, workspaceId, candidates, incomplete },
     budgetTokens,
   );
   return { text, manifest: capManifestItems(manifest) };

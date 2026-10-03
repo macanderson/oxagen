@@ -296,6 +296,18 @@ export function splitCommandList(command: string): string[] {
   return pieces;
 }
 
+/**
+ * Whether any command on a shell line makes a commit. `classifyShellEffect`
+ * names one effect per line, the furthest reaching, so `git commit && git
+ * push` reads as a push. The git lane needs to know the line committed too,
+ * to name the tool call that made a commit (ADR-297).
+ */
+export function commitsIn(command: string): boolean {
+  return splitCommandList(command).some(
+    (piece) => classifySimpleEffect(piece) === "git_commit",
+  );
+}
+
 /** Which effect a line reports when its commands have several: the furthest reaching. */
 const EFFECT_REACH: readonly EffectKind[] = [
   "pr_open",

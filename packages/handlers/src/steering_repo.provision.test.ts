@@ -249,13 +249,18 @@ class Harness {
   readonly gitlabCalls: GitlabCall[] = [];
   /** Every workspace the bind step published a first version for (#4732). */
   readonly firstPublishes: { orgId: string; workspaceId: string }[] = [];
+  /** Every installation the bind step attached as a workspace's code installation. */
+  readonly codeInstallations: {
+    scope: SteeringRepoScope;
+    installationId: number;
+  }[] = [];
   /** The version store holds the first commit as version 1. */
   storeHoldsFirst = false;
   /**
    * How many more times each dependency fails. `stale` makes the first
    * publish answer that the production branch moved.
    */
-  readonly faults = { bind: 0, groups: 0, stale: 0 };
+  readonly faults = { bind: 0, groups: 0, stale: 0, attach: 0 };
   userToken = true;
   groupToken = true;
   /** GitLab refuses the stored group token while the groups are listed. */
@@ -378,6 +383,14 @@ class Harness {
         const status = this.storeHoldsFirst ? "current" : "published";
         this.storeHoldsFirst = true;
         return Promise.resolve({ status, version: 1 });
+      },
+      attachCodeInstallation: (scope, installationId) => {
+        if (this.faults.attach > 0) {
+          this.faults.attach -= 1;
+          return Promise.reject(new Error("the connection write failed"));
+        }
+        this.codeInstallations.push({ scope, installationId });
+        return Promise.resolve();
       },
     };
   }
@@ -2206,6 +2219,84 @@ describe("the first steering version (#4732)", () => {
     const { publishFirst: _unused, ...deps } = h.deps();
     expect(await provisionSteeringRepo(deps, WS)).toBe("ready");
     expect(h.firstPublishes).toEqual([]);
+  });
+});
+
+// ── The workspace's code installation ───────────────────────────────────────
+
+describe("the workspace's code installation", () => {
+  it("attaches the steering installation once bind_repository binds a GitHub workspace", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    const deps = h.deps();
+    for (const step of STEERING_REPO_STEPS.slice(0, -1))
+      await runSteeringRepoStep(deps, WS, step);
+    // Only the bind step attaches.
+    expect(h.codeInstallations).toEqual([]);
+
+    expect(await runSteeringRepoStep(deps, WS, "bind_repository")).toEqual({
+      step: "bind_repository",
+      status: "ready",
+      ran: true,
+    });
+    expect(h.binds).toHaveLength(1);
+    // GITHUB_CONNECTION's installation, the one the fake holds.
+    expect(h.codeInstallations).toEqual([{ scope: WS, installationId: 77 }]);
+  });
+
+  it("attaches nothing when the bind fails, and attaches on the rerun that binds (negative)", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    h.faults.bind = 1;
+
+    expect(await runUntilStopped(h.deps(), WS)).toBeInstanceOf(Error);
+    expect(h.state(WS)).toMatchObject({
+      status: "failed",
+      failed_step: "bind_repository",
+    });
+    expect(h.codeInstallations).toEqual([]);
+
+    expect(await runUntilStopped(h.deps(), WS, "bind_repository")).toBeNull();
+    expect(h.codeInstallations).toEqual([{ scope: WS, installationId: 77 }]);
+  });
+
+  it("attaches nothing for a GitLab workspace (negative)", async () => {
+    const h = new Harness(null, gitlabFake());
+    expect(await provisionSteeringRepo(h.deps(), WS)).toBe("ready");
+    expect(h.binds).toHaveLength(1);
+    expect(h.codeInstallations).toEqual([]);
+  });
+
+  it("attaches nothing for the organization repo, which binds nothing (negative)", async () => {
+    const h = new Harness(githubFake(), null);
+    expect(await provisionSteeringRepo(h.deps(), ORG_SCOPE)).toBe("ready");
+    expect(h.codeInstallations).toEqual([]);
+  });
+
+  it("keeps bind_repository done when the attach fails, and logs it (negative)", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    h.faults.attach = 1;
+
+    expect(await provisionSteeringRepo(h.deps(), WS)).toBe("ready");
+    expect(h.state(WS)).toMatchObject({
+      status: "ready",
+      step: "bind_repository",
+      failed_step: null,
+      error: null,
+      binding_id: BINDING_ID,
+    });
+    expect(h.codeInstallations).toEqual([]);
+    // The first publish after the attach still ran.
+    expect(h.firstPublishes).toEqual([{ orgId: "org_1", workspaceId: "ws_1" }]);
+    expect(warn).toHaveBeenCalledWith(
+      { orgId: "org_1", workspaceId: "ws_1", err: "the connection write failed" },
+      expect.stringContaining("a person can choose one in the app"),
+    );
+    expect(warn).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "steering_repo.provision: step did not finish",
+    );
   });
 });
 

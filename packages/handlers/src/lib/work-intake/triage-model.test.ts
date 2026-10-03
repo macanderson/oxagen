@@ -45,7 +45,13 @@ describe("aiTriageModelClient", () => {
         system: "rules",
         prompt: request.prompt,
         maxRetries: 0,
-        telemetry: { orgId: scope.orgId, workspaceId: scope.workspaceId, surface: "runner", messageId: null },
+        telemetry: {
+          orgId: scope.orgId,
+          workspaceId: scope.workspaceId,
+          surface: "runner",
+          messageId: null,
+          capabilityName: "work_triage",
+        },
       }),
     );
   });

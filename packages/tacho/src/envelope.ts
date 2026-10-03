@@ -551,6 +551,63 @@ export const observedChangeSchema = z
 export type ObservedChange = z.infer<typeof observedChangeSchema>;
 
 /**
+ * The most commits one reconciliation lists in `session_commits`, the
+ * newest kept. The list is cumulative, so an earlier frame already carried
+ * the ones a cut drops. With `MAX_COMMIT_FILES` it keeps the frame well
+ * inside the request budget `MAX_OBSERVED_CHANGES` describes (ADR-297).
+ */
+export const MAX_SESSION_COMMIT_ITEMS = 64;
+
+/** The most files one `session_commits` item lists. Its totals count all. */
+export const MAX_COMMIT_FILES = 16;
+
+/** The most parents one `session_commits` item lists. */
+export const MAX_COMMIT_PARENTS = 16;
+
+/** The most characters of a commit subject one item keeps. */
+export const MAX_COMMIT_SUBJECT = 256;
+
+/** A full commit name or patch id, sha-1 or sha-256. */
+const commitName = z.string().regex(/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/);
+
+/** One file of a commit the session made. */
+export const sessionCommitFileSchema = z
+  .object({
+    path: str,
+    status: z.enum(["added", "modified", "deleted", "renamed"]),
+    added: u32,
+    removed: u32,
+  })
+  .strict();
+
+/**
+ * One commit the session made, as ADR-297 section 9 pins it. A merge lists
+ * no files and counts no lines, and its `patch_id` is null.
+ */
+export const sessionCommitSchema = z
+  .object({
+    sha: commitName,
+    parent_shas: z.array(commitName).max(MAX_COMMIT_PARENTS),
+    kind: z.enum(["change", "merge"]),
+    patch_id: commitName.nullable(),
+    authored_at: ts,
+    committed_at: ts,
+    // `MAX_COMMIT_SUBJECT` characters, each at most two UTF-16 units.
+    subject: short,
+    added: u32,
+    removed: u32,
+    files_total: u32,
+    files: z.array(sessionCommitFileSchema).max(MAX_COMMIT_FILES),
+    /** Absent only for a commit a daemon counted before it kept tests. */
+    test: z.enum(["unpushed", "email", "reflog"]).optional(),
+    tool_use_id: short.optional(),
+    files_outside_session: bool.optional(),
+  })
+  .strict();
+
+export type SessionCommit = z.infer<typeof sessionCommitSchema>;
+
+/**
  * What the collector read off the worktree for itself, rather than what a
  * tool announced (data-model section 2, observed facts).
  *
@@ -574,6 +631,18 @@ export const observationFacts = z.object({
    */
   observed_changes_total: u32.optional(),
   observed_changes_truncated: bool.optional(),
+  /**
+   * The commits the session made in this worktree, oldest first, under
+   * ADR-188's rule (ADR-297). Absent on a frame sealed on the `baseline`
+   * basis, where the rule did not run, and when git could not list them.
+   */
+  session_commits: z
+    .array(sessionCommitSchema)
+    .max(MAX_SESSION_COMMIT_ITEMS)
+    .optional(),
+  /** How many commits the session had, before the list was cut. */
+  session_commits_total: u32.optional(),
+  session_commits_truncated: bool.optional(),
 });
 
 /** Session inventory captured once at genesis (data-model section 3.2). */

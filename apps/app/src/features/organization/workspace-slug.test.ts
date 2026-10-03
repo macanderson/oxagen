@@ -2,7 +2,36 @@
 // (packages/oxagen/src/workspace-slug.ts), so a name a person types becomes a
 // slug `create_workspace` accepts, or one it refuses on its own terms.
 import { describe, expect, it } from "vitest";
-import { slugFromName } from "./workspace-slug";
+import { slugDraft, slugFromName, slugProblem } from "./workspace-slug";
+
+describe("slugDraft", () => {
+  it("keeps lowercase letters, digits and hyphens, and turns a space into a hyphen", () => {
+    expect(slugDraft("Core Platform")).toBe("core-platform");
+    expect(slugDraft("R&D / EU")).toBe("rd-eu");
+    expect(slugDraft("a  --  b")).toBe("a-b");
+  });
+
+  it("keeps a hyphen at the end, so the next word can follow it", () => {
+    expect(slugDraft("core-")).toBe("core-");
+  });
+
+  it("stops at 40 characters", () => {
+    expect(slugDraft("a".repeat(50))).toHaveLength(40);
+  });
+});
+
+describe("slugProblem", () => {
+  it("takes a slug create_workspace takes", () => {
+    expect(slugProblem("core-platform")).toBeNull();
+  });
+
+  it("names a slug too short, the wrong shape, or reserved (negative)", () => {
+    expect(slugProblem("a")).toBe("short");
+    expect(slugProblem("core-")).toBe("shape");
+    expect(slugProblem("-core")).toBe("shape");
+    expect(slugProblem("settings")).toBe("reserved");
+  });
+});
 
 describe("slugFromName", () => {
   it("spells the contract's one slug shape: lowercase groups joined by single hyphens", () => {

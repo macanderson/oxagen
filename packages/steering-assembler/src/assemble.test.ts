@@ -6,6 +6,7 @@ import {
   HARNESS_CONTEXT_MAX_CHARS,
   PREFIX_BUDGET_TOKENS,
   SMALLEST_HARNESS_CONTEXT_MAX_CHARS,
+  type IncompleteSteeringItem,
   STEERING_HEADER,
   type SteeringCandidate,
   type SteeringManifestItem,
@@ -139,6 +140,84 @@ describe("assembleSteering", () => {
     ]);
     expect(manifest.included).toBe(1);
     expect(manifest.cut).toBe(2);
+  });
+
+  // #3296: a source row with no force or no statement used to be dropped
+  // before ranking, so the manifest never named it.
+  it("lists every incomplete item as cut after the ranked ones, by id, whatever order they arrive in", () => {
+    const candidates = [
+      record({ id: "s", force: "should", body: "Prefer S. (rule; s)" }),
+      record({ id: "m", force: "may", body: "Maybe M. (fact; m)" }),
+    ];
+    const incomplete: IncompleteSteeringItem[] = [
+      {
+        id: "z-blank",
+        kind: "record",
+        force: "must",
+        recordedAt: "2026-09-02T00:00:00Z",
+      },
+      { id: "b-no-force", kind: "record", recordedAt: "" },
+      {
+        id: "k-no-statement",
+        kind: "record",
+        force: "info",
+        recordedAt: "2026-09-01T00:00:00Z",
+      },
+    ];
+    const assembled = assembleSteering({ ...run(candidates), incomplete }, 4096);
+    const { text, manifest } = assembled;
+    expect(text).toContain("- Prefer S.");
+    expect(text).not.toContain("z-blank");
+    expect(manifest.items.map((i) => [i.id, i.reason ?? null])).toEqual([
+      ["s", null],
+      ["m", "tier"],
+      ["b-no-force", "incomplete"],
+      ["k-no-statement", "incomplete"],
+      ["z-blank", "incomplete"],
+    ]);
+    expect(manifest.items.slice(2)).toEqual([
+      {
+        id: "b-no-force",
+        kind: "record",
+        recorded_at: "",
+        tokens: 0,
+        outcome: "cut",
+        reason: "incomplete",
+      },
+      {
+        id: "k-no-statement",
+        kind: "record",
+        force: "info",
+        recorded_at: "2026-09-01T00:00:00Z",
+        tokens: 0,
+        outcome: "cut",
+        reason: "incomplete",
+      },
+      {
+        id: "z-blank",
+        kind: "record",
+        force: "must",
+        recorded_at: "2026-09-02T00:00:00Z",
+        tokens: 0,
+        outcome: "cut",
+        reason: "incomplete",
+      },
+    ]);
+    expect(manifest.included).toBe(1);
+    expect(manifest.cut).toBe(4);
+    // An incomplete item spends nothing, so the text is what it would be
+    // without one.
+    const without = assembleSteering(run(candidates), 4096);
+    expect(text).toBe(without.text);
+    expect(manifest.spent_tokens).toBe(without.manifest.spent_tokens);
+    expect(manifest.text_digest).toBe(without.manifest.text_digest);
+    // The manifest is signed into the bundle, so the order cannot move.
+    expect(
+      assembleSteering(
+        { ...run(shuffled(candidates)), incomplete: shuffled(incomplete) },
+        4096,
+      ),
+    ).toEqual(assembled);
   });
 
   it("opens with the header the run names, and counts it against the budget", () => {

@@ -43,6 +43,14 @@ vi.mock("./actions", () => ({
   setOrgAvatar: vi.fn(),
   setWorkspaceAvatar: vi.fn(),
 }));
+// Create a workspace draws the new workspace's provisioning steps, whose
+// retry and import are server actions.
+vi.mock("@/features/steering-repo/actions", () => ({
+  importWorkspaceSteering: vi.fn(),
+  readSteeringRepoDestinations: vi.fn(),
+  repairSteeringRepo: vi.fn(),
+  retrySteeringRepoProvision: vi.fn(),
+}));
 
 const { WorkspacesTab } = await import("./workspaces");
 type Facts = NonNullable<Parameters<typeof WorkspacesTab>[0]["facts"]>;

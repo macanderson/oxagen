@@ -76,7 +76,13 @@ export function WriteDialog<O>({
   done?: {
     /** Dismisses the panel. Part of `done` so a panel cannot exist unlabelled. */
     close: string;
-    render: (value: O) => ReactNode;
+    /**
+     * `leave` closes the dialog from inside the panel and runs `then` in place
+     * of `onDone`, for a panel that sends the person somewhere else once what
+     * it waited for has happened (Create a workspace, once the steering repo
+     * is ready).
+     */
+    render: (value: O, leave: (then: () => void) => void) => ReactNode;
   };
   /** The dialog's fields; a confirmation has a sentence instead. */
   children?: ReactNode;
@@ -95,6 +101,13 @@ export function WriteDialog<O>({
     setOpen(false);
     setResult(null);
     onDone(value);
+  }
+
+  function leave(then: () => void) {
+    setOpen(false);
+    setResult(null);
+    setFailure(null);
+    then();
   }
 
   function openChange(next: boolean) {
@@ -119,7 +132,7 @@ export function WriteDialog<O>({
       const answer = await submit(form);
       if (answer.ok) {
         recordReceipt(copy.receipt ?? tReceipt("saved"));
-        const panel = done?.render(answer.value) ?? null;
+        const panel = done?.render(answer.value, leave) ?? null;
         if (panel === null) finish(answer.value);
         else setResult({ value: answer.value });
       } else {
@@ -184,7 +197,7 @@ export function WriteDialog<O>({
           </form>
         ) : (
           <div className="flex flex-col gap-3" data-testid={`${testId}-done`}>
-            {done?.render(result.value)}
+            {done?.render(result.value, leave)}
           </div>
         )}
       </SheetDialog>

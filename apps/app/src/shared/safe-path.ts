@@ -583,6 +583,13 @@ export const routes = {
    */
   steeringSetup: (org: string, ws: string): SafePath =>
     withQuery(pathOf(org, ws, "repositories"), { setup: "steering" }),
+  /**
+   * The Repositories page with "Add Oxagen to a repository" open on its first
+   * step. The Create a workspace dialog sends a person here once the new
+   * workspace's steering repo is ready.
+   */
+  addRepository: (org: string, ws: string): SafePath =>
+    withQuery(pathOf(org, ws, "repositories"), { add: "repository" }),
   /** Runtimes, the hosts agents run on: a tab of the Agents page (roadmap mockups/pages/runtimes.md). */
   runtimes: (org: string, ws: string): SafePath =>
     withQuery(pathOf(org, ws, "agents"), { tab: "runtimes" }),

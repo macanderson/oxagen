@@ -12,6 +12,7 @@ export {
 } from "./assemble";
 export type {
   AssembledSteering,
+  IncompleteSteeringItem,
   RunContext,
   SteeringCandidate,
   SteeringCutReason,

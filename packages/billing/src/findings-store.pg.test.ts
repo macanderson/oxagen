@@ -523,19 +523,21 @@ describe.skipIf(!enabled)("writeFindings against Postgres", () => {
     });
     try {
       await withSystemDb(async (tx) => {
+        // Every steering record carries a kind and a force (#3296).
+        const record = { ...own, kind: "rule", force: "should" };
         await tx.insert(schema.steeringRecords).values([
           // The column ignores case, as the opener's own check does.
-          { ...own, slug: recorded.toUpperCase(), title: "Run the tests" },
+          { ...record, slug: recorded.toUpperCase(), title: "Run the tests" },
           {
-            ...own,
+            ...record,
             slug: retired,
             title: "Run the linter",
             status: "retired",
             deletedAt: new Date(),
           },
           // Another lineage family, and a slug that only contains the prefix.
-          { ...own, slug: "ctx.habits.spin_loops-abc", title: "Spin loops" },
-          { ...own, slug: `x.${recorded}`, title: "Not a lineage" },
+          { ...record, slug: "ctx.habits.spin_loops-abc", title: "Spin loops" },
+          { ...record, slug: `x.${recorded}`, title: "Not a lineage" },
         ]);
         await tx
           .insert(schema.steeringProposals)
