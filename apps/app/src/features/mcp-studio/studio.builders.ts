@@ -1153,6 +1153,7 @@ export function studioSource(reads: StudioReads = {}) {
       tree: refuse,
     },
     steeringRepo: { get: refuse },
+    changes: { changeSet: refuse, revisionDiff: refuse },
     tools: {
       versions: (ctx, q) => {
         calls.versions.push([ctx, q]);

@@ -34,6 +34,11 @@ import type {
   UsageCredits,
 } from "./contracts/billing";
 import type {
+  ChangeSet,
+  ChangeSetScope,
+  RevisionDiff,
+} from "./contracts/changes";
+import type {
   AssistantSession,
   AssistantThread,
 } from "./contracts/conversations";
@@ -844,5 +849,27 @@ export interface DataSource {
     outcomes(ctx: WsCtx): Promise<Read<WorkOutcomes>>;
     collectors(ctx: WsCtx): Promise<Read<WorkCollectorList>>;
     priorities(ctx: WsCtx): Promise<Read<WorkPriorities>>;
+  };
+  /**
+   * The pull requests a run, a work order, a work item, or an issue produced,
+   * and one revision's diff, both read from Oxagen's own pull request store
+   * (ADR-292). Each is a noBillingGate read. Callers: the Run page's Changes
+   * panel and Issues tab (features/run), and the work item page's Changes
+   * panel (features/work/item). `revisionDiff` is read when a person opens a
+   * file, through each feature's `readRevisionDiff` action.
+   */
+  changes: {
+    /** get_change_set: `id` is the run's, work order's, or work item's public id, or the issue's URL. */
+    changeSet(
+      ctx: WsCtx,
+      scope: ChangeSetScope,
+      id: string,
+    ): Promise<Read<ChangeSet>>;
+    /** get_revision_diff: one revision's files and hunks, only `paths` when given. */
+    revisionDiff(
+      ctx: WsCtx,
+      revisionId: string,
+      paths?: readonly string[],
+    ): Promise<Read<RevisionDiff>>;
   };
 }

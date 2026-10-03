@@ -22,6 +22,7 @@ import type { Read } from "@/data/read";
 import { parseGitHubUrl } from "@/shared/github-url";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import { eyebrowQuiet, mono, note } from "@/ui/control-styles";
+import { PatchLines } from "@/ui/diff-view";
 import { formatCount } from "@/ui/money-format";
 import { GitHubLink, SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
@@ -591,78 +592,6 @@ function Artifacts({
   );
 }
 
-type DiffLine = {
-  kind: "add" | "del" | "ctx" | "hunk";
-  old: number | null;
-  new: number | null;
-  text: string;
-};
-
-/** A unified patch as numbered lines: the forge's hunks, read in order. */
-function diffLines(patch: string): DiffLine[] {
-  const lines: DiffLine[] = [];
-  let oldAt = 0;
-  let newAt = 0;
-  for (const raw of patch.split("\n")) {
-    const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(raw);
-    if (hunk !== null) {
-      oldAt = Number(hunk[1]);
-      newAt = Number(hunk[2]);
-      lines.push({ kind: "hunk", old: null, new: null, text: raw });
-    } else if (raw.startsWith("+")) {
-      lines.push({ kind: "add", old: null, new: newAt, text: raw.slice(1) });
-      newAt += 1;
-    } else if (raw.startsWith("-")) {
-      lines.push({ kind: "del", old: oldAt, new: null, text: raw.slice(1) });
-      oldAt += 1;
-    } else if (!raw.startsWith("\\")) {
-      lines.push({ kind: "ctx", old: oldAt, new: newAt, text: raw.slice(1) });
-      oldAt += 1;
-      newAt += 1;
-    }
-  }
-  return lines;
-}
-
-/**
- * `.diff { background:var(--void); border:1px solid var(--border);
- * border-radius:9px; font-size:11.5px; line-height:1.6; max-height:360px }`
- * (the `.lw-files` height) and `.dl` (two 34px number columns, then the
- * line), `.dl.add` / `.dl.del` at 14% of the allowed and denied hues.
- */
-const DIFF_ROW: Record<DiffLine["kind"], string> = {
-  add: "bg-success/15 text-foreground",
-  del: "bg-warning/15 text-foreground",
-  ctx: "",
-  hunk: "text-dim",
-};
-
-function Diff({ patch }: { patch: string }) {
-  return (
-    <div className="mb-2.5 max-h-[360px] overflow-auto rounded-[9px] border border-border bg-void font-mono text-xs leading-[1.6]">
-      {diffLines(patch).map((line, i) => (
-        <div
-          // A patch's lines are positional.
-          // eslint-disable-next-line @eslint-react/no-array-index-key -- a patch never reorders
-          key={i}
-          className={`grid grid-cols-[34px_34px_minmax(0,1fr)] whitespace-pre ${DIFF_ROW[line.kind]}`}
-        >
-          <span className="select-none border-r border-border px-1.5 text-right text-dim">
-            {line.old ?? ""}
-          </span>
-          <span className="select-none border-r border-border px-1.5 text-right text-dim">
-            {line.new ?? ""}
-          </span>
-          <span className="whitespace-pre-wrap px-2.5 [overflow-wrap:anywhere]">
-            {line.kind === "add" ? "+" : line.kind === "del" ? "−" : " "}
-            {line.text}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function Stat({ added, removed }: { added: number; removed: number }) {
   const locale = useLocale();
   return (
@@ -775,7 +704,7 @@ function FilesChanged({
                 <summary className="flex min-w-0 cursor-pointer list-none items-center gap-2.5 py-2 text-sm before:flex-none before:text-dim before:content-['▸'] group-open:before:content-['▾'] [&::-webkit-details-marker]:hidden">
                   {summary}
                 </summary>
-                <Diff patch={patch} />
+                <PatchLines patch={patch} />
               </details>
             );
           })}

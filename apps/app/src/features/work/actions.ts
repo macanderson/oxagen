@@ -14,6 +14,11 @@
 //
 // A refusal comes back as the kernel seam classified it (`ActionResult`), and
 // the dialog names the code in its own words (./action-failure.ts).
+//
+// Two reads live here too, made when a person opens a part of the work item
+// page's Changes panel (ADR-292): a send's change set and a file's diff. Both
+// read the `changes` port, the read and the mapper the panel's own change
+// set goes through, so the page maps every change set one way (ADR-167).
 import { steeringPrOpen } from "@oxagen/oxagen/contracts/steering.pr.open";
 import { steeringProposalCreate } from "@oxagen/oxagen/contracts/steering.proposal.create";
 import { workBriefApprove } from "@oxagen/oxagen/contracts/work.brief.approve";
@@ -31,8 +36,14 @@ import { workOrderSend } from "@oxagen/oxagen/contracts/work.order.send";
 import { workOrderStop } from "@oxagen/oxagen/contracts/work.order.stop";
 import { workTriageRetry } from "@oxagen/oxagen/contracts/work.triage.retry";
 import { workTriageRevise } from "@oxagen/oxagen/contracts/work.triage.revise";
+import {
+  type ChangeSet,
+  REVISION_DIFF_PATHS_MAX,
+  type RevisionDiff,
+} from "@/data/contracts/changes";
+import { dataSource } from "@/data/source";
 import type { ActionResult } from "@/server/kernel";
-import { kernelWrite } from "@/server/kernel";
+import { kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 /** The item after a write: name its version on the next action. */
@@ -480,4 +491,53 @@ export async function openPrioritiesPr(
       pr: pr === null ? null : { number: pr.number, url: pr.url, repository: pr.repository },
     },
   };
+}
+
+/** The scopes the work pages read a change set for. */
+type WorkChangeScope = "work_item" | "work_order";
+const WORK_CHANGE_SCOPES: ReadonlySet<string> = new Set<WorkChangeScope>([
+  "work_item",
+  "work_order",
+]);
+
+/**
+ * A change set read when a person opens it (ADR-292): the Changes panel reads
+ * each send's this way, by its work order's public id. A scope other than a
+ * work item or a work order, or an empty id, is refused as `invalid` before
+ * anything is read.
+ */
+export async function readChangeSet(
+  org: string,
+  ws: string,
+  scope: WorkChangeScope,
+  id: string,
+): Promise<ActionResult<ChangeSet>> {
+  const ctx = await requireViewer(org, ws);
+  if (!WORK_CHANGE_SCOPES.has(scope))
+    return { ok: false, reason: "invalid", code: "change_set_scope", field: "scope" };
+  if (typeof id !== "string" || id === "")
+    return { ok: false, reason: "invalid", code: "change_set_id", field: "id" };
+  return readToActionResult(await dataSource().changes.changeSet(ctx, scope, id));
+}
+
+/**
+ * One revision's hunks for the paths a person opened (`get_revision_diff`,
+ * ADR-292). The paths are a list of one to `REVISION_DIFF_PATHS_MAX` non-empty
+ * strings, or the read is refused as `invalid` before anything is read.
+ */
+export async function readRevisionDiff(
+  org: string,
+  ws: string,
+  revisionId: string,
+  paths: string[],
+): Promise<ActionResult<RevisionDiff>> {
+  const ctx = await requireViewer(org, ws);
+  if (
+    !Array.isArray(paths) ||
+    paths.length === 0 ||
+    paths.length > REVISION_DIFF_PATHS_MAX ||
+    !paths.every((path) => typeof path === "string" && path !== "")
+  )
+    return { ok: false, reason: "invalid", code: "revision_diff_paths", field: "paths" };
+  return readToActionResult(await dataSource().changes.revisionDiff(ctx, revisionId, paths));
 }

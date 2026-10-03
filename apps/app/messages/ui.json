@@ -295,6 +295,50 @@
     "toast": {
       "region": "Notifications",
       "close": "Close"
+    },
+    "diffView": {
+      "renamedFrom": "Renamed from {path}",
+      "notKept": {
+        "too_large": "Oxagen did not keep this diff because it was too large.",
+        "unreadable": "Oxagen could not read this diff with the workspace's GitHub or GitLab connection.",
+        "unconfigured": "Oxagen did not keep this diff because no diff storage was set up when it arrived."
+      },
+      "binary": "This is a binary file, so it has no lines to show.",
+      "noRoom": "This file's lines did not fit in the answer.",
+      "truncated": "This file's lines stop at the size limit."
+    },
+    "changeSet": {
+      "rule": "Each pull request shows its change from its merge base to its latest head.",
+      "pullsHeading": "Pull requests",
+      "filesHeading": "Files changed",
+      "empty": "No pull request is on record yet.",
+      "noFiles": "No open or merged pull request changed a file.",
+      "state": {
+        "open": "open",
+        "draft": "draft",
+        "merged": "merged",
+        "closed": "closed"
+      },
+      "stateSeen": "State as of {at}",
+      "noRevision": "Oxagen has not captured this pull request's diff yet.",
+      "revisionFiles": "{count, plural, one {# file} other {# files}}",
+      "incomplete": "The stored diff is incomplete.",
+      "countsUnknown": "line counts not recorded",
+      "leftOut": "Closed without merging, so its files are left out of the totals.",
+      "morePullRequests": "More pull requests are linked than this list shows.",
+      "repositorySummary": "{files, plural, one {# file} other {# files}} from {pulls, plural, one {# pull request} other {# pull requests}}",
+      "moreFiles": "This repository has more changed files than this list shows.",
+      "pullNotListed": "This pull request is past the end of the list above.",
+      "loadingDiff": "Reading the diff.",
+      "pathMissing": "This revision holds no change to this file.",
+      "loading": "Reading the changes.",
+      "failure": {
+        "denied": "You cannot read these changes. Your roles do not include {permission}.",
+        "notFound": "Oxagen has no record of these changes.",
+        "pendingApproval": "This read waits on access request {id}.",
+        "other": "Oxagen could not read these changes. The read answered {code}.",
+        "thrown": "Oxagen could not reach the server. Reload the page to try again."
+      }
     }
   }
 }

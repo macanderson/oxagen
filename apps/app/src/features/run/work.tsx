@@ -1,6 +1,7 @@
 // The side column's first panel (mockup `runSide`, pages/run.md, Side
 // column): Changes. The pull requests the run pushed to with their state,
-// the base, the checks, the diff, and one row per changed file.
+// the base, the checks, the diff, the run's change set from Oxagen's own pull
+// request store (ADR-292), and one row per changed file.
 //
 // It reads the same work read the header's checkout strip does, so the strip,
 // this panel and the Issues tab's Linked work cannot name a different pull
@@ -12,6 +13,7 @@
 // never guessed.
 import { useLocale, useTranslations } from "next-intl";
 import { use } from "react";
+import type { ChangeSet } from "@/data/contracts/changes";
 import type { RunOutputNode, RunOutputs } from "@/data/contracts/run";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
@@ -23,6 +25,7 @@ import { buttonSecondary, kvTerm, kvValue } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
 import { GitHubLink, SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
+import { RunChangeSet } from "./change-sets";
 import { Panel } from "./parts";
 import type { Place } from "./tab-props";
 
@@ -128,11 +131,13 @@ function Stat({ added, removed }: { added: number; removed: number }) {
 
 function ChangesBody({
   work,
+  changes,
   outputs,
   run,
   place,
 }: {
   work: Read<RunWork>;
+  changes: Read<ChangeSet>;
   outputs: Read<RunOutputs>;
   run: RunRow;
   place: Place;
@@ -296,6 +301,19 @@ function ChangesBody({
           )}
         </Row>
       </dl>
+      <div
+        data-testid="run-change-set"
+        className="mt-3 border-t border-border pt-3"
+      >
+        {changes.ok ? (
+          <RunChangeSet
+            changeSet={changes.value}
+            at={{ org: place.org, ws: place.ws }}
+          />
+        ) : (
+          <ReadFailure read={changes} section={t("changes")} />
+        )}
+      </div>
       {files.length === 0 ? null : (
         <>
           <ul
@@ -339,17 +357,23 @@ function ChangesBody({
   );
 }
 
-/** The panel, once the work read the page started has answered. */
+/**
+ * The panel, once the work read and the change set read the page started
+ * have answered.
+ */
 export function ChangesPanel({
   work,
+  changes,
   ...rest
 }: {
   work: Promise<Read<RunWork>>;
+  /** `get_change_set` for the run, from Oxagen's own pull request store. */
+  changes: Promise<Read<ChangeSet>>;
   outputs: Read<RunOutputs>;
   run: RunRow;
   place: Place;
 }) {
-  return <ChangesBody work={use(work)} {...rest} />;
+  return <ChangesBody work={use(work)} changes={use(changes)} {...rest} />;
 }
 
 export function ChangesLoading() {

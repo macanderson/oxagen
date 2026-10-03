@@ -106,14 +106,74 @@ export function checkKeyPosture(signingKey: string): void {
   console.log("inngest-verify: signing key posture ok");
 }
 
+/**
+ * Answers that mean the api could not take the sync just now, not that Inngest
+ * refused it. Right after a deploy, Inngest sends the new process every step it
+ * is waiting to run, and they fill the api's `background` admission lane, which
+ * `/api/inngest` shares (apps/api/src/middleware/admission.ts). The deploy of
+ * 60e2da346 (#5324) failed here on a 503 `service_overloaded` that asked for a
+ * retry after 2 seconds. A 400 for a bad function config is still final.
+ */
+const RETRYABLE_SYNC_STATUSES = new Set([429, 502, 503, 504]);
+/** Total time the sync may spend waiting between attempts before the deploy fails. */
+const SYNC_RETRY_BUDGET_MS = 90_000;
+const SYNC_DEFAULT_RETRY_MS = 2_000;
+const SYNC_MIN_RETRY_MS = 1_000;
+const SYNC_MAX_RETRY_MS = 15_000;
+
+/**
+ * How long to wait before retrying a sync answered with `status`, or null when
+ * the answer is final. A `Retry-After` in seconds is honoured within
+ * SYNC_MIN_RETRY_MS and SYNC_MAX_RETRY_MS; any other value waits the default.
+ */
+export function syncRetryDelayMs(
+  status: number,
+  retryAfter: string | null,
+): number | null {
+  if (!RETRYABLE_SYNC_STATUSES.has(status)) return null;
+  const seconds = retryAfter?.trim() ? Number(retryAfter) : Number.NaN;
+  if (!Number.isFinite(seconds) || seconds < 0) return SYNC_DEFAULT_RETRY_MS;
+  return Math.min(Math.max(seconds * 1000, SYNC_MIN_RETRY_MS), SYNC_MAX_RETRY_MS);
+}
+
+interface SyncOptions {
+  fetchImpl?: typeof fetch;
+  sleepImpl?: (ms: number) => Promise<void>;
+  budgetMs?: number;
+}
+
 /** Step 2 — sync the app so Inngest knows the functions and the callback URL. */
-async function syncApp(url: string): Promise<void> {
-  const response = await fetch(url, { method: "PUT" });
-  const body = await response.text();
-  if (!response.ok) {
-    fail(`sync of ${url} returned ${response.status}: ${body.slice(0, 300)}`);
+export async function syncApp(
+  url: string,
+  {
+    fetchImpl = fetch,
+    sleepImpl = sleep,
+    budgetMs = SYNC_RETRY_BUDGET_MS,
+  }: SyncOptions = {},
+): Promise<void> {
+  let waited = 0;
+  for (let attempt = 1; ; attempt++) {
+    const response = await fetchImpl(url, { method: "PUT" });
+    const body = await response.text();
+    if (response.ok) {
+      console.log(`inngest-verify: app synced (${body.slice(0, 200)})`);
+      return;
+    }
+    const delay = syncRetryDelayMs(
+      response.status,
+      response.headers.get("retry-after"),
+    );
+    if (delay === null || waited + delay > budgetMs) {
+      fail(
+        `sync of ${url} returned ${response.status} on attempt ${attempt}: ${body.slice(0, 300)}`,
+      );
+    }
+    console.log(
+      `inngest-verify: sync attempt ${attempt} returned ${response.status}, retrying in ${delay / 1000}s`,
+    );
+    waited += delay;
+    await sleepImpl(delay);
   }
-  console.log(`inngest-verify: app synced (${body.slice(0, 200)})`);
 }
 
 /** Step 3a — send the canary with the event key. */

@@ -1349,6 +1349,10 @@
       },
       "statusFilter": "Filter by status",
       "noMatch": "No issue has this status.",
+      "changes": {
+        "title": "Changes by issue",
+        "toggle": "Changes for {ref}"
+      },
       "linked": {
         "title": "Linked work",
         "edge": {

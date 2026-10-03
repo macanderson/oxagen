@@ -681,20 +681,16 @@
   },
   "src/features/run/linked-work.tsx": {
     "[grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]": 1,
-    "[overflow-wrap:anywhere]": 2,
+    "[overflow-wrap:anywhere]": 1,
     "before:content-['▸']": 1,
     "gap-[5px]": 2,
-    "grid-cols-[34px_34px_minmax(0,1fr)]": 1,
     "group-open:before:content-['▾']": 1,
     "h-[7px]": 1,
     "leading-[1.5]": 1,
-    "leading-[1.6]": 1,
     "leading-[1.7]": 1,
-    "max-h-[360px]": 1,
     "pl-[18px]": 1,
     "rounded-[1px]": 2,
     "rounded-[5px]": 1,
-    "rounded-[9px]": 1,
     "w-[18px]": 1,
     "w-[60px]": 1
   },
@@ -1404,6 +1400,13 @@
   },
   "src/ui/desktop-downloads.tsx": {
     "grid-cols-[auto_1fr]": 1
+  },
+  "src/ui/diff-view.tsx": {
+    "[overflow-wrap:anywhere]": 1,
+    "grid-cols-[34px_34px_minmax(0,1fr)]": 1,
+    "leading-[1.6]": 1,
+    "max-h-[360px]": 1,
+    "rounded-[9px]": 1
   },
   "src/ui/faceted-list-table.tsx": {
     "<button>": 1,
