@@ -508,8 +508,12 @@ describe("prepareAssistantTurn", () => {
         e.code === "insufficient_credits",
     );
     expect(mocks.log).toEqual(["roles", "funding", "gate"]);
+    // The gate holds the turn to the workspace's own daily budget for Stella
+    // chat before the organisation's credits (#5426).
     expect(mocks.evaluateTurnCreditGate).toHaveBeenCalledWith("org-1", {
       fundedBy: "platform",
+      lane: "assistant",
+      workspaceId: "ws-1",
     });
     expect(captured.inserts).toHaveLength(0);
     expect(mocks.openAssistantRun).not.toHaveBeenCalled();
@@ -833,12 +837,15 @@ describe("the prepared turn", () => {
     // `userId` is the person who asked: every platform-paid debit of the turn
     // is written to credit_ledger.created_by_id under it, so a statement can
     // show assistant spend by operator. Before, the debits named nobody.
+    // `capabilityName` names the lane on the usage row, because the engine's
+    // provider port opens a scope with no capability (#5426).
     expect(turnInput.telemetry).toEqual({
       orgId: "org-1",
       workspaceId: "ws-1",
       surface: "app",
       messageId: "msg-user",
       userId: "user-1",
+      capabilityName: "ask_assistant",
     });
 
     // The reply is persisted with the run it was recorded as, and the

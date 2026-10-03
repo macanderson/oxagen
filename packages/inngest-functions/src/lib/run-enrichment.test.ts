@@ -454,8 +454,12 @@ it("uses the same resolved funding for the selected model, credit gate and Stell
   expect(selectModelFromFunding).toHaveBeenCalledWith(scope.orgId, funding, {
     tier: "fast",
   });
+  // The gate holds the call to the workspace's own daily budget for run
+  // enrichment before the organisation's credits (#5426).
   expect(evaluateTurnCreditGate).toHaveBeenCalledWith(scope.orgId, {
     fundedBy: "org",
+    lane: "run_enrichment",
+    workspaceId: scope.workspaceId,
   });
   expect(runGovernedTurn).toHaveBeenCalledWith(
     expect.objectContaining({

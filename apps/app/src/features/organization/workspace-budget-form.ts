@@ -14,7 +14,12 @@ export const BUDGET_FIELDS = {
 
 export type BudgetLane = keyof typeof BUDGET_FIELDS;
 
-export const BUDGET_LANES = Object.keys(BUDGET_FIELDS) as BudgetLane[];
+/** The lanes in the order the form shows them. `satisfies` holds each to a key of `BUDGET_FIELDS`. */
+export const BUDGET_LANES = [
+  "runEnrichment",
+  "assistant",
+  "work",
+] as const satisfies readonly BudgetLane[];
 
 /**
  * The patch `update_workspace_settings` takes for `dailyBudgetUsd`: a number

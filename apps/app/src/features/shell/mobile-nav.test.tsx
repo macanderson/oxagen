@@ -195,8 +195,11 @@ describe("thumb bar", () => {
       expectTouchTarget(style(slot).minHeight);
       expectTouchTarget(style(slot).minWidth);
     }
+    // phone.css pads the bar by a spacing step over the inset (#5393), and
+    // jsdom computes neither var() nor calc(), so the rule reads back as
+    // written.
     expect(style(bar).paddingBottom).toBe(
-      "calc(6px + env(safe-area-inset-bottom))",
+      "calc(var(--spacing) * 1.5 + env(safe-area-inset-bottom))",
     );
   });
 
