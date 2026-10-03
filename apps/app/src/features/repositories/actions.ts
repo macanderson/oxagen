@@ -185,11 +185,12 @@ export async function readWorkspaceRepositories(
  * (`conflict: github_not_connected`), one with no steering repository to hold
  * the steering record (`conflict: main_repo_unbound`), the workspace's own
  * steering repository (`conflict: main_repo`), a repository already linked
- * (`conflict: repository_already_linked`), another workspace's steering
- * repository (`conflict: main_repo_claimed`, ADR-099), a `workspace.toml` that
- * is present but does not read as `workspace/v1`
- * (`conflict: workspace_toml_unreadable`), and a repository the installation
- * cannot see (`not_found: repository_not_installed`).
+ * (`conflict: repository_already_linked`), a `workspace.toml` that is present
+ * but does not read as `workspace/v1` (`conflict: workspace_toml_unreadable`),
+ * and a repository the installation cannot see
+ * (`not_found: repository_not_installed`). Another workspace's heads refuse
+ * nothing: a repository other workspaces link, or one another workspace
+ * steers by, links here too (ADR-293).
  */
 export async function linkWorkspaceRepository(
   org: string,

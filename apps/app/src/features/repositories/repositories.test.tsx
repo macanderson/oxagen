@@ -685,13 +685,13 @@ describe("the Repositories tab", () => {
     actions.linkWorkspaceRepository.mockResolvedValue({
       ok: false,
       reason: "conflict",
-      code: "repository_linked_elsewhere",
+      code: "repository_already_linked",
     });
     const dialog = await openRepository(user, "acme/infra");
     await user.click(within(dialog).getByTestId("repository-dialog-link"));
     expect(
       await within(dialog).findByTestId("repository-dialog-failure"),
-    ).toHaveTextContent("Another workspace has linked");
+    ).toHaveTextContent("already linked to this workspace");
     expect(within(dialog).queryByTestId("repository-dialog-linked")).toBeNull();
     expect(actions.readWorkspaceRepositories).toHaveBeenCalledTimes(1);
   });
@@ -1277,12 +1277,12 @@ describe("the init wizard", () => {
     actions.linkWorkspaceRepository.mockResolvedValue({
       ok: false,
       reason: "conflict",
-      code: "repository_linked_elsewhere",
+      code: "repository_already_linked",
     });
     await user.click(within(wizard).getByTestId("init-wizard-open"));
     expect(
       await within(wizard).findByTestId("init-wizard-failure"),
-    ).toHaveTextContent("Another workspace has linked");
+    ).toHaveTextContent("already linked to this workspace");
     expect(actions.openInitPullRequest).not.toHaveBeenCalled();
   });
 
@@ -1590,9 +1590,7 @@ describe("repository refusal messages", () => {
     ["installation_unreachable", "cannot reach that installation"],
     ["main_repo", "never also linked"],
     ["repository_already_linked", "already linked to this workspace"],
-    ["main_repo_claimed", "Another workspace steers by that repository"],
     ["main_repo_unbound", "no steering repository yet"],
-    ["repository_linked_elsewhere", "Another workspace has linked"],
     ["main_repo_unlink_refused", "main repository cannot be unlinked"],
     ["repository_not_linked", "Reload the page"],
     ["workspace_toml_unreadable", "present but unreadable"],
@@ -1612,20 +1610,6 @@ describe("repository refusal messages", () => {
     for (const reason of ["conflict", "not_found"] as const)
       expect(result.current({ ok: false, reason, code })).toContain(recovery);
   });
-
-  // #3340: a linked code repository never receives steering PRs (ADR-212), so
-  // no refusal gives that as its reason.
-  it.each(["main_repo_claimed", "repository_linked_elsewhere"])(
-    "gives %s a reason the code holds, with no steering PR claim",
-    (code) => {
-      const { result } = renderHook(useRepositoriesFailure, {
-        wrapper: IntlProvider,
-      });
-      const said = result.current({ ok: false, reason: "conflict", code });
-      expect(said).toContain("steering");
-      expect(said).not.toContain("Steering PR");
-    },
-  );
 
   it("preserves unknown refusal codes and approval request identifiers", () => {
     const { result } = renderHook(useRepositoriesFailure, {
