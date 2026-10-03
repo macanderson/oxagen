@@ -543,6 +543,108 @@ describe("commitFiles", () => {
   });
 });
 
+describe("compareDiff (ADR-288)", () => {
+  it("joins each file's hunks into one unified diff with the headers GitLab leaves out", async () => {
+    const { c, calls } = client({
+      body: {
+        diffs: [
+          {
+            old_path: "src/a.ts",
+            new_path: "src/a.ts",
+            renamed_file: false,
+            deleted_file: false,
+            new_file: false,
+            a_mode: "100644",
+            b_mode: "100644",
+            diff: "@@ -1 +1,2 @@\n-old\n+new\n+more\n",
+          },
+          {
+            old_path: "src/new.ts",
+            new_path: "src/new.ts",
+            renamed_file: false,
+            deleted_file: false,
+            new_file: true,
+            b_mode: "100644",
+            diff: "@@ -0,0 +1 @@\n+hello",
+          },
+        ],
+      },
+    });
+    const out = await c.compareDiff({ project: 1, from: "main", to: "feat" });
+    expect(calls[0]?.url).toBe(
+      `${API}/projects/1/repository/compare?from=main&to=feat&straight=false`,
+    );
+    expect(out.text).toBe(
+      [
+        "diff --git a/src/a.ts b/src/a.ts",
+        "--- a/src/a.ts",
+        "+++ b/src/a.ts",
+        "@@ -1 +1,2 @@",
+        "-old",
+        "+new",
+        "+more",
+        "diff --git a/src/new.ts b/src/new.ts",
+        "new file mode 100644",
+        "--- /dev/null",
+        "+++ b/src/new.ts",
+        "@@ -0,0 +1 @@",
+        "+hello",
+        "",
+      ].join("\n"),
+    );
+    expect(out.files).toEqual([
+      { path: "src/a.ts", status: "modified", additions: 2, deletions: 1 },
+      { path: "src/new.ts", status: "added", additions: 1, deletions: 0 },
+    ]);
+    expect(out).toMatchObject({ complete: true, limitations: [] });
+  });
+
+  it("says why a compare is not complete: a file over its limit, a cut-short compare, a timeout", async () => {
+    const { c } = client({
+      body: {
+        compare_timeout: true,
+        diffs: [
+          {
+            old_path: "big.bin",
+            new_path: "big.bin",
+            renamed_file: false,
+            deleted_file: false,
+            new_file: false,
+            too_large: true,
+            diff: "",
+          },
+          {
+            old_path: "old.ts",
+            new_path: "new.ts",
+            renamed_file: true,
+            deleted_file: false,
+            new_file: false,
+            collapsed: true,
+          },
+        ],
+      },
+    });
+    const out = await c.compareDiff({ project: 1, from: "a", to: "b" });
+    expect(out.complete).toBe(false);
+    expect(out.limitations).toEqual([
+      "compare_timeout",
+      "diff_collapsed",
+      "file_too_large",
+      "file_without_hunks",
+    ]);
+    expect(out.files).toEqual([
+      { path: "big.bin", status: "modified", additions: null, deletions: null },
+      {
+        path: "new.ts",
+        previousPath: "old.ts",
+        status: "renamed",
+        additions: null,
+        deletions: null,
+      },
+    ]);
+  });
+});
+
 describe("compare", () => {
   it("compares from the merge base and maps diffs", async () => {
     const { c, calls } = client({

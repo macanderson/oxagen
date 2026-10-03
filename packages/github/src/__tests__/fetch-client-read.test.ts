@@ -204,6 +204,9 @@ describe("getPullRequest", () => {
       headSha: "abc123",
       mergeCommitSha: null,
       mergedAt: null,
+      // The fixture names no base commit, base repository, or close time.
+      closedAt: null,
+      baseSha: null,
       additions: 40,
       deletions: 2,
       changedFiles: 3,

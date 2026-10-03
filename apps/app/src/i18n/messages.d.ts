@@ -9288,6 +9288,7 @@ type Messages = {
       attributionMissing: string;
       evidenceLine: string;
       list: string;
+      truncated: string;
       filters: {
         label: string;
         level: string;

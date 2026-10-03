@@ -146,7 +146,7 @@ export function ContextWindow() {
           return (
             <span
               key={i}
-              className="aspect-square rounded-[3px]"
+              className="aspect-square rounded-xs"
               style={{
                 background: bg,
                 boxShadow: lit

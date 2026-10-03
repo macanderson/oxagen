@@ -85,6 +85,13 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // The instruction-file statements the Oxagen check flagged in linked code
   // repositories (ADR-263); org_id + workspace_id NOT NULL.
   { table: "agent.code_repository_findings", policyClass: "standard" },
+  // The pull requests a workspace's forges deliver, the diff of each head
+  // commit, and their runs and work orders (ADR-288); org_id + workspace_id
+  // NOT NULL on all four.
+  { table: "forge.pull_requests", policyClass: "standard" },
+  { table: "forge.pull_request_revisions", policyClass: "standard" },
+  { table: "forge.pull_request_runs", policyClass: "standard" },
+  { table: "forge.pull_request_work_orders", policyClass: "standard" },
   { table: "agent.agent_executions", policyClass: "standard" },
   { table: "agent.agent_execution_steps", policyClass: "standard" },
   { table: "agent.agent_tool_calls", policyClass: "standard" },

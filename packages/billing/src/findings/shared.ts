@@ -54,14 +54,20 @@ export const MIN_SAVING_MICROS = 10_000n;
 const HIGH_CONFIDENCE_COVERAGE = 0.9;
 /** Coverage below this is not written. */
 const MIN_COVERAGE = 0.5;
-/** Findings kept per kind, largest saving first. */
+/**
+ * Advisory findings kept per kind, largest saving first. A finding that
+ * counts toward the unproductive spend headline (detectors 1, 7, and 8) is
+ * never cut, so this cap does not apply to it (#5262).
+ */
 export const FINDINGS_PER_KIND = 10;
 /**
- * Open findings one pass keeps: `list_findings` answers at most 50
- * (`FINDINGS_LIST_MAX`), so every open finding fits one answer however many
- * kinds the detectors write. A finding that counts toward the unproductive
- * spend headline takes its place first, in counting order. The other
- * findings fill the room left, largest saving first (#5050).
+ * Advisory findings one pass keeps in all, largest saving first. These are
+ * the findings that claim no frame and count toward nothing. The cap bounds
+ * the advice one pass stores. It does not bound the counting findings, which
+ * a pass writes however many there are, so the headline always equals the
+ * sum of the findings behind it (#5262). A workspace can therefore hold more
+ * open findings than one `list_findings` answer lists, and the answer says
+ * so with `truncated`.
  */
 export const FINDINGS_MAX = 50;
 /** Runs itemised in a finding's evidence, largest saving first. */

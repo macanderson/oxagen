@@ -39,6 +39,9 @@ export const PG_DOMAINS: readonly string[] = [
   "environments",
   // Immutable governed-run evidence (docs/specs/run-evidence-ingress).
   "evidence",
+  // Pull requests, the diff of each head commit, and their runs and work
+  // orders (ADR-288).
+  "forge",
   "iam",
   "ingestion",
   "mcp",

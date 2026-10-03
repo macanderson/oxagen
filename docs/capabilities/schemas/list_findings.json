@@ -1,7 +1,7 @@
 {
   "name": "list_findings",
   "domain": "spend",
-  "description": "List this workspace's costed findings ranked by the money at stake (open by default; applied or dismissed most recent first), each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend over the findings' window and that saving annualised. Given a run, it lists only the findings that cite that run, each with the frames it cites there.",
+  "description": "List this workspace's costed findings ranked by the money at stake (open by default; applied or dismissed most recent first), each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend over the findings' window and that saving annualised. It lists at most 50 findings. The counts and totals cover every finding, and truncated is true when more exist than the list holds. Given a run, it lists only the findings that cite that run, each with the frames it cites there.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -999,6 +999,9 @@
           "additionalProperties": false
         },
         "maxItems": 50
+      },
+      "truncated": {
+        "type": "boolean"
       }
     },
     "required": [
@@ -1009,7 +1012,8 @@
       "share",
       "annualised",
       "counts",
-      "findings"
+      "findings",
+      "truncated"
     ],
     "additionalProperties": false
   }

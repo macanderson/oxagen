@@ -692,7 +692,9 @@ async function initializeDaemon(
   // The hook path's read, when a live hook first names a pid. Where it runs
   // `ps` it answers with a promise and the registry records the start time
   // when it lands, so the hook, and every hook queued behind it, is not held
-  // while `ps` runs (#4366).
+  // while `ps` runs (#4366). `execAsync` runs in the daemon's own zone, so the
+  // reader pins UTC on the command line (`psStartCommand`), the zone the sweep
+  // reads in.
   const hookProcessStarts =
     injectedStarts ??
     ((pids: readonly number[]) =>

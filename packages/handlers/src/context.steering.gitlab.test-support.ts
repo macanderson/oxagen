@@ -496,6 +496,17 @@ function clientOver(api: FakeGitLabApi): GitLabClient {
             });
         return out;
       },
+      // The steering fake changes files whole and keeps no hunks, so a
+      // compare's diff text is empty and says so.
+      async compareDiff({ project }) {
+        api.guard(project);
+        return {
+          text: "",
+          files: [],
+          complete: false,
+          limitations: ["file_without_hunks"],
+        };
+      },
       async createMergeRequest(a) {
         api.guard(a.project);
         if (

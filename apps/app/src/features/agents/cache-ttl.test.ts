@@ -36,6 +36,7 @@ function listOf(findings: Partial<SpendFinding>[]): SpendFindings {
       calls: 22,
       ...finding,
     })),
+    truncated: false,
   };
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findingList } from "./finding.list";
+import { FINDINGS_LIST_MAX, findingList } from "./finding.list";
 
 const finding = {
   id: "fnd_0123456789abcdefghjkmn",
@@ -46,12 +46,44 @@ describe("list_findings contract", () => {
       },
       counts: { findings: 1, high: 1, medium: 0, operators: 2 },
       findings: [finding],
+      truncated: false,
     };
     expect(findingList.output.parse(out)).toEqual(out);
     expect(
       findingList.output.safeParse({
         ...out,
         findings: [{ ...finding, saving: { micros: "1", currency: "USD" } }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("says when the workspace holds more findings than the list (#5262)", () => {
+    const out = {
+      status: "open",
+      window: finding.window,
+      saving: finding.saving,
+      spend: null,
+      share: null,
+      annualised: finding.saving,
+      counts: {
+        findings: FINDINGS_LIST_MAX + 1,
+        high: FINDINGS_LIST_MAX + 1,
+        medium: 0,
+        operators: 0,
+      },
+      findings: Array.from({ length: FINDINGS_LIST_MAX }, () => finding),
+      truncated: true,
+    };
+    expect(findingList.output.parse(out)).toEqual(out);
+    // An answer must say whether the list was cut, and lists at most 50.
+    const unsaid = Object.fromEntries(
+      Object.entries(out).filter(([key]) => key !== "truncated"),
+    );
+    expect(findingList.output.safeParse(unsaid).success).toBe(false);
+    expect(
+      findingList.output.safeParse({
+        ...out,
+        findings: [...out.findings, finding],
       }).success,
     ).toBe(false);
   });
@@ -86,6 +118,7 @@ describe("list_findings contract", () => {
       annualised: finding.saving,
       counts: { findings: 1, high: 1, medium: 0, operators: 0 },
       findings: [cited],
+      truncated: false,
     };
     expect(findingList.output.parse(out)).toEqual(out);
     // A run-level finding pins no frame, and an older row names none (null).
@@ -123,6 +156,7 @@ describe("list_findings contract", () => {
         annualised: null,
         counts: { findings: 1, high: 1, medium: 0, operators: 0 },
         findings: [{ ...finding, runs: 0 }],
+        truncated: false,
       }).success,
     ).toBe(false);
   });

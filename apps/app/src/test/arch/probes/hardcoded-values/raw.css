@@ -1,0 +1,13 @@
+/* Probe for hardcoded-values.test.ts: lines 4 to 11 each write a value the
+   rule refuses. The comment on line 12 is not a declaration. */
+.raw {
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px var(--gold);
+  padding: 6px 8px;
+  max-width: 720px;
+  animation: spin 1.2s linear infinite;
+  transition: opacity var(--motion-base) ease-in-out;
+  border-top-left-radius: calc(var(--radius) - 2px);
+  color: white;
+  /* border-radius: 4px; */
+}

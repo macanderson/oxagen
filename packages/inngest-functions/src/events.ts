@@ -67,6 +67,33 @@ export const RUN_FIT_REQUESTED_EVENT = "run/fit.requested";
 export const RUN_PULL_REQUEST_LINKED_EVENT = "run/pull-request.linked";
 
 /**
+ * Asks `forge.pull-request-sync` to bring one pull request's stored record
+ * up to date (ADR-288): its row in `forge.pull_requests`, the revision and
+ * diff of its head commit, and the link to the run that named it. Sent by the
+ * GitHub App webhook route for each `pull_request` delivery and each
+ * workspace connected to the installation, with the pull request's facts from
+ * the payload, and by the tacho ingest handler beside `run/pull-request.linked`
+ * for each link a run records, with the run's root session and no facts.
+ *
+ * Data is `{ orgId, workspaceId, provider, repository, number, pullKey,
+ * facts?, link? }`. `pullKey` names the pull request within the workspace, and
+ * the function runs one event per key at a time. The id names the delivery
+ * or the link, so a re-sent one asks once.
+ */
+export const FORGE_PULL_REQUEST_OBSERVED_EVENT = "forge/pull-request.observed";
+
+/**
+ * Says a pull request's head commit now has a stored diff (ADR-288). Sent by
+ * `forge.pull-request-sync` once per revision, with the id
+ * `forge-diff-ready:<revision id>`, after the revision row names the stored
+ * bytes. Work outcome checks and other readers that need the exact diff a
+ * head carried subscribe to it. Data is `{ orgId, workspaceId, pullRequestId,
+ * revisionId, provider, repository, number, headSha, diffKey, diffSha256 }`.
+ */
+export const FORGE_PULL_REQUEST_DIFF_READY_EVENT =
+  "forge/pull-request-diff.ready";
+
+/**
  * Starts the timeout of one interjection a host raised (#3941, D8). Sent by
  * the tacho ingest handler after the transaction that writes the
  * `agent.interjections` row for a `control.interject` frame, with the id
