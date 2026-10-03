@@ -6,10 +6,10 @@ import { HarnessIcon } from "./harness-icon";
  * It grows a step more than the avatar does, so the harness logo gains on the
  * tile it sits on and stays readable at list sizes.
  */
-export const BADGE_SCALE = AVATAR_SCALE + 0.05;
+const BADGE_SCALE = AVATAR_SCALE + 0.05;
 
 /** The badge's side for an avatar of the named size: under half the tile, never under 12px. */
-export function badgeSide(size: number): number {
+function badgeSide(size: number): number {
   return Math.round(Math.max(10, size * 0.46) * BADGE_SCALE);
 }
 
