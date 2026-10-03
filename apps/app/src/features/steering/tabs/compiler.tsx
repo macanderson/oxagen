@@ -76,7 +76,7 @@ function Meter({ id, label }: { id: string; label: string }) {
       data-meter={id}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 id={id} className="text-sm text-muted-foreground">
+        <h3 id={id} className="text-[12.5px] text-muted-foreground">
           {label}
         </h3>
         <Unrecorded issue={STEERING_GAPS.assembler} />
@@ -106,9 +106,9 @@ function Part({
         <h3 id={id} className={eyebrow}>
           {title}
         </h3>
-        <span className="font-mono text-sm text-dim">{tally}</span>
+        <span className="font-mono text-[11px] text-dim">{tally}</span>
       </div>
-      <p className="text-sm text-muted-foreground">{sub}</p>
+      <p className="text-[12.5px] text-muted-foreground">{sub}</p>
       <Unrecorded issue={STEERING_GAPS.assembler} />
     </section>
   );
@@ -137,7 +137,7 @@ function CompilerBody({
     return (
       <div className="flex flex-col gap-3.5" data-testid="tab-compiler">
         <p
-          className={`${panel} ${panelBody} text-sm text-muted-foreground`}
+          className={`${panel} ${panelBody} text-[13px] text-muted-foreground`}
           data-state="no-agent"
         >
           {t("noAgent")}

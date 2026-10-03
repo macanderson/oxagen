@@ -161,10 +161,10 @@ function CustomerKey({
 function MintedKey({ orgName }: { orgName: string }) {
   const t = useTranslations("organization.modelFunding.funding");
   const heading =
-    "text-sm font-semibold uppercase tracking-[0.09em] text-dim";
+    "text-[10.5px] font-semibold uppercase tracking-[0.09em] text-dim";
   return (
     <div className="flex flex-col gap-4" data-issue="4005">
-      <p className="text-sm text-dim">{t("minted.unrecorded")}</p>
+      <p className="text-[12px] text-dim">{t("minted.unrecorded")}</p>
       <section aria-labelledby="funding-minted-held" data-key-state="held">
         <h3 id="funding-minted-held" className={`${heading} mb-2`}>
           {t("minted.heldTitle")}
@@ -252,7 +252,7 @@ function Reconciliation() {
     >
       <h4
         id="funding-reconciliation"
-        className="mb-2 text-sm font-semibold uppercase tracking-[0.09em] text-dim"
+        className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-dim"
       >
         {t("title")}
       </h4>
@@ -315,7 +315,7 @@ function ChangeSource({ current }: { current: FundingSource | null }) {
                 </Badge>
               ) : null}
             </span>
-            <span className="text-sm text-muted-foreground">
+            <span className="text-[12.5px] text-muted-foreground">
               <b className="text-foreground">
                 {t(`sources.${source}.summary`)}
               </b>{" "}
@@ -366,7 +366,7 @@ function ModelRoutes() {
           <tr key={tier} data-route={tier}>
             <td className={cell}>
               <span className={mono}>{tier}</span>
-              <div className="text-sm text-dim md:truncate">
+              <div className="text-[11px] text-dim md:truncate">
                 {t(`tiers.${tier}`)}
               </div>
             </td>
@@ -399,12 +399,12 @@ function ModelRoutes() {
           <td className={cell} colSpan={5}>
             <b>{t("total")}</b>{" "}
             <span
-              className="text-sm text-dim"
+              className="text-[11.5px] text-dim"
               data-basis="client_attested"
             >
               {t("basis")}
             </span>{" "}
-            <span className="text-sm text-dim">{t("currency")}</span>
+            <span className="text-[11.5px] text-dim">{t("currency")}</span>
           </td>
           <td className={numericCell}>
             <NotRecordedValue />

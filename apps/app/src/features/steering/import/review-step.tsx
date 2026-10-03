@@ -40,7 +40,7 @@ function oneLine(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-const sub = "mt-0.5 block max-w-[24ch] truncate text-sm text-dim";
+const sub = "mt-0.5 block max-w-[24ch] truncate text-[11.5px] text-dim";
 
 function where(row: ResolvedRow): { line: number; file: string } {
   return { line: row.record.line, file: row.record.file };
@@ -461,7 +461,7 @@ function GroupHead({ group }: { group: FileGroup }) {
     <tr data-testid="import-group" data-file={group.file}>
       <td
         colSpan={COLUMNS}
-        className="bg-hl px-3 py-1.5 text-sm text-muted-foreground"
+        className="bg-hl px-3 py-1.5 text-[12px] text-muted-foreground"
       >
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className={`${mono} text-foreground`}>{group.file}</span>

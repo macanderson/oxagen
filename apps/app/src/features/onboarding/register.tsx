@@ -244,11 +244,11 @@ function StepHeader({
   return (
     <div className="flex flex-col gap-2">
       <p className={eyebrow}>{t("eyebrow", { n: stepNumber(step) })}</p>
-      <h1 className="text-2xl font-bold tracking-tight text-foreground">
+      <h1 className="text-[26px] font-bold tracking-tight text-foreground">
         {t(`${step}.title`)}
       </h1>
       {lead === null ? null : (
-        <p className="max-w-xl text-sm text-muted-foreground">{lead}</p>
+        <p className="max-w-xl text-[14.5px] text-muted-foreground">{lead}</p>
       )}
     </div>
   );
@@ -306,7 +306,7 @@ function Denied({ ctx, viewer }: { ctx: WsCtx; viewer: string }) {
           {t("back")}
         </SafeLink>
       </div>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 pt-3 text-left text-sm">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 pt-3 text-left text-[13px]">
         <dt className="text-muted-foreground">{t("signedIn")}</dt>
         <dd>
           {viewer} · <span className={mono}>{ctx.orgRole}</span> ·{" "}
@@ -452,8 +452,8 @@ function Waiting({
           aria-hidden="true"
           className="size-3.5 flex-none animate-spin rounded-full border-2 border-border border-t-accent-text motion-reduce:animate-none"
         />
-        <h2 className="text-sm font-semibold">{t("title")}</h2>
-        <span className={`${mono} ml-auto text-sm text-muted-foreground`}>
+        <h2 className="text-[13.5px] font-semibold">{t("title")}</h2>
+        <span className={`${mono} ml-auto text-[11px] text-muted-foreground`}>
           {t("polling")}
         </span>
       </div>
@@ -495,7 +495,7 @@ function Waiting({
             waiting={t("line")}
           />
         )}
-        <p className="text-sm text-muted-foreground">
+        <p className="text-[12.5px] text-muted-foreground">
           {enrolled === null || harness === null
             ? t("none")
             : t.rich("start", {
@@ -536,7 +536,7 @@ function LogBlock({ lines, waiting }: { lines: LogLine[]; waiting: string }) {
   return (
     <ol
       data-testid="first-frame-log"
-      className={`${mono} flex flex-col gap-1 overflow-x-auto text-sm`}
+      className={`${mono} flex flex-col gap-1 overflow-x-auto text-[11.5px]`}
     >
       {lines.map((line) => (
         <li
@@ -588,8 +588,8 @@ function Received({
     >
       <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3">
         <Badge tone="allowed">{t("connected")}</Badge>
-        <h2 className="text-sm font-semibold">{t("title")}</h2>
-        <span className={`${mono} ml-auto text-sm text-muted-foreground`}>
+        <h2 className="text-[13.5px] font-semibold">{t("title")}</h2>
+        <span className={`${mono} ml-auto text-[11px] text-muted-foreground`}>
           {precise(receivedAt)}
         </span>
       </div>
@@ -597,7 +597,7 @@ function Received({
         {run.ok ? (
           <ol
             data-testid="first-frames"
-            className={`${mono} divide-y divide-border overflow-x-auto rounded-lg border border-border text-sm`}
+            className={`${mono} divide-y divide-border overflow-x-auto rounded-lg border border-border text-[11.5px]`}
           >
             {run.value.frames.frames.slice(0, 2).map((frame) => (
               <li
@@ -645,7 +645,7 @@ function Received({
         ) : (
           <ReadFailure read={chain} section={t("framesUnread")} />
         )}
-        <p className="text-sm text-muted-foreground">
+        <p className="text-[12.5px] text-muted-foreground">
           {t("routed")}{" "}
           {chain.ok && chain.value.enforcementTier === "harness"
             ? t.rich("harness", { b: (chunks) => <b>{chunks}</b> })

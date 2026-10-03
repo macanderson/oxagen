@@ -528,7 +528,7 @@ export function EventsPanel({
           <h2 id="audit-events" className={panelTitle}>
             {t("title")}
           </h2>
-          <span className="text-sm text-muted-foreground">
+          <span className="text-[12.5px] text-muted-foreground">
             {t("caption")}
           </span>
         </span>
@@ -558,7 +558,7 @@ export function EventsPanel({
       {page.events.length === 0 ? (
         <p
           data-state="filtered-empty"
-          className="px-4 py-8 text-sm text-muted-foreground"
+          className="px-4 py-8 text-[13px] text-muted-foreground"
         >
           {t("none")}
         </p>
@@ -566,7 +566,7 @@ export function EventsPanel({
         <EventsTable events={page.events} actors={actors} />
       )}
       <Pager org={org} query={query} page={page} window={rows} />
-      <p className="mx-4 mb-4 border-l-2 border-gold pl-3 text-sm text-muted-foreground">
+      <p className="mx-4 mb-4 border-l-2 border-gold pl-3 text-[13px] text-muted-foreground">
         {t("note")}
       </p>
     </section>

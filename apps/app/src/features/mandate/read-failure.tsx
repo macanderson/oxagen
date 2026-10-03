@@ -66,7 +66,7 @@ export function MandateReadFailure({
             </SafeLink>
           }
           after={
-            <ul className="mx-auto mt-5 flex max-w-[420px] flex-col gap-[7px] text-left text-sm text-muted-foreground">
+            <ul className="mx-auto mt-5 flex max-w-[420px] flex-col gap-[7px] text-left text-[12.5px] text-muted-foreground">
               <li>{t("denied.signedIn", { role: roles(orgRole) })}</li>
               <li>
                 {t("denied.needed")}{" "}

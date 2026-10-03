@@ -99,14 +99,14 @@ function StateIcon({ tone, glyph }: { tone: StateTone; glyph: StateGlyph }) {
 
 /** `code { font-family:var(--mono); font-size:.9em; background:var(--hl); padding:.12em .38em; border-radius:4px }` */
 export const stateCode =
-  "rounded bg-hl px-[0.38em] py-[0.12em] font-mono";
+  "rounded bg-hl px-[0.38em] py-[0.12em] font-mono text-[0.9em]";
 
 /**
  * The trace line under an error's actions: `.mono.dim` at 11.5px, 16px below
  * them. It is a `.state-wrap p` too, so it keeps the paragraph's measure.
  */
 export const stateTrace =
-  "mx-auto mt-4 max-w-[52ch] font-mono text-sm text-dim";
+  "mx-auto mt-4 max-w-[52ch] font-mono text-[11.5px] text-dim";
 
 /**
  * The denied state's facts: `.kv` with `margin-top:20px; text-align:left;
@@ -170,7 +170,7 @@ export function StateWrap({
         {title}
       </Heading>
       {children === undefined ? null : (
-        <p className="mx-auto mb-4 max-w-[52ch] text-sm text-muted-foreground">
+        <p className="mx-auto mb-4 max-w-[52ch] text-[13px] text-muted-foreground">
           {children}
         </p>
       )}

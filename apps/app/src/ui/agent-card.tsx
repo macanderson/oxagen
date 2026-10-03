@@ -59,13 +59,13 @@ export function AgentCard({
         ) : (
           <span
             title={agentKey}
-            className={`${mono} ${layout === "detail" ? "break-words text-lg font-semibold" : layout === "compact" ? "truncate text-sm text-foreground" : "truncate"}`}
+            className={`${mono} ${layout === "detail" ? "break-words text-lg font-semibold" : layout === "compact" ? "truncate text-[12px] text-foreground" : "truncate"}`}
           >
             {agentKey}
           </span>
         )}
         <span
-          className={`truncate ${layout === "compact" ? "text-sm text-dim" : "text-xs text-muted-foreground"}`}
+          className={`truncate ${layout === "compact" ? "text-[11.5px] text-dim" : "text-xs text-muted-foreground"}`}
         >
           {sub}
         </span>

@@ -80,7 +80,7 @@ export function TokensSection({
           id="spend-token-classes"
           title={t("byClass")}
           action={
-            <span className={`${mono} text-sm text-muted-foreground`}>
+            <span className={`${mono} text-[11px] text-muted-foreground`}>
               {t("classTotal", {
                 tokens: formatCount(total, locale),
                 from: month.period.from,
@@ -89,7 +89,7 @@ export function TokensSection({
             </span>
           }
           footer={
-            <dl className="grid w-full grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-sm">
+            <dl className="grid w-full grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-[12.5px]">
               <dt>{t("cacheHit")}</dt>
               <dd className="text-foreground">
                 <Ratio value={cacheHitRate(classes)} /> {t("cacheHitNote")}

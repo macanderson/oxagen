@@ -372,7 +372,7 @@ function Environments({
     >
       <p
         data-testid="studio-agent-environment"
-        className="text-sm text-muted-foreground"
+        className="text-[13px] text-muted-foreground"
       >
         {agentEnvironment === null
           ? t("agentsUnset")
@@ -475,7 +475,7 @@ function Auth({
           </div>
         </div>
       ) : null}
-      <p id={noteId} className="text-sm text-muted-foreground">
+      <p id={noteId} className="text-[12.5px] text-muted-foreground">
         {t("note")}
       </p>
     </Section>
@@ -496,8 +496,8 @@ function Machines({ source }: { source: StudioSource }) {
       title={t("title")}
       testId="studio-connection-machines"
     >
-      <p className="text-sm text-muted-foreground">{t("body")}</p>
-      <p className="text-sm text-foreground">
+      <p className="text-[13px] text-muted-foreground">{t("body")}</p>
+      <p className="text-[13px] text-foreground">
         {groups.length === 0 ? t("none") : <Code>{groups.join(", ")}</Code>}
       </p>
     </Section>

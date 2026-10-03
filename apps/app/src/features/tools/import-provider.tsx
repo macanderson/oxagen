@@ -300,14 +300,14 @@ function OAuthClientFields({
         data-testid={`${TESTID}-client-required`}
         className="flex flex-col gap-3 rounded-lg border border-border px-3 py-3"
       >
-        <p className="text-sm text-foreground">{t("clientRequired")}</p>
+        <p className="text-[13px] text-foreground">{t("clientRequired")}</p>
         {fields}
       </div>
     );
   }
   return (
     <details className="rounded-lg border border-border px-3 py-2">
-      <summary className="cursor-pointer text-sm text-foreground">
+      <summary className="cursor-pointer text-[13px] text-foreground">
         {t("ownClient")}
       </summary>
       <div className="pt-3">{fields}</div>
@@ -752,7 +752,7 @@ export function ImportProvider({
                     role="radio"
                     aria-checked={source === option}
                     data-testid={`${TESTID}-source-${option}`}
-                    className={`rounded-md border px-3 py-1.5 text-sm max-md:min-h-11 ${
+                    className={`rounded-md border px-3 py-1.5 text-[13px] max-md:min-h-11 ${
                       source === option
                         ? "border-foreground text-foreground"
                         : "border-border text-muted-foreground hover:text-foreground"
@@ -846,7 +846,7 @@ export function ImportProvider({
                             {picked.publisher}
                           </span>
                           <span
-                            className={`${mono} break-all text-sm text-muted-foreground`}
+                            className={`${mono} break-all text-[11px] text-muted-foreground`}
                           >
                             {picked.endpointUrl}
                           </span>
@@ -919,12 +919,12 @@ export function ImportProvider({
                           </Field>
                         </>
                       ) : picked.auth === "none" ? (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-[13px] text-muted-foreground">
                           {t("browse.noAuth")}
                         </p>
                       ) : (
                         <>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-[13px] text-muted-foreground">
                             {picked.auth === "oauth"
                               ? tOAuth("explain", { name: picked.name })
                               : tOAuth("explainUnknown")}
@@ -1090,7 +1090,7 @@ export function ImportProvider({
                   {phase.kind === "not_oauth" ? (
                     <div
                       data-testid={`${TESTID}-not-oauth`}
-                      className="flex flex-col gap-2 rounded-lg border border-border px-3 py-2.5 text-sm"
+                      className="flex flex-col gap-2 rounded-lg border border-border px-3 py-2.5 text-[13px]"
                     >
                       <p className="text-foreground">{tOAuth("notOAuth")}</p>
                       {source === "browse" &&
@@ -1122,7 +1122,7 @@ export function ImportProvider({
                       {oauthFailureText(phase.failure)}
                     </FormAlert>
                   ) : null}
-                  <p className="rounded-lg border border-border px-3 py-2.5 text-sm text-muted-foreground">
+                  <p className="rounded-lg border border-border px-3 py-2.5 text-[13px] text-muted-foreground">
                     {t("connectNote")}
                   </p>
                 </form>
@@ -1173,7 +1173,7 @@ export function ImportProvider({
                   .map((tool) => (
                     <label
                       key={tool}
-                      className="flex min-h-9 items-center gap-2.5 rounded-md border border-border px-3 py-1.5 text-sm max-md:min-h-11"
+                      className="flex min-h-9 items-center gap-2.5 rounded-md border border-border px-3 py-1.5 text-[13px] max-md:min-h-11"
                     >
                       <input
                         type="checkbox"
@@ -1217,7 +1217,7 @@ export function ImportProvider({
                   ))}
                 </ul>
               )}
-              <p className="rounded-lg border border-border px-3 py-2.5 text-sm text-muted-foreground">
+              <p className="rounded-lg border border-border px-3 py-2.5 text-[13px] text-muted-foreground">
                 <b className="font-semibold text-foreground">
                   {t("grantsNothingTitle")}
                 </b>{" "}

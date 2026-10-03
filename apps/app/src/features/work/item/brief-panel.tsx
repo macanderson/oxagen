@@ -118,7 +118,7 @@ export function BriefPanel({ detail }: { detail: WorkItemDetail }) {
               const claim = send?.claims.find((c) => c.criterion === criterion.criterion);
               return (
                 <tr key={criterion.criterion} data-testid={`work-brief-row-${criterion.criterion}`}>
-                  <td className={`${cell} whitespace-nowrap font-mono text-sm`}>
+                  <td className={`${cell} whitespace-nowrap font-mono text-[12px]`}>
                     {criterion.criterion}
                   </td>
                   <td className={`${cell} [overflow-wrap:anywhere]`}>{criterion.text}</td>
@@ -150,7 +150,7 @@ export function BriefPanel({ detail }: { detail: WorkItemDetail }) {
               <dd className={`${kvValue} font-mono`}>{shown.repository}</dd>
               <dt className={kvTerm}>{t("digest")}</dt>
               <dd className={`${kvValue} flex items-center gap-1.5`}>
-                <code data-testid="work-brief-digest" className="font-mono">
+                <code data-testid="work-brief-digest" className="font-mono text-[0.92em]">
                   {shortDigest(shown.digest)}
                 </code>
                 <CopyValue value={shown.digest} label={t("digest")} />
@@ -165,7 +165,7 @@ export function BriefPanel({ detail }: { detail: WorkItemDetail }) {
         <div className={panelBody}>
           <ol
             data-testid="work-brief-triage-draft"
-            className="ml-5 flex list-decimal flex-col gap-1.5 text-sm text-foreground"
+            className="ml-5 flex list-decimal flex-col gap-1.5 text-[13px] text-foreground"
           >
             {brief.triageCriteria.map((text) => (
               <li key={text} className="[overflow-wrap:anywhere]">

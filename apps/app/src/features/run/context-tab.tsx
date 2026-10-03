@@ -81,7 +81,7 @@ const CUTS_SHOWN = 3;
  * and its `.v` figure (mono 10.5px): one part of the first request.
  */
 const promptBar =
-  "grid grid-cols-[minmax(0,22ch)_1fr_auto] items-center gap-[9px] text-sm text-muted-foreground";
+  "grid grid-cols-[minmax(0,22ch)_1fr_auto] items-center gap-[9px] text-[11.5px] text-muted-foreground";
 
 /**
  * `.ro-dot { position:absolute; left:-30px; top:6px; width:23px; height:23px;
@@ -97,7 +97,7 @@ const spineDot =
  * swatch (8px, radius 2px) and `.tk` figure (mono 10.5px, dim).
  */
 const windowItem =
-  "flex w-full items-center gap-[9px] rounded-lg px-[9px] py-[7px] text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-hl hover:text-foreground";
+  "flex w-full items-center gap-[9px] rounded-lg px-[9px] py-[7px] text-left text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-hl hover:text-foreground";
 
 /** The kind's glyph on the spine: a gate for a policy, a page for a skill, a mark for the rest. */
 function ItemGlyph({ kind }: { kind: string }) {
@@ -166,7 +166,7 @@ function WindowBars({ measured }: { measured: ContextWindow }) {
               }}
             />
           </span>
-          <span className="font-mono text-sm">
+          <span className="font-mono text-[10.5px]">
             {block.tokens === null
               ? t("bytes", { count: formatCount(block.bytes, locale) })
               : t("tokens", { count: formatCount(block.tokens, locale) })}
@@ -202,7 +202,7 @@ function PromptPanel({
       testId="run-context-prompt"
       aside={
         <>
-          <span className="font-mono text-sm text-dim">
+          <span className="font-mono text-[11px] text-dim">
             {t("writtenNotRecorded")} ·{" "}
             {sent === null
               ? t("sentNotRecorded")
@@ -227,7 +227,7 @@ function PromptPanel({
           </p>
           <p
             data-testid="run-context-first-prompt"
-            className="m-0 max-w-[52ch] text-sm leading-[1.55] text-foreground [overflow-wrap:anywhere]"
+            className="m-0 max-w-[52ch] text-[14.5px] leading-[1.55] text-foreground [overflow-wrap:anywhere]"
           >
             {prompt === null
               ? t("noPrompt")
@@ -239,7 +239,7 @@ function PromptPanel({
         <div className="min-w-0">
           <p className={`${eyebrowQuiet} mb-1.5`}>{t("firstRequest")}</p>
           {request === null && measured === null ? (
-            <p className="m-0 text-sm text-muted-foreground">
+            <p className="m-0 text-[11.5px] text-muted-foreground">
               {t("noRequest")}
             </p>
           ) : (
@@ -250,7 +250,7 @@ function PromptPanel({
                     <div key={part} className={promptBar}>
                       <span className="truncate">{part}</span>
                       <span className="block h-[7px] min-w-0 overflow-hidden rounded-[4px] bg-hl" />
-                      <span className="font-mono text-sm">
+                      <span className="font-mono text-[10.5px]">
                         <NoValue />
                       </span>
                     </div>
@@ -259,7 +259,7 @@ function PromptPanel({
               ) : (
                 <WindowBars measured={measured} />
               )}
-              <p className="mb-0 mt-2 text-sm text-muted-foreground">
+              <p className="mb-0 mt-2 text-[11.5px] text-muted-foreground">
                 {request !== null &&
                 request.input !== null &&
                 request.cached !== null
@@ -310,7 +310,7 @@ function SpineNode({ item }: { item: TranscriptRecallItem }) {
       <div className="min-w-0">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span
-            className={`${mono} min-w-0 break-all text-sm ${cut ? "text-muted-foreground" : "font-semibold text-foreground"}`}
+            className={`${mono} min-w-0 break-all text-[12.5px] ${cut ? "text-muted-foreground" : "font-semibold text-foreground"}`}
           >
             {item.label}
           </span>
@@ -336,7 +336,7 @@ function SpineNode({ item }: { item: TranscriptRecallItem }) {
           )}
         </div>
         {why === null ? null : (
-          <p className="mb-0 mt-[3px] text-sm leading-[1.5] text-muted-foreground">
+          <p className="mb-0 mt-[3px] text-[11.5px] leading-[1.5] text-muted-foreground">
             {why}
           </p>
         )}
@@ -375,7 +375,7 @@ function ManifestSpine({
         {tally === null ? null : (
           <span
             data-testid="run-manifest-tally"
-            className="ml-auto font-mono text-sm text-dim"
+            className="ml-auto font-mono text-[11px] text-dim"
           >
             {t("renderedCount", { count: formatCount(tally.rendered, locale) })}{" "}
             · {t("cutCount", { count: formatCount(tally.cut, locale) })} ·{" "}
@@ -394,7 +394,7 @@ function ManifestSpine({
           disabled
           title={t("previewMissing")}
           aria-describedby="run-manifest-preview-why"
-          className={`${tally === null ? "ml-auto" : ""} cursor-not-allowed text-sm text-muted-foreground underline decoration-rule underline-offset-2 opacity-70`}
+          className={`${tally === null ? "ml-auto" : ""} cursor-not-allowed text-[11.5px] text-muted-foreground underline decoration-rule underline-offset-2 opacity-70`}
         >
           {t("preview")}
         </button>
@@ -402,15 +402,15 @@ function ManifestSpine({
       {manifest !== null && run.enforcementTier === "observe" ? (
         <p
           data-testid="run-manifest-observe"
-          className="mb-2.5 rounded-[10px] border border-critical/45 bg-critical/10 px-3.5 py-[11px] text-sm text-foreground"
+          className="mb-2.5 rounded-[10px] border border-critical/45 bg-critical/10 px-3.5 py-[11px] text-[12.5px] text-foreground"
         >
           <b className="text-critical">{t("observeTitle")}</b> {t("observe")}
         </p>
       ) : null}
       {manifest === null ? (
-        <p className="m-0 text-sm text-muted-foreground">{t("none")}</p>
+        <p className="m-0 text-[12.5px] text-muted-foreground">{t("none")}</p>
       ) : read === null ? (
-        <p className="m-0 text-sm text-muted-foreground">
+        <p className="m-0 text-[12.5px] text-muted-foreground">
           {t(`unread.${manifest.state === "read" ? "failed" : manifest.state}`)}
         </p>
       ) : (
@@ -425,7 +425,7 @@ function ManifestSpine({
           {cuts.length > CUTS_SHOWN ? (
             <li className="relative py-[5px]">
               <details className="group">
-                <summary className="cursor-pointer list-none text-sm text-muted-foreground underline decoration-rule underline-offset-2 hover:text-foreground [&::-webkit-details-marker]:hidden">
+                <summary className="cursor-pointer list-none text-[11.5px] text-muted-foreground underline decoration-rule underline-offset-2 hover:text-foreground [&::-webkit-details-marker]:hidden">
                   {t("moreCut", {
                     count: formatCount(cuts.length - CUTS_SHOWN, locale),
                   })}
@@ -444,7 +444,7 @@ function ManifestSpine({
         </ol>
       )}
       {manifest === null ? null : (
-        <p className="mb-0 mt-[11px] border-t border-border pt-2.5 text-sm text-dim">
+        <p className="mb-0 mt-[11px] border-t border-border pt-2.5 text-[11px] text-dim">
           {read === null || read.bundleVersion === null
             ? t("footNoBundle", { seq: manifest.entry.seq })
             : t("foot", {
@@ -516,7 +516,7 @@ function PromptWindow({
           className="rounded-xl border border-border bg-card px-[18px] py-4 text-card-foreground"
         >
           <p className={`${eyebrowQuiet} mb-1.5`}>{t("noneTitle")}</p>
-          <p className="m-0 text-sm">{t("none", { run: runId })}</p>
+          <p className="m-0 text-[13px]">{t("none", { run: runId })}</p>
         </section>
       </div>
     );
@@ -542,7 +542,7 @@ function PromptWindow({
         }
       >
         {/* `.compbar { height:30px; border-radius:9px; border:1px solid var(--border); background:var(--hl) }`, with no band the record can fill. */}
-        <div className="flex h-[30px] items-center justify-center rounded-[9px] border border-border bg-hl font-mono text-sm text-dim">
+        <div className="flex h-[30px] items-center justify-center rounded-[9px] border border-border bg-hl font-mono text-[10.5px] text-dim">
           {t("blocksNotRecorded")}
         </div>
         <div className="mt-[13px]">
@@ -562,7 +562,7 @@ function PromptWindow({
 function Unrecorded() {
   const t = useTranslations("run.context.frames");
   return (
-    <span title={t("unrecorded")} className="font-sans text-sm">
+    <span title={t("unrecorded")} className="font-sans text-[12px]">
       <NoValue />
     </span>
   );
@@ -597,7 +597,7 @@ function frameRow(
         {/* A label that only repeats the kind says nothing the Kind column does not. */}
         {entry.label === entry.type ? null : (
           <span
-            className={`${mono} min-w-0 text-sm text-foreground md:truncate`}
+            className={`${mono} min-w-0 text-[11.5px] text-foreground md:truncate`}
           >
             {entry.label}
           </span>
@@ -717,10 +717,10 @@ function WalkWindow({
                   aria-hidden="true"
                   className={`size-2 flex-none rounded-[2px] ${stop.hue}`}
                 />
-                <span className="min-w-0 flex-1 truncate font-mono text-sm">
+                <span className="min-w-0 flex-1 truncate font-mono text-[11.5px]">
                   {t("stop", { type: stop.entry.type, seq: stop.entry.seq })}
                 </span>
-                <span className="flex-none font-mono text-sm tabular-nums text-dim">
+                <span className="flex-none font-mono text-[10.5px] tabular-nums text-dim">
                   {stop.figure ?? t("frame", { seq: stop.entry.seq })}
                 </span>
               </SafeLink>

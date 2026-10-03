@@ -14,14 +14,14 @@ import { cell, Table } from "@/ui/table";
 import { STEERING_GAPS } from "../gaps";
 
 const note =
-  "border-l-2 border-gold py-0.5 pl-3 text-sm text-muted-foreground";
+  "border-l-2 border-gold py-0.5 pl-3 text-[12.5px] text-muted-foreground";
 
 const INDEX = ["today", "later", "notHere"] as const;
 
 export function OntologyShelf({ repository }: { repository: string | null }) {
   const t = useTranslations("steering.bodies.ontology");
   const code = (chunks: ReactNode) => (
-    <code className="font-mono text-sm">{chunks}</code>
+    <code className="font-mono text-[12px]">{chunks}</code>
   );
   const columns = [
     "term",
@@ -60,7 +60,7 @@ export function OntologyShelf({ repository }: { repository: string | null }) {
           <tr>
             <td
               colSpan={columns.length}
-              className={`${cell} text-sm text-muted-foreground`}
+              className={`${cell} text-[13px] text-muted-foreground`}
               data-testid="ontology-not-backed"
               data-not-backed=""
               data-issue={String(STEERING_GAPS.registry)}
@@ -84,7 +84,7 @@ export function OntologyShelf({ repository }: { repository: string | null }) {
           </h3>
         </div>
         <dl
-          className={`${panelBody} grid grid-cols-[auto_1fr] gap-x-5 gap-y-2.5 text-sm`}
+          className={`${panelBody} grid grid-cols-[auto_1fr] gap-x-5 gap-y-2.5 text-[13px]`}
         >
           {INDEX.map((row) => (
             <div key={row} data-index={row} className="contents">

@@ -23,7 +23,7 @@ import {
 /** A count per shelf; null where no read counts that shelf yet. */
 export type ShelfCounts = Record<LibraryShelf, number | null>;
 
-const chip = `${buttonSecondary} min-h-7 px-2.5 py-1 text-sm aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground`;
+const chip = `${buttonSecondary} min-h-7 px-2.5 py-1 text-[12.5px] aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground`;
 
 export function ShelfRow({
   at,
@@ -59,7 +59,7 @@ export function ShelfRow({
           >
             {t(shelf)}
             <span
-              className="font-mono text-sm text-dim"
+              className="font-mono text-[11px] text-dim"
               data-count={count === null ? "not-recorded" : String(count)}
             >
               {count === null ? t("notRecorded") : count}

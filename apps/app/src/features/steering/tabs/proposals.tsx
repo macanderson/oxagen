@@ -28,7 +28,7 @@ const OPEN_PR_STATUSES: ReadonlySet<string> = new Set([
 /** The count beside each state filter. */
 export type ProposalStateCounts = Record<ProposalState, number>;
 
-const chip = `${buttonSecondary} min-h-7 gap-1.5 px-2.5 py-1 text-sm aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground`;
+const chip = `${buttonSecondary} min-h-7 gap-1.5 px-2.5 py-1 text-[12.5px] aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground`;
 
 function StateFilters({
   at,
@@ -62,7 +62,7 @@ function StateFilters({
           {t(state)}
           {counts === null ? null : (
             <span
-              className="font-mono text-sm text-dim"
+              className="font-mono text-[11px] text-dim"
               data-count={String(counts[state])}
             >
               {counts[state]}

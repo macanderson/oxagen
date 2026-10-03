@@ -197,7 +197,7 @@ export function ListTable({
       <div className="min-w-0 overflow-x-auto">
         <table
           aria-label={label}
-          className="w-full min-w-[560px] border-collapse text-sm"
+          className="w-full min-w-[560px] border-collapse text-[13px]"
         >
           <thead>
             <tr className="border-b border-border">

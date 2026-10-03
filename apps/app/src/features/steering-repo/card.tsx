@@ -66,7 +66,7 @@ export function SteeringRepoCard({
     >
       <h2
         id={HEADING_ID}
-        className="text-base font-semibold text-foreground"
+        className="text-[15px] font-semibold text-foreground"
       >
         {t("heading")}
       </h2>

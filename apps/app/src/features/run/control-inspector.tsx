@@ -147,7 +147,7 @@ export function ControlInspector({
       ) : row === undefined ? (
         <p
           data-testid="control-unmatched"
-          className="m-0 text-sm text-muted-foreground"
+          className="m-0 text-[12.5px] text-muted-foreground"
         >
           {t("unmatched")}
         </p>

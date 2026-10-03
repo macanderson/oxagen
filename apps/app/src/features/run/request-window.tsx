@@ -119,7 +119,7 @@ export function CompositionBar({ recorded }: { recorded: ContextWindow }) {
           />
         ))}
       </div>
-      <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0 text-sm text-muted-foreground">
+      <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0 text-[11.5px] text-muted-foreground">
         {drawn.map((block) => (
           <li
             key={block.kind}
@@ -184,7 +184,7 @@ function Section({
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className={`${eyebrowQuiet} m-0`}>{title}</p>
         {aside === undefined ? null : (
-          <span className="text-sm text-dim">{aside}</span>
+          <span className="text-[11px] text-dim">{aside}</span>
         )}
       </div>
       {children}
@@ -215,7 +215,7 @@ export function RequestWindow({
     return (
       <p
         data-testid="window-none"
-        className="m-0 text-sm text-muted-foreground"
+        className="m-0 text-[12.5px] text-muted-foreground"
       >
         {t("none")}
       </p>
@@ -246,7 +246,7 @@ export function RequestWindow({
               {" "}
               <SafeLink
                 to={hrefOf(recorded.responseSeq)}
-                className={`${linkText} text-sm`}
+                className={`${linkText} text-[12.5px]`}
               >
                 {t("answeredAt", { seq: recorded.responseSeq })}
               </SafeLink>
@@ -276,7 +276,7 @@ export function RequestWindow({
               key={block.kind}
               data-testid="window-stack-row"
               data-kind={block.kind}
-              className="flex min-w-0 items-center gap-2 rounded-lg border border-border border-l-[3px] border-l-rule bg-background px-[11px] py-2 text-sm"
+              className="flex min-w-0 items-center gap-2 rounded-lg border border-border border-l-[3px] border-l-rule bg-background px-[11px] py-2 text-[11px]"
             >
               <b className={`${mono} text-foreground`}>
                 {t(`block.${block.kind}`)}
@@ -317,7 +317,7 @@ export function AssembledContext({
     return (
       <p
         data-testid="assembled-none"
-        className="m-0 text-sm text-muted-foreground"
+        className="m-0 text-[12.5px] text-muted-foreground"
       >
         {t("none")}
       </p>

@@ -32,7 +32,7 @@ import { WorkReadFailure } from "../read-failure";
 
 function Sub({ children }: { children: string }) {
   return (
-    <span className="block text-sm text-muted-foreground">{children}</span>
+    <span className="block text-[12px] text-muted-foreground">{children}</span>
   );
 }
 
@@ -80,7 +80,7 @@ function TargetRow({ target }: { target: WorkTarget }) {
     >
       <td className={cell}>
         <span className="font-medium">{target.name}</span>
-        <span className={`${mono} block text-sm text-muted-foreground`}>
+        <span className={`${mono} block text-[12px] text-muted-foreground`}>
           {target.harness}
         </span>
       </td>
@@ -132,7 +132,7 @@ function TargetRow({ target }: { target: WorkTarget }) {
           ) : null}
         </span>
       </td>
-      <td className={`${cell} text-sm`} data-budget={tier ?? "none"}>
+      <td className={`${cell} text-[12.5px]`} data-budget={tier ?? "none"}>
         {tier === null ? (
           <span className="text-muted-foreground">{t("none")}</span>
         ) : tier === "gateway" || tier === "contained" ? (
@@ -210,7 +210,7 @@ export function RuntimesTab({
         </Table>
       </div>
       <div className={`${panelBody} border-t border-border`}>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-[12.5px] text-muted-foreground">
           {t("runtimes.footNote")}
         </p>
       </div>

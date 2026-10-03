@@ -23,7 +23,7 @@ import {
 import type { ImportFileResult, ImportPolicy, ParseResult } from "./rows";
 
 /** A select in a table row: the field skin at the row's height. */
-export const rowSelect = `${inputBase} h-8 min-h-8 w-auto py-0 text-sm`;
+export const rowSelect = `${inputBase} h-8 min-h-8 w-auto py-0 text-[12.5px]`;
 
 /** The targets in the order the spec lists them (memory-collection spec, Bulk import). */
 const TARGETS: readonly ImportTarget[] = [
@@ -84,7 +84,7 @@ export function DropZone({
       className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-rule px-4 py-3.5 text-muted-foreground transition-colors data-[over]:border-gold data-[over]:bg-hl"
     >
       <UploadSimpleIcon aria-hidden="true" className="size-[18px] flex-none" />
-      <span className="min-w-44 grow text-sm font-medium text-foreground">
+      <span className="min-w-44 grow text-[13.5px] font-medium text-foreground">
         {t("label")}
       </span>
       <button
@@ -264,7 +264,7 @@ export function FilesTable({
               <span className={`block ${mono} text-foreground`}>
                 {file.path}
               </span>
-              <span className="mt-0.5 block text-sm text-dim">
+              <span className="mt-0.5 block text-[11.5px] text-dim">
                 {t("files.lines", { count: file.lines })}
               </span>
             </td>
@@ -307,7 +307,7 @@ export function FilesTable({
               {status.note === null ? null : (
                 <span
                   data-truncate={status.note}
-                  className="mt-0.5 block max-w-[28ch] truncate text-sm text-dim"
+                  className="mt-0.5 block max-w-[28ch] truncate text-[11.5px] text-dim"
                 >
                   {status.note}
                 </span>

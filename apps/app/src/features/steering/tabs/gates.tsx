@@ -72,12 +72,12 @@ function Planes() {
   return (
     <div className="grid gap-3.5 md:grid-cols-2" data-testid="gates-planes">
       <TabPanel id="gates-text" title={t("textTitle")}>
-        <p className={`${panelBody} text-sm text-muted-foreground`}>
+        <p className={`${panelBody} text-[13px] text-muted-foreground`}>
           {t("textBody")}
         </p>
       </TabPanel>
       <TabPanel id="gates-gate" title={t("gateTitle")}>
-        <p className={`${panelBody} text-sm text-muted-foreground`}>
+        <p className={`${panelBody} text-[13px] text-muted-foreground`}>
           {t("gateBody")}
         </p>
       </TabPanel>
@@ -137,7 +137,7 @@ function Notices({
             <b className="block font-semibold text-foreground md:truncate">
               {t("kinds.killSwitch")}
             </b>
-            <span className="block font-mono text-sm text-muted-foreground md:truncate">
+            <span className="block font-mono text-[11.5px] text-muted-foreground md:truncate">
               {gate.id}
             </span>
           </td>
@@ -146,7 +146,7 @@ function Notices({
               {outcome}
             </Badge>
           </td>
-          <td className={`${cell} text-sm`}>{applies}</td>
+          <td className={`${cell} text-[12.5px]`}>{applies}</td>
           <td className={cell} data-cell="notice">
             {unrecorded}
           </td>
@@ -178,7 +178,7 @@ function Notices({
     >
       {gates.length === 0 ? (
         <p
-          className={`${panelBody} text-sm text-muted-foreground`}
+          className={`${panelBody} text-[13px] text-muted-foreground`}
           data-state="no-switch"
         >
           {t("noSwitch")}

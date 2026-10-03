@@ -92,8 +92,8 @@ function Waiting({
     <section data-testid="first-frame-waiting" className={panel}>
       <div className={cardHeader}>
         <Spinner />
-        <h3 className="text-sm font-semibold">{t("waitingTitle")}</h3>
-        <span className="ml-auto font-mono text-sm text-muted-foreground">
+        <h3 className="text-[14px] font-semibold">{t("waitingTitle")}</h3>
+        <span className="ml-auto font-mono text-[11.5px] text-muted-foreground">
           {t("polling")}
         </span>
       </div>
@@ -113,7 +113,7 @@ function Waiting({
         </div>
         <div
           data-testid="first-frame-log"
-          className="overflow-x-auto rounded-lg border border-border bg-hl px-3 py-2.5 font-mono text-sm leading-relaxed"
+          className="overflow-x-auto rounded-lg border border-border bg-hl px-3 py-2.5 font-mono text-[12px] leading-relaxed"
         >
           {lines.map((line) => (
             <div key={line.text} className="flex gap-3 whitespace-nowrap">
@@ -136,7 +136,7 @@ function Waiting({
             <span className="text-muted-foreground">{t("log.waiting")}</span>
           </div>
         </div>
-        <p className="text-sm leading-relaxed text-muted-foreground">
+        <p className="text-[12.5px] leading-relaxed text-muted-foreground">
           {host === null
             ? t("startNoHost")
             : t("start", { harness: harnessName })}
@@ -168,8 +168,8 @@ function Received({ received }: { received: ReceivedFrame }) {
     <section data-testid="first-frame-received" className={panel}>
       <div className={cardHeader}>
         <Badge tone="allowed">{t("connected")}</Badge>
-        <h3 className="text-sm font-semibold">{t("receivedTitle")}</h3>
-        <span className="ml-auto font-mono text-sm text-muted-foreground">
+        <h3 className="text-[14px] font-semibold">{t("receivedTitle")}</h3>
+        <span className="ml-auto font-mono text-[11.5px] text-muted-foreground">
           {time(received.receivedAt)}
         </span>
       </div>
@@ -181,7 +181,7 @@ function Received({ received }: { received: ReceivedFrame }) {
         ) : (
           <div
             data-testid="first-frame-rows"
-            className="overflow-x-auto rounded-lg border border-border font-mono text-sm"
+            className="overflow-x-auto rounded-lg border border-border font-mono text-[12px]"
           >
             {received.frames.map((frame) => (
               <div
@@ -214,7 +214,7 @@ function Received({ received }: { received: ReceivedFrame }) {
           ) : null}
         </div>
         {received.tier === null ? null : (
-          <p className="text-sm leading-relaxed text-muted-foreground">
+          <p className="text-[12.5px] leading-relaxed text-muted-foreground">
             {received.tier === "harness"
               ? t.rich("tierBodyHarness", { b: bold })
               : t.rich("tierBody", { tier: received.tier, b: bold })}
@@ -318,7 +318,7 @@ export function RunStep({
           data-testid="first-frame-error"
           className={`${panel} flex flex-col gap-2.5 p-5`}
         >
-          <h2 className="text-lg font-semibold">{t("errorTitle")}</h2>
+          <h2 className="text-[17px] font-semibold">{t("errorTitle")}</h2>
           <p className="text-sm leading-relaxed text-muted-foreground">
             {t("errorBody", {
               at: format.dateTime(new Date(host.enrolledAt), {
@@ -330,7 +330,7 @@ export function RunStep({
           <p className="text-sm leading-relaxed text-muted-foreground">
             {t.rich("errorFix", { mono: monoChunk })}
           </p>
-          <p className="font-mono text-sm text-muted-foreground">
+          <p className="font-mono text-[11px] text-muted-foreground">
             {t("errorRequest", { id: host.hostEnrollmentId })}
           </p>
           <button
@@ -364,7 +364,7 @@ export function RunStep({
       {agent === null ? (
         <section
           data-testid="wrap-no-agent"
-          className={`${panel} flex flex-col gap-2 p-4 text-sm`}
+          className={`${panel} flex flex-col gap-2 p-4 text-[13px]`}
         >
           <h3 className="font-semibold">{wrapT("noAgentTitle")}</h3>
           <p className="text-muted-foreground">{wrapT("noAgentBody")}</p>

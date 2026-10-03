@@ -91,14 +91,14 @@ function Missing({ id, gap, text }: { id: string; gap: Gap; text: string }) {
       id={id}
       data-testid="audit-not-recorded"
       data-issue={gap.issue}
-      className="rounded-md border border-border bg-hl px-3 py-2 text-sm text-muted-foreground"
+      className="rounded-md border border-border bg-hl px-3 py-2 text-[13px] text-muted-foreground"
     >
       {text}
     </p>
   );
 }
 
-const field = "flex flex-col gap-1 text-sm";
+const field = "flex flex-col gap-1 text-[13px]";
 const label = "text-xs font-medium text-muted-foreground";
 /**
  * A 44 px tap target and 16 px text on a phone (audit.md, Mobile), so the
@@ -129,7 +129,7 @@ function DisabledSubmit({
 /** A callout: the one fact a dialog states about the write it runs. */
 function Callout({ children }: { children: ReactNode }) {
   return (
-    <p className="border-l-2 border-gold pl-3 text-sm text-muted-foreground">
+    <p className="border-l-2 border-gold pl-3 text-[13px] text-muted-foreground">
       {children}
     </p>
   );
@@ -296,7 +296,7 @@ export function CsvDialog({
     >
       <p
         data-testid="audit-csv-body"
-        className="text-sm text-muted-foreground"
+        className="text-[13px] text-muted-foreground"
       >
         {t("body", { count, n, range })}
       </p>
@@ -357,7 +357,7 @@ export function RotateDialog({ gap }: { gap: Gap }) {
       subtitle={t("subtitle")}
       footer={<DisabledSubmit label={t("submit")} describedBy={noteId} />}
     >
-      <dl className="mb-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+      <dl className="mb-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13px]">
         <dt className={fact}>{t("facts.generation")}</dt>
         <dd data-recorded="false" className={fact}>
           {recorded("notRecorded")}

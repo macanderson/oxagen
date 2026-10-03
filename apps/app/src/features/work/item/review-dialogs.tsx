@@ -194,7 +194,7 @@ export function AcceptDialog({ org, ws, detail, send, ...control }: Props) {
                   />
                   <span className="flex min-w-0 flex-col gap-0.5">
                     <span className="text-sm text-foreground">
-                      <span className="mr-1.5 font-mono text-dim">
+                      <span className="mr-1.5 font-mono text-[0.92em] text-dim">
                         {criterion.criterion}
                       </span>
                       {criterion.text}

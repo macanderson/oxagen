@@ -32,23 +32,23 @@ const column =
 const wideColumn =
   "min-w-0 border-b border-border px-4 py-3.5 md:col-span-2 md:border-r-0";
 /** `.cc-c table { min-width:460px }`, `table.narrow`: the family table scrolls inside its column. */
-const familyTable = "w-full min-w-[460px] border-collapse text-sm";
+const familyTable = "w-full min-w-[460px] border-collapse text-[13px]";
 /** `.fcell .ti { 24px; border-radius:6px; color:var(--tc,var(--muted)); background:<that at 14%> }` */
 const familyIcon =
   "grid size-6 flex-none place-items-center rounded-md bg-muted-foreground/15 text-muted-foreground";
 /** `.fcell .fx b { 12.5px; 600 }` over `.fcell .fx span { mono; 10.5px; muted }` */
 const familyName =
-  "whitespace-nowrap text-sm font-semibold text-foreground md:truncate";
+  "whitespace-nowrap text-[12.5px] font-semibold text-foreground md:truncate";
 const familyTools =
-  "whitespace-nowrap font-mono text-sm text-muted-foreground md:truncate";
+  "whitespace-nowrap font-mono text-[10.5px] text-muted-foreground md:truncate";
 /** `.hrow { grid-template-columns:8ch 1fr auto; gap:9px; font-size:11.5px; color:var(--muted) }` */
 const histRow =
-  "grid grid-cols-[8ch_minmax(0,1fr)_auto] items-center gap-[9px] text-sm text-muted-foreground";
+  "grid grid-cols-[8ch_minmax(0,1fr)_auto] items-center gap-[9px] text-[11.5px] text-muted-foreground";
 /** `.hrow .hk`, `.hrow .hv { font-family:var(--mono); font-size:11px }`; the value in the ink. */
-const histKey = "font-mono text-sm";
-const histValue = "font-mono text-sm tabular-nums text-foreground";
+const histKey = "font-mono text-[11px]";
+const histValue = "font-mono text-[11px] tabular-nums text-foreground";
 /** `.spec .sv { font-size:22px; font-weight:700; letter-spacing:-.02em; margin-bottom:7px }` */
-const specValue = "mb-[7px] text-2xl font-bold tracking-[-0.02em]";
+const specValue = "mb-[7px] text-[22px] font-bold tracking-[-0.02em]";
 /** `.stk { height:8px; border-radius:4px }` drawn as an empty track: no prefetch was recorded to fill it. */
 const emptyTrack = "block h-2 rounded bg-hl";
 
@@ -235,7 +235,7 @@ export function ToolCalls({ metrics }: { metrics: RunMetrics }) {
       flush
       aside={
         toolCalls === null || families === null ? undefined : (
-          <span className="font-mono text-sm text-dim">
+          <span className="font-mono text-[11px] text-dim">
             {t("tally", {
               calls: toolCalls.count,
               // `batches` is null only for a run with no tool call, which ran
@@ -251,24 +251,24 @@ export function ToolCalls({ metrics }: { metrics: RunMetrics }) {
         <div className={wideColumn}>
           <p className={`${eyebrowQuiet} mb-2.5 mt-0`}>{t("byFamily")}</p>
           {toolCalls === null || families === null ? (
-            <p className="m-0 text-sm text-muted-foreground">
+            <p className="m-0 text-[12.5px] text-muted-foreground">
               {t("notRead")}
             </p>
           ) : families.length === 0 ? (
-            <p className="m-0 text-sm text-muted-foreground">
+            <p className="m-0 text-[12.5px] text-muted-foreground">
               {t("noCalls")}
             </p>
           ) : (
             <FamilyTable families={families} />
           )}
-          <p className="mb-0 mt-[9px] text-sm text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground">
+          <p className="mb-0 mt-[9px] text-[11.5px] text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground">
             {t.rich("familyNote", { b: (chunks) => <b>{chunks}</b> })}
           </p>
         </div>
         <div className={column}>
           <p className={`${eyebrowQuiet} mb-2.5 mt-0`}>{t("perBatch")}</p>
           {batches === null || toolCalls === null ? (
-            <p className="m-0 text-sm text-muted-foreground">
+            <p className="m-0 text-[12.5px] text-muted-foreground">
               {toolCalls === null ? t("notRead") : t("noCalls")}
             </p>
           ) : (

@@ -174,7 +174,7 @@ function DeregisteredToggle({
     <SafeLink
       to={to}
       data-testid="agents-deregistered-toggle"
-      className="self-start rounded-sm text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className="self-start rounded-sm text-[11px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
       {shown
         ? t("hideDeregistered")

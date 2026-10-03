@@ -155,7 +155,7 @@ export function NotificationsDialog({ data }: { data: ShellData }) {
             >
               <Glyph n={n} />
               <div className="min-w-0 flex-1">
-                <p className="text-sm text-foreground">
+                <p className="text-[13px] text-foreground">
                   {n.unread ? (
                     <span
                       aria-hidden="true"
@@ -171,14 +171,14 @@ export function NotificationsDialog({ data }: { data: ShellData }) {
                   <p className="text-xs text-muted-foreground">{n.body}</p>
                 )}
                 {n.event === null ? null : (
-                  <p className="mt-0.5 font-mono text-sm text-muted-foreground">
+                  <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
                     {n.event}
                   </p>
                 )}
               </div>
               <time
                 dateTime={n.createdAt}
-                className="flex-none font-mono text-sm text-muted-foreground"
+                className="flex-none font-mono text-[11px] text-muted-foreground"
               >
                 {time(n.createdAt)}
               </time>

@@ -257,7 +257,7 @@ export function AddRuntime({
               {t("containmentHint")}
             </p>
           </div>
-          <p className="border-l-2 border-gold py-0.5 pl-3 text-sm text-foreground">
+          <p className="border-l-2 border-gold py-0.5 pl-3 text-[13px] text-foreground">
             {t("next")}
           </p>
           <button
@@ -650,7 +650,7 @@ export function Unenroll({
           </p>
           <p
             data-testid="runtime-unenroll-warn"
-            className="rounded-[10px] border border-critical/45 bg-critical/10 px-3.5 py-2.5 text-sm text-foreground"
+            className="rounded-[10px] border border-critical/45 bg-critical/10 px-3.5 py-2.5 text-[12.5px] text-foreground"
           >
             {t("scope", { agent })}
           </p>

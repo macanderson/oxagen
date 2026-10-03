@@ -51,7 +51,7 @@ export function AssistantEngineNotice({
         id={ASSISTANT_ENGINE_REASON_ID}
         role="alert"
         data-testid={`assistant-engine-${health.down}`}
-        className="flex items-start gap-2 text-sm leading-5 text-error-ink"
+        className="flex items-start gap-2 text-[13px] leading-5 text-error-ink"
       >
         <WarningCircleIcon
           aria-hidden="true"
@@ -64,7 +64,7 @@ export function AssistantEngineNotice({
       {health.error === null ? null : (
         <p
           data-testid="assistant-engine-code"
-          className="mt-1 ml-6 font-mono text-sm text-muted-foreground"
+          className="mt-1 ml-6 font-mono text-[11px] text-muted-foreground"
         >
           {health.error}
         </p>
@@ -83,7 +83,7 @@ export function AssistantEngineNotice({
             if (ready) onRecovered();
           });
         }}
-        className={`mt-1.5 ml-6 text-sm ${linkText} aria-disabled:opacity-60`}
+        className={`mt-1.5 ml-6 text-[12px] ${linkText} aria-disabled:opacity-60`}
       >
         {health.checking ? t("checking") : t("check")}
       </button>

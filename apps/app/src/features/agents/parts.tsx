@@ -61,7 +61,7 @@ export function Panel({
         className={`${panelHeader} -mx-4 -mt-4 flex-nowrap items-start bg-hl`}
       >
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <h2 id={id} className="text-sm font-semibold">
+          <h2 id={id} className="text-[13.5px] font-semibold">
             {title}
           </h2>
           {lead === undefined ? null : (
@@ -115,7 +115,7 @@ export function Sub({ children }: { children: ReactNode }) {
 /** The mockup's `.note`: a gold rule at the left and one or two sentences. */
 export function Note({ children }: { children: ReactNode }) {
   return (
-    <p className="border-l-2 border-gold py-1 pl-3 text-sm text-muted-foreground">
+    <p className="border-l-2 border-gold py-1 pl-3 text-[12.5px] text-muted-foreground">
       {children}
     </p>
   );

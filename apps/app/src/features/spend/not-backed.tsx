@@ -39,7 +39,7 @@ export function NotBacked({
     <p
       data-testid="spend-not-backed"
       data-issue={GAP_ISSUE[gap]}
-      className="max-w-prose text-sm leading-relaxed text-muted-foreground"
+      className="max-w-prose text-[12.5px] leading-relaxed text-muted-foreground"
     >
       <span className="font-medium text-foreground">{t("notBacked.lead")}</span>{" "}
       {children}

@@ -186,7 +186,7 @@ function href(place: Place, view: View) {
  * text-underline-offset:2px; text-decoration-color:var(--rule) }`.
  */
 const linkQuiet =
-  "rounded-sm text-sm text-muted-foreground underline decoration-rule underline-offset-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+  "rounded-sm text-[11.5px] text-muted-foreground underline decoration-rule underline-offset-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
 /**
  * `.ro-dot { position:absolute; left:-30px; top:6px; width:23px; height:23px;
@@ -221,7 +221,7 @@ function Frame({
     <SafeLink
       to={frameHref(place, { seq, chainRef: node?.chainRef })}
       title={t("frameTitle")}
-      className="shrink-0 rounded-md border border-border bg-background px-1.5 py-px font-mono text-sm text-dim hover:border-rule hover:text-foreground"
+      className="shrink-0 rounded-md border border-border bg-background px-1.5 py-px font-mono text-[10.5px] text-dim hover:border-rule hover:text-foreground"
     >
       {t("frame", { seq })}
     </SafeLink>
@@ -232,7 +232,7 @@ function Frame({
 function Stat({ stat }: { stat: RunOutputNode["stat"] }) {
   if (stat === null) return null;
   return (
-    <span className={`${mono} shrink-0 text-sm tabular-nums`}>
+    <span className={`${mono} shrink-0 text-[11px] tabular-nums`}>
       <b className="font-semibold text-success">+{stat.added}</b>{" "}
       <b className="font-semibold text-warning">&minus;{stat.removed}</b>
     </span>
@@ -288,7 +288,7 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
       >
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <b
-            className={`min-w-0 max-w-full truncate text-sm ${
+            className={`min-w-0 max-w-full truncate text-[13px] ${
               would
                 ? "font-medium text-muted-foreground"
                 : "font-mono font-semibold text-foreground"
@@ -301,9 +301,9 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
           <Stat stat={node.stat} />
           <Frame node={node} place={place} />
         </div>
-        <div className="mt-[3px] flex flex-wrap items-baseline gap-2 text-sm leading-normal">
+        <div className="mt-[3px] flex flex-wrap items-baseline gap-2 text-[11.5px] leading-normal">
           {node.where === null ? null : (
-            <span className="min-w-0 font-mono text-sm text-dim [overflow-wrap:anywhere]">
+            <span className="min-w-0 font-mono text-[11px] text-dim [overflow-wrap:anywhere]">
               {node.where}
             </span>
           )}
@@ -328,7 +328,7 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
             >
               {t("reviewApproval")}
             </SafeLink>
-            <span className="text-sm text-muted-foreground">
+            <span className="text-[11px] text-muted-foreground">
               {t("gateHint")}
             </span>
           </div>
@@ -366,7 +366,7 @@ function ReadMark({
       className="relative flex min-w-0 flex-wrap items-baseline gap-2 py-[5px]"
     >
       <span aria-hidden="true" className={tick} />
-      <span className="min-w-0 text-sm text-dim">
+      <span className="min-w-0 text-[11.5px] text-dim">
         {t("readMark")}{" "}
         {keyedByOccurrence(shown, (name) => name).map(
           ({ item: name, key }, i) => (
@@ -374,7 +374,7 @@ function ReadMark({
             // many times the name appeared before it.
             <span key={key}>
               {i === 0 ? null : ", "}
-              <b className="break-all font-mono text-sm font-medium text-muted-foreground">
+              <b className="break-all font-mono text-[11px] font-medium text-muted-foreground">
                 {name}
               </b>
             </span>
@@ -492,7 +492,7 @@ export function OutputsSpine({
         <h2 className={`${eyebrowQuiet} m-0`}>{t("title")}</h2>
         <span
           data-testid="run-outputs-tally"
-          className="ml-auto font-mono text-sm text-dim"
+          className="ml-auto font-mono text-[11px] text-dim"
         >
           {counts.join(" · ")}
         </span>
@@ -540,7 +540,7 @@ export function OutputsSpine({
         </ol>
       )}
 
-      <p className="mt-[11px] flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border pt-2.5 text-sm text-dim">
+      <p className="mt-[11px] flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border pt-2.5 text-[11px] text-dim">
         <span>{t("footer")}</span>
         {complete ? null : <span>{t("cut")}</span>}
       </p>

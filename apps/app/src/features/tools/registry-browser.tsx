@@ -45,7 +45,7 @@ function AuthChip({ server }: { server: RegistryServer }) {
   return (
     <span
       data-auth={server.auth}
-      className="rounded border border-border px-1.5 py-0.5 text-sm text-foreground"
+      className="rounded border border-border px-1.5 py-0.5 text-[11px] text-foreground"
     >
       {label}
     </span>
@@ -100,13 +100,13 @@ function ResultCard({
               : t("publisher", { publisher: server.publisher })}
           </span>
           {server.source === "verified" ? (
-            <span className="rounded bg-muted px-1.5 py-0.5 text-sm font-medium text-foreground">
+            <span className="rounded bg-muted px-1.5 py-0.5 text-[10.5px] font-medium text-foreground">
               {t("verified")}
             </span>
           ) : null}
         </div>
         {server.description === "" ? null : (
-          <p className="line-clamp-2 text-sm text-muted-foreground">
+          <p className="line-clamp-2 text-[13px] text-muted-foreground">
             {server.description}
           </p>
         )}
@@ -114,7 +114,7 @@ function ResultCard({
           {server.transports.map((transport) => (
             <span
               key={transport}
-              className={`${mono} rounded border border-border px-1.5 py-0.5 text-sm text-muted-foreground`}
+              className={`${mono} rounded border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground`}
             >
               {transport}
             </span>
@@ -122,7 +122,7 @@ function ResultCard({
           <AuthChip server={server} />
           <RegistryOfferChip server={server} />
           {server.version === null ? null : (
-            <span className={`${mono} text-sm text-muted-foreground`}>
+            <span className={`${mono} text-[11px] text-muted-foreground`}>
               {t("version", { version: server.version })}
             </span>
           )}

@@ -192,7 +192,7 @@ function ToolRow({
         className="flex flex-wrap items-center justify-between gap-3 py-2"
       >
         {name}
-        <span className="flex flex-wrap items-center gap-4 text-sm">
+        <span className="flex flex-wrap items-center gap-4 text-[13px]">
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -242,7 +242,7 @@ function ToolRow({
         className="flex flex-wrap items-center justify-between gap-3 py-2"
       >
         {name}
-        <span className="flex items-center gap-3 text-sm">
+        <span className="flex items-center gap-3 text-[13px]">
           {unavailable}
           <label className="flex items-center gap-2">
             <input
@@ -275,7 +275,7 @@ function ToolRow({
       className="flex flex-wrap items-center justify-between gap-3 py-2"
     >
       {name}
-      <span className="flex items-center gap-3 text-sm">
+      <span className="flex items-center gap-3 text-[13px]">
         {unavailable}
         <span data-state={tool.active ? "on" : "off"}>
           {tool.active ? t("on") : t("off")}
@@ -447,7 +447,7 @@ export function BeltView({
           <SafeLink
             to={toolsLink(at, { tab: "toolbelts" })}
             data-testid="belt-close"
-            className={`${linkText} text-sm`}
+            className={`${linkText} text-[13px]`}
           >
             {t("belt.close")}
           </SafeLink>
@@ -455,7 +455,7 @@ export function BeltView({
       </div>
       <div className={`${panelBody} flex flex-col gap-4`}>
         {derived ? (
-          <p className="max-w-prose border-l-2 border-gold pl-3 text-sm text-muted-foreground">
+          <p className="max-w-prose border-l-2 border-gold pl-3 text-[13px] text-muted-foreground">
             {t("belt.allToolsNote")}
             {canEdit ? ` ${t("belt.adminNote")}` : null}
           </p>
@@ -466,7 +466,7 @@ export function BeltView({
         {groups.length === 0 ? (
           <p
             data-testid="belt-empty"
-            className="text-sm text-muted-foreground"
+            className="text-[13px] text-muted-foreground"
           >
             {t("belt.empty")}{" "}
             <SafeLink
@@ -488,7 +488,7 @@ export function BeltView({
                 className="rounded-lg border border-border px-3.5 py-3"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-foreground">
+                  <h3 className="text-[13px] font-semibold text-foreground">
                     {group.serverName}
                   </h3>
                   {canEdit ? (
@@ -527,15 +527,15 @@ export function BeltView({
           </div>
         )}
         <div className="flex flex-col gap-1">
-          <h3 className="text-sm font-semibold text-foreground">
+          <h3 className="text-[13px] font-semibold text-foreground">
             {t("belt.carriedBy")}
           </h3>
           {agents.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-[13px] text-muted-foreground">
               {t("belt.noAgents")}
             </p>
           ) : (
-            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-[13px]">
               {agents.map((agent) => (
                 <li
                   key={agent.id}

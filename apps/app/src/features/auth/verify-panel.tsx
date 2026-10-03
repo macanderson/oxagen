@@ -73,7 +73,7 @@ export function VerifyPanel({
         <p
           role="status"
           data-testid="verify-resent"
-          className="rounded-[9px] border border-success/40 bg-success/10 px-3 py-2.5 text-sm text-foreground"
+          className="rounded-[9px] border border-success/40 bg-success/10 px-3 py-2.5 text-[12.5px] text-foreground"
         >
           {t("verify.resent")}
         </p>
@@ -87,7 +87,7 @@ export function VerifyPanel({
         {email ? (
           <>
             <input type="hidden" name="email" value={email} />
-            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-muted-foreground">
               <span>{t("verify.notArrived")}</span>
               <button
                 type="submit"

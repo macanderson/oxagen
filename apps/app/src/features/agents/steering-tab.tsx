@@ -53,7 +53,7 @@ function Meter({
       className="flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-card px-4 py-3.5"
     >
       <div className="flex flex-col">
-        <h2 id={id} className="text-sm font-semibold">
+        <h2 id={id} className="text-[13px] font-semibold">
           {label}
         </h2>
         <p className="text-xs text-muted-foreground">{sub}</p>
@@ -113,7 +113,7 @@ export function SteeringSection({
         title={t("empty.title")}
         testId="steering-empty"
       >
-        <p className="text-sm text-muted-foreground">{t("empty.body")}</p>
+        <p className="text-[12.5px] text-muted-foreground">{t("empty.body")}</p>
         <SafeLink
           to={routes.steering(org, ws)}
           className={`${buttonSecondary} self-start`}
@@ -130,7 +130,7 @@ export function SteeringSection({
         <p
           role="note"
           data-testid="steering-observe"
-          className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm"
+          className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-[13px]"
         >
           <b>{t("observe.lead")}</b> {t("observe.body")}
         </p>
@@ -150,7 +150,7 @@ export function SteeringSection({
           label={t("volatile.label")}
           sub={t("volatile.sub")}
         >
-          <p className="flex justify-between gap-3 text-sm">
+          <p className="flex justify-between gap-3 text-[13px]">
             <span className={`${mono} text-xs text-muted-foreground`}>
               {manifest.ts}
             </span>

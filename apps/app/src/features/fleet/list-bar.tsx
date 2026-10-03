@@ -239,7 +239,7 @@ export function RunsListBar({
       {pullRequests === "any" ? null : (
         <p
           data-testid="pr-filter-note"
-          className="basis-full text-sm text-muted-foreground"
+          className="basis-full text-[11.5px] text-muted-foreground"
         >
           {t("prFilter.note")}
         </p>

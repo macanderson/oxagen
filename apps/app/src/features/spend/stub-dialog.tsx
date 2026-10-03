@@ -49,7 +49,7 @@ export function StubDialog({
       >
         <p
           data-issue={issue}
-          className="text-sm leading-relaxed text-muted-foreground"
+          className="text-[13px] leading-relaxed text-muted-foreground"
         >
           {body}
         </p>

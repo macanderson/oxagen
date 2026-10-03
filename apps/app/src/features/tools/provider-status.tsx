@@ -45,7 +45,7 @@ export function ProviderStatusLight({ server }: { server: McpServer }) {
         name={light}
         label={t(`lights.${light}`)}
       />
-      <span className="text-sm text-muted-foreground">
+      <span className="text-[10.5px] text-muted-foreground">
         {t(`short.${reason}`)}
       </span>
     </span>
@@ -68,7 +68,7 @@ export function ProviderAuthorization({ server }: { server: McpServer }) {
     <span className="flex flex-col gap-0.5 text-xs">
       <span className="text-foreground">{t(`states.${auth.state}`)}</span>
       {auth.expiresAt === null ? null : (
-        <span className="text-sm text-muted-foreground">
+        <span className="text-[10.5px] text-muted-foreground">
           {t("expires", {
             when: format.dateTime(new Date(auth.expiresAt), {
               dateStyle: "medium",
@@ -77,7 +77,7 @@ export function ProviderAuthorization({ server }: { server: McpServer }) {
           })}
         </span>
       )}
-      <span className="text-sm text-muted-foreground">
+      <span className="text-[10.5px] text-muted-foreground">
         {auth.refreshable ? t("refreshable") : t("notRefreshable")}
       </span>
     </span>
@@ -180,7 +180,7 @@ export function ProvidersAttention({
     <p
       role="status"
       data-testid="tools-providers-attention"
-      className="max-w-prose rounded-lg border border-border px-3 py-2.5 text-sm text-foreground"
+      className="max-w-prose rounded-lg border border-border px-3 py-2.5 text-[13px] text-foreground"
     >
       {t("attention", { red, yellow })}
     </p>

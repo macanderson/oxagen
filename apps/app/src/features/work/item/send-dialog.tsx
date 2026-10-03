@@ -142,7 +142,7 @@ export function SendDialog({
                   data-testid={`work-send-agent-${target.id}`}
                   className="mt-1 size-4 flex-none accent-gold"
                 />
-                <span className="flex min-w-0 flex-col items-start gap-0.5 text-sm">
+                <span className="flex min-w-0 flex-col items-start gap-0.5 text-[13px]">
                   <span className="font-medium text-foreground">{target.name}</span>
                   <span className="text-xs text-muted-foreground">
                     {t("where", {
@@ -165,7 +165,7 @@ export function SendDialog({
       {others.length === 0 ? null : (
         <details
           data-testid="work-send-unavailable"
-          className="text-sm text-muted-foreground"
+          className="text-[12.5px] text-muted-foreground"
         >
           <summary className="cursor-pointer">
             {t("unavailable", { count: others.length })}
@@ -188,7 +188,7 @@ export function SendDialog({
           <dt className={kvTerm}>{t("brief")}</dt>
           <dd className={kvValue}>
             {t("briefRevision", { revision: String(approved.revision) })}{" "}
-            <code className="font-mono">{shortDigest(approved.digest)}</code>
+            <code className="font-mono text-[0.92em]">{shortDigest(approved.digest)}</code>
           </dd>
           <dt className={kvTerm}>{t("operator")}</dt>
           <dd className={kvValue}>{t("operatorYou")}</dd>
@@ -202,7 +202,7 @@ export function SendDialog({
           )}
           <dt className={kvTerm}>{t("key")}</dt>
           <dd className={kvValue}>
-            <code className="font-mono break-all">{sendKey}</code>
+            <code className="font-mono text-[0.92em] break-all">{sendKey}</code>
             <span className="block text-xs text-muted-foreground">{t("keyNote")}</span>
           </dd>
         </dl>

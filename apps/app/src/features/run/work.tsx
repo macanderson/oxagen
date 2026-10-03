@@ -110,7 +110,7 @@ function Row({
 }) {
   return (
     <>
-      <dt className={`${kvTerm} text-sm`}>{label}</dt>
+      <dt className={`${kvTerm} text-[11px]`}>{label}</dt>
       <dd className={`${kvValue} text-xs`}>{children}</dd>
     </>
   );
@@ -305,7 +305,7 @@ function ChangesBody({
             {files.slice(0, FILE_ROWS).map((node) => (
               <li
                 key={`${node.chainRef ?? ""}:${node.seq ?? ""}:${node.name}`}
-                className="flex min-w-0 justify-between gap-2.5 border-b border-border py-[5px] text-sm"
+                className="flex min-w-0 justify-between gap-2.5 border-b border-border py-[5px] text-[11.5px]"
               >
                 <span className="min-w-0 truncate font-mono" data-truncate={node.name}>
                   {node.name}
@@ -317,7 +317,7 @@ function ChangesBody({
               </li>
             ))}
             {files.length > FILE_ROWS ? (
-              <li className="py-[5px] text-sm text-dim">
+              <li className="py-[5px] text-[11.5px] text-dim">
                 {t("more", { count: files.length - FILE_ROWS })}
               </li>
             ) : null}

@@ -174,9 +174,9 @@ function KindIcon({
   return <Icon aria-hidden="true" className={className} />;
 }
 
-const chip = `${buttonSecondary} min-h-7 gap-1.5 px-2.5 py-1 text-sm aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground`;
+const chip = `${buttonSecondary} min-h-7 gap-1.5 px-2.5 py-1 text-[12.5px] aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground`;
 const meta =
-  "flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground";
+  "flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground";
 
 function KindChips({
   at,
@@ -206,7 +206,7 @@ function KindChips({
         className={chip}
       >
         {t("all")}
-        <span className="font-mono text-sm text-dim">
+        <span className="font-mono text-[11px] text-dim">
           {formatCount(all, locale)}
         </span>
       </PressLink>
@@ -220,7 +220,7 @@ function KindChips({
         >
           <KindIcon kind={k} className={`size-3.5 ${KIND_FACE[k].ink}`} />
           {record(`kinds.${k}`)}
-          <span className="font-mono text-sm text-dim">
+          <span className="font-mono text-[11px] text-dim">
             {formatCount(counts[k], locale)}
           </span>
         </PressLink>
@@ -265,7 +265,7 @@ function RecordShelfCard({
         <div className="flex flex-wrap items-center gap-1.5">
           <span
             data-term="kind"
-            className={`inline-flex items-center gap-1 rounded-md border px-[7px] py-0.5 text-sm font-semibold uppercase tracking-[0.04em] ${face === null ? "border-border text-muted-foreground" : `${face.tile} ${face.ink}`}`}
+            className={`inline-flex items-center gap-1 rounded-md border px-[7px] py-0.5 text-[11px] font-semibold uppercase tracking-[0.04em] ${face === null ? "border-border text-muted-foreground" : `${face.tile} ${face.ink}`}`}
           >
             {record.kind === null ? null : (
               <KindIcon kind={record.kind} className="size-3" />
@@ -337,7 +337,7 @@ function RecordShelfCard({
             </Badge>
             <SafeLink
               to={routes.steeringRecord(at.org, at.ws, record.lineage)}
-              className={`${buttonSecondary} min-h-7 px-2.5 py-1 text-sm`}
+              className={`${buttonSecondary} min-h-7 px-2.5 py-1 text-[12.5px]`}
               aria-label={t("openLabel", { lineage: record.lineage })}
             >
               {t("open")}
@@ -346,7 +346,7 @@ function RecordShelfCard({
               kind="record"
               sourceRef={record.lineage}
               label={t("cloneLabel", { lineage: record.lineage })}
-              className={`${buttonSecondary} min-h-7 px-2.5 py-1 text-sm`}
+              className={`${buttonSecondary} min-h-7 px-2.5 py-1 text-[12.5px]`}
             />
           </span>
         </div>
@@ -355,14 +355,14 @@ function RecordShelfCard({
             its title stands in as the label. */}
         <p
           data-term="label"
-          className="text-sm font-semibold text-foreground"
+          className="text-[14px] font-semibold text-foreground"
         >
           {record.label ?? record.title}
         </p>
         {record.statement === null ? null : (
           <p
             data-term="statement"
-            className="text-sm text-muted-foreground"
+            className="text-[13.5px] text-muted-foreground"
           >
             {record.statement}
           </p>
@@ -381,13 +381,13 @@ function RecordShelfCard({
             {t("effectNotRecorded")}
           </span>
           <span
-            className="break-all font-mono text-sm"
+            className="break-all font-mono text-[11.5px]"
             data-term="lineage"
           >
             {record.lineage}
           </span>
           {record.commit === null ? null : (
-            <span className="font-mono text-sm" data-term="commit">
+            <span className="font-mono text-[11.5px]" data-term="commit">
               {record.commit.slice(0, 7)}
             </span>
           )}
@@ -474,7 +474,7 @@ export function RecordsList({
       >
         {/* The word names the Select's trigger by id, as the list bar's Sort
             does (ui/list-controls.tsx). */}
-        <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
           <span id={sortLabelId}>{t("sort")}</span>
           <ListSelect
             size="sm"
@@ -493,7 +493,7 @@ export function RecordsList({
       {slice.length === 0 ? (
         <p
           data-state="empty-kind"
-          className="px-4 py-3.5 text-sm text-muted-foreground"
+          className="px-4 py-3.5 text-[13px] text-muted-foreground"
         >
           {t("emptyKind")}
         </p>
@@ -551,7 +551,7 @@ export function RecordsList({
       {records.length < total ? (
         <p
           data-testid="records-truncated"
-          className="border-t border-border px-4 py-2.5 text-sm text-muted-foreground"
+          className="border-t border-border px-4 py-2.5 text-[12px] text-muted-foreground"
         >
           {t("truncated", {
             read: formatCount(records.length, locale),
@@ -562,12 +562,12 @@ export function RecordsList({
       <div className="border-t border-border px-4 py-3.5">
         <p
           data-testid="records-note"
-          className="border-l-2 border-gold py-0.5 pl-3 text-sm text-muted-foreground"
+          className="border-l-2 border-gold py-0.5 pl-3 text-[12.5px] text-muted-foreground"
         >
           {t.rich("note", {
             effects: "constraint_effect ∈ {require, forbid}",
             code: (chunks) => (
-              <code className="font-mono text-sm">{chunks}</code>
+              <code className="font-mono text-[12px]">{chunks}</code>
             ),
           })}
         </p>

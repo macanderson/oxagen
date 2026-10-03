@@ -83,7 +83,7 @@ export function SteeringEmpty({ repository }: { repository: string | null }) {
     >
       {t.rich("body", {
         code: (chunks) => (
-          <code className="font-mono text-sm">{chunks}</code>
+          <code className="font-mono text-[12px]">{chunks}</code>
         ),
         repository: repository ?? t("repository"),
       })}
@@ -196,7 +196,7 @@ export function SteeringFailure({
           {t.rich("error.answered", {
             answer: `${String(read.status)} ${read.code}`,
             code: (chunks) => (
-              <code className="font-mono text-sm">{chunks}</code>
+              <code className="font-mono text-[12px]">{chunks}</code>
             ),
           })}{" "}
           {t("error.body")}
@@ -223,12 +223,12 @@ export function SteeringFailure({
             </>
           }
           after={
-            <dl className="mx-auto mt-5 grid max-w-[420px] grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-left text-sm">
+            <dl className="mx-auto mt-5 grid max-w-[420px] grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-left text-[13px]">
               <dt className="text-muted-foreground">{t("denied.signedIn")}</dt>
               {/* The design sets the person's name in the sans face and the role and workspace, which are identifiers, in mono. */}
               <dd data-testid="steering-signed-in">
                 {viewer === null ? (
-                  <span className="font-mono text-sm">
+                  <span className="font-mono text-[12px]">
                     {t("denied.signedInValue", {
                       role: wsRole,
                       workspace: wsSlug,
@@ -246,7 +246,7 @@ export function SteeringFailure({
                     ),
                     mono: (chunks) => (
                       <span
-                        className="font-mono text-sm"
+                        className="font-mono text-[12px]"
                         data-signed-in="role"
                       >
                         {chunks}
@@ -256,7 +256,7 @@ export function SteeringFailure({
                 )}
               </dd>
               <dt className="text-muted-foreground">{t("denied.needed")}</dt>
-              <dd className="font-mono text-sm">
+              <dd className="font-mono text-[12px]">
                 {t("denied.neededValue", {
                   permission: read.permission,
                   workspace: wsSlug,
@@ -276,7 +276,7 @@ export function SteeringFailure({
             permission,
             b: (chunks) => <b className="text-foreground">{chunks}</b>,
             code: (chunks) => (
-              <code className="font-mono text-sm">{chunks}</code>
+              <code className="font-mono text-[12px]">{chunks}</code>
             ),
           })}
         </StateWrap>

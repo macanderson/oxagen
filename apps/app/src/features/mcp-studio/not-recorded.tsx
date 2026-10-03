@@ -27,7 +27,7 @@ export function StudioNotRecorded({
       data-state="not-recorded"
       data-gap={studioGapRef(gap)}
       data-testid={testId}
-      className="flex flex-col gap-1 rounded-lg border border-dashed border-border px-3.5 py-3 text-sm text-muted-foreground"
+      className="flex flex-col gap-1 rounded-lg border border-dashed border-border px-3.5 py-3 text-[13px] text-muted-foreground"
     >
       {children}
     </div>

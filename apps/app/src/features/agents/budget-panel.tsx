@@ -103,7 +103,7 @@ export function BudgetSection({
       className="flex min-w-0 flex-col gap-3 border-t border-border pt-3"
     >
       <div className="flex flex-col gap-0.5">
-        <h3 id="agent-ceilings" className="text-sm font-semibold">
+        <h3 id="agent-ceilings" className="text-[13px] font-semibold">
           {t("title")}
         </h3>
         <p className="text-xs text-muted-foreground">{t("lead")}</p>

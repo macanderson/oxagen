@@ -133,7 +133,7 @@ export function CodeInput({
             onPaste={(e) => {
               onPaste(index, e);
             }}
-            className="h-12 w-[calc((100%-25px)/6)] min-w-0 rounded-md border border-input-border bg-input-bg p-0 text-center font-mono text-lg text-input-fg hover:border-input-border-hover focus-visible:border-input-border-focus focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-input-ring aria-invalid:border-input-invalid-border sm:h-[54px] sm:w-[46px] sm:text-2xl"
+            className="h-12 w-[calc((100%-25px)/6)] min-w-0 rounded-md border border-input-border bg-input-bg p-0 text-center font-mono text-lg text-input-fg hover:border-input-border-hover focus-visible:border-input-border-focus focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-input-ring aria-invalid:border-input-invalid-border sm:h-[54px] sm:w-[46px] sm:text-[21px]"
           />
         ))}
       </div>

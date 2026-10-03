@@ -80,7 +80,7 @@ export function AssistantReplyCost({
       data-testid="assistant-reply-cost"
       data-state={view.kind}
       aria-live="off"
-      className="mt-0.5 font-mono text-sm text-muted-foreground"
+      className="mt-0.5 font-mono text-[11px] text-muted-foreground"
     >
       {t("label")} <CostReading view={view} />
     </p>

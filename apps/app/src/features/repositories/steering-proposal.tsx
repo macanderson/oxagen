@@ -39,7 +39,7 @@ export function SteeringProposal({
         role="status"
         data-testid={testId}
         data-state={action === "link" ? "listed" : "proposed"}
-        className="text-sm leading-relaxed"
+        className="text-[13px] leading-relaxed"
       >
         <p>
           {action === "link"
@@ -80,7 +80,7 @@ export function SteeringProposal({
       role="status"
       data-testid={testId}
       data-state={steeringPullRequest.reused ? "reused" : "proposed"}
-      className="flex flex-col gap-1 text-sm leading-relaxed"
+      className="flex flex-col gap-1 text-[13px] leading-relaxed"
     >
       <p>{lead}</p>
       <p className="font-medium">

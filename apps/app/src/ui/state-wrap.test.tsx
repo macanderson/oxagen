@@ -54,7 +54,7 @@ describe("StateWrap", () => {
       "Nothing has reached Oxagen from this workspace.",
     );
     expect(body.tagName).toBe("P");
-    expect(body).toHaveClass("max-w-[52ch]", "text-sm");
+    expect(body).toHaveClass("max-w-[52ch]", "text-[13px]");
     expect(
       within(state).getByRole("button", { name: "Register an agent" })
         .parentElement,
@@ -171,7 +171,7 @@ describe("StateWrap", () => {
     const state = screen.getByTestId("after");
     expect(within(state).getByText("2026-09-11 09:16:04Z")).toHaveClass(
       "font-mono",
-      "text-sm",
+      "text-[11.5px]",
       "text-dim",
       "mt-4",
     );

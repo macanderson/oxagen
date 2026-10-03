@@ -118,7 +118,7 @@ export function ModelView({ belt }: { belt: Toolbelt }) {
       <pre
         data-testid="belt-block"
         data-mode={mode}
-        className={`${mono} max-h-80 overflow-auto rounded-lg bg-code-bg px-3 py-2 text-sm leading-5`}
+        className={`${mono} max-h-80 overflow-auto rounded-lg bg-code-bg px-3 py-2 text-[12px] leading-5`}
       >
         {block}
       </pre>
@@ -239,7 +239,7 @@ export function BeltSearch({ belt }: { belt: Toolbelt }) {
       ) : (
         <div
           data-testid="belt-miss"
-          className="rounded-lg border border-border px-3 py-2 text-sm"
+          className="rounded-lg border border-border px-3 py-2 text-[13px]"
         >
           <b>{t("zero")}</b>{" "}
           {outside === null ? (
@@ -279,7 +279,7 @@ function ToolDialog({
       testId="belt-tool-dialog"
     >
       {tool === null ? null : (
-        <div className="flex flex-col gap-3 text-sm">
+        <div className="flex flex-col gap-3 text-[13px]">
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
             <dt className="text-muted-foreground">{t("columns.decision")}</dt>
             <dd>{t(`decision.${tool.decision}`)}</dd>
@@ -319,7 +319,7 @@ function CategoriesDialog({
       wide
       testId="belt-categories-dialog"
     >
-      <div className="flex flex-col gap-3 text-sm">
+      <div className="flex flex-col gap-3 text-[13px]">
         <p className="text-muted-foreground">{t("body")}</p>
         <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
           {counts.map(([category, count]) => (
@@ -540,7 +540,7 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
           <div className="min-w-0 overflow-x-auto">
             <table
               aria-label={t("title")}
-              className="w-full min-w-[720px] border-collapse text-sm"
+              className="w-full min-w-[720px] border-collapse text-[13px]"
             >
               <thead>
                 <tr className="border-b border-border">

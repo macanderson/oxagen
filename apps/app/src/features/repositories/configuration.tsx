@@ -34,7 +34,7 @@ const MODE_TONE: Record<DeclaredGovernanceMode, BadgeTone> = {
 const DRIFT_COLUMNS = ["declared", "file", "live", "right"] as const;
 
 const fileBlock =
-  "max-h-[360px] overflow-auto rounded-[10px] border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-[1.6] text-foreground whitespace-pre";
+  "max-h-[360px] overflow-auto rounded-[10px] border border-border bg-code-bg px-3.5 py-3 font-mono text-[12px] leading-[1.6] text-foreground whitespace-pre";
 
 export function Configuration({
   mainFullName,
@@ -50,7 +50,7 @@ export function Configuration({
     return (
       <p
         data-testid="configuration-no-main"
-        className="text-sm text-muted-foreground"
+        className="text-[13px] text-muted-foreground"
       >
         {t("noMain")}
       </p>
@@ -60,7 +60,7 @@ export function Configuration({
       <p
         role="status"
         data-testid="configuration-loading"
-        className="text-sm text-muted-foreground"
+        className="text-[13px] text-muted-foreground"
       >
         {t("loading", { repository: mainFullName })}
       </p>
@@ -90,7 +90,7 @@ export function Configuration({
       >
         <PanelBody>
           {value.workspaceToml === null ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-[13px] text-muted-foreground">
               {t("workspaceMissing")}
             </p>
           ) : (
@@ -121,7 +121,7 @@ export function Configuration({
           <table
             aria-label={t("driftTitle")}
             data-testid="configuration-drift-table"
-            className="w-full border-collapse text-sm"
+            className="w-full border-collapse text-[13px]"
           >
             <thead>
               <tr className="border-b border-border">
@@ -169,7 +169,7 @@ export function Configuration({
       >
         <PanelBody>
           {value.governanceToml === null ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-[13px] text-muted-foreground">
               {t("governanceMissing")}
             </p>
           ) : (
@@ -177,7 +177,7 @@ export function Configuration({
           )}
           <dl
             data-testid="configuration-modes"
-            className="mt-3 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm leading-relaxed"
+            className="mt-3 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px] leading-relaxed"
           >
             {GOVERNANCE_MODES.map((mode) => (
               <div key={mode} className="contents" data-mode={mode}>
@@ -197,7 +197,7 @@ export function Configuration({
       >
         <PanelBody>
           {value.oxagen.files.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-[13px] text-muted-foreground">
               {t("treeEmpty")}
             </p>
           ) : (

@@ -47,10 +47,10 @@ type Os = (typeof OPERATING_SYSTEMS)[number];
 
 const LANGUAGE_TABS = "flex rounded-[9px] border border-border bg-hl p-[3px]";
 const osTab =
-  "flex-1 rounded-md px-3 py-1.5 text-sm text-muted-foreground aria-selected:bg-card aria-selected:text-foreground aria-selected:shadow-sm focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11";
+  "flex-1 rounded-md px-3 py-1.5 text-[13px] text-muted-foreground aria-selected:bg-card aria-selected:text-foreground aria-selected:shadow-sm focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11";
 const tokenBox =
-  "rounded-lg border border-dashed border-border bg-hl px-3 py-2.5 font-mono text-sm leading-relaxed text-foreground";
-const codeLine = `${mono} block overflow-x-auto whitespace-pre rounded-lg border border-border bg-hl px-3 py-2.5 text-sm`;
+  "rounded-lg border border-dashed border-border bg-hl px-3 py-2.5 font-mono text-[11.5px] leading-relaxed text-foreground";
+const codeLine = `${mono} block overflow-x-auto whitespace-pre rounded-lg border border-border bg-hl px-3 py-2.5 text-[12px]`;
 
 type Token = { token: string; expiresAt: string; enrollCommand: string };
 type Credential = { secret: string };
@@ -90,7 +90,7 @@ function Ladder({ observe }: { observe: boolean }) {
       {rows.map(([label, tier]) => (
         <li
           key={tier}
-          className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
+          className="flex items-center justify-between gap-2 px-3 py-2 text-[13px]"
         >
           <span>{label}</span>
           <span className="flex items-center gap-1.5">
@@ -367,7 +367,7 @@ function Panel({
       className="grid gap-5 p-[18px] md:grid-cols-2"
     >
       <div className="flex min-w-0 flex-col gap-3">
-        <h3 className="flex items-center gap-2 text-base font-semibold">
+        <h3 className="flex items-center gap-2 text-[15px] font-semibold">
           {t(`tabs.${tab}.name`)}
           {tab === "claude-code" ? (
             <Badge tone="allowed" dot={false}>
@@ -375,17 +375,17 @@ function Panel({
             </Badge>
           ) : null}
         </h3>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-[13px] text-muted-foreground">
           {t.rich(`body.${tab}`, { code })}
         </p>
         <Ladder observe={tab === "codex"} />
         {tab === "sdk" ? null : (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-[13px] text-muted-foreground">
             {tab === "codex" ? t("codexNote") : t("tierNote")}
           </p>
         )}
         {tab === "cursor" ? (
-          <p className="text-sm text-muted-foreground">{t("cursorNote")}</p>
+          <p className="text-[13px] text-muted-foreground">{t("cursorNote")}</p>
         ) : null}
       </div>
       {children}
@@ -472,10 +472,10 @@ export function WrapAgent({
               onKeyDown={onKey}
               className="flex min-h-11 flex-col items-start gap-0.5 border-b-2 border-transparent px-3.5 py-3 text-left aria-selected:border-accent-text aria-selected:bg-hl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
             >
-              <span className="text-sm font-semibold">
+              <span className="text-[13.5px] font-semibold">
                 {t(`tabs.${item}.name`)}
               </span>
-              <span className="font-mono text-sm text-muted-foreground max-md:hidden">
+              <span className="font-mono text-[11px] text-muted-foreground max-md:hidden">
                 {t(`tabs.${item}.sub`)}
               </span>
             </button>

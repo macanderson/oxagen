@@ -86,9 +86,9 @@ export function StubAction({
             id={noteId}
             data-state="not-backed"
             data-gap={gapRef(gap)}
-            className="rounded-lg border border-dashed border-border px-3 py-2.5 text-sm text-muted-foreground"
+            className="rounded-lg border border-dashed border-border px-3 py-2.5 text-[13px] text-muted-foreground"
           >
-            <span className="mb-0.5 block text-sm font-semibold uppercase tracking-[0.1em] text-dim">
+            <span className="mb-0.5 block text-[10.5px] font-semibold uppercase tracking-[0.1em] text-dim">
               {t("notBacked")}
             </span>
             {note}
@@ -118,7 +118,7 @@ export function StubField({
   placeholder?: string;
 }) {
   const field =
-    "block w-full min-w-0 rounded-md border border-input-border bg-input-disabled-bg px-3 py-2 text-base text-input-disabled-fg md:text-sm";
+    "block w-full min-w-0 rounded-md border border-input-border bg-input-disabled-bg px-3 py-2 text-base text-input-disabled-fg md:text-[13px]";
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <label htmlFor={id} className="text-sm font-medium text-foreground">

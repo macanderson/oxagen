@@ -44,7 +44,7 @@ export function CompilerControls({
       <div className="flex min-w-0 flex-col gap-1.5">
         <label
           htmlFor={agentId}
-          className="text-sm font-semibold text-foreground"
+          className="text-[12.5px] font-semibold text-foreground"
         >
           {t("agent")}
         </label>
@@ -64,7 +64,7 @@ export function CompilerControls({
           ))}
         </select>
         <p
-          className="text-sm text-muted-foreground"
+          className="text-[12px] text-muted-foreground"
           data-testid="compiler-agent-hint"
         >
           {hint}
@@ -73,7 +73,7 @@ export function CompilerControls({
       <div className="flex min-w-0 flex-col gap-1.5">
         <label
           htmlFor={promptId}
-          className="text-sm font-semibold text-foreground"
+          className="text-[12.5px] font-semibold text-foreground"
         >
           {t("prompt")}
         </label>

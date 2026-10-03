@@ -75,10 +75,10 @@ function ConnectStep({
           className={`${panelBody} flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center`}
         >
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <h3 className="text-sm font-semibold text-foreground">
+            <h3 className="text-[13.5px] font-semibold text-foreground">
               {t("github.name")}
             </h3>
-            <p className="text-sm leading-relaxed text-muted-foreground">
+            <p className="text-[13px] leading-relaxed text-muted-foreground">
               {t("github.body")}
             </p>
           </div>

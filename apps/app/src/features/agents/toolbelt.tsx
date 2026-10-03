@@ -33,7 +33,7 @@ function WireNode({
 }) {
   return (
     <li
-      className={`flex min-w-0 flex-col rounded-lg border px-3 py-2 text-sm ${belt ? "border-gold/50 bg-gold/10" : "border-border bg-hl"}`}
+      className={`flex min-w-0 flex-col rounded-lg border px-3 py-2 text-[13px] ${belt ? "border-gold/50 bg-gold/10" : "border-border bg-hl"}`}
     >
       <span>{label}</span>
       <span className="text-xs text-dim">{value}</span>
@@ -84,7 +84,7 @@ function Computation({ belt }: { belt: Toolbelt }) {
           value={t("beltValue", { count: n(belt.tools.length) })}
         />
       </ol>
-      <p className="text-sm">
+      <p className="text-[13px]">
         {t("body", {
           count: n(belt.tools.length),
           off: n(belt.cannotSee.length),

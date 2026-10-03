@@ -605,7 +605,7 @@ function InstallationPicker({
               }}
             />
             <span className="min-w-0 flex-1">
-              <b className="block truncate text-sm font-semibold">
+              <b className="block truncate text-[13px] font-semibold">
                 {installation.accountLogin}
               </b>
               <span className="block truncate text-xs text-muted-foreground">
@@ -615,7 +615,7 @@ function InstallationPicker({
               </span>
             </span>
             {installation.accountType === null ? null : (
-              <span className="flex-none rounded-sm border border-border px-1.5 py-0.5 text-sm text-muted-foreground">
+              <span className="flex-none rounded-sm border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground">
                 {installation.accountType}
               </span>
             )}

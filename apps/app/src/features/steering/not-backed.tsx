@@ -22,7 +22,7 @@ export function NotBacked({
       data-testid={testId}
       data-not-backed=""
       data-issue={issue === 0 ? undefined : String(issue)}
-      className={`${panel} ${panelBody} flex flex-col gap-1 text-sm text-muted-foreground`}
+      className={`${panel} ${panelBody} flex flex-col gap-1 text-[13px] text-muted-foreground`}
     >
       <p>{t("notBacked", { what })}</p>
       {issue === 0 ? null : <p>{t("issue", { number: String(issue) })}</p>}

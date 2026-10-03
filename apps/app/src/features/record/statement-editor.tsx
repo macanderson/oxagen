@@ -40,7 +40,7 @@ const TOKEN_CLASS: Record<MarkdownTokenKind, string | null> = {
 const LINE = 20;
 const PAD = 12;
 const codeText =
-  "font-mono text-sm leading-5 [font-feature-settings:var(--ox-font-mono-features)]";
+  "font-mono text-[12.5px] leading-5 [font-feature-settings:var(--ox-font-mono-features)]";
 const layer =
   "m-0 whitespace-pre-wrap break-words px-[18px] py-3 [overflow-wrap:break-word] [tab-size:2]";
 
@@ -409,11 +409,11 @@ export function StatementEditor({
             onKeyUp={track}
             onClick={track}
             onKeyDown={keyDown}
-            className={`${codeText} ${layer} absolute inset-0 z-[3] block size-full resize-none overflow-hidden border-0 bg-transparent text-base text-transparent caret-foreground outline-none [-webkit-text-fill-color:transparent] focus-visible:outline-2 focus-visible:outline-ring sm:text-sm`}
+            className={`${codeText} ${layer} absolute inset-0 z-[3] block size-full resize-none overflow-hidden border-0 bg-transparent text-base text-transparent caret-foreground outline-none [-webkit-text-fill-color:transparent] focus-visible:outline-2 focus-visible:outline-ring sm:text-[12.5px]`}
           />
         </div>
       </div>
-      <div className="flex flex-wrap gap-3.5 border-t border-border px-3.5 py-1.5 text-sm text-muted-foreground">
+      <div className="flex flex-wrap gap-3.5 border-t border-border px-3.5 py-1.5 text-[11px] text-muted-foreground">
         <span data-testid="record-caret">
           {t("caret", caret)}
           {selected > 0 ? ` ${t("selected", { count: selected })}` : ""}

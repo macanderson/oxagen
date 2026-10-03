@@ -26,7 +26,7 @@ import { OpenApprovalsButton } from "./frame-player";
  * parked call.
  */
 const warn =
-  "m-0 rounded-[10px] border border-critical/45 bg-critical/[0.09] px-3.5 py-[11px] text-sm text-foreground [&_b]:font-semibold [&_b]:text-critical";
+  "m-0 rounded-[10px] border border-critical/45 bg-critical/[0.09] px-3.5 py-[11px] text-[12.5px] text-foreground [&_b]:font-semibold [&_b]:text-critical";
 
 type Cards = {
   mandates: ReadonlyMap<string, MandateRow>;
@@ -119,7 +119,7 @@ export function ParkedElsewhere({
         />
       ) : null}
       {more ? (
-        <p className="m-0 flex flex-wrap items-center gap-2.5 text-sm">
+        <p className="m-0 flex flex-wrap items-center gap-2.5 text-[12.5px]">
           <Badge tone="approval">{t("parkedBadge")}</Badge>
           <span>{t("more", { count: unmatched.length })}</span>
           <OpenApprovalsButton>{t("openDrawer")}</OpenApprovalsButton>
@@ -131,7 +131,7 @@ export function ParkedElsewhere({
           data-testid="parked-pointer"
           // The Run header's pause banner: `border:1px solid <st-approval 40%>;
           // background:<st-approval 10%>; border-radius:10px; padding:11px 14px`.
-          className="m-0 flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-[10px] border border-info/40 bg-info/10 px-3.5 py-[11px] text-sm text-foreground"
+          className="m-0 flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-[10px] border border-info/40 bg-info/10 px-3.5 py-[11px] text-[12.5px] text-foreground"
         >
           <Badge tone="approval">{t("parkedBadge")}</Badge>
           <span>

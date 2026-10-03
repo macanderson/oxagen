@@ -39,7 +39,7 @@ export function Rail({
         >
           <span
             aria-hidden="true"
-            className={`grid size-[18px] place-items-center rounded-full border text-sm font-bold ${
+            className={`grid size-[18px] place-items-center rounded-full border text-[10.5px] font-bold ${
               s.state === "current"
                 ? "border-brand bg-brand text-brand-foreground"
                 : s.state === "done"
@@ -215,7 +215,7 @@ export function FileEditor({
         )}
         {bar}
       </div>
-      <div className="flex max-h-80 overflow-auto p-3 font-mono text-sm leading-5">
+      <div className="flex max-h-80 overflow-auto p-3 font-mono text-[12.5px] leading-5">
         <pre
           aria-hidden="true"
           className="select-none pr-3 text-right text-muted-foreground"

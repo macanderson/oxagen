@@ -58,13 +58,13 @@ function CheckRow({
     <li
       data-testid={`work-check-${check.name}`}
       data-conclusion={check.conclusion}
-      className="flex flex-wrap items-baseline gap-2 text-sm"
+      className="flex flex-wrap items-baseline gap-2 text-[13px]"
     >
       {/* A required check that ended neutral blocks Accept as a failure does. */}
       <Badge tone={check.conclusion === "neutral" && required ? "failed" : CHECK_TONE[check.conclusion]}>
         {t(`conclusions.${check.conclusion}`)}
       </Badge>
-      <span className="font-mono text-foreground">{check.name}</span>
+      <span className="font-mono text-[0.92em] text-foreground">{check.name}</span>
       {head === null ? null : (
         <span className="text-muted-foreground">{t("onHead", { head: shortSha(head) })}</span>
       )}
@@ -158,7 +158,7 @@ export function ReviewPanel({
         </span>
         <Why send={send} />
       </div>
-      <div className={`${panelBody} flex flex-col gap-3.5 text-sm`}>
+      <div className={`${panelBody} flex flex-col gap-3.5 text-[13px]`}>
         {pr === null ? (
           <p className="text-muted-foreground">{t("noPullRequest")}</p>
         ) : (
@@ -180,7 +180,7 @@ export function ReviewPanel({
                   <span className="text-muted-foreground">{t("headUnread")}</span>
                 ) : (
                   <>
-                    <code data-testid="work-review-head" className="font-mono">
+                    <code data-testid="work-review-head" className="font-mono text-[0.92em]">
                       {shortSha(head)}
                     </code>
                     {pr.headAt === null ? null : (

@@ -3,4 +3,4 @@
 
 /** `.note`: a gold rule on the left and muted prose beside it. */
 export const note =
-  "border-l-2 border-gold py-0.5 pl-3 text-sm leading-relaxed text-muted-foreground";
+  "border-l-2 border-gold py-0.5 pl-3 text-[12.5px] leading-relaxed text-muted-foreground";

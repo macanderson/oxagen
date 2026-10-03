@@ -47,7 +47,7 @@ function Filter<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+    <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
       <span id={`${id}-label`}>{label}</span>
       <ListSelect
         items={options}
@@ -59,7 +59,7 @@ function Filter<T extends string>({
         id={id}
         aria-labelledby={`${id}-label`}
         size="sm"
-        className="text-sm max-md:min-h-11 max-md:text-base"
+        className="text-[12px] max-md:min-h-11 max-md:text-base"
       />
     </span>
   );
@@ -162,7 +162,7 @@ export function FindingsList({
         />
       </div>
       {slice.length === 0 ? (
-        <p className={`${panel} p-4 text-sm text-muted-foreground`}>
+        <p className={`${panel} p-4 text-[13px] text-muted-foreground`}>
           {t("filters.none")}
         </p>
       ) : (

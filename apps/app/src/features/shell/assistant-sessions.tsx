@@ -135,13 +135,13 @@ export function AssistantSessions({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <h3 className="flex-none px-4 pt-1 pb-2 text-sm font-semibold text-muted-foreground">
+      <h3 className="flex-none px-4 pt-1 pb-2 text-[12px] font-semibold text-muted-foreground">
         {t("title")}
       </h3>
       <p
         role="status"
         data-testid="assistant-sessions-status"
-        className="flex-none px-4 text-sm leading-5 text-muted-foreground"
+        className="flex-none px-4 text-[13px] leading-5 text-muted-foreground"
       >
         {listed.state === "loading"
           ? t("loading")
@@ -160,7 +160,7 @@ export function AssistantSessions({
           onClick={() => {
             setListed({ state: "loading" });
           }}
-          className={`mx-4 mt-1.5 w-fit flex-none text-sm ${linkText}`}
+          className={`mx-4 mt-1.5 w-fit flex-none text-[12px] ${linkText}`}
         >
           {t("retry")}
         </button>
@@ -169,7 +169,7 @@ export function AssistantSessions({
         <p
           role="alert"
           data-testid="assistant-sessions-open-failed"
-          className="mx-4 mt-1.5 flex-none text-sm leading-5 text-error-ink"
+          className="mx-4 mt-1.5 flex-none text-[13px] leading-5 text-error-ink"
         >
           {openFailed === "gone" ? t("gone") : t("openFailed")}
         </p>
@@ -195,10 +195,10 @@ export function AssistantSessions({
                   }}
                   className="flex w-full flex-col gap-0.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60 disabled:hover:bg-transparent aria-[current=true]:bg-secondary"
                 >
-                  <span className="truncate text-sm leading-5 text-foreground">
+                  <span className="truncate text-[13px] leading-5 text-foreground">
                     {session.title ?? t("untitled")}
                   </span>
-                  <span className="flex gap-2 text-sm text-muted-foreground">
+                  <span className="flex gap-2 text-[11px] text-muted-foreground">
                     <time
                       dateTime={session.updatedAt}
                       title={format.dateTime(updated, {
@@ -218,7 +218,7 @@ export function AssistantSessions({
       ) : (
         <div className="flex-1" />
       )}
-      <p className="flex-none border-t border-border px-4 py-3 text-sm text-muted-foreground">
+      <p className="flex-none border-t border-border px-4 py-3 text-[11px] text-muted-foreground">
         {t("archive")}
       </p>
     </div>

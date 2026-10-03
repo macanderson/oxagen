@@ -88,15 +88,15 @@ export function DismissDialog({
     >
       <div className="flex flex-col gap-3">
         {waiting.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-[13px] text-muted-foreground">
             {t("noneWaiting")}
           </p>
         ) : (
-          <ul className="flex flex-col gap-2 text-sm" data-testid="dismiss-list">
+          <ul className="flex flex-col gap-2 text-[13px]" data-testid="dismiss-list">
             {waiting.map((memory) => (
               <li key={memory.id} className="flex flex-col gap-0.5">
                 <span className="text-foreground">{memoryName(memory)}</span>
-                <span className="text-sm text-muted-foreground">
+                <span className="text-[12px] text-muted-foreground">
                   <AgentValue agent={memory.agent} agents={agents} />
                 </span>
               </li>

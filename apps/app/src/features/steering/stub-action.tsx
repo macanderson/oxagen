@@ -34,7 +34,7 @@ export function StubAction({
       {shown ? (
         <p
           role="status"
-          className="basis-full text-sm text-muted-foreground"
+          className="basis-full text-[12.5px] text-muted-foreground"
         >
           {note}
         </p>

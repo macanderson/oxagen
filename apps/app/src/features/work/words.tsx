@@ -103,7 +103,7 @@ export function PriorityCell({ priority }: { priority: WorkPriority }) {
       <Badge tone={PRIORITY_TONE[priority.label]} dot={false}>
         {priority.label}
       </Badge>
-      <span className="text-sm text-muted-foreground" data-wrap="">
+      <span className="text-[11.5px] text-muted-foreground" data-wrap="">
         {priority.by === "person" && priority.setBy !== null ? `${t("setBy", { name: priority.setBy })} ` : null}
         {priority.reason}
         {priority.cites.map((cite) => (
@@ -124,7 +124,7 @@ export function CostText({ cost }: { cost: CostCoverage }) {
     <span className="inline-flex flex-col items-end gap-0.5" data-cost-known={cost.knownRuns} data-cost-runs={cost.runs}>
       {cost.total === null ? <span className="text-muted-foreground">{t("unknown")}</span> : <Money value={cost.total} />}
       {cost.knownRuns < cost.runs ? (
-        <span className="text-sm text-muted-foreground">
+        <span className="text-[11.5px] text-muted-foreground">
           {t("coverage", { known: cost.knownRuns, runs: cost.runs })}
         </span>
       ) : null}
@@ -262,7 +262,7 @@ export function WaitLine({ wait }: { wait: WorkWait }) {
   return (
     // The line says what the item waits for, so it wraps in a table cell
     // rather than end in an ellipsis (globals.css, data-wrap, #4674).
-    <span className="text-sm text-muted-foreground" data-wait={wait.kind} data-wrap="">
+    <span className="text-[12.5px] text-muted-foreground" data-wait={wait.kind} data-wrap="">
       {text}
     </span>
   );

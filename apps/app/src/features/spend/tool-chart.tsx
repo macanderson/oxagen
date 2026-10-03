@@ -68,7 +68,7 @@ export function ToolChart({ tools }: { tools: readonly ToolChartItem[] }) {
               onClick={() => {
                 setMetric(choice);
               }}
-              className="rounded-md border border-transparent px-2.5 py-1 text-sm text-muted-foreground hover:text-foreground aria-pressed:border-border aria-pressed:bg-card aria-pressed:text-foreground"
+              className="rounded-md border border-transparent px-2.5 py-1 text-[12.5px] text-muted-foreground hover:text-foreground aria-pressed:border-border aria-pressed:bg-card aria-pressed:text-foreground"
             >
               {t(`metric.${choice}`)}
             </button>
@@ -76,7 +76,7 @@ export function ToolChart({ tools }: { tools: readonly ToolChartItem[] }) {
         </div>
       </div>
       {shown.length === 0 ? (
-        <p className="px-4 py-3.5 text-sm text-muted-foreground">
+        <p className="px-4 py-3.5 text-[12.5px] text-muted-foreground">
           {t("empty")}
         </p>
       ) : (

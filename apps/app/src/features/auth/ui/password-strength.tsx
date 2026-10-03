@@ -29,7 +29,7 @@ export function PasswordStrength({ id, value }: { id: string; value: string }) {
           <li
             key={requirement}
             data-met={met[requirement] || undefined}
-            className={`flex items-center gap-1.5 text-sm ${met[requirement] ? "text-success" : "text-dim"}`}
+            className={`flex items-center gap-1.5 text-[11.5px] ${met[requirement] ? "text-success" : "text-dim"}`}
           >
             <span aria-hidden>{met[requirement] ? "✓" : "·"}</span>
             <span>{t(requirement)}</span>

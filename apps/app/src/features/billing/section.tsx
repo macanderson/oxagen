@@ -54,7 +54,7 @@ export function Section({
 export function PanelNote({ children }: { children: ReactNode }) {
   return (
     <div className={panelBody}>
-      <p className="border-l-2 border-gold/60 pl-3 text-sm text-muted-foreground">
+      <p className="border-l-2 border-gold/60 pl-3 text-[12.5px] text-muted-foreground">
         {children}
       </p>
     </div>

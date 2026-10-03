@@ -56,7 +56,7 @@ export function PageHeader({
           {figure}
         </div>
         {description ? (
-          <p className="max-w-[70ch] text-sm text-muted-foreground">
+          <p className="max-w-[70ch] text-[13px] text-muted-foreground">
             {description}
           </p>
         ) : null}

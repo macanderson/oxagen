@@ -50,7 +50,7 @@ function NotBacked({ gap, children }: { gap: GapKey; children: string }) {
     <p
       data-testid="audit-not-recorded"
       data-issue={AUDIT_GAPS[gap].issue}
-      className="max-w-prose text-sm text-muted-foreground"
+      className="max-w-prose text-[13px] text-muted-foreground"
     >
       {children}
     </p>
@@ -79,7 +79,7 @@ function Panel({
             {title}
           </h2>
           {caption ? (
-            <span className="text-sm text-muted-foreground">
+            <span className="text-[12.5px] text-muted-foreground">
               {caption}
             </span>
           ) : null}
@@ -99,7 +99,7 @@ function UnrecordedTile({ term }: { term: string }) {
     <div className={statTile}>
       <dt className={statTerm}>{term}</dt>
       <dd className={`${statValue} text-muted-foreground`}>
-        <span data-recorded="false" className="text-base font-medium">
+        <span data-recorded="false" className="text-[15px] font-medium">
           {t("notRecorded")}
         </span>
       </dd>
@@ -153,7 +153,7 @@ export function ReceiptsTab() {
           <h2 id="audit-receipts" className={panelTitle}>
             {t("title")}
           </h2>
-          <span className="text-sm text-muted-foreground">
+          <span className="text-[12.5px] text-muted-foreground">
             {t("caption")}
           </span>
         </span>
@@ -212,7 +212,7 @@ export function ReceiptsTab() {
           id={note}
           data-testid="audit-not-recorded"
           data-issue={AUDIT_GAPS.receipts.issue}
-          className="max-w-prose text-sm text-muted-foreground"
+          className="max-w-prose text-[13px] text-muted-foreground"
         >
           {t("notRecorded")}
         </p>
@@ -266,7 +266,7 @@ function BundleCard({
     return (
       <p
         data-testid="audit-bundle-unread"
-        className={`${panel} px-4 py-3 text-sm text-muted-foreground`}
+        className={`${panel} px-4 py-3 text-[13px] text-muted-foreground`}
       >
         {t("unread", { id, code })}
       </p>
@@ -315,7 +315,7 @@ function BundleCard({
         </span>
       </header>
       <div className={`${panelBody} flex flex-col gap-3`}>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[13px]">
           <Fact term={t("exportId")}>
             <span className={mono}>{bundle.exportRef}</span>
           </Fact>
@@ -368,7 +368,7 @@ export function ExportsTab({
           the organization, so it never reads as a description of the ZIP card. */}
       <p
         data-testid="audit-exports-callout"
-        className="border-l-2 border-gold pl-3 text-sm text-muted-foreground"
+        className="border-l-2 border-gold pl-3 text-[13px] text-muted-foreground"
       >
         {t("callout")}
       </p>
@@ -410,8 +410,8 @@ function PolicyField({
   const t = useTranslations("audit");
   return (
     <div className="grid gap-x-4 gap-y-0.5 py-1.5 md:grid-cols-[14rem_1fr]">
-      <dt className="text-sm font-medium">{term}</dt>
-      <dd className="text-sm text-muted-foreground">
+      <dt className="text-[13px] font-medium">{term}</dt>
+      <dd className="text-[13px] text-muted-foreground">
         {children ?? <span data-recorded="false">{t("notRecorded")}</span>}
       </dd>
     </div>
@@ -503,7 +503,7 @@ export function RetentionTab({
         title={t("redaction")}
         caption={t("redactionCaption")}
       >
-        <p className="border-l-2 border-gold pl-3 text-sm text-muted-foreground">
+        <p className="border-l-2 border-gold pl-3 text-[13px] text-muted-foreground">
           {t("redactionNote")}
         </p>
       </Panel>

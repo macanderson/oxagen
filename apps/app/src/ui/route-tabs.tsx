@@ -46,12 +46,12 @@ export type RouteTab = {
  * @internal Exported for design-record.test.ts, which pins the selected style.
  */
 export const tabLink =
-  "-mb-px inline-flex min-h-10 max-md:min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-[13px] py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-selected:border-gold aria-selected:text-foreground";
-export const tabCount = "font-mono text-sm font-normal text-dim";
+  "-mb-px inline-flex min-h-10 max-md:min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-[13px] py-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-selected:border-gold aria-selected:text-foreground";
+export const tabCount = "font-mono text-[10.5px] font-normal text-dim";
 
 /** The smaller row of views inside one tab. */
 const pillTab =
-  "inline-flex min-h-7 max-md:min-h-11 items-center gap-1.5 rounded-full border border-border px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-hl hover:text-foreground " +
+  "inline-flex min-h-7 max-md:min-h-11 items-center gap-1.5 rounded-full border border-border px-3 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-hl hover:text-foreground " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-selected:border-foreground/30 aria-selected:bg-hl aria-selected:text-foreground";
 
 const LOOKS = {

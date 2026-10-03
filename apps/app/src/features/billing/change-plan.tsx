@@ -91,7 +91,7 @@ function PlanForm({
       {failure === null ? null : (
         <FormAlert testId="plan-error">{t(`changePlan.${failure}`)}</FormAlert>
       )}
-      <label className="flex flex-col gap-1.5 text-sm font-semibold text-muted-foreground">
+      <label className="flex flex-col gap-1.5 text-[12.5px] font-semibold text-muted-foreground">
         {t("changePlan.plan")}
         <select
           value={choice}
@@ -128,7 +128,7 @@ function PlanForm({
       </label>
       <input type="hidden" name="planSlug" value={slug} />
       <input type="hidden" name="interval" value={interval} />
-      <p className="border-l-2 border-gold/60 pl-3 text-sm text-muted-foreground">
+      <p className="border-l-2 border-gold/60 pl-3 text-[12.5px] text-muted-foreground">
         {t("changePlan.note")}
       </p>
     </SafeForm>

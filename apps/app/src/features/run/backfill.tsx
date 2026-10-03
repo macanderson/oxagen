@@ -60,7 +60,7 @@ export function BackfillNote({
   return (
     <p
       data-testid="run-backfill-note"
-      className="mt-2 max-w-[70ch] text-sm text-muted-foreground"
+      className="mt-2 max-w-[70ch] text-[13px] text-muted-foreground"
     >
       {run.recordBasis === "mixed"
         ? t("partlyNote")

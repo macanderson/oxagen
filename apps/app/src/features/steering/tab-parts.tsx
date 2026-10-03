@@ -14,7 +14,7 @@ import { panel, panelHeader, panelTitle } from "@/ui/control-styles";
 
 /** `.note { border-left:2px solid var(--gold); font-size:12.5px; color:var(--muted) }` */
 const note =
-  "border-l-2 border-gold py-0.5 pl-3 text-sm text-muted-foreground";
+  "border-l-2 border-gold py-0.5 pl-3 text-[12.5px] text-muted-foreground";
 
 export function Note({
   children,
@@ -32,7 +32,7 @@ export function Note({
 
 /** `code` inside a translated sentence. */
 export const code = (chunks: ReactNode) => (
-  <code className="font-mono">{chunks}</code>
+  <code className="font-mono text-[0.92em]">{chunks}</code>
 );
 
 /**
@@ -81,7 +81,7 @@ export function Unrecorded({ issue }: { issue: number }) {
       data-unrecorded=""
       data-issue={String(issue)}
       title={t("issue", { number: String(issue) })}
-      className="font-sans text-sm text-muted-foreground"
+      className="font-sans text-[12.5px] text-muted-foreground"
     >
       {t("notRecorded")}
     </span>

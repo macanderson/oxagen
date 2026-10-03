@@ -401,7 +401,7 @@ export function SteerFleetDialog({
                 <span
                   id={`${formId}-interrupt`}
                   data-testid="steer-interrupt-reason"
-                  className="max-w-48 text-right text-sm text-dim"
+                  className="max-w-48 text-right text-[11px] text-dim"
                 >
                   {interruptible > 0
                     ? t("interruptCarriers", { count: interruptible })

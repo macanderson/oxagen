@@ -305,7 +305,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
           <CopyIcon aria-hidden="true" className="size-3.5" />
         )}
       </button>
-      <span role="status" className="text-sm text-muted-foreground">
+      <span role="status" className="text-[11px] text-muted-foreground">
         {state === "copied"
           ? t("copied")
           : state === "failed"
@@ -459,7 +459,7 @@ function Examples({ description }: { description: ToolDescription }) {
             className="flex flex-col gap-1.5"
           >
             <div className="flex items-center justify-between gap-3">
-              <h3 id={heading} className="text-sm font-semibold">
+              <h3 id={heading} className="text-[13.5px] font-semibold">
                 {title}
               </h3>
               <CopyButton

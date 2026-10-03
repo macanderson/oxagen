@@ -114,7 +114,7 @@ export function UnlinkDialog({
           {treeState(row.tree) === "governed" ? (
             <p
               data-testid="unlink-governed"
-              className="rounded-lg border border-error/40 bg-error/8 px-3.5 py-2.5 text-sm leading-relaxed text-foreground"
+              className="rounded-lg border border-error/40 bg-error/8 px-3.5 py-2.5 text-[13px] leading-relaxed text-foreground"
             >
               {t("governed", { workspace })}
             </p>
@@ -123,7 +123,7 @@ export function UnlinkDialog({
             data-testid="unlink-copies"
             data-state="not-recorded"
             data-gap={REPOSITORY_GAPS.lifecycle}
-            className="rounded-lg border border-border bg-hl px-3.5 py-2.5 text-sm leading-relaxed text-muted-foreground"
+            className="rounded-lg border border-border bg-hl px-3.5 py-2.5 text-[13px] leading-relaxed text-muted-foreground"
           >
             {t("copies")}
           </p>

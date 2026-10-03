@@ -44,7 +44,7 @@ export type AssistantReplyFeedbackProps = {
 };
 
 const VERDICT_BUTTON =
-  "inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-sm text-muted-foreground transition-colors max-md:min-h-11 max-md:px-3 " +
+  "inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[12px] text-muted-foreground transition-colors max-md:min-h-11 max-md:px-3 " +
   "hover:bg-secondary hover:text-secondary-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring " +
   "aria-pressed:border-rule aria-pressed:bg-secondary aria-pressed:text-foreground disabled:cursor-not-allowed disabled:opacity-60";
 
@@ -180,7 +180,7 @@ export function AssistantReplyFeedback({
           className="mt-2 flex flex-col gap-1.5"
           data-testid="assistant-feedback-note-form"
         >
-          <label htmlFor={noteId} className="text-sm text-foreground">
+          <label htmlFor={noteId} className="text-[12px] text-foreground">
             {t("noteLabel")}
           </label>
           <textarea
@@ -199,7 +199,7 @@ export function AssistantReplyFeedback({
             onKeyDown={onNoteKeyDown}
             className={`${inputBase} resize-none`}
           />
-          <p id={hintId} className="text-sm text-muted-foreground">
+          <p id={hintId} className="text-[11px] text-muted-foreground">
             {t("noteHint", { max: REPLY_FEEDBACK_NOTE_MAX_CHARS })}
           </p>
           <div className="flex items-center gap-3">
@@ -216,7 +216,7 @@ export function AssistantReplyFeedback({
               disabled={sending}
               data-testid="assistant-feedback-cancel"
               onClick={closeNote}
-              className={`text-sm ${linkText} disabled:opacity-60`}
+              className={`text-[12px] ${linkText} disabled:opacity-60`}
             >
               {t("cancel")}
             </button>
@@ -227,7 +227,7 @@ export function AssistantReplyFeedback({
       <p
         role="status"
         data-testid="assistant-feedback-recorded"
-        className="mt-1 text-sm text-muted-foreground"
+        className="mt-1 text-[11px] text-muted-foreground"
       >
         {recorded === "useful" ? t("recordedUseful") : null}
         {recorded === "wrong" ? t("recordedWrong") : null}
@@ -236,7 +236,7 @@ export function AssistantReplyFeedback({
         <p
           role="alert"
           data-testid="assistant-feedback-failed"
-          className="mt-1 text-sm text-error-ink"
+          className="mt-1 text-[12px] text-error-ink"
         >
           {t("failed")}
         </p>

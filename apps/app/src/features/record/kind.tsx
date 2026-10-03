@@ -92,7 +92,7 @@ export function KindBadge({ kind }: { kind: RecordKind }) {
       data-term="kind"
       data-kind={kind}
       title={t(kind)}
-      className={`inline-flex items-center gap-[5px] whitespace-nowrap rounded-md border py-0.5 pr-2 pl-1.5 text-sm font-semibold uppercase leading-normal tracking-[0.05em] ${badge}`}
+      className={`inline-flex items-center gap-[5px] whitespace-nowrap rounded-md border py-0.5 pr-2 pl-1.5 text-[11px] font-semibold uppercase leading-normal tracking-[0.05em] ${badge}`}
     >
       <Icon aria-hidden="true" className="size-3" />
       {term(`kinds.${kind}`)}

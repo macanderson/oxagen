@@ -61,9 +61,9 @@ import { CancelRegistration } from "./cancel-registration";
 
 /** An input at 16px on a phone, so iOS does not zoom on focus. */
 const control = `${inputBase} min-h-10 max-md:min-h-11 max-md:text-base`;
-const label = "text-sm font-semibold text-foreground";
+const label = "text-[12.5px] font-semibold text-foreground";
 const hint = "text-xs text-muted-foreground";
-const sectionTitle = "text-sm font-semibold text-foreground";
+const sectionTitle = "text-[13.5px] font-semibold text-foreground";
 
 export type ReservedAgent = {
   id: string;
@@ -84,7 +84,7 @@ function SectionHead({ title, done }: { title: string; done?: string }) {
       {done === undefined ? null : (
         <span
           data-testid="register-toolbelt-done"
-          className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-sm text-muted-foreground"
+          className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground"
         >
           <CheckIcon aria-hidden className="size-3" />
           {done}
@@ -100,7 +100,7 @@ function Reserved({ reserved }: { reserved: ReservedAgent }) {
   return (
     <dl
       data-testid="register-reserved"
-      className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 text-sm"
+      className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 text-[13px]"
     >
       <dt className={kvTerm}>{t("name")}</dt>
       <dd className={`${kvValue} flex items-center gap-1.5`}>
@@ -158,7 +158,7 @@ function ToolbeltSection({
         data-testid="register-toolbelt-empty"
       >
         <SectionHead title={t("toolbelt")} done={t("toolbeltDone")} />
-        <p className="text-sm text-foreground">{t("toolbeltEmpty")}</p>
+        <p className="text-[13px] text-foreground">{t("toolbeltEmpty")}</p>
         <SafeLink
           to={tools}
           data-testid="register-toolbelt-import"
@@ -447,7 +447,7 @@ export function RegisterAgentForm({
                 ) : named.length === 0 ? (
                   <p
                     data-testid="register-runtime-none"
-                    className="text-sm text-foreground"
+                    className="text-[13px] text-foreground"
                   >
                     {t("runtimeNone")}
                   </p>
@@ -492,7 +492,7 @@ export function RegisterAgentForm({
         )}
         <p
           data-testid="register-note"
-          className="border-l-2 border-gold py-0.5 pl-3.5 text-sm text-foreground"
+          className="border-l-2 border-gold py-0.5 pl-3.5 text-[13px] text-foreground"
         >
           {locked
             ? t.rich("reserved", { key, mono: keyText })

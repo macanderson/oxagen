@@ -109,7 +109,7 @@ export function WorkingCopies({
           title={t("filesTitle")}
         >
           <PanelBody>
-            <pre className="overflow-x-auto rounded-[10px] border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-[1.6] text-foreground">
+            <pre className="overflow-x-auto rounded-[10px] border border-border bg-code-bg px-3.5 py-3 font-mono text-[12px] leading-[1.6] text-foreground">
               {".oxagen/\n"}
               {`  ${WORKSPACE_TOML.replace(".oxagen/", "").padEnd(18)}`}
               <span className="text-code-comment">{t("filesToml")}</span>
@@ -127,7 +127,7 @@ export function WorkingCopies({
           title={t("syncTitle")}
         >
           <PanelBody>
-            <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-sm leading-relaxed max-sm:grid-cols-1">
+            <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-[13px] leading-relaxed max-sm:grid-cols-1">
               {SYNC.map(({ key, command }) => (
                 <div key={key} className="contents" data-command={command}>
                   <dt className={`${mono} text-dim`}>{command}</dt>
@@ -177,7 +177,7 @@ function CopiesBody({
       <p
         data-testid="working-copies-denied"
         data-state="denied"
-        className="px-4 py-3.5 text-sm leading-relaxed text-muted-foreground"
+        className="px-4 py-3.5 text-[13px] leading-relaxed text-muted-foreground"
       >
         {t("denied")}
       </p>
@@ -206,7 +206,7 @@ function CopiesBody({
         <table
           aria-label={t("label")}
           data-testid="working-copies-table"
-          className="w-full min-w-[720px] border-collapse text-sm"
+          className="w-full min-w-[720px] border-collapse text-[13px]"
         >
           <thead>
             <tr className="border-b border-border">
@@ -228,7 +228,7 @@ function CopiesBody({
                   colSpan={COPY_COLUMNS.length}
                   data-testid="working-copies-empty"
                   data-state="empty"
-                  className={`${cell} text-sm leading-relaxed text-muted-foreground`}
+                  className={`${cell} text-[13px] leading-relaxed text-muted-foreground`}
                 >
                   {t.rich("empty", { code })}
                 </td>
@@ -260,7 +260,7 @@ function CopyRow({ row, readAt }: { row: WorkingCopy; readAt: Date | null }) {
   return (
     <tr data-testid={`working-copy-${row.id}`} data-copy={row.id}>
       <td className={cell}>
-        <span className="block text-sm text-muted-foreground md:truncate">
+        <span className="block text-[12px] text-muted-foreground md:truncate">
           {row.hostname}
         </span>
         <code
@@ -284,7 +284,7 @@ function CopyRow({ row, readAt }: { row: WorkingCopy; readAt: Date | null }) {
           <span className={mono}>{row.branch}</span>
         )}
         {row.headCommit === null ? null : (
-          <span className={`${mono} block text-sm text-dim md:truncate`}>
+          <span className={`${mono} block text-[11px] text-dim md:truncate`}>
             {t("head", { commit: short(row.headCommit) })}
           </span>
         )}
@@ -342,7 +342,7 @@ function CopyRow({ row, readAt }: { row: WorkingCopy; readAt: Date | null }) {
             ? format.dateTime(seen, { dateStyle: "medium", timeStyle: "short" })
             : format.relativeTime(seen, readAt)}
         </time>
-        <span className="block text-sm text-dim">
+        <span className="block text-[11px] text-dim">
           {row.reportedBy === null
             ? t("reportedByKey")
             : row.reportedBy.name === null
@@ -422,13 +422,13 @@ export function ConnectDirectoryDialog({
         <section aria-labelledby="linkdir-command">
           <h3
             id="linkdir-command"
-            className="mb-1.5 text-sm font-semibold text-muted-foreground"
+            className="mb-1.5 text-[12.5px] font-semibold text-muted-foreground"
           >
             {t("commandLabel")}
           </h3>
           <pre
             data-testid="linkdir-command"
-            className="overflow-x-auto rounded-[10px] border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-[1.6] text-foreground"
+            className="overflow-x-auto rounded-[10px] border border-border bg-code-bg px-3.5 py-3 font-mono text-[12px] leading-[1.6] text-foreground"
           >
             {`${commands[0]}  `}
             <span className="text-code-comment">{t("loginComment")}</span>
@@ -449,7 +449,7 @@ export function ConnectDirectoryDialog({
         <section aria-labelledby="linkdir-what">
           <h3
             id="linkdir-what"
-            className="mb-1.5 text-sm font-semibold text-muted-foreground"
+            className="mb-1.5 text-[12.5px] font-semibold text-muted-foreground"
           >
             {t("whatLabel")}
           </h3>

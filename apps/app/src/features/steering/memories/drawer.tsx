@@ -53,7 +53,7 @@ import {
 /** The runs the drawer lists before it counts the rest. */
 const RUNS_SHOWN = 8;
 
-const section = "mt-4 mb-1.5 text-sm font-semibold text-foreground";
+const section = "mt-4 mb-1.5 text-[13px] font-semibold text-foreground";
 
 function Fact({ term, children }: { term: string; children: ReactNode }) {
   return (
@@ -104,7 +104,7 @@ function Runs({
   const { memory, uses, usesTotal } = detail;
   if (!memory.useSignal) {
     return (
-      <p className="text-sm text-muted-foreground" data-testid="memory-why">
+      <p className="text-[12.5px] text-muted-foreground" data-testid="memory-why">
         <NoSignalWhy memory={memory} />
       </p>
     );
@@ -121,10 +121,10 @@ function Runs({
   return (
     <div className="flex flex-col gap-1.5" data-testid="memory-runs">
       {runs.length === 0 && reported === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("noRuns")}</p>
+        <p className="text-[12.5px] text-muted-foreground">{t("noRuns")}</p>
       ) : null}
       {runs.length === 0 ? null : (
-        <ul className="flex flex-col gap-1 text-sm">
+        <ul className="flex flex-col gap-1 text-[12.5px]">
           {runs.slice(0, RUNS_SHOWN).map((use) => (
             <li
               key={`${use.run}:${use.usedAt}`}
@@ -144,12 +144,12 @@ function Runs({
         </ul>
       )}
       {more > 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-[12.5px] text-muted-foreground">
           {t("moreUses", { count: more })}
         </p>
       ) : null}
       {reported > 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-[12.5px] text-muted-foreground">
           {t("reported", {
             harness:
               memory.harness === null
@@ -180,13 +180,13 @@ function Standing({
       <>
         <h3 className={section}>{t("record")}</h3>
         {memory.promotedLineage === null ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-[12.5px] text-muted-foreground">
             {t("promotedMerged")}
           </p>
         ) : (
           <SafeLink
             to={routes.steeringRecord(at.org, at.ws, memory.promotedLineage)}
-            className={`${linkText} ${mono} text-sm`}
+            className={`${linkText} ${mono} text-[12.5px]`}
           >
             {memory.promotedLineage}
           </SafeLink>
@@ -224,7 +224,7 @@ function Standing({
   return (
     <>
       <h3 className={section}>{t("memoryPr")}</h3>
-      <div className="text-sm text-foreground" data-testid="memory-standing">
+      <div className="text-[12.5px] text-foreground" data-testid="memory-standing">
         {body}
       </div>
     </>
@@ -316,7 +316,7 @@ export function MemoryDrawer({
         testId="memory-drawer"
       >
         {read.reason === "error" && read.status === 404 ? (
-          <p className="text-sm text-muted-foreground">{t("notFound")}</p>
+          <p className="text-[13px] text-muted-foreground">{t("notFound")}</p>
         ) : (
           <SteeringReadFailure read={read} section={t("section")} />
         )}
@@ -417,7 +417,7 @@ export function MemoryDrawer({
         <h3 className={section}>{t("statement")}</h3>
         <pre
           data-testid="memory-statement"
-          className={`${mono} whitespace-pre-wrap rounded-md bg-muted p-3 text-sm text-foreground`}
+          className={`${mono} whitespace-pre-wrap rounded-md bg-muted p-3 text-[12.5px] text-foreground`}
         >
           {memory.statement}
         </pre>
@@ -427,7 +427,7 @@ export function MemoryDrawer({
         {others.length === 0 ? null : (
           <>
             <h3 className={section}>{t("sameStatement")}</h3>
-            <ul className="flex flex-col gap-1 text-sm" data-testid="memory-same">
+            <ul className="flex flex-col gap-1 text-[12.5px]" data-testid="memory-same">
               {others.map((other) => (
                 <li key={other.id} className="flex flex-col">
                   <span className="text-foreground">{memoryName(other)}</span>

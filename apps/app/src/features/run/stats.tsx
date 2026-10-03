@@ -90,12 +90,12 @@ function Involved({
         notRecorded={t("notRecorded")}
         sub={sub === "" ? t("header.harnessNotRecorded") : sub}
       />
-      <span className="font-mono text-sm text-dim">
+      <span className="font-mono text-[11.5px] text-dim">
         {t("summary.onBehalfOf")}
       </span>
       <span
         data-testid="run-operator"
-        className="inline-flex min-w-0 max-w-full items-center gap-[9px] rounded-full border border-border bg-background py-[5px] pl-1.5 pr-3 text-sm text-foreground"
+        className="inline-flex min-w-0 max-w-full items-center gap-[9px] rounded-full border border-border bg-background py-[5px] pl-1.5 pr-3 text-[12.5px] text-foreground"
       >
         {hasOperator ? (
           <Avatar
@@ -126,7 +126,7 @@ function Involved({
                     t(`facts.operatorKind.${run.operatorKind}`)
                   ))}
               </b>
-              <span className="truncate font-mono text-sm text-dim">
+              <span className="truncate font-mono text-[10.5px] text-dim">
                 {/* A wrapped session's operator can be the person who
                     enrolled the host rather than one who started the run,
                     and the record says which. */}
@@ -202,7 +202,7 @@ export function SummaryPanel({
           {t("summary.title")}
         </h2>
         <Badge tone="quiet" dot={false}>
-          <span className="text-sm">{t("summary.generated")}</span>
+          <span className="text-[10.5px]">{t("summary.generated")}</span>
         </Badge>
       </div>
       <Involved run={run} agent={agent} place={place} />
@@ -213,7 +213,7 @@ export function SummaryPanel({
       ) : (
         <p
           data-testid="generated-summary"
-          className="mb-2.5 mt-3 max-w-[78ch] text-base leading-[1.55] text-foreground"
+          className="mb-2.5 mt-3 max-w-[78ch] text-[15px] leading-[1.55] text-foreground"
         >
           {shownSummary(summary.text)}
         </p>
@@ -226,7 +226,7 @@ export function SummaryPanel({
           {t("summaryFailed", { reason: run.enrichmentError })}
         </p>
       )}
-      <div className="mt-[13px] flex flex-wrap items-center gap-2.5 border-t border-border pt-[11px] font-mono text-sm text-dim">
+      <div className="mt-[13px] flex flex-wrap items-center gap-2.5 border-t border-border pt-[11px] font-mono text-[11px] text-dim">
         <span className="min-w-0 flex-1">
           {summary === null ? (
             t("summary.notGenerated")
@@ -370,7 +370,7 @@ export function StatRow({
         label={t("cost")}
         note={
           displayedCost === null ? undefined : (
-            <span className="font-mono text-sm text-dim">
+            <span className="font-mono text-[10.5px] text-dim">
               {metrics.cost === null
                 ? t("provisional")
                 : // A rebuilt run's cost is the rollup's price-book
