@@ -949,6 +949,7 @@ describe("Tools › MCP servers view", () => {
                 toolCount: 1,
                 authKind: "none",
                 iconUrl: null,
+                description: null,
                 authorization: null,
                 contextTokens: null,
                 weeklyPrice: null,
