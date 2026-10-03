@@ -238,7 +238,10 @@ describe("every cached test in tools/scripts", () => {
     );
   });
 
-  it("declares every file a cached test reads outside the package", () => {
+  // Parses every cached test in the package in one synchronous pass, about 9
+  // seconds in CI. Vitest 3 fails a synchronous test that returns after its
+  // timeout, so this one names its own.
+  it("declares every file a cached test reads outside the package", { timeout: 60_000 }, () => {
     const report = undeclaredReads().map(
       ({ test, undeclared }) => `${test}: ${undeclared.map(describeRead).join(", ")}`,
     );

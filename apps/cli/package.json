@@ -52,10 +52,10 @@
   "devDependencies": {
     "@oxagen/telemetry": "workspace:*",
     "@types/node": "25.9.8",
-    "@vitest/coverage-v8": "2.1.9",
+    "@vitest/coverage-v8": "3.2.6",
     "esbuild": "0.28.2",
     "tsx": "4.23.5",
     "typescript": "6.0.3",
-    "vitest": "2.1.9"
+    "vitest": "3.2.6"
   }
 }
