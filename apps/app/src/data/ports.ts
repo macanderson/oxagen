@@ -103,6 +103,7 @@ import type {
   SpendDrillKind,
   SpendFindingEvidence,
   SpendFindings,
+  SpendFindingsQuery,
   SpendGroupKind,
   SpendPerMergedPr,
   SpendReport,
@@ -530,8 +531,15 @@ export interface DataSource {
      * Oxagen's own spend and the other is somebody's laptop.
      */
     gatewayPolicy(ctx: WsCtx): Promise<Read<GatewayPolicy>>;
-    /** list_findings over the open findings (#2963): the Findings section's cards and the totals above them */
-    findings(ctx: WsCtx): Promise<Read<SpendFindings>>;
+    /**
+     * list_findings over the open findings (#2963): the Findings section's
+     * cards and the totals above them. The query narrows the read to one
+     * subject's findings or names a later page (#5303).
+     */
+    findings(
+      ctx: WsCtx,
+      query?: SpendFindingsQuery,
+    ): Promise<Read<SpendFindings>>;
     /** get_finding_evidence: the runs, calls and prices one finding cites */
     findingEvidence(
       ctx: WsCtx,

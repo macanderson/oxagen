@@ -692,7 +692,7 @@ export function Overview({
   deliveries: Read<SteeringDeliveries> | null;
   spend: Read<unknown> | null;
   spendRow: AgentSpendRow | null;
-  /** The open findings, for the cache TTL line; null when the tab read none. */
+  /** The agent's open findings, for the cache TTL line; null when the tab read none. */
   findings: Read<SpendFindings> | null;
   lastRun: RunRow | null;
   operatorName: string | null;

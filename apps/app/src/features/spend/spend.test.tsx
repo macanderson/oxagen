@@ -288,8 +288,9 @@ async function renderSpend(
   finding?: string,
   as: typeof ctx = ctx,
   by?: string,
+  cursor?: string,
 ) {
-  const view = parseSpendView(segments, finding, by);
+  const view = parseSpendView(segments, finding, by, cursor);
   if (view === null) throw new Error(`no view for ${segments.join("/")}`);
   const element = await Spend({ ctx: as, source, view, today: TODAY });
   return render(
@@ -353,6 +354,8 @@ function listing(over: Partial<SpendFindings> = {}): SpendFindings {
     counts: { findings: 3, high: 2, medium: 1, operators: 3 },
     findings: [found(), onAgent, onOperator],
     truncated: false,
+    nextCursor: null,
+    offset: 0,
     ...over,
   };
 }
@@ -1309,6 +1312,46 @@ describe("Spend › Findings", () => {
     expect(hero).toHaveTextContent("every one opens to its evidence");
   });
 
+  it("reads the page of findings past the first 50 that the cursor names, and ranks it from 51 (#5303)", async () => {
+    loaded({ operator: report([row("prn_marcusbell", { operator: MARCUS })]) });
+    findings.mockResolvedValue(
+      readOk(
+        listing({
+          counts: { findings: 53, high: 52, medium: 1, operators: 3 },
+          truncated: true,
+          offset: 50,
+        }),
+      ),
+    );
+    await renderSpend(["findings"], undefined, ctx, undefined, "c2");
+    expect(findings).toHaveBeenCalledExactlyOnceWith(ctx, { cursor: "c2" });
+    expect(screen.getByTestId("spend-findings-truncated")).toHaveTextContent(
+      "The list shows open findings 51 to 53 of 53.",
+    );
+    const cards = within(
+      screen.getByRole("list", { name: "Findings ranked by savings" }),
+    ).getAllByRole("listitem");
+    expect(cards[0]?.querySelector("span")).toHaveTextContent(/^51$/);
+    // The tab badge counts every open finding, whatever the page.
+    const tabs = screen.getByRole("tablist", { name: "Spend views" });
+    expect(
+      within(tabs).getByRole("tab", { name: /^Findings/ }),
+    ).toHaveTextContent("Findings53");
+    expect(
+      screen.getByRole("link", { name: "Open the first page" }),
+    ).toHaveAttribute("href", "/acme/core-platform/spend/findings");
+  });
+
+  it("reads the first page with no cursor on the Findings tab and on every other tab", async () => {
+    loaded();
+    await renderSpend(["findings"]);
+    expect(findings).toHaveBeenCalledExactlyOnceWith(ctx, {});
+    cleanup();
+    findings.mockClear();
+    await renderSpend(["waste"], undefined, ctx, undefined, "c2");
+    expect(findings).toHaveBeenCalledExactlyOnceWith(ctx, {});
+  });
+
   it("ranks each card with its kind, level, confidence, who it is about, the evidence line, the amount at stake and its share, Evidence and Fix", async () => {
     loaded({ operator: report([row("prn_marcusbell", { operator: MARCUS })]) });
     await renderSpend(["findings"]);
@@ -2030,6 +2073,12 @@ describe("Spend › drill", () => {
       "agent",
       "a-intel.core.stella-ci",
     );
+    // The drill reads the findings about its own key, so one that ranks past
+    // the workspace's first page still counts toward its savings (#5303).
+    expect(findings).toHaveBeenCalledExactlyOnceWith(ctx, {
+      level: "agent",
+      subject: "a-intel.core.stella-ci",
+    });
     expect(byGroup).not.toHaveBeenCalled();
     expect(screen.queryByTestId("spend-summary")).toBeNull();
     const crumb = screen.getByRole("navigation", { name: "Breadcrumb" });

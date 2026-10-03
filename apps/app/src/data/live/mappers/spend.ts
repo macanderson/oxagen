@@ -277,6 +277,8 @@ export function toSpendFindings(
     },
     findings: out.findings.map(toFinding),
     truncated: out.truncated,
+    nextCursor: out.nextCursor,
+    offset: out.offset,
   };
 }
 

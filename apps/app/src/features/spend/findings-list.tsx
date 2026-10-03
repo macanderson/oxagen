@@ -8,7 +8,9 @@
 // the spend spec draws for its kind (./finding-card.tsx): its amount and its
 // share of the workspace's spend first, then its finding text, what it cites,
 // Evidence and Fix. A finding about an agent draws the agent's avatar with its
-// registered harness (#4871).
+// registered harness (#4871). The server lists one page of at most 50
+// findings, and the list filters, sorts and pages that page. A finding's rank
+// counts from the page's first rank, so the second page starts at 51 (#5303).
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { byMicrosDescending, type Cost } from "@/data/contracts/money";
@@ -67,12 +69,18 @@ function Filter<T extends string>({
 
 export function FindingsList({
   findings,
+  firstRank = 1,
+  cursor = null,
   spend,
   names,
   harnesses = {},
   at,
 }: {
   findings: readonly SpendFinding[];
+  /** The rank of the first finding listed: 1 on the first page, 51 on the second. */
+  firstRank?: number;
+  /** The cursor of the page listed; null on the first page. */
+  cursor?: string | null;
   /** The workspace's priced spend over the findings' window, each card's share is of; null when none was recorded. */
   spend: Cost | null;
   /** An operator finding's subject is a `prn_…` id; this is the person's name for it. */
@@ -91,7 +99,7 @@ export function FindingsList({
 
   const ranked: Ranked[] = findings.map((finding, index) => ({
     finding,
-    rank: index + 1,
+    rank: firstRank + index,
   }));
   const kindOf = (item: Ranked) => t(`kind.${item.finding.kind}`);
   const shown = ranked
@@ -172,6 +180,7 @@ export function FindingsList({
               key={item.finding.id}
               finding={item.finding}
               rank={item.rank}
+              cursor={cursor}
               names={names}
               harnesses={harnesses}
               spend={spend}

@@ -447,6 +447,8 @@ describe("the findings the Spend page leads with", () => {
         counts: { findings: 1, high: 1, medium: 0, operators: 2 },
         findings: [listedFinding],
         truncated: false,
+        nextCursor: null,
+        offset: 0,
       }),
     );
     const read = await spend.findings(ctx);
@@ -467,6 +469,41 @@ describe("the findings the Spend page leads with", () => {
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: findingList,
       input: { status: "open" },
+      page: "spend",
+    });
+  });
+
+  it("findings narrows the read to a subject or a later page, and carries the page's cursor and offset (#5303)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        status: "open",
+        window: listedFinding.window,
+        saving: savingCost,
+        spend: null,
+        share: null,
+        annualised: savingCost,
+        counts: { findings: 62, high: 62, medium: 0, operators: 2 },
+        findings: [listedFinding],
+        truncated: true,
+        nextCursor: "c3",
+        offset: 50,
+      }),
+    );
+    const read = await spend.findings(ctx, {
+      level: "agent",
+      subject: "acme.core.release-bot",
+      cursor: "c2",
+    });
+    expect(read.ok && read.value.nextCursor).toBe("c3");
+    expect(read.ok && read.value.offset).toBe(50);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: findingList,
+      input: {
+        status: "open",
+        level: "agent",
+        subject: "acme.core.release-bot",
+        cursor: "c2",
+      },
       page: "spend",
     });
   });
@@ -587,6 +624,8 @@ describe("the findings the Spend page leads with", () => {
         counts: { findings: 1, high: 1, medium: 0, operators: 1 },
         findings: [{ ...listedFinding, id: "01k5rtgh" }],
         truncated: false,
+        nextCursor: null,
+        offset: 0,
       }),
     );
     expect(await spend.findings(ctx)).toEqual(

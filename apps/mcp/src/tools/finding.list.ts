@@ -11,6 +11,15 @@ export const schema = {
   runId: findingList.input.shape.runId.describe(
     "a run's public id (arun_… or tse_…): list only the findings that cite it, each with the frames it cites there",
   ),
+  level: findingList.input.shape.level.describe(
+    "tool, agent, operator or workspace: list only the findings at this level",
+  ),
+  subject: findingList.input.shape.subject.describe(
+    "an agent key, an operator's prn_… id, a tool name or the workspace id: list only the findings about it",
+  ),
+  cursor: findingList.input.shape.cursor.describe(
+    "the nextCursor of the previous page; omit it for the first page",
+  ),
 };
 
 export const metadata: ToolMetadata = {

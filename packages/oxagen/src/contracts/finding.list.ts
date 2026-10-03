@@ -12,6 +12,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import {
+  findingLevelSchema,
   findingRunCitationSchema,
   findingSchema,
   findingStatusSchema,
@@ -26,15 +27,22 @@ export const ANNUALISED_WINDOW_MIN_DAYS = 7;
  * At most this many findings in one answer. A workspace can hold more: the
  * findings job never caps a finding that counts toward the unproductive
  * spend headline (#5262). The counts and totals still cover every finding
- * the read matches, and `truncated` says the list holds fewer.
+ * the read matches, `truncated` says the list holds fewer, and `nextCursor`
+ * reads the next page (#5303).
  */
 export const FINDINGS_LIST_MAX = 50;
+
+/** The longest cursor a read accepts. The handler's cursors are far shorter. */
+export const FINDINGS_CURSOR_MAX = 256;
+
+/** The longest subject a read filters on: an agent key, a tool name, or an id. */
+const SUBJECT_MAX = 256;
 
 export const findingList = registerCapability({
   name: "list_findings",
   domain: "spend",
   description:
-    "List this workspace's costed findings ranked by the money at stake (open by default; applied or dismissed most recent first), each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend over the findings' window and that saving annualised. It lists at most 50 findings. The counts and totals cover every finding, and truncated is true when more exist than the list holds. Given a run, it lists only the findings that cite that run, each with the frames it cites there.",
+    "List this workspace's costed findings ranked by the money at stake (open by default; applied or dismissed most recent first), each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend over the findings' window and that saving annualised. It lists at most 50 findings a page. The counts and totals cover every finding, truncated is true when more exist than the page holds, and nextCursor reads the next page. Given a run, it lists only the findings that cite that run, each with the frames it cites there. Given a level and a subject, it lists only the findings about that agent, operator, tool or workspace.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
@@ -56,6 +64,23 @@ export const findingList = registerCapability({
        * and the totals cover those findings (#4001).
        */
       runId: runPublicIdSchema.optional(),
+      /**
+       * Lists only the findings at this level (#5303). With `subject`, an
+       * agent's page reads that agent's findings in one call.
+       */
+      level: findingLevelSchema.optional(),
+      /**
+       * Lists only the findings about this key: an agent key, an operator's
+       * `prn_…`, a tool name, or the workspace id (#5303). The totals cover
+       * those findings.
+       */
+      subject: z.string().min(1).max(SUBJECT_MAX).optional(),
+      /**
+       * The `nextCursor` of the page before. Without it the read answers the
+       * first page. A cursor holds its place in the list order, so a page read
+       * with it starts after the last finding of the page before (#5303).
+       */
+      cursor: z.string().min(1).max(FINDINGS_CURSOR_MAX).optional(),
     })
     .strict(),
   output: z
@@ -97,10 +122,21 @@ export const findingList = registerCapability({
         .max(FINDINGS_LIST_MAX),
       /**
        * True when the read matches more findings than `findings` lists, so
-       * `counts.findings` is larger than the list. The list holds the first
-       * FINDINGS_LIST_MAX in its order (#5262).
+       * `counts.findings` is larger than the list. A page holds at most
+       * FINDINGS_LIST_MAX findings in the list order (#5262).
        */
       truncated: z.boolean(),
+      /**
+       * The cursor that reads the page after this one; null on the last page
+       * (#5303).
+       */
+      nextCursor: z.string().min(1).max(FINDINGS_CURSOR_MAX).nullable(),
+      /**
+       * How many findings come before this page in the list order: 0 on the
+       * first page, 50 on the second. A finding's rank is `offset` plus its
+       * place on the page (#5303).
+       */
+      offset: z.number().int().nonnegative(),
     })
     .strict(),
 });

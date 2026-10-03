@@ -1,8 +1,9 @@
 // The cache TTL the findings job proposes for one agent (detector 3,
 // ADR-208). The idle cache finding carries it as a recommendation on the
 // `cache_ttl` setting, with the TTL the agent's writes used when they used
-// one. The agent page reads it from the open findings (`list_findings`), the
-// same read the Activity tab lists.
+// one. The agent page reads it from the agent's own open findings
+// (`list_findings` by the agent's key, #5303), the same read the Activity tab
+// lists.
 import type { SpendFinding, SpendFindings } from "@/data/contracts/spend";
 
 /** The setting a TTL recommendation names; billing's `CACHE_TTL_SETTING`. */

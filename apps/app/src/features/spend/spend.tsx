@@ -8,7 +8,10 @@
 // answer, its state replaces the body; when it holds nothing, the empty state
 // does. The other summary reads (findings, waste, budgets) leave their count
 // off, and their tile not recorded, when they do not answer, and their own tab
-// says why. An agent's avatar carries the harness it registered (#4871): the
+// says why. The Findings tab reads the page of the list its cursor names, and
+// a drill reads the findings about its own key, so a finding that ranks past
+// the workspace's first page still shows (#5303). An agent's avatar carries
+// the harness it registered (#4871): the
 // rollup names the agent key alone, so the tabs that list agents read the
 // agents once beside the rollup, and a failed read leaves the avatars
 // unbadged.
@@ -157,7 +160,10 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
   if (view.drill !== null) {
     const [drill, findings, names, harnesses] = await Promise.all([
       source.spend.drill(ctx, view.tab, view.drill),
-      source.spend.findings(ctx),
+      // A drill's kind names the finding level it lists: operator, agent or
+      // tool. The findings job keeps at most one open finding per kind for
+      // each level and subject, so one page holds every finding about the key.
+      source.spend.findings(ctx, { level: view.tab, subject: view.drill }),
       view.tab === "operator"
         ? source.spend.byGroup(ctx, "operator", period)
         : Promise.resolve(null),
@@ -192,7 +198,14 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
 
   const [month, findings, waste, budgets, harnesses] = await Promise.all([
     source.spend.byGroup(ctx, view.tab === "month" ? view.by : "model", period),
-    source.spend.findings(ctx),
+    // The tab badge counts every open finding on any page, so only the
+    // Findings tab names its page.
+    source.spend.findings(
+      ctx,
+      view.tab === "findings" && view.cursor !== null
+        ? { cursor: view.cursor }
+        : {},
+    ),
     source.spend.waste(ctx, period),
     source.spend.budgets(ctx),
     AGENT_TABS.has(view.tab)
@@ -310,12 +323,20 @@ async function body({
           <FindingsSection
             headline={headline}
             findings={findings.value}
+            cursor={view.cursor}
             operators={operators.ok ? operators.value.rows : []}
             harnesses={harnesses.byKey}
             at={at}
             evidence={
               evidence === null ? null : (
-                <FindingEvidence evidence={evidence} at={at} />
+                <FindingEvidence
+                  evidence={evidence}
+                  at={at}
+                  close={routes.spend(at.org, at.ws, {
+                    tab: "findings",
+                    cursor: view.cursor ?? undefined,
+                  })}
+                />
               )
             }
           />

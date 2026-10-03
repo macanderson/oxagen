@@ -88,9 +88,9 @@ export type AgentReads = {
   /** The steering manifests of recent runs; null on a tab that does not show them. */
   deliveries: SourceRead<DataSource["steering"]["deliveries"]> | null;
   /**
-   * The open findings of the workspace: the Activity tab lists the agent's,
-   * and the Overview reads its cache TTL recommendation from them. Null on
-   * every other tab.
+   * This agent's open findings, read by its key (#5303): the Activity tab
+   * lists them, and the Overview reads its cache TTL recommendation from
+   * them. Null on every other tab, and for an agent with no key.
    */
   findings: SourceRead<DataSource["spend"]["findings"]> | null;
   /** The org and workspace ceilings above the agent; null off Permissions. */
@@ -152,7 +152,14 @@ export async function readAgentTab(
       ? source.spend.byGroup(ctx, "agent", period)
       : none,
     DELIVERY_TABS.has(tab) ? source.steering.deliveries(ctx) : none,
-    FINDINGS_TABS.has(tab) ? source.spend.findings(ctx) : none,
+    // One page holds every open finding about one agent: the findings job
+    // keeps at most one open finding per kind for each level and subject,
+    // and there are far fewer kinds than a page holds. A read of the
+    // workspace's first page would miss an agent whose findings rank past
+    // it (#5303).
+    FINDINGS_TABS.has(tab) && agentKey !== null
+      ? source.spend.findings(ctx, { level: "agent", subject: agentKey })
+      : none,
     tab === "permissions" ? source.spend.budgets(ctx) : none,
     tab === "permissions" ? source.org.roles(ctx) : none,
     tab === "toolbelt" ? source.tools.toolbelts(ctx) : none,

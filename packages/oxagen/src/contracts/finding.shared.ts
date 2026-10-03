@@ -29,7 +29,13 @@ const findingKindSchema = z.enum([
   "retry_loops",
 ]);
 
-const findingLevelSchema = z.enum(["tool", "agent", "operator", "workspace"]);
+/** Where a finding's fix applies: the level whose key `subject` carries. */
+export const findingLevelSchema = z.enum([
+  "tool",
+  "agent",
+  "operator",
+  "workspace",
+]);
 
 const findingConfidenceSchema = z.enum(["high", "medium"]);
 
