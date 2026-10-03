@@ -302,7 +302,8 @@ describe("tenant policy manifest", () => {
     // 2026-10-02). 178 adds forge.pull_requests, forge.pull_request_revisions,
     // forge.pull_request_runs and forge.pull_request_work_orders (ADR-288,
     // 2026-10-03). 179 adds forge.pull_request_issues (ADR-292, 2026-10-03).
-    expect(POLICY_MANIFEST.length).toBe(179);
+    // 180 adds forge.revision_certifications (ADR-294, 2026-10-03).
+    expect(POLICY_MANIFEST.length).toBe(180);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {
