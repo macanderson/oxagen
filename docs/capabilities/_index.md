@@ -713,6 +713,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [accept_work_order](work.order.accept.md) | [work.order.accept.ts](../../packages/oxagen/src/contracts/work.order.accept.ts) | api |
 | [approve_work_brief](work.brief.approve.md) | [work.brief.approve.ts](../../packages/oxagen/src/contracts/work.brief.approve.ts) | api |
 | [cancel_work_order](work.order.cancel.md) | [work.order.cancel.ts](../../packages/oxagen/src/contracts/work.order.cancel.ts) | api |
+| [claim_work_criterion](work.criterion.claim.md) | [work.criterion.claim.ts](../../packages/oxagen/src/contracts/work.criterion.claim.ts) | api, mcp |
 | [claim_work_order](work.order.claim.md) | [work.order.claim.ts](../../packages/oxagen/src/contracts/work.order.claim.ts) | api |
 | [close_work_item](work.item.close.md) | [work.item.close.ts](../../packages/oxagen/src/contracts/work.item.close.ts) | api |
 | [create_work_item](work.item.create.md) | [work.item.create.ts](../../packages/oxagen/src/contracts/work.item.create.ts) | api, mcp |
@@ -725,14 +726,14 @@ after the registered name separately when their contract uses a dotted stem.
 | [refresh_work_order_checks](work.order.checks.refresh.md) | [work.order.checks.refresh.ts](../../packages/oxagen/src/contracts/work.order.checks.refresh.ts) | api |
 | [reject_work_order](work.order.reject.md) | [work.order.reject.ts](../../packages/oxagen/src/contracts/work.order.reject.ts) | api |
 | [reopen_work_item](work.item.reopen.md) | [work.item.reopen.ts](../../packages/oxagen/src/contracts/work.item.reopen.ts) | api |
-| [retry_work_triage](work.triage.retry.md) | [work.triage.retry.ts](../../packages/oxagen/src/contracts/work.triage.retry.ts) | api, mcp |
+| [retry_work_triage](work.triage.retry.md) | [work.triage.retry.ts](../../packages/oxagen/src/contracts/work.triage.retry.ts) | api |
 | [return_work_order](work.order.return.md) | [work.order.return.ts](../../packages/oxagen/src/contracts/work.order.return.ts) | api |
 | [revise_work_triage](work.triage.revise.md) | [work.triage.revise.ts](../../packages/oxagen/src/contracts/work.triage.revise.ts) | api, mcp |
 | [save_work_brief](work.brief.save.md) | [work.brief.save.ts](../../packages/oxagen/src/contracts/work.brief.save.ts) | api |
 | [send_work_order](work.order.send.md) | [work.order.send.ts](../../packages/oxagen/src/contracts/work.order.send.ts) | api |
 | [set_work_collector](work.collector.set.md) | [work.collector.set.ts](../../packages/oxagen/src/contracts/work.collector.set.ts) | api |
 | [stop_work_order](work.order.stop.md) | [work.order.stop.ts](../../packages/oxagen/src/contracts/work.order.stop.ts) | api |
-| [sync_work_collector](work.collector.sync.md) | [work.collector.sync.ts](../../packages/oxagen/src/contracts/work.collector.sync.ts) | api, mcp |
+| [sync_work_collector](work.collector.sync.md) | [work.collector.sync.ts](../../packages/oxagen/src/contracts/work.collector.sync.ts) | api |
 
 ## Workspace
 

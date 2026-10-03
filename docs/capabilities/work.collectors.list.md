@@ -18,7 +18,12 @@ None.
 
 ## Output
 
-`collectors[]`, oldest first:
+| Field | Type | Notes |
+| --- | --- | --- |
+| `collectors` | object[] | The workspace's collectors, oldest first. The table below lists each one's fields |
+| `viewer` | `{ can_change_collectors }` | Whether the caller may change a collector with `set_work_collector` |
+
+Each entry of `collectors`:
 
 | Field | Type | Notes |
 | --- | --- | --- |
@@ -37,5 +42,7 @@ None.
 | `created_at` | `string` | |
 
 ## Semantics
+
+`viewer.can_change_collectors` comes from the role check `set_work_collector` makes: an org Owner or Admin, or a workspace Owner or Admin, reads true. A workspace Member or Viewer reads false. An API key and an agent run read false without a role read, because `set_work_collector` refuses every API key and every agent run (#5181). The flag decides nothing. `set_work_collector` checks again on every call. Work setup uses it to turn off Add collector for a person who cannot change collectors.
 
 A reconcile runs every 15 minutes and reads what changed since the cursor. Health reads `lagging` when a reconcile found changes a webhook missed or the nightly count of open issues differed, and `failing` after three failed reconciles in a row. A failing collector stops its scheduled reads until a person runs `sync_work_collector`. A paused collector keeps each webhook delivery and fetches nothing.

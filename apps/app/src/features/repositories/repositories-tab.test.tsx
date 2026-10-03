@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import type { RepositoryTree } from "@/data/contracts/repository";
 import { IntlProvider } from "@/test/intl";
+import type { IssueCollection } from "./actions";
 import type { Load } from "./parts";
 import type { RepositoryRow } from "./view";
 
@@ -19,9 +20,9 @@ vi.mock("./actions", () => ({ setIssueCollection }));
 const { RepositoriesTab, TreeBadge } = await import("./repositories-tab");
 
 /** acme/docs is collected; the rest are not. */
-const ISSUES: Load<{ collected: string[] }> = {
+const ISSUES: Load<IssueCollection> = {
   kind: "ready",
-  value: { collected: ["acme/docs"] },
+  value: { collected: ["acme/docs"], canChange: true },
 };
 
 const TREE: RepositoryTree = {
@@ -83,7 +84,7 @@ beforeEach(() => {
 
 function tab(
   truncated = false,
-  issues: Load<{ collected: string[] }> = ISSUES,
+  issues: Load<IssueCollection> = ISSUES,
   onIssuesChanged = vi.fn(),
 ) {
   const onAddOxagen = vi.fn();
@@ -249,6 +250,19 @@ describe("the Issues switch", () => {
     await user.click(screen.getByRole("switch", { name: "Collect issues from acme/site" }));
     expect(await screen.findByTestId("repository-issues-failure-acme/site")).toBeTruthy();
     expect(onIssuesChanged).not.toHaveBeenCalled();
+  });
+
+  it("shows the switch to a role that cannot change it, says why, and sends nothing (negative)", async () => {
+    const user = userEvent.setup();
+    tab(false, { kind: "ready", value: { collected: ["acme/docs"], canChange: false } });
+    const site = screen.getByRole("switch", { name: "Collect issues from acme/site" });
+    expect(site).toHaveAttribute("aria-disabled", "true");
+    expect(site).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByTestId("repository-issues-no-role-acme/site")).toHaveTextContent(
+      "Your role cannot change issue collection in this workspace.",
+    );
+    await user.click(site);
+    expect(setIssueCollection).not.toHaveBeenCalled();
   });
 
   it("does nothing while the collectors could not be read (negative)", async () => {

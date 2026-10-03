@@ -765,6 +765,52 @@ export type WorkOrderRejectResponse = z.output<
 >;
 
 /**
+ * Where the agent working a send claims one criterion of its brief
+ * (`claim_work_criterion`), under the API URL. The host's key makes the
+ * call, and Oxagen files the claim as the run linked to the send (ADR-251,
+ * amended 2026-10-03).
+ */
+export const WORK_CRITERION_CLAIM_PATH = "/v1/tacho/work-orders/criteria/claim";
+
+/** A brief criterion id: `c` and a number from 1, such as `c1`. */
+export const WORK_CRITERION_ID_PATTERN = /^c[1-9][0-9]{0,5}$/;
+
+/** A full Git commit id, as a criterion claim names the pull request's head. */
+export const WORK_HEAD_SHA_PATTERN = /^[0-9a-f]{40}$/;
+
+/** The longest statement a criterion claim takes, in characters. */
+export const WORK_CRITERION_CLAIM_TEXT_MAX = 2000;
+
+/** A criterion claim, as the host sends it. The contract takes these fields and no others. */
+export interface WorkCriterionClaimRequest {
+  item_id: string;
+  work_order_id: string;
+  criterion_id: string;
+  head_sha: string;
+  /** How the agent met the criterion. */
+  text: string;
+}
+
+/** The answer to a criterion claim. Passthrough for the same reason as the claim. */
+export const workCriterionClaimResponseSchema = z
+  .object({
+    repeat: z.boolean(),
+    claim: z
+      .object({
+        criterion_id: z.string(),
+        head_sha: z.string(),
+        /** The run the claim is filed as: the run linked to the send. */
+        run_id: z.string(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
+export type WorkCriterionClaimResponse = z.output<
+  typeof workCriterionClaimResponseSchema
+>;
+
+/**
  * The environment variable `oxagen work start` sets on the harness it starts.
  * The hook process inherits it from the harness, and the hook client passes
  * it to the daemon, which names the order on the session's `agent_start`.

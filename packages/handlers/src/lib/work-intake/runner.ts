@@ -41,7 +41,12 @@ const GITHUB_API = "https://api.github.com";
 const TREE_TIMEOUT_MS = 15_000;
 
 function change(entry: ItemChange): WorkIntakeChange {
-  return { publicId: entry.publicId, change: entry.change, digest: entry.digest };
+  return {
+    publicId: entry.publicId,
+    change: entry.change,
+    digest: entry.digest,
+    ...(entry.revision === undefined ? {} : { revision: entry.revision }),
+  };
 }
 
 /**
@@ -169,8 +174,8 @@ export function createWorkIntakeRunner(triageDeps: () => TriageRunDeps = default
       return runInTenantScope(scope, () => runTriage(triageDeps(), scope, itemPublicId, retry));
     },
 
-    recordTriageFailure(scope, itemPublicId, reason) {
-      return runInTenantScope(scope, () => recordTriageFailure(scope, itemPublicId, reason, new Date()));
+    recordTriageFailure(scope, itemPublicId, reason, run) {
+      return runInTenantScope(scope, () => recordTriageFailure(scope, itemPublicId, reason, new Date(), run));
     },
 
     async prune(now) {

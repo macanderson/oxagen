@@ -1,14 +1,16 @@
 // The outcome counts, from built projections (P1-05, #5163): accepted and
-// merged, returned, and closed apart; lead time by nearest rank; review
-// touches; cost coverage; the reopen cohort; and UTC weeks from Monday. The
-// pilot measures (P1-06, #5241): each send in one delivery bucket, claim time,
-// and each week's intake and full flow. The answer is parsed with
-// get_work_outcomes' own output schema.
+// merged, returned, and closed apart, each close by its resolution; lead time
+// by nearest rank; review touches; cost coverage; the reopen cohort; and UTC
+// weeks from Monday. The pilot measures (P1-06, #5241): each send in one
+// delivery bucket, claim time, each week's intake and full flow, whether the
+// window covers the whole week, and items counted once however many of their
+// sends finished. The answer is parsed with get_work_outcomes' own output
+// schema.
 import { describe, expect, it } from "vitest";
 import { workOutcomesGet } from "@oxagen/oxagen/contracts/work.outcomes.get";
-import { type WorkFact, reduceWorkItem } from "@oxagen/work/records";
+import { type CloseResolution, type WorkFact, reduceWorkItem } from "@oxagen/work/records";
 import type { RunCost } from "./derive";
-import { IN_REVIEW, O1, O2, READY, SHA1, at, f } from "./facts.test-support";
+import { IN_REVIEW, O1, O2, READY, SHA1, SHA2, at, f } from "./facts.test-support";
 import {
   type OutcomeItem,
   type OutcomesInput,
@@ -138,10 +140,49 @@ describe("computeOutcomes", () => {
   });
 
   it("splits the window into UTC weeks from Monday, with each week's intake and full flow", () => {
+    // The window runs Friday to Friday, so it cuts the first week and the
+    // second is still running: neither is complete.
     expect(out.weeks).toEqual([
-      { week: "2026-09-21", accepted_merged: 0, returned: 0, median_lead_hours: null, entered: 0, sent: 0, full_flow: false },
-      { week: "2026-09-28", accepted_merged: 2, returned: 1, median_lead_hours: 0.25, entered: 4, sent: 3, full_flow: true },
+      { week: "2026-09-21", accepted_merged: 0, returned: 0, median_lead_hours: null, entered: 0, sent: 0, full_flow: false, complete: false },
+      { week: "2026-09-28", accepted_merged: 2, returned: 1, median_lead_hours: 0.25, entered: 4, sent: 3, full_flow: true, complete: false },
     ]);
+  });
+
+  it("counts cancelled, declined, and duplicate closes apart", () => {
+    const close = (resolution: CloseResolution, minute = 5) =>
+      outcome([f.collected(), f.triage("triaged"), f.closed(1, minute, resolution)]);
+    const closes = [
+      close("cancelled"),
+      close("cancelled", 6),
+      close("declined"),
+      close("duplicate"),
+      close("duplicate", 6),
+      close("duplicate", 7),
+      // Closed ten days ago: before this 7-day window.
+      outcome(shift([f.collected(), f.triage("triaged"), f.closed(1, 5, "cancelled")], -10 * DAY_MS)),
+    ];
+    const result = workOutcomesGet.output.parse({ ...computeOutcomes({ ...EMPTY, items: closes }), truncated: false });
+    expect(result.closed).toEqual({ cancelled: 2, declined: 1, duplicate: 3 });
+    expect(result.accepted_merged).toBe(0);
+    expect(result.returned).toBe(0);
+  });
+
+  it("counts an item once when two of its sends finished in the window, at its latest done time", () => {
+    // Done on send 1 at 10:15, reopened, then done again on send 2 at 10:45.
+    const twice = [
+      ...DONE_FAST,
+      f.reopened(2, 1, 16),
+      f.send(O2, 2, 1, 2, 17),
+      f.runtime("claimed", O2, 18),
+      f.prLinked(O2, 19),
+      f.head(O2, SHA2, 20),
+      f.accepted(O2, SHA2, 30),
+      f.merged(O2, SHA2, 45),
+    ];
+    const result = computeOutcomes({ ...EMPTY, items: [outcome(twice)] });
+    expect(result.accepted_merged).toBe(1);
+    expect(result.weeks.reduce((sum, week) => sum + week.accepted_merged, 0)).toBe(1);
+    expect(result.lead_time).toEqual({ median_hours: 0.75, p90_hours: 0.75, sample: 1 });
   });
 
   it("leaves out a lead time that would run backwards, and still counts the item", () => {
@@ -168,6 +209,38 @@ describe("computeOutcomes", () => {
     });
     expect(result.weeks.length).toBeGreaterThanOrEqual(5);
     expect(result.weeks.every((week) => week.entered === 0 && week.sent === 0 && !week.full_flow)).toBe(true);
+  });
+});
+
+describe("whole weeks", () => {
+  /** Monday 2026-10-05 at 09:00 UTC: a Monday read made after the week turned. */
+  const MONDAY = new Date("2026-10-05T09:00:00.000Z");
+
+  it("marks a week cut by the window or still running as incomplete", () => {
+    const result = workOutcomesGet.output.parse({ ...computeOutcomes({ ...EMPTY, now: MONDAY, days: 28 }), truncated: false });
+    expect(result.weeks.map(({ week, complete }) => ({ week, complete }))).toEqual([
+      { week: "2026-09-07", complete: false },
+      { week: "2026-09-14", complete: true },
+      { week: "2026-09-21", complete: true },
+      { week: "2026-09-28", complete: true },
+      { week: "2026-10-05", complete: false },
+    ]);
+  });
+
+  it("covers four whole weeks with a 35-day read on a Monday", () => {
+    const result = computeOutcomes({ ...EMPTY, now: MONDAY, days: 35 });
+    expect(result.weeks).toHaveLength(6);
+    expect(result.weeks.filter((week) => week.complete).map((week) => week.week)).toEqual([
+      "2026-09-07",
+      "2026-09-14",
+      "2026-09-21",
+      "2026-09-28",
+    ]);
+  });
+
+  it("counts a week the window starts at its first moment as complete", () => {
+    const result = computeOutcomes({ ...EMPTY, now: new Date("2026-10-05T00:00:00.000Z"), days: 28 });
+    expect(result.weeks.map((week) => week.complete)).toEqual([true, true, true, true, false]);
   });
 });
 

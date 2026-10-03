@@ -10,7 +10,8 @@
 //     Oxagen reads its head, required checks, and check results from GitHub
 //     (evidence.ts).
 //   - GitHub delivers a `pull_request` event: every send that linked the pull
-//     request records the new head, a human merge, or a close without merging.
+//     request records the new head, a merge with the account that merged it
+//     and whether that was the Oxagen GitHub App, or a close without merging.
 //
 // Each runs in the send's own tenant scope. Facts carry dedupe keys, so a
 // redelivered event or a retried function records nothing twice. GitHub's
@@ -22,10 +23,19 @@
 // reopens it, and the revert only feeds the Outcomes count (ADR-286, amended
 // 2026-10-03). A revert made without that line records nothing.
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
-import { type FactInput, type FactKind, HEAD_SHA_PATTERN, WorkRecordError } from "@oxagen/work/records";
+import { type FactInput, type FactKind, HEAD_SHA_PATTERN, type MergedBy, WorkRecordError } from "@oxagen/work/records";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNull } from "drizzle-orm";
-import { type EvidenceReader, type PullRequestRead, evidenceFacts, githubEvidenceReader, ordersForPullRequest, readEvidence } from "./evidence";
+import {
+  type EvidenceReader,
+  type PullRequestRead,
+  evidenceFacts,
+  githubEvidenceReader,
+  mergerOf,
+  ordersForPullRequest,
+  oxagenAppBotLogin,
+  readEvidence,
+} from "./evidence";
 import { endWorkOrderRuns } from "./runtime";
 import { appendFacts, readWorkItem, type WorkScope } from "./store";
 
@@ -87,7 +97,7 @@ async function rootRunOf(tx: Tx, scope: WorkScope, rootSessionUuid: string): Pro
 }
 
 /** Read GitHub for one send and record what it found. Never fails the caller's write. */
-async function recordSendEvidence(scope: WorkScope, itemId: string, orderId: string, reader: EvidenceReader, now: Date): Promise<number> {
+export async function recordSendEvidence(scope: WorkScope, itemId: string, orderId: string, reader: EvidenceReader, now: Date): Promise<number> {
   const order = await withTenantDb(async (tx) => {
     const record = await readWorkItem(tx, scope, itemId);
     return record.projection.orders.find((entry) => entry.orderId === orderId) ?? null;
@@ -247,8 +257,27 @@ function text(value: unknown): string | null {
   return typeof value === "string" && value !== "" ? value : null;
 }
 
-/** The pull request a `pull_request` delivery describes, or null when it describes none. Pure. */
-export function workPullRequestDeliveryOf(body: Record<string, unknown>): PullRequestDelivery | null {
+/**
+ * The account a delivery's `merged_by` names, with whether it is the Oxagen
+ * GitHub App, or null when it names none or leaves out its login or type.
+ * Pure.
+ */
+function mergedByOf(value: unknown, appLogin: string | null): MergedBy | null {
+  if (typeof value !== "object" || value === null) return null;
+  const login = text((value as Record<string, unknown>)["login"]);
+  const type = text((value as Record<string, unknown>)["type"]);
+  return login === null || type === null ? null : mergerOf({ login, type }, appLogin);
+}
+
+/**
+ * The pull request a `pull_request` delivery describes, or null when it
+ * describes none. `appLogin` is the Oxagen GitHub App's login, read from
+ * GITHUB_APP_SLUG unless a test passes one. Pure apart from that default.
+ */
+export function workPullRequestDeliveryOf(
+  body: Record<string, unknown>,
+  appLogin: string | null = oxagenAppBotLogin(),
+): PullRequestDelivery | null {
   const pr = body["pull_request"];
   const repo = body["repository"];
   if (typeof pr !== "object" || pr === null || typeof repo !== "object" || repo === null) return null;
@@ -273,6 +302,7 @@ export function workPullRequestDeliveryOf(body: Record<string, unknown>): PullRe
       merged: p["merged"] === true,
       mergeCommitSha: text(p["merge_commit_sha"]),
       mergedAt: text(p["merged_at"]),
+      mergedBy: mergedByOf(p["merged_by"], appLogin),
       updatedAt,
     },
   };

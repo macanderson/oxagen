@@ -340,6 +340,7 @@ import { workItemClose } from "./work.item.close";
 import { workItemReopen } from "./work.item.reopen";
 import { workOrderClaim } from "./work.order.claim";
 import { workOrderReject } from "./work.order.reject";
+import { workCriterionClaim } from "./work.criterion.claim";
 import { steeringMemoryPrRecordsList } from "./steering.memory_pr_records.list";
 import { steeringMemoryPrRecordDrop } from "./steering.memory_pr_records.drop";
 import { workItemCreate } from "./work.item.create";
@@ -1240,6 +1241,7 @@ export {
   workItemReopen,
   workOrderClaim,
   workOrderReject,
+  workCriterionClaim,
   workItemCreate,
   workTriageRevise,
   workTriageRetry,
@@ -1736,6 +1738,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   workItemReopen,
   workOrderClaim,
   workOrderReject,
+  workCriterionClaim,
   workItemCreate,
   workTriageRevise,
   workTriageRetry,

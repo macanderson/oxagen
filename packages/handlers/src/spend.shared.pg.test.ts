@@ -14,6 +14,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readRunTotals, readUnmeteredRuns } from "./spend.shared";
 
 const enabled = Boolean(process.env.DATABASE_URL);
+// On CI a missing DATABASE_URL fails the file, so a green run means these
+// cases ran instead of skipping.
+if (process.env.CI && !enabled) throw new Error("The spend run read test needs DATABASE_URL on CI.");
 const totals = schema.runTotals;
 const runs = schema.agentRuns;
 

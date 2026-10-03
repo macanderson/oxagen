@@ -14,6 +14,10 @@
 // The record wizard flattens a statement to one line, and triage would read
 // that as a single rule, so this editor writes the statement itself and keeps
 // a line break before every rule.
+//
+// propose_record and open_steering_pr take a workspace Owner or Member, or an
+// org Owner or Admin. For any other role the submit is off and a line above it
+// says why. The server refuses the write either way.
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
@@ -58,7 +62,16 @@ function prioritiesStatement(instruction: string, rules: readonly string[]): str
 
 type Opened = { proposalId: string; pr: { number: number; url: string; repository: string } | null };
 
-export function PrioritiesEditor({ org, ws }: { org: string; ws: string }) {
+export function PrioritiesEditor({
+  org,
+  ws,
+  canControl,
+}: {
+  org: string;
+  ws: string;
+  /** Whether the viewer may propose the record and open its pull request; unknown reads as allowed and the server decides. */
+  canControl: boolean;
+}) {
   const t = useTranslations("work.setup.priorities.editor");
   const failureText = useListActionFailure();
   const starters = STARTER_RULES.map((key) => t(`starterRules.${key}`));
@@ -96,7 +109,7 @@ export function PrioritiesEditor({ org, ws }: { org: string; ws: string }) {
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending) return;
+    if (pending || !canControl) return;
     if (instruction.trim() === "") {
       setFailure(t("instructionRequired"));
       return;
@@ -296,10 +309,16 @@ export function PrioritiesEditor({ org, ws }: { org: string; ws: string }) {
         {failure === null ? null : (
           <FormAlert testId="work-priorities-failure">{failure}</FormAlert>
         )}
+        {canControl ? null : (
+          <p data-testid="work-priorities-no-role" className={fieldHint}>
+            {t("noRole")}
+          </p>
+        )}
         <SubmitButton
           pending={pending}
           label={t("submit")}
           pendingLabel={t("pending")}
+          disabled={!canControl}
           testId="work-priorities-submit"
         />
       </form>

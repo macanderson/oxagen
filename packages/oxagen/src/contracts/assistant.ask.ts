@@ -31,8 +31,8 @@
  * A turn the person stops is not a refusal. When the caller passed `turnId`
  * and `cancel_assistant_turn` names it, the turn returns with `stopped: true`
  * and whatever reply the engine had written, and the run is sealed
- * `cancelled`. A budget stop still refuses with `engine_aborted`. A dropped
- * connection is not a stop: the turn runs on (ADR-092, ADR-176).
+ * `cancelled`. A dropped connection is not a stop: the turn runs on
+ * (ADR-092, ADR-176).
  *
  * The turn is not a governed action (`noBillingGate`, #2968 decision 3): the
  * run is free to the customer and never appears in `list_runs`; `runId` opens

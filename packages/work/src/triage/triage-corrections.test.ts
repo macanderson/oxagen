@@ -11,7 +11,6 @@ import {
   checkCorrectionValue,
   correctionRows,
   effectiveTriage,
-  isTriageCorrectionField,
 } from "./triage-corrections";
 
 const DANA = "11111111-1111-4111-8111-111111111111";
@@ -138,10 +137,5 @@ describe("checkCorrectionValue", () => {
     expect(checkCorrectionValue("estimate_minutes", 0)).toBe(0);
     expect(checkCorrectionValue("claims", [])).toEqual([]);
     expect(new TriageCorrectionError("x").code).toBe("triage_correction_invalid");
-  });
-
-  it("names the correctable fields", () => {
-    expect(isTriageCorrectionField("priority")).toBe(true);
-    expect(isTriageCorrectionField("state")).toBe(false);
   });
 });

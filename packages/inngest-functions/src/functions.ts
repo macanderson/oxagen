@@ -92,9 +92,13 @@ import {
 import { runEnrichScratchExpire } from "./functions/run.enrich-scratch-expire";
 import { runPullRequestBackfill } from "./functions/run.pull-request-backfill";
 import { forgePullRequestSync } from "./functions/forge.pull-request-sync";
+import {
+  workOrderPullRequestLinked,
+  workOrderResultsSweep,
+  workOrderRunEnded,
+} from "./functions/work.order-results";
 import { forgeRevisionCertification } from "./functions/forge.revision-certification";
 import { forgePullRequestBackfill } from "./functions/forge.pull-request-backfill";
-import { workOrderPullRequestLinked, workOrderRunEnded } from "./functions/work.order-results";
 import { agentInterjectionTimeout } from "./functions/agent.interjection-timeout";
 import { agentInterjectionTimeoutSweep } from "./functions/agent.interjection-timeout-sweep";
 import { conversationTitle } from "./functions/conversation.title";
@@ -192,6 +196,8 @@ export const functions: any[] = [
   forgePullRequestBackfill,
   workOrderRunEnded,
   workOrderPullRequestLinked,
+  // Record what a lost run seal or pull request delivery left out (ADR-251).
+  workOrderResultsSweep,
   agentInterjectionTimeout,
   agentInterjectionTimeoutSweep,
   conversationTitle,

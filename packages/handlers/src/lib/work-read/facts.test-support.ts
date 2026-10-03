@@ -6,7 +6,7 @@
 // 2026-10-01, and each person and row is a fixed uuid.
 import type { Sha256Digest } from "@oxagen/run-evidence";
 import { type TriageCorrection, type TriageDecision, effectiveTriage } from "@oxagen/work";
-import { type CheckConclusion, type WorkFact, newFact, reduceWorkItem } from "@oxagen/work/records";
+import { type CheckConclusion, type CloseResolution, type MergedBy, type WorkFact, newFact, reduceWorkItem } from "@oxagen/work/records";
 import type { OrderPullRequest } from "../forge-pull-requests/orders";
 import type { DerivedItem, Lookups } from "./derive";
 
@@ -24,6 +24,13 @@ export const RUNTIME = "00000000-0000-4000-8000-0000000000b2";
 export const O1 = "00000000-0000-4000-8000-0000000000c1";
 export const O2 = "00000000-0000-4000-8000-0000000000c2";
 export const ITEM = "wi_x";
+
+/** A person who merges on GitHub. */
+export const PERSON_MERGER: MergedBy = { login: "amara", type: "User", oxagen_app: false };
+/** The Oxagen GitHub App, merging with the installation token Oxagen issues an agent. */
+export const APP_MERGER: MergedBy = { login: "oxagen-connect[bot]", type: "Bot", oxagen_app: true };
+/** GitHub's merge queue, merging a pull request a person queued. */
+export const QUEUE_MERGER: MergedBy = { login: "github-merge-queue[bot]", type: "Bot", oxagen_app: false };
 
 export function digest(n: number): Sha256Digest {
   return `sha256:${String(n).padStart(64, "0")}`;
@@ -254,7 +261,8 @@ export const f = {
       orderId: order,
       data: { reason: "The test is missing." },
     }),
-  merged: (order: string, sha: string, minute: number) =>
+  /** With no merger, the merge reads as one recorded before Oxagen read who merged. */
+  merged: (order: string, sha: string, minute: number, mergedBy?: MergedBy | null) =>
     newFact({
       kind: "merged",
       source: "provider",
@@ -264,7 +272,7 @@ export const f = {
       dedupeKey: `merged:${order}`,
       orderId: order,
       headSha: sha,
-      data: { merge_commit: MERGE },
+      data: mergedBy === undefined ? { merge_commit: MERGE } : { merge_commit: MERGE, merged_by: mergedBy },
     }),
   prClosed: (order: string, minute: number) =>
     newFact({
@@ -277,7 +285,7 @@ export const f = {
       orderId: order,
       data: {},
     }),
-  closed: (itemRevision: number, minute: number) =>
+  closed: (itemRevision: number, minute: number, resolution: CloseResolution = "declined") =>
     newFact({
       kind: "closed",
       source: "person",
@@ -285,7 +293,7 @@ export const f = {
       actor: MARCUS,
       occurredAt: at(minute),
       dedupeKey: `closed:${minute}`,
-      data: { resolution: "declined", reason: "Not this quarter." },
+      data: { resolution, reason: "Not this quarter." },
     }),
   reopened: (itemRevision: number, afterSend: number, minute: number) =>
     newFact({

@@ -7,6 +7,7 @@ import {
   FACT_SOURCES,
   FACT_SOURCES_BY_KIND,
   ITEM_FACT_KINDS,
+  type MergedBy,
   ORDER_FACT_KINDS,
   type WorkFact,
   checkFact,
@@ -73,9 +74,26 @@ const VALID: WorkFact[] = [
   newFact({ kind: "checks_required", source: "provider", ...base("k22"), orderId: "o1", headSha: SHA, data: { names: ["test"] } }),
   newFact({ kind: "check_observed", source: "provider", ...base("k23"), orderId: "o1", headSha: SHA, data: { name: "test", conclusion: "success" } }),
   newFact({ kind: "criterion_claimed", source: "agent", ...base("k24"), orderId: "o1", criterionId: "c1", headSha: SHA, data: { text: "Done." } }),
-  newFact({ kind: "returned", source: "person", ...base("k25"), orderId: "o1", data: { reason: "Missing test." } }),
-  newFact({ kind: "accepted", source: "person", ...base("k26"), orderId: "o1", headSha: SHA, briefDigest: DIGEST, data: { criteria: ["c1"], required_checks: [] } }),
-  newFact({ kind: "merged", source: "provider", ...base("k27"), orderId: "o1", headSha: SHA, data: { merge_commit: "c".repeat(40) } }),
+  newFact({ kind: "returned", source: "person", ...base("k25"), orderId: "o1", data: { reason: "Missing test.", run_ids: ["tse_abc"] } }),
+  newFact({
+    kind: "accepted",
+    source: "person",
+    ...base("k26"),
+    orderId: "o1",
+    repository: "aintel/platform",
+    prNumber: 7,
+    headSha: SHA,
+    briefDigest: DIGEST,
+    data: { criteria: ["c1"], required_checks: [], run_ids: ["tse_abc", "arun_def"] },
+  }),
+  newFact({
+    kind: "merged",
+    source: "provider",
+    ...base("k27"),
+    orderId: "o1",
+    headSha: SHA,
+    data: { merge_commit: "c".repeat(40), merged_by: { login: "amara", type: "User", oxagen_app: false } },
+  }),
   newFact({ kind: "pr_closed", source: "provider", ...base("k28"), orderId: "o1", data: {} }),
   newFact({ kind: "reverted", source: "provider", ...base("k29"), orderId: "o1", repository: "aintel/platform", prNumber: 640, data: { merge_commit: "d".repeat(40), reverts: 7 } }),
 ];
@@ -156,6 +174,8 @@ describe("checkFact", () => {
     ["reverted", "prNumber"],
     ["accepted", "headSha"],
     ["accepted", "briefDigest"],
+    ["accepted", "repository"],
+    ["accepted", "prNumber"],
   ] as const)("refuses a %s fact with no %s", (kind, column) => {
     const fact = VALID.find((entry) => entry.kind === kind)!;
     refusal({ ...fact, [column]: null } as WorkFact);
@@ -180,10 +200,34 @@ describe("checkFact", () => {
     refusal({ ...find("checks_required"), data: { names: [""] } });
     refusal({ ...find("criterion_claimed"), data: { text: "" } });
     refusal({ ...find("accepted"), data: { criteria: "c1" as unknown as string[], required_checks: [] } });
-    refusal({ ...find("merged"), data: { merge_commit: "abc" } });
+    refusal({ ...find("returned"), data: { reason: "Missing test.", run_ids: ["run_1"] } });
+    refusal({ ...find("merged"), data: { merge_commit: "abc", merged_by: null } });
     refusal({ ...find("reverted"), data: { merge_commit: "abc", reverts: 7 } });
     refusal({ ...find("reverted"), data: { merge_commit: "d".repeat(40), reverts: 0 } });
     refusal({ ...find("reverted"), data: { merge_commit: "d".repeat(40), reverts: "7" as unknown as number } });
+  });
+
+  it("admits a merge that names its merger or names none, and refuses one that leaves the field out or names half an account", () => {
+    const merged = VALID.find((fact) => fact.kind === "merged") as Extract<WorkFact, { kind: "merged" }>;
+    const commit = merged.data.merge_commit;
+    const by = (mergedBy: unknown) => ({ ...merged, data: { merge_commit: commit, merged_by: mergedBy as MergedBy | null } });
+    expect(() => checkFact(by({ login: "oxagen-connect[bot]", type: "Bot", oxagen_app: true }))).not.toThrow();
+    expect(() => checkFact(by({ login: "github-merge-queue[bot]", type: "Bot", oxagen_app: false }))).not.toThrow();
+    expect(() => checkFact(by(null))).not.toThrow();
+    expect(refusal({ ...merged, data: { merge_commit: commit } })).toContain("account that merged it");
+    expect(refusal(by({ login: "", type: "User", oxagen_app: false }))).toContain("login");
+    expect(refusal(by({ login: "amara", type: "", oxagen_app: false }))).toContain("type");
+    expect(refusal(by("amara"))).toContain("account that merged it");
+    // A new merge says whether the Oxagen GitHub App made it.
+    expect(refusal(by({ login: "amara", type: "User" }))).toContain("oxagen_app");
+    expect(refusal(by({ login: "amara", type: "User", oxagen_app: "no" }))).toContain("oxagen_app");
+  });
+
+  it("refuses a return or an acceptance that does not list the runs linked to the send", () => {
+    const find = <K extends WorkFact["kind"]>(kind: K) => VALID.find((fact) => fact.kind === kind) as Extract<WorkFact, { kind: K }>;
+    expect(refusal({ ...find("accepted"), data: { criteria: ["c1"], required_checks: [] } })).toContain("lists the runs");
+    expect(refusal({ ...find("returned"), data: { reason: "Missing test." } })).toContain("lists the runs");
+    expect(refusal({ ...find("accepted"), data: { criteria: ["c1"], required_checks: [], run_ids: ["tse_abc", 7 as unknown as string] } })).toContain("not a run id");
   });
 
   it("takes a revert only from the provider, on a send", () => {

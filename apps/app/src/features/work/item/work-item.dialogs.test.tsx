@@ -6,7 +6,9 @@
 // reasons, and passes the work order's key unchanged. The Accept dialog keeps
 // Accept disabled until every criterion is ticked, and reads "Accept is
 // blocked." while the gate is closed. Escape closes a dialog and focus goes
-// back to the button that opened it. Every rendered state runs axe (INV-26).
+// back to the button that opened it. A refusal because the page read a stale
+// item, or a stale head on Accept, is named on every decision and the item is
+// read again. Every rendered state runs axe (INV-26).
 import {
   cleanup,
   render,
@@ -30,6 +32,7 @@ import {
   draftBriefItem,
   HEAD,
   inReviewItem,
+  mergedByAppItem,
   NEXT_KEY,
   needsInfoItem,
   possibleDuplicateItem,
@@ -97,6 +100,9 @@ const AFTER = { id: "wi_12ab", state: "ready", revision: 1, version: 5 };
 const OK = { ok: true, value: { item: AFTER } };
 const STALE = { ok: false, reason: "conflict", code: "stale_version" };
 const STALE_TEXT = "This item changed since you opened it. Reload the page and try again.";
+const STALE_HEAD = { ok: false, reason: "conflict", code: "stale_head" };
+const STALE_HEAD_TEXT =
+  "The pull request has a new head commit since you opened the page. Reload the page and review the new head.";
 
 async function renderItem(
   detail: WorkItemDetail,
@@ -281,6 +287,28 @@ describe("Accept dialog", () => {
     );
     expect(screen.queryByTestId("work-dialog-accept-submit")).toBeNull();
     expect(screen.queryByTestId("work-accept-c1")).toBeNull();
+  });
+
+  it("reads Accept is blocked when the oxagen GitHub App merged the pull request", async () => {
+    const detail = mergedByAppItem();
+    render(
+      <IntlProvider>
+        <AcceptDialog
+          org="acme"
+          ws="core-platform"
+          detail={itemData(detail)}
+          send={firstSend(detail)}
+          open
+          onOpenChange={vi.fn()}
+          onDone={vi.fn()}
+        />
+      </IntlProvider>,
+    );
+    const blocked = await screen.findByTestId("work-accept-blocked");
+    expect(blocked).toHaveTextContent(
+      "Accept is blocked. The oxagen GitHub App merged the pull request, so no person merged it. Return the work or close the item.",
+    );
+    expect(screen.queryByTestId("work-dialog-accept-submit")).toBeNull();
   });
 });
 
@@ -640,4 +668,42 @@ describe("Close and reopen", () => {
       reason: "The fix regressed.",
     });
   });
+});
+
+describe("Stale refusals", () => {
+  it("names a stale head on Accept and reads the item again", async () => {
+    actions.acceptWork.mockResolvedValue(STALE_HEAD);
+    const user = await renderItem(inReviewItem());
+    await user.click(screen.getByTestId("work-action-accept"));
+    const accept = await dialog("accept");
+    await user.click(within(accept).getByTestId("work-accept-c1"));
+    await user.click(within(accept).getByTestId("work-accept-c2"));
+    await user.click(submit("accept"));
+    expect(actions.acceptWork).toHaveBeenCalledOnce();
+    expect(await within(accept).findByTestId("work-action-failure")).toHaveTextContent(STALE_HEAD_TEXT);
+    expect(router.refresh).toHaveBeenCalled();
+    // The dialog stays open with the reason, so nothing reads as accepted.
+    expect(screen.getByTestId("work-dialog-accept")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["Return", inReviewItem, "return", "return", actions.returnWork],
+    ["Stop", runningItem, "stop", "stop", actions.stopSend],
+    ["Withdraw", stoppingItem, "withdraw", "stop", actions.cancelSend],
+    ["Close", readyItem, "close", "close", actions.closeItem],
+    ["Reopen", doneItem, "reopen", "reopen", actions.reopenItem],
+  ] as const)(
+    "names a stale item on %s and reads the item again",
+    async (_name, build, button, name, action) => {
+      action.mockResolvedValue(STALE);
+      const user = await renderItem(build());
+      await user.click(screen.getByTestId(`work-action-${button}`));
+      const opened = await dialog(name);
+      await user.type(within(opened).getByLabelText("Reason"), "Checked again.");
+      await user.click(submit(name));
+      expect(action).toHaveBeenCalledOnce();
+      expect(await within(opened).findByTestId("work-action-failure")).toHaveTextContent(STALE_TEXT);
+      expect(router.refresh).toHaveBeenCalled();
+    },
+  );
 });

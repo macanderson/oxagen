@@ -158,12 +158,14 @@ export interface CollectorStore {
   findItem(collectorId: string, providerId: string): Promise<StoredWorkItem | null>;
   /**
    * Insert or update the workspace's item for this provider id. A new item
-   * gets the workspace's next number. The input is already screened.
+   * gets the workspace's next number. The input is already screened. A store
+   * that keeps item revisions (ADR-244) returns the revision the write left
+   * the item on, and the change carries it.
    */
   upsertItem(
     collector: CollectorRecord,
     input: WorkItemInput,
-  ): Promise<{ item: StoredWorkItem; created: boolean }>;
+  ): Promise<{ item: StoredWorkItem; created: boolean; revision?: number }>;
   setCursor(collectorId: string, cursor: string): Promise<void>;
   setHealth(collectorId: string, health: CollectorHealth): Promise<void>;
   /** A collector's reconcile or count result rows, newest first. */
@@ -305,6 +307,12 @@ export interface ItemChange {
   change: ItemChangeKind;
   /** Short digest of the fields the change covers, for the event's idempotency key. */
   digest: string;
+  /**
+   * The item revision this write left the item on. Absent when the store
+   * keeps no revisions. Triage uses it to tell a late failure from a failure
+   * on the revision it was about.
+   */
+  revision?: number;
 }
 
 export interface CollectResult {
@@ -416,7 +424,7 @@ export async function collectItem(
     requester: screened.requester,
     tainted: taintedFields(mapped),
   };
-  const { item: stored, created } = await ports.store.upsertItem(collector, input);
+  const { item: stored, created, revision } = await ports.store.upsertItem(collector, input);
   let kind: ItemChangeKind | null = null;
   if (created) kind = "new";
   else if (
@@ -426,10 +434,15 @@ export async function collectItem(
       !sameLabels(before.labels, input.labels))
   )
     kind = "updated";
-  const change =
+  const change: ItemChange | null =
     kind === null || stored.deleted
       ? null
-      : { publicId: stored.publicId, change: kind, digest: changeDigest(input) };
+      : {
+          publicId: stored.publicId,
+          change: kind,
+          digest: changeDigest(input),
+          ...(revision === undefined ? {} : { revision }),
+        };
   return { providerId: mapped.providerId, change, before, stale: false, skipped: false };
 }
 
@@ -503,29 +516,6 @@ export async function closeInboundEvent(
   inboundEventId: string,
 ): Promise<void> {
   await ports.store.markInboundEvent(inboundEventId, INBOUND_OUTCOMES.collected);
-}
-
-export type ProcessResult =
-  | Exclude<OpenResult, { kind: "ready" }>
-  | { kind: "collected"; changes: ItemChange[] };
-
-/**
- * The whole fetch and map for one stored event. The durable worker runs the
- * same three steps one by one, so a retry repeats only the ref that failed.
- */
-export async function processInboundEvent(
-  ports: CollectorPorts,
-  inboundEventId: string,
-): Promise<ProcessResult> {
-  const opened = await openInboundEvent(ports, inboundEventId);
-  if (opened.kind !== "ready") return opened;
-  const changes: ItemChange[] = [];
-  for (const ref of opened.refs) {
-    const result = await collectRef(ports, opened.collector, ref);
-    if (result?.change) changes.push(result.change);
-  }
-  await closeInboundEvent(ports, inboundEventId);
-  return { kind: "collected", changes };
 }
 
 // ── 3. Reconcile ────────────────────────────────────────────────────────────
@@ -693,49 +683,6 @@ export async function finishReconcile(
       : INBOUND_OUTCOMES.reconcileFailed,
   });
   return refreshHealth(ports, collectorId);
-}
-
-export type ReconcileResult =
-  | { kind: "skipped"; reason: string }
-  | {
-      kind: "finished";
-      summary: ReconcileSummary;
-      changes: ItemChange[];
-      health: HealthChange | null;
-    };
-
-/**
- * A whole reconcile: pages until the provider has no more, up to `maxPages`,
- * then the result row and the health. The durable worker runs each page as
- * its own step and calls finishReconcile itself.
- */
-export async function reconcileCollector(
-  ports: CollectorPorts,
-  collectorId: string,
-  options: { maxPages?: number; force?: boolean } = {},
-): Promise<ReconcileResult> {
-  const maxPages = options.maxPages ?? 20;
-  const summary: ReconcileSummary = { ok: true, pages: 0, handled: 0, missed: 0 };
-  const changes: ItemChange[] = [];
-  for (let i = 0; i < maxPages; i += 1) {
-    const page = await reconcilePage(ports, collectorId, { force: options.force });
-    if (page.kind === "skipped") {
-      if (i === 0) return { kind: "skipped", reason: page.reason };
-      break;
-    }
-    if (page.kind === "failed") {
-      summary.ok = false;
-      summary.error = page.error;
-      break;
-    }
-    summary.pages += 1;
-    summary.handled += page.handled;
-    summary.missed += page.missed;
-    changes.push(...page.changes);
-    if (!page.hasMore) break;
-  }
-  const health = await finishReconcile(ports, collectorId, summary);
-  return { kind: "finished", summary, changes, health };
 }
 
 // ── 4. Nightly count ────────────────────────────────────────────────────────

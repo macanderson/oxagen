@@ -822,7 +822,10 @@ jobs:
 
   # The required status check. The ruleset on main requires `test`, and
   # migration-gate, deploy-web and deploy-node need it, so it keeps the name
-  # and fails unless every build and unit lane succeeded. `!cancelled()` lets
+  # and fails unless every build and unit lane, and rls-integration, succeeded.
+  # rls-integration runs the database package's integration suite, the only
+  # runner of the Work records' RLS and store tests, so a red run there must
+  # block the merge too. `!cancelled()` lets
   # it report a failed lane as a failure, where the implicit success() would
   # skip it, and a skipped required check reads as passing. A run cancelled by
   # a newer push skips it.
@@ -841,7 +844,7 @@ jobs:
   # instead, and the ready run replaces it. A documentation-only pull request
   # passes with no lane run.
   test:
-    needs: [preflight, build, unit]
+    needs: [preflight, build, unit, rls-integration]
     if: >-
       !cancelled() &&
       github.event_name != 'workflow_dispatch' &&
@@ -855,6 +858,7 @@ jobs:
           HEAVY: ${{ needs.preflight.outputs.heavy }}
           BUILD_RESULT: ${{ needs.build.result }}
           UNIT_RESULT: ${{ needs.unit.result }}
+          RLS_RESULT: ${{ needs.rls-integration.result }}
         run: |
           if [ "$DRAFT" = true ]; then
             echo "::error::This pull request is a draft, so no build or unit lane ran. Mark it ready with gh pr ready, and the ready run replaces this result."
@@ -866,8 +870,9 @@ jobs:
           fi
           echo "build: $BUILD_RESULT"
           echo "unit: $UNIT_RESULT"
-          if [ "$BUILD_RESULT" != success ] || [ "$UNIT_RESULT" != success ]; then
-            echo "::error::A build or unit lane did not succeed (build: $BUILD_RESULT, unit: $UNIT_RESULT). Open the failed lane in this run for its log."
+          echo "rls-integration: $RLS_RESULT"
+          if [ "$BUILD_RESULT" != success ] || [ "$UNIT_RESULT" != success ] || [ "$RLS_RESULT" != success ]; then
+            echo "::error::A build, unit, or rls-integration job did not succeed (build: $BUILD_RESULT, unit: $UNIT_RESULT, rls-integration: $RLS_RESULT). Open the failed job in this run for its log."
             exit 1
           fi
 

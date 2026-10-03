@@ -29,6 +29,11 @@
  * - issues / issue_comment → the delivery reaches work intake (P1-03,
  *   #5103) with the installation, the repository, and the raw request; its
  *   failure never changes the response
+ * - pull_request → the forge sync request (ADR-288) and the work orders
+ *   (ADR-251), once per delivery with an installation; a failure never
+ *   changes the response
+ * - check_run / check_suite / status → the work orders whose head is the
+ *   commit (ADR-251); a failure never changes the response
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -53,6 +58,9 @@ const mocks = vi.hoisted(() => ({
   requestCodeRepoChecks: vi.fn(),
   routeGithubDiscoveryPush: vi.fn(),
   routeGithubWorkDelivery: vi.fn(),
+  recordWorkOrderPullRequest: vi.fn(),
+  recordWorkOrderChecks: vi.fn(),
+  requestForgePullRequestSync: vi.fn(),
   findHealthScopes: vi.fn(),
   // Mirrors the real healthRequests, so the test reads the events it sends.
   healthRequests: vi.fn(
@@ -173,6 +181,22 @@ vi.mock("@oxagen/handlers/lib/work-intake/delivery", () => ({
   routeGithubWorkDelivery: mocks.routeGithubWorkDelivery,
 }));
 
+// The work order recorders (ADR-251) read and write Postgres and have their
+// own suite (work.pull-request.webhook.test.ts). Here they are a seam, so
+// these tests assert which deliveries reach them and that their failure
+// never reaches GitHub. Without this seam the real recorder ran on every
+// pull_request case and threw inside the route's catch, unseen.
+vi.mock("@oxagen/handlers/work.pull-request.webhook", () => ({
+  recordWorkOrderPullRequest: mocks.recordWorkOrderPullRequest,
+  recordWorkOrderChecks: mocks.recordWorkOrderChecks,
+}));
+
+// The forge sync request (ADR-288) sends its own event and has its own suite
+// (forge.pull-request.webhook.test.ts). Here it is a seam for the same reason.
+vi.mock("@oxagen/handlers/forge.pull-request.webhook", () => ({
+  requestForgePullRequestSync: mocks.requestForgePullRequestSync,
+}));
+
 // The steering repo health scope lookup reads Postgres and has its own suite.
 // Here it is a seam. The event mapping (health.events) is the real one.
 vi.mock("@oxagen/handlers/steering-repo/health", () => ({
@@ -268,6 +292,9 @@ beforeEach(() => {
   mocks.githubCodeCheckRequests.mockResolvedValue([]);
   mocks.requestCodeRepoChecks.mockResolvedValue(0);
   mocks.routeGithubWorkDelivery.mockResolvedValue({ events: [], stored: 0, duplicates: 0, rejected: 0 });
+  mocks.recordWorkOrderPullRequest.mockResolvedValue(0);
+  mocks.recordWorkOrderChecks.mockResolvedValue(0);
+  mocks.requestForgePullRequestSync.mockResolvedValue(0);
   // No steering repo matches unless a test says so (S2, #4560).
   mocks.findHealthScopes.mockResolvedValue([]);
 });
@@ -1378,6 +1405,161 @@ describe("github app webhook – work intake (P1-03, #5103)", () => {
     expect(logger.error).toHaveBeenCalledWith(
       expect.objectContaining({ eventName: "issues" }),
       expect.stringContaining("work intake"),
+    );
+  });
+});
+
+// A push to an open pull request, with the head commit a work order reads.
+const HEAD_SHA = "9b1f6c0d2e3a4b5c6d7e8f90a1b2c3d4e5f60718";
+const SYNCHRONIZE = {
+  action: "synchronize",
+  installation: { id: 555 },
+  repository: { id: 90210, full_name: "acme/widgets" },
+  pull_request: {
+    number: 7,
+    state: "open",
+    head: { sha: HEAD_SHA },
+    base: { ref: "main" },
+    updated_at: "2026-10-02T09:10:00Z",
+  },
+};
+
+describe("github app webhook – forge pull request sync (ADR-288)", () => {
+  it("asks the forge sync once per pull_request delivery, with the body and the installation", async () => {
+    const res = await app.fetch(signedPost("pull_request", SYNCHRONIZE));
+    expect(res.status).toBe(200);
+    expect(mocks.requestForgePullRequestSync).toHaveBeenCalledTimes(1);
+    expect(mocks.requestForgePullRequestSync).toHaveBeenCalledWith(
+      expect.objectContaining({ send: expect.any(Function) }),
+      { body: SYNCHRONIZE, installationId: "555" },
+    );
+  });
+
+  it("answers GitHub as usual and logs when the request fails", async () => {
+    mocks.requestForgePullRequestSync.mockRejectedValue(new Error("inngest down"));
+    const res = await app.fetch(signedPost("pull_request", SYNCHRONIZE));
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { dispatched: number }).dispatched).toBe(1);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ eventName: "pull_request" }),
+      expect.stringContaining("forge sync"),
+    );
+  });
+});
+
+describe("github app webhook – work orders (ADR-251)", () => {
+  const CHECK_RUN = {
+    action: "completed",
+    installation: { id: 555 },
+    repository: { full_name: "acme/widgets" },
+    check_run: {
+      id: 41,
+      name: "test",
+      head_sha: HEAD_SHA,
+      status: "completed",
+      conclusion: "failure",
+    },
+  };
+  const CHECK_SUITE = {
+    action: "completed",
+    installation: { id: 555 },
+    repository: { full_name: "acme/widgets" },
+    check_suite: {
+      id: 42,
+      head_sha: HEAD_SHA,
+      status: "completed",
+      conclusion: "success",
+    },
+  };
+  const STATUS = {
+    installation: { id: 555 },
+    repository: { full_name: "acme/widgets" },
+    sha: HEAD_SHA,
+    context: "ci/circleci",
+    state: "success",
+  };
+
+  it("records a signed pull_request delivery with the body and the installation", async () => {
+    const res = await app.fetch(signedPost("pull_request", SYNCHRONIZE));
+    expect(res.status).toBe(200);
+    expect(mocks.recordWorkOrderPullRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.recordWorkOrderPullRequest).toHaveBeenCalledWith({
+      body: SYNCHRONIZE,
+      installationId: "555",
+    });
+    expect(mocks.recordWorkOrderChecks).not.toHaveBeenCalled();
+    // Nothing on the pull request's path failed and was swallowed.
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it("records nothing on a bad signature, a push, or a delivery with no installation", async () => {
+    const bad = await app.fetch(
+      signedPost("pull_request", SYNCHRONIZE, { badSig: true }),
+    );
+    expect(bad.status).toBe(401);
+    await app.fetch(signedPost("push", SYNCHRONIZE));
+    const { installation: _installation, ...body } = SYNCHRONIZE;
+    await app.fetch(signedPost("pull_request", body));
+    expect(mocks.recordWorkOrderPullRequest).not.toHaveBeenCalled();
+    expect(mocks.recordWorkOrderChecks).not.toHaveBeenCalled();
+  });
+
+  it("answers GitHub as usual and logs when recording the pull request fails", async () => {
+    const failure = new AggregateError(
+      [new Error("pg down")],
+      "1 of 1 workspaces could not record the pull request",
+    );
+    mocks.recordWorkOrderPullRequest.mockRejectedValue(failure);
+    const res = await app.fetch(signedPost("pull_request", SYNCHRONIZE));
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { dispatched: number }).dispatched).toBe(1);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ err: failure, eventName: "pull_request" }),
+      expect.stringContaining("work orders"),
+    );
+  });
+
+  it.each([
+    ["check_run", CHECK_RUN],
+    ["check_suite", CHECK_SUITE],
+    ["status", STATUS],
+  ] as const)(
+    "records a signed %s delivery with the body and the installation",
+    async (event, body) => {
+      const res = await app.fetch(signedPost(event, body));
+      expect(res.status).toBe(200);
+      expect(mocks.recordWorkOrderChecks).toHaveBeenCalledTimes(1);
+      expect(mocks.recordWorkOrderChecks).toHaveBeenCalledWith({
+        body,
+        installationId: "555",
+      });
+      expect(mocks.recordWorkOrderPullRequest).not.toHaveBeenCalled();
+      expect(logger.error).not.toHaveBeenCalled();
+    },
+  );
+
+  it("records no check on a bad signature, another event, or a delivery with no installation", async () => {
+    const bad = await app.fetch(
+      signedPost("check_run", CHECK_RUN, { badSig: true }),
+    );
+    expect(bad.status).toBe(401);
+    await app.fetch(signedPost("workflow_run", CHECK_RUN));
+    await app.fetch(signedPost("push", CHECK_RUN));
+    const { installation: _installation, ...body } = CHECK_RUN;
+    const res = await app.fetch(signedPost("check_run", body));
+    expect(res.status).toBe(200);
+    expect(mocks.recordWorkOrderChecks).not.toHaveBeenCalled();
+  });
+
+  it("answers GitHub as usual and logs when recording a check fails", async () => {
+    const failure = new Error("pg down");
+    mocks.recordWorkOrderChecks.mockRejectedValue(failure);
+    const res = await app.fetch(signedPost("check_suite", CHECK_SUITE));
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { received: boolean }).received).toBe(true);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ err: failure, eventName: "check_suite" }),
+      expect.stringContaining("check result"),
     );
   });
 });

@@ -23,7 +23,7 @@ export const workOrderAccept = registerCapability({
     "Accept a send's result on the pull request's head commit, with every criterion ticked. Acceptance merges nothing.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

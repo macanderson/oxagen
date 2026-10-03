@@ -161,7 +161,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     /** The two rows that share an expiry, in the id order the page boundary uses. */
     const sameExpiryById = () =>
-      [ids["budget.turn.continue"]!, ids["mcp:github:create_release"]!].sort();
+      [ids["update_workspace"]!, ids["mcp:github:create_release"]!].sort();
 
     const list = (
       orgId: string,
@@ -239,7 +239,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
               orgId: orgA,
               workspaceId: wsA1,
               messageId: orphanMessageId,
-              capabilityName: "budget.turn.continue",
+              capabilityName: "update_workspace",
               inputPreview: {},
               riskLevel: "low",
               expiresAt: sameExpiry,
@@ -369,7 +369,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const out = await list(orgA, wsA1);
       const byTool = new Map(out.items.map((i) => [i.tool, i]));
       expect(byTool.get("create_workspace")!.requester).toBe(requesterPublicId);
-      expect(byTool.get("budget.turn.continue")!.requester).toBeNull();
+      expect(byTool.get("update_workspace")!.requester).toBeNull();
     });
 
     it("excludes the org's other workspaces and other orgs", async () => {

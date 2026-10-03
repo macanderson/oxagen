@@ -26,10 +26,12 @@ import {
 import { type Lookups, type RunCost, type WorkStatus, checksWordOf, costOf, priorityViewOf, rowOf, tabOf } from "./derive";
 import {
   AMARA,
+  APP_MERGER,
   IN_REVIEW,
   MARCUS,
   O1,
   O2,
+  QUEUE_MERGER,
   READY,
   REPOSITORY,
   SENT,
@@ -304,6 +306,18 @@ const CASES: Case[] = [
     wait: { kind: "merged_before_review", at: at(12) },
   },
   {
+    name: "a send the Oxagen GitHub App merged before review",
+    facts: [...IN_REVIEW, f.merged(O1, SHA1, 12, APP_MERGER)],
+    status: "in_review",
+    wait: { kind: "merged_by_app", login: "oxagen-connect[bot]", at: at(12) },
+  },
+  {
+    name: "an accepted send the Oxagen GitHub App merged",
+    facts: [...IN_REVIEW, f.accepted(O1, SHA1, 12), f.merged(O1, SHA1, 13, APP_MERGER)],
+    status: "in_review",
+    wait: { kind: "merged_by_app", login: "oxagen-connect[bot]", at: at(13) },
+  },
+  {
     name: "a send whose item changed after the run",
     facts: [...IN_REVIEW, f.sourceChanged(2, 12)],
     status: "in_review",
@@ -347,6 +361,12 @@ const CASES: Case[] = [
   {
     name: "a done item",
     facts: [...IN_REVIEW, f.accepted(O1, SHA1, 12), f.merged(O1, SHA1, 15)],
+    status: "done",
+    wait: { kind: "done", accepted: { by: "Marcus", at: at(12), head: SHA1 }, merged_at: at(15) },
+  },
+  {
+    name: "a done item GitHub's merge queue merged",
+    facts: [...IN_REVIEW, f.accepted(O1, SHA1, 12), f.merged(O1, SHA1, 15, QUEUE_MERGER)],
     status: "done",
     wait: { kind: "done", accepted: { by: "Marcus", at: at(12), head: SHA1 }, merged_at: at(15) },
   },
@@ -538,6 +558,13 @@ describe("the row", () => {
     const out = row([...IN_REVIEW, f.accepted(O1, SHA1, 12)]);
     expect(out.send?.accepted).toBe(true);
     expect(out.send?.gate).toEqual({ open: false, block: "already_accepted", detail: SHA1 });
+  });
+
+  it("closes Accept on a send the Oxagen GitHub App merged, keeps it on the review tab, and finishes nothing", () => {
+    const out = row([...IN_REVIEW, f.accepted(O1, SHA1, 12), f.merged(O1, SHA1, 13, APP_MERGER)]);
+    expect(out).toMatchObject({ state: "review", tab: "review", status: "in_review", finished_at: null });
+    expect(out.send?.accepted).toBe(true);
+    expect(out.send?.gate).toEqual({ open: false, block: "merged_by_app", detail: "oxagen-connect[bot]" });
   });
 
   it("finishes a done item at the later of its acceptance and its merge", () => {

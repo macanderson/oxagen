@@ -76,6 +76,7 @@
       "no_head": "oxagen has not read the pull request's head commit yet. Read the checks again.",
       "pr_closed": "The pull request closed without merging. The item is not done.",
       "merged_before_review": "Merged on {at} before anyone accepted it. It is done once a person accepts it.",
+      "merged_by_app": "The oxagen GitHub App ({login}) merged the pull request on {at}. No person merged it. Return the work or close the item.",
       "brief_out_of_date": "The item changed after its brief was approved. Approve the new brief before you accept.",
       "accepted_waiting_merge": "Accepted by {by} on {head}. Waiting for the merge.",
       "done": "{by} accepted {head} on {accepted}. Merged on {merged}.",
@@ -315,7 +316,8 @@
           "openedPr": "Steering PR <pr>#{number}</pr> in {repository} adds the priorities record.",
           "openedNoPr": "oxagen saved the priorities record as a proposal, but no pull request is open yet. Open it from the proposal.",
           "openedRetry": "Merge the pull request to put the rules in place. Then select Retry triage on each work item whose triage failed.",
-          "review": "Review and merge"
+          "review": "Review and merge",
+          "noRole": "Only a workspace Owner or Member can open this pull request."
         }
       },
       "runtimes": {
@@ -384,7 +386,8 @@
           "lead": "Median lead time"
         },
         "empty": "No week in this window has a finished item.",
-        "noLead": "none"
+        "noLead": "none",
+        "partial": "Partial week"
       },
       "touchKinds": {
         "title": "Touches by kind",

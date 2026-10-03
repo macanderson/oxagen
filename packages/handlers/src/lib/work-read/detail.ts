@@ -340,7 +340,17 @@ export function sendDetailOf(item: Pick<DerivedItem, "facts" | "projection">, or
         : {
             ...ref,
             head_at: headSeen?.occurredAt ?? null,
-            merged: order.merge === null ? null : { at: order.merge.at, merge_commit: order.merge.mergeCommit },
+            merged:
+              order.merge === null
+                ? null
+                : {
+                    at: order.merge.at,
+                    merge_commit: order.merge.mergeCommit,
+                    merged_by:
+                      order.merge.mergedBy === null
+                        ? null
+                        : { login: order.merge.mergedBy.login, type: order.merge.mergedBy.type, oxagen_app: order.merge.mergedBy.oxagen_app },
+                  },
             closed_at: order.prClosed ? lastAt(facts.filter((fact) => onPullRequest(order, fact)), "pr_closed") : null,
           },
     pull_requests: forgePullRequestsOf(order, lookups),

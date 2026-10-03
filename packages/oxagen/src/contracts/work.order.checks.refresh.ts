@@ -23,7 +23,7 @@ export const workOrderChecksRefresh = registerCapability({
     "Read again from GitHub the checks a send's pull request needs on its head commit, and record the required checks and each conclusion.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

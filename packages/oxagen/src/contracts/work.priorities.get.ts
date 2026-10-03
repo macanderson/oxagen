@@ -19,7 +19,7 @@ export const workPrioritiesGet = registerCapability({
     "Read the priorities record triage ranks work by: its lineage, version, hash, and numbered rules, with triage's suggestions, corrections, and failures in the last 30 days.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,
