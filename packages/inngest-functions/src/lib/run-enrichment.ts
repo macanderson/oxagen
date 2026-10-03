@@ -82,13 +82,13 @@ export function usdMicros(usd: number | undefined): number {
     : 0;
 }
 
-/** The account's last sentence when the budget stopped the job early. */
-export const ENRICHMENT_BUDGET_NOTE =
-  " The account covers only the start of the run: its enrichment budget ran out before the rest was read.";
-
-/** The account's sentence when its input reached a read limit. */
-export const ENRICHMENT_LIMIT_NOTE =
-  " The account covers only the start of the run because its transcript reached a read limit.";
+// The notes an account ends with live beside `clipSummary`, which keeps them
+// when a view cuts a summary stored before the cap (#4622).
+export {
+  ENRICHMENT_BUDGET_NOTE,
+  ENRICHMENT_LIMIT_NOTE,
+  partialEvidenceNote,
+} from "@oxagen/recorder";
 
 /** One narrative call's answer, with the tokens it used and their price. */
 export interface NarrativeTurn {
@@ -398,13 +398,6 @@ function terminalOrRetryable(failure: unknown): unknown {
     status !== 429;
   if (!refused) return failure;
   return new NonRetriableError((failure as Error).message, { cause: failure });
-}
-
-/** The account's sentence when some recorded bodies could not be read. */
-export function partialEvidenceNote(missing: number): string {
-  return missing > 0
-    ? ` Evidence is partial: ${missing} recorded bodies were unavailable.`
-    : "";
 }
 
 /**
