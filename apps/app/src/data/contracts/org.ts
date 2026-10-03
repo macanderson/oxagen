@@ -126,7 +126,7 @@ const BoundRepository = z.object({
 });
 type BoundRepository = z.infer<typeof BoundRepository>;
 
-/** One lane's daily budget in US dollars, or null for no limit. zod v4's `number()` refuses an infinite value on its own. */
+/** One lane's daily budget in US dollars, or null for no limit. */
 const DailyBudgetUsd = z.number().nonnegative().nullable();
 
 /**
