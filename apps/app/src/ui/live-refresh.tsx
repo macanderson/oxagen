@@ -22,14 +22,14 @@ export function LiveRefresh({
 }) {
   const navigate = useNavigate();
   const [pending, startTransition] = useTransition();
-  const busy = useRef(false);
+  const busyRef = useRef(false);
   useEffect(() => {
-    busy.current = pending;
+    busyRef.current = pending;
   }, [pending]);
   useEffect(() => {
     if (!active) return;
     const id = window.setInterval(() => {
-      if (document.visibilityState !== "visible" || busy.current) return;
+      if (document.visibilityState !== "visible" || busyRef.current) return;
       startTransition(() => {
         navigate.refresh();
       });

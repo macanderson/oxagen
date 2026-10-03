@@ -154,7 +154,7 @@ export type NewWorkspaceDraft = {
  * made either way, so a refusal here is carried beside it, not returned as the
  * create's own refusal: that would claim no workspace was made.
  */
-export type CostCenterCharged =
+type CostCenterCharged =
   | { ok: true; code: string }
   | { ok: false; code: string; reason: string };
 
