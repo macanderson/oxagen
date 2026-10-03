@@ -131,6 +131,9 @@ export function GatewayPolicySection({
     valuesOf(policy),
   );
   const [saved, setSaved] = useState<GatewayPolicy>(policy);
+  // Held apart so the allowlist's narrowing survives into the rich-text
+  // callback below.
+  const allow = saved.modelAllow;
   const [reach, setReach] = useState<GatewayReach | null>(null);
   const [errors, setErrors] = useState<GatewayFieldErrors>({});
   const [alert, setAlert] = useState<"denied" | "failed" | null>(null);
@@ -328,12 +331,12 @@ export function GatewayPolicySection({
             )}
           </p>
           <p>
-            {saved.modelAllow === null
+            {allow === null
               ? t("noAllowlist")
-              : saved.modelAllow.length === 0
+              : allow.length === 0
                 ? t("permitNoModels")
                 : t.rich("allowlist", {
-                    models: () => <ModelNames models={saved.modelAllow} />,
+                    models: () => <ModelNames models={allow} />,
                   })}
           </p>
           {saved.modelDeny.length > 0 ? (

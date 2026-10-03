@@ -97,10 +97,14 @@ const ROUTERS: ReadonlySet<ProviderId> = new Set<ProviderId>([
   "vercel",
 ]);
 
+function isProviderId(key: string): key is ProviderId {
+  return Object.hasOwn(MARKS, key);
+}
+
 function lookup(name: string | null | undefined): ProviderId | null {
   if (!name) return null;
   const key = name.trim().toLowerCase().replace(/[\s_]+/g, "-");
-  if (Object.hasOwn(MARKS, key)) return key as ProviderId;
+  if (isProviderId(key)) return key;
   return Object.hasOwn(ALIASES, key) ? (ALIASES[key] ?? null) : null;
 }
 

@@ -2474,9 +2474,9 @@ export function TranscriptView({
               {meta.map((part, index) => (
                 <span key={part}>
                   {index === 0 ? null : " · "}
-                  {part === run.model?.slug ? (
+                  {run.model !== null && part === run.model.slug ? (
                     <ProviderMark
-                      provider={run.model?.provider ?? null}
+                      provider={run.model.provider}
                       model={part}
                       size={14}
                       className="mr-1 align-middle"
