@@ -17,6 +17,7 @@ function enrolled(): HostFile {
   const signer = bundleSigner();
   return testHostFile(signer, signer.sign(unsignedBundle()), {
     wrapper_version: "2.1.4-365",
+    mcp_stdio_command: ["node", "/opt/tacho/tacho-mcp-stdio.mjs"],
   });
 }
 
