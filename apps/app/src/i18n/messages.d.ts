@@ -12612,6 +12612,50 @@ type Messages = {
       region: string;
       close: string;
     };
+    diffView: {
+      renamedFrom: string;
+      notKept: {
+        too_large: string;
+        unreadable: string;
+        unconfigured: string;
+      };
+      binary: string;
+      noRoom: string;
+      truncated: string;
+    };
+    changeSet: {
+      rule: string;
+      pullsHeading: string;
+      filesHeading: string;
+      empty: string;
+      noFiles: string;
+      state: {
+        open: string;
+        draft: string;
+        merged: string;
+        closed: string;
+      };
+      stateSeen: string;
+      noRevision: string;
+      revisionFiles: string;
+      incomplete: string;
+      countsUnknown: string;
+      leftOut: string;
+      morePullRequests: string;
+      repositorySummary: string;
+      moreFiles: string;
+      pullNotListed: string;
+      loadingDiff: string;
+      pathMissing: string;
+      loading: string;
+      failure: {
+        denied: string;
+        notFound: string;
+        pendingApproval: string;
+        other: string;
+        thrown: string;
+      };
+    };
   };
   work: {
     status: {
