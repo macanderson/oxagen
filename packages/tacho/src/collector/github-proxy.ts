@@ -9,13 +9,18 @@ import type { HostFile } from "../host/host-file";
 import type { FetchLike } from "../host/control-client";
 import type { PolicyView } from "./hook-handler";
 import type { SessionRecord, SessionRegistry } from "./registry";
-import type { TachoEvent } from "../envelope";
 import {
   TACHO_CREDENTIAL_BASIS_ATTR,
   TACHO_CREDENTIAL_GATEWAY_BROKERED,
   TACHO_RUN_TOKEN_ATTR,
   isWrappedHarness,
 } from "../wire";
+import {
+  onSessionQueue,
+  type RecordSink,
+  recordOnChain,
+  type SessionExclusive,
+} from "./chain-write";
 
 const LIFE_MS = 15 * 60_000;
 const MAX_LEASES = 1024;
@@ -57,7 +62,13 @@ export interface GithubProxyDeps {
   controlFetch: FetchLike;
   fetch?: typeof globalThis.fetch;
   now(): number;
-  record(events: readonly TachoEvent[]): void;
+  record: RecordSink;
+  /**
+   * Run a frame's seal and write on its session's queue, where the session's
+   * hooks run. The daemon's is the transcript tailer's. Absent, the frame is
+   * sealed where the request stands.
+   */
+  exclusive?: SessionExclusive;
   log(line: string): void;
 }
 
@@ -489,24 +500,44 @@ export function createGithubProxy(deps: GithubProxyDeps) {
             }
           : {}),
       };
-      deps.record([
-        session.recorder.sealCollectorEvent(
-          "token_use",
-          {
-            tool_name: pushing ? "git push" : "git fetch",
-            tool_target: lease.repository,
-            policy_decision: "allow",
-            policy_source: "bundle",
-          },
-          {
-            attrs: {
-              [TACHO_CREDENTIAL_BASIS_ATTR]: TACHO_CREDENTIAL_GATEWAY_BROKERED,
-              [TACHO_RUN_TOKEN_ATTR]: lease.id,
-              "oxagen.github.repository": lease.repository,
-            },
-          },
-        ),
-      ]);
+      // Recorded before the token is used, on the session's queue. A hook
+      // there can stand between its seal and its write. A frame sealed
+      // beside it took the seq after the hook's frame and reached the WAL
+      // first, so the hook's write was refused and the session recorded
+      // nothing more. The session can stop while this waits, and then
+      // nothing is forwarded.
+      const recorded = await onSessionQueue(deps.exclusive, session, () => {
+        const current = live(lease);
+        if (current === undefined) return false;
+        recordOnChain(
+          current.recorder,
+          (chain) => [
+            chain.sealCollectorEvent(
+              "token_use",
+              {
+                tool_name: pushing ? "git push" : "git fetch",
+                tool_target: lease.repository,
+                policy_decision: "allow",
+                policy_source: "bundle",
+              },
+              {
+                attrs: {
+                  [TACHO_CREDENTIAL_BASIS_ATTR]:
+                    TACHO_CREDENTIAL_GATEWAY_BROKERED,
+                  [TACHO_RUN_TOKEN_ATTR]: lease.id,
+                  "oxagen.github.repository": lease.repository,
+                },
+              },
+            ),
+          ],
+          deps.record,
+        );
+        return true;
+      });
+      if (!recorded) {
+        reply(res, 403, "The session stopped before forwarding");
+        return;
+      }
       const upstream = await fetchUpstream(
         `https://github.com/${lease.repository}.git/${path[3]}${url.search}`,
         init,
@@ -560,25 +591,45 @@ export function createGithubProxy(deps: GithubProxyDeps) {
           deps.log("GitHub credential revocation failed");
         }
       }
-      if (!session.sealed && !session.pendingTerminal) {
-        deps.record([
-          session.recorder.sealCollectorEvent(
-            "tool_call",
-            {
-              tool_name: pushing ? "git push" : "git fetch",
-              tool_target: lease.repository,
-            },
-            {
-              attrs: {
-                [TACHO_CREDENTIAL_BASIS_ATTR]:
-                  TACHO_CREDENTIAL_GATEWAY_BROKERED,
-                [TACHO_RUN_TOKEN_ATTR]: lease.id,
-                "oxagen.github.repository": lease.repository,
-                "oxagen.github.http_status": String(status),
-              },
-            },
-          ),
-        ]);
+      // On the session's queue for the reason the `token_use` frame is. The
+      // answer is already sent, so a frame that cannot be written is logged
+      // rather than thrown over the request's own outcome.
+      try {
+        await onSessionQueue(deps.exclusive, session, () => {
+          const current = deps.registry.byUuid(lease.session);
+          if (
+            current === undefined ||
+            current.sealed ||
+            current.pendingTerminal
+          )
+            return;
+          recordOnChain(
+            current.recorder,
+            (chain) => [
+              chain.sealCollectorEvent(
+                "tool_call",
+                {
+                  tool_name: pushing ? "git push" : "git fetch",
+                  tool_target: lease.repository,
+                },
+                {
+                  attrs: {
+                    [TACHO_CREDENTIAL_BASIS_ATTR]:
+                      TACHO_CREDENTIAL_GATEWAY_BROKERED,
+                    [TACHO_RUN_TOKEN_ATTR]: lease.id,
+                    "oxagen.github.repository": lease.repository,
+                    "oxagen.github.http_status": String(status),
+                  },
+                },
+              ),
+            ],
+            deps.record,
+          );
+        });
+      } catch (error) {
+        deps.log(
+          `GitHub proxy could not record the ${pushing ? "push" : "fetch"}: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
     }
   }

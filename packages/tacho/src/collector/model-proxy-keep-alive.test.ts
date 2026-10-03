@@ -111,7 +111,11 @@ function withoutMarkers(value: unknown): unknown {
  * message, reads the longest entry still cached, and restarts that entry's
  * TTL from its own start.
  */
-async function fakeVendor(clock: () => number) {
+async function fakeVendor(
+  clock: () => number,
+  /** Runs when a keep-alive arrives, before the vendor answers it. */
+  onKeepAlive: () => void = () => {},
+) {
   const cache = new Map<string, number>();
   const asked: Asked[] = [];
   const keyOf = (body: Record<string, unknown>, k: number) =>
@@ -147,6 +151,7 @@ async function fakeVendor(clock: () => number) {
       const write = tokens(n) - read;
       cache.set(keyOf(body, n), at + TTL);
       asked.push({ at, body, usage: { read, write } });
+      if (body["max_tokens"] === 0) onKeepAlive();
       const usage = {
         input_tokens: 10,
         cache_read_input_tokens: read,
@@ -214,10 +219,13 @@ describe("the cache keep-alive through the model proxy", () => {
   async function start(options: {
     keepAlive?: boolean;
     price?: ModelPrice;
+    /** End the parent's session while its keep-alive is at the vendor. */
+    endsDuringKeepAlive?: boolean;
   }) {
     let now = T0;
     const clock = () => now;
-    const vendor = await fakeVendor(clock);
+    let duringKeepAlive: () => void = () => {};
+    const vendor = await fakeVendor(clock, () => duringKeepAlive());
     cleanups.push(() => vendor.close());
     const registry = new SessionRegistry({
       scope: TEST_ENROLLMENT,
@@ -237,6 +245,8 @@ describe("the cache keep-alive through the model proxy", () => {
       harness: "claude-code",
     }).record;
     const parent = registry.ensure(SESSION, { harness: "claude-code" }).record;
+    if (options.endsDuringKeepAlive === true)
+      duringKeepAlive = () => registry.seal(parent);
     const events: TachoEvent[] = [];
     const log: string[] = [];
     const bundle = unsignedBundle({
@@ -468,5 +478,24 @@ describe("the cache keep-alive through the model proxy", () => {
     await h.call(0, PARENT_FIRST);
     await h.wait(15_000, 12 * MINUTE);
     expect(h.vendor.keepAlives()).toEqual([]);
+  });
+
+  it("stores the request whole on the host's chain when the session ends while its keep-alive is out", async () => {
+    const h = await start({ endsDuringKeepAlive: true });
+    await h.call(0, PARENT_FIRST);
+    h.hook(10_000, "SubagentStart");
+    await h.wait(15_000, 5 * MINUTE);
+    expect(h.vendor.keepAlives()).toHaveLength(1);
+    await until(() => h.keepAliveFrames().length === 1);
+    const frame = h.keepAliveFrames()[0] as TachoEvent;
+    const parentUuid = h.parent.recorder.sessionUuid;
+    expect(frame.session_uuid).not.toBe(parentUuid);
+    expect(frame.attrs["oxagen.session_uuid"]).toBe(parentUuid);
+    // A fold names the parent's request, which is on the session's chain, so
+    // a reader of the host's chain could not rebuild this one.
+    expect(frame.attrs["oxagen.request_prior_digest"]).toBeUndefined();
+    expect(frame.attrs["oxagen.request_stored_bytes"]).toBe(
+      frame.attrs["oxagen.request_full_bytes"],
+    );
   });
 });

@@ -155,6 +155,8 @@ import {
 import {
   applyCommands as applyDeliveredCommands,
   HandledCommands,
+  type InboxDeps,
+  type InboxResult,
 } from "./inbox";
 import {
   createMcpGateway,
@@ -191,6 +193,7 @@ import {
 } from "./memory-capture/stella-memories";
 import { createMachineLoop } from "./local-servers/machine";
 import { pushCredentialBasis } from "./push-basis";
+import type { SessionExclusive } from "./chain-write";
 import { forgetRecallHints } from "./recall-hints";
 import { sessionSkills } from "./session-skills";
 import { issueRunToken } from "./credential-issuer";
@@ -1107,6 +1110,8 @@ async function initializeDaemon(
    * - the OTLP records that name it, one task per session a post names;
    * - the tailer's seals of its transcripts, read outside any queue;
    * - the gateway frame of a call it waits on (ADR-189);
+   * - the frame of a model call it made, once the answer is piped;
+   * - the frames of a Git custody request it made;
    * - the git lane's facts and reconciliation for it, read outside any queue.
    *
    * The host queue:
@@ -1129,11 +1134,21 @@ async function initializeDaemon(
    * - The host chain's writers are synchronous (the gateway, the model proxy,
    *   run tokens), so no queued task can stand between their seal and their
    *   write.
-   * - The detector and the operator's commands (`onControl`) mark every chain
-   *   and seal across awaits outside any queue, as they did beside the one
-   *   queue this replaced.
+   * - The detector seals only on the host chain, outside any queue, and
+   *   writes each seal in the stretch that makes it.
+   * - The operator's commands (`onControl`) seal in one stretch after their
+   *   bundle fetch, outside any queue, and mark only the chains a batch can
+   *   seal on, right before the seals.
    */
   const queues = new HookQueues();
+  /**
+   * Run `apply` on a session's queue. The transcript tailer, the model proxy
+   * and the Git custody proxy seal on a session's chain through this, so a
+   * frame of theirs never lands between a hook's seal and its write
+   * (`chain-write.ts`).
+   */
+  const sessionExclusive: SessionExclusive = (session, apply) =>
+    queues.session(session.harnessSessionId, async () => apply());
   /**
    * Aborted when `stop` begins. A hook that reads a repository (a push's
    * credential basis, a session's remote) holds its session's queue for the
@@ -1331,13 +1346,12 @@ async function initializeDaemon(
    * about to seal events it may not be able to write can put every chain
    * back if the write fails. `checkpoint` and `recordReconciliation` already
    * do this by hand for the one or few sessions they touch, and so does the
-   * registry's sweep. This covers a caller (`applyCommands`,
-   * `handleHookEvent`, OTel ingestion, the detector) whose sealing runs
-   * inside a call this file does not own, and so does not know in advance
-   * which sessions (out of everything the registry currently holds) it will
-   * touch. Marking and
-   * rolling back a chain the call never reaches costs nothing: the mark
-   * matches the chain's position exactly and the rollback is a no-op.
+   * registry's sweep. This covers a caller (`handleHookEvent`) whose sealing
+   * runs inside a call this file does not own, and so does not know in
+   * advance which sessions (out of everything the registry currently holds)
+   * it will touch. Marking and rolling back a chain the call never reaches
+   * costs nothing: the mark matches the chain's position exactly and the
+   * rollback is a no-op.
    *
    * `within` narrows the marks to the sessions a caller's queue owns. A hook
    * passes it: another session's hook runs beside it, and a rollback that
@@ -1500,41 +1514,82 @@ async function initializeDaemon(
     }
   }
 
+  /** Host commands that seal only on the host chain, or on nothing. */
+  const HOST_ONLY_COMMANDS: ReadonlySet<string> = new Set([
+    "refresh_bundle",
+    "revoke",
+    "work_order",
+  ]);
+
   /**
-   * Run `seal`, record what it sealed, and roll every chain back to where
-   * this call found it if the WAL write throws.
+   * The chains a batch of operator commands can seal on, each with its mark:
+   * the host chain, each session a command names, and every live session
+   * when a command for the whole host fans out to them.
+   */
+  function markCommandChains(
+    commands: ControlEnvelope["commands"],
+  ): Array<{ session: SessionRecord; mark: ChainMark }> {
+    const sessions = new Set<SessionRecord>([hostRecord]);
+    for (const command of commands) {
+      if (command.session_uuid !== null) {
+        const named = registry.byUuid(command.session_uuid);
+        if (named !== undefined) sessions.add(named);
+      } else if (!HOST_ONLY_COMMANDS.has(command.command)) {
+        for (const session of registry.live()) sessions.add(session);
+      }
+    }
+    return [...sessions].map((session) => ({
+      session,
+      mark: session.recorder.markChain(),
+    }));
+  }
+
+  /**
+   * Apply a batch of operator commands, write what they sealed, and take
+   * back the chains they sealed on if the write throws.
    *
    * A seal moves a recorder's cursor in memory before the WAL write that
-   * follows it confirms the event landed. Without this, a write failure —
-   * a full disk, a stale seq `Wal.append` now refuses, a body write that
-   * throws — left the cursor standing on an event the log never durably
-   * held, and the next seal on that chain opened a gap no verifier could
-   * close. See `rollbackChain`'s own comment in `recorder.ts` for the fuller
-   * account. `applyCommands` is the one caller whose seal is asynchronous
-   * end to end; every other caller in this file marks and rolls back by
-   * hand, scoped to the one or few sessions it actually touches, because
-   * `markEveryChain` costs the whole registry and most of them do not need
-   * to pay it.
+   * follows it confirms the event landed. Without the marks, a write failure
+   * (a full disk, a stale seq `Wal.append` refuses, a body write that throws)
+   * left the cursor on an event the log never held, and the next seal on
+   * that chain opened a gap no verifier could close. See `rollbackChain` in
+   * `recorder.ts` for the fuller account.
+   *
+   * The marks cover only the chains the batch can seal on
+   * (`markCommandChains`), and they are taken right before the seals.
+   * `applyCommands` seals in one stretch, after the bundle fetch a
+   * `refresh_bundle` asks for, so the marks are taken again once that fetch
+   * returns. The fetch can take 15 s, and hooks, the gateway and the model
+   * proxy write these chains meanwhile. Marked before it, a failed write took
+   * every chain back behind frames the WAL already held, and every later
+   * seal on those chains was refused.
    */
-  async function recordSealedAsync<T>(
-    seal: () => Promise<T>,
-    toRecorded: (result: T) => {
-      events: readonly TachoEvent[];
-      bodies?: readonly FrameBody[];
-      /** Puts back session state the seal changed beyond the chains. */
-      restore?: () => void;
-    },
-  ): Promise<T> {
-    const marks = markEveryChain();
-    let sealed: ReturnType<typeof toRecorded> | undefined;
+  async function applyCommandsRecorded(
+    commands: ControlEnvelope["commands"],
+    deps: InboxDeps,
+  ): Promise<InboxResult> {
+    let marks = markCommandChains(commands);
+    let result: InboxResult | undefined;
     try {
-      const result = await seal();
-      sealed = toRecorded(result);
-      record(sealed.events, sealed.bodies ?? []);
+      result = await applyCommands(commands, {
+        ...deps,
+        refreshBundle: async () => {
+          // Nothing is sealed before the fetch, so a fetch that fails takes
+          // nothing back.
+          marks = [];
+          await deps.refreshBundle();
+          marks = markCommandChains(commands);
+        },
+      });
+      record(result.events);
       return result;
     } catch (error) {
-      rollbackEveryChain(marks);
-      sealed?.restore?.();
+      for (const { session, mark } of [...marks].reverse())
+        session.recorder.rollbackChain(mark);
+      // A failed write puts back each question an answer released and each
+      // message the batch queued, and forgets their acknowledgements, so the
+      // redelivered commands apply again (#3941).
+      result?.restore();
       throw error;
     }
   }
@@ -2022,39 +2077,32 @@ async function initializeDaemon(
       mandateConfirmedAt = now();
     } else await refreshBundle();
     if (control.commands.length > 0) {
-      const result = await recordSealedAsync(
-        () =>
-          applyCommands(control.commands, {
-            registry,
-            hostRecorder: () => hostRecorder,
-            kill,
-            processStart: (pid) => processStarts([pid])?.get(pid),
-            refreshBundle: async () => {
-              await refreshBundle({ force: true });
-            },
-            onHostSuspended: (reason) => {
-              host = applyControlFacts(paths.hostFile, host, {
-                host_status: "suspended",
-              });
-              syncLocalServers();
-              log(`host suspended by operator: ${reason}`);
-            },
-            // A work order waits in the agent's `work-orders` directory for
-            // the person at the machine (ADR-251). A redelivery of the same
-            // command writes nothing and logs nothing.
-            keepWorkOrder: (order) => {
-              if (!keepPendingWorkOrder(paths, order)) return;
-              log(
-                `work order ${order.work_order} for ${order.item} is waiting (command ${order.command_id}). Run \`oxagen work start ${order.work_order}\` to claim it and start the agent.`,
-              );
-            },
-            now,
-          }),
-        // A failed write puts back each question an answer released and each
-        // message the batch queued, and forgets their acknowledgements, so
-        // the redelivered commands apply again (#3941).
-        (result) => ({ events: result.events, restore: result.restore }),
-      );
+      const result = await applyCommandsRecorded(control.commands, {
+        registry,
+        hostRecorder: () => hostRecorder,
+        kill,
+        processStart: (pid) => processStarts([pid])?.get(pid),
+        refreshBundle: async () => {
+          await refreshBundle({ force: true });
+        },
+        onHostSuspended: (reason) => {
+          host = applyControlFacts(paths.hostFile, host, {
+            host_status: "suspended",
+          });
+          syncLocalServers();
+          log(`host suspended by operator: ${reason}`);
+        },
+        // A work order waits in the agent's `work-orders` directory for the
+        // person at the machine (ADR-251). A redelivery of the same command
+        // writes nothing and logs nothing.
+        keepWorkOrder: (order) => {
+          if (!keepPendingWorkOrder(paths, order)) return;
+          log(
+            `work order ${order.work_order} for ${order.item} is waiting (command ${order.command_id}). Run \`oxagen work start ${order.work_order}\` to claim it and start the agent.`,
+          );
+        },
+        now,
+      });
       try {
         // Written before the acknowledgements leave. A queued message or
         // steer seals no frame, so nothing else marked the state dirty, and a
@@ -2146,9 +2194,31 @@ async function initializeDaemon(
   // above): every counted response reports what is left of this host's window.
   rateLimitSink.notify = (hint) => shipper.noteRateLimit(hint);
 
+  /**
+   * The host chain as the detector's current stretch of seals found it.
+   *
+   * The detector seals only on the host chain, in two synchronous stretches
+   * either side of its transcript scan, and writes each stretch before it
+   * yields (`Detector.tick`). It reads `hostRecorder` right before each seal,
+   * so the mark is taken there, at a stretch's first seal, and the sink that
+   * writes the stretch (`recordDetected`) takes it. A failed write then takes
+   * back only what that stretch sealed. The mark used to be taken on every
+   * chain before the scan, and a write that failed after it took them all
+   * back behind the frames hooks, the gateway and the model proxy wrote
+   * during the scan. Every later seal on those chains was then refused.
+   */
+  let detectorStretch:
+    | { mark: ChainMark; beforeSeal: SessionRecorder["chainCursor"] }
+    | undefined;
   const detector = new Detector({
     registry,
-    hostRecorder: () => hostRecorder,
+    hostRecorder: () => {
+      detectorStretch = {
+        mark: detectorStretch?.mark ?? hostRecorder.markChain(),
+        beforeSeal: { ...hostRecorder.chainCursor },
+      };
+      return hostRecorder;
+    },
     listProcesses: () => listClaudeProcesses(exec),
     transcriptRoots: options.transcriptRoots ?? [paths.claudeProjects],
     readSettings: () => readJsonFileIfExists(paths.claudeSettings) ?? {},
@@ -2179,8 +2249,7 @@ async function initializeDaemon(
     session: (id) => registry.get(id),
     record,
     statePath: paths.transcriptTailState,
-    exclusive: (session, apply) =>
-      queues.session(session.harnessSessionId, async () => apply()),
+    exclusive: sessionExclusive,
     adoptedCursor: (harnessSessionId, path) =>
       backfillLedger.transcriptCursor(harnessSessionId, path),
     log,
@@ -2512,6 +2581,10 @@ async function initializeDaemon(
       env: z.record(z.string(), z.string().optional()).optional(),
       harness: tachoHarnessSchema.optional(),
       agent: z.string().optional(),
+      // Named, or zod strips it, and a restored end is recorded under no
+      // ledger key: the client's spooled copy of the same hook then reads as
+      // a new one, and the session's end is sealed twice.
+      hook_id: z.string().optional(),
       replay: z
         .object({
           receivedAt: z.string().datetime(),
@@ -3927,6 +4000,7 @@ async function initializeDaemon(
     registry,
     hostRecorder: () => hostRecorder,
     record,
+    exclusive: sessionExclusive,
     policy: () => ({
       bundle: host.bundle,
       hostStatus: hostStatusInForce(host, bundleVerified),
@@ -4025,6 +4099,7 @@ async function initializeDaemon(
     controlFetch: options.fetch ?? globalThis.fetch,
     now,
     record,
+    exclusive: sessionExclusive,
     log,
   });
 
@@ -4698,6 +4773,21 @@ async function initializeDaemon(
     );
   }
 
+  /**
+   * Write one stretch of the detector's seals, and take the host chain back
+   * to the stretch's mark when the write throws (`detectorStretch`).
+   */
+  function recordDetected(events: readonly TachoEvent[]): void {
+    const stretch = detectorStretch;
+    detectorStretch = undefined;
+    try {
+      record(events);
+    } catch (error) {
+      if (stretch !== undefined) hostRecorder.rollbackChain(stretch.mark);
+      throw error;
+    }
+  }
+
   async function controlTick(): Promise<void> {
     if (stopped) return;
     for (const session of registry.list()) {
@@ -4716,12 +4806,25 @@ async function initializeDaemon(
     await stage("detector", async () => {
       if (now() - lastDetect >= timers.detectorMs) {
         lastDetect = now();
-        const marks = markEveryChain();
         try {
-          await detector.tick((events) => record(events));
+          await detector.tick(recordDetected);
         } catch (error) {
-          rollbackEveryChain(marks);
+          // A seal that threw left the seals before it in its stretch
+          // unwritten. This runs once the tick's awaits unwind, so another
+          // writer may have sealed on the host chain since, and a rollback
+          // would take its frame back too. The chain goes back only while it
+          // still stands where the failed seal found it.
+          const stretch = detectorStretch;
+          const at = hostRecorder.chainCursor;
+          if (
+            stretch !== undefined &&
+            at.seq === stretch.beforeSeal.seq &&
+            at.prevHash === stretch.beforeSeal.prevHash
+          )
+            hostRecorder.rollbackChain(stretch.mark);
           throw error;
+        } finally {
+          detectorStretch = undefined;
         }
       }
     });
