@@ -122,6 +122,30 @@ describe("evaluateTurnCreditGate", () => {
     });
   });
 
+  it("blocks with workspace_budget_spent once the workspace's daily lane budget is spent (#5426)", async () => {
+    const { WorkspaceBudgetSpentError } = await import(
+      "./workspace-lane-budget"
+    );
+    assertCanStartTurnMock.mockRejectedValue(
+      new WorkspaceBudgetSpentError("assistant", 2, 2.05),
+    );
+    const result = await evaluateTurnCreditGate("org-1", {
+      fundedBy: "org",
+      lane: "assistant",
+      workspaceId: "ws-1",
+    });
+    expect(result).toEqual({
+      ok: false,
+      code: "workspace_budget_spent",
+      message: expect.stringMatching(/Stella chat.*\$2\.05 of \$2\.00/),
+    });
+    expect(assertCanStartTurnMock).toHaveBeenCalledWith("org-1", {
+      fundedBy: "org",
+      lane: "assistant",
+      workspaceId: "ws-1",
+    });
+  });
+
   it("fails OPEN (admits) on a non-billing infra error", async () => {
     assertCanStartTurnMock.mockRejectedValue(
       new Error("connection reset by peer"),

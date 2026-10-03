@@ -50,6 +50,7 @@ import { GrantableOrgRole } from "@/data/contracts/org";
 import type { ActionResult } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
+import type { DailyBudgetUsdPatch } from "./workspace-budget-form";
 import { slugFromName } from "./workspace-slug";
 
 export type RoleDraft = {
@@ -220,7 +221,27 @@ type GovernanceDraft = {
   applyImmediately: boolean;
 };
 
-export type WorkspaceEditDraft = WorkspaceDraft & GovernanceDraft;
+/**
+ * What the Edit workspace dialog's Model spend section changes (#5426). Both
+ * ride the same `update_workspace_settings` call as the name and slug, so a
+ * rename and a budget change are one write and one audit record.
+ */
+type SpendDraft = {
+  /**
+   * Whether Stella names and summarizes the workspace's runs. Null means the
+   * dialog had nothing to send: the settings could not be read when it
+   * opened and the person never touched the switch.
+   */
+  runEnrichmentEnabled: boolean | null;
+  /**
+   * The lanes whose limit changed, as `workspace-budget-form.ts` read them
+   * off the form: a number sets the limit, null removes it, and a lane left
+   * out is unchanged. Empty, nothing about the budgets is sent.
+   */
+  dailyBudgetUsd: DailyBudgetUsdPatch;
+};
+
+export type WorkspaceEditDraft = WorkspaceDraft & GovernanceDraft & SpendDraft;
 
 /**
  * How the governance half of an edit ended, as the dialog has to tell it.
@@ -317,10 +338,20 @@ export async function editWorkspace(
   draft: WorkspaceEditDraft,
 ): Promise<ActionResult<WorkspaceEdited>> {
   const ctx = await requireViewer(org);
+  // The spend settings ride the rename's call. A field the dialog had nothing
+  // to say about is left out, so a plain rename sends exactly what it always
+  // sent, and the contract's own parse refuses a budget past its bounds on
+  // its field before the kernel runs.
   const renamed = await kernelWrite(ctx, workspaceSettingsWrite, {
     workspaceId,
     name: draft.name.trim(),
     slug: draft.slug.trim(),
+    ...(draft.runEnrichmentEnabled === null
+      ? {}
+      : { runEnrichmentEnabled: draft.runEnrichmentEnabled }),
+    ...(Object.keys(draft.dailyBudgetUsd).length === 0
+      ? {}
+      : { dailyBudgetUsd: draft.dailyBudgetUsd }),
   });
   if (!renamed.ok) return renamed;
 

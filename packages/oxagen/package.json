@@ -40,6 +40,8 @@
     "./steering-record-label": "./src/steering-record-label.ts",
     "./agent-version-config": "./src/agent-version-config.ts",
     "./run-enrichment": "./src/run-enrichment.ts",
+    "./workspace-budgets": "./src/workspace-budgets.ts",
+    "./workspace-budgets-schema": "./src/workspace-budgets-schema.ts",
     "./run-fit": "./src/run-fit.ts",
     "./steering-repo": "./src/steering-repo/index.ts",
     "./steering-repo/*": "./src/steering-repo/*.ts"
