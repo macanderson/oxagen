@@ -13,6 +13,7 @@ import {
   ResendVerificationSchema,
   fieldErrors,
 } from "./schemas";
+import { Button } from "@/ui/button";
 import { Field } from "@/ui/field";
 import { SubmitButton } from "@/ui/form-feedback";
 import { formText } from "./form-text";
@@ -89,14 +90,16 @@ export function VerifyPanel({
             <input type="hidden" name="email" value={email} />
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
               <span>{t("verify.notArrived")}</span>
-              <button
+              <Button
                 type="submit"
+                variant="link"
+                size="xs"
                 aria-disabled={pending || undefined}
                 data-touch-target=""
-                className={authLinkButton}
+                className={`${authLinkButton} h-auto`}
               >
                 {pending ? t("verify.resendPending") : t("verify.resend")}
-              </button>
+              </Button>
             </p>
             {error ? (
               <p className="text-base text-error-ink">{t(`errors.${error}`)}</p>

@@ -500,16 +500,17 @@ describe("get_tacho_bundle Cedar", () => {
     expect(answer.etag).toBe(base);
   });
 
-  it("still sends the mandate, without Cedar, when the published policies do not compile", async () => {
-    const base = await currentEtag();
+  it("fails the request when the published policies do not compile and none have compiled (#5390)", async () => {
+    // A bundle signed without Cedar would let the host allow every call the
+    // policies forbid, so the request fails and the host keeps the bundle it
+    // holds.
     mocks.host.mockReturnValue(hostRow(CEDAR_HOST));
-    const answer = await createTachoBundleGetHandler({
-      published: cedarPort(cedarVersion({ policies: [BROKEN_POLICY] })),
-    })({ host_enrollment_id: HOST_PUBLIC }, MACHINE);
-    expect(answer.not_modified).toBe(false);
-    expect(answer.bundle).not.toHaveProperty("cedar");
-    expect(answer.bundle?.permissions).toEqual({ allow: [], deny: [], ask: [] });
-    expect(answer.etag).toBe(base);
+    await expect(
+      createTachoBundleGetHandler({
+        published: cedarPort(cedarVersion({ policies: [BROKEN_POLICY] })),
+      })({ host_enrollment_id: HOST_PUBLIC }, MACHINE),
+    ).rejects.toThrow(CedarPoliciesUnavailableError);
+    expect(writes).toEqual([]);
   });
 
   it("keeps the etag the host holds when the published policies cannot be read", async () => {

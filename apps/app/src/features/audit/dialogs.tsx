@@ -15,12 +15,8 @@
 import { useTranslations } from "next-intl";
 import { type ReactNode, useId, useState, useTransition } from "react";
 import { routes, type SafePath } from "@/shared/safe-path";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  inputBase,
-  mono,
-} from "@/ui/control-styles";
+import { buttonPrimary, inputBase, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { DownloadLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -51,16 +47,16 @@ function DialogButton({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
+      <Button
         type="button"
         data-opens={testId}
         onClick={() => {
           setOpen(true);
         }}
-        className={primary ? buttonPrimary : buttonSecondary}
+        variant={primary ? "primary" : "outline"}
       >
         {label}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}
@@ -115,14 +111,14 @@ function DisabledSubmit({
   describedBy: string;
 }) {
   return (
-    <button
+    <Button
       type="button"
       disabled
       aria-describedby={describedBy}
-      className={buttonPrimary}
+      variant="primary"
     >
       {text}
-    </button>
+    </Button>
   );
 }
 

@@ -715,6 +715,59 @@ describe("materializeTools", () => {
     );
   });
 
+  // #3127: the next turn asks for the same call under a new message, and
+  // `createApprovalRequest` hands back the row the first turn wrote. A decided
+  // row is answered, not parked again: no second card, no handler run, and
+  // the reason its resume refused it, so the turn can tell the person why.
+  it("answers an already decided approval instead of parking the call a second time", async () => {
+    mocks.insertToolInvocation.mockClear();
+    mocks.createApprovalRequest.mockClear();
+    const decided = {
+      approvalId: "appr_x",
+      approvalPublicId: "apr_x",
+      resolution: "approved",
+      resumeStatus: "failed",
+      resumeError: "requester_access_revoked",
+      expiresAt: new Date(Date.now() + 60_000),
+    };
+    mocks.createApprovalRequest.mockResolvedValueOnce(decided);
+    mocks.waitForApproval.mockClear();
+    vi.mocked(invoke).mockClear();
+    const fixtureGated = [
+      {
+        ...FIXTURE[2],
+        agent: { riskLevel: "high" as const, requiresApproval: true },
+      },
+    ];
+    vi.doMock("@oxagen/oxagen", () => ({
+      listCapabilities: () => fixtureGated,
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
+    }));
+    vi.resetModules();
+    const { materializeTools: mt } = await import("./materialize-tools");
+    const events: unknown[] = [];
+    const { tools } = await mt(
+      { ...CTX, messageId: "msg_44" },
+      { approvalMode: "park", onApprovalRequired: (e) => events.push(e) },
+    );
+    await expect(
+      (
+        tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }
+      ).execute({ y: 1 }),
+    ).resolves.toEqual({
+      approvalId: "appr_x",
+      resolution: "approved",
+      execution: "failed",
+      reason: "requester_access_revoked",
+    });
+    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    expect(events).toEqual([]);
+    expect(mocks.waitForApproval).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it("attaches a parked approval to the run set on runIdRef AFTER materialization, not the run captured at materialize time (finding 9, negative)", async () => {
     // The in-app assistant materializes tools before `openAssistantRun` opens
     // the run (the belt has to exist first, to build the run's own

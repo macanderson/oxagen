@@ -18,15 +18,8 @@ import type {
 import type { Read } from "@/data/read";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { routes, type SafePath } from "@/shared/safe-path";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  kvList,
-  kvTerm,
-  kvValue,
-  linkText,
-  mono,
-} from "@/ui/control-styles";
+import { buttonPrimary, kvList, kvTerm, kvValue, linkText, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
 import { PullRequestLink, SafeLink, useNavigate } from "@/ui/navigation";
@@ -260,17 +253,17 @@ function Restore({
       {failure === null ? null : (
         <FormAlert testId="memory-restore-failure">{failure}</FormAlert>
       )}
-      <button
+      <Button
         type="button"
         data-testid="memory-restore"
-        className={buttonPrimary}
+        variant="primary"
         disabled={pending}
         onClick={() => {
           void restore();
         }}
       >
         {pending ? t("restorePending") : t("restore")}
-      </button>
+      </Button>
     </>
   );
 }
@@ -335,26 +328,26 @@ export function MemoryDrawer({
   if (memory.state === "waiting") {
     foot = (
       <>
-        <button
+        <Button
           type="button"
           data-testid="memory-drawer-dismiss"
-          className={buttonSecondary}
+          variant="outline"
           onClick={() => {
             onDismiss(group);
           }}
         >
           {t("dismiss")}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           data-testid="memory-drawer-promote"
-          className={buttonPrimary}
+          variant="primary"
           onClick={() => {
             onPromote(group);
           }}
         >
           {t("promote")}
-        </button>
+        </Button>
       </>
     );
   } else if (prUrl !== null && detail.memoryPr !== null) {

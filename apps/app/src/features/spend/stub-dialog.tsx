@@ -6,7 +6,7 @@
 // "Stub controls say what the product would do"). The backend issue that
 // would back it rides as a data attribute.
 import { useState } from "react";
-import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { SheetDialog } from "@/ui/sheet-dialog";
 
 export function StubDialog({
@@ -31,16 +31,16 @@ export function StubDialog({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
+      <Button
         type="button"
         data-touch-target=""
-        className={primary ? buttonPrimary : buttonSecondary}
+        variant={primary ? "primary" : "outline"}
         onClick={() => {
           setOpen(true);
         }}
       >
         {label}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}

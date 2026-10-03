@@ -55,9 +55,8 @@ import {
   type Steps,
 } from "./player-model";
 
-/** `.btn.sm { padding:4px 9px; font-size:12px; border-radius:7px }` over `.btn`. A phone keeps the 44px target. */
-const smallButton =
-  "inline-flex items-center gap-1.5 rounded-lg border border-button-default-border bg-button-default-bg px-2.25 py-1 text-sm font-medium text-button-default-fg transition-colors hover:border-rule hover:bg-button-default-hover-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11";
+/** The step links draw the kit's outline button at `xs`. A phone keeps the 44px target. */
+const smallButton = "gap-1.5 max-md:min-h-11";
 
 /**
  * `.navitem { display:flex; align-items:center; gap:10px; padding:7px 9px;

@@ -10,13 +10,8 @@
 import { useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
 import { routes } from "@/shared/safe-path";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  inputBase,
-  linkText,
-  mono,
-} from "@/ui/control-styles";
+import { inputBase, linkText, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 
@@ -39,18 +34,18 @@ function StubDialog({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={testId}
         data-touch-target=""
         aria-haspopup="dialog"
-        className={primary ? buttonPrimary : buttonSecondary}
+        variant={primary ? "primary" : "outline"}
         onClick={() => {
           setOpen(true);
         }}
       >
         {label}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}
@@ -124,16 +119,16 @@ export function TryAgain() {
   const t = useTranslations("agents.list.states.error");
   const navigate = useNavigate();
   return (
-    <button
+    <Button
       type="button"
       data-testid="agents-retry"
       data-touch-target=""
-      className={buttonPrimary}
+      variant="primary"
       onClick={() => {
         navigate.refresh();
       }}
     >
       {t("retry")}
-    </button>
+    </Button>
   );
 }

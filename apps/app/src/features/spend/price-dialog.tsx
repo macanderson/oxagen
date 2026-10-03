@@ -9,7 +9,7 @@ import { type SyntheticEvent, useState } from "react";
 import type { PriceTokenClass } from "@/data/contracts/spend";
 import type { ActionResult } from "@/server/kernel";
 import { routes } from "@/shared/safe-path";
-import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -266,17 +266,17 @@ export function PriceDialog({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-touch-target=""
         data-testid={compact ? "spend-price-row-open" : "spend-price-open"}
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {compact ? t("unpriced.setRate") : t("dialog.open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
@@ -393,17 +393,17 @@ export function PriceDialog({
               />
             ))}
             {showAll ? null : (
-              <button
+              <Button
                 type="button"
                 data-touch-target=""
                 aria-expanded={false}
-                className={buttonSecondary}
+                variant="outline"
                 onClick={() => {
                   setShowAll(true);
                 }}
               >
                 {t("dialog.showAllClasses")}
-              </button>
+              </Button>
             )}
           </fieldset>
           <SubmitButton

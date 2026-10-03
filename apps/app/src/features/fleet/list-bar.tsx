@@ -14,7 +14,8 @@ import { ColumnsIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import type { PullRequestFilter } from "@/data/contracts/runs";
-import { buttonSecondary, inputBase } from "@/ui/control-styles";
+import { inputBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { ListSelect, type ListSelectItem } from "@/ui/list-select";
 import {
   type FleetListQuery,
@@ -226,16 +227,16 @@ export function RunsListBar({
           if (next !== undefined) onPullRequests(next);
         }}
       />
-      <button
+      <Button
         type="button"
         data-testid="columns-open"
         data-touch-target=""
         onClick={onColumns}
-        className={`${buttonSecondary} inline-flex items-center gap-1.5 px-2.5 py-1 text-sm`}
+        variant="outline" className="inline-flex items-center gap-1.5 px-2.5 py-1 text-sm"
       >
         <ColumnsIcon aria-hidden className="size-3.5" />
         {t("columnsPicker.open")}
-      </button>
+      </Button>
       {pullRequests === "any" ? null : (
         <p
           data-testid="pr-filter-note"

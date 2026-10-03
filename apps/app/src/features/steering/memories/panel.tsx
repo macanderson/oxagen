@@ -22,7 +22,8 @@ import type {
 } from "@/data/contracts/steering";
 import type { Read } from "@/data/read";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
-import { buttonSecondary, linkText, mono } from "@/ui/control-styles";
+import { linkText, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { ListSelect } from "@/ui/list-select";
 import { PullRequestLink, SafeLink, useNavigate } from "@/ui/navigation";
 import { cell, headCell, numericCell } from "@/ui/table";
@@ -396,19 +397,19 @@ export function MemoriesPanel({
             {t("selection.count", { count: picked.length })}
           </b>
           <span className="ml-auto flex flex-wrap items-center gap-2">
-            <button
+            <Button
               type="button"
-              className={buttonSecondary}
+              variant="outline"
               onClick={() => {
                 setSelected(new Set());
               }}
             >
               {t("selection.clear")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               data-testid="memory-dismiss"
-              className={buttonSecondary}
+              variant="outline"
               onClick={() => {
                 setDialog({
                   kind: "dismiss",
@@ -417,11 +418,11 @@ export function MemoriesPanel({
               }}
             >
               {t("selection.dismiss")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               data-testid="memory-promote"
-              className={buttonSecondary}
+              variant="outline"
               onClick={() => {
                 setDialog({
                   kind: "promote",
@@ -430,7 +431,7 @@ export function MemoriesPanel({
               }}
             >
               {t("selection.promote")}
-            </button>
+            </Button>
           </span>
         </div>
       )}

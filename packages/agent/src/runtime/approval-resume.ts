@@ -45,6 +45,21 @@ import {
 } from "./assistant-run";
 
 const a = schema.approvalRequests;
+
+/**
+ * The name a gate's refusal carries, such as `gau_exhausted` or
+ * `budget_exceeded` from the credit and spend gates, which throw plain errors
+ * with a `code`. Only a snake_case word counts, so a driver's code (`42P01`,
+ * `ECONNRESET`) never reaches the person as a reason.
+ */
+function refusalCode(error: unknown): string | null {
+  if (!(error instanceof Error) || !("code" in error)) return null;
+  const { code } = error;
+  return typeof code === "string" && /^[a-z]+(_[a-z]+)*$/.test(code)
+    ? code
+    : null;
+}
+
 export interface ApprovalResumeRef {
   id: string;
   orgId: string;
@@ -343,16 +358,25 @@ export async function resumeApprovedCall(
         if (killed) throw new ApprovalResumeError("kill_switch_active");
         if (Date.now() >= row.expiresAt.getTime())
           throw new ApprovalResumeError("approval_expired");
-        dispatched = true;
         // No rule digest is passed and no fresh rules are required: the
         // workspace's decision rules do not judge Stella's calls, so a payload
         // sealed with a `ruleDigest` before ADR-235 resumes like any other.
+        //
+        // The kernel reads IAM, entitlement, credit and billing again here.
+        // `dispatched` turns true only once they have all admitted the call
+        // and the handler starts (#3127). A refusal before that is a known
+        // refusal and is recorded as `failed` with its code. Setting it before
+        // `invoke` recorded an out-of-credit or IAM refusal as an unknown
+        // outcome, and the person was told to check a run that never ran.
         await invoke(cap.name, payload.rawInput, ctx, {
           surface: "agent",
           runId: run.runId,
           assertValidatedInput: (value) => {
             if (inputDigest(value) !== payload.validatedDigest)
               throw new ApprovalResumeError("input_schema_changed");
+          },
+          onHandlerStart: () => {
+            dispatched = true;
           },
         });
         const status = cap.mode === "async" ? "dispatched" : "succeeded";
@@ -382,16 +406,12 @@ export async function resumeApprovedCall(
                     ? "decision_rules_unavailable"
                     : dispatched
                       ? "execution_outcome_unknown"
-                      : "authorization_or_admission_failed";
-        const refusedBeforeHandler =
-          error instanceof ApprovalResumeError ||
-          error instanceof DecisionRuleDeniedError ||
-          error instanceof DecisionRuleApprovalRequiredError ||
-          error instanceof DecisionRuleUnavailableError ||
-          (error instanceof CapabilityError &&
-            error.code === "decision_rules_unavailable");
-        const status =
-          dispatched && !refusedBeforeHandler ? "indeterminate" : "failed";
+                      : (refusalCode(error) ??
+                        "authorization_or_admission_failed");
+        // Only a call whose handler started can have an outcome nobody knows.
+        // Everything before that, the checks above and the kernel's gates, is
+        // a refusal, and the person reads its reason on the card.
+        const status = dispatched ? "indeterminate" : "failed";
         if (run) await run.seal({ status: "failed", error: reason });
         await finish(status, reason);
         return status;

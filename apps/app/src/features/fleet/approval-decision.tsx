@@ -22,12 +22,8 @@ import { useRef, useState } from "react";
 import type { AutoEligibility } from "@/data/contracts/approvals";
 import type { ActionResult } from "@/server/kernel";
 import { routes } from "@/shared/safe-path";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  linkText,
-  textareaBase,
-} from "@/ui/control-styles";
+import { linkText, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -282,17 +278,17 @@ export function ApprovalDecision({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid="decide"
-        className={`${buttonPrimary} self-start`}
+        variant="primary" className="self-start"
         onClick={() => {
           setOpen(true);
           void load();
         }}
       >
         {t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
@@ -359,28 +355,28 @@ export function ApprovalDecision({
             </FormAlert>
           )}
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
               type="button"
               data-testid="approve"
               aria-disabled={busy || settledBy !== null || undefined}
-              className={buttonPrimary}
+              variant="primary"
               onClick={() => {
                 if (settledBy === null) void submit("approved");
               }}
             >
               {pending === "approved" ? t("approving") : t("approve")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               data-testid="deny"
               aria-disabled={busy || settledBy !== null || undefined}
-              className={buttonSecondary}
+              variant="outline"
               onClick={() => {
                 if (settledBy === null) void submit("denied");
               }}
             >
               {pending === "denied" ? t("denying") : t("deny")}
-            </button>
+            </Button>
           </div>
         </div>
       </SheetDialog>

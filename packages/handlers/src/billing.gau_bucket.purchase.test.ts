@@ -10,7 +10,9 @@
  * like — and assert the handler never read it. Every organisation in the
  * fixture is tier `free`, the tier for which the kernel's IAM check allows
  * every capability, so a refusal can only come from the handler's own gate
- * (INV-29).
+ * (INV-29). Each one is inside its signup grant unless a test says otherwise,
+ * because the gate counts no bought units for an org past its grant with no
+ * subscription, and the handler refuses that org (#4886).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BillingProvider } from "@oxagen/billing";
@@ -41,7 +43,17 @@ interface OrgWorld {
   role: string | null;
   negotiated: NegotiatedRow | null;
   /** The entitled subscription joined to its plan, or null for none. */
-  entitled: (PlanRow & { billingInterval: string }) | null;
+  entitled:
+    | (PlanRow & {
+        billingInterval: string;
+        currentPeriodStart: Date;
+        currentPeriodEnd: Date;
+      })
+    | null;
+  /** The org's signup grant row, or null for an org with none. */
+  grant: { grantedGau: number; grantedAt: Date; expiresAt: Date } | null;
+  /** The Free row's `subscription_required_after_grant`. */
+  subscriptionRequiredAfterGrant: boolean;
   /** The subscriptions row's customer, or null for a subscription-less org. */
   subscriptionCustomerId: string | null;
   /** The org_billing_settings row, or null for an org with none yet. */
@@ -63,6 +75,35 @@ const FREE_PLAN: PlanRow = {
   blockSizeGau: 5_000,
   includedGauPerMonth: 5_000,
   updatedAt: new Date("2026-09-01T00:00:00.000Z"),
+};
+
+const DAY_MS = 86_400_000;
+
+/** A grant issued yesterday, with 29 days left. */
+const ACTIVE_GRANT = {
+  grantedGau: 33_000,
+  grantedAt: new Date(Date.now() - DAY_MS),
+  expiresAt: new Date(Date.now() + 29 * DAY_MS),
+};
+
+/** A grant that ended yesterday. */
+const EXPIRED_GRANT = {
+  grantedGau: 33_000,
+  grantedAt: new Date(Date.now() - 31 * DAY_MS),
+  expiresAt: new Date(Date.now() - DAY_MS),
+};
+
+/** An entitled monthly Build subscription, in the middle of its month. */
+const BUILD_SUBSCRIPTION = {
+  tier: "build",
+  currency: "usd",
+  ratePerGauMicros: 5_500n,
+  blockSizeGau: 5_000,
+  includedGauPerMonth: 50_000,
+  updatedAt: new Date("2026-09-01T00:00:00.000Z"),
+  billingInterval: "month",
+  currentPeriodStart: new Date(Date.now() - 10 * DAY_MS),
+  currentPeriodEnd: new Date(Date.now() + 20 * DAY_MS),
 };
 
 const NEGOTIATED: NegotiatedRow = {
@@ -111,9 +152,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       return w.negotiated ? [w.negotiated] : [];
     if (table === real.schema.subscriptions && joined)
       return w.entitled ? [w.entitled] : [];
-    if (table === real.schema.plans) return [FREE_PLAN];
+    if (table === real.schema.plans)
+      return [
+        {
+          ...FREE_PLAN,
+          subscriptionRequiredAfterGrant: w.subscriptionRequiredAfterGrant,
+        },
+      ];
     // readGauEntitlement reads the org's signup grant in the same round trip.
-    if (table === real.schema.gauSignupGrants) return [];
+    if (table === real.schema.gauSignupGrants)
+      return w.grant ? [w.grant] : [];
     if (table === real.schema.gauBuckets) return [w.bucket];
     throw new Error(`unexpected table ${nameOf(table)}`);
   };
@@ -225,6 +273,8 @@ const provider = {
 const ORG_FREE = "00000000-0000-0000-0000-00000000f0f1";
 const ORG_NEGOTIATED = "00000000-0000-0000-0000-00000000e0e1";
 const ORG_INVOICED = "00000000-0000-0000-0000-00000000d0d1";
+const ORG_AFTER_GRANT = "00000000-0000-0000-0000-00000000c0c1";
+const ORG_SUBSCRIBED = "00000000-0000-0000-0000-00000000b0b1";
 
 const INPUT = {
   quantityGau: 10_000,
@@ -268,6 +318,8 @@ function orgWorld(overrides: Partial<OrgWorld> = {}): OrgWorld {
     role: "Owner",
     negotiated: null,
     entitled: null,
+    grant: ACTIVE_GRANT,
+    subscriptionRequiredAfterGrant: true,
     subscriptionCustomerId: null,
     settings: null,
     hasDefaultCard: false,
@@ -294,6 +346,15 @@ beforeEach(() => {
         stripeCustomerId: "cus_inv",
         approvedForInvoiceBilling: true,
       },
+    }),
+  );
+  world.set(ORG_AFTER_GRANT, orgWorld({ grant: EXPIRED_GRANT }));
+  world.set(
+    ORG_SUBSCRIBED,
+    orgWorld({
+      grant: EXPIRED_GRANT,
+      entitled: BUILD_SUBSCRIPTION,
+      subscriptionCustomerId: "cus_sub",
     }),
   );
   provider.createGauCheckout.mockResolvedValue({
@@ -420,6 +481,99 @@ describe("purchase_gau_bucket handler", () => {
     expect(err).toMatchObject({ code: "conflict", reason: "invoice_billed" });
     expect(provider.createGauCheckout).not.toHaveBeenCalled();
     expect(log.inserts).toEqual([]);
+  });
+
+  describe("a purchase the gate would not count is refused before Stripe (#4886)", () => {
+    const subscriptionRequired = (e: unknown) =>
+      isHandlerError(e) &&
+      e.code === "conflict" &&
+      e.reason === "subscription_required";
+
+    it("refuses an org past its signup grant with no subscription, with no Stripe call and no write", async () => {
+      const err = await purchaseFor(ORG_AFTER_GRANT).catch((e: unknown) => e);
+
+      expect(err).toSatisfy(subscriptionRequired);
+      expect(err).toBeInstanceOf(Error);
+      expect(err instanceof Error ? err.message : "").toMatch(
+        /needs a subscription.*nothing was charged.*Choose a plan/s,
+      );
+      expect(provider.createGauCheckout).not.toHaveBeenCalled();
+      expect(provider.findCustomerByOrgId).not.toHaveBeenCalled();
+      expect(provider.createCustomer).not.toHaveBeenCalled();
+      expect(log.inserts).toEqual([]);
+      expect(emitSecurityEvent).not.toHaveBeenCalled();
+      // INV-27 still holds: the refusal reads the entitlement, never the bucket.
+      expect(log.tablesRead).toContain("gauSignupGrants");
+      expect(log.tablesRead).not.toContain("gauBuckets");
+    });
+
+    it("refuses an org with no grant row and no subscription", async () => {
+      (world.get(ORG_AFTER_GRANT) as OrgWorld).grant = null;
+
+      await expect(purchaseFor(ORG_AFTER_GRANT)).rejects.toSatisfy(
+        subscriptionRequired,
+      );
+      expect(provider.createGauCheckout).not.toHaveBeenCalled();
+    });
+
+    it("refuses an org past its grant even when a saved card exists", async () => {
+      (world.get(ORG_AFTER_GRANT) as OrgWorld).hasDefaultCard = true;
+
+      await expect(purchaseFor(ORG_AFTER_GRANT)).rejects.toSatisfy(
+        subscriptionRequired,
+      );
+      expect(provider.createGauCheckout).not.toHaveBeenCalled();
+    });
+
+    it("refuses a negotiated-terms org past its grant with no subscription", async () => {
+      const w = world.get(ORG_NEGOTIATED) as OrgWorld;
+      w.grant = EXPIRED_GRANT;
+
+      await expect(
+        purchaseFor(ORG_NEGOTIATED, { ...INPUT, quantityGau: 20_000 }),
+      ).rejects.toSatisfy(subscriptionRequired);
+      expect(provider.createGauCheckout).not.toHaveBeenCalled();
+    });
+
+    it("an invoice-billed org keeps its own refusal", async () => {
+      (world.get(ORG_INVOICED) as OrgWorld).grant = EXPIRED_GRANT;
+
+      await expect(purchaseFor(ORG_INVOICED)).rejects.toMatchObject({
+        code: "conflict",
+        reason: "invoice_billed",
+      });
+    });
+
+    it("sells to an org inside its signup grant, whose bucket the gate reads", async () => {
+      const out = await purchaseFor(ORG_FREE);
+
+      expect(out).toMatchObject({ quantityGau: 10_000, blocks: 2 });
+      expect(provider.createGauCheckout).toHaveBeenCalledOnce();
+    });
+
+    it("sells to a subscriber past its grant, at its plan's rate", async () => {
+      const out = await purchaseFor(ORG_SUBSCRIBED);
+
+      expect(out).toMatchObject({ quantityGau: 10_000, blocks: 2 });
+      expect(provider.createGauCheckout).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orgId: ORG_SUBSCRIBED,
+          customerId: "cus_sub",
+          blocks: 2,
+          blockPriceCents: 2_750,
+        }),
+      );
+    });
+
+    it("sells to an org past its grant when an operator has cleared the subscription rule", async () => {
+      (world.get(ORG_AFTER_GRANT) as OrgWorld).subscriptionRequiredAfterGrant =
+        false;
+
+      await expect(purchaseFor(ORG_AFTER_GRANT)).resolves.toMatchObject({
+        blocks: 2,
+      });
+      expect(provider.createGauCheckout).toHaveBeenCalledOnce();
+    });
   });
 
   it("the Billing role may buy", async () => {

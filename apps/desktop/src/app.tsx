@@ -77,6 +77,7 @@ import {
   deregisterArgs,
   deregisterNeedsSession,
   describeCliInstall,
+  describeFailedReapply,
   detectedMeta,
   enforcementText,
   enrollArgs,
@@ -1146,6 +1147,7 @@ export function App() {
     : [];
   const skewNote = host && state ? binSkew(host, state) : null;
   const cliInstallNote = describeCliInstall(state?.cli_install);
+  const failedReapply = describeFailedReapply(state?.cli_install);
   // Whether there is anything for "Remove links" to remove. The two
   // `*_on_path` fields answer a different question: they resolve against the
   // running process's PATH, and a GUI launch never sources a login profile,
@@ -2095,9 +2097,14 @@ export function App() {
         </section>
       )}
 
-      {skewNote && (
+      {(skewNote || failedReapply) && (
         <section className="panel" aria-label="Tools out of date">
-          <p className="sub">{skewNote}</p>
+          {failedReapply && (
+            <div className="notice error" role="alert">
+              {failedReapply}
+            </div>
+          )}
+          {skewNote && <p className="sub">{skewNote}</p>}
           <div className="row">
             <button
               type="button"

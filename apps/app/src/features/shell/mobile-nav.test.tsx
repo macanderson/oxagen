@@ -28,6 +28,7 @@ import {
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { phoneWidth } from "@/test/phone";
+import { expectTouchTarget, lengthPx } from "@/test/touch-target";
 import en from "../../../messages/en.json";
 import createMessages from "../../../messages/create.json";
 import shellMessages from "../../../messages/shell.json";
@@ -191,12 +192,17 @@ describe("thumb bar", () => {
       "/acme/core-platform/spend",
     ]);
     for (const slot of slots()) {
-      expect(style(slot).minHeight).toBe("44px");
-      expect(style(slot).minWidth).toBe("44px");
+      expectTouchTarget(style(slot).minHeight);
+      expectTouchTarget(style(slot).minWidth);
     }
-    expect(style(bar).paddingBottom).toBe(
-      "calc(6px + env(safe-area-inset-bottom))",
+    // Six px of air over the home indicator, on the spacing scale (#5283),
+    // plus the safe area. jsdom computes neither, so the test splits the two
+    // and resolves the spacing step to px.
+    const padding = /^calc\((.+) \+ env\(safe-area-inset-bottom\)\)$/.exec(
+      style(bar).paddingBottom,
     );
+    expect(padding).not.toBeNull();
+    expect(lengthPx(`calc(${padding?.[1] ?? ""})`)).toBe(6);
   });
 
   const waitingIn = (count: number, more = false) =>
@@ -412,7 +418,7 @@ describe("More sheet", () => {
       ["Billingplan and invoices", "/acme/billing"],
       ["Auditevents and incidents", "/acme/audit"],
     ]);
-    for (const link of links) expect(style(link).minHeight).toBe("44px");
+    for (const link of links) expectTouchTarget(style(link).minHeight);
 
     // The bottom sheet: a drag handle, the safe-area inset, a full-width footer button, a scrim.
     expect(sheet).toHaveAttribute("data-sheet");
@@ -428,7 +434,7 @@ describe("More sheet", () => {
       within(sheet).getByRole("button", { name: "Close More" }),
     ).toHaveAttribute("data-dialog-dismiss");
     expect(style(close).flexGrow).toBe("1");
-    expect(style(close).minHeight).toBe("44px");
+    expectTouchTarget(style(close).minHeight);
     expect(document.querySelector("[data-scrim]")).not.toBeNull();
 
     await user.click(within(sheet).getByRole("link", { name: /^Billing/ }));
@@ -460,7 +466,7 @@ describe("More sheet", () => {
       "Switch workspaceCore platform",
     ]);
     for (const id of ["more-search", "more-switch-ws"])
-      expect(style(within(sheet).getByTestId(id)).minHeight).toBe("44px");
+      expectTouchTarget(style(within(sheet).getByTestId(id)).minHeight);
   });
 
   // The tile is the phone's other way into the assistant, so it shows the
@@ -644,7 +650,7 @@ describe("the other dialogs on a phone", () => {
     const drawer = await screen.findByTestId("nav-drawer");
     expect(screen.getAllByTestId("assistant-launcher")).toHaveLength(2);
     const launcher = within(drawer).getByTestId("assistant-launcher");
-    expect(style(launcher).minHeight).toBe("44px");
+    expectTouchTarget(style(launcher).minHeight);
     expect(launcher).toHaveAttribute("aria-expanded", "false");
   });
 

@@ -1,7 +1,8 @@
 // Sending a work order back to its work item (F34): one send note per work
 // order, with its runs and their spend, through runWriteBack. The record keeps
 // a later pass from posting the same streak twice. Nothing else on the
-// provider is called, and nothing starts a run.
+// provider is called, and nothing starts a run. The note links to the work
+// order in Oxagen, and shows what the runs cost only on a private item.
 import { describe, expect, it } from "vitest";
 import { WRITE_BACK_DEFAULTS, type WriteBackSwitches } from "../file";
 import type { CollectorHealth } from "../health";
@@ -12,10 +13,13 @@ import {
   sendBackNoteText,
   sendBackWorkOrders,
 } from "../send-back";
+import type { ItemVisibility } from "../types";
 import { renderWriteBackSpend } from "../writeback";
 import { createFakeCollector, erased, fakeConnection } from "./fake";
 
 const usd = (cents: number) => ({ micros: BigInt(cents) * 10_000n, currency: "USD" });
+
+const orderUrl = (itemId: string) => `https://app.oxagen.sh/acme/core/work/${itemId}`;
 
 function order(name: string, over: Partial<WorkOrderToSendBack> = {}): WorkOrderToSendBack {
   return {
@@ -51,9 +55,12 @@ function setup(
     health?: CollectorHealth;
     held?: SendBackKey[];
     collectorless?: string[];
+    unlinked?: string[];
+    visibility?: ItemVisibility;
   } = {},
 ) {
   const fake = createFakeCollector();
+  fake.visibility = options.visibility ?? "private";
   const record = memoryRecord(options.held);
   const ports: SendBackPorts = {
     async resolve(itemId) {
@@ -65,6 +72,7 @@ function setup(
           health: options.health ?? "healthy",
         },
         target: { ref: { providerId: `p-${itemId}`, kind: "item" }, conn: fakeConnection() },
+        orderUrl: options.unlinked?.includes(itemId) ? null : orderUrl(itemId),
       };
     },
     record,
@@ -81,7 +89,7 @@ describe("sendBackWorkOrders", () => {
       {
         method: "note",
         providerId: "p-item-a",
-        value: `${sendBackNoteText(wo)}\n\n${renderWriteBackSpend({ runs: wo.runs })}`,
+        value: `${sendBackNoteText(wo, orderUrl("item-a"))}\n\n${renderWriteBackSpend({ runs: wo.runs }, { figures: true })}`,
       },
     ]);
     const note = String(fake.writeBackCalls[0]!.value);
@@ -89,7 +97,30 @@ describe("sendBackWorkOrders", () => {
     expect(note).toContain("Agent acme.core.builder ran it 3 times in a row");
     expect(note).toContain("Unproductive spend: $5.00 across 3 runs.");
     expect(note).toContain("- tse_a3: $3.00, pull request closed unmerged");
+    expect(note).toContain("Read why each run ended before you send the work again: https://app.oxagen.sh/acme/core/work/item-a");
     expect(record.keys).toEqual(["order-a:tse_a3"]);
+  });
+
+  it("on a public item, names the runs and their outcome, links to the work order, and shows no dollar figure", async () => {
+    const { fake, record, ports } = setup({ visibility: "public" });
+    expect(await sendBackWorkOrders([order("a")], ports)).toEqual([{ orderId: "order-a", outcome: "written" }]);
+    const note = String(fake.writeBackCalls[0]!.value);
+    expect(note).toContain("Oxagen sent work order wo_a back to this work item.");
+    expect(note).toContain("https://app.oxagen.sh/acme/core/work/item-a");
+    expect(note).toContain("- tse_a3: pull request closed unmerged");
+    expect(note).toContain("- tse_a2: pull request merged, then reverted");
+    expect(note).toContain("- tse_a1: run abandoned before it opened a pull request");
+    expect(note).not.toContain("$");
+    expect(note).not.toContain("Unproductive spend");
+    expect(record.keys).toEqual(["order-a:tse_a3"]);
+  });
+
+  it("leaves the link out when Oxagen cannot name the work order's page", async () => {
+    const { fake, ports } = setup({ unlinked: ["item-a"] });
+    await sendBackWorkOrders([order("a")], ports);
+    const note = String(fake.writeBackCalls[0]!.value);
+    expect(note).toContain("Read why each run ended before you send the work again.");
+    expect(note).not.toContain("https://");
   });
 
   it("makes the note and nothing else: no status, no close, no labels", async () => {
@@ -154,7 +185,7 @@ describe("sendBackWorkOrders", () => {
   });
 
   it("names the work order alone when the run named no agent", () => {
-    expect(sendBackNoteText(order("a", { agentKey: null }))).toBe(
+    expect(sendBackNoteText(order("a", { agentKey: null }), null)).toBe(
       "Oxagen sent work order wo_a back to this work item. The work order ran 3 times in a row, and each run ended with nothing kept. Read why each run ended before you send the work again.",
     );
   });

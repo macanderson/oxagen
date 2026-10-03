@@ -10,7 +10,7 @@
 // person from sending, so it interrupts rather than waiting to be found.
 import { WarningCircleIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
-import { linkText } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import type { EngineDown, EngineHealth } from "./use-engine-health";
 
 /** The sentence Send is described by while the engine is down. */
@@ -73,8 +73,10 @@ export function AssistantEngineNotice({
         Held with `aria-disabled` rather than `disabled` while a read is out,
         so focus stays on it: a disabled button drops focus to the page.
       */}
-      <button
+      <Button
         type="button"
+        variant="link"
+        size="xs"
         data-testid="assistant-engine-check"
         aria-disabled={health.checking || undefined}
         onClick={() => {
@@ -83,10 +85,10 @@ export function AssistantEngineNotice({
             if (ready) onRecovered();
           });
         }}
-        className={`mt-1.5 ml-6 text-sm ${linkText} aria-disabled:opacity-60`}
+        className="mt-1.5 ml-6 h-auto px-0 aria-disabled:opacity-60"
       >
         {health.checking ? t("checking") : t("check")}
-      </button>
+      </Button>
     </div>
   );
 }

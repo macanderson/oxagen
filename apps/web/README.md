@@ -148,17 +148,17 @@ Never put `--` before the filename. Each build module has a co-located
   `/read?e=page-flip-reader` (`prefix_redirects` in
   `infra/stacks-new/oxagen/main.tf`). There is no `index.html` at that path.
 - `fonts/`: the house faces, vendored from the brand kit by
-  `node tools/scripts/sync-brand-assets.mjs`: Aeonik (upright and italic),
-  Aeonik Mono, Aeonik Fono, Monaspace Neon, and Space Grotesk at
-  400/500/600/700. Literata variable serif (normal and italic, latin subset)
+  `node tools/scripts/sync-brand-assets.mjs`: Geist, Monaspace Neon, Space
+  Grotesk at 400/500/600/700, and Aeonik (upright and italic), Aeonik Mono,
+  and Aeonik Fono. Literata variable serif (normal and italic, latin subset)
   sits beside them, and only the book reader offers it as a long-form reading
   option. All of them are cached immutable for a year. Mac set the rule on
   2026-10-02 (oxageninc/brand#83): Space Grotesk sets every h1, h2, and h3,
-  and the wordmark when it is text rather than an SVG. Aeonik sets h4 to h6
-  and all other text. Monaspace Neon sets code, data, and figures. Every
+  and the wordmark when it is text rather than an SVG. Geist sets h4 to h6
+  and all other text (Geist since 2026-10-03). Monaspace Neon sets code, data, and figures. Every
   size reads the site's ramp in `assets/oxagen.css`, whose steps follow the
-  kit's marketing base, so no page writes a size of its own. Aeonik Mono
-  and Aeonik Fono load, and no rule names them yet. A page preloads only the
+  kit's marketing base, so no page writes a size of its own. Aeonik, Aeonik
+  Mono, and Aeonik Fono load, and no rule names them. A page preloads only the
   faces its first screen draws.
 - `favicon.svg`: the hive, the kit's Oxagen icon: six hexagonal cells, four
   drawn as an outline in the tab's ink and two filled with the gold, one of

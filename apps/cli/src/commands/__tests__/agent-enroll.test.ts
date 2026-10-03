@@ -12,7 +12,9 @@ vi.mock("../../lib/config.js", () => ({
 }));
 
 const calls: Array<{ name: string; args: unknown[] }> = [];
-const outcomes = { enroll: { ok: true, warnings: [] as string[] } };
+const outcomes: {
+  enroll: { ok: boolean; warnings: string[]; shipping?: { healthy: boolean } };
+} = { enroll: { ok: true, warnings: [] } };
 const OXAGEN_RUNTIME = { hookCommand: "/opt/oxagen/oxagen hook" };
 vi.mock("@oxagen/recorder/cli", () => ({
   defaultCliDeps: (overrides: Record<string, unknown>) => ({
@@ -82,6 +84,38 @@ describe("oxagen agent enroll", () => {
       credentials: "passthrough",
       validityDays: 30,
     });
+  });
+
+  it("tells the recorder who runs it, and passes --allow-root (#5390)", async () => {
+    await handleAgentEnroll(
+      { token: "oxe_1time_0123456789abcdefghjkmnpqrs", allowRoot: true },
+      captureWriter().writer,
+    );
+    const [options, deps] = calls[0]!.args as [
+      Record<string, unknown>,
+      Record<string, unknown>,
+    ];
+    expect(options["allowRoot"]).toBe(true);
+    // Without `getuid` the recorder's root guard never fired.
+    expect(typeof deps["getuid"]).toBe("function");
+    expect((deps["getuid"] as () => number | undefined)()).toBe(
+      process.getuid?.(),
+    );
+  });
+
+  it("fails when the new daemon never reaches Oxagen, after moving the other agents (#5390)", async () => {
+    outcomes.enroll = {
+      ok: true,
+      warnings: [],
+      shipping: { healthy: false },
+    };
+    expect(
+      await handleAgentEnroll(
+        { token: "oxe_1time_0123456789abcdefghjkmnpqrs" },
+        captureWriter().writer,
+      ),
+    ).toBe(false);
+    expect(calls.map((call) => call.name)).toEqual(["enroll", "move"]);
   });
 
   it("reports the routine's refusal as a failed command, and moves nothing", async () => {

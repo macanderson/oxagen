@@ -596,10 +596,11 @@ export interface DataSource {
     /** list_workspaces, archived rows included */
     workspaces(ctx: OrgCtx): Promise<Read<WorkspaceList>>;
     /**
-     * list_repositories and list_agents inside one workspace: its bound
-     * repositories and its agent count, for the Workspaces row. A `WsCtx`,
-     * because both reads are workspace-scoped; the tab makes one per workspace
-     * the viewer may enter.
+     * list_repositories, list_agents and get_workspace_settings inside one
+     * workspace: its bound repositories and its agent count, for the
+     * Workspaces row, and its spend settings, for the Edit dialog. A `WsCtx`,
+     * because all three reads are workspace-scoped; the tab makes one per
+     * workspace the viewer may enter.
      */
     workspaceFacts(ctx: WsCtx): Promise<Read<WorkspaceFacts>>;
     /** list_cost_centers, the organization's live chargeback labels (ADR-142) */

@@ -3,23 +3,27 @@
  * processes, and Neo4j — on one small ARM instance, behind an ALB rather than
  * a public IP.
  *
- * This replaces the old account's `data-node`. Postgres moves to Aurora
- * Serverless v2, which is genuinely cheaper managed than self-hosted at this
- * traffic level.
+ * This replaces the old account's `data-node`. Postgres moved to Aurora
+ * Serverless v2, and production Postgres moves on to ClickHouse Cloud's
+ * Postgres (ADR-295).
  *
- * ClickHouse and Neo4j both stay here, on this node. An earlier revision of
- * this file said ClickHouse's role was moving to Redshift Serverless; that
- * plan is withdrawn (#2682, 2026-09-07). The platform reads and writes
- * ClickHouse directly — `packages/telemetry` does, through
- * `/oxagen/production/CLICKHOUSE_URL` — and nothing was ever pointed at
- * Redshift, so the migration existed only in this comment and in a workgroup
- * nobody queried. Neo4j stays for its own reason: Amazon's only graph product
- * with native vector search (Neptune Analytics) has a real floor cost that
- * does not reach zero even paused, and Neo4j 5.11+ already gives this app
- * vector indexes today. The
- * node therefore still carries one engine's worth of state, which is why it
- * is not fully disposable the way a pure web-tier instance would be — see
- * the EBS volume and its `prevent_destroy` below.
+ * Neo4j stays here, on this node, for its own reason: Amazon's only graph
+ * product with native vector search (Neptune Analytics) has a real floor cost
+ * that does not reach zero even paused, and Neo4j 5.11+ already gives this
+ * app vector indexes today. The node therefore carries one engine's worth of
+ * state, which is why it is not fully disposable the way a pure web-tier
+ * instance would be. See the EBS volume and its `prevent_destroy` below.
+ *
+ * ClickHouse also runs here, in a container, but production ClickHouse moves
+ * to ClickHouse Cloud (ADR-295, #5395), because the container's 1.5 GiB cap
+ * refused hundreds of queries an hour (#4243). The platform reads and writes
+ * whichever one `/oxagen/production/CLICKHOUSE_URL` names: this node's
+ * `http://127.0.0.1:8123`, or an https Cloud URL. The container stays as the
+ * rollback target until a later change removes it. ClickHouse Cloud admits
+ * only this node's NAT address, so CI reaches it through an SSM port forward
+ * to this node. An earlier revision of this file said ClickHouse's role was
+ * moving to Redshift Serverless. That plan was withdrawn (#2682, 2026-09-07),
+ * and nothing was ever pointed at Redshift.
  *
  * ## Why a private subnet plus an ALB, where the old account used a public IP
  *

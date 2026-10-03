@@ -18,7 +18,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
 import { Badge, type BadgeTone } from "@/ui/badge";
-import { buttonSmall } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { LiveRefresh } from "@/ui/live-refresh";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { SteeringRepoProvisioning } from "./provisioning";
@@ -91,12 +91,12 @@ export function SteeringRepoSetup({
           <p className="min-w-0 flex-1 text-sm text-muted-foreground">
             {lead}
           </p>
-          <button
+          <Button
             type="button"
             data-testid="steering-repo-setup-open"
             data-touch-target=""
             aria-haspopup="dialog"
-            className={buttonSmall}
+            variant="outline" size="sm"
             onClick={() => {
               setOpen(true);
             }}
@@ -106,7 +106,7 @@ export function SteeringRepoSetup({
               : status === "ready"
                 ? t("open.finish")
                 : t("open.act")}
-          </button>
+          </Button>
         </div>
       )}
       <SheetDialog

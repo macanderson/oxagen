@@ -17,7 +17,8 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useActionState, useId, useState } from "react";
 import type { Money as MoneyValue } from "@/data/contracts/money";
-import { buttonPrimary, inputBase } from "@/ui/control-styles";
+import { inputBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { formatMoney } from "@/ui/money-format";
 import { SafeForm } from "@/ui/navigation";
@@ -155,17 +156,17 @@ export function ChangePlan({
   const formId = useId();
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid="change-plan"
         data-touch-target=""
-        className={buttonPrimary}
+        variant="primary"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}

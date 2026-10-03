@@ -1,13 +1,19 @@
 /**
- * `detect` on a host.json it cannot validate, and the mode of an export
- * written to a file.
+ * `detect` on a host.json it cannot validate, the mode of an export written
+ * to a file, and an export on a machine with two agents.
  */
 import { mkdirSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { writeHostFile } from "../host/host-file";
 import { agentPaths, tachoHome } from "../host/paths";
-import { TEST_AGENT_ID } from "../host/test-support";
+import {
+  bundleSigner,
+  TEST_AGENT_ID,
+  testHostFile,
+  unsignedBundle,
+} from "../host/test-support";
 import { Wal } from "../host/wal";
 import { minimalSession } from "../test-helpers";
 import { defaultCliDeps } from "./deps";
@@ -59,5 +65,52 @@ describe("export --out", () => {
       ),
     ).toBe(true);
     expect(statSync(out).mode & 0o777).toBe(0o600);
+  });
+});
+
+describe("export on a machine with two agents (ADR-203)", () => {
+  it("lists and exports a session only the newer agent's WAL holds", async () => {
+    const lines: string[] = [];
+    const errors: string[] = [];
+    const d = {
+      ...deps(),
+      out: (line: string) => lines.push(line),
+      err: (line: string) => errors.push(line),
+    };
+    // `d.paths` is the older agent, the one a command acts on when nothing
+    // names an agent. The session is in the newer agent's WAL.
+    const newer = agentPaths(d.paths, "b2c3d4e5");
+    const signer = bundleSigner();
+    writeHostFile(
+      d.paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle()), {
+        enrolled_at: "2026-09-10T00:00:00.000Z",
+      }),
+    );
+    writeHostFile(
+      newer.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle()), {
+        enrolled_at: "2026-09-11T00:00:00.000Z",
+      }),
+    );
+    const events = minimalSession();
+    new Wal(newer.wal).append(events);
+    const uuid = events[0]?.session_uuid as string;
+    const sessionId = events[0]?.session_id as string;
+
+    expect(await exportCommand({ list: true }, d)).toBe(true);
+    expect(lines.at(-1)).toContain(`${uuid}  ${sessionId}`);
+
+    expect(await exportCommand({ session: sessionId, format: "trace" }, d)).toBe(
+      true,
+    );
+    expect(lines.at(-1)).toContain("session_start");
+    expect(await exportCommand({ session: uuid }, d)).toBe(true);
+    expect(errors).toEqual([]);
+
+    // A session no agent recorded names every WAL it looked in.
+    expect(await exportCommand({ session: "nope" }, d)).toBe(false);
+    expect(errors.at(-1)).toContain(d.paths.wal);
+    expect(errors.at(-1)).toContain(newer.wal);
   });
 });

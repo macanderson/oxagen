@@ -3,6 +3,7 @@
 import { PencilSimpleIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { useCallback, useId, useRef, useState } from "react";
+import { Button } from "@/ui/button";
 import { inputBase, mono } from "@/ui/control-styles";
 
 /** The whole path opens an identifier edit. The source owns the saved name. */
@@ -42,7 +43,7 @@ export function SourceFilename({
   return (
     <div className="min-w-0 flex-1">
       {draft === null ? (
-        <button
+        <Button
           ref={(button) => {
             if (button && restoreFocusRef.current) {
               button.focus();
@@ -50,10 +51,12 @@ export function SourceFilename({
             }
           }}
           type="button"
+          variant="link"
+          size="xs"
           disabled={disabled}
           title={t("rename", { path })}
           aria-label={t("rename", { path })}
-          className={`${mono} group inline-flex max-w-full cursor-text items-center gap-2 rounded-sm text-left hover:underline focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-not-allowed`}
+          className={`${mono} group h-auto max-w-full cursor-text justify-start gap-2 whitespace-normal rounded-sm p-0 text-left`}
           onClick={() => {
             cancelledRef.current = false;
             setInvalid(false);
@@ -65,7 +68,7 @@ export function SourceFilename({
             aria-hidden="true"
             className="size-3 shrink-0 text-muted-foreground"
           />
-        </button>
+        </Button>
       ) : (
         <div className="flex flex-col gap-1">
           <input

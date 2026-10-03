@@ -27,7 +27,8 @@ import type { UsageCredits } from "@/data/contracts/billing";
 import type { Money as MoneyValue } from "@/data/contracts/money";
 import { mulMicros } from "@/data/contracts/money";
 import type { Read } from "@/data/read";
-import { buttonSecondary, inputBase } from "@/ui/control-styles";
+import { inputBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
@@ -81,17 +82,17 @@ function TopUpForm({
         className="flex flex-wrap items-center gap-2"
       >
         {presetsUsd.map((preset) => (
-          <button
+          <Button
             key={preset}
             type="button"
             data-preset={preset}
-            className={buttonSecondary}
+            variant="outline"
             onClick={() => {
               setText(String(preset));
             }}
           >
             <Money value={mulMicros(ONE_DOLLAR, preset)} />
-          </button>
+          </Button>
         ))}
       </div>
       <div className="flex flex-wrap items-center gap-3 text-base">

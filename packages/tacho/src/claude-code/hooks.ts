@@ -256,6 +256,7 @@ const PROMOTED = new Set([
   "compact_summary",
   "teammate_name",
   "subagent_result",
+  "subagent_status",
   // Message text, never an attribute. Attributes are stored as they arrive,
   // so text left there would skip the redaction and the retention mandate
   // every body goes through. Cursor's `preToolUse` carries what the agent
@@ -281,6 +282,18 @@ function num(value: unknown): number | undefined {
 
 function bool(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
+}
+
+/**
+ * How a subagent ended, as the tool status of its stop. Cursor's
+ * `subagentStop` says `completed`, `error` or `aborted`, and its adapter
+ * passes the word on as `subagent_status`. Claude Code's `SubagentStop` says
+ * nothing, so it reads `ok`.
+ */
+function subagentToolStatus(status: unknown): "ok" | "error" | "cancelled" {
+  if (status === "error") return "error";
+  if (status === "aborted") return "cancelled";
+  return "ok";
 }
 
 /**
@@ -636,9 +649,13 @@ export function normalizeHook(
         ),
       ];
     }
+    // Claude Code's own refusal, from its auto mode. It is not an Oxagen
+    // verdict, so it is sealed as `harness_permission`, the kind the OTel
+    // path gives the same check. As a `policy_decision` it was counted among
+    // the session's Oxagen policy decisions and denies.
     case "PermissionDenied": {
       return [
-        draft("policy_decision", {
+        draft("harness_permission", {
           ...toolFacts(input, options.sessionUuid),
           policy_decision: "deny",
           policy_source: "harness",
@@ -720,6 +737,8 @@ export function normalizeHook(
       }
       return drafts;
     }
+    // Each call Claude Code let through in a parallel batch. Like
+    // `PermissionDenied`, this is the harness's check, not Oxagen's.
     case "PostToolBatch": {
       const calls = Array.isArray(input["tool_calls"])
         ? (input["tool_calls"] as unknown[])
@@ -731,7 +750,7 @@ export function normalizeHook(
           ...record,
           tool_calls: undefined,
         });
-        return draft("policy_decision", {
+        return draft("harness_permission", {
           ...toolFacts(sub, options.sessionUuid),
           batch_size: calls.length,
           batch_index: index,
@@ -779,7 +798,7 @@ export function normalizeHook(
         ...(str(input["agent_transcript_path"]) !== undefined
           ? { subagent_transcript_path: str(input["agent_transcript_path"]) }
           : {}),
-        tool_status: "ok",
+        tool_status: subagentToolStatus(input["subagent_status"]),
       };
       return [
         draft(

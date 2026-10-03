@@ -612,14 +612,25 @@ function runSessions(run: {
  * reads it as the start of a request it cannot price, so the tool calls after
  * it do not join the request before it (#4506).
  */
-/** Per-query bounds keep spillable work below the service memory limit. */
+/**
+ * Per-query bounds keep spillable work below the service memory limit.
+ *
+ * Production ClickHouse runs in ClickHouse Cloud, on replicas of 8 GiB or
+ * more (ADR-295). These bounds were 128 MiB, 16 MiB spill points, and 2
+ * threads while it ran on the app node under a 1.5 GiB cap, and from
+ * 2026-10-02 every findings pass and run-progress read failed against the
+ * 128 MiB bound (#5395). A query may now take 1 GiB, an eighth of the smallest
+ * replica, and spills to disk past 256 MiB, so one heavy read still cannot
+ * crowd out ingest. The block size stays 256: it sets the batch the caller's
+ * consumer receives, not the memory bound.
+ */
 export const COST_FRAME_QUERY_SETTINGS: ClickHouseSettings = {
-  max_memory_usage: String(128 * 1024 * 1024),
-  max_bytes_before_external_group_by: String(16 * 1024 * 1024),
-  max_bytes_before_external_sort: String(16 * 1024 * 1024),
-  max_bytes_in_join: String(32 * 1024 * 1024),
+  max_memory_usage: String(1024 * 1024 * 1024),
+  max_bytes_before_external_group_by: String(256 * 1024 * 1024),
+  max_bytes_before_external_sort: String(256 * 1024 * 1024),
+  max_bytes_in_join: String(256 * 1024 * 1024),
   join_algorithm: "grace_hash",
-  max_threads: 2,
+  max_threads: 4,
   max_execution_time: 30,
   max_block_size: "256",
 };

@@ -33,7 +33,7 @@ import type {
 } from "@/data/contracts/repository";
 import type { ActionResult } from "@/server/kernel";
 import { routes } from "@/shared/safe-path";
-import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { useFormatter } from "@/ui/formatter";
 import { useNavigate } from "@/ui/navigation";
 import { PageHeader } from "@/ui/page-header";
@@ -326,19 +326,19 @@ export function Repositories({
           eyebrow={wsName}
           description={t("subtitle")}
           actions={
-            <button
+            <Button
               type="button"
               data-testid="repositories-add-oxagen"
               data-touch-target=""
               data-gold={headerGold ? "" : undefined}
               aria-haspopup="dialog"
-              className={headerGold ? buttonPrimary : buttonSecondary}
+              variant={headerGold ? "primary" : "outline"}
               onClick={() => {
                 openWizard(null);
               }}
             >
               {t("addOxagen")}
-            </button>
+            </Button>
           }
         />
         {steering}

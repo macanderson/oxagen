@@ -12,13 +12,8 @@
 // the button follows the viewer's approve flag, not the control flag.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
-import {
-  buttonPrimary,
-  buttonSmall,
-  fieldHint,
-  fieldLabel,
-  textareaBase,
-} from "@/ui/control-styles";
+import { fieldHint, fieldLabel, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { refreshChecks, reviseTriage } from "../actions";
@@ -99,17 +94,17 @@ export function RecordAnswer({
         </div>
       )}
       <div className="mt-3">
-        <button
+        <Button
           type="submit"
           data-testid="work-action-record-answer"
-          className={buttonPrimary}
+          variant="primary"
           disabled={blocked !== null || pending}
           aria-busy={pending || undefined}
           title={blocked ?? undefined}
           aria-describedby={blocked === null ? undefined : reasonId}
         >
           {t("submit")}
-        </button>
+        </Button>
         {blocked === null ? null : (
           <span id={reasonId} hidden>
             {blocked}
@@ -161,10 +156,10 @@ export function RefreshChecks({
 
   return (
     <div className="flex flex-col items-start gap-2">
-      <button
+      <Button
         type="button"
         data-testid="work-action-refresh-checks"
-        className={buttonSmall}
+        variant="outline" size="sm"
         disabled={blocked !== null || pending}
         aria-busy={pending || undefined}
         title={blocked ?? undefined}
@@ -174,7 +169,7 @@ export function RefreshChecks({
         }}
       >
         {t("submit")}
-      </button>
+      </Button>
       {blocked === null ? null : (
         <span id={reasonId} hidden>
           {blocked}

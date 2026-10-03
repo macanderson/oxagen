@@ -946,11 +946,17 @@ export async function materializeTools(
               );
               const { approvalId } = approval;
               expiresAt = approval.expiresAt?.toISOString() ?? expiresAt;
+              // The same call asked again inside the approval's window
+              // finds the row it already wrote (ADR-118). A decided row
+              // answers the decision and what became of the call, with the
+              // refusal's reason when its re-check stopped it, so the turn
+              // can tell the person why rather than park it a second time.
               if (opts.approvalMode === "park" && approval.resolution) {
                 return {
                   approvalId,
                   resolution: approval.resolution,
                   execution: approval.resumeStatus,
+                  reason: approval.resumeError ?? null,
                 };
               }
               // Emit approval-required event BEFORE blocking so the stream route

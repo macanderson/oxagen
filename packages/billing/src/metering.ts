@@ -22,6 +22,8 @@ import {
 import { assertOrgCanConsume, BillingSuspendedError } from "./dunning";
 import { maybeAutoReload } from "./autoreload";
 import { logger } from "./logger";
+import type { SpendLane } from "@oxagen/oxagen/workspace-budgets";
+import { assertUnderWorkspaceLaneBudget } from "./workspace-lane-budget";
 
 // ---------------------------------------------------------------------------
 // Admission gate: the pre-turn guard
@@ -148,6 +150,14 @@ export interface StartTurnOptions {
    * reads the GAU bucket, not the credit balance (ADR-055).
    */
   fundedBy?: TurnFunding;
+  /**
+   * The workspace lane the turn spends on, with the workspace it runs in
+   * (#5426). When both are given, the turn is held to that lane's daily
+   * budget in the workspace's settings before any other check, whoever pays
+   * the vendor: the budget is the customer's own control, not the platform's.
+   */
+  lane?: SpendLane;
+  workspaceId?: string;
 }
 
 export { BillingSuspendedError };
@@ -175,6 +185,15 @@ export async function assertCanStartTurn(
 ): Promise<void> {
   const start = Date.now();
   const fundedBy: TurnFunding = opts.fundedBy ?? "platform";
+
+  // Step 0: the workspace's own daily budget on this lane (#5426). Runs for
+  // an org-funded turn too, because the budget is the customer's control.
+  if (opts.lane !== undefined && opts.workspaceId !== undefined)
+    await assertUnderWorkspaceLaneBudget({
+      orgId,
+      workspaceId: opts.workspaceId,
+      lane: opts.lane,
+    });
 
   // Step 1: refuse suspended orgs immediately.
   await assertOrgCanConsume(orgId);

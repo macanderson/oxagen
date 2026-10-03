@@ -38,7 +38,9 @@ export const retractRecord = defineTool({
     "Withdraw a steering record by appending a retraction to its lineage. The original record is never deleted or edited — it keeps its hash, evidence and citations, and the retraction supersedes it (§9). Publishing the retirement of a published record is open_steering_pr.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  // No "app" layer: no contract it absorbs declares one, so no rev1 page
+  // carries it until cutover (tools/scripts/check_ui_parity.mjs).
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
 
   absorbs: ["delete_memory", "demote_memory"],

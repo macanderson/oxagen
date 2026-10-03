@@ -20,7 +20,8 @@ import {
 } from "react";
 import type { ActionResult } from "@/server/kernel";
 import type { SafePath } from "@/shared/safe-path";
-import { buttonDanger, buttonSecondary, mono } from "@/ui/control-styles";
+import { mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { useFormatter } from "@/ui/formatter";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -95,15 +96,15 @@ function WriteDialog<O>({
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={danger ? buttonDanger : buttonSecondary}
+        variant={danger ? "destructive-outline" : "outline"}
         onClick={() => {
           setOpen(true);
         }}
       >
         {copy.open}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={openChange}
@@ -250,15 +251,15 @@ export function RetireAgent({
   ];
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={danger ? buttonDanger : buttonSecondary}
+        variant={danger ? "destructive-outline" : "outline"}
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={openChange}
@@ -311,16 +312,16 @@ export function RetireAgent({
               <FormAlert testId={`${testId}-failure`}>{failure}</FormAlert>
             )}
             <SheetFooterAction>
-              <button
+              <Button
                 type="submit"
                 form={formId}
                 disabled={!understood || pending}
                 data-touch-target=""
                 data-testid={`${testId}-confirm`}
-                className={`${buttonDanger} disabled:cursor-not-allowed disabled:opacity-50`}
+                variant="destructive-outline" className="disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {pending ? t("pending") : t("confirm")}
-              </button>
+              </Button>
             </SheetFooterAction>
           </form>
         )}
