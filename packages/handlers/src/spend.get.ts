@@ -36,7 +36,6 @@ import {
   type DailyTotalsRecord,
   foldBasis,
   type RunTotalsRecord,
-  standingSourcesOf,
   utcDay,
 } from "@oxagen/billing";
 import { bareToolName } from "@oxagen/run-ledger";
@@ -278,31 +277,11 @@ const WHOLE_RUN_GROUPINGS: ReadonlySet<SpendGroupBy> = new Set([
  * its tool definitions were not recorded.
  */
 export function tokenSourcesOf(
-  runs: readonly RunTotalsRecord[],
+  runs: readonly SpendRunRecord[],
 ): SpendTokenSources {
-  const add = (sum: number | null, tokens: number | null) =>
-    tokens === null ? sum : (sum ?? 0) + tokens;
-  let toolDefinitionTokens: number | null = null;
-  let contextFrameTokens: number | null = null;
-  let steeringTokens: number | null = null;
-  let toolResultTokens: number | null = null;
-  for (const run of runs) {
-    const sources = standingSourcesOf(run);
-    toolDefinitionTokens = add(
-      toolDefinitionTokens,
-      sources.toolDefinitionTokens,
-    );
-    contextFrameTokens = add(contextFrameTokens, sources.contextFrameTokens);
-    steeringTokens = add(steeringTokens, sources.steeringTokens);
-    for (const tool of run.breakdown.tools)
-      toolResultTokens = add(toolResultTokens, tool.resultTokens);
-  }
-  return {
-    toolDefinitionTokens,
-    contextFrameTokens,
-    steeringTokens,
-    toolResultTokens,
-  };
+  // The drill sums the same sources with the same helpers, so a row and the
+  // drill it opens agree.
+  return { ...sumStanding(runs), toolResultTokens: resultTokensOf(runs) };
 }
 
 /** Each run of `list` once, in the order first seen. */
