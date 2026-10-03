@@ -47,6 +47,7 @@ import {
   transcriptEntry,
   transcriptFigures,
 } from "./run.builders";
+import { changeSet } from "@/test/change-views";
 import { runIssue, runIssues } from "./issues.builders";
 import { releaseTranscript } from "./transcript.builders";
 import { TRANSCRIPT_PAGE } from "./transcript-rows";
@@ -92,6 +93,8 @@ vi.mock("./actions", () => ({
   readRunExport: vi.fn(),
   sealRun: vi.fn(),
   answerInterjection: vi.fn(),
+  readChangeSet: vi.fn(),
+  readRevisionDiff: vi.fn(),
 }));
 vi.mock("next-intl/server", async () => {
   const { translator } = await import("@/test/intl");
@@ -583,10 +586,17 @@ describe("header", () => {
     );
     expect(chips.getByText("fork replay")).toBeTruthy();
     const rig = within(screen.getByTestId("run-rig"));
-    expect(rig.getByText("claude-sonnet-5")).toHaveAttribute(
-      "title",
-      "anthropic sonnet",
+    // The model chip draws the maker's mark and names the maker in text, so
+    // the provider reads without a hover (#5297). The tier stays on hover.
+    const model = rig.getByTestId("run-model");
+    expect(model).toHaveTextContent("claude-sonnet-5");
+    expect(model).toHaveAttribute("title", "sonnet");
+    expect(within(model).getByTestId("run-model-provider")).toHaveTextContent(
+      "Anthropic",
     );
+    expect(
+      model.querySelector('svg[data-provider-mark="anthropic"]'),
+    ).not.toBeNull();
     // The session recorded its harness, so the rig names it and its version.
     expect(rig.getByText("Claude Code")).toBeTruthy();
     expect(rig.getByText("2.1.0")).toBeTruthy();
@@ -3591,6 +3601,41 @@ describe("the work", () => {
     const changes = within(await screen.findByTestId("run-changes"));
     expect(changes.queryByText("none")).toBeNull();
     expect(changes.getByText(/github_unreachable/)).toBeTruthy();
+  });
+
+  // ADR-292: the run's change set comes from Oxagen's own pull request store.
+  it("reads the run's change set by the run's public id and draws it in Changes", async () => {
+    const { calls, container } = await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      changes: ok(changeSet()),
+    });
+    const changes = within(await screen.findByTestId("run-changes"));
+    expect(calls.changeSet).toEqual([[ctx, "run", runRow().id]]);
+    const set = within(changes.getByTestId("run-change-set"));
+    expect(
+      set.getAllByTestId("change-pull").map((row) => row.dataset.state),
+    ).toEqual(["open", "merged"]);
+    expect(set.getAllByTestId("change-file")).toHaveLength(2);
+    await expectNoAxe(container);
+  });
+
+  it("names a change set read that threw in Changes and keeps the rest of the page (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(runWork()),
+      changes: () => Promise.reject(new Error("forge store down")),
+    });
+    const changes = within(await screen.findByTestId("run-changes"));
+    expect(
+      within(changes.getByTestId("run-change-set")).getByText(
+        /frame_store_unreachable/,
+      ),
+    ).toBeTruthy();
+    expect(
+      changes.getByRole("link", { name: "acme/platform#482" }),
+    ).toBeTruthy();
   });
 
   it("names a running check by its status, marks a partial outputs read's file count as a floor, and folds files past eight into a count", async () => {

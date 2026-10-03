@@ -145,7 +145,7 @@ export const changeSetGet = registerCapability({
     "Get the pull requests a run, a work order, a work item, or an issue produced, each with its latest stored revision and files, and their change rolled up by repository. Read from Oxagen's own pull request store, never from GitHub or GitLab.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

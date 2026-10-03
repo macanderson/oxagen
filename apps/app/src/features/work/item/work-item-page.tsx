@@ -8,21 +8,26 @@
 // The page reads the item (get_work_item) and the agents that can take a send
 // (list_work_targets) together. An item the workspace does not hold is a 404.
 // A refused or failed item read replaces the body with its state and keeps the
-// shell. A failed targets read only holds Send back, with its reason.
+// shell. A failed targets read only holds Send back, with its reason. Once the
+// item answers, the page reads its change set (get_change_set) by the item's
+// public id, which the URL does not carry (ADR-292). A failed change set read
+// is named in its own panel.
 //
 // The page's words are Phase 1's: Claimed, and Accepted by a person. No word
 // on it claims a verdict. A cost the runtime did not send reads unknown, every
 // acceptance names the commit it was given on, and the item's own text stays
 // data.
 import { notFound } from "next/navigation";
+import type { ChangeSet } from "@/data/contracts/changes";
 import type { WorkItemDetail, WorkTargetList } from "@/data/contracts/work";
 import type { DataSource } from "@/data/ports";
-import type { Read } from "@/data/read";
+import { PAGE_FAILURES, type Read, readError } from "@/data/read";
 import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { useFormatter } from "@/ui/formatter";
 import { BriefPanel } from "./brief-panel";
+import { ChangesPanel } from "./changes-panel";
 import { CostPanel, HistoryPanel } from "./cost-history";
 import { DeliveryPanel } from "./delivery-panel";
 import { WorkItemHead } from "./head";
@@ -36,11 +41,13 @@ type At = { org: string; ws: string };
 function Loaded({
   detail,
   targets,
+  changes,
   at,
   dialog,
 }: {
   detail: WorkItemDetail;
   targets: WorkTargetList | null;
+  changes: Read<ChangeSet>;
   at: At;
   dialog: "send" | null;
 }) {
@@ -65,6 +72,7 @@ function Loaded({
       <BriefPanel detail={detail} />
       {showDelivery ? <DeliveryPanel detail={detail} at={at} /> : null}
       {review === null ? null : <ReviewPanel detail={detail} send={review} at={at} />}
+      <ChangesPanel detail={detail} read={changes} at={at} />
       {showCost ? <CostPanel detail={detail} at={at} /> : null}
       <HistoryPanel detail={detail} />
     </div>
@@ -107,6 +115,13 @@ export async function WorkItemPage({
       <Failure read={read} at={at} item={item} readAt={readAt.toISOString()} />
     );
   }
+  // A thrown read folds to the work page's own read error, so the Changes
+  // panel says the read failed rather than the page throwing.
+  const changes = await source.changes
+    .changeSet(ctx, "work_item", read.value.item.id)
+    .catch(() =>
+      readError(PAGE_FAILURES.work.error.code, PAGE_FAILURES.work.error.status),
+    );
   return (
     <>
       <PageRecord
@@ -117,6 +132,7 @@ export async function WorkItemPage({
       <Loaded
         detail={read.value}
         targets={targets.ok ? targets.value : null}
+        changes={changes}
         at={at}
         dialog={dialog}
       />

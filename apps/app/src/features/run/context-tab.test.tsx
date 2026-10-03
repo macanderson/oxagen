@@ -36,6 +36,12 @@ vi.mock("next/link", () => ({
     <a {...rest}>{children}</a>
   ),
 }));
+// The Issues tab's change sets read through the lane's actions, which this
+// file never opens.
+vi.mock("./actions", () => ({
+  readChangeSet: vi.fn(),
+  readRevisionDiff: vi.fn(),
+}));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 

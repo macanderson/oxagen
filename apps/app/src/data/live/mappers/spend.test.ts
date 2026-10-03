@@ -153,6 +153,44 @@ describe("toSpendReport", () => {
     expect(view.rows[0]?.topRuns).toEqual([run]);
     expect(view.rows[1]?.topRuns).toEqual([]);
   });
+
+  it("copies a row's prompt sources, keeps an unmeasured one null, and leaves a row without them without (#5295)", () => {
+    const sources = {
+      toolDefinitionTokens: 18_000,
+      contextFrameTokens: null,
+      steeringTokens: 400,
+      toolResultTokens: 2_000,
+    };
+    const out = spendGet.output.parse({
+      period: { from: "2026-09-01", to: "2026-09-30" },
+      groupBy: "agent",
+      total: figure,
+      days: [],
+      reported: null,
+      rows: [
+        {
+          ...figure,
+          key: "acme.core.cc",
+          provider: null,
+          operator: null,
+          tokens: wireTokens,
+          topRuns: [],
+          tokenSources: sources,
+        },
+        {
+          ...figure,
+          key: "acme.core.review",
+          provider: null,
+          operator: null,
+          tokens: wireTokens,
+          topRuns: [],
+        },
+      ],
+    });
+    const view = SpendReport.parse(toSpendReport(out));
+    expect(view.rows[0]?.tokenSources).toEqual(sources);
+    expect(view.rows[1]).not.toHaveProperty("tokenSources");
+  });
 });
 
 describe("toFleetSpend", () => {

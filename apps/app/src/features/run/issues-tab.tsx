@@ -9,6 +9,12 @@
 // why, and carries `data-gap="tracker"`, never a guessed state. The table
 // appears once; Linked work below it lists repositories, pull requests and
 // files, never the issues again.
+//
+// Between the two, Changes by issue opens each issue's change set from
+// Oxagen's own pull request store (ADR-292), because an issue has no page of
+// its own. Only an issue whose link is a GitHub or GitLab issue page gets
+// one, since the store reads an issue by that page alone.
+import { CHANGE_SET_ID_PATTERNS } from "@oxagen/oxagen/contracts/forge.changes.get";
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, Suspense, use } from "react";
 import type { RunIssues } from "@/data/contracts/run-issues";
@@ -23,6 +29,7 @@ import { useFormatter } from "@/ui/formatter";
 import { formatCount } from "@/ui/money-format";
 import { GitHubLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
+import { IssueChangeSet } from "./change-sets";
 import { IssuesTable, type IssueTableRow } from "./issues-table";
 import { EdgeChip, LinkedWork, LinkedWorkLoading } from "./linked-work";
 import { Note, Panel, PanelBody } from "./parts";
@@ -238,6 +245,48 @@ function IssuesFromRead({
 }
 
 /**
+ * Changes by issue: one disclosure for each issue the store can read by its
+ * page, which reads that issue's change set the first time it opens. Nothing
+ * is drawn while the issues read fails, because the table above names that
+ * failure, or when no issue has such a page.
+ */
+function IssueChanges({
+  place,
+  issues,
+}: {
+  place: Place;
+  issues: Promise<Read<RunIssues>>;
+}) {
+  const t = useTranslations("run.issues.changes");
+  const read = use(issues);
+  if (!read.ok) return null;
+  const linked = read.value.issues.flatMap((issue) =>
+    issue.url !== null && CHANGE_SET_ID_PATTERNS.issue.test(issue.url)
+      ? [{ ref: issue.ref, url: issue.url }]
+      : [],
+  );
+  if (linked.length === 0) return null;
+  return (
+    <Panel title={t("title")} testId="run-issue-changes">
+      <ul className="flex flex-col">
+        {linked.map((issue) => (
+          <li
+            key={issue.url}
+            className="border-t border-border first:border-t-0"
+          >
+            <IssueChangeSet
+              url={issue.url}
+              label={t("toggle", { ref: issue.ref })}
+              at={{ org: place.org, ws: place.ws }}
+            />
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
+/**
  * The Issues tab over the page's bundle. The page awaits every tab the same
  * way, so this answers a promise although it makes no read of its own. The
  * issues and work reads stream inside the Issues table's and Linked work's
@@ -253,6 +302,9 @@ export function IssuesTab(props: RunTabProps): Promise<ReactNode> {
     <>
       <Suspense fallback={<IssuesPanel place={place} read={null} />}>
         <IssuesFromRead place={place} issues={issues} />
+      </Suspense>
+      <Suspense fallback={null}>
+        <IssueChanges place={place} issues={issues} />
       </Suspense>
       <Suspense fallback={<LinkedWorkLoading />}>
         <LinkedWork work={work} outputs={outputs} place={place} />

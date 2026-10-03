@@ -14,7 +14,9 @@
 // A later transcript page is read here too, through the `runs.transcript`
 // port rather than the kernel seam, so the Run page maps every page of a
 // transcript with one mapper (ADR-167, ADR-182). So is the delivery report,
-// through `runs.commands`, the read a control frame's inspector makes.
+// through `runs.commands`, the read a control frame's inspector makes. So are
+// an issue's change set and a file's diff, through the `changes` port the
+// Changes panel reads (ADR-292).
 import { agentInterjectionAnswer } from "@oxagen/oxagen/contracts/agent.interjection.answer";
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
 import {
@@ -29,6 +31,12 @@ import { runSeal } from "@oxagen/oxagen/contracts/run.seal";
 import { runFork } from "@oxagen/oxagen/contracts/run.fork";
 import { runSummarize } from "@oxagen/oxagen/contracts/run.summarize";
 import { z } from "zod";
+import {
+  type ChangeSet,
+  ChangeSetScope,
+  REVISION_DIFF_PATHS_MAX,
+  type RevisionDiff,
+} from "@/data/contracts/changes";
 import {
   type RunTranscript,
   TRANSCRIPT_ENTRY_DEFAULT,
@@ -350,6 +358,65 @@ export async function readDeliveryReport(
   if (query === null)
     return { ok: false, reason: "invalid", code: "report_query", field: "q" };
   return readToActionResult(await dataSource().runs.commands(ctx, query));
+}
+
+/**
+ * A change set read when a person opens it (ADR-292): the Issues tab reads
+ * each issue's this way, by the issue's URL. It reads the `changes` port, the
+ * read and the mapper the Changes panel's change set goes through. A scope
+ * outside the four, or an empty id, is refused as `invalid` before anything
+ * is read.
+ */
+export async function readChangeSet(
+  org: string,
+  ws: string,
+  scope: ChangeSetScope,
+  id: string,
+): Promise<ActionResult<ChangeSet>> {
+  const ctx = await requireViewer(org, ws);
+  const parsed = ChangeSetScope.safeParse(scope);
+  if (!parsed.success)
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "change_set_scope",
+      field: "scope",
+    };
+  if (typeof id !== "string" || id === "")
+    return { ok: false, reason: "invalid", code: "change_set_id", field: "id" };
+  return readToActionResult(
+    await dataSource().changes.changeSet(ctx, parsed.data, id),
+  );
+}
+
+/**
+ * One revision's hunks for the paths a person opened (`get_revision_diff`,
+ * ADR-292), read when a file in a change set opens. The paths are a list of
+ * one to `REVISION_DIFF_PATHS_MAX` non-empty strings, or the read is refused
+ * as `invalid` before anything is read.
+ */
+export async function readRevisionDiff(
+  org: string,
+  ws: string,
+  revisionId: string,
+  paths: string[],
+): Promise<ActionResult<RevisionDiff>> {
+  const ctx = await requireViewer(org, ws);
+  if (
+    !Array.isArray(paths) ||
+    paths.length === 0 ||
+    paths.length > REVISION_DIFF_PATHS_MAX ||
+    !paths.every((path) => typeof path === "string" && path !== "")
+  )
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "revision_diff_paths",
+      field: "paths",
+    };
+  return readToActionResult(
+    await dataSource().changes.revisionDiff(ctx, revisionId, paths),
+  );
 }
 
 /**

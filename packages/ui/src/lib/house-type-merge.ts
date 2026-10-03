@@ -3,14 +3,7 @@ import type {
   DefaultClassGroupIds,
   DefaultThemeGroupIds,
 } from "tailwind-merge";
-
-/**
- * The steps of the two house type scales. `house-tailwind.css`, which the
- * brand sync copies from the kit, turns each one into a `text-m-<step>` and a
- * `text-a-<step>` utility. `utils.test.ts` fails when that file gains a step
- * this list lacks.
- */
-const TYPE_STEPS = ["h1", "h2", "h3", "h4", "body", "micro"] as const;
+import houseTypeUtilities from "./house-type-utilities.json";
 
 /**
  * The tailwind-merge config every `cn()` in product builds on, through
@@ -23,13 +16,17 @@ const TYPE_STEPS = ["h1", "h2", "h3", "h4", "body", "micro"] as const;
  * #5185). In the `font-size` group, a house size conflicts only with another
  * size, such as `text-sm` or `text-a-h1`.
  *
+ * The groups come from `house-type-utilities.json`, which the kit generates
+ * from its type scales and the brand sync copies here. A step the kit adds,
+ * such as `text-a-2xs` in kit 2.7.0, reaches `cn()` with the sync and needs
+ * no edit in this file. `utils.test.ts` checks the list against every utility
+ * `house-tailwind.css` defines.
+ *
  * `packages/ui`, `apps/app`, and `apps/app_deprecated` each keep their own
- * `cn()`, so this one list is what keeps the three in step.
+ * `cn()`, so this one config is what keeps the three in step.
  */
 export const houseTypeMerge: ConfigExtension<DefaultClassGroupIds, DefaultThemeGroupIds> = {
   extend: {
-    classGroups: {
-      "font-size": [{ text: [{ a: TYPE_STEPS, m: TYPE_STEPS }] }],
-    },
+    classGroups: houseTypeUtilities.tailwind_merge,
   },
 };

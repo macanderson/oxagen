@@ -12,7 +12,8 @@
 // cost and productive ratio of the agent's sealed runs in the 30 days before
 // this run started. Each tool's result cost is an estimate of input the run's
 // cost already counts, so it always carries the `estimated` basis. So does
-// the standing context by source (#4537, spec detector 2).
+// the standing context by source (#4537, spec detector 2). The three sources'
+// tokens over every counted call ride beside it as `tokenSources` (#5295).
 //
 // It also answers each loop that reached the workspace's no-progress limit
 // (#4490, spec detector 1), from `cost.no_progress_hits`: the Cost tab draws
@@ -36,6 +37,7 @@ import {
   type RunCostNoProgressHit,
   type RunCostProvisional,
   type RunCostStandingContext,
+  type RunCostTokenSources,
 } from "@oxagen/oxagen/contracts/run.cost";
 import {
   costBasisSchema,
@@ -294,6 +296,28 @@ export function standingContextOf(
   };
 }
 
+/**
+ * The row's tool definition, context frame and steering tokens, each summed
+ * over every call the rollup counted (#5295). The stored row carries them
+ * beside the record (`StoredRunTotals`), so a row without them, such as a
+ * test fake, reads every source as unmeasured. Null when no source was
+ * measured, and a source no call measured stays null, never a zero.
+ */
+export function tokenSourcesOf(row: object): RunCostTokenSources | null {
+  const sources = standingSourcesOf(row);
+  if (
+    sources.toolDefinitionTokens === null &&
+    sources.contextFrameTokens === null &&
+    sources.steeringTokens === null
+  )
+    return null;
+  return {
+    toolDefinitionTokens: sources.toolDefinitionTokens,
+    contextFrameTokens: sources.contextFrameTokens,
+    steeringTokens: sources.steeringTokens,
+  };
+}
+
 export function createRunCostHandler(
   deps: RunCostDeps,
 ): CapabilityHandler<typeof runCostGet> {
@@ -380,6 +404,7 @@ export function createRunCostHandler(
           cost: cost(t.costMicros, row.currency, "estimated"),
         })),
         standingContext: standingContextOf(row),
+        tokenSources: tokenSourcesOf(row),
         priceEntryIds: row.priceEntryIds,
         rolledUpAt: row.rolledUpAt.toISOString(),
         isEstimate: row.sealedAt === null,

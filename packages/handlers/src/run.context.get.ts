@@ -18,6 +18,9 @@
 // Both are scoped through `resolveRun`, which is where a run outside the
 // caller's workspace becomes `not_found`. Each block's tokens are its byte
 // share of the prompt total the vendor reported, so the blocks sum to it.
+// The composition sums each block over every window the walk reached, which
+// is how the Cost tab reads a run's prompt split without a second walk
+// (#5295).
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   RUN_CONTEXT_ASSEMBLY_MAX,
@@ -35,6 +38,7 @@ import {
   type RecordedWindow,
   tachoContextWindow,
   type TachoModelCallRow,
+  windowComposition,
 } from "@oxagen/run-ledger";
 import { readTachoModelCalls } from "./lib/run-context";
 import {
@@ -144,6 +148,9 @@ export function createRunContextGetHandler(
       run.source === "tacho"
         ? await wrappedReading(deps, run.sessionUuid)
         : await ledgerReading(deps, run.runId);
+    // Summed over every window the walk reached, before the list is cut to
+    // the contract's length, so a long run's composition is not a prefix's.
+    const composition = windowComposition(reading.windows);
     return {
       runId: input.runId,
       source: run.source === "tacho" ? "wrapped" : "ledger",
@@ -154,6 +161,8 @@ export function createRunContextGetHandler(
         reading.walked &&
         reading.windows.length <= RUN_CONTEXT_WINDOW_MAX &&
         reading.assemblies.length <= RUN_CONTEXT_ASSEMBLY_MAX,
+      composition:
+        composition === null ? null : { ...composition, basis: "apportioned" },
     };
   };
 }

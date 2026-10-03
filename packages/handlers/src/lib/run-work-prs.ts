@@ -10,13 +10,33 @@ import { logger } from "../logger";
 import { buildCiSummary } from "./ci-status";
 import { type ConnectedRunRepository, workDigest } from "./run-work";
 
-export interface RecordedRunPr {
+/**
+ * A pull request the run's record names in a repository the workspace links,
+ * by the provider's repository id. The read finds the repository among the
+ * linked ones by `providerRepositoryId`.
+ */
+export interface LinkedRunPr {
   repositoryId: string;
   number: number;
   headSha: string | null;
   /** The ledger event that recorded it (`run_seq`), where the reader has one. */
   seq?: string;
 }
+
+/**
+ * A pull request the run's record names in a repository the workspace does
+ * not link. The caller has already found the workspace's own GitHub
+ * connection that reads the repository's owner, as the ADR-192 backfill does,
+ * so the read takes the repository as given. Its `connected` is false.
+ */
+export interface UnlinkedRunPr {
+  repository: ConnectedRunRepository;
+  number: number;
+  headSha: string | null;
+}
+
+/** A pull request the run's record names outright. */
+export type RecordedRunPr = LinkedRunPr | UnlinkedRunPr;
 
 /** The ledger events one page reads, and the pages one read walks. */
 const LEDGER_EVENT_PAGE = 500;
@@ -32,8 +52,8 @@ const LEDGER_EVENT_PAGES = 20;
 export async function readLedgerPrReceipts(
   store: Pick<RunStore, "readAttemptEventsSince">,
   runId: string,
-): Promise<{ receipts: RecordedRunPr[]; complete: boolean }> {
-  const receipts: RecordedRunPr[] = [];
+): Promise<{ receipts: LinkedRunPr[]; complete: boolean }> {
+  const receipts: LinkedRunPr[] = [];
   let cursor = "0";
   for (let page = 0; page < LEDGER_EVENT_PAGES; page++) {
     const events = await store.readAttemptEventsSince(
@@ -114,20 +134,33 @@ export async function readWorkPullRequests(
 }> {
   const warnings = new Set<string>();
   const result = new Map<string, RunWorkPr>();
-  const targets = checkouts.map((checkout) => ({
-    checkout,
-    recorded: null as RecordedRunPr | null,
-  }));
+  // Each target carries the repository it reads, because an unlinked
+  // receipt's repository is not among `repositories`.
+  const targets: {
+    checkout: RunCheckout;
+    recorded: RecordedRunPr | null;
+    repo: ConnectedRunRepository | undefined;
+  }[] = [];
+  // The receipts go first. A receipt names its pull request outright, and a
+  // checkout names only a branch. Each new branch spends one of the 20
+  // discoveries, even a default branch that links nothing. With the receipts
+  // last, a run with 20 branches in linked repositories never read the PRs
+  // its record names.
   for (const receipt of recorded) {
-    const repo = repositories.find(
-      (candidate) => candidate.providerRepositoryId === receipt.repositoryId,
-    );
+    const repo =
+      "repository" in receipt
+        ? receipt.repository
+        : repositories.find(
+            (candidate) =>
+              candidate.providerRepositoryId === receipt.repositoryId,
+          );
     if (!repo) {
       warnings.add("recorded_repository_not_connected");
       continue;
     }
     targets.push({
       recorded: receipt,
+      repo,
       checkout: {
         id: "",
         path: "",
@@ -140,13 +173,18 @@ export async function readWorkPullRequests(
       },
     });
   }
+  for (const checkout of checkouts)
+    targets.push({
+      checkout,
+      recorded: null,
+      repo: repositories.find(
+        (candidate) => candidate.url === checkout.repository?.url,
+      ),
+    });
   const seenBranches = new Map<string, string[]>();
   const defaultBranches = new Map<string, string>();
   let discoveries = 0;
-  for (const { checkout, recorded: receipt } of targets) {
-    const repo = repositories.find(
-      (candidate) => candidate.url === checkout.repository?.url,
-    );
+  for (const { checkout, recorded: receipt, repo } of targets) {
     if (!repo) {
       warnings.add("repository_not_connected");
       continue;
@@ -299,7 +337,9 @@ export async function readWorkPullRequests(
             owner: repo.owner,
             name: repo.name,
             url: repo.url,
-            connected: true,
+            // False for a repository the workspace does not link, which a
+            // receipt reached through the owner's connection.
+            connected: repo.connected,
           },
           number: pr.number,
           title: pr.title,

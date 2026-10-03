@@ -83,6 +83,7 @@ import {
 } from "./credential";
 import { restoreGithubRepositories } from "./github";
 import { agentDeps } from "./agent-deps";
+import { registerClaudeCodeMcp } from "./claude-code-mcp";
 import { daemonServiceSpec } from "./daemon-service";
 import { policyModeText } from "./policy-mode";
 import { shippingHealth, type ShippingHealth } from "./status";
@@ -1319,6 +1320,44 @@ async function enrollSteps(
         deps.out("      already present; nothing to change");
       }
     });
+    // Oxagen's own tools for the hooked session (#5287): the Stop hook asks
+    // a run that showed trouble to call `record_reflection`, and only this
+    // entry gives the session that tool. Its own step, after the hooks, so a
+    // failure here warns and leaves Claude Code hooked: the hooks work
+    // without it, and without it the Stop hook asks for nothing.
+    if (
+      harnesses.includes("claude-code") &&
+      !unhooked.includes("claude-code") &&
+      deps.editClaudeUserConfig !== undefined
+    ) {
+      deps.out(`      Claude Code MCP server: ${deps.paths.claudeUserConfig}`);
+      try {
+        const registered = registerClaudeCodeMcp(host, deps);
+        host = registered.host;
+        if (registered.result === "skipped")
+          warnings.push(
+            `Claude Code was not given Oxagen's tools: ${registered.reason ?? "unknown reason"}. Until it has them, the Stop hook asks Claude Code for no reflection.`,
+          );
+        else if (registered.result === "written")
+          deps.out(
+            "      `oxagen` server written; a new Claude Code session lists Oxagen's tools",
+          );
+        else deps.out("      already present; nothing to change");
+        if (registered.displaced)
+          warnings.push(
+            "an MCP server already used the name `oxagen` in Claude Code; it was moved aside and unenroll restores it",
+          );
+      } catch (error) {
+        // The registration may have recorded the file, or a server it moved
+        // aside, in host.json before it failed. The later writes below start
+        // from `host`, so they must not drop that record.
+        host = readHostFile(deps.paths.hostFile) ?? host;
+        warnings.push(
+          `Claude Code was not given Oxagen's tools: ${error instanceof Error ? error.message : String(error)}. The hooks are written. Run \`oxagen agent enroll\` again to add the tools; until then the Stop hook asks Claude Code for no reflection.`,
+        );
+        deps.out("      not written (see the warning below)");
+      }
+    }
     hook("codex", () => {
       deps.out(`      Codex: ${deps.paths.codexHooks}`);
       const merged = mergeCodexHooks(deps.readCodexHooks(), hookConfig);

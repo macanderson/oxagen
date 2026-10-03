@@ -26,6 +26,8 @@ import {
   WORK_SUBAGENT_CAP,
 } from "./lib/run-work";
 import { readRunCommandRefFrames } from "./lib/run-command-refs";
+import { unlinkedRepositoryResolver } from "./lib/run-pr-link-repository";
+import { githubConnectionFor } from "./lib/run-pull-request-backfill";
 import {
   readLedgerPrReceipts,
   readWorkPullRequests,
@@ -45,6 +47,13 @@ export type RunWorkDeps = RunReadDeps & {
   commandFrames: typeof readRunCommandRefFrames;
   /** The releases those frames created, with GitHub's state for each. */
   releases: typeof readWorkReleases;
+  /**
+   * The id of the workspace's own GitHub connection that reads an owner's
+   * repositories, or null when none does. A PR the run's record names in a
+   * repository the workspace does not link is read through it, as the
+   * ADR-192 backfill reads that PR's state.
+   */
+  githubConnection: typeof githubConnectionFor;
 };
 export function createRunWorkGetHandler(
   deps: RunWorkDeps,
@@ -107,6 +116,15 @@ export function createRunWorkGetHandler(
     // the same PR merges into it rather than listing it twice.
     const receipts: RecordedRunPr[] = [];
     const linkWarnings = new Set<string>();
+    // A PR in a repository the workspace does not link is read through the
+    // workspace's own GitHub connection for its owner. Before #5296 every
+    // such link was dropped, and the section said "No pull request" for a
+    // run that opened several.
+    const unlinkedRepository = unlinkedRepositoryResolver(
+      scope,
+      deps.githubConnection,
+      "get_run_work",
+    );
     for (const row of links.slice(0, WORK_PR_LINK_CAP)) {
       const link = prLinkOf(row);
       if (link === null) {
@@ -118,15 +136,25 @@ export function createRunWorkGetHandler(
           candidate.owner.toLowerCase() === link.owner.toLowerCase() &&
           candidate.name.toLowerCase() === link.name.toLowerCase(),
       );
-      if (!repo?.providerRepositoryId) {
+      if (repo?.providerRepositoryId) {
+        receipts.push({
+          repositoryId: repo.providerRepositoryId,
+          number: link.number,
+          headSha: null,
+        });
+        continue;
+      }
+      const other =
+        repo === undefined ? await unlinkedRepository(link) : "not_connected";
+      if (other === "lookup_failed") {
+        linkWarnings.add("pull_request_read_failed");
+        continue;
+      }
+      if (other === "not_connected") {
         linkWarnings.add("recorded_repository_not_connected");
         continue;
       }
-      receipts.push({
-        repositoryId: repo.providerRepositoryId,
-        number: link.number,
-        headSha: null,
-      });
+      receipts.push({ repository: other, number: link.number, headSha: null });
     }
     // The pull requests and the releases are separate GitHub reads, so they
     // run side by side.
@@ -176,4 +204,5 @@ export const runWorkGetHandler = createRunWorkGetHandler({
   pullRequests: readWorkPullRequests,
   commandFrames: readRunCommandRefFrames,
   releases: readWorkReleases,
+  githubConnection: githubConnectionFor,
 });

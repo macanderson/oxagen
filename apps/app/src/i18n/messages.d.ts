@@ -6994,6 +6994,7 @@ type Messages = {
         };
         allAdvanced: string;
         retries: string;
+        resultTokens: string;
       };
       families: {
         shell: string;
@@ -7030,10 +7031,13 @@ type Messages = {
         byCost: string;
         resultsTitle: string;
         standingTitle: string;
+        windowsTitle: string;
+        windowsSplitTitle: string;
         sources: {
           toolDefinitions: string;
           steering: string;
           contextFrames: string;
+          contextBlock: string;
         };
         noTools: string;
         toolsNotRead: string;
@@ -7041,6 +7045,7 @@ type Messages = {
         note: string;
         noteWithResults: string;
         noteWithStanding: string;
+        noteWithWindows: string;
         noteNotRolledUp: string;
       };
       calls: {
@@ -7106,7 +7111,11 @@ type Messages = {
           steering: string;
           system: string;
         };
+        tok: string;
+        tokShare: string;
         partsNote: string;
+        windowsNote: string;
+        sourcesNote: string;
         effectivePrice: string;
         effectiveValue: string;
         cacheWriteShare: string;
@@ -7866,6 +7875,10 @@ type Messages = {
       };
       statusFilter: string;
       noMatch: string;
+      changes: {
+        title: string;
+        toggle: string;
+      };
       linked: {
         title: string;
         edge: {
@@ -10981,6 +10994,8 @@ type Messages = {
         pendingApproval: string;
         exhausted: string;
         unavailable: string;
+        noAnswer: string;
+        commitNoAnswer: string;
         billing: string;
       };
     };
@@ -12652,6 +12667,50 @@ type Messages = {
       region: string;
       close: string;
     };
+    diffView: {
+      renamedFrom: string;
+      notKept: {
+        too_large: string;
+        unreadable: string;
+        unconfigured: string;
+      };
+      binary: string;
+      noRoom: string;
+      truncated: string;
+    };
+    changeSet: {
+      rule: string;
+      pullsHeading: string;
+      filesHeading: string;
+      empty: string;
+      noFiles: string;
+      state: {
+        open: string;
+        draft: string;
+        merged: string;
+        closed: string;
+      };
+      stateSeen: string;
+      noRevision: string;
+      revisionFiles: string;
+      incomplete: string;
+      countsUnknown: string;
+      leftOut: string;
+      morePullRequests: string;
+      repositorySummary: string;
+      moreFiles: string;
+      pullNotListed: string;
+      loadingDiff: string;
+      pathMissing: string;
+      loading: string;
+      failure: {
+        denied: string;
+        notFound: string;
+        pendingApproval: string;
+        other: string;
+        thrown: string;
+      };
+    };
   };
   work: {
     status: {
@@ -13352,6 +13411,11 @@ type Messages = {
       closedBody: string;
       acceptance: string;
       consequence: string;
+    };
+    changes: {
+      heading: string;
+      sendsHeading: string;
+      send: string;
     };
     refresh: {
       submit: string;

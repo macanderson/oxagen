@@ -1095,6 +1095,54 @@ describe("runs.cost", () => {
     expect(bare.ok && bare.value.rollup?.standingContext).toBeNull();
   });
 
+  it("maps each prompt source's tokens, and reads an answer without them as null, never a zero (#5295)", async () => {
+    const rollup = {
+      cost: { micros: "500", currency: "USD", basis: "mixed" },
+      tokens,
+      cacheHitRate: 0.9,
+      turns: 2,
+      steps: 7,
+      modelCalls: 4,
+      toolCalls: 3,
+      retries: null,
+      productiveRatio: null,
+      advancedSteps: null,
+      unproductiveSteps: null,
+      unproductiveCauses: null,
+      byModel: [],
+      byTool: [],
+      priceEntryIds: ["prc_1"],
+      rolledUpAt: "2026-09-15T08:59:00.000Z",
+      isEstimate: false,
+    };
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "tse_4f0a",
+        baseline: null,
+        rollup: {
+          ...rollup,
+          tokenSources: {
+            toolDefinitionTokens: 48_000,
+            contextFrameTokens: null,
+            steeringTokens: 1_200,
+          },
+        },
+      }),
+    );
+    const read = await runs.cost(ctx, "tse_4f0a");
+    if (!read.ok) throw new Error("expected an ok read");
+    expect(read.value.rollup?.tokenSources).toEqual({
+      toolDefinitionTokens: 48_000,
+      contextFrameTokens: null,
+      steeringTokens: 1_200,
+    });
+    kernelRead.mockResolvedValue(
+      readOk({ runId: "tse_4f0a", baseline: null, rollup }),
+    );
+    const bare = await runs.cost(ctx, "tse_4f0a");
+    expect(bare.ok && bare.value.rollup?.tokenSources).toBeNull();
+  });
+
   it("keeps a baseline figure too few runs carry as null, never a zero (negative)", async () => {
     kernelRead.mockResolvedValue(
       readOk({
@@ -2089,8 +2137,34 @@ describe("runs.context", () => {
         unmeasured: 2,
         assemblies: out.assemblies,
         complete: true,
+        // An answer that carried no composition reads as none (#5295).
+        composition: null,
       }),
     );
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("carries the run's composition block by block (#5295)", async () => {
+    const composition = {
+      requests: 3,
+      requestsWithoutTokens: 1,
+      promptTokens: 3000,
+      blocks: {
+        system: 300,
+        steering: null,
+        tools: null,
+        context: null,
+        conversation: 2700,
+      },
+      initialConversationTokens: 900,
+      basis: "apportioned",
+    };
+    kernelRead.mockResolvedValue(readOk({ ...out, composition }));
+    const read = await runs.context(ctx, "tse_4f0a");
+    if (!read.ok) throw new Error("expected an ok read");
+    // The basis is the contract's one value, so the view leaves it out.
+    const { basis: _basis, ...view } = composition;
+    expect(read.value.composition).toEqual(view);
     expect(captureError).not.toHaveBeenCalled();
   });
 

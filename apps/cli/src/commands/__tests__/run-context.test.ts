@@ -117,6 +117,46 @@ describe("oxagen run context", () => {
     ]);
   });
 
+  it("adds the run's composition as a last row, a block no window carried as a dash (#5295)", async () => {
+    post.mockResolvedValue({
+      ...CONTEXT,
+      composition: {
+        requests: 1,
+        requestsWithoutTokens: 1,
+        promptTokens: 42_000,
+        blocks: {
+          system: 4200,
+          steering: null,
+          tools: 12_600,
+          context: null,
+          conversation: 25_200,
+        },
+        initialConversationTokens: 25_200,
+        basis: "apportioned",
+      },
+    });
+    const { writer, out } = memoryWriter();
+    await runContext("tse_0a1b2c", {}, writer);
+    expect((out[6] ?? "").trim().split(/\s{2,}/)).toEqual([
+      "All",
+      "1 request(s)",
+      "42,000",
+      "4,200",
+      "-",
+      "12,600",
+      "-",
+      "25,200",
+    ]);
+  });
+
+  it("adds no composition row to an answer that carries none (negative)", async () => {
+    post.mockResolvedValue({ ...CONTEXT, composition: null });
+    const { writer, out } = memoryWriter();
+    await runContext("tse_0a1b2c", {}, writer);
+    expect(out).toHaveLength(6);
+    expect(out.some((line) => line.startsWith("All"))).toBe(false);
+  });
+
   it("says what was not recorded rather than printing a zero (negative)", async () => {
     post.mockResolvedValue(CONTEXT);
     const { writer, out } = memoryWriter();

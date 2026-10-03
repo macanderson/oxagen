@@ -85,6 +85,39 @@ describe("get_run_context contract", () => {
       ).toBe(false);
   });
 
+  it("carries the run's composition, reads an answer from before as null, and refuses a block outside the five (#5295)", () => {
+    const composition = {
+      requests: 12,
+      requestsWithoutTokens: 1,
+      promptTokens: 120_000,
+      blocks: {
+        system: 12_000,
+        steering: null,
+        tools: 36_000,
+        context: null,
+        conversation: 72_000,
+      },
+      initialConversationTokens: 900,
+      basis: "apportioned",
+    };
+    expect(
+      runContextGet.output.parse(answer({ composition })).composition,
+    ).toEqual(composition);
+    expect(runContextGet.output.parse(answer()).composition).toBeNull();
+    expect(
+      runContextGet.output.parse(answer({ composition: null })).composition,
+    ).toBeNull();
+    for (const bad of [
+      { ...composition, blocks: { ...composition.blocks, memory: 10 } },
+      { ...composition, blocks: { ...composition.blocks, system: -1 } },
+      { ...composition, basis: "measured" },
+      { ...composition, requests: undefined },
+    ])
+      expect(
+        runContextGet.output.safeParse(answer({ composition: bad })).success,
+      ).toBe(false);
+  });
+
   it("caps the windows one answer carries", () => {
     const many = Array.from({ length: RUN_CONTEXT_WINDOW_MAX + 1 }, () =>
       window(),

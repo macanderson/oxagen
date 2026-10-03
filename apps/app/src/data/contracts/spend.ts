@@ -126,6 +126,20 @@ const SpendRow = SpendFigure.extend({
    * {@link ASSISTANT_SPEND_KEY} row.
    */
   topRuns: z.array(SpendTopRun).optional(),
+  /**
+   * What the row's runs spent on each prompt source the recorder measures,
+   * summed (#5295). A source no run measured is null, never a zero. Present
+   * on a row of whole runs (operator, agent, task, cost center) and absent on
+   * a model, tool, or MCP server row.
+   */
+  tokenSources: z
+    .object({
+      toolDefinitionTokens: Count.nullable(),
+      contextFrameTokens: Count.nullable(),
+      steeringTokens: Count.nullable(),
+      toolResultTokens: Count.nullable(),
+    })
+    .optional(),
 });
 
 /**

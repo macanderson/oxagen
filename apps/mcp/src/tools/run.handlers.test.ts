@@ -305,6 +305,21 @@ const CASES: ToolCase[] = [
           ],
         },
       ],
+      // The one window, summed by block (#5295).
+      composition: {
+        requests: 1,
+        requestsWithoutTokens: 0,
+        promptTokens: 1000,
+        blocks: {
+          system: 100,
+          steering: null,
+          tools: 300,
+          context: null,
+          conversation: 600,
+        },
+        initialConversationTokens: 600,
+        basis: "apportioned",
+      },
       unmeasured: 1,
       assemblies: [],
       complete: true,
