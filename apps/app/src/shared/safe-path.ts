@@ -458,7 +458,9 @@ export const routes = {
    * (comma-separated) and `frames` a later page of the frames. The spine above the tabs adds `reads`, which folds its read marks
    * away, and `spine`, the folded groups a person opened (comma-separated
    * indexes). `finding` opens one finding's evidence over the Cost tab
-   * (#4001). Each is a query value, so the run keeps one route (§1.2).
+   * (#4001). `details` opens the Details drawer at one of its sections
+   * (`run`, `prs`, `subagents`, `missing`). Each is a query value, so the run
+   * keeps one route (§1.2).
    */
   run: (
     org: string,
@@ -472,6 +474,7 @@ export const routes = {
       reads?: string;
       spine?: string;
       finding?: string;
+      details?: string;
     },
   ): SafePath =>
     withQuery(pathOf(org, ws, "runs", run), {
@@ -482,6 +485,7 @@ export const routes = {
       reads: q?.reads,
       spine: q?.spine,
       finding: q?.finding,
+      details: q?.details,
     }),
   /**
    * Spend on one tab, with one key's drill or one finding's evidence open. The
