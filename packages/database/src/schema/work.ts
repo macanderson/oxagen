@@ -149,6 +149,7 @@ export const WORK_FACT_KINDS = [
   "accepted",
   "merged",
   "pr_closed",
+  "reverted",
 ] as const;
 
 /** The fact kinds that belong to a work order. ORDER_FACT_KINDS in @oxagen/work repeats this list. */
@@ -171,6 +172,7 @@ export const WORK_ORDER_FACT_KINDS = [
   "accepted",
   "merged",
   "pr_closed",
+  "reverted",
 ] as const;
 
 /** Who reported a fact. FACT_SOURCES in @oxagen/work repeats this list. */
@@ -791,7 +793,7 @@ export const workItemFacts = workSchema.table(
     }),
     kindCheck: check(
       "item_facts_kind_check",
-      sql`${t.kind} IN ('collected', 'entered', 'source_changed', 'triage_recorded', 'triage_failed', 'triage_overridden', 'brief_saved', 'brief_approved', 'closed', 'reopened', 'send_requested', 'send_delivered', 'send_rejected', 'send_withdrawn', 'claimed', 'run_linked', 'run_ended', 'stop_requested', 'stopped', 'pr_linked', 'head_observed', 'checks_required', 'check_observed', 'criterion_claimed', 'returned', 'accepted', 'merged', 'pr_closed')`,
+      sql`${t.kind} IN ('collected', 'entered', 'source_changed', 'triage_recorded', 'triage_failed', 'triage_overridden', 'brief_saved', 'brief_approved', 'closed', 'reopened', 'send_requested', 'send_delivered', 'send_rejected', 'send_withdrawn', 'claimed', 'run_linked', 'run_ended', 'stop_requested', 'stopped', 'pr_linked', 'head_observed', 'checks_required', 'check_observed', 'criterion_claimed', 'returned', 'accepted', 'merged', 'pr_closed', 'reverted')`,
     ),
     sourceCheck: check(
       "item_facts_source_check",
@@ -799,7 +801,7 @@ export const workItemFacts = workSchema.table(
     ),
     orderCheck: check(
       "item_facts_order_check",
-      sql`(${t.kind} IN ('send_requested', 'send_delivered', 'send_rejected', 'send_withdrawn', 'claimed', 'run_linked', 'run_ended', 'stop_requested', 'stopped', 'pr_linked', 'head_observed', 'checks_required', 'check_observed', 'criterion_claimed', 'returned', 'accepted', 'merged', 'pr_closed')) = (${t.orderId} IS NOT NULL)`,
+      sql`(${t.kind} IN ('send_requested', 'send_delivered', 'send_rejected', 'send_withdrawn', 'claimed', 'run_linked', 'run_ended', 'stop_requested', 'stopped', 'pr_linked', 'head_observed', 'checks_required', 'check_observed', 'criterion_claimed', 'returned', 'accepted', 'merged', 'pr_closed', 'reverted')) = (${t.orderId} IS NOT NULL)`,
     ),
     briefCheck: check(
       "item_facts_brief_check",

@@ -67,6 +67,7 @@ const NOTHING: Partial<WorkOutcomes> = {
   },
   cost: { runs: 0, knownRuns: 0, total: null },
   reopens: { cohort: 0, reopened: 0, waiting: 0 },
+  reverts: { cohort: 0, reverted: 0, waiting: 0 },
   truncated: false,
   weeks: [],
 };
@@ -158,15 +159,25 @@ describe("Outcomes › the last 30 days", () => {
     );
   });
 
-  it("counts reopens in the old cohort and says reverts are not recorded", async () => {
+  it("counts reopens and reverts in the old cohort and says which reverts count", async () => {
     await renderOutcomes(outcomes());
     const reopens = screen.getByTestId("work-outcomes-reopens");
+    expect(
+      within(reopens).getByRole("heading", { name: "Reopens and reverts" }),
+    ).toBeInTheDocument();
     expect(reopens.querySelector('[data-figure="cohort"]')).toHaveTextContent("14");
     expect(reopens.querySelector('[data-figure="reopened"]')).toHaveTextContent("1");
+    expect(reopens.querySelector('[data-figure="reverted"]')).toHaveTextContent("2");
     expect(reopens).toHaveTextContent(
       "9 newer items wait for their 30 days before counting here.",
     );
-    expect(reopens).toHaveTextContent("oxagen does not record reverts yet.");
+    expect(reopens).toHaveTextContent(
+      "A revert counts when it merges with the line Reverts owner/repo#123 that GitHub's Revert button writes.",
+    );
+    expect(reopens).toHaveTextContent(
+      "A revert made by hand without that line is not counted.",
+    );
+    expect(reopens).not.toHaveTextContent("does not record reverts");
   });
 });
 

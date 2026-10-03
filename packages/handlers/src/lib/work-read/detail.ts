@@ -382,6 +382,9 @@ function detailsOf(fact: WorkFact): Pick<HistoryOut, "reason" | "resolution" | "
     case "check_observed":
       return { ...none, check: fact.data.name, conclusion: fact.data.conclusion };
     case "merged":
+    case "reverted":
+      // A revert's pull request column names the reverting pull request, and
+      // its merge commit is the revert's own.
       return { ...none, merge_commit: fact.data.merge_commit };
     default:
       return none;

@@ -932,8 +932,8 @@ async function intakeByWeek(tx: Tx, scope: WorkScope, windowStart: Date, now: Da
  * since the start of the reopen cohort, or a return or close in the window,
  * newest first and at most OUTCOMES_ITEMS_MAX of them, with their facts and
  * their triage correction counts. The check facts are left out: the figures
- * read acceptances, merges, returns, closes, and reopens, never a check, and a
- * pull request's checks are most of its facts.
+ * read acceptances, merges, returns, closes, reopens, and reverts, never a
+ * check, and a pull request's checks are most of its facts.
  *
  * For the pilot measures it also reads the sends in the window, at most
  * OUTCOMES_SENDS_MAX of them, and each week's entered and sent counts, which

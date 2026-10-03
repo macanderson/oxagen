@@ -402,11 +402,12 @@
         "note": "An unknown cost stays unknown and adds nothing to the total. In-app triage spend shows on <billing>Billing</billing> and is outside these figures."
       },
       "reopens": {
-        "title": "Reopens",
+        "title": "Reopens and reverts",
         "cohort": "Merged 30 or more days ago",
         "reopened": "Reopened",
+        "reverted": "Reverted",
         "waiting": "{count, plural, one {# newer item waits for its} other {# newer items wait for their}} 30 days before counting here.",
-        "reverts": "oxagen does not record reverts yet."
+        "reverts": "A revert counts when it merges with the line Reverts owner/repo#123 that GitHub's Revert button writes. A revert made by hand without that line is not counted."
       },
       "empty": {
         "title": "No finished work",

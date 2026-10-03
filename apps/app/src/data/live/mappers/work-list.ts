@@ -279,6 +279,11 @@ export function toWorkOutcomes(
       reopened: out.reopens.reopened,
       waiting: out.reopens.waiting,
     },
+    reverts: {
+      cohort: out.reverts.cohort,
+      reverted: out.reverts.reverted,
+      waiting: out.reverts.waiting,
+    },
     truncated: out.truncated,
     weeks: out.weeks.map((week) => ({
       week: week.week,

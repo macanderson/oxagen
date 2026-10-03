@@ -63,7 +63,7 @@ Each send:
 | `stale_acceptance` | object or `null` | An acceptance on an earlier head. It counts for nothing and stays visible |
 | `claims` | object[] | The agent's claims on criteria. Nothing records one in Phase 1 yet |
 
-Each history entry names its `kind`, its `source`, who acted by display name, when, the item revision, the send number, and the details the fact carries: a reason, a resolution, an outcome, a head, a check and its conclusion, a pull request, a merge commit, and a brief revision.
+Each history entry names its `kind`, its `source`, who acted by display name, when, the item revision, the send number, and the details the fact carries: a reason, a resolution, an outcome, a head, a check and its conclusion, a pull request, a merge commit, and a brief revision. A `reverted` entry names the pull request that reverted the send's merge, and that pull request's merge commit. It leaves the item's state as it was.
 
 ## Semantics
 

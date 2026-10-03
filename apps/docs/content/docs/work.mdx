@@ -73,7 +73,11 @@ Nothing is reserved when you press Send. On a gateway or contained runtime, the 
 
 ## Outcomes
 
-**Outcomes** counts the work that finished in the last 30 days: accepted and merged, returned, and closed, each on its own. It shows lead time from the first reading of the item to its finish, with its median, its 90th percentile, and its sample. It counts review touches per accepted item and the share of run cost Oxagen knows. Reopens count only items that finished 30 or more days ago. In-app triage spend is on Billing, outside these figures.
+**Outcomes** counts the work that finished in the last 30 days: accepted and merged, returned, and closed, each on its own. It shows lead time from the first reading of the item to its finish, with its median, its 90th percentile, and its sample. It counts review touches per accepted item and the share of run cost Oxagen knows. Reopens count only items that finished 30 or more days ago. Reverts count over the same items.
+
+A revert counts when GitHub merges a pull request with the line `Reverts owner/repo#123`, where 123 is the pull request that finished the item. GitHub's **Revert** button writes that line. A revert made by hand without that line is not counted. A revert leaves the item done. It shows in the item's history, and you decide whether to reopen the item.
+
+In-app triage spend is on Billing, outside these figures.
 
 The `get_work_outcomes` API also reports how sends reach a runtime and how the workspace uses Work each week. Outcomes does not draw these figures yet.
 
