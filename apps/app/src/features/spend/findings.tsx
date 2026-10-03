@@ -231,7 +231,7 @@ export function FindingsSection({
           {findings.truncated ? (
             <p
               data-testid="spend-findings-truncated"
-              className="text-[12.5px] text-muted-foreground"
+              className="text-sm text-muted-foreground"
             >
               {t("truncated", {
                 shown: formatCount(findings.findings.length, locale),

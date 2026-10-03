@@ -414,16 +414,22 @@ describe("list_findings past one answer (#5262)", () => {
       { status: "open", runId: run },
     );
     const [rows, totals] = compiled;
+    // Drizzle names a column by its schema and table: "cost"."findings"."id".
     const order =
-      /order by "findings"\."estimated_saving_micros" desc, "findings"\."id" asc/;
+      /order by "cost"\."findings"\."estimated_saving_micros" desc, "cost"\."findings"\."id" asc/;
     expect(rows?.sql).toMatch(order);
     expect(rows?.sql).toMatch(/limit \$\d+/);
     expect(totals?.sql).toMatch(order);
     expect(totals?.sql).toMatch(/"findings"\."cited_runs" @> \$\d+/);
     expect(totals?.sql).not.toMatch(/limit/);
-    // The totals read leaves the evidence out, apart from its operators.
-    expect(totals?.sql).toMatch(/\("findings"\."cited_frames" -> 'operatorKeys'\)::text/);
-    expect(totals?.sql).not.toMatch(/"findings"\."why"/);
+    // The totals read leaves the evidence and the text out, and reads only
+    // the operators from the evidence.
+    expect(totals?.sql).toMatch(
+      /\("cost"\."findings"\."cited_frames" -> 'operatorKeys'\)::text/,
+    );
+    expect(rows?.sql).toMatch(/"why"/);
+    expect(totals?.sql).not.toMatch(/"why"/);
+    expect(totals?.sql).not.toMatch(/"cited_frames",/);
   });
 
   it("parses each finding's operators from the stored evidence", async () => {
