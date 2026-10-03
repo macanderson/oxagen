@@ -246,6 +246,13 @@
       calc(100vw - var(--spacing) * 4)
     );
     --editor-max-h: calc(100vh - var(--spacing) * 75);
+    /* Glyphs a pseudo-element draws (#5283): the disclosure caret and the
+       sort arrows. */
+    --glyph-disclosure: "▸";
+    --glyph-disclosure-open: "▾";
+    --glyph-sort: "↕";
+    --glyph-sort-asc: "↑";
+    --glyph-sort-desc: "↓";
     /* An agent avatar's corner, as a share of its size (#5283). */
     --agent-corner: 27%;
     --sidebar-bg: var(--void);
@@ -689,4 +696,98 @@
    is a utility over --agent-corner. */
 @utility rounded-agent {
   border-radius: var(--agent-corner);
+}
+
+/* Named utilities for values no stock utility sets (#5283). */
+@utility truncate-start {
+  /* Truncate from the start, so a path keeps its end: the text runs right to
+     left inside the box and a <bdi> keeps its own order. */
+  direction: rtl;
+  text-align: left;
+}
+@utility lazy-render {
+  content-visibility: auto;
+  contain-intrinsic-size: auto calc(var(--spacing) * 40);
+}
+@utility cell-max-wide {
+  --cell-max: calc(var(--spacing) * 128);
+}
+@utility auth-grid {
+  /* The sign-in page's backdrop: a 48px grid of hairlines that fades out
+     toward the bottom. */
+  --auth-grid-step: calc(var(--spacing) * 12);
+  --auth-grid-line: calc(var(--auth-grid-step) - 1px);
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 var(--auth-grid-line),
+      var(--border) var(--auth-grid-line) var(--auth-grid-step)
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 var(--auth-grid-line),
+      var(--border) var(--auth-grid-line) var(--auth-grid-step)
+    );
+  mask-image: linear-gradient(180deg, #000 0%, transparent 78%);
+}
+
+@layer components {
+/* The toast stack, Base UI's stacking recipe (#5283). Base UI sets each
+   toast's index, heights, offset and swipe movement as custom properties at
+   runtime; these rules turn them into the stack's transform. Collapsed, each
+   toast behind the front one peeks out by --peek and shrinks by a tenth.
+   Expanded, the toasts stand apart by --gap. */
+[data-toast] {
+  --gap: calc(var(--spacing) * 3);
+  --peek: calc(var(--spacing) * 3);
+  --height: var(--toast-frontmost-height, var(--toast-height));
+  --offset-y: calc(
+    var(--toast-offset-y) * -1 + var(--toast-index) * var(--gap) * -1 +
+      var(--toast-swipe-movement-y)
+  );
+  --scale: max(0, 1 - var(--toast-index) * 0.1);
+  --shrink: calc(1 - var(--scale));
+  z-index: calc(1000 - var(--toast-index));
+  transform: translateX(var(--toast-swipe-movement-x))
+    translateY(
+      calc(
+        var(--toast-swipe-movement-y) - var(--toast-index) * var(--peek) -
+          var(--shrink) * var(--height)
+      )
+    )
+    scale(var(--scale));
+  transition:
+    transform var(--motion-entry) var(--ease-hover),
+    opacity var(--motion-entry) var(--ease-hover),
+    height var(--motion-micro) var(--ease-hover);
+}
+/* The gap under each toast holds the hover, so the stack stays open while
+   the pointer crosses from one toast to the next. */
+[data-toast]::after {
+  height: calc(var(--gap) + var(--spacing) * 0.25);
+}
+[data-toast][data-expanded] {
+  transform: translateX(var(--toast-swipe-movement-x))
+    translateY(var(--offset-y));
+}
+[data-toast][data-starting-style],
+[data-toast][data-ending-style]:not([data-limited]):not(
+    [data-swipe-direction]
+  ) {
+  transform: translateY(150%);
+}
+[data-toast][data-ending-style][data-swipe-direction="down"] {
+  transform: translateY(calc(var(--toast-swipe-movement-y) + 150%));
+}
+[data-toast][data-ending-style][data-swipe-direction="left"] {
+  transform: translateX(calc(var(--toast-swipe-movement-x) - 150%))
+    translateY(var(--offset-y));
+}
+[data-toast][data-ending-style][data-swipe-direction="right"] {
+  transform: translateX(calc(var(--toast-swipe-movement-x) + 150%))
+    translateY(var(--offset-y));
+}
+[data-toast][data-ending-style][data-swipe-direction="up"] {
+  transform: translateY(calc(var(--toast-swipe-movement-y) - 150%));
+}
 }

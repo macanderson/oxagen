@@ -81,7 +81,7 @@ describe("faceted ListTable", () => {
       expect(control.className).not.toMatch(/\bw-full\b/);
       expect(control.className).not.toMatch(/\bblock\b/);
     }
-    expect(search.className).toContain("flex-[1_1_14rem]");
+    expect(search.className).toContain("grow basis-56");
     // Each filter is the app's Select, and it keeps its width in the row.
     for (const filter of filters) {
       expect(filter).toHaveAttribute("data-slot", "select-trigger");

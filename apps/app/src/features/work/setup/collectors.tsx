@@ -89,7 +89,7 @@ function CollectorRows({
                   data-linked={skipped ? "false" : undefined}
                   className="flex flex-wrap items-center gap-2"
                 >
-                  <span className={`${mono} [overflow-wrap:anywhere]`}>{repo}</span>
+                  <span className={`${mono} wrap-anywhere`}>{repo}</span>
                   {skipped ? (
                     <Badge tone="denied" dot={false}>
                       {t("notLinked")}
@@ -140,7 +140,7 @@ function CollectorRows({
                 </p>
               ) : null}
               {error === null ? null : (
-                <p className="text-foreground [overflow-wrap:anywhere]">
+                <p className="text-foreground wrap-anywhere">
                   {t("error", { error })}
                 </p>
               )}

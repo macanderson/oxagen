@@ -93,26 +93,16 @@ function ToastList({ closeLabel }: { closeLabel: string }) {
         data-toast=""
         data-tone={tone}
         className={
-          "group/toast pointer-events-auto absolute right-0 bottom-0 isolate z-[calc(1000-var(--toast-index))] w-full origin-bottom rounded-2xl bg-app-raised-bg/55 dark:bg-app-raised-bg/70 text-app-raised-fg shadow-pop ring-1 ring-foreground/5 will-change-transform select-none dark:ring-foreground/10 " +
+          "group/toast pointer-events-auto absolute right-0 bottom-0 isolate w-full origin-bottom rounded-2xl bg-app-raised-bg/55 dark:bg-app-raised-bg/70 text-app-raised-fg shadow-pop ring-1 ring-foreground/5 will-change-transform select-none dark:ring-foreground/10 " +
           "before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-lg dark:before:backdrop-blur-2xl before:backdrop-saturate-150 " +
           "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring " +
-          "[--gap:0.75rem] [--height:var(--toast-frontmost-height,var(--toast-height))] [--offset-y:calc(var(--toast-offset-y)*-1+calc(var(--toast-index)*var(--gap)*-1)+var(--toast-swipe-movement-y))] [--peek:0.75rem] [--scale:calc(max(0,1-(var(--toast-index)*0.1)))] [--shrink:calc(1-var(--scale))] " +
-          "h-(--height) [transform:translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--peek))-(var(--shrink)*var(--height))))_scale(var(--scale))] [transition:transform_500ms_cubic-bezier(0.22,1,0.36,1),opacity_500ms,height_150ms] " +
-          "after:absolute after:top-full after:left-0 after:h-[calc(var(--gap)+1px)] after:w-full after:content-[''] " +
-          "data-expanded:h-(--toast-height) data-expanded:[transform:translateX(var(--toast-swipe-movement-x))_translateY(var(--offset-y))] " +
-          "data-limited:opacity-0 data-starting-style:[transform:translateY(150%)] " +
-          "[&[data-ending-style]:not([data-limited]):not([data-swipe-direction])]:[transform:translateY(150%)] " +
-          "data-ending-style:data-[swipe-direction=down]:[transform:translateY(calc(var(--toast-swipe-movement-y)+150%))] " +
-          "data-ending-style:data-[swipe-direction=left]:[transform:translateX(calc(var(--toast-swipe-movement-x)-150%))_translateY(var(--offset-y))] " +
-          "data-ending-style:data-[swipe-direction=right]:[transform:translateX(calc(var(--toast-swipe-movement-x)+150%))_translateY(var(--offset-y))] " +
-          "data-ending-style:data-[swipe-direction=up]:[transform:translateY(calc(var(--toast-swipe-movement-y)-150%))] " +
-          "data-expanded:data-ending-style:data-[swipe-direction=down]:[transform:translateY(calc(var(--toast-swipe-movement-y)+150%))] " +
-          "data-expanded:data-ending-style:data-[swipe-direction=left]:[transform:translateX(calc(var(--toast-swipe-movement-x)-150%))_translateY(var(--offset-y))] " +
-          "data-expanded:data-ending-style:data-[swipe-direction=right]:[transform:translateX(calc(var(--toast-swipe-movement-x)+150%))_translateY(var(--offset-y))] " +
-          "data-expanded:data-ending-style:data-[swipe-direction=up]:[transform:translateY(calc(var(--toast-swipe-movement-y)-150%))]"
+          "h-(--height) " +
+          "after:absolute after:top-full after:left-0 after:w-full " +
+          "data-expanded:h-(--toast-height) " +
+          "data-limited:opacity-0"
         }
       >
-        <Toast.Content className="flex h-full items-center gap-3 overflow-hidden p-4 transition-opacity duration-250 ease-[cubic-bezier(0.22,1,0.36,1)] data-behind:opacity-0 data-expanded:opacity-100">
+        <Toast.Content className="flex h-full items-center gap-3 overflow-hidden p-4 transition-opacity duration-(--motion-base) ease-(--ease-hover) data-behind:opacity-0 data-expanded:opacity-100">
           <ToneIcon
             aria-hidden="true"
             weight="fill"
@@ -129,7 +119,7 @@ function ToastList({ closeLabel }: { closeLabel: string }) {
           <Toast.Close
             aria-label={closeLabel}
             render={<Button variant="ghost" size="icon-sm" />}
-            className="relative shrink-0 after:absolute after:-inset-2 after:content-['']"
+            className="relative shrink-0 after:absolute after:-inset-2"
           >
             <XIcon aria-hidden="true" />
           </Toast.Close>

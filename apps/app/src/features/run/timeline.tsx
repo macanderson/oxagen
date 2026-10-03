@@ -43,7 +43,7 @@ const timelineHeader =
  * z-index:3 }`.
  */
 const tick =
-  "absolute bottom-4 -ml-0.5 w-1 rounded-t-xs ring-2 ring-card before:absolute before:-inset-x-2 before:-inset-y-1.5 before:content-[''] hover:z-3 hover:brightness-125 focus-visible:z-3 focus-visible:brightness-125 focus-visible:outline-none";
+  "absolute bottom-4 -ml-0.5 w-1 rounded-t-xs ring-2 ring-card before:absolute before:-inset-x-2 before:-inset-y-1.5 hover:z-3 hover:brightness-125 focus-visible:z-3 focus-visible:brightness-125 focus-visible:outline-none";
 /** `.rt-tick.tall { height:30px }`, `.rt-tick.cost { height:24px }`, and the resting 18px. */
 const TICK_HEIGHT = { tall: "h-7.5", cost: "h-6", rest: "h-4.5" };
 /** `.rt-tick.on { outline:2px solid var(--fg); outline-offset:1px; z-index:2 }` */

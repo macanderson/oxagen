@@ -89,7 +89,7 @@ function SendRow({ send, at }: { send: WorkSend; at: At }) {
           {t(`words.${word}`)}
         </Badge>
         {notes.length === 0 ? null : (
-          <span className="mt-1 block text-sm text-muted-foreground [overflow-wrap:anywhere]">
+          <span className="mt-1 block text-sm text-muted-foreground wrap-anywhere">
             {notes.join(" ")}
           </span>
         )}

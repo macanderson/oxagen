@@ -129,7 +129,7 @@ function SearchBox({
     <form
       role="search"
       aria-label={t("searchRuns")}
-      className="flex min-w-36 flex-[1_1_200px]"
+      className="flex min-w-36 grow basis-50"
       onSubmit={(event: SyntheticEvent<HTMLFormElement>) => {
         event.preventDefault();
         const q = draft.trim();

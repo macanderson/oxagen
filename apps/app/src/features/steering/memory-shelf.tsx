@@ -367,7 +367,7 @@ export function MemoryShelfBody({
                 setOpen({ ref: memory.ref, step: "memory" });
               }}
             >
-              <td className={`${cell} [--cell-max:32rem]`}>
+              <td className={`${cell} cell-max-wide`}>
                 {/* The row's keyboard way in: a button answers Enter and Space. */}
                 <button
                   type="button"

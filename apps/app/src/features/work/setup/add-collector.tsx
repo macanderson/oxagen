@@ -264,7 +264,7 @@ export function AddCollector({
                     toggle(repo, event.currentTarget.checked);
                   }}
                 />
-                <span className={`${mono} [overflow-wrap:anywhere]`}>{repo}</span>
+                <span className={`${mono} wrap-anywhere`}>{repo}</span>
               </label>
             ))}
             <p id="work-collector-repos-hint" className={fieldHint}>

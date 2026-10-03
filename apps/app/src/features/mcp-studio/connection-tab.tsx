@@ -396,7 +396,7 @@ function Environments({
                 {env.sandbox ? <Badge tone="quiet">{t("sandbox")}</Badge> : null}
               </span>
             </td>
-            <td className={`${cell} ${mono} [overflow-wrap:anywhere]`}>
+            <td className={`${cell} ${mono} wrap-anywhere`}>
               {env.url === null ? "—" : redactUrls(env.url)}
             </td>
             <td className={`${cell} ${mono}`}>
