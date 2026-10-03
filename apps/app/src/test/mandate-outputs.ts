@@ -15,7 +15,7 @@ export const MANDATE_ID = "mnd_4f2a9c";
 const AT = "2026-09-01T00:00:00.000Z";
 
 /** The instant the handler counted the sample's authority at (#3152). */
-export const AS_OF = "2026-09-16T12:00:00.000Z";
+const AS_OF = "2026-09-16T12:00:00.000Z";
 
 export function authorityOutput(
   overrides: Partial<AuthorityOutput> = {},
