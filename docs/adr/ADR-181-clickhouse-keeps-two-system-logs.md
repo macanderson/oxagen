@@ -2,6 +2,9 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-25
+- **Amended by:** ADR-295 (production ClickHouse moves to ClickHouse Cloud,
+  so these limits govern only the node's own container once production
+  stops reading it).
 - **Owners:** platform
 - **Related:** issue #4243 (run reads refused at the memory cap), issue #1305
   (metric logging held the old data node at its CPU ceiling), ADR-042 (the
