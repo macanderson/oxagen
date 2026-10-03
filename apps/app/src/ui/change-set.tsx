@@ -486,7 +486,7 @@ export function ChangeSetDisclosure({
       },
     );
   };
-  let body: ReactNode = null;
+  let body: ReactNode;
   if (state === "loading")
     body = (
       <p

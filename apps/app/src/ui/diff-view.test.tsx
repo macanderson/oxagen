@@ -42,7 +42,7 @@ function file(over: Partial<DiffFile> = {}): DiffFile {
 function rows(container: HTMLElement): string[][] {
   return [...container.querySelectorAll("[data-line]")].map((row) => [
     row.getAttribute("data-line") ?? "",
-    ...[...row.children].map((cell) => cell.textContent ?? ""),
+    ...[...row.children].map((cell) => cell.textContent),
   ]);
 }
 
