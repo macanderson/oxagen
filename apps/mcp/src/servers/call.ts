@@ -27,6 +27,7 @@ import {
   type Admission,
   type ApprovalRequest,
   type ApprovalState,
+  type CallRate,
   type EmergencyDeny,
   type MeterKind,
   type MeterOutcome,
@@ -257,6 +258,27 @@ async function emergencyRefusal(
   );
 }
 
+/**
+ * The `rate` fact for one call, or the refusal when it cannot be read. A
+ * failed read stops the call, as a failed kill switch read does, since
+ * Oxagen cannot tell that no rate rule would deny it.
+ */
+async function rateOf(view: ServedView, ports: ServedPorts, entry: ServedTool, now: number): Promise<CallRate | Answer> {
+  const { server, tool } = entry;
+  try {
+    return await ports.callRate(view.run, { server: server.name, tool: tool.name }, now);
+  } catch (error) {
+    ports.log.warn("Oxagen could not count the tool's recent calls, so the call was not sent.", {
+      tool: tool.name,
+      error: errorName(error),
+    });
+    return refusal(
+      `Oxagen could not count the recent calls to ${tool.name} for the workspace's policies, so it did not send the call. Call it again in a minute.`,
+      "failed",
+    );
+  }
+}
+
 /** The refusal for an approval Oxagen could not read or open. Logs only the error's name. */
 function approvalFailed(ports: ServedPorts, tool: string, error: unknown): Answer {
   ports.log.warn("Oxagen could not open an approval, so the call was not sent.", { tool, error: errorName(error) });
@@ -300,18 +322,26 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
   const stopped = await emergencyRefusal(ports, entry, environment);
   if (stopped !== null) return stopped;
 
-  // Five live facts a rule can name have no source on the served path yet,
-  // so both decisions leave them out (#4666):
-  // - rate: the governed action ledger records no outcome, so a count read
-  //   from it would include denied and parked retries.
+  // The live facts both decisions read (#4666). They are read once, so the
+  // decision after an approval reads the same facts as the first.
+  // - rate: the calls to this tool that left Oxagen in the hour and the
+  //   minute before now, from served_tool_calls. It counts every agent and
+  //   run in the workspace, because the table records no agent, so a rule
+  //   meant for one agent stops the tool sooner than it says.
+  // Four facts have no source on the served path yet, so both decisions
+  // leave them out:
   // - taint: nothing on the served path marks a run's data as tainted.
-  // - run: nothing records which served calls a run has made or read.
-  // - budget_remaining_cents: nothing records what a served agent has spent.
-  //   A spend budget caps model spend in micros, which is not this fact.
+  // - run: served_tool_calls records which tools a run called, but nothing
+  //   records what a call read, and prior_calls and prior_reads are one fact.
+  // - budget_remaining_cents: nothing records what a served call costs, and
+  //   that cost needs a maintainer's decision. A spend budget caps model
+  //   spend in micros, which is not this fact.
   // - mandate_remaining_cents: no mandate reaches a served call.
   // A rule on one of them reads the policy's default: an untainted run, no
-  // calls in the last hour or minute, no prior calls, the budget the agent
-  // file declares or none, and no mandate.
+  // prior calls, the budget the agent file declares or none, and no mandate.
+  const now = clock(ports);
+  const rate = await rateOf(view, ports, entry, now);
+  if ("result" in rate) return rate;
   const decide = (approval?: { granted: boolean; approvers: number }): ToolCallVerdict =>
     decideToolCall({
       runtime: decider.runtime,
@@ -320,8 +350,9 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
       action: tool.name,
       args,
       version: tool.version,
-      now: clock(ports),
+      now,
       tier: "gateway",
+      rate,
       ...(view.run.operatorRole === undefined ? {} : { operator_role: view.run.operatorRole }),
       ...(approval === undefined ? {} : { approval }),
     });

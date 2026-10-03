@@ -27,6 +27,7 @@ vi.mock("./tenant", async (importOriginal) => {
 
 import { scopeSelectSource } from "./tenant";
 import {
+  readServedToolCallRate,
   readServedToolFeedback,
   recordServedToolCall,
   SERVED_TOOL_CALLS_TABLE,
@@ -135,5 +136,61 @@ describe("readServedToolFeedback", () => {
     }
     const schema = readFileSync(join(here, "schema.sql"), "utf8");
     expect(schema).toContain(`CREATE TABLE IF NOT EXISTS ${SERVED_TOOL_CALLS_TABLE} (`);
+  });
+});
+
+describe("readServedToolCallRate", () => {
+  const NOW = Date.UTC(2026, 9, 2, 12, 0, 0);
+
+  it("reads the hour and the minute before the clock it is given", async () => {
+    chSelect.mockResolvedValueOnce({ data: [{ last_hour: "20", last_minute: "3" }] });
+
+    await expect(
+      readServedToolCallRate({ server: "slack", tool: "slack__post_message", now: NOW }),
+    ).resolves.toEqual({ lastHour: 20, lastMinute: 3 });
+
+    expect(chSelect).toHaveBeenCalledTimes(1);
+    const [q] = chSelect.mock.calls[0]!;
+    expect(q.params).toEqual({
+      server: "slack",
+      tool: "slack__post_message",
+      hourStart: NOW - 60 * 60 * 1000,
+      minuteStart: NOW - 60 * 1000,
+    });
+    expect(q.query).toContain(`FROM ${SERVED_TOOL_CALLS_TABLE}`);
+    expect(q.query).toMatch(/server = \{server:String\}/);
+    expect(q.query).toMatch(/tool = \{tool:String\}/);
+    expect(q.query).toMatch(/created_at >= fromUnixTimestamp64Milli\(\{hourStart:Int64\}\)/);
+    expect(q.query).toMatch(/countIf\(created_at >= fromUnixTimestamp64Milli\(\{minuteStart:Int64\}\)\)/);
+  });
+
+  it("counts only calls that left Oxagen: allowed, or an error result from the tool", async () => {
+    chSelect.mockResolvedValueOnce({ data: [{ last_hour: 0, last_minute: 0 }] });
+    await readServedToolCallRate({ server: "slack", tool: "slack__post_message", now: NOW });
+
+    const [q] = chSelect.mock.calls[0]!;
+    expect(q.query).toMatch(/\(outcome = 'allowed' OR problem = 'error_result'\)/);
+    expect(q.query).not.toMatch(/'denied'|'parked'/);
+  });
+
+  it("answers zero calls when the store answers no row", async () => {
+    chSelect.mockResolvedValueOnce({ data: [] });
+    await expect(
+      readServedToolCallRate({ server: "slack", tool: "slack__post_message", now: NOW }),
+    ).resolves.toEqual({ lastHour: 0, lastMinute: 0 });
+  });
+
+  it("lets a failed read reach the caller", async () => {
+    chSelect.mockRejectedValueOnce(new Error("clickhouse down"));
+    await expect(
+      readServedToolCallRate({ server: "slack", tool: "slack__post_message", now: NOW }),
+    ).rejects.toThrow("clickhouse down");
+  });
+
+  it("sends a query the tenant rewrite can scope", async () => {
+    chSelect.mockResolvedValueOnce({ data: [] });
+    await readServedToolCallRate({ server: "slack", tool: "slack__post_message", now: NOW });
+    const [q] = chSelect.mock.calls[0]!;
+    expect(() => scopeSelectSource(q.query)).not.toThrow();
   });
 });
