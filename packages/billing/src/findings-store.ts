@@ -136,6 +136,17 @@ export const FRAME_GROUP_READS_RESERVE = 50;
  */
 export const FRAME_GROUP_READ_SESSIONS = 5_000;
 /**
+ * Group reads the store may refuse in one frame read before the read stops
+ * asking for groups (#5462). A refused group's runs count as capped. Every
+ * refusal counts toward the process-wide ClickHouse circuit breaker, which
+ * opens after 5 failures in a row by default
+ * (`CIRCUIT_BREAKER_FAILURE_THRESHOLD`). An open breaker refuses every read
+ * the pass has left, the single-run reads too, and that fails the pass. So
+ * the read skips the groups left after 2 refusals and counts their runs as
+ * capped as well.
+ */
+export const FRAME_GROUP_READ_REFUSALS_MAX = 2;
+/**
  * Model-call frames one pass holds across every run it reads (#4506). The
  * plan sizes its group reads to fit it, by each run's model calls in the
  * rollup. A run whose frames would pass it is not read, and
@@ -144,7 +155,7 @@ export const FRAME_GROUP_READ_SESSIONS = 5_000;
 export const FRAME_READ_MAX_FRAMES = 200_000;
 /** File-change frames one pass reads, newest first. */
 export const FILE_CHANGE_READ_MAX = 200_000;
-/** Model-call frame reads one pass runs at once. */
+/** Single-run frame reads one pass runs at once. A group read runs alone (#5462). */
 const FRAME_READ_CONCURRENCY = 8;
 /** Claim rows one insert statement carries. */
 const CLAIM_INSERT_CHUNK = 500;
@@ -163,6 +174,12 @@ export interface FrameRead {
    * with one group number are read in one query. Absent on a run read alone.
    */
   group?: number;
+  /**
+   * The job key of the recurring group the run's group read covers: the key
+   * recurring runs (detector 7) groups by. A refused group read names it in
+   * its warning (#5462). Absent on a run read alone.
+   */
+  job?: string;
 }
 
 interface FindingsPassDeps {
@@ -568,8 +585,8 @@ function planGroupReads(
   const reads: FrameRead[] = [];
   let used = 0;
   let frames = bounds.groupFrames;
-  const close = (runs: readonly GroupRun[]) => {
-    for (const run of runs) reads.push({ ...run.read, group: used });
+  const close = (runs: readonly GroupRun[], job: string) => {
+    for (const run of runs) reads.push({ ...run.read, group: used, job });
     used += 1;
   };
   for (const group of groups) {
@@ -580,7 +597,7 @@ function planGroupReads(
       if (run.calls > frames) break;
       const named = sessionsNamed(run.ref);
       if (open.length > 0 && sessions + named > bounds.groupSessions) {
-        close(open);
+        close(open, group.job);
         open = [];
         sessions = 0;
         if (used >= places) break;
@@ -589,7 +606,7 @@ function planGroupReads(
       sessions += named;
       open.push(run);
     }
-    if (open.length > 0) close(open);
+    if (open.length > 0) close(open, group.job);
   }
   return { reads, used };
 }
@@ -956,38 +973,71 @@ function readUnits(runs: readonly FrameRead[], grouped: boolean): ReadUnit[] {
 }
 
 /**
+ * The batches a frame read runs, in order (#5462). A group read is a batch on
+ * its own, so one group query runs at a time. In production on 2026-10-03
+ * each group read scanned 6 to 14 million rows, two to four times the rows
+ * the table holds, and up to eight of them ran at once. Runs read alone share
+ * a batch of up to `concurrency` queries.
+ */
+function readBatches(
+  units: readonly ReadUnit[],
+  concurrency: number,
+): ReadUnit[][] {
+  const out: ReadUnit[][] = [];
+  for (const unit of units) {
+    const last = out.at(-1);
+    if (
+      !unit.group &&
+      last !== undefined &&
+      !last[0]!.group &&
+      last.length < concurrency
+    )
+      last.push(unit);
+    else out.push([unit]);
+  }
+  return out;
+}
+
+/**
  * Each run's rows from `read`, in the order the runs are given, while the
- * rows the pass holds stay at or under `cap` (#4506). `concurrency` queries
- * run at once and are admitted in order. A query is one run, or one group
- * read through `readGroup` (#5168). A group's runs are admitted one by one,
- * in order. The first run whose rows would pass the cap is dropped whole,
- * since a detector needs all of a run's frames. Every run after it is dropped
- * too, in its group or after it, and no later batch is read. `peak` is the
- * most rows the pass kept. The batch in flight adds at most its own queries'
- * rows until they are admitted or dropped.
+ * rows the pass holds stay at or under `cap` (#4506). Up to `concurrency`
+ * single-run queries run at once, and a group read through `readGroup` runs
+ * alone (#5168, #5462). Results are admitted in order. A group's runs are
+ * admitted one by one, in order. The first run whose rows would pass the cap
+ * is dropped whole, since a detector needs all of a run's frames. Every run
+ * after it is dropped too, in its group or after it, and no later batch is
+ * read. `peak` is the most rows the pass kept. The batch in flight adds at
+ * most its own queries' rows until they are admitted or dropped.
+ *
+ * When `readGroup` answers null, the store refused that group read. Its runs
+ * are left out of the answer, so the pass counts them as capped, and the read
+ * goes on with the next batch (#5462).
  */
 export async function readFrameRows<T>(
   runs: readonly FrameRead[],
   read: (run: FrameRead) => Promise<T[]>,
   cap: number,
   concurrency: number = FRAME_READ_CONCURRENCY,
-  readGroup?: (runs: readonly FrameRead[]) => Promise<ReadonlyMap<string, T[]>>,
+  readGroup?: (
+    runs: readonly FrameRead[],
+  ) => Promise<ReadonlyMap<string, T[]> | null>,
 ): Promise<{ rows: Map<string, T[]>; peak: number }> {
   const units = readUnits(runs, readGroup !== undefined);
   const rows = new Map<string, T[]>();
   let held = 0;
   let peak = 0;
-  for (let i = 0; i < units.length; i += concurrency) {
-    const batch = units.slice(i, i + concurrency);
+  for (const batch of readBatches(units, concurrency)) {
     const results = await Promise.all(
-      batch.map(async (unit): Promise<ReadonlyMap<string, T[]>> => {
+      batch.map(async (unit): Promise<ReadonlyMap<string, T[]> | null> => {
         if (unit.group) return readGroup!(unit.runs);
         const run = unit.runs[0]!;
         return new Map([[run.runId, await read(run)]]);
       }),
     );
     for (let j = 0; j < batch.length; j += 1) {
-      const got = results[j]!;
+      const got = results[j];
+      // A refused group read: its runs stay unread.
+      if (got === null || got === undefined) continue;
       for (const run of batch[j]!.runs) {
         const list = got.get(run.runId) ?? [];
         if (held + list.length > cap) return { rows, peak };
@@ -1001,26 +1051,126 @@ export async function readFrameRows<T>(
 }
 
 /**
+ * ClickHouse server error codes that refuse a read for its size or for the
+ * store's load (#5462): over the memory limit (241), over the time limit
+ * (159), and too many queries or no free connection (202, 203). These are the
+ * read codes in `CLICKHOUSE_BACKPRESSURE_REASONS` (@oxagen/telemetry), with
+ * the time limit added. A read refused for its time limit is refused again on
+ * a retry, so the pass does not wait for it.
+ */
+const FRAME_READ_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  "241",
+  "159",
+  "202",
+  "203",
+]);
+
+/** The code the circuit breaker gives a call it refuses before sending it. */
+const CIRCUIT_OPEN_CODE = "CIRCUIT_OPEN";
+
+/**
+ * The code of the ClickHouse refusal `err` is, or null for any other failure
+ * (#5462). It reads the error's `code` and `message`, as
+ * `storeOverloadedFrom` in @oxagen/telemetry does, because a refusal arrives
+ * in three shapes:
+ *
+ * - `@clickhouse/client` parses a server error into an error with its `code`
+ *   ("241" or "159").
+ * - The circuit breaker refuses a call with the code `CIRCUIT_OPEN`.
+ * - The client's own request timeout fires with the message "Timeout error."
+ *   and no code. It waits 30 seconds by default, the same as the reads'
+ *   `max_execution_time`, so either one can end a slow read first. This one
+ *   returns `client_timeout`.
+ *
+ * A server error the client could not parse keeps its text, so a message
+ * that says the memory or time limit was exceeded counts too.
+ */
+export function frameReadRefusal(err: unknown): string | null {
+  if (typeof err !== "object" || err === null) return null;
+  const raw = (err as { code?: unknown }).code;
+  const code = typeof raw === "number" ? String(raw) : raw;
+  if (code === CIRCUIT_OPEN_CODE) return CIRCUIT_OPEN_CODE;
+  if (typeof code === "string" && FRAME_READ_REFUSAL_CODES.has(code))
+    return code;
+  const message = (err as { message?: unknown }).message;
+  if (typeof message !== "string") return null;
+  if (/^Timeout error\.?$/.test(message)) return "client_timeout";
+  if (/memory limit.*exceeded/i.test(message)) return "241";
+  if (/timeout exceeded/i.test(message)) return "159";
+  return null;
+}
+
+/**
  * One group read's rows, by run public id (#5168). Every run of a group read
  * is wrapped, so each is named by its root session.
+ *
+ * Null when the store refuses the read ({@link frameReadRefusal}), after one
+ * warning that names the group's job key, its run count, and the code
+ * (#5462). The caller leaves the group's runs unread, and the pass counts
+ * them as capped, so recurring runs (detector 7) prices none of them this
+ * pass. A recurring job too large for the store then costs the pass that
+ * job's finding, and every other finding is still written. Any other error
+ * fails the read.
  */
 async function readGroupRows(
   scope: FindingsScope,
   runs: readonly FrameRead[],
   keepModelless: boolean,
-): Promise<Map<string, ModelCallFrameRow[]>> {
+): Promise<Map<string, ModelCallFrameRow[]> | null> {
   const wrapped = runs.flatMap((r) =>
     r.ref.kind === "tacho" ? [{ runId: r.runId, ref: r.ref }] : [],
   );
   const refs = wrapped.map((r) => r.ref);
-  const byRoot = await readGroupModelCallFrames(
-    keepModelless
-      ? { ...scope, runs: refs, keepModelless: true }
-      : { ...scope, runs: refs },
-  );
+  let byRoot: Map<string, ModelCallFrameRow[]>;
+  try {
+    byRoot = await readGroupModelCallFrames(
+      keepModelless
+        ? { ...scope, runs: refs, keepModelless: true }
+        : { ...scope, runs: refs },
+    );
+  } catch (err) {
+    const code = frameReadRefusal(err);
+    if (code === null) throw err;
+    logger.warn(
+      { ...scope, job: runs[0]?.job ?? null, runs: runs.length, code, err },
+      "findings: the store refused a recurring group's frame read, so its runs count as capped",
+    );
+    return null;
+  }
   return new Map(
     wrapped.map((r) => [r.runId, byRoot.get(r.ref.rootSessionUuid) ?? []]),
   );
+}
+
+/** Reads one group's rows, or answers null when the store refused the read. */
+type GroupRowsReader = (
+  runs: readonly FrameRead[],
+) => Promise<Map<string, ModelCallFrameRow[]> | null>;
+
+/**
+ * The group reader one priced read uses (#5462). It reads each group through
+ * {@link readGroupRows} until the store has refused
+ * {@link FRAME_GROUP_READ_REFUSALS_MAX} of them. It then skips every group
+ * left, with one warning each, and returns null for it, so those runs count
+ * as capped too.
+ */
+function groupReader(
+  scope: FindingsScope,
+  keepModelless: boolean,
+): GroupRowsReader {
+  let refusals = 0;
+  return async (runs) => {
+    if (refusals >= FRAME_GROUP_READ_REFUSALS_MAX) {
+      logger.warn(
+        { ...scope, job: runs[0]?.job ?? null, runs: runs.length, refusals },
+        "findings: skipped a recurring group's frame read after the store refused earlier ones, so its runs count as capped",
+      );
+      return null;
+    }
+    const rows = await readGroupRows(scope, runs, keepModelless);
+    if (rows === null) refusals += 1;
+    return rows;
+  };
 }
 
 /** The price book slice that covers every row: their models and their span. */
@@ -1055,7 +1205,8 @@ function rowsPriceSlice(
  *
  * Runs with one group number are read in one query (#5168). Each run's rows
  * are then priced on their own, under the run's own root, so a frame gets the
- * key it gets from a read of its run alone.
+ * key it gets from a read of its run alone. A group read the store refuses
+ * leaves its runs absent too, like the cap does (#5462).
  *
  * With `keepModelless`, a run's calls that named no model come back too, as
  * `noModel` frames with no price, and count toward the cap (#4506).
@@ -1076,7 +1227,7 @@ export async function readPricedFrames(
       ),
     cap,
     FRAME_READ_CONCURRENCY,
-    (group) => readGroupRows(scope, group, keepModelless),
+    groupReader(scope, keepModelless),
   );
   const book = await loadPriceBookSlice(
     rowsPriceSlice(scope.orgId, rows.values()),
@@ -1619,7 +1770,11 @@ const productionDeps: FindingsPassDeps = {
  * repeated instructions finding holds for its proposal too, and a lineage
  * that already has a record or a proposal does not use up the pass's cap
  * (#4579). Throws when a store is degraded: the job retries rather than
- * writing findings from missing frames.
+ * writing findings from missing frames. One exception: when ClickHouse
+ * refuses a recurring group's frame read for memory, time, or load, that
+ * group's runs count as capped and the pass goes on (#5462). The store
+ * refuses that read again on every retry, and from 2026-09-28 one such read
+ * kept every finding in its workspace from refreshing.
  */
 export async function runFindingsPass(
   scope: FindingsScope,
