@@ -473,9 +473,15 @@ export async function stripEnrollmentHooks(
   // this enrollment wrote comes out, and a server of the user's that it
   // displaced goes back, under the lock Claude Code saves the file with.
   // Every other key in that file is Claude Code's and stays as it is.
+  // An agent that never hooked Claude Code never wrote the entry, so its
+  // unenroll leaves the file, and Claude Code's lock on it, alone. A host
+  // whose harness list could not be read is checked anyway.
   let claudeCodeMcpChanged: string | undefined;
   const editUserConfig = deps.editClaudeUserConfig;
-  if (editUserConfig !== undefined) {
+  if (
+    editUserConfig !== undefined &&
+    (host?.harnesses === undefined || host.harnesses.includes("claude-code"))
+  ) {
     const userConfig = deps.paths.claudeUserConfig;
     attempt(userConfig, () => {
       editUserConfig((current) => {

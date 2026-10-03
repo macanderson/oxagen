@@ -83,6 +83,38 @@ export function claudeCodeMcpPresence(
   return oxagenMcpPresence(existing, enrollmentId);
 }
 
+/** What `claudeCodeSessionHasOxagenTools` judges a session by. */
+export interface OxagenToolsCheck {
+  /** The enrollment that would have written the entry. */
+  enrollmentId: string;
+  /** Whether the enrollment holds the key the gateway serves tools with. */
+  hasGatewayKey: boolean;
+  /** When the entry last took its present form (`mcp_registered_at`). */
+  registeredAt: string | undefined;
+  /** When the daemon first saw the session. */
+  sessionStartedAt: string;
+  /** Claude Code's user config, read only when every other test passes. */
+  readUserConfig: () => unknown;
+}
+
+/**
+ * Whether a Claude Code session can call Oxagen's tools: the enrollment
+ * holds the gateway key, wrote the `oxagen` entry before the session
+ * started, and the entry is still in the user config. Claude Code loads MCP
+ * servers when a session starts, so a session already running when the entry
+ * was written does not have the tools.
+ */
+export function claudeCodeSessionHasOxagenTools(
+  check: OxagenToolsCheck,
+): boolean {
+  if (!check.hasGatewayKey || check.registeredAt === undefined) return false;
+  const registered = Date.parse(check.registeredAt);
+  const started = Date.parse(check.sessionStartedAt);
+  if (!Number.isFinite(registered) || !Number.isFinite(started)) return false;
+  if (started < registered) return false;
+  return oxagenMcpPresence(check.readUserConfig(), check.enrollmentId).present;
+}
+
 /** Why the user config cannot be merged into, or undefined when it can. */
 export function claudeUserConfigShapeProblem(
   document: unknown,

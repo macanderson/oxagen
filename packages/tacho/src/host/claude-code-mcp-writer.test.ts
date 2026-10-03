@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 import {
   claudeCodeMcpPresence,
+  claudeCodeSessionHasOxagenTools,
   claudeUserConfigShapeProblem,
   mergeClaudeCodeMcpConfig,
   stripClaudeCodeMcpConfig,
@@ -185,5 +186,68 @@ describe("claudeUserConfigShapeProblem", () => {
       "`mcpServers` is an array",
     );
     expect(claudeUserConfigShapeProblem([])).toContain("an array");
+  });
+});
+
+describe("claudeCodeSessionHasOxagenTools", () => {
+  const entry = mergeClaudeCodeMcpConfig(userConfig(), CONFIG).config;
+  const base = {
+    enrollmentId: TEST_ENROLLMENT,
+    hasGatewayKey: true,
+    registeredAt: "2026-10-02T10:00:00.000Z",
+    sessionStartedAt: "2026-10-02T10:05:00.000Z",
+    readUserConfig: () => entry,
+  };
+
+  it("answers yes for a session that started after the entry was written", () => {
+    expect(claudeCodeSessionHasOxagenTools(base)).toBe(true);
+    expect(
+      claudeCodeSessionHasOxagenTools({
+        ...base,
+        sessionStartedAt: base.registeredAt,
+      }),
+    ).toBe(true);
+  });
+
+  it("answers no for a session that was already running, which loaded no such server", () => {
+    expect(
+      claudeCodeSessionHasOxagenTools({
+        ...base,
+        sessionStartedAt: "2026-10-02T09:59:59.999Z",
+      }),
+    ).toBe(false);
+  });
+
+  it("answers no without the gateway key, a written time, or the entry, and reads the file last", () => {
+    let reads = 0;
+    const counted = {
+      ...base,
+      readUserConfig: () => {
+        reads += 1;
+        return entry;
+      },
+    };
+    expect(
+      claudeCodeSessionHasOxagenTools({ ...counted, hasGatewayKey: false }),
+    ).toBe(false);
+    expect(
+      claudeCodeSessionHasOxagenTools({ ...counted, registeredAt: undefined }),
+    ).toBe(false);
+    expect(
+      claudeCodeSessionHasOxagenTools({ ...counted, sessionStartedAt: "soon" }),
+    ).toBe(false);
+    expect(reads).toBe(0);
+    expect(
+      claudeCodeSessionHasOxagenTools({
+        ...base,
+        readUserConfig: () => userConfig(),
+      }),
+    ).toBe(false);
+    expect(
+      claudeCodeSessionHasOxagenTools({
+        ...base,
+        enrollmentId: OTHER_ENROLLMENT,
+      }),
+    ).toBe(false);
   });
 });

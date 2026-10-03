@@ -123,15 +123,22 @@ describe("registerClaudeCodeMcp", () => {
     expect(existsSync(claudeConfigLockPath(file))).toBe(false);
 
     const recorded = readHostFile(m.paths.hostFile);
-    expect(recorded?.mcp_registered).toEqual(["claude-code"]);
+    const writtenAt = recorded?.mcp_registered_at?.["claude-code"];
+    expect(Number.isFinite(Date.parse(writtenAt ?? ""))).toBe(true);
     expect(recorded?.harness_files?.claude_user_config).toBe(file);
-    expect(outcome.host.mcp_registered).toEqual(["claude-code"]);
+    expect(outcome.host.mcp_registered_at).toEqual({
+      "claude-code": writtenAt,
+    });
 
     // A second run finds it in place and changes no byte.
     const bytes = readFileSync(file, "utf8");
     const again = registerClaudeCodeMcp(outcome.host, m.deps);
     expect(again.result).toBe("present");
     expect(readFileSync(file, "utf8")).toBe(bytes);
+    // The entry did not change, so the time it took its form stands.
+    expect(
+      readHostFile(m.paths.hostFile)?.mcp_registered_at?.["claude-code"],
+    ).toBe(writtenAt);
   });
 
   it("creates the file when Claude Code has never run", () => {
@@ -163,6 +170,26 @@ describe("registerClaudeCodeMcp", () => {
     expect(readConfig(file)).toEqual(before);
   });
 
+  it("keeps the server the person put under the name most recently", async () => {
+    const m = machine();
+    const file = m.paths.claudeUserConfig;
+    const first = { type: "http", url: "https://first.example/mcp" };
+    seedConfig(file, { mcpServers: { oxagen: first } });
+    const outcome = registerClaudeCodeMcp(m.host, m.deps);
+    expect(outcome.displaced).toBe(true);
+    // The person puts a server of their own under the name again.
+    const second = { command: "their-second-server" };
+    seedConfig(file, { mcpServers: { oxagen: second } });
+    const again = registerClaudeCodeMcp(outcome.host, m.deps);
+    expect(again.displaced).toBe(true);
+    const recorded = readHostFile(m.paths.hostFile);
+    expect(recorded?.displaced_mcp_servers["claude-code"]).toEqual({
+      oxagen: second,
+    });
+    await stripEnrollmentHooks(recorded, m.deps);
+    expect(readConfig(file).mcpServers?.["oxagen"]).toEqual(second);
+  });
+
   it("writes nothing for an enrollment without a gateway key", () => {
     const m = machine();
     const keyless: HostFile = { ...m.host };
@@ -172,7 +199,7 @@ describe("registerClaudeCodeMcp", () => {
     expect(outcome.result).toBe("skipped");
     expect(outcome.reason).toContain("no gateway key");
     expect(existsSync(m.paths.claudeUserConfig)).toBe(false);
-    expect(readHostFile(m.paths.hostFile)?.mcp_registered).toBeUndefined();
+    expect(readHostFile(m.paths.hostFile)?.mcp_registered_at).toBeUndefined();
   });
 
   it("refuses a config of the wrong shape and leaves it exactly as it is", () => {
@@ -184,7 +211,7 @@ describe("registerClaudeCodeMcp", () => {
       HarnessFileError,
     );
     expect(readFileSync(file, "utf8")).toBe(bytes);
-    expect(readHostFile(m.paths.hostFile)?.mcp_registered).toBeUndefined();
+    expect(readHostFile(m.paths.hostFile)?.mcp_registered_at).toBeUndefined();
   });
 });
 
@@ -199,15 +226,26 @@ describe("addMissingClaudeCodeMcp", () => {
       { agentKey: m.host.agent_key, path: file, ok: true },
     ]);
     expect(readConfig(file).mcpServers?.["oxagen"]).toBeDefined();
-    expect(readHostFile(m.paths.hostFile)?.mcp_registered).toEqual([
-      "claude-code",
-    ]);
+    expect(
+      readHostFile(m.paths.hostFile)?.mcp_registered_at?.["claude-code"],
+    ).toBeDefined();
     expect(addMissingClaudeCodeMcp(m.deps)).toEqual([]);
 
     // The person takes the server out with `claude mcp remove oxagen`.
     seedConfig(file, { mcpServers: { github: GITHUB } });
     expect(addMissingClaudeCodeMcp(m.deps)).toEqual([]);
     expect(readConfig(file).mcpServers?.["oxagen"]).toBeUndefined();
+  });
+
+  it("writes nothing when the enrolling shell had another CLAUDE_CONFIG_DIR", () => {
+    const m = machine({
+      harness_files: { claude_settings: "/Users/dev/claude-work/settings.json" },
+    });
+    const [skipped] = addMissingClaudeCodeMcp(m.deps);
+    expect(skipped).toMatchObject({ agentKey: m.host.agent_key, ok: false });
+    expect(skipped?.problem).toContain("CLAUDE_CONFIG_DIR");
+    expect(existsSync(m.paths.claudeUserConfig)).toBe(false);
+    expect(readHostFile(m.paths.hostFile)?.mcp_registered_at).toBeUndefined();
   });
 
   it("waits while another enroll, unenroll, or reassign holds the install lock", () => {

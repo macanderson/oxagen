@@ -228,10 +228,11 @@ export interface ReflectionAskOptions {
   replayed: boolean;
   /**
    * Whether the session can reach `REFLECTION_TOOL_NAME`: this enrollment
-   * wrote the `oxagen` server into Claude Code's user config and has the key
-   * the gateway serves Oxagen's tools with (#5287). Without both, an ask
-   * would block a stop for a tool the agent cannot call. Called only once
-   * every cheaper check has passed, because it reads a file.
+   * wrote the `oxagen` server into Claude Code's user config before the
+   * session started, and has the key the gateway serves Oxagen's tools with
+   * (#5287). Without all of that, an ask would block a stop for a tool the
+   * agent cannot call. Called only once every cheaper check has passed,
+   * because it reads files.
    */
   toolRegistered: () => boolean;
 }

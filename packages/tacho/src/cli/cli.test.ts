@@ -5037,7 +5037,9 @@ describe("Oxagen's MCP server in Claude Code (#5287)", () => {
       "`oxagen` server written; a new Claude Code session lists Oxagen's tools",
     );
     const host = readHostFile(d.paths.hostFile);
-    expect(host?.mcp_registered).toEqual(["claude-code"]);
+    expect(host?.mcp_registered_at?.["claude-code"]).toBe(
+      "2026-09-10T12:00:00.000Z",
+    );
     expect(host?.harness_files?.claude_user_config).toBe(d.file);
 
     // A re-enroll of the live host changes nothing in the file.
@@ -5053,7 +5055,7 @@ describe("Oxagen's MCP server in Claude Code (#5287)", () => {
     const { editClaudeUserConfig: _unused, ...older } = d;
     expect((await enroll(ENROLL, older)).ok).toBe(true);
     expect(userConfig(d.file).mcpServers?.["oxagen"]).toBeUndefined();
-    expect(readHostFile(d.paths.hostFile)?.mcp_registered).toBeUndefined();
+    expect(readHostFile(d.paths.hostFile)?.mcp_registered_at).toBeUndefined();
 
     const reapplied = await enroll({}, d);
     expect(reapplied.ok).toBe(true);
@@ -5061,9 +5063,9 @@ describe("Oxagen's MCP server in Claude Code (#5287)", () => {
     expect(userConfig(d.file).mcpServers?.["oxagen"]).toMatchObject({
       args: expect.arrayContaining(["--enrollment", TEST_ENROLLMENT]),
     });
-    expect(readHostFile(d.paths.hostFile)?.mcp_registered).toEqual([
-      "claude-code",
-    ]);
+    expect(
+      readHostFile(d.paths.hostFile)?.mcp_registered_at?.["claude-code"],
+    ).toBe("2026-09-10T12:00:00.000Z");
   });
 
   it("is removed by unenroll, which puts back the server it displaced", async () => {

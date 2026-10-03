@@ -192,14 +192,21 @@ export const hostFileSchema = z
       .record(z.string(), z.record(z.string(), z.unknown()))
       .default({}),
     /**
-     * The wrapped harnesses whose user MCP config this enrollment wrote the
-     * `oxagen` server into (#5287). Today that is only `claude-code`.
-     * `oxagen agent status` adds the server once to a live enrollment made
-     * before enroll wrote it, and this list is how it knows it already did.
-     * A person who later removes the entry keeps it removed until they
-     * enroll again. Optional: a host enrolled before #5287 has none.
+     * When this enrollment last wrote the `oxagen` server into a wrapped
+     * harness's user MCP config, by harness (#5287). Today that is only
+     * `claude-code`. Two readers use it:
+     *
+     *   - `oxagen agent status` adds the server once to a live enrollment
+     *     made before enroll wrote it, and an entry here says it already
+     *     did. A person who later removes the server keeps it removed until
+     *     they enroll again.
+     *   - The Stop hook asks only a session that started after this time.
+     *     Claude Code loads MCP servers when a session starts, so a session
+     *     already running when the entry was written does not have the tool.
+     *
+     * Optional: a host enrolled before #5287 has none.
      */
-    mcp_registered: z.array(z.string()).optional(),
+    mcp_registered_at: z.record(z.string(), z.string()).optional(),
     /**
      * Where the harness files were when this host enrolled
      * (`harnessFilesRecord`). Optional: a host enrolled before this field

@@ -64,8 +64,10 @@ record leaves them as they are.
    hook blocked a stop for a tool the agent could not call. Enrolling Claude
    Code now writes the local gateway into Claude Code's user config as the
    `oxagen` server, and the Stop hook asks only when that entry is there for
-   this enrollment and the enrollment holds the gateway key. Otherwise it does
-   not block, and the digest reflection covers the run. The gateway is the
+   this enrollment, the enrollment holds the gateway key, and the session
+   started after the entry was written. Claude Code loads MCP servers when a
+   session starts, so a session already running has no such tool. Otherwise
+   the hook does not block, and the digest reflection covers the run. The gateway is the
    endpoint because both capture handlers answer only a call the local gateway
    serves (decision 2): a session pointed at the hosted MCP server directly is
    refused with `no_watched_run`. Through the gateway the call seals on the

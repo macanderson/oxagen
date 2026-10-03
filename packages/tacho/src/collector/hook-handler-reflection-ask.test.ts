@@ -33,12 +33,11 @@ const SESSION = "5b0c1d7e-2f43-4a8e-9c61-0d2b7f3e8a14";
 
 /**
  * A host's hook handler. `toolRegistered` answers whether the enrollment
- * gave Claude Code Oxagen's MCP server (#5287); `undefined` leaves the port
- * out, as a handler with no daemon behind it has.
+ * gave Claude Code Oxagen's MCP server (#5287); `null` leaves the port out,
+ * as a handler with no daemon behind it has. (`undefined` would take the
+ * default.)
  */
-function harness(
-  toolRegistered: (() => boolean) | undefined = () => true,
-) {
+function harness(toolRegistered: (() => boolean) | null = () => true) {
   const bundle = bundleSigner().sign(unsignedBundle());
   let clock = Date.parse("2026-09-10T10:00:00.000Z");
   const now = () => (clock += 1000);
@@ -60,7 +59,7 @@ function harness(
     policy: () => view,
     acknowledge: (ack: CommandAcknowledgement) => acks.push(ack),
     now,
-    ...(toolRegistered !== undefined
+    ...(toolRegistered !== null
       ? { reflectionToolRegistered: toolRegistered }
       : {}),
   };
@@ -304,7 +303,7 @@ describe("a Stop the ask does not reach", () => {
   });
 
   it("does not block a session when the handler cannot tell whether the tool is there", async () => {
-    const h = harness(undefined);
+    const h = harness(null);
     await failedRead(h);
     const stop = await send(h, hook("Stop", { stop_hook_active: false }));
     expect(stop.response).toEqual({});

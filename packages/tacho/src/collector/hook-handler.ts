@@ -198,14 +198,14 @@ export interface HookHandlerDeps {
     run: { sessionUuid: string; at: string },
   ) => void;
   /**
-   * Whether a Claude Code session on this host can reach Oxagen's
-   * `record_reflection` tool: the enrollment wrote the `oxagen` MCP server
-   * into Claude Code's user config and holds the gateway key that serves it
-   * (#5287). The daemon reads the file only when a Stop would otherwise ask.
-   * Absent, no Stop asks for a reflection, so a hook never blocks a stop for
-   * a tool the session does not have.
+   * Whether this Claude Code session can reach Oxagen's `record_reflection`
+   * tool: the enrollment wrote the `oxagen` MCP server into Claude Code's
+   * user config before the session started, and holds the gateway key that
+   * serves it (#5287). The daemon reads the files only when a Stop would
+   * otherwise ask. Absent, no Stop asks for a reflection, so a hook never
+   * blocks a stop for a tool the session does not have.
    */
-  reflectionToolRegistered?: () => boolean;
+  reflectionToolRegistered?: (session: { startedAt: string }) => boolean;
 }
 
 export interface HookReplay {
@@ -1742,7 +1742,10 @@ async function routeHook(
                   : (record.harness ?? "claude-code"),
               stopHookActive: input["stop_hook_active"] === true,
               replayed: replay !== undefined,
-              toolRegistered: () => deps.reflectionToolRegistered?.() ?? false,
+              toolRegistered: () =>
+                deps.reflectionToolRegistered?.({
+                  startedAt: record.startedAt,
+                }) ?? false,
             });
       // A queued steer, or a resume's continuation, keeps the turn going:
       // `decision: "block"` hands the reason to the model as what to do next.

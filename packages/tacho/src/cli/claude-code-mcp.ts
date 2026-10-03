@@ -113,6 +113,7 @@ export function registerClaudeCodeMcp(
   }
   let result: ClaudeCodeMcpOutcome["result"] = "present";
   let displaced = false;
+  let wroteEntry = false;
   edit((document) => {
     const problem = claudeUserConfigShapeProblem(document);
     if (problem !== undefined) throw new HarnessFileError(path, problem);
@@ -136,21 +137,30 @@ export function registerClaudeCodeMcp(
         displaced_mcp_servers: {
           ...current.displaced_mcp_servers,
           [HARNESS]: {
-            ...(merged.displaced as Record<string, Record<string, unknown>>),
-            // A server displaced by an earlier run is the user's original.
             ...current.displaced_mcp_servers[HARNESS],
+            // The server the person put under the name most recently wins:
+            // one there now replaced whatever an earlier run moved aside.
+            ...(merged.displaced as Record<string, Record<string, unknown>>),
           },
         },
       };
       writeHostFile(deps.paths.hostFile, current);
     }
     result = "written";
+    wroteEntry = true;
     return merged.config;
   });
-  if (!(current.mcp_registered ?? []).includes(HARNESS)) {
+  // The time the entry took its present form. A session that started before
+  // it has no such tool, so the Stop hook leaves it alone. An entry found in
+  // place with no time recorded (a run that died after writing it) gets this
+  // run's time, which can only hold the ask back, never ask too early.
+  if (wroteEntry || current.mcp_registered_at?.[HARNESS] === undefined) {
     current = {
       ...current,
-      mcp_registered: [...(current.mcp_registered ?? []), HARNESS],
+      mcp_registered_at: {
+        ...current.mcp_registered_at,
+        [HARNESS]: new Date(deps.now()).toISOString(),
+      },
     };
     writeHostFile(deps.paths.hostFile, current);
   }
@@ -176,7 +186,7 @@ export function needsClaudeCodeMcp(host: HostFile): boolean {
     host.revoked_at === null &&
     host.harnesses.includes(HARNESS) &&
     canServeOxagenTools(host) &&
-    !(host.mcp_registered ?? []).includes(HARNESS)
+    host.mcp_registered_at?.[HARNESS] === undefined
   );
 }
 
@@ -185,7 +195,7 @@ export function needsClaudeCodeMcp(host: HostFile): boolean {
  * Runs under the install lock, and does nothing while an enroll, unenroll,
  * or reassign holds it, because that run writes the entry itself or takes
  * the enrollment away. A failure is reported and tried again on the next
- * call, since `mcp_registered` is set only once the entry is written.
+ * call, since `mcp_registered_at` is set only once the entry is written.
  */
 export function addMissingClaudeCodeMcp(deps: CliDeps): ClaudeCodeMcpAdded[] {
   if (deps.editClaudeUserConfig === undefined) return [];
@@ -203,6 +213,25 @@ export function addMissingClaudeCodeMcp(deps: CliDeps): ClaudeCodeMcpAdded[] {
       // have written the entry, or retired the agent.
       const host = readHostFile(own.paths.hostFile);
       if (host === undefined || !needsClaudeCodeMcp(host)) continue;
+      // An enrollment from before #5287 recorded where Claude Code's
+      // settings were, not its user config. When that settings file is not
+      // the one this process finds, the enrolling shell had another
+      // CLAUDE_CONFIG_DIR, and either `.claude.json` could be the one Claude
+      // Code reads, so nothing is written. Enroll records the path itself.
+      const recorded = host.harness_files;
+      if (
+        recorded?.claude_user_config === undefined &&
+        recorded?.claude_settings !== undefined &&
+        recorded.claude_settings !== agent.paths.claudeSettings
+      ) {
+        added.push({
+          agentKey: host.agent_key,
+          path: own.paths.claudeUserConfig,
+          ok: false,
+          problem: `this agent was enrolled with Claude Code's settings at ${recorded.claude_settings}, and this command finds them at ${agent.paths.claudeSettings}, so it cannot tell which .claude.json Claude Code reads. Run \`oxagen agent enroll\` from a shell with the CLAUDE_CONFIG_DIR you enrolled with`,
+        });
+        continue;
+      }
       try {
         const outcome = registerClaudeCodeMcp(host, own);
         added.push({
