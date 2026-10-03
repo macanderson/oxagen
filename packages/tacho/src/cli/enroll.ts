@@ -1843,12 +1843,17 @@ async function enrollSteps(
         warnings.push(
           `tachod is still starting after ${(HEALTH_STARTING_ATTEMPTS * HEALTH_POLL_MS) / 1000}s, so the model base URL was left as it is. Run \`oxagen agent status\` once it is up; check ${deps.paths.log} if it never is`,
         );
-      } else if (deps.serviceManager.status().running !== false) {
+      } else if (
+        probe.outcome === "silent" &&
+        deps.serviceManager.status().running !== false
+      ) {
         // Silent, but the service manager does not say the daemon is gone:
         // it may be hung, or slower than the probe. A base URL taken out on
         // that guess stops recording for good and tells no one, while one
         // left in fails every model call out loud until the daemon answers,
-        // which `oxagen agent status` names. Loud beats silent (#5421).
+        // which `oxagen agent status` names. Loud beats silent (#5421). A
+        // daemon that answered and said its proxy is not listening is not
+        // a guess, and is handled below.
         warnings.push(
           `tachod did not answer on 127.0.0.1:${host.port} but its service is still ${deps.serviceManager.status().running === true ? "running" : "loaded"}, so the model base URL was left as it is. Check ${deps.paths.log}, then run \`oxagen agent enroll\` again`,
         );
