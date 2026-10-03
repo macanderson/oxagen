@@ -63,4 +63,22 @@ describe("list_mandates contract", () => {
       mandateList.input.safeParse({ agentId: "invoice-bot" }).success,
     ).toBe(false);
   });
+
+  // #3152: the answer names the instant its authority was counted at, so the
+  // app judges each window against it and makes up none of its own. The
+  // output stays `.strict()`, and the instant is required.
+  it("answers the instant its authority was counted at, and requires it", () => {
+    const asOf = "2026-09-16T12:00:00.000Z";
+    expect(mandateList.output.parse({ items: [], asOf })).toEqual({
+      items: [],
+      asOf,
+    });
+    expect(mandateList.output.safeParse({ items: [] }).success).toBe(false);
+    expect(
+      mandateList.output.safeParse({ items: [], asOf: "yesterday" }).success,
+    ).toBe(false);
+    expect(
+      mandateList.output.safeParse({ items: [], asOf, extra: true }).success,
+    ).toBe(false);
+  });
 });

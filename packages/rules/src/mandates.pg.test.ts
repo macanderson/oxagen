@@ -36,7 +36,7 @@
  *     reservation, so the period holds no more than the open call
  */
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 describe.skipIf(!process.env.DATABASE_URL)(
   "mandates against Postgres",
@@ -52,6 +52,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       lockMandate,
       MANDATE_APPROVAL_TTL_MS,
       parseMandateRow,
+      readAuthorities,
       readAuthority,
       release,
       releaseParked,
@@ -61,6 +62,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const { legacyMeasureKindGuess, periodKey } = await import(
       "./mandates/measures"
     );
+    const { PgDialect } = await import("drizzle-orm/pg-core");
 
     const orgId = randomUUID();
     const workspaceId = randomUUID();
@@ -635,6 +637,93 @@ describe.skipIf(!process.env.DATABASE_URL)(
         reserved: "1250000000",
       });
       expect((await ledgerOf(id)).at(-1)!.balanceAfter).toBe("3750000000");
+    });
+
+    // #3152: a page of mandates is counted at one instant, in one statement.
+    // `list_mandates` read the clock and the ledger once per row, so a page of
+    // N mandates cost N round trips per measure, and two rows read on either
+    // side of a UTC period boundary sat in two periods in one answer.
+    it("readAuthorities counts a page of mandates at one instant in one statement", async () => {
+      const daily = await insertMandate(randomUUID(), {
+        limits: {
+          calls: { perPeriod: "50", period: "daily", currencyOrUnit: "calls" },
+        },
+      });
+      const monthly = await insertMandate(randomUUID());
+      const row = (
+        mandateId: string,
+        kind: "reserve" | "settle",
+        measure: string,
+        value: string,
+        key: string,
+      ) => ({
+        orgId,
+        workspaceId,
+        mandateId,
+        toolCallId: randomUUID(),
+        kind,
+        measure,
+        value,
+        unitOrCurrency: measure === "calls" ? "calls" : "USD",
+        measureKind: measure === "calls" ? "count" : "money",
+        periodKey: key,
+        balanceAfter: "0",
+      });
+      await withSystemDb((tx) =>
+        tx
+          .insert(schema.mandateLedger)
+          .values([
+            row(daily, "reserve", "calls", "3", periodKey("daily", NOW)),
+            // The day before: another window, so it is not this one's draw.
+            row(daily, "reserve", "calls", "5", "2026-09-13"),
+            row(monthly, "reserve", "amount", "100000000", "2026-09"),
+            row(monthly, "settle", "amount", "100000000", "2026-09"),
+            row(monthly, "reserve", "amount", "40000000", "2026-09"),
+            // Last month: not this window's draw either.
+            row(monthly, "reserve", "amount", "70000000", "2026-08"),
+          ]),
+      );
+      const records = [await loadMandate(daily), await loadMandate(monthly)];
+      // Every statement drizzle sends is compiled here first, so the spy
+      // counts round trips. It also proves it saw the read at all: a spy on
+      // a copy of drizzle the package does not use would count zero.
+      const compiled = vi.spyOn(PgDialect.prototype, "sqlToQuery");
+      const read = await inScope(() =>
+        withTenantDb((tx) => readAuthorities(tx, records, NOW)),
+      );
+      const ledgerReads = compiled.mock.results
+        .map((r) => (r.value as { sql: string }).sql)
+        .filter((sql) => sql.includes('"mandate_ledger"'));
+      compiled.mockRestore();
+      expect(ledgerReads).toHaveLength(1);
+      expect(read.get(daily)).toEqual([
+        expect.objectContaining({
+          measure: "calls",
+          periodKey: "2026-09-14",
+          reserved: "3",
+          settled: "0",
+          remaining: "47",
+        }),
+      ]);
+      expect(read.get(monthly)).toEqual([
+        expect.objectContaining({
+          measure: "amount",
+          periodKey: "2026-09",
+          // The settled call's reservation nets out, as `periodSums` has it,
+          // so 40 is still held and 140 is drawn.
+          reserved: "40000000",
+          settled: "100000000",
+          remaining: "1860000000",
+        }),
+      ]);
+      // The one-mandate read is the same read.
+      for (const record of records) {
+        expect(
+          await inScope(() =>
+            withTenantDb((tx) => readAuthority(tx, record, NOW)),
+          ),
+        ).toEqual(read.get(record.id));
+      }
     });
 
     // ── the check ──────────────────────────────────────────────────────────────

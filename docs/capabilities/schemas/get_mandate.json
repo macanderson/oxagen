@@ -434,11 +434,15 @@
           ],
           "additionalProperties": false
         }
+      },
+      "asOf": {
+        "type": "string"
       }
     },
     "required": [
       "mandate",
-      "ledger"
+      "ledger",
+      "asOf"
     ],
     "additionalProperties": false
   }
