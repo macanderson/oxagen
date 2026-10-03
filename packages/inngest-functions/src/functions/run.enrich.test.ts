@@ -216,6 +216,8 @@ const {
   ENRICHMENT_RUN_BUDGET_USD,
   ENRICHMENT_RUN_TOTAL_BUDGET_MICROS,
 } = await import("../lib/run-enrichment");
+const { ENRICHMENT_SCRATCH_TTL_MS, RUN_ENRICH_SCRATCH_KEPT_EVENT } =
+  await import("../lib/run-enrichment-scratch");
 await import("./run.enrich");
 const data = {
   orgId: "00000000-0000-4000-8000-000000000001",
@@ -224,11 +226,15 @@ const data = {
 };
 /** The provider's run id for one job, which keys its scratch chunks. */
 const JOB_RUN_ID = "01K5ZJ3N9Q8R7S6T5V4W3X2Y1Z";
+/** The provider's `step.sendEvent`, which keeps what a job sends. */
+const sendEvent = async (_label: string, events: unknown) => {
+  state.sent.push(...[events].flat());
+};
 const run = () =>
   state.handlers.get("run/enrich")!({
     event: { data },
     events: [{ data }],
-    step: { run: (_name: string, fn: () => unknown) => fn() },
+    step: { run: (_name: string, fn: () => unknown) => fn(), sendEvent },
     runId: JOB_RUN_ID,
   });
 beforeEach(() => {
@@ -278,6 +284,8 @@ describe("automatic run enrichment", () => {
     // run is due again once enrichment is back on (#3784).
     expect(Object.keys(state.writes[0]!)).toEqual(["summaryObservedAt"]);
     expect(state.writes[0]).not.toHaveProperty("summaryError");
+    // A job that reads nothing keeps nothing, so it schedules no delete.
+    expect(state.sent).toEqual([]);
   });
   it("does not persist an invented account when Stella or credit admission fails", async () => {
     state.call.mockRejectedValue(new Error("credit gate refused"));
@@ -705,7 +713,7 @@ describe("a queued event that no longer asks for work", () => {
     state.handlers.get("run/enrich")!({
       event: { data: eventData, ts: sentAt },
       events: [{ data: eventData, ts: sentAt }],
-      step: { run: (_name: string, fn: () => unknown) => fn() },
+      step: { run: (_name: string, fn: () => unknown) => fn(), sendEvent },
       runId: JOB_RUN_ID,
     });
 
@@ -1575,6 +1583,7 @@ describe("the transcript chunks a job keeps", () => {
           }
           return result;
         },
+        sendEvent,
       },
       runId: JOB_RUN_ID,
     });
@@ -1671,6 +1680,7 @@ describe("the transcript chunks a job keeps", () => {
         // time the retry read it.
         run: (name: string, fn: () => unknown) =>
           name === "read-record" ? Promise.resolve(null) : fn(),
+        sendEvent,
       },
       runId: JOB_RUN_ID,
     });
@@ -1706,6 +1716,7 @@ describe("the transcript chunks a job keeps", () => {
       step: {
         run: (name: string, fn: () => unknown) =>
           name === "read-record" ? Promise.resolve(legacy) : fn(),
+        sendEvent,
       },
       runId: JOB_RUN_ID,
     });
@@ -1727,5 +1738,51 @@ describe("the transcript chunks a job keeps", () => {
     ).rejects.toThrow("run id");
     expect(state.scratchWritten).toEqual([]);
     expect(state.call).not.toHaveBeenCalled();
+  });
+
+  // A cancelled job runs neither its own cleanup nor its failure handler,
+  // so its chunks stayed in the bucket for good (#4383). The job now
+  // schedules their delete before its read keeps the first one.
+  it("schedules the delete of its scratch a day out, before the read keeps a chunk", async () => {
+    runOfChunks(2);
+    state.call.mockResolvedValue(account);
+    const writtenWhenSent: number[] = [];
+    const outcome = await state.handlers.get("run/enrich")!({
+      event: { data },
+      events: [{ data }],
+      step: {
+        run: (_name: string, fn: () => unknown) => fn(),
+        sendEvent: async (label: string, events: unknown) => {
+          if (label === "expire-scratch")
+            writtenWhenSent.push(state.scratchWritten.length);
+          await sendEvent(label, events);
+        },
+      },
+      runId: JOB_RUN_ID,
+    });
+    expect(outcome).toMatchObject({ status: "generated" });
+    expect(writtenWhenSent).toEqual([0]);
+    expect(state.scratchWritten).toContain(key("chunk-1"));
+    const sent = state.sent as {
+      name: string;
+      id: string;
+      data: Record<string, unknown>;
+    }[];
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({
+      name: RUN_ENRICH_SCRATCH_KEPT_EVENT,
+      id: `run-enrich-scratch:${JOB_RUN_ID}`,
+      data: {
+        orgId: data.orgId,
+        workspaceId: data.workspaceId,
+        jobRunId: JOB_RUN_ID,
+      },
+    });
+    // Due a day after the instant the job read the run, which the account
+    // records as the run's observed time.
+    const observedAt = state.writes.at(-1)?.summaryObservedAt as Date;
+    expect(
+      Date.parse(String(sent[0]!.data.expiresAt)) - observedAt.getTime(),
+    ).toBe(ENRICHMENT_SCRATCH_TTL_MS);
   });
 });
