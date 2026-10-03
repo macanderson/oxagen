@@ -577,6 +577,29 @@ function ceilingLines(
   return lines;
 }
 
+/**
+ * The warning for a harness whose model calls bypass a proxy that is listening:
+ * its base URL is not ours, a managed settings file overrides ours, or
+ * enroll left the user's own value in place. Without it, the only sign was an
+ * indented detail line under Gateway, which read the same as the happy path.
+ * Nothing when the proxy is down, because the Gateway line already says so.
+ */
+function routingWarning(
+  gateway: StatusReport["gateway"],
+  entry: ModelBaseUrlHarnessState,
+): string | undefined {
+  if (gateway?.listening !== true) return undefined;
+  if (entry.ours && entry.shadowedBy === undefined) return undefined;
+  const lead = `Warning     ${entry.harness} model calls bypass the proxy, so Oxagen does not record them or enforce budget and model limits on them.`;
+  // A managed file wins over the user's settings, so running enroll alone
+  // cannot route the harness while that key is there.
+  if (entry.shadowedBy !== undefined)
+    return `${lead} ${entry.shadowedBy.file} sets ${entry.key} and overrides the enrolled value. Remove ${entry.key} from that file, then run \`oxagen agent enroll\`.`;
+  if (entry.leftAlone !== undefined)
+    return `${lead} ${entry.leftAlone}. Change that file, then run \`oxagen agent enroll\`.`;
+  return `${lead} Run \`oxagen agent enroll\` to route them through the proxy.`;
+}
+
 /** `report` as text, one line per finding. */
 function printStatus(report: StatusReport, deps: CliDeps): void {
   const h = report.host;
@@ -628,6 +651,11 @@ function printStatus(report: StatusReport, deps: CliDeps): void {
       deps.out(
         `            ${entry.harness}: env.ENABLE_TOOL_SEARCH is ${entry.toolSearch.current === null ? "not set" : JSON.stringify(entry.toolSearch.current)}, so every request carries the whole MCP tool catalog and a large one overflows the context (run \`oxagen agent enroll\` to set it)`,
       );
+  }
+  // After the detail lines, so the block under Gateway stays together.
+  for (const entry of modelBaseUrls ?? []) {
+    const warning = routingWarning(gateway, entry);
+    if (warning !== undefined) deps.out(warning);
   }
   for (const entry of modelCredentials ?? [])
     deps.out(`Credential  ${describeHarness(entry)}`);
