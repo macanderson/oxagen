@@ -131,6 +131,7 @@ describe("get_run_cost", () => {
       byTool: [{ name: "Read", calls: 2, resultTokens: null, cost: null }],
       // The fixture's row carries no token sources.
       standingContext: null,
+      tokenSources: null,
       priceEntryIds: ["0192d4a8-7c1e-7a00-8000-0000000000e1"],
       rolledUpAt: ROLLED_UP_AT.toISOString(),
       // The fixture's row was rebuilt after the run sealed.
@@ -355,6 +356,36 @@ describe("get_run_cost steps and tool costs (#3984, #3892)", () => {
       contextFrames: null,
     });
     expect(() => runCostGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers each source's tokens over every counted call, and a source no call measured as null (#5295)", async () => {
+    const row = Object.assign(
+      pricedRun(3_000n, { costBasis: "gateway_observed" }),
+      {
+        toolDefinitionTokens: 4_000,
+        contextFrameTokens: null,
+        steeringTokens: 0,
+      },
+    );
+    const out = await harness([row]).handler({ runId: row.runId }, ctx());
+    // The sums as stored, the first call included. A measured zero stays a
+    // zero and an unmeasured source stays null.
+    expect(out.rollup?.tokenSources).toEqual({
+      toolDefinitionTokens: 4_000,
+      contextFrameTokens: null,
+      steeringTokens: 0,
+    });
+    expect(() => runCostGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers no token sources for a row no call measured any of them on (negative)", async () => {
+    const row = Object.assign(pricedRun(3_000n), {
+      toolDefinitionTokens: null,
+      contextFrameTokens: null,
+      steeringTokens: null,
+    });
+    const out = await harness([row]).handler({ runId: row.runId }, ctx());
+    expect(out.rollup?.tokenSources).toBeNull();
   });
 });
 

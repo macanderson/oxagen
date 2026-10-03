@@ -256,3 +256,84 @@ export function tachoContextWindow(
 export function isLaterLlmCallSighting(row: TachoModelCallRow): boolean {
   return (row.attrs?.[LLM_CALL_DUPLICATE_OF_ATTR] ?? "") !== "";
 }
+
+/**
+ * A run's prompt composition: each block's tokens summed over every window
+ * the run recorded (#5295). Each window's blocks are already its byte share
+ * of the prompt total the vendor reported, so the blocks here sum to
+ * `promptTokens`, and the split is an estimate of where the tokens went.
+ */
+export interface WindowComposition {
+  /** The windows whose call reported its prompt total, which every sum below covers. */
+  requests: number;
+  /** Windows whose call reported no prompt total. Their blocks carry no tokens, so no sum counts them. */
+  requestsWithoutTokens: number;
+  /** The prompt tokens of the `requests` windows, summed: every block below added up. */
+  promptTokens: number;
+  /** Each block's tokens summed; null for a block none of the windows carried. */
+  blocks: Record<ContextWindowBlockKind, number | null>;
+  /**
+   * The conversation block of the run's first request: the first window that
+   * declared tools, else the first window. Null when that window reported no
+   * prompt total or carried no conversation block.
+   */
+  initialConversationTokens: number | null;
+}
+
+/** Whether a window declared at least one tool. */
+function declaredTools(window: RecordedWindow): boolean {
+  return window.blocks.some(
+    (block) => block.kind === "tools" && block.items > 0,
+  );
+}
+
+/**
+ * The prompt composition of `windows`, in frame order; null when no window
+ * reported a prompt total, so no block has a token to sum.
+ *
+ * The first request is the first window that declared tools. A harness such
+ * as Claude Code makes side calls of its own, a session title or a check of a
+ * Bash command's prefix, and a side call sends a short prompt and no tools
+ * (ADR-062, amendment of 2026-10-02). Read by that shape, a side call that
+ * came first is not taken for the person's first prompt. A run none of whose
+ * windows declared tools takes its first window.
+ */
+export function windowComposition(
+  windows: readonly RecordedWindow[],
+): WindowComposition | null {
+  const blocks: Record<ContextWindowBlockKind, number | null> = {
+    system: null,
+    steering: null,
+    tools: null,
+    context: null,
+    conversation: null,
+  };
+  let requests = 0;
+  let requestsWithoutTokens = 0;
+  let promptTokens = 0;
+  for (const window of windows) {
+    if (window.promptTokens === null) {
+      requestsWithoutTokens += 1;
+      continue;
+    }
+    requests += 1;
+    promptTokens += window.promptTokens;
+    for (const block of window.blocks)
+      if (block.tokens !== null)
+        blocks[block.kind] = (blocks[block.kind] ?? 0) + block.tokens;
+  }
+  if (requests === 0) return null;
+  const first = windows.find(declaredTools) ?? windows[0];
+  const initial =
+    first === undefined || first.promptTokens === null
+      ? null
+      : (first.blocks.find((block) => block.kind === "conversation")?.tokens ??
+        null);
+  return {
+    requests,
+    requestsWithoutTokens,
+    promptTokens,
+    blocks,
+    initialConversationTokens: initial,
+  };
+}

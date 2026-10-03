@@ -575,7 +575,7 @@
             "output": "Output",
             "reasoning": "Reasoning"
           },
-          "inputSplit": "Input is recorded as one figure, {input} tokens, and not split by class yet. The six input classes wait on that split.",
+          "inputSplit": "Input is {input} tokens. Tool results, context frames, tool definitions and steering are the recorder's estimates summed over this agent's runs. Conversation and system are measured on each run's requests and not summed over 30 days yet.",
           "cacheRate": "Cache hit rate",
           "cacheRateValue": "{rate} with {read} of {input} input tokens served from cache",
           "perRun": "Per run",
@@ -938,7 +938,7 @@
           "countedAsInput": "counted as input",
           "note": "Cache hit rate {rate}. The findings job flags a toolbelt wider than the agent uses, because those tokens are paid on every call whether the tool is used or not.",
           "noteNoCache": "No input token is recorded, so there is no cache hit rate.",
-          "notBacked": "A class’s rate and cost, and the tool-definition share of input, are not recorded per class yet."
+          "notBacked": "A class’s rate and cost are not recorded per class yet. Tool definitions is the recorder's estimate summed over this agent's runs, and the input classes above already count it."
         },
         "last30": {
           "title": "Last 30 days",

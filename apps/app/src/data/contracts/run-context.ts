@@ -63,6 +63,39 @@ const ContextAssembly = z
   .strict();
 export type ContextAssembly = z.infer<typeof ContextAssembly>;
 
+/**
+ * Each block's tokens summed over every window the read reached (#5295). A
+ * block's tokens are its byte share of each request's vendor total, so the
+ * blocks sum to `promptTokens` and the split is an estimate. A block no
+ * window carried is null, never zero: a wrapped window has no `context`.
+ */
+const ContextComposition = z
+  .object({
+    /** The windows whose call reported its prompt total, which every sum covers. */
+    requests: Count,
+    /** Windows whose call reported no prompt total; no sum counts their blocks. */
+    requestsWithoutTokens: Count,
+    /** The prompt tokens of the `requests` windows, summed. */
+    promptTokens: Count,
+    blocks: z
+      .object({
+        system: Count.nullable(),
+        steering: Count.nullable(),
+        tools: Count.nullable(),
+        context: Count.nullable(),
+        conversation: Count.nullable(),
+      })
+      .strict(),
+    /**
+     * The conversation block of the run's first request: the first window
+     * that declared tools, else the first window. Null when that request
+     * reported no total or carried no conversation.
+     */
+    initialConversationTokens: Count.nullable(),
+  })
+  .strict();
+export type ContextComposition = z.infer<typeof ContextComposition>;
+
 export const RunContext = z
   .object({
     source: z.enum(["wrapped", "ledger"]),
@@ -72,6 +105,8 @@ export const RunContext = z
     assemblies: z.array(ContextAssembly),
     /** False when the read stopped at a cap, so the lists are a prefix. */
     complete: z.boolean(),
+    /** The run's prompt composition; null when no window reported a prompt total. */
+    composition: ContextComposition.nullable(),
   })
   .strict();
 export type RunContext = z.infer<typeof RunContext>;
