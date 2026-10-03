@@ -28,6 +28,9 @@ import {
   readTachoFileChanges,
   readTachoToolCallFrames,
   readTachoToolCallObservations,
+  RUN_SESSIONS_PARAMS_MAX,
+  RUN_SESSIONS_PER_PARAM,
+  runSessionsFilter,
 } from "./cost-frames";
 
 const ORG = "00000000-0000-4000-8000-000000000001";
@@ -1206,6 +1209,98 @@ describe("readGroupModelCallFrames", () => {
       readGroupModelCallFrames({ orgId: ORG, workspaceId: WS, runs }),
     ).rejects.toThrow("clickhouse unavailable");
   });
+
+  // #5311: one query named every root and every session of the group in two
+  // array parameters, and a recurring job of 2,500 runs passes ClickHouse's
+  // 128 KiB URL field limit by far.
+  describe("a group too large for one request URL", () => {
+    /** `n` distinct uuids that start with `prefix` (8 hex digits). */
+    const ids = (prefix: string, n: number) =>
+      Array.from(
+        { length: n },
+        (_, i) => `${prefix}-0000-4000-8000-${i.toString(16).padStart(12, "0")}`,
+      );
+    const params = () => queryMock.mock.calls.map(([call]) => call.query_params);
+
+    it("reads more runs than one parameter's roots in batches and joins the answers", async () => {
+      const roots = ids("000000a1", 1_001);
+      answer([stored(roots[0]!, roots[0]!, 1)]);
+      answer([stored(roots[1_000]!, roots[1_000]!, 2)]);
+      const frames = await readGroupModelCallFrames({
+        orgId: ORG,
+        workspaceId: WS,
+        runs: roots.map((root) => ({ rootSessionUuid: root, sessionUuids: [root] })),
+      });
+      expect(params().map((p) => (p["rootSessionUuids"] as string[]).length)).toEqual([
+        1_000, 1,
+      ]);
+      expect(params()[1]).toMatchObject({
+        rootSessionUuids: [roots[1_000]],
+        sessionUuids: [roots[1_000]],
+      });
+      expect(frames.size).toBe(1_001);
+      expect(frames.get(roots[0]!)?.map((f) => f.seq)).toEqual([1]);
+      expect(frames.get(roots[1_000]!)?.map((f) => f.seq)).toEqual([2]);
+    });
+
+    it("splits one batch's sessions across parameters in every subquery", async () => {
+      const chains = ids("000000a2", 1_499);
+      answer([]);
+      await readGroupModelCallFrames({
+        orgId: ORG,
+        workspaceId: WS,
+        runs: [
+          { rootSessionUuid: RUN, sessionUuids: [RUN, ...chains] },
+          { rootSessionUuid: RUN_B, sessionUuids: [RUN_B] },
+        ],
+      });
+      expect(queryMock).toHaveBeenCalledTimes(1);
+      const { query, query_params } = lastQuery();
+      expect(query.match(/session_uuid IN \{sessionUuids1:Array\(UUID\)\}/g)).toHaveLength(5);
+      expect(query_params["sessionUuids"]).toHaveLength(1_000);
+      expect(query_params["sessionUuids1"]).toEqual([...chains.slice(999), RUN_B]);
+    });
+
+    it("starts a batch when the next run's sessions would pass the URL budget", async () => {
+      const runsOf = ["000000b1", "000000b2", "000000b3"].map((prefix) => {
+        const [root, ...rest] = ids(prefix, 4_000);
+        return { rootSessionUuid: root!, sessionUuids: [root!, ...rest] };
+      });
+      answer([]);
+      answer([]);
+      await readGroupModelCallFrames({ orgId: ORG, workspaceId: WS, runs: runsOf });
+      expect(params().map((p) => p["rootSessionUuids"])).toEqual([
+        [runsOf[0]!.rootSessionUuid, runsOf[1]!.rootSessionUuid],
+        [runsOf[2]!.rootSessionUuid],
+      ]);
+    });
+
+    it("reads a run with more sessions than the URL holds alone, by its root", async () => {
+      const [huge, ...chains] = ids("000000c1", 10_001);
+      answer([]);
+      answer([stored(huge!, chains[9_999]!, 7)]);
+      answer([]);
+      const frames = await readGroupModelCallFrames({
+        orgId: ORG,
+        workspaceId: WS,
+        runs: [
+          { rootSessionUuid: RUN, sessionUuids: [RUN] },
+          { rootSessionUuid: huge!, sessionUuids: [huge!, ...chains] },
+          { rootSessionUuid: RUN_B, sessionUuids: [RUN_B] },
+        ],
+      });
+      expect(queryMock).toHaveBeenCalledTimes(3);
+      const [, alone] = queryMock.mock.calls.map(([call]) => call);
+      expect(alone!.query.match(/SELECT session_uuid FROM tacho_events/g)).toHaveLength(5);
+      expect(alone!.query).not.toContain("{sessionUuids");
+      expect(alone!.query_params).toMatchObject({ rootSessionUuids: [huge] });
+      expect(
+        Object.keys(alone!.query_params).filter((k) => k.startsWith("sessionUuids")),
+      ).toEqual([]);
+      // The run's own chain list still picks its rows.
+      expect(frames.get(huge!)?.map((f) => f.seq)).toEqual([7]);
+    });
+  });
 });
 
 describe("readTachoToolCallFrames", () => {
@@ -2135,6 +2230,51 @@ describe("readObservedModels", () => {
     });
   });
 
+  // #5311: each query parameter is one URL field, ClickHouse refuses a field
+  // over 128 KiB, and about 3,600 boundaries fill one. The hourly price book
+  // sync can move a model's rate every hour.
+  describe("a long boundary list", () => {
+    const summary = {
+      model: "m",
+      provider: "",
+      calls: "1",
+      tokens: "10",
+      first_seen: "2026-09-10T00:00:00.000Z",
+      last_seen: "2026-09-10T00:00:00.000Z",
+    };
+    /** `n` boundaries a minute apart. */
+    const minutes = (n: number) =>
+      Array.from(
+        { length: n },
+        (_, i) => new Date(Date.UTC(2026, 8, 1) + i * 60_000),
+      );
+    const count = (ts: string, name: string) =>
+      `arrayCount(b -> b <= ${ts}, {${name}:Array(DateTime64(3))})`;
+
+    it("splits it across parameters and adds their counts for each bucket", async () => {
+      answerBoth([summary]);
+      const boundaries = minutes(1_001);
+      await readObservedModels({ orgId: ORG, since: SINCE, boundaries });
+      const classCall = queryMock.mock.calls[1]![0];
+      for (const ts of ["c.ts", "toDateTime64(created_at, 3, 'UTC')"])
+        expect(classCall.query).toContain(
+          `(${count(ts, "boundaries")} + ${count(ts, "boundaries1")})`,
+        );
+      expect(classCall.query_params["boundaries"]).toHaveLength(1_000);
+      expect(classCall.query_params["boundaries1"]).toEqual([
+        boundaries[1_000]!.toISOString().replace("T", " ").replace("Z", ""),
+      ]);
+    });
+
+    it("refuses a list past the URL budget with its count, before the class read", async () => {
+      answer([summary]);
+      await expect(
+        readObservedModels({ orgId: ORG, since: SINCE, boundaries: minutes(10_001) }),
+      ).rejects.toThrow(/10001 price boundaries/);
+      expect(queryMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // The boundary array is scanned once per frame, so a caller that hands in
   // a whole price catalog's history pays for every model's rate changes on
   // every frame and splits the report into buckets that answer identically.
@@ -2441,5 +2581,139 @@ describe("streamed cost frames", () => {
     })).rejects.toThrow("consumer failed");
     expect(close).toHaveBeenCalledTimes(1);
     expect(queryMock.mock.calls.at(-1)?.[0].query).toContain("PARTITION BY tool_name, tool_input_digest, tool_output_digest");
+  });
+});
+
+/**
+ * A run's sessions as one URL field (#5311). @clickhouse/client sends each
+ * query parameter as `param_<name>` in the request URL, an array as quoted
+ * values in brackets, and ClickHouse refuses a field longer than
+ * `http_max_field_value_size` (128 KiB) with "Field value too long".
+ */
+describe("runSessionsFilter", () => {
+  const FIELD_LIMIT = 128 * 1024;
+  const URI_LIMIT = 1024 * 1024;
+
+  /** `n` distinct session uuids. */
+  function uuids(n: number): string[] {
+    return Array.from(
+      { length: n },
+      (_, i) => `00000000-0000-4000-8000-${i.toString(16).padStart(12, "0")}`,
+    );
+  }
+
+  /** The bytes one array parameter takes in the request URL. */
+  function fieldBytes(list: readonly string[]): number {
+    const value = `[${list.map((s) => `'${s}'`).join(",")}]`;
+    return new URLSearchParams([["v", value]]).toString().length - "v=".length;
+  }
+
+  it("needs no split for a list one field holds, and a split for one it cannot", () => {
+    expect(fieldBytes(uuids(RUN_SESSIONS_PER_PARAM))).toBeLessThan(FIELD_LIMIT);
+    // The run that failed every pass and rollup named a few thousand chains.
+    expect(fieldBytes(uuids(3_000))).toBeGreaterThan(FIELD_LIMIT);
+  });
+
+  it("binds a list one parameter holds as it always has", () => {
+    const list = uuids(RUN_SESSIONS_PER_PARAM);
+    expect(runSessionsFilter(list)).toEqual({
+      sql: "session_uuid IN {sessionUuids:Array(UUID)}",
+      params: { sessionUuids: list },
+    });
+  });
+
+  it("splits a longer list across parameters that each fit one URL field", () => {
+    const list = uuids(2_500);
+    const { sql, params } = runSessionsFilter(list);
+    expect(sql).toBe(
+      "(session_uuid IN {sessionUuids:Array(UUID)} OR session_uuid IN {sessionUuids1:Array(UUID)} OR session_uuid IN {sessionUuids2:Array(UUID)})",
+    );
+    expect(Object.keys(params)).toEqual([
+      "sessionUuids",
+      "sessionUuids1",
+      "sessionUuids2",
+    ]);
+    expect(Object.values(params).map((p) => p.length)).toEqual([1_000, 1_000, 500]);
+    // Every session is named once.
+    expect(Object.values(params).flat()).toEqual(list);
+    for (const p of Object.values(params))
+      expect(fieldBytes(p)).toBeLessThan(FIELD_LIMIT);
+  });
+
+  it("keeps the most parameters it binds under the URL limit", () => {
+    const list = uuids(RUN_SESSIONS_PER_PARAM * RUN_SESSIONS_PARAMS_MAX);
+    const { params } = runSessionsFilter(list);
+    expect(Object.keys(params)).toHaveLength(RUN_SESSIONS_PARAMS_MAX);
+    const total = Object.values(params).reduce((n, p) => n + fieldBytes(p), 0);
+    expect(total).toBeLessThan(URI_LIMIT / 2);
+  });
+
+  it("names the run's family by its root when the list passes the URL budget", () => {
+    const { sql, params } = runSessionsFilter(
+      uuids(RUN_SESSIONS_PER_PARAM * RUN_SESSIONS_PARAMS_MAX + 1),
+    );
+    expect(params).toEqual({});
+    expect(sql).not.toContain("Array(UUID)");
+    expect(sql).toMatch(/^session_uuid IN \(\s*SELECT session_uuid FROM tacho_events\s/);
+    expect(sql).toContain("org_id = {orgId:UUID}");
+    expect(sql).toContain("workspace_id = {workspaceId:UUID}");
+    expect(sql).toContain("root_session_uuid = {rootSessionUuid:UUID}");
+  });
+
+  it("names a long list in every subquery of the model-call read", async () => {
+    answer([]);
+    const list = uuids(2_500);
+    await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "tacho", rootSessionUuid: list[0]!, sessionUuids: list },
+    });
+    const { query, query_params } = lastQuery();
+    // The priced rows, both transcript joins, and both proxy joins.
+    expect(query.match(/session_uuid IN \{sessionUuids2:Array\(UUID\)\}/g)).toHaveLength(5);
+    expect(query).not.toContain("{sessionUuids3:");
+    expect(query_params["sessionUuids"]).toHaveLength(1_000);
+    expect(query_params["sessionUuids2"]).toHaveLength(500);
+  });
+
+  it("names a family past the URL budget by its root in the model-call read", async () => {
+    answer([]);
+    const list = uuids(RUN_SESSIONS_PER_PARAM * RUN_SESSIONS_PARAMS_MAX + 1);
+    await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "tacho", rootSessionUuid: list[0]!, sessionUuids: list },
+    });
+    const { query, query_params } = lastQuery();
+    expect(query.match(/SELECT session_uuid FROM tacho_events/g)).toHaveLength(5);
+    expect(query).not.toContain("Array(UUID)");
+    expect(
+      Object.keys(query_params).filter((k) => k.startsWith("sessionUuids")),
+    ).toEqual([]);
+    expect(query_params).toMatchObject({ rootSessionUuid: list[0] });
+  });
+
+  it("splits a long list in the tool-call and progress reads", async () => {
+    const list = uuids(1_001);
+    const args = {
+      orgId: ORG,
+      workspaceId: WS,
+      rootSessionUuid: list[0]!,
+      sessionUuids: list,
+    };
+    answer([]);
+    await readTachoToolCallFrames(args);
+    const tools = lastQuery();
+    expect(
+      tools.query.match(/session_uuid IN \{sessionUuids1:Array\(UUID\)\}/g),
+    ).toHaveLength(2);
+    expect(tools.query_params["sessionUuids1"]).toEqual([list[1_000]]);
+    answer([]);
+    await readTachoProgressFrames(args);
+    const progress = lastQuery();
+    expect(
+      progress.query.match(/session_uuid IN \{sessionUuids1:Array\(UUID\)\}/g),
+    ).toHaveLength(1);
+    expect(progress.query_params["sessionUuids1"]).toEqual([list[1_000]]);
   });
 });

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
-import { chSelect } from "@oxagen/telemetry";
+import { chSelect, sessionListFilter } from "@oxagen/telemetry";
 import type {
   RunCapturedDiff,
   RunCheckout,
@@ -277,6 +277,13 @@ export async function readWorkPrLinks(
  * `first_seq` counts its own chain's frames (#3823). The list names the
  * chains, which puts `session_uuid` in the primary key's range. The rows are
  * ordered with the run's own chain first, then by chain and frame.
+ *
+ * A long list is split across array parameters so no URL field passes
+ * ClickHouse's limit (#5311). A list too long for the URL is not sent: the
+ * root predicate already admits only the run's chains, so the read returns
+ * the same links at the cost of a scan of the workspace. One URL's row
+ * spans chains under one limit, so the read cannot take the list in batches,
+ * and the fence admits no subquery that would name the chains.
  */
 export async function readRunPrLinks(
   rootSessionUuid: string,
@@ -286,6 +293,7 @@ export async function readRunPrLinks(
   // subagent chain, then the chain, then the frame. `chain` is the alias,
   // because an alias named `session_uuid` would shadow the column it reads.
   const first = "(session_uuid != {rootSessionUuid:UUID}, session_uuid, seq)";
+  const listed = sessionListFilter([rootSessionUuid, ...subagentChains]);
   const result = await chSelect<WorkPrLinkRow & { chain: string }>({
     query: `SELECT ${prAttr("url")} AS url,
       argMin(session_uuid, ${first}) AS chain,
@@ -295,7 +303,7 @@ export async function readRunPrLinks(
       toString(argMin(ts, ${first})) AS first_ts
       FROM tacho_events FINAL
       WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
-        AND session_uuid IN {sessionUuids:Array(UUID)}
+        ${listed === null ? "" : `AND ${listed.sql}`}
         AND (session_uuid = {rootSessionUuid:UUID}
           OR root_session_uuid = {rootSessionUuid:UUID})
         AND (kind = 'oxagen:pr_link' OR attrs['pr.url'] != '')
@@ -305,7 +313,7 @@ export async function readRunPrLinks(
       LIMIT {limit:UInt32}`,
     params: {
       rootSessionUuid,
-      sessionUuids: [rootSessionUuid, ...subagentChains],
+      ...(listed === null ? {} : listed.params),
       limit: WORK_PR_LINK_CAP + 1,
     },
   });

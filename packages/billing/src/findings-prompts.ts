@@ -47,8 +47,9 @@ export type PromptFrameReader = (
 ) => Promise<ReadonlyMap<string, readonly PricedRequestFrame[]>>;
 
 /** One `turn_start` row as ClickHouse returns it. */
-interface PromptRow {
-  root_session_uuid: string;
+export interface PromptRow {
+  /** The run's root session uuid. */
+  root: string;
   seq: string | number;
   at: string;
   prompt_digest: string;
@@ -61,8 +62,14 @@ interface PromptRow {
  * The operator prompts of the window, on each run's own chain. A slash
  * command (`command_name` set) is left out: its text is a template the
  * harness already keeps, not an instruction pasted into the run.
+ *
+ * No alias names a stored column. ClickHouse reads a name in WHERE as the
+ * SELECT alias before the column, so `toString(root_session_uuid) AS
+ * root_session_uuid` turned `session_uuid = root_session_uuid` into a UUID
+ * compared with a String. ClickHouse refuses that comparison (NO_COMMON_TYPE),
+ * and the nightly findings pass failed on it from 2026-10-01 on (#5311).
  */
-export const PROMPTS_QUERY = `SELECT toString(root_session_uuid) AS root_session_uuid, seq,
+export const PROMPTS_QUERY = `SELECT toString(root_session_uuid) AS root, seq,
   formatDateTime(ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS at,
   prompt_digest, prompt_length, content_digest, bytes_ref
   FROM tacho_events FINAL
@@ -98,7 +105,8 @@ export async function promptTextMode(scope: Scope): Promise<PromptTextMode> {
     : "digest_only";
 }
 
-async function readPromptRows(
+/** The window's prompt rows, newest first, read in the workspace's tenant scope. */
+export async function readPromptRows(
   scope: Scope,
   window: { start: Date; end: Date },
 ): Promise<PromptRow[]> {
@@ -197,7 +205,7 @@ export async function readRunPrompts(
     readPromptRows(scope, window),
   ]);
   const kept = rows.flatMap((row) => {
-    const runId = runIdBySession.get(row.root_session_uuid);
+    const runId = runIdBySession.get(row.root);
     return runId !== undefined && runIds.has(runId) ? [{ row, runId }] : [];
   });
   const texts: (string | null)[] = kept.map(() => null);
@@ -225,7 +233,7 @@ export async function readRunPrompts(
     text: texts[i] ?? null,
   }));
   const rootByRun = new Map<string, string>();
-  for (const { row, runId } of kept) rootByRun.set(runId, row.root_session_uuid);
+  for (const { row, runId } of kept) rootByRun.set(runId, row.root);
   const priced = promptRunsToPrice(
     { mode, prompts },
     runIds,

@@ -78,7 +78,17 @@ import {
   systemContextPartSchema,
   type SystemContextPart,
 } from "@oxagen/recorder";
+import {
+  ARRAY_PARAM_VALUES_MAX,
+  ARRAY_PARAMS_MAX,
+  sessionListFilter,
+  splitArrayParam,
+} from "./array-params";
 import { clickhouse } from "./clickhouse";
+
+// The run readers outside this package (packages/handlers) bound their
+// session lists with these.
+export { sessionBatches, sessionListFilter } from "./array-params";
 
 /**
  * How a frame's cost is known. `estimated` is a frame a backfill rebuilt from
@@ -376,10 +386,54 @@ function classBucketServerToolRequests(rowAlias: string): string {
 const FRAME_SERVER_TOOL_REQUESTS = classBucketServerToolRequests("c");
 
 /**
- * The predicate that limits a wrapped run's read to its own chains, by the
- * table's sort key ({@link FrameRunRef}).
+ * Sessions one array parameter carries at most ({@link ARRAY_PARAM_VALUES_MAX}
+ * in ./array-params.ts). A run whose family held a few thousand subagent
+ * sessions failed every rollup and every findings pass on the URL field
+ * limit when its whole list went in one parameter (#5311).
  */
-const RUN_SESSIONS = "session_uuid IN {sessionUuids:Array(UUID)}";
+export const RUN_SESSIONS_PER_PARAM = ARRAY_PARAM_VALUES_MAX;
+
+/** Array parameters one read splits a run's sessions across at most. */
+export const RUN_SESSIONS_PARAMS_MAX = ARRAY_PARAMS_MAX;
+
+/**
+ * The sessions that carry a run's root in its workspace, named by ClickHouse
+ * itself. Every caller binds the three parameters it reads.
+ */
+const RUN_FAMILY_SESSIONS = `session_uuid IN (
+            SELECT session_uuid FROM tacho_events
+            WHERE org_id = {orgId:UUID}
+              AND workspace_id = {workspaceId:UUID}
+              AND root_session_uuid = {rootSessionUuid:UUID})`;
+
+/**
+ * The predicate that limits a wrapped run's read to its own chains, by the
+ * table's sort key ({@link FrameRunRef}), and the parameters it binds.
+ *
+ * Up to {@link RUN_SESSIONS_PER_PARAM} sessions bind as one array parameter,
+ * `sessionUuids`, as they always have. A longer list is split across
+ * `sessionUuids`, `sessionUuids1`, `sessionUuids2` and on, so no URL field
+ * passes the server's limit and the read still names each chain by the sort
+ * key. A list longer than {@link RUN_SESSIONS_PARAMS_MAX} parameters hold is
+ * not sent: the read takes the chains that carry the run's root in the
+ * workspace, which are every chain the root predicate already admits. That
+ * form costs a scan of the workspace's root column, so it is kept for a
+ * family too large to name in the URL.
+ *
+ * Three other ways were weighed and left out. The root subquery for every
+ * run brings back, on every read, the workspace scan #4103 removed. Raising
+ * the server's field limit is a fleet setting that moves the wall and leaves
+ * it. Writing the list into the SQL as literals hits the query size limit
+ * instead, and puts values in the query text that a parameter keeps out.
+ */
+export function runSessionsFilter(sessions: readonly string[]): {
+  sql: string;
+  params: Record<string, string[]>;
+} {
+  return (
+    sessionListFilter(sessions) ?? { sql: RUN_FAMILY_SESSIONS, params: {} }
+  );
+}
 
 /**
  * The sighting of a model call the loopback proxy sealed. It is the one
@@ -422,11 +476,13 @@ const RECORD_BASIS_VALUE = "attrs['oxagen.record_basis']";
  * call id, for the join named `alias` on `c.<key>`. Keyed on each id apart
  * for the reason the transcript joins are (`TRANSCRIPT_THINKING`). The
  * aliases differ from the column names so a grouped column is never read
- * back as its own aggregate.
+ * back as its own aggregate. `sessionsSql` is the run's
+ * {@link runSessionsFilter} predicate.
  */
 function proxySightingJoin(
   key: "request_id" | "message_id",
   alias: string,
+  sessionsSql: string,
 ): string {
   return `LEFT JOIN (
         SELECT
@@ -441,7 +497,7 @@ function proxySightingJoin(
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
-          AND ${RUN_SESSIONS}
+          AND ${sessionsSql}
           AND kind = 'llm_call'
           AND ${PROXY_SIGHTING}
         GROUP BY call_key
@@ -629,6 +685,7 @@ export async function readModelCallFrames(args: {
     }), consume);
   }
 
+  const sessions = runSessionsFilter(runSessions(run));
   const result = await ch.query({
     query: `
       SELECT
@@ -667,7 +724,7 @@ export async function readModelCallFrames(args: {
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
-          AND ${RUN_SESSIONS}
+          AND ${sessions.sql}
           AND kind = 'llm_call'
           AND source IN {sources:Array(String)}
           AND ${NOT_A_DUPLICATE}
@@ -683,7 +740,7 @@ export async function readModelCallFrames(args: {
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
-          AND ${RUN_SESSIONS}
+          AND ${sessions.sql}
           AND kind = 'llm_call'
           AND ${TRANSCRIPT_SPLIT_ROW}
         GROUP BY call_key
@@ -699,21 +756,21 @@ export async function readModelCallFrames(args: {
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
-          AND ${RUN_SESSIONS}
+          AND ${sessions.sql}
           AND kind = 'llm_call'
           AND ${TRANSCRIPT_SPLIT_ROW}
         GROUP BY call_key
         HAVING call_key != ''
       ) AS m ON m.call_key = c.message_id
-      ${proxySightingJoin("request_id", "r")}
-      ${proxySightingJoin("message_id", "q")}
+      ${proxySightingJoin("request_id", "r", sessions.sql)}
+      ${proxySightingJoin("message_id", "q", sessions.sql)}
       ORDER BY c.ts, c.seq
     `,
     query_params: {
       orgId: args.orgId,
       workspaceId: args.workspaceId,
       rootSessionUuid: run.rootSessionUuid,
-      sessionUuids: runSessions(run),
+      ...sessions.params,
       sources: TACHO_TOKEN_SOURCES,
       duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
     },
@@ -805,15 +862,72 @@ export interface GroupFrameRun {
 const GROUP_ROOTS = "root_session_uuid IN {rootSessionUuids:Array(UUID)}";
 
 /**
+ * The sessions that carry one of a group read's roots in its workspace,
+ * named by ClickHouse itself, as {@link RUN_FAMILY_SESSIONS} does for one run.
+ */
+const GROUP_FAMILY_SESSIONS = `session_uuid IN (
+            SELECT session_uuid FROM tacho_events
+            WHERE org_id = {orgId:UUID}
+              AND workspace_id = {workspaceId:UUID}
+              AND ${GROUP_ROOTS})`;
+
+/** One query of a group read: the roots it names and their sessions. */
+interface GroupFrameBatch {
+  roots: string[];
+  sessions: string[];
+}
+
+/**
+ * A group's runs in the batches one query reads each (#5311). A batch names
+ * at most {@link ARRAY_PARAM_VALUES_MAX} roots, so the roots fit one URL
+ * field, and at most {@link ARRAY_PARAM_VALUES_MAX} x
+ * {@link ARRAY_PARAMS_MAX} sessions, so the sessions fit the split
+ * {@link sessionListFilter} makes. A run with more sessions than that is read
+ * alone, and its batch names its chains by its root instead. Every row
+ * belongs to one run, and a run sits in one batch, so the batches' answers
+ * together are the one read's. A group that fits one query is one batch.
+ */
+function groupFrameBatches(
+  families: ReadonlyMap<string, ReadonlySet<string>>,
+): GroupFrameBatch[] {
+  const sessionsMax = ARRAY_PARAM_VALUES_MAX * ARRAY_PARAMS_MAX;
+  const out: GroupFrameBatch[] = [];
+  let batch: GroupFrameBatch = { roots: [], sessions: [] };
+  let named = new Set<string>();
+  for (const [root, sessions] of families) {
+    const added = [...sessions].filter((s) => !named.has(s));
+    if (
+      batch.roots.length > 0 &&
+      (batch.roots.length >= ARRAY_PARAM_VALUES_MAX ||
+        batch.sessions.length + added.length > sessionsMax)
+    ) {
+      out.push(batch);
+      batch = { roots: [], sessions: [] };
+      named = new Set();
+    }
+    batch.roots.push(root);
+    for (const s of sessions)
+      if (!named.has(s)) {
+        named.add(s);
+        batch.sessions.push(s);
+      }
+  }
+  if (batch.roots.length > 0) out.push(batch);
+  return out;
+}
+
+/**
  * A transcript-split join for a group read, on the request id (`t`) or the
  * message id (`m`). It is the run read's join over every run of the group,
  * keyed on the call id and the run's root session, so one run's call ids
  * never meet another run's. The root key holds a subagent's sightings
- * together, as the run read's root predicate does (ADR-168).
+ * together, as the run read's root predicate does (ADR-168). `sessionsSql`
+ * names the batch's sessions.
  */
 function groupTranscriptJoin(
   key: "request_id" | "message_id",
   alias: string,
+  sessionsSql: string,
 ): string {
   return `LEFT JOIN (
         SELECT
@@ -826,7 +940,7 @@ function groupTranscriptJoin(
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND ${GROUP_ROOTS}
-          AND ${RUN_SESSIONS}
+          AND ${sessionsSql}
           AND kind = 'llm_call'
           AND ${TRANSCRIPT_SPLIT_ROW}
         GROUP BY call_key, root_session_uuid
@@ -841,6 +955,7 @@ function groupTranscriptJoin(
 function groupProxySightingJoin(
   key: "request_id" | "message_id",
   alias: string,
+  sessionsSql: string,
 ): string {
   return `LEFT JOIN (
         SELECT
@@ -856,7 +971,7 @@ function groupProxySightingJoin(
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND ${GROUP_ROOTS}
-          AND ${RUN_SESSIONS}
+          AND ${sessionsSql}
           AND kind = 'llm_call'
           AND ${PROXY_SIGHTING}
         GROUP BY call_key, root_session_uuid
@@ -887,6 +1002,11 @@ function groupProxySightingJoin(
  * Every root the caller names has an entry, empty when the run has no frame.
  * A row that names no model is left out unless `keepModelless` keeps it, as
  * in the run read. Throws on a degraded store.
+ *
+ * A group too large for one request URL is read in batches of runs
+ * ({@link groupFrameBatches}), one query each (#5311). A group of 2,500 runs
+ * named every root and every session in two array parameters, far past
+ * ClickHouse's 128 KiB field limit.
  */
 export async function readGroupModelCallFrames(args: {
   orgId: string;
@@ -910,11 +1030,39 @@ export async function readGroupModelCallFrames(args: {
     });
   }
   if (sessionsByRoot.size === 0) return out;
-  const sessionUuids = new Set<string>();
-  for (const run of args.runs)
-    for (const session of runSessions(run)) sessionUuids.add(session);
+  // Each root once, with every session the runs that name it list.
+  const families = new Map<string, Set<string>>();
+  for (const run of args.runs) {
+    const family = families.get(run.rootSessionUuid) ?? new Set<string>();
+    for (const session of runSessions(run)) family.add(session);
+    families.set(run.rootSessionUuid, family);
+  }
 
   const ch = clickhouse();
+  for (const batch of groupFrameBatches(families)) {
+    const rows = await readGroupFrameBatch(ch, args, batch);
+    for (const r of rows) {
+      const run = sessionsByRoot.get(r.run_root.toLowerCase());
+      if (run === undefined || !run.sessions.has(r.session_uuid.toLowerCase()))
+        continue;
+      out.get(run.root)!.push(toWrappedFrameRow(r));
+    }
+  }
+  return out;
+}
+
+/** One batch of a group read: the rows of its runs, each with its root. */
+async function readGroupFrameBatch(
+  ch: ReturnType<typeof clickhouse>,
+  args: { orgId: string; workspaceId: string; keepModelless?: boolean },
+  batch: GroupFrameBatch,
+): Promise<(WrappedFrameDbRow & { run_root: string })[]> {
+  // The rows a chain outside its own run's list carries are dropped above, so
+  // naming the batch's chains by their roots returns the same frames.
+  const sessions = sessionListFilter(batch.sessions) ?? {
+    sql: GROUP_FAMILY_SESSIONS,
+    params: {},
+  };
   const result = await ch.query({
     query: `
       SELECT
@@ -955,39 +1103,30 @@ export async function readGroupModelCallFrames(args: {
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND ${GROUP_ROOTS}
-          AND ${RUN_SESSIONS}
+          AND ${sessions.sql}
           AND kind = 'llm_call'
           AND source IN {sources:Array(String)}
           AND ${NOT_A_DUPLICATE}
           ${args.keepModelless === true ? "" : "AND model != ''"}
       ) AS c
-      ${groupTranscriptJoin("request_id", "t")}
-      ${groupTranscriptJoin("message_id", "m")}
-      ${groupProxySightingJoin("request_id", "r")}
-      ${groupProxySightingJoin("message_id", "q")}
+      ${groupTranscriptJoin("request_id", "t", sessions.sql)}
+      ${groupTranscriptJoin("message_id", "m", sessions.sql)}
+      ${groupProxySightingJoin("request_id", "r", sessions.sql)}
+      ${groupProxySightingJoin("message_id", "q", sessions.sql)}
       ORDER BY c.root_session_uuid, c.ts, c.seq
     `,
     query_params: {
       orgId: args.orgId,
       workspaceId: args.workspaceId,
-      rootSessionUuids: [...out.keys()],
-      sessionUuids: [...sessionUuids],
+      rootSessionUuids: batch.roots,
+      ...sessions.params,
       sources: TACHO_TOKEN_SOURCES,
       duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
     },
     format: "JSONEachRow",
     clickhouse_settings: COST_FRAME_QUERY_SETTINGS,
   });
-  const rows = (await result.json()) as (WrappedFrameDbRow & {
-    run_root: string;
-  })[];
-  for (const r of rows) {
-    const run = sessionsByRoot.get(r.run_root.toLowerCase());
-    if (run === undefined || !run.sessions.has(r.session_uuid.toLowerCase()))
-      continue;
-    out.get(run.root)!.push(toWrappedFrameRow(r));
-  }
-  return out;
+  return (await result.json()) as (WrappedFrameDbRow & { run_root: string })[];
 }
 
 /**
@@ -1012,6 +1151,7 @@ export async function readTachoToolCallFrames(args: {
   sessionUuids: readonly string[];
 }, consume?: FrameConsumer<ToolCallFrameRow>): Promise<ToolCallFrameRow[]> {
   const ch = clickhouse();
+  const sessions = runSessionsFilter(runSessions(args));
   const result = await ch.query({
     query: `
       SELECT
@@ -1038,7 +1178,7 @@ export async function readTachoToolCallFrames(args: {
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
-          AND ${RUN_SESSIONS}
+          AND ${sessions.sql}
           AND kind = 'tool_call'
           AND source = 'hook'
       ) AS h
@@ -1048,7 +1188,7 @@ export async function readTachoToolCallFrames(args: {
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
-          AND ${RUN_SESSIONS}
+          AND ${sessions.sql}
           AND kind = 'tool_call'
           AND source = 'otel_span'
           AND tool_use_id != ''
@@ -1062,7 +1202,7 @@ export async function readTachoToolCallFrames(args: {
       orgId: args.orgId,
       workspaceId: args.workspaceId,
       rootSessionUuid: args.rootSessionUuid,
-      sessionUuids: runSessions(args),
+      ...sessions.params,
     },
     format: "JSONEachRow",
     clickhouse_settings: COST_FRAME_QUERY_SETTINGS,
@@ -1124,6 +1264,7 @@ export async function readTachoProgressFrames(args: {
   sessionUuids: readonly string[];
 }): Promise<ProgressFrameRow[]> {
   const ch = clickhouse();
+  const sessions = runSessionsFilter(runSessions(args));
   const result = await ch.query({
     query: `
       SELECT
@@ -1136,7 +1277,7 @@ export async function readTachoProgressFrames(args: {
       WHERE org_id = {orgId:UUID}
         AND workspace_id = {workspaceId:UUID}
         AND root_session_uuid = {rootSessionUuid:UUID}
-        AND ${RUN_SESSIONS}
+        AND ${sessions.sql}
         AND (
           (kind = 'tool_call' AND source = 'hook')
           OR kind = 'oxagen:file_changed'
@@ -1147,7 +1288,7 @@ export async function readTachoProgressFrames(args: {
       orgId: args.orgId,
       workspaceId: args.workspaceId,
       rootSessionUuid: args.rootSessionUuid,
-      sessionUuids: runSessions(args),
+      ...sessions.params,
     },
     format: "JSONEachRow",
   });
@@ -1536,8 +1677,29 @@ function noteObservedModelBoundHit(args: {
  * one interval, so grouping by this index groups every row whose price-book
  * answer could not have differed.
  */
-function bucketIndexExpr(tsColumn: string): string {
-  return `arrayCount(b -> b <= ${tsColumn}, {boundaries:Array(DateTime64(3))})`;
+function bucketIndexExpr(tsColumn: string, parts: readonly string[]): string {
+  // The list comes split across array parameters (#5311). The parts are
+  // disjoint, so their counts add up to the count over the whole list.
+  const counts = parts.map(
+    (name) => `arrayCount(b -> b <= ${tsColumn}, {${name}:Array(DateTime64(3))})`,
+  );
+  return counts.length === 1 ? counts[0]! : `(${counts.join(" + ")})`;
+}
+
+/**
+ * The price boundaries split into array parameters that each fit one URL
+ * field ({@link splitArrayParam}). The hourly price book sync can move a
+ * model's rate every hour, and about 3,600 boundaries fill one field, so one
+ * parameter was not enough. Throws past the URL budget with the count, where
+ * ClickHouse would refuse the request with a form error that names nothing.
+ */
+function boundaryParams(boundaries: readonly string[]): [string, string[]][] {
+  const split = splitArrayParam("boundaries", boundaries);
+  if (split === null)
+    throw new RangeError(
+      `readObservedModels: ${boundaries.length} price boundaries pass the request URL budget of ${ARRAY_PARAM_VALUES_MAX * ARRAY_PARAMS_MAX}`,
+    );
+  return split;
 }
 
 /**
@@ -1771,7 +1933,9 @@ export async function readObservedModels(args: {
     args.boundariesFor === undefined
       ? (args.boundaries ?? [])
       : await args.boundariesFor(models);
-  const boundaries = boundaryDates.map(chDateTime);
+  const boundarySplit = boundaryParams(boundaryDates.map(chDateTime));
+  const boundaryNames = boundarySplit.map(([name]) => name);
+  const boundaries = Object.fromEntries(boundarySplit);
   const gatewayCacheWrite = "toInt64(coalesce(cache_write_tokens, 0))";
   const tachoCacheWrite = "toInt64(coalesce(c.cache_creation_tokens, 0))";
   const tachoCache1h = classBucketCache1h("c", tachoCacheWrite);
@@ -1792,7 +1956,7 @@ export async function readObservedModels(args: {
         SELECT
           c.model                                                      AS model,
           c.provider                                                   AS provider,
-          ${bucketIndexExpr("c.ts")}                                    AS bucket_index,
+          ${bucketIndexExpr("c.ts", boundaryNames)}                     AS bucket_index,
           toInt64(coalesce(c.input_tokens, 0))                         AS input_uncached,
           toInt64(coalesce(c.cache_read_tokens, 0))                    AS cache_read,
           ${tachoCache5m}                                               AS cache_write_5m,
@@ -1858,7 +2022,7 @@ export async function readObservedModels(args: {
         SELECT
           toString(model)                                              AS model,
           toString(provider)                                           AS provider,
-          ${bucketIndexExpr("toDateTime64(created_at, 3, 'UTC')")}      AS bucket_index,
+          ${bucketIndexExpr("toDateTime64(created_at, 3, 'UTC')", boundaryNames)} AS bucket_index,
           toInt64(greatest(0, toInt64(input_tokens) - toInt64(cached_tokens) - ${gatewayCacheWrite})) AS input_uncached,
           toInt64(coalesce(cached_tokens, 0))                          AS cache_read,
           ${gatewayCacheWrite}                                         AS cache_write_5m,
@@ -1896,7 +2060,7 @@ export async function readObservedModels(args: {
       GROUP BY model, class, bucket_index
       ORDER BY model, class, bucket_index
     `,
-    query_params: { ...baseParams, models, boundaries },
+    query_params: { ...baseParams, models, ...boundaries },
     format: "JSONEachRow",
   });
   type ClassRow = {
@@ -1929,7 +2093,8 @@ export async function readObservedModels(args: {
           tachoWhere,
           workspace,
           until,
-          params: { ...baseParams, models, boundaries },
+          boundaryNames,
+          params: { ...baseParams, models, ...boundaries },
         })
       : null;
 
@@ -1959,13 +2124,15 @@ async function readCallBuckets(args: {
   tachoWhere: string;
   workspace: string;
   until: string;
+  /** The array parameters the price boundaries are split across. */
+  boundaryNames: readonly string[];
   params: Record<string, unknown>;
 }): Promise<Map<string, ObservedCallBucketRow[]>> {
   const tachoCte = `,
       tc AS (
         SELECT
           c.model                                   AS model,
-          ${bucketIndexExpr("c.ts")}                 AS bucket_index,
+          ${bucketIndexExpr("c.ts", args.boundaryNames)} AS bucket_index,
           toInt64(coalesce(c.cache_read_tokens, 0)) AS cache_read,
           c.ts                                      AS ts
         FROM (
@@ -1983,7 +2150,7 @@ async function readCallBuckets(args: {
       WITH gw AS (
         SELECT
           toString(model)                                         AS model,
-          ${bucketIndexExpr("toDateTime64(created_at, 3, 'UTC')")} AS bucket_index,
+          ${bucketIndexExpr("toDateTime64(created_at, 3, 'UTC')", args.boundaryNames)} AS bucket_index,
           toInt64(coalesce(cached_tokens, 0))                     AS cache_read,
           toDateTime64(created_at, 3, 'UTC')                      AS ts
         FROM metered_token_usage
