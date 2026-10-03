@@ -894,6 +894,19 @@ describe("the GitLab seam's merge-queue calls", () => {
     await expect(seam.holdsCommit(repo, head, moved)).resolves.toBe(false);
   });
 
+  it("reads the commit a branch shares with main, and none for a commit GitLab cannot find", async () => {
+    const { api, seam, repo, head } = await onBranch();
+    await expect(seam.mergeBase(repo, head, head)).resolves.toBe(head);
+    expect(api.restCalls).toEqual([]);
+    await expect(seam.mergeBase(repo, head, "c0")).resolves.toBe("c0");
+    // main moved after the branch was cut, so the two still share c0.
+    const moved = api.commit("main", "z", "1");
+    await expect(seam.mergeBase(repo, head, moved)).resolves.toBe("c0");
+    expect(api.restCalls).toContain("GET /repository/merge_base");
+    // GitLab answers 400 when it finds no merge base.
+    await expect(seam.mergeBase(repo, head, "missing")).resolves.toBeNull();
+  });
+
   it("reads a commit's parents, none for the first commit", async () => {
     const { api, seam, repo, head } = await onBranch();
     await expect(seam.commitParents(repo, head)).resolves.toEqual(["c0"]);

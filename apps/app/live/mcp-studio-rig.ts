@@ -12,7 +12,10 @@
  *
  * `mergeSteeringPullRequest` merges a steering PR through the proposal row its
  * opener wrote (#5122). `publishAgentFile` finds the agent file PR the host's
- * enrollment opened (#5149), which the suite then merges the same way.
+ * enrollment opened (#5149), which the suite then merges the same way. When
+ * Oxagen refuses a merge with checks_failed, `withSteeringCheckReport` adds
+ * the "Oxagen steering" check report to the error, because cleanup deletes
+ * the repository that holds it.
  *
  * Like the steering rig, it never prints a secret: the upstream token, the
  * relay token, and the gateway key stay out of every error message.
@@ -37,10 +40,12 @@ import type { ToolStudioDraftSaveOutput } from "@oxagen/oxagen/contracts/tool.st
 import type { ToolStudioReviewOpenOutput } from "@oxagen/oxagen/contracts/tool.studio.review.open";
 import {
   excerpt,
+  type GithubCheckRun,
   type GithubRig,
   HttpError,
   MCP_STUDIO_SUITE,
   mergeSteeringPr,
+  messageOf,
   MINUTE,
   newestRun,
   type Oxagen,
@@ -696,6 +701,67 @@ export function waitForSteeringCheck(gh: GithubRig, fullName: string, sha: strin
       return run.status === "completed" ? reached(run) : waiting(`status ${run.status}`);
     },
   );
+}
+
+/** The most of one check report a refusal's error carries. */
+const REPORT_MAX = 6000;
+
+/** One check run's report: its conclusion, then the title, summary, and text Oxagen wrote. */
+export function describeCheckRun(sha: string, run: GithubCheckRun): string {
+  const output = run.output ?? null;
+  const body = [output?.title, output?.summary, output?.text]
+    .filter((part): part is string => typeof part === "string" && part.trim() !== "")
+    .join("\n\n");
+  const shown = body.length > REPORT_MAX ? `${body.slice(0, REPORT_MAX)}\n(The report is cut here.)` : body;
+  return `The "Oxagen steering" check on ${sha} concluded ${run.conclusion ?? run.status}:\n${shown === "" ? "(no report)" : shown}`;
+}
+
+/**
+ * The newest "Oxagen steering" check report on each commit, one after the
+ * other. A commit with no check, or whose checks GitHub would not list, says
+ * so in place of a report.
+ */
+async function steeringCheckReports(gh: GithubRig, fullName: string, shas: readonly string[]): Promise<string> {
+  const parts: string[] = [];
+  for (const sha of new Set(shas)) {
+    try {
+      const run = newestRun(await gh.steeringCheckRuns(fullName, sha));
+      parts.push(run === null ? `No "Oxagen steering" check is on ${sha}.` : describeCheckRun(sha, run));
+    } catch (error) {
+      parts.push(`The "Oxagen steering" checks on ${sha} could not be read: ${messageOf(error)}`);
+    }
+  }
+  return parts.join("\n\n");
+}
+
+/**
+ * The error to throw for a refused merge. When Oxagen refused it
+ * checks_failed, the error also carries the "Oxagen steering" check report
+ * on each commit the refusal names, on the PR's head now, and on `heads`.
+ * The report holds the failing checks and their findings, and the
+ * workflow's cleanup deletes the test repository that holds it, so the
+ * suite reads it before the test ends. Any other error comes back as it was.
+ */
+export async function withSteeringCheckReport(
+  error: unknown,
+  gh: GithubRig,
+  fullName: string,
+  number: number,
+  heads: readonly string[],
+): Promise<Error> {
+  if (!(error instanceof HttpError) || error.status !== 409 || !error.message.includes("checks_failed")) {
+    return error instanceof Error ? error : new Error(messageOf(error));
+  }
+  const named = [...error.message.matchAll(/\b[0-9a-f]{40}\b/g)].map((match) => match[0]);
+  const shas = [...named, ...heads];
+  let headNow = "";
+  try {
+    shas.push((await gh.getPr(fullName, number)).head.sha);
+  } catch (readError) {
+    headNow = `\n\nPR #${String(number)} could not be read again: ${messageOf(readError)}`;
+  }
+  const report = await steeringCheckReports(gh, fullName, shas);
+  return new HttpError(error.status, `${error.message}${headNow}\n\n${report}`);
 }
 
 // ── MCP gateway ──────────────────────────────────────────────────────────────

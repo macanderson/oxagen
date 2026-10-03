@@ -41,6 +41,7 @@ import { logger } from "../logger";
 import { checkRunText } from "../tools.pr.open";
 import {
   assertHealthy,
+  checkBase,
   inMergeQueue,
   landSteeringPr,
   readSteeringLayout,
@@ -211,6 +212,33 @@ export function passedCheckNames(report: CheckReport): string[] {
   return report.results
     .filter((result) => result.status === "passed")
     .map((result) => result.check);
+}
+
+/**
+ * The checks that failed and the first error they found, as two sentences a
+ * merge refusal carries. A caller of the API reads why nothing merged without
+ * opening the check report on the host. Null when the report holds no error.
+ */
+export function failureSummary(report: CheckReport | null): string | null {
+  if (report === null) return null;
+  const errors = report.findings.filter(
+    (finding) => finding.severity === "error",
+  );
+  const first = errors[0];
+  if (first === undefined) return null;
+  const failed = report.results
+    .filter((result) => result.status === "failed")
+    .map((result) => result.check);
+  const names: string[] = failed.length > 0 ? failed : [first.check];
+  const checks =
+    names.length === 1
+      ? `The ${names[0]} check`
+      : `The ${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} checks`;
+  const count = errors.length === 1 ? "1 error" : `${errors.length} errors`;
+  const message = first.message.trim();
+  const text = /[.!?]$/.test(message) ? message : `${message}.`;
+  const where = first.path === "" ? "" : ` is in ${first.path}`;
+  return `${checks} found ${count}. The first error${where}: ${text}`;
 }
 
 export interface SteeringGovernanceInput {
@@ -641,14 +669,25 @@ export async function setSteeringGovernanceMode(
       approve: async () => approval,
       mergedBy: input.actingUserId,
       // The queue merged the production branch into the PR's branch. The
-      // checks compare the new head with the production head it now holds.
+      // checks compare the new head with the production head it now holds,
+      // or with the commit it shares with one that moved since.
       recheck: async (next) => {
-        const base = await host.branchHead(repo, repo.defaultBranch);
+        const main = await host.branchHead(repo, repo.defaultBranch);
         const again =
-          base === null ? null : await runGovernanceChecks(checks, next, base);
+          main === null
+            ? null
+            : await runGovernanceChecks(
+                checks,
+                next,
+                await checkBase(host, repo, next, main),
+              );
         return again === null
           ? { ok: false, checks: [] }
-          : { ok: again.passed, checks: passedCheckNames(again) };
+          : {
+              ok: again.passed,
+              checks: passedCheckNames(again),
+              failure: failureSummary(again),
+            };
       },
       publisher: await input.seams.publisher(input.scope, host),
       now: input.now,
