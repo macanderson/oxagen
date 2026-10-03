@@ -265,7 +265,7 @@ function RecordShelfCard({
         <div className="flex flex-wrap items-center gap-1.5">
           <span
             data-term="kind"
-            className={`inline-flex items-center gap-1 rounded-md border px-1.75 py-0.5 text-xs font-semibold uppercase tracking-[0.04em] ${face === null ? "border-border text-muted-foreground" : `${face.tile} ${face.ink}`}`}
+            className={`inline-flex items-center gap-1 rounded-md border px-1.75 py-0.5 text-xs font-semibold uppercase tracking-wider ${face === null ? "border-border text-muted-foreground" : `${face.tile} ${face.ink}`}`}
           >
             {record.kind === null ? null : (
               <KindIcon kind={record.kind} className="size-3" />

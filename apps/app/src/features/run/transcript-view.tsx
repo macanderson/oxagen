@@ -188,7 +188,7 @@ function lineClick(open: () => void): () => void {
  * color:var(--fg) }`.
  */
 const txs =
-  "flex min-w-0 flex-col font-mono text-sm leading-[1.65] text-foreground";
+  "flex min-w-0 flex-col font-mono text-sm leading-relaxed text-foreground";
 /** `.tx-tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:0 0 10px }` */
 const txTools = "flex flex-wrap items-center gap-2 pb-2.5";
 /**
@@ -302,7 +302,7 @@ const txProseLine = "min-w-0 truncate";
  * no chip carries two inks.
  */
 const chipShape =
-  "whitespace-nowrap rounded-sm border bg-card px-1.5 font-mono text-xs leading-[1.6] tabular-nums";
+  "whitespace-nowrap rounded-sm border bg-card px-1.5 font-mono text-xs leading-relaxed tabular-nums";
 const CHIP = {
   plain: `${chipShape} border-border text-muted-foreground`,
   ok: `${chipShape} border-border text-success`,

@@ -31,7 +31,7 @@ export const numericCell = `${cell} whitespace-nowrap text-right font-mono tabul
 
 /** `th { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--dim) }` */
 export const headCell =
-  "whitespace-nowrap bg-card px-3 py-2.25 text-xs font-semibold uppercase tracking-[0.09em] text-dim";
+  "whitespace-nowrap bg-card px-3 py-2.25 text-xs font-semibold uppercase tracking-widest text-dim";
 
 export function Table({
   label,

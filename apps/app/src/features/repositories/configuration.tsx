@@ -34,7 +34,7 @@ const MODE_TONE: Record<DeclaredGovernanceMode, BadgeTone> = {
 const DRIFT_COLUMNS = ["declared", "file", "live", "right"] as const;
 
 const fileBlock =
-  "max-h-90 overflow-auto rounded-xl border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-[1.6] text-foreground whitespace-pre";
+  "max-h-90 overflow-auto rounded-xl border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-relaxed text-foreground whitespace-pre";
 
 export function Configuration({
   mainFullName,

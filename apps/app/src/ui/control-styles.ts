@@ -139,7 +139,7 @@ export const panel =
  * in gold-as-ink.
  */
 export const eyebrow =
-  "text-xs font-semibold uppercase tracking-[0.14em] text-accent-text";
+  "text-xs font-semibold uppercase tracking-widest text-accent-text";
 
 /**
  * `.eyebrow.q { color:var(--muted) }`: the same caps line inside a panel,
@@ -147,7 +147,7 @@ export const eyebrow =
  * rather than gold.
  */
 export const eyebrowQuiet =
-  "text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground";
+  "text-sm font-semibold uppercase tracking-widest text-muted-foreground";
 
 export const mono = "font-mono";
 
@@ -176,7 +176,7 @@ export const kvValue = "m-0 min-w-0 text-foreground [overflow-wrap:anywhere]";
  * the badges around it do not.
  */
 export const linkChip =
-  "inline-flex min-w-0 max-w-full items-center gap-1.25 whitespace-nowrap rounded-md border border-border bg-hl px-1.75 py-0.5 text-xs font-semibold leading-normal tracking-[0.02em] text-muted-foreground transition-colors hover:border-gold hover:bg-hl hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+  "inline-flex min-w-0 max-w-full items-center gap-1.25 whitespace-nowrap rounded-md border border-border bg-hl px-1.75 py-0.5 text-xs font-semibold leading-normal tracking-wide text-muted-foreground transition-colors hover:border-gold hover:bg-hl hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
 /**
  * `.panel-h { padding:12px 16px; border-bottom:1px solid var(--border) }` and
@@ -203,9 +203,9 @@ export const panelBody = "px-4 py-3.5";
 export const statTile =
   "flex min-w-0 flex-col rounded-2xl border border-border bg-card px-3.75 py-3.25 text-card-foreground max-md:px-3 max-md:py-2.75";
 export const statTerm =
-  "mb-1.25 text-xs font-semibold uppercase tracking-[0.1em] text-dim";
+  "mb-1.25 text-xs font-semibold uppercase tracking-widest text-dim";
 export const statValue =
-  "text-xl font-bold leading-[1.15] tracking-[-0.02em] tabular-nums max-md:text-lg";
+  "text-xl font-bold leading-tight tracking-display tabular-nums max-md:text-lg";
 export const statNote = "mt-0.75 text-xs text-muted-foreground";
 /**
  * `.grid.g4 { grid-template-columns:repeat(auto-fit,minmax(175px,1fr)); gap:14px }`,
@@ -224,9 +224,9 @@ export const runStatStrip =
 export const runStatTile =
   "flex min-w-0 flex-col rounded-2xl border border-border bg-card px-2.75 py-2.25 text-card-foreground";
 export const runStatTerm =
-  "mb-1.25 text-xs font-semibold uppercase tracking-[0.1em] text-dim";
+  "mb-1.25 text-xs font-semibold uppercase tracking-widest text-dim";
 export const runStatValue =
-  "text-lg font-bold leading-[1.15] tracking-[-0.02em] tabular-nums";
+  "text-lg font-bold leading-tight tracking-display tabular-nums";
 export const runStatNote = "mt-0.75 text-xs text-muted-foreground";
 export const statStrip =
   "grid grid-cols-2 gap-3.5 md:[grid-template-columns:repeat(auto-fit,minmax(175px,1fr))]";

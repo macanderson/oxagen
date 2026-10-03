@@ -18,7 +18,7 @@ export function BillableUnits() {
             data-unit={unit}
             className="relative flex flex-col gap-1 pl-6 before:absolute before:left-1 before:top-1.5 before:size-2 before:rounded-full before:bg-gold"
           >
-            <span className="text-xs font-semibold uppercase tracking-[0.1em] text-dim">
+            <span className="text-xs font-semibold uppercase tracking-widest text-dim">
               {t(unit)}
             </span>
             <span className="text-base text-foreground">{t(`${unit}Body`)}</span>

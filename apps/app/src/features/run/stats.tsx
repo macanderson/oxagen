@@ -214,7 +214,7 @@ export function SummaryPanel({
       ) : (
         <p
           data-testid="generated-summary"
-          className="mb-2.5 mt-3 max-w-measure text-base leading-[1.55] text-foreground"
+          className="mb-2.5 mt-3 max-w-measure text-base leading-normal text-foreground"
         >
           {shownSummary(summary.text)}
         </p>

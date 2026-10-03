@@ -158,7 +158,7 @@ export function RunTimeline({
         {/* `.rt-turns { position:relative; height:16px; font-family:var(--mono); font-size:10px; color:var(--dim); letter-spacing:.06em; text-transform:uppercase }` */}
         <div
           aria-hidden="true"
-          className="relative h-4 font-mono text-xs uppercase tracking-[0.06em] text-dim"
+          className="relative h-4 font-mono text-xs uppercase tracking-wider text-dim"
         >
           {bands.map((band) => (
             <span

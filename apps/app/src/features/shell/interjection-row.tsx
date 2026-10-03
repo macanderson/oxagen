@@ -72,7 +72,7 @@ export function InterjectionRow({
         />
       )}
       <span className="min-w-0 flex-1">
-        <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <span className="block text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           {t("interjection.kind")}
         </span>
         <b className="block text-sm font-semibold">

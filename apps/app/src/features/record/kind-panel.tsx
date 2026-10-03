@@ -44,7 +44,7 @@ const strong = (chunks: ReactNode) => <b>{chunks}</b>;
 
 /** `.eyebrow.q`: a panel's section eyebrow. */
 const sectionEyebrow =
-  "mb-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground";
+  "mb-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground";
 
 /** `.kv`: a two-column definition list. */
 const kv =
@@ -319,7 +319,7 @@ function ConstraintPanel({
       >
         <span
           data-word=""
-          className="font-mono text-sm font-semibold uppercase tracking-[0.06em]"
+          className="font-mono text-sm font-semibold uppercase tracking-wider"
         >
           {constraintEffect ?? t("effectUnknownWord")}
         </span>

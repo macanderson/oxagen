@@ -485,7 +485,7 @@ function RunRowView({
               }}
               data-touch-target=""
               title={title ?? undefined}
-              className="block truncate text-sm text-foreground hover:underline max-md:leading-[44px]"
+              className="block truncate text-sm text-foreground hover:underline max-md:leading-11"
             >
               {title ?? t("untitled")}
             </SafeLink>

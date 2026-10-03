@@ -161,7 +161,7 @@ function CustomerKey({
 function MintedKey({ orgName }: { orgName: string }) {
   const t = useTranslations("organization.modelFunding.funding");
   const heading =
-    "text-xs font-semibold uppercase tracking-[0.09em] text-dim";
+    "text-xs font-semibold uppercase tracking-widest text-dim";
   return (
     <div className="flex flex-col gap-4" data-issue="4005">
       <p className="text-sm text-dim">{t("minted.unrecorded")}</p>
@@ -252,7 +252,7 @@ function Reconciliation() {
     >
       <h4
         id="funding-reconciliation"
-        className="mb-2 text-xs font-semibold uppercase tracking-[0.09em] text-dim"
+        className="mb-2 text-xs font-semibold uppercase tracking-widest text-dim"
       >
         {t("title")}
       </h4>
