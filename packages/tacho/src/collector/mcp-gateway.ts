@@ -218,7 +218,11 @@ export interface GatewayCallRecord {
   toolUseId?: string;
   status: "ok" | "error" | "rejected";
   durationMs: number;
-  /** Set when the control plane refused the call. */
+  /**
+   * What the control plane said when it refused the call or the call failed:
+   * a JSON-RPC error's message, or a failed tool result's text. Only a
+   * refusal seals it, as a digest.
+   */
   refusedReason?: string;
   /**
    * The rules that refused it, from a -32002 refusal's `error.data.ruleIds`,
@@ -474,18 +478,65 @@ export function answerFor(
 }
 
 /**
+ * The start of each message the kernel throws when an IAM decision refuses a
+ * call, in `packages/oxagen/src/kernel.ts`: the deny (`IAM denied "<name>" for
+ * principal: ...`, which is also how a gateway key's `machineKeyDenial`
+ * arrives) and `pending_approval` (`IAM requires approval for "<name>" ...`).
+ * The kernel records both as a deny, because the call did not run. Its other
+ * `authz_denied` messages are not decisions about the call, such as an IAM
+ * check that errored and failed closed, so they stay `error`.
+ */
+const KERNEL_REFUSAL_PREFIXES = [
+  'IAM denied "',
+  'IAM requires approval for "',
+] as const;
+
+/**
+ * The text of a `tools/call` result that reports a failure (`isError: true`),
+ * its text blocks joined by newlines, or undefined when the result is not
+ * one.
+ *
+ * MCP puts a tool's failure here, not in a JSON-RPC error. The hosted server's
+ * tools throw, and the MCP SDK's `createToolError` answers HTTP 200 with
+ * `{ content: [{ type: "text", text: <the error's message> }], isError: true }`.
+ */
+export function toolErrorTextOf(result: unknown): string | undefined {
+  if (result === null || typeof result !== "object") return undefined;
+  const { isError, content } = result as {
+    isError?: unknown;
+    content?: unknown;
+  };
+  if (isError !== true) return undefined;
+  if (!Array.isArray(content)) return "";
+  return content
+    .flatMap((block: unknown) => {
+      if (block === null || typeof block !== "object") return [];
+      const { type, text } = block as { type?: unknown; text?: unknown };
+      return type === "text" && typeof text === "string" ? [text] : [];
+    })
+    .join("\n");
+}
+
+/**
  * What a forwarded answer was, in the three words the record uses.
  *
  * `rejected` means **Oxagen refused this call**, because the daemon seals a
  * rejection as a `policy_decision` with `policy_decision: "deny"` and
- * `policy_source: "kernel"` and the desktop counts it as refused. So only the
- * refusal code earns it: `-32002` is the code the control plane answers a
- * governance denial with, and the one this gateway uses for its own.
+ * `policy_source: "kernel"` and the desktop counts it as refused. Two answers
+ * earn it. One is a JSON-RPC error with `-32002`, the code this gateway uses
+ * for its own refusals. The other is a failed tool result whose text is the
+ * kernel's IAM refusal. The hosted server sends no `-32002` and marks no
+ * refusal: the kernel's message is the only sign of one, so it is read by
+ * its first words. A refusal whose wording drifts is recorded as `error`,
+ * never as `ok`. A marker the server sets on a refusal would replace this.
  *
- * Every other JSON-RPC error is the tool failing, not the mandate speaking —
- * an unknown tool name, arguments that do not validate, a handler that threw.
+ * Every other failure is the tool failing, not the mandate speaking — an
+ * unknown tool name, arguments that do not validate, a handler that threw.
  * Filing those as refusals invents governance decisions nobody made and
- * inflates the refused count on the machine's own screen with them.
+ * inflates the refused count on the machine's own screen with them. So a
+ * JSON-RPC error with any other code is an `error`, and so is a result that
+ * reports `isError: true` for any other reason. Reading that result as
+ * success recorded every failed call as a call that worked.
  *
  * A non-2xx HTTP status with no JSON-RPC error in the body is an `error` too,
  * and explicitly so: reading "no `error` member" as success recorded a control
@@ -498,7 +549,11 @@ export function outcomeOf(
   if (rpc?.error !== undefined)
     return rpc.error.code === RPC_REFUSED ? "rejected" : "error";
   if (status < 200 || status >= 300) return "error";
-  return "ok";
+  const failure = toolErrorTextOf(rpc?.result);
+  if (failure === undefined) return "ok";
+  return KERNEL_REFUSAL_PREFIXES.some((prefix) => failure.startsWith(prefix))
+    ? "rejected"
+    : "error";
 }
 
 /** The most rules one refusal names, and the longest each may be: the envelope's bounds. */
@@ -816,12 +871,16 @@ export function createMcpGateway(deps: McpGatewayDeps): McpGateway {
         }
       }
 
+      // A failed tool result carries its reason as text, where a JSON-RPC
+      // error carries it as a message. A refusal seals only its digest.
+      const failure = toolErrorTextOf(rpc?.result);
       recordCall(
         request,
         context,
         outcomeOf(response.status, rpc),
         now() - startedAt,
-        rpc?.error?.message,
+        rpc?.error?.message ??
+          (failure === undefined || failure === "" ? undefined : failure),
         rpc,
       );
       return response;
@@ -911,11 +970,16 @@ function exchangeOf(
  * One half of a call as its JCS text and the value behind it, or nothing when
  * there is no half and nothing when it has no JCS form.
  *
- * A tool argument or result carrying a value RFC 8785 cannot canonicalise (a
- * non-finite number is the one that occurs) would otherwise throw out of
- * `recordCall` and take the forward's answer with it. The gateway stands in
- * the caller's path, so the call is served and the frame says less, rather
- * than the call failing over its own evidence.
+ * A tool argument or result carrying a value RFC 8785 cannot canonicalise
+ * would otherwise throw out of `recordCall` and take the forward's answer
+ * with it. The gateway stands in the caller's path, so the call is served and
+ * the frame says less, rather than the call failing over its own evidence.
+ *
+ * A non-finite number is the one that occurs: `JSON.parse` reads `1e400` as
+ * `Infinity`. RFC 8785 has no form for it, but `jcs` does not throw on it. It
+ * writes `null`, so the digest would name a value the client never sent, and
+ * two different calls would share it. So this checks for one first and drops
+ * the half, as it does for a value `jcs` throws on.
  */
 function canonical(
   value: unknown,
@@ -923,6 +987,12 @@ function canonical(
   half: string,
 ): { value: JsonValue; text: string } | undefined {
   if (value === undefined) return undefined;
+  if (holdsNonFiniteNumber(value)) {
+    log(
+      `mcp gateway recorded a call without its ${half}: it holds a number JSON has no form for`,
+    );
+    return undefined;
+  }
   try {
     return { value: value as JsonValue, text: jcs(value as JsonValue) };
   } catch (error) {
@@ -931,6 +1001,16 @@ function canonical(
     );
     return undefined;
   }
+}
+
+/** Whether a parsed value holds, at any depth, `Infinity`, `-Infinity` or `NaN`. */
+function holdsNonFiniteNumber(value: unknown): boolean {
+  if (typeof value === "number") return !Number.isFinite(value);
+  if (value === null || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some(holdsNonFiniteNumber);
+  return Object.values(value as Record<string, unknown>).some(
+    holdsNonFiniteNumber,
+  );
 }
 
 function clientNameOf(

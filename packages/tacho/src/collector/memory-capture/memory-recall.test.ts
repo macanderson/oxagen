@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { digestBytes } from "../../digest";
+import { redactionMarker } from "../../evidence/redaction";
 import type { FetchLike } from "../../host/control-client";
 import {
   createMemoryRecall,
@@ -102,6 +103,9 @@ function recall(fetch: FetchLike, options: { timeoutMs?: number } = {}) {
     },
   };
 }
+
+/** A GitHub token's shape, as the redaction tests write it. */
+const GITHUB_TOKEN = "ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD";
 
 const REMOTE = digestBytes("github.com/acme/widgets");
 const FOLDED = digestBytes("github.com/acme/widgets.folded");
@@ -239,6 +243,30 @@ describe("a recall", () => {
     });
     const body = calls[0]?.body as { text: string };
     expect(body.text).toHaveLength(MEMORY_RECALL_TEXT_MAX_CHARS);
+  });
+
+  it("sends a credential in the prompt as its redaction marker", async () => {
+    const body = await sent({
+      ...REQUEST,
+      text: `Push with ${GITHUB_TOKEN} please`,
+    });
+    expect(body.text).toBe(
+      `Push with ${redactionMarker("github_token")} please`,
+    );
+  });
+
+  it("redacts the prompt before it cuts it, so no part of a secret at the cut is sent", async () => {
+    // The token starts 10 characters before the cut. Cut first, its first
+    // 10 characters are too few for the detector, and they would be sent.
+    const head = `${"x".repeat(MEMORY_RECALL_TEXT_MAX_CHARS - 11)} `;
+    const body = await sent({ ...REQUEST, text: `${head}${GITHUB_TOKEN}` });
+    expect(body.text).toBe(
+      `${head}${redactionMarker("github_token")}`.slice(
+        0,
+        MEMORY_RECALL_TEXT_MAX_CHARS,
+      ),
+    );
+    expect(body.text).not.toContain("ghp_");
   });
 
   it("never ends the cut prompt on half a surrogate pair", async () => {
