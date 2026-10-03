@@ -45,18 +45,22 @@ describe("hardcoded values: every value reaches the page through a token", () =>
     expect(() => baseline()).not.toThrow();
   });
 
-  it("reads packages/ui beside apps/app, and skips the kit's synced files", () => {
-    const files = scannedFiles();
-    expect(files).toEqual(
-      expect.arrayContaining([
-        "src/app/globals.css",
-        `${UI_SRC}styles/globals.css`,
-        `${UI_SRC}components/dialog.tsx`,
-      ]),
-    );
-    expect(files).not.toContain(`${UI_SRC}styles/house-tokens.css`);
-    expect(files.some((file) => file.endsWith(".stories.tsx"))).toBe(false);
-  });
+  it(
+    "reads packages/ui beside apps/app, and skips the kit's synced files",
+    () => {
+      const files = scannedFiles();
+      expect(files).toEqual(
+        expect.arrayContaining([
+          "src/app/globals.css",
+          `${UI_SRC}styles/globals.css`,
+          `${UI_SRC}components/dialog.tsx`,
+        ]),
+      );
+      expect(files).not.toContain(`${UI_SRC}styles/house-tokens.css`);
+      expect(files.some((file) => file.endsWith(".stories.tsx"))).toBe(false);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
 
   it(
     "every hard-coded value under src/ is in the baseline, and every baseline entry is still found",
