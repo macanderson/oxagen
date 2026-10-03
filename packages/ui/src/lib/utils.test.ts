@@ -56,8 +56,9 @@ describe("cn", () => {
 // size. tailwind-merge's default config read them as a text colour, so a
 // colour class in the same list dropped them (oxageninc/brand#75, #5185).
 describe("cn with the house type utilities", () => {
-  // Every utility house-tailwind.css defines, so a step the brand sync adds
-  // fails the cases below until house-type-merge.ts names it too.
+  // Every utility house-tailwind.css defines. house-type-merge.ts reads its
+  // list from the kit's house-type-utilities.json, so the cases below fail
+  // when the kit's CSS and JSON disagree on a step.
   const css = readFileSync(new URL("../styles/house-tailwind.css", import.meta.url), "utf8");
   const UTILITIES = [...css.matchAll(/@utility (text-[am]-[a-z0-9]+)\s/g)].map((m) => m[1] as string);
 
