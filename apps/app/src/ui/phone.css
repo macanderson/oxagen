@@ -10,8 +10,8 @@
 @media (width < 48rem) {
   /* Touch targets are 44px or larger. */
   [data-touch-target] {
-    min-height: 44px;
-    min-width: 44px;
+    min-height: calc(var(--spacing) * 11);
+    min-width: calc(var(--spacing) * 11);
   }
 
   /* A tab row that scrolls sideways snaps each tab to its start
@@ -35,7 +35,7 @@
 
   /* The fixed thumb bar clears the home indicator. */
   [data-thumb-bar] {
-    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+    padding-bottom: calc(var(--spacing) * 1.5 + env(safe-area-inset-bottom));
   }
 
   /* Dialogs rise from the bottom edge as sheets. */
@@ -44,7 +44,7 @@
     translate: none;
     width: 100%;
     max-width: none;
-    max-height: calc(100dvh - 24px);
+    max-height: calc(100dvh - var(--spacing) * 6);
     border-radius: var(--ox-radius-4xl) var(--ox-radius-4xl) 0 0;
     border-bottom-width: 0;
     padding-bottom: calc(0px + env(safe-area-inset-bottom));
@@ -80,7 +80,7 @@
 
   table[data-cards] tbody {
     display: grid;
-    gap: 8px;
+    gap: calc(var(--spacing) * 2);
   }
 
   table[data-cards] tr {
@@ -88,7 +88,7 @@
     grid-template-columns: minmax(0, 1fr);
     border: 1px solid var(--border);
     border-radius: var(--ox-radius-card);
-    padding: 6px 12px;
+    padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 3);
   }
 
   table[data-cards] td,
@@ -97,12 +97,12 @@
     align-items: center;
     justify-content: flex-end;
     flex-wrap: wrap;
-    gap: 8px;
-    min-height: 34px;
+    gap: calc(var(--spacing) * 2);
+    min-height: calc(var(--spacing) * 8.5);
     min-width: 0;
     max-width: none;
     overflow-wrap: anywhere;
-    padding: 7px 0;
+    padding: calc(var(--spacing) * 1.75) 0;
     white-space: normal;
     /* A hairline rules each cell off from the next, as on a printed card. */
     border-bottom-width: 1px;
@@ -126,7 +126,7 @@
 
   table[data-cards] td:first-child,
   table[data-cards] th[scope="row"]:first-child {
-    padding-top: 9px;
+    padding-top: calc(var(--spacing) * 2.25);
   }
 
   table[data-cards] td:first-child::before,

@@ -10,6 +10,8 @@
   box-shadow: var(--shadow-pop);
   padding: calc(var(--ox-space) * 2);
   width: 100%;
+  max-width: 38%;
+  max-height: 68vh;
   margin: 0;
   animation: fade-in var(--motion-base) var(--ease-entry) both;
   animation: none;

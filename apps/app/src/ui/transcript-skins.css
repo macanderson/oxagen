@@ -11,19 +11,24 @@
  * the same element wins.
  */
 @layer components {
+  /* One terminal column: the transcript measures its indents and gaps in
+     characters, as a terminal does. */
+  :root {
+    --tx-col: 1ch;
+  }
   /* The replay bar: the transport, the scrubber, and the time. */
   .rpbar {
     position: sticky;
-    top: calc(53px + env(safe-area-inset-top, 0px));
+    top: calc(var(--spacing) * 13.25 + env(safe-area-inset-top, 0px));
     z-index: 20;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
-    margin-bottom: 12px;
-    padding: 7px 10px;
+    gap: calc(var(--spacing) * 1.5);
+    margin-bottom: calc(var(--spacing) * 3);
+    padding: calc(var(--spacing) * 1.75) calc(var(--spacing) * 2.5);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--ox-radius-2xl);
     background: color-mix(in srgb, var(--panel) 94%, transparent);
     backdrop-filter: blur(10px);
   }
@@ -31,17 +36,17 @@
     position: relative;
     flex: 1 1 200px;
     min-width: 0;
-    height: 30px;
-    margin: 0 6px;
+    height: calc(var(--spacing) * 7.5);
+    margin: 0 calc(var(--spacing) * 1.5);
   }
   .rp-rail {
     position: absolute;
     inset-inline: 0;
-    top: 12px;
-    height: 6px;
+    top: calc(var(--spacing) * 3);
+    height: calc(var(--spacing) * 1.5);
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: 3px;
+    border-radius: var(--ox-radius-xs);
     background: var(--hl);
     pointer-events: none;
   }
@@ -53,10 +58,10 @@
   }
   .rp-marks i {
     position: absolute;
-    top: 9px;
-    width: 2px;
-    height: 12px;
-    border-radius: 1px;
+    top: calc(var(--spacing) * 2.25);
+    width: calc(var(--spacing) * 0.5);
+    height: calc(var(--spacing) * 3);
+    border-radius: var(--ox-radius-xs);
     transform: translateX(-1px);
     pointer-events: none;
   }
@@ -64,8 +69,8 @@
     background: var(--fg);
   }
   .rp-marks .m-tool {
-    top: 11px;
-    height: 8px;
+    top: calc(var(--spacing) * 2.75);
+    height: calc(var(--spacing) * 2);
     background: var(--rule);
   }
   .rp-marks .m-err {
@@ -75,39 +80,39 @@
     position: absolute;
     inset: 0;
     width: 100%;
-    height: 30px;
+    height: calc(var(--spacing) * 7.5);
     margin: 0;
     background: transparent;
     cursor: pointer;
     appearance: none;
   }
   .rp-range::-webkit-slider-runnable-track {
-    height: 30px;
+    height: calc(var(--spacing) * 7.5);
     background: transparent;
   }
   .rp-range::-moz-range-track {
-    height: 30px;
+    height: calc(var(--spacing) * 7.5);
     background: transparent;
   }
   .rp-range::-webkit-slider-thumb {
-    width: 14px;
-    height: 14px;
-    margin-top: 8px;
+    width: calc(var(--spacing) * 3.5);
+    height: calc(var(--spacing) * 3.5);
+    margin-top: calc(var(--spacing) * 2);
     border: 2px solid var(--panel);
     border-radius: 50%;
     background: var(--gold);
-    box-shadow: 0 0 0 1px var(--gold);
+    box-shadow: 0 0 0 calc(var(--spacing) * 0.25) var(--gold);
     appearance: none;
   }
   .rp-range::-moz-range-thumb {
-    width: 14px;
-    height: 14px;
+    width: calc(var(--spacing) * 3.5);
+    height: calc(var(--spacing) * 3.5);
     border: 2px solid var(--panel);
     border-radius: 50%;
     background: var(--gold);
   }
   .rp-range:focus-visible {
-    border-radius: 6px;
+    border-radius: var(--ox-radius-md);
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
@@ -115,7 +120,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    min-width: 64px;
+    min-width: calc(var(--spacing) * 16);
     font-family: var(--mono);
     font-size: var(--ox-a-2xs);
     line-height: 1.3;
@@ -147,11 +152,11 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px 10px;
+    gap: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2.5);
     min-width: 0;
-    padding: 8px 12px;
+    padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
     border: 1px solid var(--t-line);
-    border-radius: 10px 10px 0 0;
+    border-radius: var(--ox-radius-xl) var(--ox-radius-xl) 0 0;
     background: var(--t-bar);
     font-size: var(--ox-a-micro);
     color: var(--t-dim);
@@ -159,13 +164,13 @@
   .term-dots {
     display: flex;
     flex: none;
-    gap: 6px;
+    gap: calc(var(--spacing) * 1.5);
   }
   /* The window lights are the kit's zinc rule, on paper and on ink. The
      macOS red, amber, and green were not house values (#4804). */
   .term-dots i {
-    width: 10px;
-    height: 10px;
+    width: calc(var(--spacing) * 2.5);
+    height: calc(var(--spacing) * 2.5);
     border-radius: 50%;
     background: light-dark(var(--ox-paper-rule), var(--ox-rule));
   }
@@ -178,7 +183,7 @@
     white-space: nowrap;
   }
   .term-t b {
-    margin-right: 1ch;
+    margin-right: calc(var(--tx-col) * 1);
     font-weight: 700;
     color: var(--t-fg);
   }
@@ -186,19 +191,19 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 5px;
+    gap: calc(var(--spacing) * 1.25);
     font-family: var(--mono);
     font-size: var(--ox-a-2xs);
   }
   .rp-body {
-    max-height: clamp(440px, calc(100vh - 262px), 1000px);
+    max-height: clamp(var(--spacing) * 110, calc(100vh - var(--spacing) * 65.5), var(--spacing) * 250);
     overflow-y: auto;
     overscroll-behavior: contain;
   }
   .tg {
     min-width: 0;
     overflow: hidden;
-    padding: 8px 10px 0 0;
+    padding: calc(var(--spacing) * 2) calc(var(--spacing) * 2.5) 0 0;
     font-family: var(--mono);
     font-size: var(--ox-a-2xs);
     font-variant-numeric: tabular-nums;
@@ -208,7 +213,7 @@
   }
   .tc {
     min-width: 0;
-    padding: 6px 16px 2px calc(16px + var(--depth, 0) * 2ch);
+    padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 4) calc(var(--spacing) * 0.5) calc(var(--spacing) * 4 + var(--depth, 0) * var(--tx-col) * 2);
     border-inline: 1px solid var(--t-line);
     background: var(--t-bg);
     font-size: var(--ox-a-micro);
@@ -227,9 +232,9 @@
     flex-wrap: wrap;
     align-content: flex-start;
     align-items: baseline;
-    gap: 4px 5px;
+    gap: calc(var(--spacing) * 1) calc(var(--spacing) * 1.25);
     min-width: 0;
-    padding: 7px 0 4px 12px;
+    padding: calc(var(--spacing) * 1.75) 0 calc(var(--spacing) * 1) calc(var(--spacing) * 3);
     font-family: var(--font);
     font-size: var(--ox-a-2xs);
     color: var(--muted);
@@ -240,19 +245,19 @@
     text-overflow: ellipsis;
   }
   .tr-banner .tc {
-    padding-top: 12px;
+    padding-top: calc(var(--spacing) * 3);
   }
   .tr-foot .tc {
-    padding-bottom: 14px;
+    padding-bottom: calc(var(--spacing) * 3.5);
     border-bottom: 1px solid var(--t-line);
-    border-radius: 0 0 10px 10px;
+    border-radius: 0 0 var(--ox-radius-xl) var(--ox-radius-xl);
   }
 
   /* The margin: what Oxagen adds beside the harness's own lines. */
   .mg-cost {
-    padding: 1px 7px;
+    padding: calc(var(--spacing) * 0.25) calc(var(--spacing) * 1.75);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--ox-radius-md);
     background: var(--panel);
     font-family: var(--mono);
     font-size: var(--ox-a-2xs);
@@ -269,7 +274,7 @@
   }
   .mg-gap {
     flex-basis: 100%;
-    padding-top: 3px;
+    padding-top: calc(var(--spacing) * 0.75);
     border-top: 1px dashed var(--rule);
     font-style: italic;
     color: var(--dim);
@@ -319,7 +324,7 @@
     content: none;
   }
   .tx-call[data-state="run"]::before {
-    animation: tx-blink 1s steps(2, start) infinite;
+    animation: tx-blink var(--motion-blink) var(--ease-blink) infinite;
   }
   .tx-call[data-state="ask"]::before {
     color: var(--t-ask);
@@ -346,7 +351,7 @@
   .tx-head {
     display: flex;
     align-items: baseline;
-    gap: 1ch;
+    gap: calc(var(--tx-col) * 1);
     min-width: 0;
     cursor: pointer;
   }
@@ -371,7 +376,7 @@
   .tx-recall-items {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 2px 12px;
+    gap: calc(var(--spacing) * 0.5) calc(var(--spacing) * 3);
     font-size: var(--ox-a-2xs);
     color: var(--t-dim);
   }
@@ -397,7 +402,7 @@
     position: relative;
     min-width: 0;
     margin-left: var(--g-w);
-    padding-left: 3ch;
+    padding-left: calc(var(--tx-col) * 3);
     color: var(--t-dim);
   }
   .tx-res::before {
@@ -410,7 +415,7 @@
     content: none;
   }
   .tx-out {
-    max-height: 320px;
+    max-height: calc(var(--spacing) * 80);
     margin: 0;
     overflow: auto;
     font: inherit;
@@ -419,19 +424,19 @@
   }
   .tx-diff {
     min-width: 0;
-    margin: 2px 0 4px;
+    margin: calc(var(--spacing) * 0.5) 0 calc(var(--spacing) * 1);
   }
   .tx-dpath {
     display: flex;
     flex-wrap: wrap;
-    gap: 1ch;
+    gap: calc(var(--tx-col) * 1);
   }
   .tx-dpath b {
     font-weight: 700;
     color: var(--t-fg);
   }
   .tx-dlines {
-    max-height: 320px;
+    max-height: calc(var(--spacing) * 80);
     overflow: auto;
   }
   .tx-dl {
@@ -441,15 +446,15 @@
   }
   .tx-dn {
     flex: none;
-    min-width: 4ch;
-    margin-right: 1ch;
+    min-width: calc(var(--tx-col) * 4);
+    margin-right: calc(var(--tx-col) * 1);
     text-align: right;
     color: var(--t-dim);
     user-select: none;
   }
   .tx-ds {
     flex: none;
-    width: 2ch;
+    width: calc(var(--tx-col) * 2);
   }
   .tx-dl.add {
     background: var(--t-add);
@@ -463,7 +468,7 @@
     opacity: 0.75;
   }
   .tx-dl.gap {
-    padding-left: 5ch;
+    padding-left: calc(var(--tx-col) * 5);
     color: var(--t-dim);
   }
 
@@ -472,8 +477,8 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 16px;
-    padding: 2px 0 6px;
+    gap: calc(var(--spacing) * 4);
+    padding: calc(var(--spacing) * 0.5) 0 calc(var(--spacing) * 1.5);
   }
   .tx-clawd {
     margin: 0;
@@ -487,12 +492,12 @@
     font-weight: 700;
   }
   .tx-working {
-    margin-top: 8px;
+    margin-top: calc(var(--spacing) * 2);
     color: var(--t-acc);
   }
   .tx-spin {
     display: inline-block;
-    width: 2ch;
+    width: calc(var(--tx-col) * 2);
   }
   .term:is(.cx, .cu) .tx-word {
     background: linear-gradient(
@@ -504,7 +509,7 @@
     background-clip: text;
     background-size: 200% 100%;
     color: transparent;
-    animation: tx-shim 1.8s linear infinite;
+    animation: tx-shim var(--motion-shimmer) var(--ease-linear) infinite;
   }
 
   /* Claude Code. */
@@ -528,14 +533,14 @@
     --g-think: "∴";
   }
   .term.cc .tx-user {
-    margin: 4px -8px 0;
-    padding: 3px 8px 3px calc(8px + var(--g-w));
-    border-radius: 3px;
+    margin: calc(var(--spacing) * 1) calc(var(--spacing) * -2) 0;
+    padding: calc(var(--spacing) * 0.75) calc(var(--spacing) * 2) calc(var(--spacing) * 0.75) calc(var(--spacing) * 2 + var(--g-w));
+    border-radius: var(--ox-radius-xs);
     background: var(--t-user);
   }
   .term.cc .tx-user::before {
-    top: 3px;
-    left: 8px;
+    top: calc(var(--spacing) * 0.75);
+    left: calc(var(--spacing) * 2);
   }
   .term.cc .tx-arg::before {
     content: "(";
@@ -545,7 +550,7 @@
   }
   .term.cc .tx-spin::before {
     content: "✻";
-    animation: tx-glyph 1.2s steps(1) infinite;
+    animation: tx-glyph var(--motion-pulse) var(--ease-step) infinite;
   }
 
   /* Codex. */
@@ -572,14 +577,14 @@
     color: var(--t-dim);
   }
   .term.cx .tx-user {
-    margin-top: 4px;
-    padding: 6px 10px 6px calc(10px + var(--g-w));
+    margin-top: calc(var(--spacing) * 1);
+    padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2.5) calc(var(--spacing) * 1.5) calc(var(--spacing) * 2.5 + var(--g-w));
     border-left: 2px solid var(--t-acc);
     background: var(--t-user);
   }
   .term.cx .tx-user::before {
-    top: 6px;
-    left: 10px;
+    top: calc(var(--spacing) * 1.5);
+    left: calc(var(--spacing) * 2.5);
     font-weight: 700;
     color: var(--t-acc);
   }
@@ -597,12 +602,12 @@
     display: inline-flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 2px;
-    min-width: min(430px, 100%);
-    margin-bottom: 4px;
-    padding: 8px 14px;
+    gap: calc(var(--spacing) * 0.5);
+    min-width: min(var(--spacing) * 107.5, 100%);
+    margin-bottom: calc(var(--spacing) * 1);
+    padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3.5);
     border: 1px solid var(--t-line);
-    border-radius: 8px;
+    border-radius: var(--ox-radius-lg);
   }
   .term.cx .tx-spin::before {
     content: "•";
@@ -629,10 +634,10 @@
     --g-think: "▸";
   }
   .term.cu .tx-user {
-    margin-top: 4px;
-    padding: 10px 12px;
+    margin-top: calc(var(--spacing) * 1);
+    padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3);
     border: 1px solid var(--t-line);
-    border-radius: 10px;
+    border-radius: var(--ox-radius-xl);
     background: var(--t-user);
   }
   .term.cu .tx-think {
@@ -648,10 +653,10 @@
     color: var(--t-fg);
   }
   .term.cu .tx-res {
-    margin-top: 4px;
-    padding: 6px 10px;
+    margin-top: calc(var(--spacing) * 1);
+    padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2.5);
     border: 1px solid var(--t-line);
-    border-radius: 8px;
+    border-radius: var(--ox-radius-lg);
     background: light-dark(#fff, #1f1f1f);
     font-family: var(--mono);
     font-size: var(--ox-a-micro);
@@ -659,7 +664,7 @@
   .term.cu .tx-res + .tx-res {
     margin-top: 0;
     border-top: 0;
-    border-radius: 0 0 8px 8px;
+    border-radius: 0 0 var(--ox-radius-lg) var(--ox-radius-lg);
   }
   .term.cu .tx-working {
     color: var(--t-dim);
@@ -696,20 +701,20 @@
   }
   .term.st .tx-call,
   .term.st .tx-think {
-    padding-left: calc(var(--g-w) + 10px);
+    padding-left: calc(var(--g-w) + var(--spacing) * 2.5);
     border-left: 2px solid
       color-mix(in srgb, var(--s-silver) 45%, transparent);
   }
   .term.st .tx-call::before,
   .term.st .tx-think::before {
-    left: 10px;
+    left: calc(var(--spacing) * 2.5);
     color: var(--t-acc);
   }
   .term.st .tx-think {
     border-left-color: var(--t-ask);
   }
   .term.st .tx-x {
-    left: 10px;
+    left: calc(var(--spacing) * 2.5);
   }
   .term.st .tx-call:is(
       [data-tool="edit"],
@@ -745,12 +750,12 @@
     color: var(--t-acc);
   }
   .term.st .tx-res {
-    margin-left: calc(var(--g-w) + 12px);
+    margin-left: calc(var(--g-w) + var(--spacing) * 3);
     padding-left: 0;
   }
   .term.st .tx-banner {
     justify-content: space-between;
-    padding-bottom: 8px;
+    padding-bottom: calc(var(--spacing) * 2);
     border-bottom: 1px solid var(--t-line);
     color: var(--t-dim);
   }
@@ -764,14 +769,14 @@
   }
   .term.st .tx-spin::before {
     content: "●";
-    animation: tx-pulse 1.2s ease-in-out infinite;
+    animation: tx-pulse var(--motion-pulse) var(--ease-pulse) infinite;
   }
 
   /* A phone: one column, the margin under its line, no gutter. */
   @media (width < 48rem) {
     .rpbar {
-      gap: 4px;
-      padding: 6px 8px;
+      gap: calc(var(--spacing) * 1);
+      padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2);
     }
     .rp-track {
       order: 9;
@@ -794,7 +799,7 @@
     }
     .term .tm {
       align-items: center;
-      padding: 2px 12px 4px calc(12px + var(--depth, 0) * 1.5ch);
+      padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 3) calc(var(--spacing) * 1) calc(var(--spacing) * 3 + var(--depth, 0) * var(--tx-col) * 1.5);
       border-inline: 1px solid var(--t-line);
       background: var(--t-bg);
     }
@@ -802,7 +807,7 @@
       display: none;
     }
     .term .tc {
-      padding-inline: calc(12px + var(--depth, 0) * 1.5ch) 12px;
+      padding-inline: calc(var(--spacing) * 3 + var(--depth, 0) * var(--tx-col) * 1.5) calc(var(--spacing) * 3);
       font-size: var(--ox-a-2xs);
     }
     .rp-body {
