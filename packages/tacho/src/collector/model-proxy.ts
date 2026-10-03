@@ -318,7 +318,8 @@ export interface ModelProxyDeps {
   priorSpendMicros?: (sessionUuid: string) => number;
   /**
    * This host's observed spend on a UTC day (`YYYY-MM-DD`), read from its
-   * WAL once per day (ADR-160).
+   * WAL once per process, for the first day the day budget is asked about
+   * (ADR-160). A later day starts at zero (`createDaySpend`).
    */
   priorDaySpendMicros?: DaySpendDeps["priorDaySpendMicros"];
   /** The control plane's latest figures for the agent's day, when it sent any. */

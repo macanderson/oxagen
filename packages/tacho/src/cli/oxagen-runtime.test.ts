@@ -72,6 +72,34 @@ describe("oxagenRuntimeCommands", () => {
     });
   });
 
+  it("runs the bundle with Homebrew's opt node, which brew upgrade keeps", () => {
+    // A versioned formula keeps its `@` in both paths.
+    const cellar = "/opt/homebrew/Cellar/node@22/22.9.0/bin/node";
+    const opt = "/opt/homebrew/opt/node@22/bin/node";
+    const entry = "/opt/homebrew/lib/node_modules/@oxagen/cli/oxagen.mjs";
+    const runtime = oxagenRuntimeCommands(
+      entry,
+      {},
+      cellar,
+      "darwin",
+      false,
+      (candidate) => candidate === opt,
+    );
+    expect(runtime).toEqual({
+      hookCommand: `${opt} ${entry} hook`,
+      credentialHelperCommand: `${opt} ${entry} credential issue --harness claude-code`,
+      daemonCommand: [opt, entry, "daemon"],
+      mcpStdioCommand: [opt, entry, "mcp-stdio"],
+      binDir: "/opt/homebrew/lib/node_modules/@oxagen/cli",
+      program: "oxagen",
+    });
+    // No opt link: the path it has is the best there is.
+    expect(
+      oxagenRuntimeCommands(entry, {}, cellar, "darwin", false, nothing)
+        .daemonCommand,
+    ).toEqual([cellar, entry, "daemon"]);
+  });
+
   it("quotes a Windows path for cmd.exe", () => {
     const runtime = oxagenRuntimeCommands(
       undefined,

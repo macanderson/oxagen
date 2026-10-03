@@ -518,6 +518,64 @@ describe("restore", () => {
     });
   });
 
+  it("keeps a Claude Code key the person added after apply, takes the helper out, and says the released key went nowhere", async () => {
+    seed(settingsPath(), SETTINGS);
+    const applied = await applyModelCredentials(
+      { home, harnesses: ["claude-code"], helperCommand: HELPER },
+      internals(),
+    );
+    // The person rotated the key while enrolled and pasted the new one in.
+    // Anthropic shows a key once, so this file may hold the only copy.
+    const newer = "sk-ant-api03-FAKE-NEWER-OWN-KEY";
+    const edited = JSON.parse(readFileSync(settingsPath(), "utf8"));
+    edited.env.ANTHROPIC_API_KEY = newer;
+    seed(settingsPath(), `${JSON.stringify(edited, null, 2)}\n`);
+    const restored = await restoreModelCredentials(
+      { home, harnesses: ["claude-code"], helperCommand: HELPER },
+      { secrets: { anthropic: { kind: "api_key", secret: KEY } } },
+      internals(),
+    );
+    expect(restored.harnesses[0]).toMatchObject({
+      changed: true,
+      brokered: false,
+      secretRestored: false,
+      reason: "foreign_key_present",
+    });
+    const settings = JSON.parse(readFileSync(settingsPath(), "utf8"));
+    expect(settings.apiKeyHelper).toBeUndefined();
+    expect(settings.env).toEqual({
+      ANTHROPIC_API_KEY: newer,
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:4319/anthropic",
+      OTHER: "kept",
+    });
+    expect(readFileSync(settingsPath(), "utf8")).not.toContain(KEY);
+    expect(existsSync(applied.harnesses[0]!.backup)).toBe(false);
+
+    // A bearer added since counts too: writing the key beside it would set
+    // both members, the state apply refuses to create.
+    seed(settingsPath(), SETTINGS);
+    await applyModelCredentials(
+      { home, harnesses: ["claude-code"], helperCommand: HELPER },
+      internals(),
+    );
+    const bearer = JSON.parse(readFileSync(settingsPath(), "utf8"));
+    bearer.env.ANTHROPIC_AUTH_TOKEN = "corp-bearer-FAKE-ADDED-LATER";
+    seed(settingsPath(), `${JSON.stringify(bearer, null, 2)}\n`);
+    const beside = await restoreModelCredentials(
+      { home, harnesses: ["claude-code"], helperCommand: HELPER },
+      { secrets: { anthropic: { kind: "api_key", secret: KEY } } },
+      internals(),
+    );
+    expect(beside.harnesses[0]).toMatchObject({
+      secretRestored: false,
+      reason: "foreign_key_present",
+    });
+    const after = JSON.parse(readFileSync(settingsPath(), "utf8"));
+    expect(after.apiKeyHelper).toBeUndefined();
+    expect(after.env.ANTHROPIC_AUTH_TOKEN).toBe("corp-bearer-FAKE-ADDED-LATER");
+    expect(after.env.ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
   it("leaves a Codex key the person already put back alone, and drops the receipt", async () => {
     seed(authPath(), AUTH);
     const applied = await applyModelCredentials(

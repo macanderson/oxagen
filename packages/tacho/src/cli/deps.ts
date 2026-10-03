@@ -358,13 +358,17 @@ export function runtimeCommands(
   }
   const transient = transientBinDir(binDir, env);
   const flagged = transient !== undefined ? { transient } : {};
+  // `process.execPath` is Homebrew's versioned keg for a Homebrew node, and
+  // `brew upgrade node` deletes it, which would leave every hook and the
+  // service naming an interpreter that is gone.
+  const node = stableExecutablePath(nodePath, platform, exists);
   return {
-    hookCommand: `${shellQuote(nodePath, platform)} ${shellQuote(P.join(binDir, "tacho-hook.mjs"), platform)}`,
+    hookCommand: `${shellQuote(node, platform)} ${shellQuote(P.join(binDir, "tacho-hook.mjs"), platform)}`,
     credentialHelperCommand: helperCommandFor(
-      `${shellQuote(nodePath, platform)} ${shellQuote(P.join(binDir, "tacho.mjs"), platform)}`,
+      `${shellQuote(node, platform)} ${shellQuote(P.join(binDir, "tacho.mjs"), platform)}`,
     ),
-    daemonCommand: [nodePath, P.join(binDir, "tachod.mjs")],
-    mcpStdioCommand: [nodePath, P.join(binDir, "tacho.mjs"), "mcp-stdio"],
+    daemonCommand: [node, P.join(binDir, "tachod.mjs")],
+    mcpStdioCommand: [node, P.join(binDir, "tacho.mjs"), "mcp-stdio"],
     binDir,
     ...flagged,
   };
@@ -411,7 +415,12 @@ export function oxagenRuntimeCommands(
   } else if (native) {
     prefix = [stableExecutablePath(nodePath, platform, exists)];
   } else if (entry !== undefined && !/\.[cm]?tsx?$/.test(entry)) {
-    prefix = [nodePath, P.resolve(entry)];
+    // The interpreter at the path its package manager keeps, as the
+    // recorder's own bundle layout names it.
+    prefix = [
+      stableExecutablePath(nodePath, platform, exists),
+      P.resolve(entry),
+    ];
   } else {
     return runtimeCommands(undefined, env, nodePath, platform, false, exists);
   }

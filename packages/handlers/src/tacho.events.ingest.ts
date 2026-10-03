@@ -126,7 +126,10 @@ import {
   sendInterjectionsRaised,
 } from "./lib/interjection-frames";
 import { recordProofFrames } from "./lib/proof";
-import { readdressNextRunCommands } from "./lib/next-run-commands";
+import {
+  isDaemonChain,
+  readdressNextRunCommands,
+} from "./lib/next-run-commands";
 import { linkRunFromIngest } from "./lib/work-records/runtime";
 import { sendPullRequestLinks } from "./lib/run-pull-request-links";
 import {
@@ -141,6 +144,7 @@ import {
 import {
   type HostCedarReader,
   hostCedarReader,
+  readCedarForEnvelope,
 } from "./lib/tacho-host-cedar";
 import {
   type HostSkillsReader,
@@ -2552,12 +2556,15 @@ const ingestBatch = async (
       }
       // `inserted`, not `accepted && !existing`: a conflict that took the update
       // path is accepted and still did not open the session, and `!existing` is
-      // the read that preceded the statement.
+      // the read that preceded the statement. The daemon's own chain opens a
+      // root session as soon as the daemon starts, before any agent runs, so
+      // it never counts as the organization's first run.
       if (
         sessionRow?.publicId &&
         inserted &&
         firstOpenedRunId === null &&
-        first.parent_session_uuid == null
+        first.parent_session_uuid == null &&
+        !isDaemonChain(first.session_id)
       ) {
         firstOpenedRunId = sessionRow.publicId;
       }
@@ -3191,10 +3198,12 @@ const ingestBatch = async (
   // The envelope's etag covers the host's published skills and Cedar
   // policies, as the bundle's does, so they are read first, outside any
   // tenant transaction (./lib/tacho-host-skills.ts says why). Both at once,
-  // so the production port answers them with one read.
+  // so the production port answers them with one read. The batch has landed,
+  // so Cedar policies the reader cannot give leave Cedar out of the etag
+  // rather than fail the batch (`readCedarForEnvelope`).
   const [skills, policy] = await Promise.all([
     skillsReader.read(capability, ctx, result.seen),
-    cedarReader.read(capability, ctx, result.seen),
+    readCedarForEnvelope(cedarReader, capability, ctx, result.seen),
   ]);
   const control = await withTenantDb((tx) =>
     controlEnvelope(tx as never, ctx, result.seen, new Date(), skills, policy),

@@ -119,11 +119,32 @@ export async function loadCedarRuntimeFrom(sources: CedarSources): Promise<Cedar
   }
 }
 
-let cached: Promise<CedarRuntime | null> | undefined;
+/** How long a load that found no evaluator stands before the next try. */
+export const CEDAR_RETRY_AFTER_MS = 60_000;
 
-/** The process's Cedar evaluator, or `null` when this host has none. */
-export function loadCedarRuntime(): Promise<CedarRuntime | null> {
-  cached ??= loadCedarRuntimeFrom(DEFAULT_SOURCES);
+let cached: Promise<CedarRuntime | null> | undefined;
+let failedAt: number | undefined;
+
+/**
+ * The process's Cedar evaluator, or `null` when this host has none.
+ *
+ * An evaluator that loaded is kept. A load that found none stands for
+ * `CEDAR_RETRY_AFTER_MS`, then the next call tries again. The API and the
+ * daemon run for days, and a failure kept for good left the API signing host
+ * bundles with no Cedar policies until it restarted. The wait keeps a host
+ * whose evaluator is broken from compiling the wasm again on every hook.
+ */
+export function loadCedarRuntime(
+  now: () => number = Date.now,
+): Promise<CedarRuntime | null> {
+  if (failedAt !== undefined && now() - failedAt >= CEDAR_RETRY_AFTER_MS) {
+    cached = undefined;
+    failedAt = undefined;
+  }
+  cached ??= loadCedarRuntimeFrom(DEFAULT_SOURCES).then((runtime) => {
+    if (runtime === null) failedAt = now();
+    return runtime;
+  });
   return cached;
 }
 

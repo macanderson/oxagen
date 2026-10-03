@@ -109,6 +109,49 @@ describe("the native tacho executable", () => {
   });
 });
 
+/**
+ * #5381 item 6: an npm install runs the bundle with `process.execPath`,
+ * which is Homebrew's versioned keg for a Homebrew node. `brew upgrade node`
+ * deletes that keg, so every hook and the service would name a file that is
+ * gone.
+ */
+describe("the node that runs the bundle", () => {
+  const cellar = "/opt/homebrew/Cellar/node/26.5.0/bin/node";
+  const opt = "/opt/homebrew/opt/node/bin/node";
+  const bin = "/opt/homebrew/lib/node_modules/@oxagen/recorder/bin";
+
+  it("names Homebrew's opt node in every command rather than the Cellar version", () => {
+    const runtime = runtimeCommands(
+      `${bin}/tacho.mjs`,
+      {},
+      cellar,
+      "darwin",
+      false,
+      on(`${bin}/tachod.mjs`, cellar, opt),
+    );
+    expect(runtime).toEqual({
+      hookCommand: `${opt} ${bin}/tacho-hook.mjs`,
+      credentialHelperCommand: `${opt} ${bin}/tacho.mjs credential issue --harness claude-code`,
+      daemonCommand: [opt, `${bin}/tachod.mjs`],
+      mcpStdioCommand: [opt, `${bin}/tacho.mjs`, "mcp-stdio"],
+      binDir: bin,
+    });
+  });
+
+  it("keeps the Cellar path when there is no opt link to name", () => {
+    const runtime = runtimeCommands(
+      `${bin}/tacho.mjs`,
+      {},
+      cellar,
+      "darwin",
+      false,
+      on(`${bin}/tachod.mjs`, cellar),
+    );
+    expect(runtime.hookCommand).toBe(`${cellar} ${bin}/tacho-hook.mjs`);
+    expect(runtime.daemonCommand).toEqual([cellar, `${bin}/tachod.mjs`]);
+  });
+});
+
 describe("finding a harness", () => {
   const answering =
     (lookup: string, found: string): Exec =>

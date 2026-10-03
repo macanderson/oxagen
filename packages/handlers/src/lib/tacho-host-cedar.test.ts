@@ -26,7 +26,12 @@ import {
   type TachoHostRow,
   unsignedBundle,
 } from "./tacho-host";
-import { createHostCedarReader, hostCedarReader } from "./tacho-host-cedar";
+import {
+  CedarPoliciesUnavailableError,
+  createHostCedarReader,
+  hostCedarReader,
+  readCedarForEnvelope,
+} from "./tacho-host-cedar";
 import {
   BROKEN_POLICY,
   CEDAR_RUNTIME,
@@ -279,16 +284,40 @@ describe("hostCedarReader", () => {
     const read = createHostCedarReader(cedarPort(), {
       cedar: async () => loaded,
     });
+    // Nothing has compiled yet, so no earlier set can stand in. Answering no
+    // policies would sign a bundle that allows what they forbid (#5381).
     await expect(
       read.read("get_tacho_bundle", CTX, hostRow()),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow(CedarPoliciesUnavailableError);
     expect(warn.mock.calls[0]?.[1]).toMatch(/evaluator did not load/);
     loaded = runtime;
     const policy = await read.read("get_tacho_bundle", CTX, hostRow());
     expect(policy?.policies).toHaveProperty(NO_SHELL_ID);
   });
 
-  it("answers nothing and logs it when the published version cannot be read", async () => {
+  it("serves the last set that compiled when the evaluator did not load for a new version", async () => {
+    const port = cedarPort();
+    let loaded: CedarRuntime | null = runtime;
+    const read = createHostCedarReader(port, { cedar: async () => loaded });
+    const first = await read.read("get_tacho_bundle", CTX, hostRow());
+    expect(first?.policies).toHaveProperty(NO_SHELL_ID);
+    // A version already compiled never asks for the evaluator, so only a
+    // newly published one meets the missing evaluator.
+    port.version = cedarVersion({ version: 2 });
+    loaded = null;
+    await expect(
+      read.read("get_tacho_bundle", CTX, hostRow()),
+    ).resolves.toBe(first);
+    expect(warn.mock.calls.at(-1)?.[1]).toMatch(
+      /evaluator did not load, so the host receives the last policies that compiled/,
+    );
+    // The evaluator loads on a later poll, and the new version compiles.
+    loaded = runtime;
+    const next = await read.read("get_tacho_bundle", CTX, hostRow());
+    expect(next?.policies).toHaveProperty(REVIEWER_NO_SHELL_ID);
+  });
+
+  it("fails the read, and logs it, when the published version cannot be read and nothing has compiled", async () => {
     const port = cedarPort();
     port.published = async () => {
       throw new Error("the version store is down");
@@ -296,16 +325,115 @@ describe("hostCedarReader", () => {
     const { read } = reader(port);
     await expect(
       read.read("get_tacho_bundle", CTX, hostRow()),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow(CedarPoliciesUnavailableError);
     expect(warn.mock.calls[0]?.[0]).toMatchObject({
       err: "the version store is down",
     });
+  });
+
+  it("serves the last set that compiled, and keeps the etag, when the published version cannot be read", async () => {
+    const port = cedarPort();
+    const { read } = reader(port);
+    const first = await read.read("get_tacho_bundle", CTX, hostRow());
+    const served = await hostBundle(port, hostRow(), read);
+    expect(served.etag).not.toBe(bundleWithoutCedar().etag);
+    // A GitHub outage on a legacy steering connection fails the read the
+    // same way.
+    port.published = async () => {
+      throw new Error("the version store is down");
+    };
+    await expect(
+      read.read("fetch_commands", CTX, hostRow()),
+    ).resolves.toBe(first);
+    // The host's next poll names the etag it holds, so it keeps its policies.
+    expect((await hostBundle(port, hostRow(), read)).etag).toBe(served.etag);
+  });
+
+  it("serves nothing it held once a read finds nothing published, even when a later read fails", async () => {
+    const port = cedarPort();
+    const { read } = reader(port);
+    await read.read("get_tacho_bundle", CTX, hostRow());
+    // The workspace's steering repo is unlinked. A read that worked says the
+    // workspace has no policies, so an outage must not bring them back.
+    port.version = null;
+    await expect(
+      read.read("get_tacho_bundle", CTX, hostRow()),
+    ).resolves.toBeUndefined();
+    port.published = async () => {
+      throw new Error("the version store is down");
+    };
+    await expect(
+      read.read("get_tacho_bundle", CTX, hostRow()),
+    ).rejects.toThrow(CedarPoliciesUnavailableError);
+  });
+
+  it("serves the newest set that compiled, not the first, when a later read fails", async () => {
+    const port = cedarPort();
+    const { read } = reader(port);
+    const first = await read.read("get_tacho_bundle", CTX, hostRow());
+    port.version = cedarVersion({ version: 2 });
+    const second = await read.read("get_tacho_bundle", CTX, hostRow());
+    expect(second).not.toBe(first);
+    expect(second?.policies).toHaveProperty(REVIEWER_NO_SHELL_ID);
+    port.published = async () => {
+      throw new Error("the version store is down");
+    };
+    await expect(
+      read.read("get_tacho_bundle", CTX, hostRow()),
+    ).resolves.toBe(second);
+  });
+
+  it("never serves one workspace the set another workspace compiled (negative)", async () => {
+    const port = cedarPort();
+    const { read } = reader(port);
+    await read.read("get_tacho_bundle", CTX, hostRow());
+    port.published = async () => {
+      throw new Error("the version store is down");
+    };
+    // Another workspace in the same organization, and the same workspace id
+    // under another organization. This reader compiled nothing for either.
+    const sibling: CapabilityContext = {
+      ...CTX,
+      workspaceId: "00000000-0000-4000-8000-000000000003",
+    };
+    const otherOrg: CapabilityContext = {
+      ...CTX,
+      orgId: "00000000-0000-4000-8000-000000000009",
+    };
+    await expect(
+      read.read("get_tacho_bundle", sibling, hostRow()),
+    ).rejects.toThrow(CedarPoliciesUnavailableError);
+    await expect(
+      read.read("get_tacho_bundle", otherOrg, hostRow()),
+    ).rejects.toThrow(CedarPoliciesUnavailableError);
   });
 
   it("shares one reader between the routes bound to one port", () => {
     const port = cedarPort();
     expect(hostCedarReader(port)).toBe(hostCedarReader(port));
     expect(hostCedarReader(port)).not.toBe(hostCedarReader(cedarPort()));
+  });
+});
+
+describe("readCedarForEnvelope", () => {
+  it("answers no policies for the typed error, logs it, and lets any other error through", async () => {
+    const port = cedarPort();
+    port.published = async () => {
+      throw new Error("the version store is down");
+    };
+    const { read } = reader(port);
+    await expect(
+      readCedarForEnvelope(read, "fetch_commands", CTX, hostRow()),
+    ).resolves.toBeUndefined();
+    expect(warn.mock.calls.at(-1)?.[1]).toMatch(/etag leaves Cedar out/);
+    const broken = {
+      read: async () => {
+        throw new Error("a defect in the reader");
+      },
+    };
+    await expect(
+      readCedarForEnvelope(broken, "fetch_commands", CTX, hostRow()),
+    ).rejects.toThrow("a defect in the reader");
   });
 });
 
