@@ -1945,8 +1945,9 @@ describe("header", () => {
       "run-facts-model",
       "run-facts-start",
     ]);
+    // The avatar's initials sit before the slug, so the slot ends on it.
     expect(screen.getByTestId("run-facts-agent")).toHaveTextContent(
-      /^release-bot$/,
+      /release-bot$/,
     );
     expect(screen.getByTestId("run-facts-operator")).toHaveTextContent(
       /^Marcus Bell$/,
