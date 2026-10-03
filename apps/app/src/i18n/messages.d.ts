@@ -4392,7 +4392,6 @@ type Messages = {
         pending: string;
         facts: {
           toolbelt: string;
-          budget: string;
           agents: string;
           agentsCount: string;
         };
@@ -4415,6 +4414,18 @@ type Messages = {
           refused: string;
           close: string;
         };
+      };
+      spend: {
+        heading: string;
+        enrichment: string;
+        enrichmentHint: string;
+        runEnrichment: string;
+        assistant: string;
+        work: string;
+        unit: string;
+        noLimit: string;
+        hint: string;
+        unread: string;
       };
       archiveWorkspace: {
         open: string;

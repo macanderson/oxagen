@@ -438,20 +438,6 @@ export interface GovernanceChangeDetail {
 }
 
 /**
- * Evidence recorded on `steering.published` when a person adopted host merges
- * of pull requests Oxagen opened (adopt_steering_merges, #5195). The event's
- * actor is the adopter. `adopted` names each merge commit and the pull request
- * it merged. The published version is null when the publish did not go live
- * in the same call, and the repository sync then publishes main.
- */
-export interface SteeringMergesAdoptedDetail {
-  /** `owner/name` of the steering repository. */
-  fullName: string;
-  adopted: readonly { commit: string; pullRequest: number }[];
-  publishedVersion: number | null;
-}
-
-/**
  * A steering record proposal the findings job opened with no acting user
  * (detector 6, prompt habits). It rides a `capability.invoke_allowed` or
  * `capability.invoke_error` row for `propose_record` with a null actor. The
@@ -744,7 +730,6 @@ export type SecurityEventDetail =
   | ApprovalRuleInvalidationDetail
   | GovernanceChangeDetail
   | SystemProposalDetail
-  | SteeringMergesAdoptedDetail
   | SsoProviderChangeDetail
   | SsoSignInDetail
   | SsoPolicyDetail

@@ -19,6 +19,7 @@ import {
   defaultRegistration,
   deregisterArgs,
   describeCliInstall,
+  describeFailedReapply,
   HARNESS_LABEL,
   HARNESSES,
   workspaceUrl,
@@ -527,6 +528,48 @@ describe("describeCliInstall", () => {
         note: "see the log",
       }),
     ).toBe("see the log");
+  });
+
+  it("says when the launch moved the hooks and the collector, and shows a failed re-apply as an alert (#5421)", () => {
+    const base = {
+      dir: "/Users/a/.local/bin",
+      files: [] as string[],
+      skipped: [] as string[],
+      profile: null,
+      note: "",
+    };
+    const moved = {
+      ...base,
+      state: "linked" as const,
+      reapply: {
+        state: "moved" as const,
+        from: ["'/old/oxagen' hook"],
+        detail: "tachod healthy",
+      },
+    };
+    expect(describeCliInstall(moved)).toBe(
+      "Already on PATH in /Users/a/.local/bin. The hooks and the collector were moved to this version.",
+    );
+    expect(describeFailedReapply(moved)).toBeNull();
+    const failed = {
+      ...base,
+      state: "failed" as const,
+      note: "Oxagen could not move the hooks and the collector to this version. They run the copy that was working. oxagen agent enroll exited exit status: 1",
+      reapply: {
+        state: "failed" as const,
+        from: ["'/old/oxagen' hook"],
+        detail: "oxagen agent enroll exited exit status: 1",
+      },
+    };
+    expect(describeFailedReapply(failed)).toBe(failed.note);
+    expect(describeCliInstall(failed)).toBe(
+      "Linked into /Users/a/.local/bin, but the hooks and the collector were not moved to this version.",
+    );
+    // A link failure with no re-apply reads as it did.
+    expect(
+      describeCliInstall({ ...base, state: "failed", note: "disk full" }),
+    ).toBe("Could not link into /Users/a/.local/bin: disk full");
+    expect(describeFailedReapply(null)).toBeNull();
   });
 });
 

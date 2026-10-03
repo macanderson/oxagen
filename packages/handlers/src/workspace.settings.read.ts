@@ -1,4 +1,5 @@
 import { runEnrichmentEnabled } from "@oxagen/oxagen/run-enrichment";
+import { dailyBudgetUsdOf } from "@oxagen/oxagen/workspace-budgets";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   workspaceSettingsRead,
@@ -40,6 +41,7 @@ export function mapWorkspaceSettingsRow(row: {
     ),
     steering: readGatePolicy(row.settings),
     runEnrichmentEnabled: runEnrichmentEnabled(row.settings),
+    dailyBudgetUsd: dailyBudgetUsdOf(row.settings),
   };
 }
 

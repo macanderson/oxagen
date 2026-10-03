@@ -6,7 +6,7 @@
  * (the x in the wordmark, the eyebrows) and at most one action per screen;
  * every state is a glyph or a neutral fill, never a hue.
  *
- * house-fonts.css loads the house faces: Aeonik for everything read,
+ * house-fonts.css loads the house faces: Geist for everything read,
  * Space Grotesk for the wordmark, and Monaspace Neon for code and paths.
  * Every colour and face below resolves to an --ox-* token, so the next reskin
  * of the kit reaches this app without a hand edit.

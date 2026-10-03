@@ -390,12 +390,12 @@ describe("renderHealthReport", () => {
     const report = renderHealthReport(
       state({
         health: "diverged",
-        reason: "main holds 1 commit Oxagen did not merge: c3c3c3c",
+        reason: "main holds 1 commit that no pull request merged: c3c3c3c",
         revert_pr_number: 13,
       }),
     );
-    expect(report.title).toBe("main holds a commit Oxagen did not merge");
-    expect(report.summary).toContain("✗ main holds 1 commit Oxagen did not merge: c3c3c3c");
+    expect(report.title).toBe("main holds a commit that no pull request merged");
+    expect(report.summary).toContain("✗ main holds 1 commit that no pull request merged: c3c3c3c");
     expect(report.summary).toContain("which merges #13");
   });
 
@@ -478,7 +478,7 @@ const TARGET: HealthTarget = {
 const P = "a1".repeat(20);
 const PUBLISHED: PublishedCommit = { sha: P, version: 7 };
 const DIVERGENCE: Divergence = {
-  reason: "main holds 1 commit Oxagen did not merge: c3c3c3c",
+  reason: "main holds 1 commit that no pull request merged: c3c3c3c",
   main_sha: "d4".repeat(20),
 };
 
