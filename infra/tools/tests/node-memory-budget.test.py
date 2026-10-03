@@ -50,6 +50,22 @@ class NodeMemoryBudgetTest(unittest.TestCase):
         self.assertEqual(result["containers"], 8960 * MIB)
         self.assertEqual(result["host_reserve"], 1024 * MIB)
 
+    def test_overlap_counts_the_current_container_beside_the_incoming_one(self):
+        # #5318: the swap keeps the current app running while it finishes its
+        # requests, so both copies hold memory until the drain ends.
+        containers = [
+            ("/oxagen-app", 768 * MIB, True, False),
+            ("/oxagen-web-app", 768 * MIB, True, False),
+            ("/oxagen-api", 1536 * MIB, True, False),
+        ]
+        alone = budget.assess_budget(4096 * MIB, containers, "app", 768 * MIB)
+        self.assertEqual(alone["containers"], (1536 + 768) * MIB)
+        both = budget.assess_budget(4096 * MIB, containers, "app", 768 * MIB, overlap=True)
+        self.assertEqual(both["containers"], (1536 + 768 + 768) * MIB)
+        with self.assertRaisesRegex(ValueError, "Node memory budget exceeded"):
+            budget.assess_budget(3328 * MIB, containers, "app", 768 * MIB, overlap=True)
+        budget.assess_budget(3328 * MIB, containers, "app", 768 * MIB)
+
     def test_replacement_excludes_both_previous_names_but_not_another_service(self):
         containers = [
             ("/oxagen-api", 0, True, False),

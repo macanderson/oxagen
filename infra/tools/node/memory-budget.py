@@ -29,10 +29,13 @@ def physical_memory(meminfo: str) -> int:
     return int(match.group(1)) * 1024
 
 
-def assess_budget(total: int, containers: list, service: str, incoming: int) -> dict:
+def assess_budget(total: int, containers: list, service: str, incoming: int,
+                  overlap: bool = False) -> dict:
+    """With `overlap`, the current container keeps running beside the incoming
+    one while it finishes its requests, so its limit still counts."""
     if total <= 0 or incoming <= 0:
         raise ValueError("Physical memory and the incoming limit must be positive.")
-    replaced = {f"/oxagen-{service}", f"/oxagen-web-{service}"}
+    replaced = {f"/oxagen-web-{service}"} if overlap else {f"/oxagen-{service}", f"/oxagen-web-{service}"}
     other = 0
     unlimited = []
     for name, limit, running, restarting in containers:
@@ -94,6 +97,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--service", required=True)
     parser.add_argument("--memory", required=True)
+    parser.add_argument("--overlap", action="store_true",
+                        help="count the current container too, for a swap that drains it beside the new one")
     args = parser.parse_args()
     try:
         if not re.fullmatch(r"[a-z][a-z0-9-]{0,30}", args.service):
@@ -101,6 +106,7 @@ def main() -> int:
         result = assess_budget(
             physical_memory(Path("/proc/meminfo").read_text()),
             running_container_limits(), args.service, memory_bytes(args.memory),
+            overlap=args.overlap,
         )
     except (ValueError, OSError, subprocess.SubprocessError) as error:
         # Docker errors may contain command details. Report the operation, not
