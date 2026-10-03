@@ -47,7 +47,7 @@ export type RouteTab = {
  */
 export const tabLink =
   "-mb-px inline-flex min-h-10 max-md:min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3.25 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-selected:border-gold aria-selected:text-foreground";
-export const tabCount = "font-mono text-xs font-normal text-dim";
+export const tabCount = "font-mono text-xs font-normal text-muted-foreground";
 
 /** The smaller row of views inside one tab. */
 const pillTab =

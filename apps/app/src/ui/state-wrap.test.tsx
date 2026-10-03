@@ -172,7 +172,7 @@ describe("StateWrap", () => {
     expect(within(state).getByText("2026-09-11 09:16:04Z")).toHaveClass(
       "font-mono",
       "text-xs",
-      "text-dim",
+      "text-muted-foreground",
       "mt-4",
     );
     expect(state.querySelector("dl")).toHaveClass(

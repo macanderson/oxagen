@@ -370,7 +370,7 @@ export function MemoryShelfBody({
                 >
                   {memory.body}
                 </Button>
-                <span className="mt-0.5 block font-mono text-xs text-dim md:truncate">
+                <span className="mt-0.5 block font-mono text-xs text-muted-foreground md:truncate">
                   {t("provenance", {
                     ref: memory.publicRef,
                     source: memory.source,

@@ -40,10 +40,10 @@ function DiffRow({ line }: { line: DiffLine }) {
   const t = useTranslations("steering.pr.diff");
   return (
     <tr data-line={KIND[line.op]} className={LINE_TONE[line.op]}>
-      <td className="w-10 select-none px-2 text-right text-dim">
+      <td className="w-10 select-none px-2 text-right text-muted-foreground">
         {line.before ?? ""}
       </td>
-      <td className="w-10 select-none px-2 text-right text-dim">
+      <td className="w-10 select-none px-2 text-right text-muted-foreground">
         {line.after ?? ""}
       </td>
       <td className="w-4 select-none text-dim" aria-hidden="true">
@@ -88,7 +88,7 @@ function FileDiff({ file }: { file: SteeringPrDiff["files"][number] }) {
           {rows.map((row) =>
             "gap" in row ? (
               <tr key={`gap:${String(row.gap)}`} data-gap="">
-                <td colSpan={4} className="px-2 text-dim">
+                <td colSpan={4} className="px-2 text-muted-foreground">
                   {t("gap")}
                 </td>
               </tr>

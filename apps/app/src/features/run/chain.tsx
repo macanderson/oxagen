@@ -163,7 +163,7 @@ function HashChain({ chain }: { chain: RunChain }) {
           <span className={`${mono} block text-xs`}>
             {t(`rules.${rule}`)}
           </span>
-          <span className={`${mono} block text-xs text-dim`}>
+          <span className={`${mono} block text-xs text-muted-foreground`}>
             {chain.hashRule}
           </span>
         </Fact>
@@ -430,7 +430,7 @@ function ReplayGrade({
                 {rung.grade === recorded ? (
                   <Badge tone="proven">{rung.grade}</Badge>
                 ) : (
-                  <span className={`${mono} text-dim`}>{rung.grade}</span>
+                  <span className={`${mono} text-muted-foreground`}>{rung.grade}</span>
                 )}
               </td>
               <td className={`${cell} text-sm`}>
@@ -438,7 +438,7 @@ function ReplayGrade({
                   {rung.met ? t("met") : t("unmet")}
                 </span>
                 <span
-                  className={`${mono} block text-xs text-dim md:truncate`}
+                  className={`${mono} block text-xs text-muted-foreground md:truncate`}
                 >
                   {rung.reason}
                 </span>
@@ -492,7 +492,7 @@ function Checkpoints({ chain, place }: { chain: RunChain; place: Place }) {
       testId="chain-checkpoints"
       flush
       aside={
-        <span className="font-mono text-xs text-dim">
+        <span className="font-mono text-xs text-muted-foreground">
           {t("count", { count: formatCount(chain.checkpoints.length, locale) })}
         </span>
       }
@@ -565,14 +565,14 @@ function CheckpointRow({
           ) : (
             <Badge tone="allowed">{t("countersigned")}</Badge>
           )}
-          <span className="max-w-full text-xs text-dim md:truncate">
+          <span className="max-w-full text-xs text-muted-foreground md:truncate">
             {t("signed")} <When at={checkpoint.signedAt} />
             <span className={`${mono} block md:truncate`}>
               {checkpoint.deviceKeyFingerprint}
             </span>
           </span>
           {checkpoint.countersignedAt === null ? null : (
-            <span className="max-w-full text-xs text-dim md:truncate">
+            <span className="max-w-full text-xs text-muted-foreground md:truncate">
               {t("countersignedAt")} <When at={checkpoint.countersignedAt} />
               {checkpoint.platformKey === null ? null : (
                 <span className={`${mono} block md:truncate`}>
@@ -583,7 +583,7 @@ function CheckpointRow({
           )}
           {checkpoint.anchorRoot === null ? null : (
             <span
-              className={`${mono} max-w-full text-xs text-dim md:truncate`}
+              className={`${mono} max-w-full text-xs text-muted-foreground md:truncate`}
             >
               {t("anchored", { root: checkpoint.anchorRoot })}
             </span>

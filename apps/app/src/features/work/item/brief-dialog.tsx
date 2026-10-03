@@ -125,7 +125,7 @@ export function EditBriefDialog({
               className="flex flex-col gap-2 border-t border-border pt-3 first:border-t-0 first:pt-0"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="font-mono text-sm text-dim">{key}</span>
+                <span className="font-mono text-sm text-muted-foreground">{key}</span>
                 <Button
                   type="button"
                   variant="outline" size="sm"

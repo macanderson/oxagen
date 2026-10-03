@@ -68,6 +68,10 @@
   --color-code-string: var(--code-string);
   --color-code-number: var(--code-number);
   --color-code-punct: var(--code-punct);
+  /* The kit's badge tokens, so a quiet badge reads them (#5283). */
+  --color-badge-bg: var(--badge-bg);
+  --color-badge-fg: var(--badge-fg);
+  --color-badge-border: var(--badge-border);
   /* Widths in characters (#5283). A line of prose and a truncated cell are
      measured in ch, so each named width keeps its unit: max-w-measure for a
      lede under a heading, max-w-measure-narrow for a state's message, and
@@ -173,7 +177,7 @@
     --gold: var(--ox-gold);
     --gold-bright: var(--ox-gold-bright);
     --gold-deep: var(--ox-gold-deep);
-    --accent-text: var(--ember-ink);
+    --accent-text: var(--gold-text);
     --on-gold: var(--ox-ink);
     /* The glyph on a gold-deep avatar (#8A7223): paper reads at 4.66:1, ink at
        4.27:1. Gold-deep holds in both themes, so this one does too. */
@@ -314,7 +318,7 @@
        between the panel and the canvas, never the canvas itself. */
     --code-bg: var(--ox-paper-hl);
     --code-comment: var(--muted-foreground);
-    --code-table: var(--ember-ink);
+    --code-table: var(--gold-text);
     --code-key: var(--foreground);
     --code-string: var(--proven);
     --code-number: var(--info);
@@ -434,7 +438,7 @@
   font-size: var(--ox-a-micro);
 }
 
-/* `th { letter-spacing:.09em; text-transform:uppercase; color:var(--dim);
+/* `th { letter-spacing:.09em; text-transform:uppercase; color:var(--muted-foreground);
    background:var(--panel) }` — the header is flat on the panel; the caps and
    the tracking mark it, not a band of grey. */
 [data-shell-page] table thead th {
@@ -445,7 +449,7 @@
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--dim);
+  color: var(--muted-foreground);
 }
 
 /* `:where` keeps this rule under the phone's card padding in src/ui/phone.css,

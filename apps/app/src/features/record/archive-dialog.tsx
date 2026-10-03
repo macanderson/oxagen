@@ -92,7 +92,7 @@ export function ArchiveDialog({
         <p
           id="record-archive-gap"
           data-state="not-recorded"
-          className="text-sm text-dim"
+          className="text-sm text-muted-foreground"
         >
           {repository === null
             ? t("notRecordedNoRepo")

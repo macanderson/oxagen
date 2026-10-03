@@ -221,7 +221,7 @@ function Frame({
     <SafeLink
       to={frameHref(place, { seq, chainRef: node?.chainRef })}
       title={t("frameTitle")}
-      className="shrink-0 rounded-md border border-border bg-background px-1.5 py-px font-mono text-xs text-dim hover:border-rule hover:text-foreground"
+      className="shrink-0 rounded-md border border-border bg-background px-1.5 py-px font-mono text-xs text-muted-foreground hover:border-rule hover:text-foreground"
     >
       {t("frame", { seq })}
     </SafeLink>
@@ -303,7 +303,7 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
         </div>
         <div className="mt-0.75 flex flex-wrap items-baseline gap-2 text-xs leading-normal">
           {node.where === null ? null : (
-            <span className="min-w-0 font-mono text-xs text-dim wrap-anywhere">
+            <span className="min-w-0 font-mono text-xs text-muted-foreground wrap-anywhere">
               {node.where}
             </span>
           )}
@@ -366,7 +366,7 @@ function ReadMark({
       className="relative flex min-w-0 flex-wrap items-baseline gap-2 py-1.25"
     >
       <span aria-hidden="true" className={tick} />
-      <span className="min-w-0 text-xs text-dim">
+      <span className="min-w-0 text-xs text-muted-foreground">
         {t("readMark")}{" "}
         {keyedByOccurrence(shown, (name) => name).map(
           ({ item: name, key }, i) => (
@@ -397,7 +397,7 @@ function ReadMark({
           </>
         ) : null}
         {notes.length === 0 ? null : (
-          <span className="text-dim"> · {notes.join(" · ")}</span>
+          <span className="text-muted-foreground"> · {notes.join(" · ")}</span>
         )}
       </span>
       <Frame node={group.items.at(-1)} place={place} />
@@ -492,7 +492,7 @@ export function OutputsSpine({
         <h2 className={`${eyebrowQuiet} m-0`}>{t("title")}</h2>
         <span
           data-testid="run-outputs-tally"
-          className="ml-auto font-mono text-xs text-dim"
+          className="ml-auto font-mono text-xs text-muted-foreground"
         >
           {counts.join(" · ")}
         </span>
@@ -540,7 +540,7 @@ export function OutputsSpine({
         </ol>
       )}
 
-      <p className="mt-2.75 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border pt-2.5 text-xs text-dim">
+      <p className="mt-2.75 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border pt-2.5 text-xs text-muted-foreground">
         <span>{t("footer")}</span>
         {complete ? null : <span>{t("cut")}</span>}
       </p>

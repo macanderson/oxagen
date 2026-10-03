@@ -26,7 +26,7 @@ export function NotBacked({
       data-testid={testId}
       className="flex flex-col gap-1 rounded-lg border border-dashed border-border px-3.5 py-3 text-sm"
     >
-      <span className="text-xs font-semibold uppercase tracking-widest text-dim">
+      <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
         {t("notBacked")}
       </span>
       <span className="max-w-prose text-muted-foreground">{children}</span>

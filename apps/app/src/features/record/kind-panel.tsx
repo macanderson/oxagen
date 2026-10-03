@@ -144,14 +144,14 @@ function Meter({
         {label}
         <span className="ms-auto font-semibold tabular-nums text-foreground">
           {value === null ? (
-            <span data-state="not-recorded" className="font-normal text-dim">
+            <span data-state="not-recorded" className="font-normal text-muted-foreground">
               {t("notRecorded")}
             </span>
           ) : (
             t.rich("of", {
               value: formatCount(value, locale),
               total: formatCount(total, locale),
-              dim: (chunks) => <span className="text-dim">{chunks}</span>,
+              dim: (chunks) => <span className="text-muted-foreground">{chunks}</span>,
             })
           )}
         </span>
@@ -219,7 +219,7 @@ function Meters({
       <p
         data-state="not-recorded"
         data-gap={RECORD_GAPS.violated}
-        className="text-xs text-dim"
+        className="text-xs text-muted-foreground"
       >
         {t("thirdNotRecorded")}
       </p>

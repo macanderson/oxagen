@@ -88,7 +88,7 @@ export function StubAction({
             data-gap={gapRef(gap)}
             className="rounded-lg border border-dashed border-border px-3 py-2.5 text-sm text-muted-foreground"
           >
-            <span className="mb-0.5 block text-xs font-semibold uppercase tracking-widest text-dim">
+            <span className="mb-0.5 block text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               {t("notBacked")}
             </span>
             {note}

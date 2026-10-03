@@ -59,7 +59,7 @@ const DIFF_ROW: Record<DiffLine["kind"], string> = {
   add: "bg-success/15 text-foreground",
   del: "bg-warning/15 text-foreground",
   ctx: "",
-  hunk: "text-dim",
+  hunk: "text-muted-foreground",
 };
 
 /** A unified patch, one numbered row per line. */
@@ -74,10 +74,10 @@ export function PatchLines({ patch }: { patch: string }) {
           data-line={line.kind}
           className={`grid grid-cols-diff whitespace-pre ${DIFF_ROW[line.kind]}`}
         >
-          <span className="select-none border-r border-border px-1.5 text-right text-dim">
+          <span className="select-none border-r border-border px-1.5 text-right text-muted-foreground">
             {line.old ?? ""}
           </span>
-          <span className="select-none border-r border-border px-1.5 text-right text-dim">
+          <span className="select-none border-r border-border px-1.5 text-right text-muted-foreground">
             {line.new ?? ""}
           </span>
           <span className="whitespace-pre-wrap px-2.5 wrap-anywhere">

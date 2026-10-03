@@ -26,7 +26,7 @@ const TONE: Record<BadgeTone, string> = {
   proven: "border-proven/40 bg-proven/10 text-proven",
   failed: "border-error/40 bg-error/10 text-error-ink",
   critical: "border-critical/40 bg-critical/10 text-critical",
-  quiet: "border-border bg-hl text-muted-foreground",
+  quiet: "border-badge-border bg-badge-bg text-muted-foreground",
 };
 
 const badgeBase =

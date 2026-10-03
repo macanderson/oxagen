@@ -324,7 +324,7 @@ export function StatementEditor({
           <span
             data-testid="record-find-count"
             aria-live="polite"
-            className={`${mono} text-dim`}
+            className={`${mono} text-muted-foreground`}
           >
             {found}
           </span>
@@ -425,7 +425,7 @@ export function StatementEditor({
         <span>{t("lineEnding")}</span>
         <span>{t("encoding")}</span>
         <span className="flex-1" />
-        <span className="hidden text-dim md:inline">{t("keys")}</span>
+        <span className="hidden text-muted-foreground md:inline">{t("keys")}</span>
       </div>
     </section>
   );

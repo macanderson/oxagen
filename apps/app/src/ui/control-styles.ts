@@ -150,7 +150,7 @@ export const note =
  */
 export const kvList =
   "grid grid-cols-dl items-baseline gap-x-4 gap-y-1.75 text-sm";
-export const kvTerm = "whitespace-nowrap text-dim";
+export const kvTerm = "whitespace-nowrap text-muted-foreground";
 export const kvValue = "m-0 min-w-0 text-foreground wrap-anywhere";
 
 /**
@@ -186,7 +186,7 @@ export const panelBody = "px-4 py-3.5";
 export const statTile =
   "flex min-w-0 flex-col rounded-2xl border border-border bg-card px-3.75 py-3.25 text-card-foreground max-md:px-3 max-md:py-2.75";
 export const statTerm =
-  "mb-1.25 text-xs font-semibold uppercase tracking-widest text-dim";
+  "mb-1.25 text-xs font-semibold uppercase tracking-widest text-muted-foreground";
 export const statValue =
   "text-xl font-bold leading-tight tracking-display tabular-nums max-md:text-lg";
 export const statNote = "mt-0.75 text-xs text-muted-foreground";
@@ -207,7 +207,7 @@ export const runStatStrip =
 export const runStatTile =
   "flex min-w-0 flex-col rounded-2xl border border-border bg-card px-2.75 py-2.25 text-card-foreground";
 export const runStatTerm =
-  "mb-1.25 text-xs font-semibold uppercase tracking-widest text-dim";
+  "mb-1.25 text-xs font-semibold uppercase tracking-widest text-muted-foreground";
 export const runStatValue =
   "text-lg font-bold leading-tight tracking-display tabular-nums";
 export const runStatNote = "mt-0.75 text-xs text-muted-foreground";

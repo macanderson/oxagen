@@ -87,7 +87,7 @@ function LineCounts({
   const locale = useLocale();
   if (additions === null || deletions === null)
     return (
-      <span className="whitespace-nowrap text-base text-dim">
+      <span className="whitespace-nowrap text-base text-muted-foreground">
         {t("countsUnknown")}
       </span>
     );
@@ -152,9 +152,9 @@ function RevisionLine({ pull }: { pull: Pull }) {
   const kept = useTranslations("ui.diffView.notKept");
   const revision = pull.revision;
   if (revision === null)
-    return <p className="text-base text-dim">{t("noRevision")}</p>;
+    return <p className="text-base text-muted-foreground">{t("noRevision")}</p>;
   return (
-    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-dim">
+    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-muted-foreground">
       <LineCounts
         additions={revision.additions}
         deletions={revision.deletions}
@@ -203,7 +203,7 @@ function PullRow({ pull }: { pull: Pull }) {
       )}
       <RevisionLine pull={pull} />
       {pull.state === "closed" ? (
-        <p data-testid="change-left-out" className="text-base text-dim">
+        <p data-testid="change-left-out" className="text-base text-muted-foreground">
           {t("leftOut")}
         </p>
       ) : null}
@@ -322,7 +322,7 @@ function FileRow({
           {file.path}
         </span>
         <span className="ml-auto flex flex-none items-center gap-2">
-          <span className="font-mono text-base text-dim">
+          <span className="font-mono text-base text-muted-foreground">
             {refs.filter((ref) => ref !== null).join(" ")}
           </span>
           <LineCounts additions={file.additions} deletions={file.deletions} />
@@ -364,7 +364,7 @@ function RepositoryFiles({
           additions={repository.additions}
           deletions={repository.deletions}
         />
-        <span className="text-dim">
+        <span className="text-muted-foreground">
           {t("repositorySummary", {
             files: repository.filesChanged,
             pulls: repository.pullRequests,

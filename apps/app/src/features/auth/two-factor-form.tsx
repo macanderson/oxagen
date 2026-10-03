@@ -65,7 +65,7 @@ function ExpiryClock() {
   return (
     <span
       data-testid="two-factor-expiry"
-      className="font-mono text-xs text-dim"
+      className="font-mono text-xs text-muted-foreground"
     >
       {t("expires", { time: `0:${String(left).padStart(2, "0")}` })}
     </span>

@@ -478,7 +478,7 @@ function RunRowView({
             </SafeLink>
             <span
               data-testid="row-id"
-              className={`${mono} block truncate text-xs text-dim`}
+              className={`${mono} block truncate text-xs text-muted-foreground`}
             >
               {run.id}
             </span>
@@ -988,9 +988,9 @@ function PauseDialog({
             <p className="text-sm text-muted-foreground">{t("body")}</p>
           )}
           <dl className="grid grid-cols-dl items-baseline gap-x-4 gap-y-1.75 text-sm">
-            <dt className="text-dim">{t("run")}</dt>
+            <dt className="text-muted-foreground">{t("run")}</dt>
             <dd className={mono}>{run.id}</dd>
-            <dt className="text-dim">{t("position")}</dt>
+            <dt className="text-muted-foreground">{t("position")}</dt>
             <dd>
               {run.turns === null
                 ? t("positionNoTurn", { steps: run.steps, frames: run.frames })
@@ -1000,7 +1000,7 @@ function PauseDialog({
                     frames: run.frames,
                   })}
             </dd>
-            <dt className="text-dim">{t("recordedAs")}</dt>
+            <dt className="text-muted-foreground">{t("recordedAs")}</dt>
             <dd>
               {ledger
                 ? t("ledgerRecordedValue")
@@ -1323,7 +1323,7 @@ export function FleetBoard({
                   <td
                     colSpan={columns.length + 1}
                     data-testid="runs-none"
-                    className="px-4 py-4.5 text-center text-dim"
+                    className="px-4 py-4.5 text-center text-muted-foreground"
                   >
                     {emptyText}
                   </td>

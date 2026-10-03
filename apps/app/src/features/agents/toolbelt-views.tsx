@@ -323,7 +323,7 @@ function CategoriesDialog({
               <span className={mono}>
                 {category === NO_CATEGORY ? t("none") : category}
               </span>
-              <span className="text-dim">{formatCount(count, locale)}</span>
+              <span className="text-muted-foreground">{formatCount(count, locale)}</span>
             </li>
           ))}
         </ul>
@@ -422,7 +422,7 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
         <td className={cell}>
           <NotRecordedValue />
         </td>
-        <td className={`${cell} ${mono} text-sm text-dim`}>
+        <td className={`${cell} ${mono} text-sm text-muted-foreground`}>
           {tool.schemaDigest === null ? (
             <NotRecordedValue />
           ) : (
@@ -453,7 +453,7 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
                 <td className={`${cell} font-semibold`} colSpan={6}>
                   {key === NO_CATEGORY ? t("categories.none") : key}
                 </td>
-                <td className={`${cell} text-sm text-dim`}>
+                <td className={`${cell} text-sm text-muted-foreground`}>
                   {t("groupCount", { count: rows.length })}
                 </td>
               </tr>,
@@ -516,7 +516,7 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
                 }}
               >
                 {key === NO_CATEGORY ? t("categories.none") : key}{" "}
-                <span className="text-dim">{formatCount(count, locale)}</span>
+                <span className="text-muted-foreground">{formatCount(count, locale)}</span>
               </Button>
             ))}
           </div>

@@ -615,7 +615,7 @@ export function InitWizard({
                       {file === ".gitignore" ? "~" : "+"}
                     </span>
                     <span className={`${mono} text-foreground`}>{file}</span>
-                    <span className="text-dim">
+                    <span className="text-muted-foreground">
                       {key === "workspaceToml"
                         ? t(`pullRequest.files.workspaceToml.${role}`)
                         : t(`pullRequest.files.${key}`, { mode })}
@@ -647,7 +647,7 @@ export function InitWizard({
           </section>
         </div>
       )}
-      <p className="mt-4 font-mono text-xs text-dim">
+      <p className="mt-4 font-mono text-xs text-muted-foreground">
         {t.rich("needs", { ws, code })}
       </p>
     </SheetDialog>

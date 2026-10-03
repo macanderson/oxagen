@@ -162,16 +162,16 @@ export async function InvitationBody({
             )}
           </div>
           <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-rail-sm sm:gap-y-2.5">
-            <dt className="text-dim">{t("organization")}</dt>
+            <dt className="text-muted-foreground">{t("organization")}</dt>
             <dd className="mb-2 min-w-0 break-words text-foreground sm:mb-0">
               {invitation.orgName}{" "}
-              <span className={`${mono} text-dim`}>({invitation.orgSlug})</span>
+              <span className={`${mono} text-muted-foreground`}>({invitation.orgSlug})</span>
             </dd>
-            <dt className="text-dim">{t("role")}</dt>
+            <dt className="text-muted-foreground">{t("role")}</dt>
             <dd className="mb-2 text-foreground sm:mb-0">
               {t(`roles.${invitation.role}`)}
             </dd>
-            <dt className="text-dim">{t("expires")}</dt>
+            <dt className="text-muted-foreground">{t("expires")}</dt>
             <dd className="text-foreground">
               {invitation.expiresAt ? date(invitation.expiresAt) : t("never")}
             </dd>

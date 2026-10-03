@@ -80,7 +80,7 @@ function Runs({
       id="agent-runs"
       title={t("title")}
       aside={
-        <span className={`${mono} text-xs text-dim`}>
+        <span className={`${mono} text-xs text-muted-foreground`}>
           {t("shown", { count: formatCount(runs.value.length, locale) })}
         </span>
       }
@@ -110,7 +110,7 @@ function Runs({
               </SafeLink>
               <span
                 data-testid="agent-run-id"
-                className={`${mono} block truncate text-xs text-dim`}
+                className={`${mono} block truncate text-xs text-muted-foreground`}
               >
                 {run.id}
               </span>
@@ -129,7 +129,7 @@ function Runs({
               )}
             </td>
             <td className={numericCell}>{formatCount(run.frames, locale)}</td>
-            <td className={`${cell} ${mono} text-sm text-dim`}>
+            <td className={`${cell} ${mono} text-sm text-muted-foreground`}>
               <Instant at={run.startedAt} />
             </td>
           </tr>
@@ -163,7 +163,7 @@ function Accounting({
       title={t("title")}
       lead={t("lead")}
       aside={
-        <span className={`${mono} text-xs text-dim`}>{t("window")}</span>
+        <span className={`${mono} text-xs text-muted-foreground`}>{t("window")}</span>
       }
     >
       {spend !== null && !spend.ok ? (
@@ -204,7 +204,7 @@ function Accounting({
                   formatCount(r.toolDefinitions, locale)
                 )}
               </td>
-              <td className={`${numericCell} text-dim`}>
+              <td className={`${numericCell} text-muted-foreground`}>
                 {t("countedAsInput")}
               </td>
               <td className={numericCell}>

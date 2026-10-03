@@ -395,7 +395,7 @@ function LedgerTable({
           <td className={numericCell}>
             {row.cost === null ? <NoValue /> : <MoneyText value={row.cost} />}
           </td>
-          <td className={`${numericCell} text-dim`}>
+          <td className={`${numericCell} text-muted-foreground`}>
             {row.from === null || row.to === null ? (
               <NoValue />
             ) : (
@@ -432,7 +432,7 @@ function LedgerTable({
             <MoneyText value={ledger.cost} />
           )}
         </td>
-        <td className={`${numericCell} font-normal text-dim`}>
+        <td className={`${numericCell} font-normal text-muted-foreground`}>
           {metrics.cost === null ? (
             <NoValue />
           ) : (

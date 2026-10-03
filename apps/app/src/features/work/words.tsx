@@ -132,7 +132,7 @@ export function PriorityCell({ priority }: { priority: WorkPriority }) {
         {priority.by === "person" && priority.setBy !== null ? `${t("setBy", { name: priority.setBy })} ` : null}
         {priority.reason}
         {priority.cites.map((cite) => (
-          <span key={cite} className={`${mono} ml-1 text-dim`}>
+          <span key={cite} className={`${mono} ml-1 text-muted-foreground`}>
             {cite}
           </span>
         ))}

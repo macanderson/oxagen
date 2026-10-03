@@ -203,7 +203,7 @@ function PromptPanel({
       testId="run-context-prompt"
       aside={
         <>
-          <span className="font-mono text-xs text-dim">
+          <span className="font-mono text-xs text-muted-foreground">
             {t("writtenNotRecorded")} ·{" "}
             {sent === null
               ? t("sentNotRecorded")
@@ -304,7 +304,7 @@ function SpineNode({ item }: { item: TranscriptRecallItem }) {
       className="relative min-w-0 py-1.75"
     >
       <span
-        className={`${spineDot} ${cut ? "border-dashed text-dim" : "text-muted-foreground"}`}
+        className={`${spineDot} ${cut ? "border-dashed text-muted-foreground" : "text-muted-foreground"}`}
       >
         <ItemGlyph kind={item.kind} />
       </span>
@@ -376,7 +376,7 @@ function ManifestSpine({
         {tally === null ? null : (
           <span
             data-testid="run-manifest-tally"
-            className="ml-auto font-mono text-xs text-dim"
+            className="ml-auto font-mono text-xs text-muted-foreground"
           >
             {t("renderedCount", { count: formatCount(tally.rendered, locale) })}{" "}
             · {t("cutCount", { count: formatCount(tally.cut, locale) })} ·{" "}
@@ -448,7 +448,7 @@ function ManifestSpine({
         </ol>
       )}
       {manifest === null ? null : (
-        <p className="mb-0 mt-2.75 border-t border-border pt-2.5 text-xs text-dim">
+        <p className="mb-0 mt-2.75 border-t border-border pt-2.5 text-xs text-muted-foreground">
           {read === null || read.bundleVersion === null
             ? t("footNoBundle", { seq: manifest.entry.seq })
             : t("foot", {
@@ -546,7 +546,7 @@ function PromptWindow({
         }
       >
         {/* `.compbar { height:30px; border-radius:9px; border:1px solid var(--border); background:var(--hl) }`, with no band the record can fill. */}
-        <div className="flex h-7.5 items-center justify-center rounded-xl border border-border bg-hl font-mono text-xs text-dim">
+        <div className="flex h-7.5 items-center justify-center rounded-xl border border-border bg-hl font-mono text-xs text-muted-foreground">
           {t("blocksNotRecorded")}
         </div>
         <div className="mt-3.25">
@@ -724,7 +724,7 @@ function WalkWindow({
                 <span className="min-w-0 flex-1 truncate font-mono text-xs">
                   {t("stop", { type: stop.entry.type, seq: stop.entry.seq })}
                 </span>
-                <span className="flex-none font-mono text-xs tabular-nums text-dim">
+                <span className="flex-none font-mono text-xs tabular-nums text-muted-foreground">
                   {stop.figure ?? t("frame", { seq: stop.entry.seq })}
                 </span>
               </SafeLink>

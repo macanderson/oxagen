@@ -422,7 +422,7 @@ function Repositories({ work, place }: { work: RunWork; place: Place }) {
 function Checks({ pull }: { pull: Pull }) {
   const t = useTranslations("run.issues.linked");
   if (pull.ci === null)
-    return <span className="text-dim">{t("ciMissing")}</span>;
+    return <span className="text-muted-foreground">{t("ciMissing")}</span>;
   const failed = pull.ci.runs.filter(
     (check) => check.conclusion !== null && FAILED_CHECK.has(check.conclusion),
   );
@@ -673,7 +673,7 @@ function FilesChanged({
                   {node.name}
                 </span>
                 {patch === null ? (
-                  <span className="flex-none text-xs text-dim">
+                  <span className="flex-none text-xs text-muted-foreground">
                     {t("noPatch")}
                   </span>
                 ) : null}
@@ -701,7 +701,7 @@ function FilesChanged({
                 className="group border-t border-border first:border-t-0"
               >
                 {/* `.lw-files summary::before { content:"▸" }`, `▾` when open. */}
-                <summary className="flex min-w-0 cursor-pointer list-none items-center gap-2.5 py-2 text-sm before:flex-none before:text-dim before:content-(--glyph-disclosure) group-open:before:content-(--glyph-disclosure-open) [&::-webkit-details-marker]:hidden">
+                <summary className="flex min-w-0 cursor-pointer list-none items-center gap-2.5 py-2 text-sm before:flex-none before:text-muted-foreground before:content-(--glyph-disclosure) group-open:before:content-(--glyph-disclosure-open) [&::-webkit-details-marker]:hidden">
                   {summary}
                 </summary>
                 <PatchLines patch={patch} />
@@ -725,7 +725,7 @@ function FilesChanged({
                 {diff.digest === null ? null : (
                   <code
                     data-truncate={diff.digest}
-                    className={`${mono} min-w-0 break-all text-xs text-dim`}
+                    className={`${mono} min-w-0 break-all text-xs text-muted-foreground`}
                   >
                     {`${diff.digest.slice(0, "sha256:".length + 12)}…`}
                   </code>
@@ -736,7 +736,7 @@ function FilesChanged({
               </li>
             ))}
           </ul>
-          <p className="mt-1.5 text-xs text-dim">
+          <p className="mt-1.5 text-xs text-muted-foreground">
             {t("capturedBasis", {
               count: formatCount(work.diffs.length, locale),
             })}
@@ -785,7 +785,7 @@ function Legend({ edges }: { edges: readonly Edge[] }) {
   if (edges.includes("branch")) shown.push("branch");
   const inferred = edges.filter((edge) => edge === "inferred").length;
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs text-dim">
+    <div className="mb-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs text-muted-foreground">
       <p className={`${eyebrowQuiet} m-0`}>{t("title")}</p>
       {shown.map((edge) => (
         <span key={edge} className="inline-flex items-center gap-1.5">

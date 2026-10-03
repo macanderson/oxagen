@@ -134,7 +134,7 @@ export function Changes({
             data-testid="changes-other-kinds"
             data-state="not-recorded"
             data-gap={REPOSITORY_GAPS.lifecycle}
-            className="text-sm text-dim"
+            className="text-sm text-muted-foreground"
           >
             {t("otherKinds")}
           </p>
@@ -146,7 +146,7 @@ export function Changes({
           <dl className="grid grid-cols-dl-clip gap-x-5 gap-y-2.5 text-sm leading-relaxed max-sm:grid-cols-1">
             {(["promoter", "reconciler", "person"] as const).map((who) => (
               <div key={who} className="contents" data-opener={who}>
-                <dt className="text-dim">{t(`auto.${who}.name`)}</dt>
+                <dt className="text-muted-foreground">{t(`auto.${who}.name`)}</dt>
                 <dd className="text-foreground">
                   {t.rich(`auto.${who}.what`, { code })}
                 </dd>
@@ -246,7 +246,7 @@ function ChangeTable({
                 <td
                   colSpan={7}
                   data-testid="changes-empty"
-                  className={`${cell} text-dim`}
+                  className={`${cell} text-muted-foreground`}
                 >
                   {rows.length === 0 ? t("empty") : repos("nothing")}
                 </td>
@@ -313,7 +313,7 @@ function ChangeRow({
           </b>
         </span>
         <span
-          className={`${mono} mt-0.5 block text-xs text-dim md:truncate`}
+          className={`${mono} mt-0.5 block text-xs text-muted-foreground md:truncate`}
         >
           {row.pullRequest.branch}
         </span>

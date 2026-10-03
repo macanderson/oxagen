@@ -182,7 +182,7 @@ export function Configuration({
           >
             {GOVERNANCE_MODES.map((mode) => (
               <div key={mode} className="contents" data-mode={mode}>
-                <dt className={`${mono} text-dim`}>{mode}</dt>
+                <dt className={`${mono} text-muted-foreground`}>{mode}</dt>
                 <dd className="text-foreground">{t(`modes.${mode}`)}</dd>
               </div>
             ))}
@@ -206,7 +206,7 @@ export function Configuration({
               {value.oxagen.files.join("\n")}
             </pre>
           )}
-          <p className="mt-2 text-sm text-dim">{t("treeJson")}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{t("treeJson")}</p>
           <p className={`mt-3 ${note}`}>{t.rich("treeNote", { code })}</p>
         </PanelBody>
       </Panel>

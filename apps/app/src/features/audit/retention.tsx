@@ -61,7 +61,7 @@ function RetentionLine({
   return (
     <p
       data-testid="audit-retention-line"
-      className="font-mono text-xs text-dim"
+      className="font-mono text-xs text-muted-foreground"
     >
       {t("retentionLine", { bodies, org })}
     </p>

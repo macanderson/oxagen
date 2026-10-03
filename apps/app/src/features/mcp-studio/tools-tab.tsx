@@ -575,7 +575,7 @@ export function ToolsTab({
                   <tr>
                     <td
                       colSpan={columns}
-                      className={`${cell} text-dim`}
+                      className={`${cell} text-muted-foreground`}
                       data-testid="studio-tools-no-match"
                     >
                       {t("noMatch")}
@@ -670,7 +670,7 @@ export function ToolsTab({
                             (tool.killSwitch?.on === true ? (
                               <Badge tone="denied">{t("offBadge")}</Badge>
                             ) : (
-                              <span className="text-dim">{"—"}</span>
+                              <span className="text-muted-foreground">{"—"}</span>
                             ))}
                         </td>
                       </tr>
