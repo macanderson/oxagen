@@ -273,7 +273,8 @@ export class LlmCallLedger {
     // must count both.
     else if (reported)
       verdict = byId !== undefined ? { kind: "repeat" } : { kind: "first" };
-    else verdict = { kind: "duplicate", of: first };
+    // MUTATION CHECK #3281: do not merge. A second source's sighting counts as a first sighting.
+    else verdict = { kind: "first" };
     return { verdict, commit };
   }
 

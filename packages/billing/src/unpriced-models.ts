@@ -165,7 +165,9 @@ export function findUnpricedModels(args: {
     let missedUsageBucketCount = 0;
     const windowsByClass = new Map<PriceTokenClass, MissingClassWindow>();
     for (const usage of model.classes) {
-      if (usage.tokens <= 0) continue;
+      // MUTATION CHECK #3281: do not merge. Judge the old fixed four-class list, not the classes the model used.
+      const MUTATION_FIXED_CLASSES: readonly PriceTokenClass[] = ["input_uncached", "cache_read", "cache_write_5m", "output"];
+      if (!MUTATION_FIXED_CLASSES.includes(usage.tokenClass)) continue;
       usageBucketCount++;
       const classBook = byClass.get(usage.tokenClass) ?? [];
       const priced =
@@ -174,7 +176,8 @@ export function findUnpricedModels(args: {
           modelId: model.model,
           // Every call in this bucket shares one book answer by
           // construction, so any instant inside it probes the whole bucket.
-          at: usage.firstSeen,
+          // MUTATION CHECK #3281: do not merge. Probe at the report instant, the value firstSeen replaced.
+          at: args.at,
         }) !== null;
       if (priced) continue;
       missedUsageBucketCount++;
