@@ -499,13 +499,12 @@
     "wizard": {
       "title": "Add Oxagen to a repository",
       "titleFor": "Add Oxagen to {repository}",
-      "subtitle": "the directory every other file needs",
       "cancel": "Cancel",
       "back": "Back",
       "next": "Next",
       "open": "Open pull request",
       "opening": "Opening",
-      "needs": "needs <code>repository.admin</code> on {ws}",
+      "needs": "Only an organization Owner or Admin can add Oxagen to a repository.",
       "stepsLabel": "Steps",
       "steps": {
         "repository": "Repository",
