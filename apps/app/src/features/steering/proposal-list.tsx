@@ -88,7 +88,7 @@ function ProposalRow({
           to={to}
           aria-label={t("open", { lineage: proposal.lineage })}
           data-touch-target=""
-          className={`${mono} inline-flex max-w-full items-center rounded-sm text-sm font-medium text-foreground after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring`}
+          className={`${mono} inline-flex max-w-full items-center rounded-sm text-sm font-medium text-foreground after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-ring`}
         >
           <span className="min-w-0 md:truncate">{proposal.lineage}</span>
         </SafeLink>

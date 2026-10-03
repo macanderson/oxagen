@@ -184,7 +184,7 @@ export function Avatar({
         style={side}
         className={`${box} ${TONE_CLASS[spec.tone]}`}
       >
-        <Glyph style={{ width: "56%", height: "56%" }} aria-hidden />
+        <Glyph className="size-14/25" aria-hidden />
       </span>
     );
   }
@@ -220,9 +220,8 @@ export function Avatar({
       style={{
         ...side,
         fontSize: Math.round(px * initialsScale(text.length)),
-        letterSpacing: "0.02em",
       }}
-      className={`${box} ${TONE_CLASS[tone]} ${FONT_CLASS[font]}`}
+      className={`${box} ${TONE_CLASS[tone]} ${FONT_CLASS[font]} tracking-wide`}
     >
       {text}
     </span>

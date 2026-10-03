@@ -303,12 +303,12 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
         </div>
         <div className="mt-0.75 flex flex-wrap items-baseline gap-2 text-xs leading-normal">
           {node.where === null ? null : (
-            <span className="min-w-0 font-mono text-xs text-dim [overflow-wrap:anywhere]">
+            <span className="min-w-0 font-mono text-xs text-dim wrap-anywhere">
               {node.where}
             </span>
           )}
           {node.note === null ? null : (
-            <span className="min-w-0 text-muted-foreground [overflow-wrap:anywhere]">
+            <span className="min-w-0 text-muted-foreground wrap-anywhere">
               {node.note}
             </span>
           )}
@@ -512,7 +512,7 @@ export function OutputsSpine({
         </p>
       ) : (
         <ol
-          className={`relative m-0 list-none py-0 pl-7.5 before:absolute before:bottom-1.5 before:left-2.75 before:top-1.5 before:w-px before:content-[''] ${
+          className={`relative m-0 list-none py-0 pl-7.5 before:absolute before:bottom-1.5 before:left-2.75 before:top-1.5 before:w-px ${
             live
               ? "before:bg-gradient-to-b before:from-rule before:from-78% before:to-transparent"
               : "before:bg-rule"

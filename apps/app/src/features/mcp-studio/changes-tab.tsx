@@ -330,7 +330,7 @@ function ReviewSummary({ review }: { review: StudioReview }) {
     >
       <dt className={kvTerm}>{t("branch")}</dt>
       <dd
-        className={`${kvValue} ${mono} [overflow-wrap:anywhere]`}
+        className={`${kvValue} ${mono} wrap-anywhere`}
         data-testid="studio-review-branch"
       >
         {review.branch}
@@ -588,7 +588,7 @@ export function ChangesTab({
                   data-testid={`studio-edit-${String(index)}`}
                   className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
                 >
-                  <span className="min-w-0 [overflow-wrap:anywhere]">
+                  <span className="min-w-0 wrap-anywhere">
                     <OpLabel op={op} />
                   </span>
                   {canEdit ? (

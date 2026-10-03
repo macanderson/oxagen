@@ -108,7 +108,7 @@ export function PrioritiesTab({
             problem === null ? undefined : (
               <p
                 data-testid="work-priorities-problem"
-                className="mx-auto max-w-measure-narrow text-base text-muted-foreground [overflow-wrap:anywhere]"
+                className="mx-auto max-w-measure-narrow text-base text-muted-foreground wrap-anywhere"
               >
                 {problem}
               </p>
@@ -187,7 +187,7 @@ export function PrioritiesTab({
                   <span className={`${mono} flex-none text-dim`}>
                     {t("priorities.rule", { number: String(rule.number) })}
                   </span>
-                  <span className="min-w-0 [overflow-wrap:anywhere]">
+                  <span className="min-w-0 wrap-anywhere">
                     {rule.text}
                   </span>
                 </li>

@@ -154,7 +154,7 @@ function FrameRow({
       data-kind={type}
       className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2 text-base ${pending ? "border-dashed border-border text-muted-foreground" : "border-border"}`}
     >
-      <span className="min-w-0 [overflow-wrap:anywhere]">
+      <span className="min-w-0 wrap-anywhere">
         <span className={`${mono} font-semibold`}>{type}</span>{" "}
         <span className="text-muted-foreground">{summary}</span>
       </span>
@@ -218,7 +218,7 @@ function Header({
             {run.id}
           </span>
         </p>
-        <h1 className="text-xl font-bold leading-tight text-foreground [overflow-wrap:anywhere]">
+        <h1 className="text-xl font-bold leading-tight text-foreground wrap-anywhere">
           {run.name ?? run.taskRef ?? run.id}
         </h1>
         <ul
@@ -226,7 +226,7 @@ function Header({
           className={`${mono} flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground`}
         >
           {facts.map((fact) => (
-            <li key={fact} className="[overflow-wrap:anywhere]">
+            <li key={fact} className="wrap-anywhere">
               {fact === harness ? (
                 <HarnessIcon harness={harness} size={16} className="mr-1.5" />
               ) : null}
@@ -381,7 +381,7 @@ function AgentView({
               {row.answeredBy === null ? (
                 t("reply.timeout")
               ) : (
-                <span className={`${mono} [overflow-wrap:anywhere]`}>
+                <span className={`${mono} wrap-anywhere`}>
                   {row.answeredBy}
                 </span>
               )}
@@ -524,7 +524,7 @@ function OperatorQuestion({
         {row === null ? null : (
           <p
             data-testid="interjection-repository"
-            className="text-base [overflow-wrap:anywhere]"
+            className="text-base wrap-anywhere"
           >
             {row.repository === null
               ? t("repositoryUnresolved")

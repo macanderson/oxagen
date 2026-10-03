@@ -127,7 +127,7 @@ export function LibraryAll({
       },
       node: (
         <tr key={row.id} data-lineage={row.lineage}>
-          <td className={`${cell} [--cell-max:32rem]`}>
+          <td className={`${cell} cell-max-wide`}>
             <b
               data-term="label"
               className="block font-medium text-foreground md:truncate"

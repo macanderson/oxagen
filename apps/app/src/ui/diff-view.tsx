@@ -80,7 +80,7 @@ export function PatchLines({ patch }: { patch: string }) {
           <span className="select-none border-r border-border px-1.5 text-right text-dim">
             {line.new ?? ""}
           </span>
-          <span className="whitespace-pre-wrap px-2.5 [overflow-wrap:anywhere]">
+          <span className="whitespace-pre-wrap px-2.5 wrap-anywhere">
             {line.kind === "add" ? "+" : line.kind === "del" ? "−" : " "}
             {line.text}
           </span>

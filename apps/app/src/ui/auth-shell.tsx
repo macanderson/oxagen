@@ -38,7 +38,7 @@ export function AuthShell({
     <div className="relative isolate flex min-h-dvh flex-col items-center bg-background px-4 pb-14 sm:px-5">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 opacity-50 [background:repeating-linear-gradient(0deg,transparent_0_47px,var(--border)_47px_48px),repeating-linear-gradient(90deg,transparent_0_47px,var(--border)_47px_48px)] [mask-image:linear-gradient(180deg,#000_0%,transparent_78%)]"
+        className="pointer-events-none absolute inset-0 -z-10 opacity-50 auth-grid"
       />
       <header className="flex w-full max-w-5xl items-center gap-3 pt-6">
         <Brandmark />

@@ -121,9 +121,9 @@ export function BriefPanel({ detail }: { detail: WorkItemDetail }) {
                   <td className={`${cell} whitespace-nowrap font-mono text-sm`}>
                     {criterion.criterion}
                   </td>
-                  <td className={`${cell} [overflow-wrap:anywhere]`}>{criterion.text}</td>
+                  <td className={`${cell} wrap-anywhere`}>{criterion.text}</td>
                   <td className={cell}>{t(`kinds.${criterion.intent}`)}</td>
-                  <td className={`${cell} text-muted-foreground [overflow-wrap:anywhere]`}>
+                  <td className={`${cell} text-muted-foreground wrap-anywhere`}>
                     {criterion.evidence === "" ? t("noEvidence") : criterion.evidence}
                   </td>
                   {showClaims ? (
@@ -133,7 +133,7 @@ export function BriefPanel({ detail }: { detail: WorkItemDetail }) {
                       ) : (
                         <span className="flex flex-col items-start gap-1">
                           <Badge tone="quiet">{t("claimed")}</Badge>
-                          <span className="text-sm text-muted-foreground [overflow-wrap:anywhere]">
+                          <span className="text-sm text-muted-foreground wrap-anywhere">
                             {claim.text}
                           </span>
                         </span>
@@ -168,7 +168,7 @@ export function BriefPanel({ detail }: { detail: WorkItemDetail }) {
             className="ml-5 flex list-decimal flex-col gap-1.5 text-sm text-foreground"
           >
             {brief.triageCriteria.map((text) => (
-              <li key={text} className="[overflow-wrap:anywhere]">
+              <li key={text} className="wrap-anywhere">
                 {text}
               </li>
             ))}

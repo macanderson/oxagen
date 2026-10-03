@@ -76,7 +76,7 @@ function MessageScrollerItem({
       data-slot="message-scroller-item"
       scrollAnchor={scrollAnchor}
       className={cn(
-        "min-w-0 shrink-0 [contain-intrinsic-size:auto_10rem] [content-visibility:auto]",
+        "min-w-0 shrink-0 lazy-render",
         className,
       )}
       {...props}
@@ -104,7 +104,7 @@ function MessageScrollerButton({
       data-slot="message-scroller-button"
       direction="end"
       className={cn(
-        "absolute bottom-4 left-1/2 -translate-x-1/2 shadow-sm transition-[translate,scale,opacity] duration-200 data-[active=false]:pointer-events-none data-[active=false]:translate-y-full data-[active=false]:scale-95 data-[active=false]:opacity-0 data-[active=false]:duration-400 data-[active=false]:ease-[cubic-bezier(0.7,0,0.84,0)] data-[active=true]:translate-y-0 data-[active=true]:scale-100 data-[active=true]:opacity-100 data-[active=true]:ease-[cubic-bezier(0.23,1,0.32,1)]",
+        "absolute bottom-4 left-1/2 -translate-x-1/2 shadow-sm transition duration-(--motion-overlay) data-[active=false]:pointer-events-none data-[active=false]:translate-y-full data-[active=false]:scale-95 data-[active=false]:opacity-0 data-[active=false]:duration-(--motion-entry) data-[active=false]:ease-(--ease-exit) data-[active=true]:translate-y-0 data-[active=true]:scale-100 data-[active=true]:opacity-100 data-[active=true]:ease-(--ease-entry)",
         className,
       )}
       render={<Button variant="secondary" size="icon-sm" />}
