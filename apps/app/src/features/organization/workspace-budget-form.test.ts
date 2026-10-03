@@ -1,8 +1,9 @@
 // The three budget inputs of Edit workspace, read into the patch
 // `update_workspace_settings` takes (#5426). What a blank input means depends
 // on what was stored, and each case is asserted here rather than left to
-// reading: a cleared limit is sent as null, an untouched blank is not sent,
-// and a bad value is refused on its own field before any write.
+// reading: a cleared limit is sent as null, an untouched blank or an unchanged
+// number is not sent, and a bad value is refused on its own field before any
+// write.
 import { describe, expect, it } from "vitest";
 import { budgetPatchOf } from "./workspace-budget-form";
 
@@ -35,6 +36,16 @@ describe("budgetPatchOf", () => {
         assistant: 12,
       }),
     ).toEqual({ ok: true, patch: { assistant: null } });
+  });
+
+  it("leaves out a number equal to the stored one: the input as it opened", () => {
+    expect(
+      budgetPatchOf(form({ budgetRunEnrichment: "2.50", budgetWork: "0" }), {
+        ...NO_LIMITS,
+        runEnrichment: 2.5,
+        work: 0,
+      }),
+    ).toEqual({ ok: true, patch: {} });
   });
 
   it("leaves out a blank whose stored value was null: nothing changed", () => {

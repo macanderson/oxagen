@@ -44,10 +44,12 @@ export type BudgetRefused = {
  * value was a number, blank is the person clearing it, so the lane is sent
  * as null and the limit goes. When the stored value was null, or the settings
  * could not be read at all, blank is the input as it opened, so the lane is
- * left out and the write leaves it alone. A number is sent as typed, 0
- * included: 0 is the lane switched off, and the contract's own parse refuses
- * anything over its ceiling. A negative or a value that is not a number is
- * refused here, before any write, on the field it came from.
+ * left out and the write leaves it alone. A number equal to the stored one is
+ * the input as it opened too, so that lane is left out as well. Any other
+ * number is sent as typed, 0 included: 0 is the lane switched off, and the
+ * contract's own parse refuses anything over its ceiling. A negative or a
+ * value that is not a number is refused here, before any write, on the field
+ * it came from.
  */
 export function budgetPatchOf(
   form: FormData,
@@ -66,6 +68,9 @@ export function budgetPatchOf(
     if (!Number.isFinite(value) || value < 0) {
       return { ok: false, reason: "invalid", code: "invalid_input", field };
     }
+    // A number equal to the stored one is the input as it opened, so the
+    // lane is left out and another editor's change to it survives this save.
+    if (stored !== null && stored[lane] === value) continue;
     patch[lane] = value;
   }
   return { ok: true, patch };
