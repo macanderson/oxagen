@@ -29,6 +29,13 @@
       "no_pull_request": "No pull request",
       "pr_closed": "Pull request closed"
     },
+    "pullState": {
+      "open": "Open",
+      "draft": "Draft",
+      "closed": "Closed",
+      "merged": "Merged",
+      "seen": "State as of {at}"
+    },
     "wait": {
       "aPerson": "a person",
       "theRuntime": "the runtime",

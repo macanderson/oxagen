@@ -21,6 +21,18 @@ const HEAD = "3f9a2c1d4e5f60718293a4b5c6d7e8f901234567";
 const EARLIER = "2d4f6a80123456789abcdef0123456789abcdef0";
 const DIGEST = `sha256:${"a".repeat(64)}`;
 const AT = "2026-10-02T12:58:00.000Z";
+/** Pull request #612 as the forge store holds it: merged. */
+const FORGE_PULL = {
+  id: "fpr_01k6pull",
+  provider: "github",
+  repository: "acme/platform",
+  number: 612,
+  url: "https://github.com/acme/platform/pull/612",
+  title: "Return a Retry-After header on 429",
+  state: "merged",
+  head: HEAD,
+  state_seen_at: AT,
+};
 
 function row(overrides: Record<string, unknown> = {}) {
   return {
@@ -51,6 +63,7 @@ function row(overrides: Record<string, unknown> = {}) {
       runtime: { name: "CI runner 6", tier: "gateway" },
       requested_at: AT,
       pull_request: { repository: "acme/platform", number: 612, url: "https://github.com/acme/platform/pull/612", head: HEAD },
+      pull_requests: [FORGE_PULL],
       checks: "failing",
       gate: { open: false, block: "check_failed", detail: "test: failure" },
       accepted: false,
@@ -94,6 +107,22 @@ describe("toWorkItemList", () => {
       cost: { runs: 2, knownRuns: 1, total: { micros: "1250000", currency: "USD" } },
     });
     expect(view.viewer).toEqual({ canControl: true, canApprove: false });
+  });
+
+  it("copies every pull request the forge store holds for the send", () => {
+    expect(view.items[0]?.send?.pullRequests).toEqual([
+      {
+        id: "fpr_01k6pull",
+        provider: "github",
+        repository: "acme/platform",
+        number: 612,
+        url: "https://github.com/acme/platform/pull/612",
+        title: "Return a Retry-After header on 429",
+        state: "merged",
+        head: HEAD,
+        stateSeenAt: AT,
+      },
+    ]);
   });
 
   it("keeps an unknown cost null and invents no zero", () => {
@@ -200,6 +229,7 @@ describe("toWorkItemDetail", () => {
           merged: null,
           closed_at: null,
         },
+        pull_requests: [{ ...FORGE_PULL, id: "fpr_01k6second", number: 613, title: null, state: "draft", head: EARLIER }, FORGE_PULL],
         required_checks: ["test"],
         checks: [{ name: "test", conclusion: "pending", required: true }],
         earlier_checks: { head: EARLIER, checks: [{ name: "test", conclusion: "success", required: true }] },
@@ -247,6 +277,15 @@ describe("toWorkItemDetail", () => {
       { id: "tse_01k6c", cost: { micros: "10", currency: "USD", basis: null }, tier: "harness" },
     ]);
     expect(send?.cost).toEqual({ runs: 3, knownRuns: 2, total: { micros: "1250010", currency: "USD" } });
+  });
+
+  it("keeps each pull request's forge state beside the facts' pull request", () => {
+    const [send] = view.sends;
+    expect(send?.pullRequests.map((pull) => [pull.id, pull.number, pull.state, pull.title])).toEqual([
+      ["fpr_01k6second", 613, "draft", null],
+      ["fpr_01k6pull", 612, "merged", "Return a Retry-After header on 429"],
+    ]);
+    expect(send?.pullRequest).toMatchObject({ number: 612, head: HEAD, merged: null });
   });
 
   it("keeps the stale acceptance and the earlier head's results beside the current head", () => {

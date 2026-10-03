@@ -98,10 +98,27 @@ A host has taken the work order when Oxagen recorded the delivery, or when the o
 | `agent` | `{ id, name, harness }` | The agent it went to. Every field is null when the agent is gone |
 | `runtime` | `{ name, tier }` | The runtime's name and the tier the send recorded |
 | `requested_at` | `string` | When the person sent it |
-| `pull_request` | `{ repository, number, url, head }` or `null` | The pull request the run linked |
+| `pull_request` | `{ repository, number, url, head }` or `null` | The pull request the run linked, from the send's facts. Acceptance, the checks, and the gate are judged on its head. `url` is the forge store's link when the store holds the same pull request |
+| `pull_requests` | pull request[] | Every pull request the send has in the forge store, newest first. Empty when the store holds none |
 | `checks` | checks word | The required checks on the head, as one word |
 | `gate` | `{ open, block, detail }` | Whether Accept is open, and if not, why |
 | `accepted` | `boolean` | A person accepted the pull request's current head |
+
+Each entry in `pull_requests` comes from the forge store ([ADR-292](../adr/ADR-292-every-pull-request-read-comes-from-the-forge-store.md)):
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | `string` | The forge store's `fpr_…` id |
+| `provider` | `github` or `gitlab` | The forge |
+| `repository` | `string` | Lower-cased owner/name, or the GitLab project path |
+| `number` | `int` | The pull request number, or the merge request iid |
+| `url` | `string` | The link the forge reported |
+| `title` | `string` or `null` | The title the forge last reported. Render it as text |
+| `state` | `open`, `draft`, `closed`, or `merged` | The state the forge last reported |
+| `head` | `string` | The head commit the forge last reported |
+| `state_seen_at` | `string` | When Oxagen last read the state |
+
+A send reaches a pull request through the forge store's work order link, or through its `pr_linked` fact matched to a forge row by repository and number. A pull request the store holds no row for is not listed until its next delivery or the backfill records it.
 
 The checks word is `passing` when every required check passed, `failing` when one failed, was cancelled, was skipped, or timed out, `missing` when one has not reported, and `running` when one is still running. A failure outranks a check that has not reported, which outranks one still running. It is `unread` when Oxagen has not read the required checks for this head, `none_required` when the base branch requires none, `no_pull_request` when the run linked none, and `pr_closed` when the pull request closed without merging.
 
