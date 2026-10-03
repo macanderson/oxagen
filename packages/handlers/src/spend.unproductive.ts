@@ -15,8 +15,9 @@
 // finding counts in no figure here.
 //
 // The Findings tab lists every open finding, whatever its window, so the
-// answer also counts the open findings whose claimed calls all ran outside
-// the period. The hero names them when the headline counts none (#5294).
+// answer also counts the open findings whose calls all ran outside the
+// period (`countFindingsOutside`). The hero names them when the headline
+// counts none (#5294).
 import {
   countClaims,
   dayBounds,
@@ -59,7 +60,7 @@ export type UnproductiveSpendDeps = {
     window: Window,
     kinds: readonly string[],
   ) => Promise<KindSaving[]>;
-  /** The open findings that claim calls and none in the window. */
+  /** The open findings whose calls all ran outside the window. */
   countFindingsOutside: (scope: Scope, window: Window) => Promise<number>;
 };
 

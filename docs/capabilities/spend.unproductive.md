@@ -32,7 +32,7 @@ The unproductive spend of the active workspace over a day range: the one total S
 | `share` | number or null | `unproductive` over `spend`, capped at 1; null when `spend` is null or zero |
 | `parts` | object[] | detectors 2, 3, and 5 in that order, each `{ detector, saving, findings }` (rule 2) |
 | `estimate` | object | detector 4 as `{ saving, findings }`: a counterfactual on a smaller model class (rule 3) |
-| `findingsOutsidePeriod` | integer | the open findings that claim at least one frame and claim none in the period. Spend › Findings lists every open finding, so the hero names this count when `unproductive` is zero |
+| `findingsOutsidePeriod` | integer | the open findings of detectors 1, 7, and 8 whose frames all ran outside the period: each claims frames only outside it, or claims none and its own window lies wholly outside it. Spend › Findings lists every open finding, so the hero names this count when `unproductive` is zero |
 
 `parts[].saving` and `estimate.saving` add the stored savings of the open and applied findings of the detector's kinds whose window overlaps the period. Detector 2 is `standing_context`. Detector 3 is `cache_writes_never_read`, `idle_cache_rewrites`, and `cache_busts`. Detector 5 is `unpaged_results`. Detector 4 is `model_class_fit`. None of them adds to `unproductive`.
 

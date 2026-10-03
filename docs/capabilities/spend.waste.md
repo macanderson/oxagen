@@ -34,7 +34,7 @@ Spend the frames show bought nothing, by cause, with the runs that prove it (Mis
 | `largestCause` | enum or null | the cause with the most money on it |
 | `causes` | object[] | largest waste first, each `{ cause, wasted, runs, runIds, provingRuns }`; `runIds` are the runs that prove it, largest waste first, at most ten |
 | `causes[].provingRuns` | object[] | the same runs in the same order as `{ runId, name }`. `name` is the session name the Fleet board shows, or null when the run has none |
-| `findingsOutsidePeriod` | integer | the open findings that claim at least one frame and claim none in the period. Spend › Findings lists them, and no cause counts their frames |
+| `findingsOutsidePeriod` | integer | the open findings of detectors 1, 7, and 8 whose frames all ran outside the period: each claims frames only outside it, or claims none and its own window lies wholly outside it. Spend › Findings lists them, and no cause counts their frames |
 
 ## Causes
 

@@ -219,7 +219,7 @@ const WasteCause = z.enum(WASTE_CAUSES);
  * `list_waste`: spend the frames show bought nothing, by cause, largest
  * first. `wasted` is the unproductive spend headline for the period plus the
  * cache-write cause. `findingsOutsidePeriod` counts the open findings whose
- * claimed calls all ran outside the period.
+ * calls all ran outside the period.
  */
 export const SpendWaste = z.object({
   wasted: Cost.nullable(),
@@ -361,8 +361,8 @@ const FindingFigure = z.object({ saving: Money, findings: Count });
  * totals. `spend` and `share` are null when the period's spend has no single
  * figure. `parts` holds detectors 2, 3, and 5 in that order and `estimate`
  * detector 4: each sits beside the headline and stays out of it.
- * `findingsOutsidePeriod` counts the open findings whose claimed calls all
- * ran outside the period: the list shows them, and the headline does not.
+ * `findingsOutsidePeriod` counts the open findings whose calls all ran
+ * outside the period: the list shows them, and the headline does not.
  */
 export const UnproductiveSpend = z.object({
   period: DayRange,

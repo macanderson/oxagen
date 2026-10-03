@@ -57,7 +57,7 @@ export type SpendWasteDeps = {
   ) => Promise<SpendRunRecord[]>;
   /** The calls open and applied findings claim in the window, with each finding's kind. */
   readClaims: (scope: SpendScope, window: ClaimWindow) => Promise<CauseClaim[]>;
-  /** The open findings that claim calls and none in the window. */
+  /** The open findings whose calls all ran outside the window. */
   countFindingsOutside: (
     scope: SpendScope,
     window: ClaimWindow,

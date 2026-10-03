@@ -37,20 +37,29 @@ describe.skipIf(!enabled)("the finding-claim reads against Postgres", () => {
   let assistant = "";
   const ids: Record<string, string> = {};
 
+  /** A pass window that ended before the window under test began. */
+  const earlier = {
+    windowStart: new Date("2026-08-28T00:00:00.000Z"),
+    windowEnd: new Date("2026-09-27T00:00:00.000Z"),
+  };
+
   /** One finding row, open unless `status` says otherwise. */
   const finding = (
     name: string,
     kind: string,
     status: "open" | "applied" | "dismissed" = "open",
     basis = "client_attested",
+    span = {
+      windowStart: new Date("2026-09-01T00:00:00.000Z"),
+      windowEnd: new Date("2026-10-02T00:00:00.000Z"),
+    },
   ) => ({
     ...scope,
     kind,
     level: "workspace",
     subject: `${name}-${tag}`,
     fingerprint: `${kind}|workspace|${name}-${tag}`,
-    windowStart: new Date("2026-09-01T00:00:00.000Z"),
-    windowEnd: new Date("2026-10-02T00:00:00.000Z"),
+    ...span,
     estimatedSavingMicros: 1_000n,
     savingBasis: basis,
     confidence: "high",
@@ -119,8 +128,13 @@ describe.skipIf(!enabled)("the finding-claim reads against Postgres", () => {
           finding("retry", "retry_loops"),
           // Claims a call before the window only.
           finding("nooutcome", "spend_with_no_outcome"),
-          // Claims nothing.
+          // Claims nothing, and its window overlaps the one under test.
           finding("shell", "repeated_shell_commands"),
+          // Claims nothing, written before claims existed, by a pass whose
+          // window ended before the one under test.
+          finding("legacy", "duplicate_tool_calls", "open", "client_attested", earlier),
+          // A kind that claims no call, over the same earlier window.
+          finding("carry", "unpaged_results", "open", "client_attested", earlier),
         ])
         .returning({ id: findings.id, subject: findings.subject });
       for (const row of rows) ids[row.subject.replace(`-${tag}`, "")] = row.id;
@@ -181,12 +195,16 @@ describe.skipIf(!enabled)("the finding-claim reads against Postgres", () => {
     ]);
   });
 
-  it("counts the open findings that claim calls and none inside the window", async () => {
+  it("counts the open findings whose calls all ran outside the window", async () => {
+    // Spend with no outcome claims a call before the window only, and the
+    // legacy duplicate tool calls finding claims none and covers days before
+    // it. Context carry claims no call by kind, so it is not counted.
     expect(
       await runInTenantScope(scope, () => countFindingsOutside(scope, window)),
-    ).toBe(1);
+    ).toBe(2);
     // Over September only the retry loop's finding claims no call inside:
-    // its one call ran on October 1.
+    // its one call ran on October 1. The legacy finding's window overlaps
+    // September, so nothing says where its calls ran.
     expect(
       await runInTenantScope(scope, () =>
         countFindingsOutside(scope, {

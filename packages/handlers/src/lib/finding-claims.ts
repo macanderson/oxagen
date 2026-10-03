@@ -3,11 +3,24 @@
 // spend headline, as `readUnproductiveClaims` in @oxagen/billing reads them,
 // with the kind and basis of the finding that claims each call. `list_waste`
 // splits the same calls by cause with them. `countFindingsOutside` counts the
-// open findings whose claimed calls all ran outside a window: the Findings
-// tab lists those findings, and no figure for the window counts their calls.
+// open findings that count no call in a window because their calls ran
+// outside it: the Findings tab lists those findings, and no figure for the
+// window counts their calls.
 import { type CostBasis, inAppRunTotal } from "@oxagen/billing";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq, exists, gte, inArray, lt, notExists, sql } from "drizzle-orm";
+import { WASTE_CLAIM_CAUSES } from "@oxagen/oxagen/contracts/spend.waste";
+import {
+  and,
+  eq,
+  exists,
+  gte,
+  inArray,
+  lt,
+  lte,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 
 export type ClaimScope = { orgId: string; workspaceId: string };
 export type ClaimWindow = { start: Date; end: Date };
@@ -85,10 +98,24 @@ export async function readCauseClaims(
   return rows.map((r) => ({ ...r, basis: r.basis as CostBasis }));
 }
 
+/** The finding kinds whose findings claim calls: detectors 1, 7, and 8. */
+const CLAIMING_KINDS: readonly string[] = WASTE_CLAIM_CAUSES.flatMap((c) => [
+  ...c.kinds,
+]);
+
 /**
- * The open findings that claim at least one call and claim none that ran in
- * the window. A finding with calls on both sides of the window's edge is not
- * counted, since the window's figures count its calls inside.
+ * The open findings of the claiming kinds that count no call in the window:
+ *
+ * - one that claims calls, all of them outside the window;
+ * - one that claims none and whose own window lies wholly outside it. A
+ *   finding written before `cost.finding_claims` existed has no claim rows,
+ *   and a pass whose window ended before this one began cannot have claimed
+ *   a call inside it.
+ *
+ * A finding with calls on both sides of the window's edge is not counted,
+ * since the window's figures count its calls inside. A finding with no claim
+ * rows whose window overlaps this one is not counted either: nothing says
+ * where its calls ran.
  */
 export async function countFindingsOutside(
   scope: ClaimScope,
@@ -103,12 +130,7 @@ export async function countFindingsOutside(
           eq(findings.orgId, scope.orgId),
           eq(findings.workspaceId, scope.workspaceId),
           eq(findings.status, "open"),
-          exists(
-            tx
-              .select({ one: sql`1` })
-              .from(claims)
-              .where(eq(claims.findingId, findings.id)),
-          ),
+          inArray(findings.kind, [...CLAIMING_KINDS]),
           notExists(
             tx
               .select({ one: sql`1` })
@@ -120,6 +142,16 @@ export async function countFindingsOutside(
                   lt(claims.frameAt, window.end),
                 ),
               ),
+          ),
+          or(
+            exists(
+              tx
+                .select({ one: sql`1` })
+                .from(claims)
+                .where(eq(claims.findingId, findings.id)),
+            ),
+            lte(findings.windowEnd, window.start),
+            gte(findings.windowStart, window.end),
           ),
         ),
       ),

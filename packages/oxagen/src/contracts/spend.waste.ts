@@ -125,8 +125,10 @@ export const spendWasteList = registerCapability({
       /** Largest waste first. */
       causes: z.array(wasteCauseRowSchema),
       /**
-       * The open findings that claim calls and claim none in the period. The
-       * Findings tab lists them, and no cause here counts their calls.
+       * The open findings of the claiming kinds whose calls all ran outside
+       * the period: each claims calls only outside it, or claims none and
+       * covers only days outside it. The Findings tab lists them, and no
+       * cause here counts their calls.
        */
       findingsOutsidePeriod: z.number().int().nonnegative(),
     })
