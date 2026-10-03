@@ -30,6 +30,8 @@ export const HOST_FILE_SCHEMA = "tacho.host.v1" as const;
 export const harnessFilesRecordSchema = z
   .object({
     claude_settings: z.string().min(1),
+    /** Claude Code's user config, which holds the Oxagen MCP server entry. */
+    claude_user_config: z.string().min(1),
     codex_hooks: z.string().min(1),
     cursor_hooks: z.array(z.string().min(1)),
     stella_toml: z.string().min(1),
@@ -190,6 +192,15 @@ export const hostFileSchema = z
       .record(z.string(), z.record(z.string(), z.unknown()))
       .default({}),
     /**
+     * The wrapped harnesses whose user MCP config this enrollment wrote the
+     * `oxagen` server into (#5287). Today that is only `claude-code`.
+     * `oxagen agent status` adds the server once to a live enrollment made
+     * before enroll wrote it, and this list is how it knows it already did.
+     * A person who later removes the entry keeps it removed until they
+     * enroll again. Optional: a host enrolled before #5287 has none.
+     */
+    mcp_registered: z.array(z.string()).optional(),
+    /**
      * Where the harness files were when this host enrolled
      * (`harnessFilesRecord`). Optional: a host enrolled before this field
      * existed has none, and unenroll falls back to the paths it resolves.
@@ -290,6 +301,7 @@ export function sessionScopeForEnrollment(
 export function harnessFilesRecord(paths: TachoPaths): HarnessFilesRecord {
   return {
     claude_settings: paths.claudeSettings,
+    claude_user_config: paths.claudeUserConfig,
     codex_hooks: paths.codexHooks,
     cursor_hooks: [...paths.cursorHooks],
     stella_toml: paths.stellaToml,
@@ -313,6 +325,9 @@ export function withRecordedHarnessFiles(
   return {
     ...paths,
     claudeSettings,
+    // A record from before #5287 has no entry, and the host it describes
+    // never had the Oxagen MCP server written, so this process's path stands.
+    claudeUserConfig: record.claude_user_config ?? paths.claudeUserConfig,
     claudeProjects:
       record.claude_settings !== undefined
         ? join(dirname(claudeSettings), "projects")

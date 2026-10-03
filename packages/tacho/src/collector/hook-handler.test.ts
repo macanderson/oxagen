@@ -104,6 +104,9 @@ function harness(
     policy: () => view,
     acknowledge: (ack: CommandAcknowledgement) => acks.push(ack),
     now,
+    // A host whose enrollment gave Claude Code Oxagen's MCP server, so the
+    // Stop hook may ask for a reflection (#5287).
+    reflectionToolRegistered: () => true,
   };
   return { registry, view, deps, acks, now };
 }

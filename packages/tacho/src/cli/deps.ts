@@ -28,6 +28,7 @@ import {
   type CredentialStore,
   openCredentialStore,
 } from "../host/credential-store";
+import { withClaudeConfigLock } from "../host/claude-config-lock";
 import { readJsonFileIfExists } from "../host/fs";
 import { HarnessFiles, type SettleOutcome } from "../host/harness-file";
 import { readHostFile } from "../host/host-file";
@@ -526,6 +527,17 @@ export interface CliDeps {
    */
   readClaudeDesktopConfig: () => unknown;
   writeClaudeDesktopConfig: (document: unknown) => void;
+  /**
+   * Edit Claude Code's user config (`paths.claudeUserConfig`) under the lock
+   * Claude Code saves it with (`host/claude-config-lock.ts`). `edit` gets the
+   * parsed document, undefined when the file is absent, and returns the
+   * document to write, or undefined to leave the file as it is. The read,
+   * the edit, and the write all happen inside the lock, so a save Claude
+   * Code makes at the same moment cannot drop the edit. Optional so a test's
+   * in-memory ports need not supply it. Absent, enroll adds no MCP server to
+   * Claude Code (#5287).
+   */
+  editClaudeUserConfig?: (edit: (document: unknown) => unknown) => void;
   /**
    * Why a harness file could not be written (read-only, or in a read-only
    * directory), or undefined when it can. `enroll` asks before it mints
@@ -1080,6 +1092,17 @@ export function defaultCliDeps(
         `${JSON.stringify(document, null, 2)}\n`,
       );
     },
+    // Claude Code rewrites this file all the time, so the read is taken
+    // inside its lock, not before it.
+    editClaudeUserConfig: (edit) =>
+      withClaudeConfigLock(paths.claudeUserConfig, () => {
+        const next = edit(harnessFiles.readJson(paths.claudeUserConfig));
+        if (next !== undefined)
+          harnessFiles.write(
+            paths.claudeUserConfig,
+            `${JSON.stringify(next, null, 2)}\n`,
+          );
+      }),
     harnessWriteProblem: (path) => harnessFiles.writeProblem(path),
     settleHarnessFiles: () => settleOrThrow(harnessFiles),
     // The base URL and the vendor key live in the files the hooks went into,

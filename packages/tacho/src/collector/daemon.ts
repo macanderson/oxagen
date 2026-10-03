@@ -65,7 +65,9 @@ import {
   mcpEndpointFor,
   modelProxyPortFor,
   sessionScopeOf,
+  withRecordedHarnessFiles,
 } from "../host/host-file";
+import { claudeCodeMcpPresence } from "../host/claude-code-mcp-writer";
 import { readModelBaseUrlState } from "../host/model-base-url";
 import {
   applyModelCredentials,
@@ -763,6 +765,26 @@ async function initializeDaemon(
           ))
             memoryUses.note({ ...file, ...run });
         };
+  // Whether a Claude Code session here can call Oxagen's `record_reflection`
+  // (#5287): the enrollment holds the key the gateway serves Oxagen's tools
+  // with, and Claude Code's user config carries this enrollment's `oxagen`
+  // server. The config is read at the path enroll recorded, because the
+  // service's environment need not carry the CLAUDE_CONFIG_DIR the enrolling
+  // shell had. Read only at a Stop that would otherwise ask, and any failure
+  // to read it answers no, so the Stop hook never asks for a tool the
+  // session cannot reach.
+  const reflectionToolRegistered = (): boolean => {
+    if (host.gateway_api_key === undefined) return false;
+    try {
+      const file = withRecordedHarnessFiles(paths, host).claudeUserConfig;
+      return claudeCodeMcpPresence(
+        readJsonFileIfExists(file),
+        host.host_enrollment_id,
+      ).present;
+    } catch {
+      return false;
+    }
+  };
   // Runs the tools a lock pins on this machine. It starts at the end of
   // start-up, and `syncLocalServers` starts or stops it after each change to
   // the host's status.
@@ -2825,6 +2847,7 @@ async function initializeDaemon(
           skills,
           ...(recallMemories !== undefined ? { recallMemories } : {}),
           ...(noteMemoryReads !== undefined ? { noteMemoryReads } : {}),
+          reflectionToolRegistered,
         },
         envelope.replay,
         envelope.harness,
