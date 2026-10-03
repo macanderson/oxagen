@@ -15,7 +15,9 @@ import { ENVELOPE_VERSION } from "./types";
 // module's own tests pass.
 describe("@oxagen/crypto public surface", () => {
   it("re-exports each value the module docs name, unchanged", () => {
-    expect(crypto).toEqual({
+    // A module namespace also carries Symbol.toStringTag, so compare its
+    // string-keyed exports only.
+    expect(Object.fromEntries(Object.entries(crypto))).toEqual({
       encrypt,
       decrypt,
       lastingDecryptFailure,
