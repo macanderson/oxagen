@@ -13,6 +13,10 @@
 // overlaps the period. Each stays beside the headline and out of its sum
 // (rules 2 and 3). The status filter is the claims reader's, so a dismissed
 // finding counts in no figure here.
+//
+// The Findings tab lists every open finding, whatever its window, so the
+// answer also counts the open findings whose claimed calls all ran outside
+// the period. The hero names them when the headline counts none (#5294).
 import {
   countClaims,
   dayBounds,
@@ -28,6 +32,7 @@ import {
   UNPRODUCTIVE_PARTS,
 } from "@oxagen/oxagen/contracts/spend.unproductive";
 import { and, eq, gt, inArray, lt, sql } from "drizzle-orm";
+import { countFindingsOutside } from "./lib/finding-claims";
 import {
   type FrameTimeSpendResult,
   frameTimeSpendDeps,
@@ -54,6 +59,8 @@ export type UnproductiveSpendDeps = {
     window: Window,
     kinds: readonly string[],
   ) => Promise<KindSaving[]>;
+  /** The open findings that claim calls and none in the window. */
+  countFindingsOutside: (scope: Scope, window: Window) => Promise<number>;
 };
 
 const PART_KINDS: readonly string[] = UNPRODUCTIVE_PARTS.flatMap(
@@ -139,10 +146,11 @@ export function createUnproductiveSpendHandler(
     const { from, to } = input.period;
     const window = { start: dayBounds(from).start, end: dayBounds(to).next };
 
-    const [claims, savings, spend] = await Promise.all([
+    const [claims, savings, spend, findingsOutsidePeriod] = await Promise.all([
       deps.readClaims(scope, window),
       deps.readKindSavings(scope, window, [...PART_KINDS, ...ESTIMATE_KINDS]),
       deps.readSpend(scope, window),
+      deps.countFindingsOutside(scope, window),
     ]);
     const currencies = [
       ...new Set([
@@ -182,6 +190,7 @@ export function createUnproductiveSpendHandler(
         ...figure(p.kinds),
       })),
       estimate: figure(UNPRODUCTIVE_ESTIMATE.kinds),
+      findingsOutsidePeriod,
     };
   };
 }
@@ -190,4 +199,5 @@ export const spendUnproductiveHandler = createUnproductiveSpendHandler({
   readClaims,
   readSpend,
   readKindSavings,
+  countFindingsOutside,
 });

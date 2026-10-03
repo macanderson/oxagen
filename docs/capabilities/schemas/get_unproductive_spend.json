@@ -1,7 +1,7 @@
 {
   "name": "get_unproductive_spend",
   "domain": "spend",
-  "description": "Answer this workspace's unproductive spend over a day range: the frames that spin loops, recurring runs, and spend with no outcome claim, each counted once, and its share of the priced spend of the frames that ran in the period. Beside it and out of its sum: what standing context, cache rewrites, and context carry price, and what model class fit estimates. Equals the operator ranking's total for the same period.",
+  "description": "Answer this workspace's unproductive spend over a day range: the frames that spin loops, recurring runs, and spend with no outcome claim, each counted once, and its share of the priced spend of the frames that ran in the period. Beside it and out of its sum: what standing context, cache rewrites, and context carry price, and what model class fit estimates. Equals the operator ranking's total for the same period. Also counts the open findings that claim calls only outside the period.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -200,6 +200,10 @@
           "findings"
         ],
         "additionalProperties": false
+      },
+      "findingsOutsidePeriod": {
+        "type": "integer",
+        "minimum": 0
       }
     },
     "required": [
@@ -208,7 +212,8 @@
       "spend",
       "share",
       "parts",
-      "estimate"
+      "estimate",
+      "findingsOutsidePeriod"
     ],
     "additionalProperties": false
   }

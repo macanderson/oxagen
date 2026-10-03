@@ -32,6 +32,7 @@ The unproductive spend of the active workspace over a day range: the one total S
 | `share` | number or null | `unproductive` over `spend`, capped at 1; null when `spend` is null or zero |
 | `parts` | object[] | detectors 2, 3, and 5 in that order, each `{ detector, saving, findings }` (rule 2) |
 | `estimate` | object | detector 4 as `{ saving, findings }`: a counterfactual on a smaller model class (rule 3) |
+| `findingsOutsidePeriod` | integer | the open findings that claim at least one frame and claim none in the period. Spend › Findings lists every open finding, so the hero names this count when `unproductive` is zero |
 
 `parts[].saving` and `estimate.saving` add the stored savings of the open and applied findings of the detector's kinds whose window overlaps the period. Detector 2 is `standing_context`. Detector 3 is `cache_writes_never_read`, `idle_cache_rewrites`, and `cache_busts`. Detector 5 is `unpaged_results`. Detector 4 is `model_class_fit`. None of them adds to `unproductive`.
 
@@ -46,3 +47,7 @@ The unproductive spend of the active workspace over a day range: the one total S
 The headline reads the claim rows [`get_operator_ranking`](spend.operator_ranking.md) reads (`readUnproductiveClaims`, ADR-208) and counts them the same way (`countClaims`). A frame two findings claim counts once, under the lowest detector. For one period, the ranking's total equals `unproductive`.
 
 The share counts both sides by the time each frame ran. A run whose priced frames all fall in the period adds its whole cost. A run that crosses the period's first or last day adds only its frames inside the period, read from the frame store and priced the way the rollup prices them. At most 50 crossing runs are read, largest first. When one is left unread or cannot be priced, `spend` and `share` are null.
+
+A run's last frame is bounded by its seal, its last rollup, and, for a wrapped run, the last batch any session of its tree sent (`last_event_at`). The last bound keeps an unsealed run that went quiet before the period out of it, even when a reprice rolled the run up again during the period (#5294).
+
+`spend` is not the Spend tile's figure. The tile adds each run whole on the day it started, and `spend` adds each frame on the day it ran, so a run that crosses the period's edge counts differently in each. The Findings hero says so beside the share.

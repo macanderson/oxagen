@@ -15,6 +15,11 @@
  * Each figure adds the open and applied findings of the detector's kinds
  * whose window overlaps the period.
  *
+ * The Findings tab lists every open finding, whatever its window, so the
+ * answer also counts the open findings that claim calls and claim none in
+ * the period. The page names them beside a headline that counts none of
+ * their calls (#5294).
+ *
  * A period whose figures hold two currencies is refused with `conflict`
  * (`unproductive_mixed_currency`), since each figure sums one currency.
  */
@@ -59,7 +64,7 @@ export const spendUnproductive = registerCapability({
   name: "get_unproductive_spend",
   domain: "spend",
   description:
-    "Answer this workspace's unproductive spend over a day range: the frames that spin loops, recurring runs, and spend with no outcome claim, each counted once, and its share of the priced spend of the frames that ran in the period. Beside it and out of its sum: what standing context, cache rewrites, and context carry price, and what model class fit estimates. Equals the operator ranking's total for the same period.",
+    "Answer this workspace's unproductive spend over a day range: the frames that spin loops, recurring runs, and spend with no outcome claim, each counted once, and its share of the priced spend of the frames that ran in the period. Beside it and out of its sum: what standing context, cache rewrites, and context carry price, and what model class fit estimates. Equals the operator ranking's total for the same period. Also counts the open findings that claim calls only outside the period.",
   mode: "sync",
   surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
@@ -92,6 +97,11 @@ export const spendUnproductive = registerCapability({
       parts: z.array(unproductivePartSchema).length(UNPRODUCTIVE_PARTS.length),
       /** Detector 4's estimate, beside the headline and out of it (rule 3). */
       estimate: findingFigureSchema,
+      /**
+       * The open findings that claim calls and claim none in the period: the
+       * Findings tab lists them, and the headline counts none of their calls.
+       */
+      findingsOutsidePeriod: z.number().int().nonnegative(),
     })
     .strict(),
 });
