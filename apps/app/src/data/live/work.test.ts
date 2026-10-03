@@ -101,6 +101,7 @@ const OUTCOMES = {
   touches: { per_item: null, brief_approvals: 0, acceptances: 0, returns: 0, triage_overrides: 0, triage_corrections: 0 },
   cost: { runs: 0, known_runs: 0, total: null },
   reopens: { cohort: 0, reopened: 0, waiting: 0 },
+  reverts: { cohort: 0, reverted: 0, waiting: 0 },
   delivery: {
     sends: 0,
     claimed: 0,
