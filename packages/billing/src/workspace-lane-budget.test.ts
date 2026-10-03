@@ -14,22 +14,22 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const original = await importOriginal<typeof import("@oxagen/database")>();
-  return {
-    ...original,
-    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({
-        select: () => ({
-          from: () => ({
-            where: () => ({
-              limit: async () => {
-                await mocks.settingsRead();
-                return [{ settings: mocks.settings }];
-              },
-            }),
+  const withTenantDb = async (fn: (tx: unknown) => Promise<unknown>) =>
+    fn({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => {
+              await mocks.settingsRead();
+              return [{ settings: mocks.settings }];
+            },
           }),
         }),
       }),
-  };
+    });
+  // ADR-086: a seam that substitutes withTenantDb must substitute withOrgDb
+  // too, or the real one raises TenantScopeError under the test.
+  return { ...original, withTenantDb, withOrgDb: withTenantDb };
 });
 vi.mock("./spend-counter", () => ({
   sumLaneSpendForDay: async (args: unknown) => {

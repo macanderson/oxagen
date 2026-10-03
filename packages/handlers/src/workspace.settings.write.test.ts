@@ -568,7 +568,7 @@ describe("workspace.settings.write handler", () => {
       expect(params).toContain(JSON.stringify({ runEnrichmentEnabled: false }));
       expect(params).toContain(JSON.stringify({ assistant: 1 }));
       expect(out.runEnrichmentEnabled).toBe(false);
-      expect(out.dailyBudgetUsd.assistant).toBe(1);
+      expect(out.dailyBudgetUsd?.assistant).toBe(1);
     });
   });
 

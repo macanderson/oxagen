@@ -141,6 +141,7 @@ export async function sumLaneSpendForDay(args: {
   lane: SpendLane;
   at: Date;
 }): Promise<bigint> {
+  // tenancy: global billing counters, filtered by the gate's orgId, workspaceId, day and lane in the where clause.
   const rows = await withSystemDb((tx) =>
     tx
       .select({
