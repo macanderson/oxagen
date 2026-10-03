@@ -1170,12 +1170,11 @@ export async function agentDaySpend(
  *
  * `bundle_features` is here rather than only at enrollment because it has to
  * track the code the host is **running**. `wrapper_version` and
- * `daemon_version` both originate in `host.json`, which `tacho enroll` writes
- * once and no upgrade rewrites, so a host that upgrades in place keeps
- * reporting the version it enrolled with forever — which would leave every
- * upgraded host permanently ungated. The advertisement rides the health
- * report on every poll instead, so an upgraded host is gated in on its next
- * one.
+ * `daemon_version` both originate in `host.json`. A daemon since #5365 puts
+ * its running version there at start-up, but an older daemon reports the
+ * version it enrolled with for as long as it runs, so a version check would
+ * leave those hosts ungated. The advertisement rides the health report on
+ * every poll instead, so an upgraded host is gated in on its next one.
  *
  * **It tracks downgrades too, which is why a health report without
  * `bundle_features` clears the column rather than preserving it.** The
