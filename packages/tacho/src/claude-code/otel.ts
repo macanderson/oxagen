@@ -885,8 +885,13 @@ function spanDraft(span: OtlpSpan, resource: Attrs): OtelDraft | undefined {
         ...(n(attrs, "duration_ms") !== undefined
           ? { tool_duration_ms: n(attrs, "duration_ms") }
           : {}),
+        // Claude Code's own count, so it is `reported`. A reader prefers it
+        // to the hook's estimate of the same call (#5339).
         ...(n(attrs, "result_tokens") !== undefined
-          ? { tool_result_tokens: n(attrs, "result_tokens") }
+          ? {
+              tool_result_tokens: n(attrs, "result_tokens"),
+              tool_result_tokens_basis: "reported",
+            }
           : {}),
         ...(s(attrs, "file_path") !== undefined
           ? { tool_target: s(attrs, "file_path") }

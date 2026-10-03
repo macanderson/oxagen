@@ -512,6 +512,58 @@ describe("context carry", () => {
     });
   });
 
+  // #5339. A hook-only session's result size is the recorder's estimate.
+  // The finding prices it the same way and labels the figure estimated, as
+  // one estimated part makes a cost basis estimated, so an estimate never
+  // reads as a count Claude Code reported.
+  it("labels the figure estimated when the result's tokens were the hook's estimate", () => {
+    const carried = (estimated: boolean) => {
+      const r = run();
+      const [finding] = detect({
+        runs: [r],
+        toolCalls: [
+          call(
+            r,
+            1,
+            6_000,
+            estimated ? { resultTokensBasis: "estimated" } : {},
+          ),
+        ],
+        frames: new Map([
+          [
+            r.runId,
+            [frame(r, 0.5, 40_000), frame(r, 2, 47_000), frame(r, 3, 48_000)],
+          ],
+        ]),
+      });
+      return finding;
+    };
+    const reported = carried(false);
+    const estimate = carried(true);
+    expect(reported!.basis).toBe("gateway_observed");
+    expect(estimate!.basis).toBe("estimated");
+    // The same carries and the same saving: only the label changes.
+    expect(estimate!.savingMicros).toBe(reported!.savingMicros);
+    expect(estimate!.evidence).toMatchObject({ calls: 2, coveredCalls: 2 });
+
+    // The same holds where the call's chain has no frames.
+    const r = run();
+    const [unframed] = detect({
+      runs: [r],
+      toolCalls: [
+        call(r, 1, 25_000, {
+          sessionUuid: SUBAGENT,
+          resultTokensBasis: "estimated",
+        }),
+      ],
+      frames: new Map([[r.runId, [frame(r, 0.5, 40_000, { chain: null })]]]),
+    });
+    expect(unframed).toMatchObject({
+      basis: "estimated",
+      savingMicros: BigInt((25_000 - PAGE_TOKENS) * 3),
+    });
+  });
+
   it("prices none for a 6,000-token result on a run whose frames were not read", () => {
     const r = run();
     expect(detect({ runs: [r], toolCalls: [call(r, 1, 6_000)] })).toEqual([]);

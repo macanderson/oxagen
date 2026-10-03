@@ -342,6 +342,9 @@ export function toObservations(
       outputDigest: r.outputDigest,
       isMutating: r.isMutating,
       resultTokens: r.resultTokens,
+      ...(r.resultTokensBasis === "estimated"
+        ? { resultTokensBasis: "estimated" as const }
+        : {}),
       sessionUuid: r.sessionUuid === r.rootSessionUuid ? null : r.sessionUuid,
       status: r.status,
       errorClass: r.errorClass,

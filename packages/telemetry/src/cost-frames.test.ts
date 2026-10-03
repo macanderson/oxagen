@@ -716,6 +716,48 @@ describe("readModelCallFrames", () => {
     });
   });
 
+  // #5339. A session the proxy did not carry prices its OTel or transcript
+  // rows, and the recorder puts the context Oxagen's hooks handed it on
+  // those rows. A row from before any hook handed text carries none, and
+  // the read keeps it null rather than zero.
+  it("carries a hook-only session's context frames from its own rows, null where none were handed", async () => {
+    const row = (context: number | null) => ({
+      at: "2026-10-03T10:00:00.000Z",
+      model: "claude-opus-4-5",
+      provider: "anthropic",
+      input_uncached: "1000",
+      cache_read: "0",
+      cache_write_5m: "0",
+      cache_write_1h: "0",
+      output: "200",
+      reasoning: "0",
+      server_tool_request: "0",
+      cost_micros: null,
+      session_uuid: RUN,
+      tool_definition_tokens: null,
+      context_frame_tokens: context,
+      steering_tokens: "80",
+      system_context_digest: "",
+      proxy_observed: 0,
+    });
+    answer([row(null), row(42)]);
+    const frames = await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
+    });
+    expect(frames.map((frame) => frame.contextFrameTokens)).toEqual([
+      null,
+      42,
+    ]);
+    expect(frames.map((frame) => frame.toolDefinitionTokens)).toEqual([
+      null,
+      null,
+    ]);
+    expect(frames.map((frame) => frame.steeringTokens)).toEqual([80, 80]);
+    expect(frames[0]?.basis).toBe("client_attested");
+  });
+
   // #4508 item 1. Only the proxy recorded the request, so only its sighting
   // carries the token sources and the system context. When an OTel or
   // transcript row of the same call sealed first, the host stamps the proxy
@@ -1341,6 +1383,7 @@ describe("readTachoToolCallFrames", () => {
       "at",
       "session_uuid",
       "result_tokens",
+      "result_tokens_basis",
     ]);
     expect(frames).toEqual([
       {
@@ -1386,6 +1429,38 @@ describe("readTachoToolCallFrames", () => {
     ).toHaveLength(2);
     expect(query).toContain("ORDER BY h.ts, h.seq");
     expect(frame?.resultTokens).toBeNull();
+    expect(frame).not.toHaveProperty("resultTokensBasis");
+  });
+
+  // #5339. A session without enhanced telemetry sends no tool span, so the
+  // hook row's estimate fills in, and says it is one. A span's count wins
+  // where both exist.
+  it("takes the hook's estimate where no span reported, and marks it estimated", async () => {
+    answer([
+      hookRow({ result_tokens: "250", result_tokens_basis: "estimated" }),
+      hookRow({ result_tokens: "812", result_tokens_basis: "reported" }),
+    ]);
+    const frames = await readTachoToolCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      rootSessionUuid: RUN,
+      sessionUuids: [RUN],
+    });
+    const { query } = lastQuery();
+    expect(query).toContain(
+      "coalesce(r.result_tokens, h.tool_result_tokens) AS result_tokens",
+    );
+    expect(query).toContain(
+      "multiIf(r.result_tokens IS NOT NULL, 'reported', h.tool_result_tokens IS NULL, '', h.tool_result_tokens_basis = 'reported', 'reported', 'estimated') AS result_tokens_basis",
+    );
+    // The hook row's own columns are read for the estimate.
+    expect(query).toContain("tool_result_tokens, tool_result_tokens_basis");
+    expect(frames[0]).toMatchObject({
+      resultTokens: 250,
+      resultTokensBasis: "estimated",
+    });
+    expect(frames[1]?.resultTokens).toBe(812);
+    expect(frames[1]).not.toHaveProperty("resultTokensBasis");
   });
 
   it("reads each call's time and chain, which place it under the model call that made it (F17)", async () => {
@@ -1646,6 +1721,45 @@ describe("readTachoToolCallObservations", () => {
         errorClass: null,
       },
     ]);
+  });
+
+  // #5339. The findings job reads the same choice as the rollup: the span's
+  // count, else the hook's estimate, which says it is one.
+  it("reads the hook's estimate where no span reported, marked estimated", async () => {
+    answer([
+      {
+        root_session_uuid: RUN,
+        session_uuid: RUN,
+        at: "2026-09-14T10:00:02.000Z",
+        seq: 7,
+        tool: "Read",
+        input_digest: "sha256:in",
+        output_digest: "sha256:out",
+        is_mutating: false,
+        result_tokens: 30_000,
+        result_tokens_basis: "estimated",
+        status: "ok",
+        error_class: "",
+      },
+    ]);
+    const [row] = await readTachoToolCallObservations({
+      orgId: ORG,
+      workspaceId: WS,
+      from: new Date("2026-08-15T00:00:00.000Z"),
+      to: new Date("2026-09-14T12:00:00.000Z"),
+      limit: 10,
+    });
+    const { query } = lastQuery();
+    expect(selectedColumns(query)).toEqual(
+      expect.arrayContaining(["result_tokens", "result_tokens_basis"]),
+    );
+    expect(query).toContain(
+      "coalesce(r.result_tokens, h.tool_result_tokens) AS result_tokens",
+    );
+    expect(row).toMatchObject({
+      resultTokens: 30_000,
+      resultTokensBasis: "estimated",
+    });
   });
 
   it("lets a degraded store throw", async () => {

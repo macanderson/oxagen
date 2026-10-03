@@ -129,6 +129,10 @@ describe("hook normalization", () => {
       tool_error_class: "ENOENT",
     });
 
+    // No result reached the hook, so it estimates no result tokens, never 0.
+    expect(failed[0]?.body).not.toHaveProperty("tool_result_tokens");
+    expect(failed[0]?.body).not.toHaveProperty("tool_result_tokens_basis");
+
     const objectError = hook("PostToolUseFailure", {
       tool_name: "Read",
       tool_use_id: "toolu_2b",
@@ -146,6 +150,9 @@ describe("hook normalization", () => {
     expect(write.map((d) => d.kind)).toEqual(["tool_call", "file_io"]);
     expect(write[0]?.body).toMatchObject({
       tool_output_bytes: 11,
+      // The result's 11 bytes over four, rounded up, as an estimate (#5339).
+      tool_result_tokens: 3,
+      tool_result_tokens_basis: "estimated",
       tool_duration_ms: 3,
     });
 
