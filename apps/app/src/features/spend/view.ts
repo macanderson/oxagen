@@ -37,8 +37,7 @@ export type SpendTab = (typeof SPEND_TABS)[number];
 
 /**
  * The groupings the Month tab offers, in the design's order (#2962). Work
- * item reads each run's work order from the rollup. Agent is the default
- * this build opens on, where the design opens on Work item.
+ * item reads each run's work order from the rollup.
  */
 export const SPEND_MONTH_BY = [
   "work_item",
@@ -49,8 +48,8 @@ export const SPEND_MONTH_BY = [
 ] as const;
 export type SpendMonthBy = (typeof SPEND_MONTH_BY)[number];
 
-/** The grouping a Month address with no `by` opens on. */
-export const SPEND_MONTH_DEFAULT_BY: SpendMonthBy = "agent";
+/** The grouping a Month address with no `by` opens on: Work item, as the design opens (#2962). */
+export const SPEND_MONTH_DEFAULT_BY: SpendMonthBy = "work_item";
 
 export type SpendView =
   /** The month's spend, grouped one way. */

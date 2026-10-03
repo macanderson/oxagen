@@ -1,4 +1,4 @@
-// Which view a Spend path opens: the bare path is Month, grouped by agent
+// Which view a Spend path opens: the bare path is Month, grouped by work item
 // unless the query names another grouping, a known tab segment is that tab, a
 // drill segment only where get_spend_drill would accept its key, and one
 // finding's evidence only where the finding contracts would accept its id.
@@ -13,8 +13,13 @@ import {
 } from "./view";
 
 describe("parseSpendView", () => {
-  it("opens the Month tab grouped by agent on the bare path", () => {
-    const month = { tab: "month", drill: null, finding: null, by: "agent" };
+  it("opens the Month tab grouped by work item on the bare path, as the design does (#2962)", () => {
+    const month = {
+      tab: "month",
+      drill: null,
+      finding: null,
+      by: "work_item",
+    };
     expect(parseSpendView(undefined)).toEqual(month);
     expect(parseSpendView([])).toEqual(month);
     expect(parseSpendView(["month"])).toEqual(month);
@@ -49,12 +54,12 @@ describe("parseSpendView", () => {
     ["a grouping the tab does not offer", "tool"],
     ["an empty grouping", ""],
     ["a grouping in another case", "Operator"],
-  ])("groups by agent for %s (negative)", (_case, by) => {
+  ])("groups by work item for %s (negative)", (_case, by) => {
     expect(parseSpendView(undefined, undefined, by)).toEqual({
       tab: "month",
       drill: null,
       finding: null,
-      by: "agent",
+      by: "work_item",
     });
   });
 
@@ -199,7 +204,7 @@ describe("parseSpendView", () => {
       tab: "month",
       drill: null,
       finding: null,
-      by: "agent",
+      by: "work_item",
     });
   });
 

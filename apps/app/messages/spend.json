@@ -815,6 +815,10 @@
         "label": "No work item",
         "note": "Runs that served no work item"
       },
+      "notMetered": {
+        "label": "Not metered",
+        "reported": "{amount} reported"
+      },
       "moreRuns": "{count, plural, one {# more run} other {# more runs}}",
       "showRuns": "Costliest runs of {name}",
       "reported": "The harness reported {amount} of this total. The gateway metered or estimated the rest.",
