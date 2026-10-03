@@ -10975,6 +10975,8 @@ type Messages = {
         pendingApproval: string;
         exhausted: string;
         unavailable: string;
+        noAnswer: string;
+        commitNoAnswer: string;
         billing: string;
       };
     };
