@@ -21,6 +21,7 @@ import {
   COST_FRAME_QUERY_SETTINGS,
   OBSERVED_MODEL_READ_BOUND,
   OBSERVED_TOKEN_CLASSES,
+  readGroupModelCallFrames,
   readModelCallFrames,
   readObservedModels,
   readTachoProgressFrames,
@@ -986,6 +987,224 @@ describe("readModelCallFrames", () => {
     expect(query).toContain("execution_step_id = {runId:UUID}");
     expect(query).not.toContain("originMessageId");
     expect(query_params).toEqual({ orgId: ORG, runId: RUN });
+  });
+});
+
+describe("readGroupModelCallFrames", () => {
+  /** A second run's root, and a third that the group does not name. */
+  const RUN_B = "00000000-0000-4000-8000-0000000000bb";
+  const OTHER = "00000000-0000-4000-8000-0000000000dd";
+  /** One row as the store returns it, on `session` under `root`. */
+  const stored = (
+    root: string,
+    session: string,
+    seq: number,
+    over: Record<string, unknown> = {},
+  ) => ({
+    at: "2026-09-14T10:00:00.000Z",
+    model: "claude-sonnet-5",
+    provider: "anthropic",
+    input_uncached: "10",
+    cache_read: "0",
+    cache_write_5m: "0",
+    cache_write_1h: "0",
+    output: "5",
+    reasoning: "0",
+    server_tool_request: "0",
+    cost_micros: "100",
+    session_uuid: session,
+    seq: String(seq),
+    run_root: root,
+    ...over,
+  });
+  const runs = [
+    { rootSessionUuid: RUN, sessionUuids: [RUN, CHILD] },
+    { rootSessionUuid: RUN_B, sessionUuids: [RUN_B] },
+  ];
+
+  it("reads every run of the group in one query, through each run's root and sessions, keyed on the root", async () => {
+    answer([
+      stored(RUN, RUN, 1),
+      stored(RUN, CHILD, 2, { reasoning: "3" }),
+      stored(RUN_B, RUN_B, 1),
+    ]);
+    const frames = await readGroupModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      runs,
+    });
+
+    expect(queryMock).toHaveBeenCalledTimes(1);
+    const { query, query_params, clickhouse_settings } = lastQuery();
+    expect(query_params).toEqual({
+      orgId: ORG,
+      workspaceId: WS,
+      rootSessionUuids: [RUN, RUN_B],
+      sessionUuids: [RUN, CHILD, RUN_B],
+      sources: ["otel_log", "collector", "hook", "transcript"],
+      duplicateAttr: "oxagen.llm_call_duplicate_of",
+    });
+    expect(clickhouse_settings).toEqual(COST_FRAME_QUERY_SETTINGS);
+    // The priced rows and all four joined reads name the group's roots and
+    // sessions, so the read stays on the table's sort key.
+    expect(
+      query.match(/root_session_uuid IN \{rootSessionUuids:Array\(UUID\)\}/g),
+    ).toHaveLength(5);
+    expect(
+      query.match(/session_uuid IN \{sessionUuids:Array\(UUID\)\}/g),
+    ).toHaveLength(5);
+    expect(query).not.toContain("{rootSessionUuid:UUID}");
+    // Each joined read keys on the call id and the run's root, so one run's
+    // call ids never meet another run's.
+    for (const [alias, key] of [
+      ["t", "request_id"],
+      ["m", "message_id"],
+      ["r", "request_id"],
+      ["q", "message_id"],
+    ] as const)
+      expect(query).toContain(
+        `) AS ${alias} ON ${alias}.call_key = c.${key} AND ${alias}.root_session_uuid = c.root_session_uuid`,
+      );
+    expect(query.match(/GROUP BY call_key, root_session_uuid/g)).toHaveLength(
+      4,
+    );
+    // The duplicate filter stays on the priced rows alone, as in the run read.
+    expect(query.match(/attrs\[\{duplicateAttr:String\}\] = ''/g)).toHaveLength(
+      1,
+    );
+    expect(query).toContain("AND model != ''");
+    expect(query).toContain("ORDER BY c.root_session_uuid, c.ts, c.seq");
+
+    expect([...frames.keys()]).toEqual([RUN, RUN_B]);
+    expect(frames.get(RUN)).toEqual([
+      expect.objectContaining({ sessionUuid: RUN, seq: 1, reasoning: 0 }),
+      expect.objectContaining({ sessionUuid: CHILD, seq: 2, reasoning: 3 }),
+    ]);
+    expect(frames.get(RUN_B)).toEqual([
+      expect.objectContaining({ sessionUuid: RUN_B, seq: 1 }),
+    ]);
+    // The row's root picks its run and is not part of the frame.
+    expect(frames.get(RUN)?.[0]).not.toHaveProperty("run_root");
+  });
+
+  it("selects every column the run read selects, in its order, and then the root", async () => {
+    answer([]);
+    await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "tacho", ...runs[0]! },
+    });
+    const runQuery = lastQuery().query;
+    answer([]);
+    await readGroupModelCallFrames({ orgId: ORG, workspaceId: WS, runs });
+    const groupQuery = lastQuery().query;
+
+    expect(selectedColumns(groupQuery)).toEqual([
+      ...selectedColumns(runQuery),
+      "run_root",
+    ]);
+    // The priced figures come from the same expressions.
+    for (const expr of [
+      `${CACHE_5M} AS cache_write_5m`,
+      `${CACHE_1H} AS cache_write_1h`,
+      `${REASONING} AS reasoning`,
+      "coalesce(c.tool_definition_tokens, r.tool_definitions, q.tool_definitions) AS tool_definition_tokens",
+      "c.seq AS seq",
+    ])
+      expect(groupQuery).toContain(expr);
+  });
+
+  it("maps a row as the run read maps it", async () => {
+    const row = {
+      ...stored(RUN, RUN, 4),
+      provider: "",
+      cost_micros: null,
+      tool_definition_tokens: 900,
+      steering_tokens: "80",
+      system_context_digest: `sha256:${"d".repeat(64)}`,
+      proxy_observed: 1,
+      cache_keep_alive: "1",
+    };
+    answer([row]);
+    const alone = await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "tacho", ...runs[0]! },
+    });
+    answer([row]);
+    const grouped = await readGroupModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      runs,
+    });
+    expect(grouped.get(RUN)).toEqual(alone);
+    expect(grouped.get(RUN_B)).toEqual([]);
+  });
+
+  it("drops a row whose chain is not one of its own run's sessions, or whose root the group did not name", async () => {
+    answer([
+      stored(RUN, RUN, 1),
+      // Run B's chain, stamped with run A's root.
+      stored(RUN, RUN_B, 2),
+      // A root the group did not name.
+      stored(OTHER, RUN, 3),
+      // ClickHouse prints a UUID in lower case.
+      stored(RUN_B.toUpperCase(), RUN_B.toUpperCase(), 4),
+    ]);
+    const frames = await readGroupModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      runs,
+    });
+    expect(frames.get(RUN)?.map((f) => f.seq)).toEqual([1]);
+    expect(frames.get(RUN_B)?.map((f) => f.seq)).toEqual([4]);
+    expect(frames.has(OTHER)).toBe(false);
+  });
+
+  it("names a run's root when its session list left it out", async () => {
+    answer([]);
+    await readGroupModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      runs: [{ rootSessionUuid: RUN, sessionUuids: [CHILD] }],
+    });
+    expect(lastQuery().query_params).toMatchObject({
+      rootSessionUuids: [RUN],
+      sessionUuids: [RUN, CHILD],
+    });
+  });
+
+  it("keeps a call that names no model only when the caller asks", async () => {
+    answer([stored(RUN, RUN, 1, { model: "" })]);
+    const frames = await readGroupModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      runs,
+      keepModelless: true,
+    });
+    const { query, query_params } = lastQuery();
+    expect(query).not.toContain("model != ''");
+    expect(query_params).not.toHaveProperty("keepModelless");
+    expect(frames.get(RUN)).toEqual([
+      expect.objectContaining({ model: "", seq: 1 }),
+    ]);
+  });
+
+  it("asks nothing for a group with no runs", async () => {
+    const frames = await readGroupModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      runs: [],
+    });
+    expect(frames.size).toBe(0);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it("lets a degraded store throw", async () => {
+    queryMock.mockRejectedValueOnce(new Error("clickhouse unavailable"));
+    await expect(
+      readGroupModelCallFrames({ orgId: ORG, workspaceId: WS, runs }),
+    ).rejects.toThrow("clickhouse unavailable");
   });
 });
 
