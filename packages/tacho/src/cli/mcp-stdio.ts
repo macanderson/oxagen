@@ -24,6 +24,7 @@ import { createInterface } from "node:readline";
 import { agentPathsForEnrollment } from "../host/agents";
 import { readHostFile } from "../host/host-file";
 import { tachoHome } from "../host/paths";
+import { MCP_STREAMABLE_HTTP_ACCEPT } from "../wire";
 
 export interface McpStdioOptions {
   /** The enrollment this config entry was written for. */
@@ -54,6 +55,17 @@ export function shimError(
     id: id === undefined ? null : id,
     error: { code: -32002, message },
   };
+}
+
+/**
+ * True for a JSON-RPC error whose id is null or missing. JSON-RPC sends that
+ * id when the server could not read the request's id, and the MCP SDK
+ * transport sends it for every POST it refuses before reading the body.
+ */
+function answersNoRequest(message: object): boolean {
+  if (Array.isArray(message) || !("error" in message)) return false;
+  const id = (message as { id?: unknown }).id;
+  return id === null || id === undefined;
 }
 
 /**
@@ -135,7 +147,9 @@ export async function runMcpStdio(
         headers: {
           Authorization: `Bearer ${target.token}`,
           "Content-Type": "application/json",
-          Accept: "application/json",
+          // The two media types the MCP transport requires of a client. The
+          // local gateway always answers with JSON, which this accepts.
+          Accept: MCP_STREAMABLE_HTTP_ACCEPT,
           // Loopback, so this is not a real origin check — it is here so the
           // gateway's guard sees a Host it recognises even behind a proxy
           // that rewrites one.
@@ -160,7 +174,14 @@ export async function runMcpStdio(
         parsed = undefined;
       }
       if (typeof parsed === "object" && parsed !== null) {
-        if (expectsReply || response.ok) deps.stdout.write(`${body}\n`);
+        if (expectsReply && answersNoRequest(parsed)) {
+          // An error with a null or missing id matches no request, so the
+          // client would wait out its own timeout (#5356). It answers this
+          // line, so it takes this line's id.
+          reply({ ...(parsed as Record<string, unknown>), id });
+        } else if (expectsReply || response.ok) {
+          deps.stdout.write(`${body}\n`);
+        }
       } else if (!response.ok || (expectsReply && body.length > 0)) {
         deps.stderr.write(
           `oxagen mcp-stdio: the gateway answered ${response.status}: ${body.slice(0, 200)}\n`,

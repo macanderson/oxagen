@@ -62,6 +62,7 @@ import {
 import { type DraftContent, jsonContent } from "../evidence/frame-body";
 import { TACHO_VERSION } from "../version";
 import {
+  MCP_STREAMABLE_HTTP_ACCEPT,
   TACHO_GATEWAY_GENESIS_HEADER,
   TACHO_GATEWAY_SESSION_HEADER,
   type PolicyBundle,
@@ -355,10 +356,24 @@ export function ceilingOf(
 }
 
 /**
- * A streamable-HTTP response may be `application/json` or an SSE stream. We
- * ask for JSON, but a server is free to answer with a stream anyway, so a
- * body that looks like SSE is reduced to its last `data:` payload — which for
- * a single request/response exchange is the response.
+ * The JSON-RPC message in an upstream body, or undefined when the body is
+ * empty.
+ *
+ * A streamable-HTTP server answers a POST with `application/json` or with an
+ * event stream (SSE, `text/event-stream`). The hosted server streams: xmcp
+ * leaves the MCP SDK transport's `enableJsonResponse` unset, so each message
+ * arrives as an `event: message` with a `data:` line, and the stream closes
+ * after the response.
+ *
+ * A body that looks like a stream is read event by event, as the SSE standard
+ * reads it. An event's `data:` lines join with newlines. An event with no
+ * data, such as the SDK's priming event or a keep-alive comment, carries no
+ * message. The last message is the response, because the server sends any
+ * notification about a request before the response and closes the stream
+ * after it.
+ *
+ * Throws when the body, or the last event's data, is not JSON. The caller
+ * decides what the client is told.
  */
 export function readRpcBody(text: string): unknown {
   const trimmed = text.trim();
@@ -367,11 +382,95 @@ export function readRpcBody(text: string): unknown {
     return JSON.parse(trimmed) as unknown;
   }
   let last: string | undefined;
-  for (const line of trimmed.split(/\r?\n/)) {
-    if (line.startsWith("data:")) last = line.slice(5).trim();
+  for (const event of trimmed.split(/\r?\n\r?\n/)) {
+    const data = event
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(line.startsWith("data: ") ? 6 : 5));
+    const payload = data.join("\n");
+    if (payload.trim().length > 0) last = payload;
   }
   if (last === undefined) return undefined;
   return JSON.parse(last) as unknown;
+}
+
+/** What the gateway read back from the hosted server for one forward. */
+export interface UpstreamAnswer {
+  status: number;
+  /** The JSON-RPC message, or undefined when the body was empty or not JSON. */
+  body: unknown;
+  /** The raw body, quoted to the client when it is not a JSON-RPC answer. */
+  text: string;
+}
+
+/** The longest stretch of a raw upstream body an error message quotes. */
+const UPSTREAM_EXCERPT_MAX = 200;
+
+function isRpcErrorObject(value: unknown): value is JsonRpcError {
+  if (value === null || typeof value !== "object") return false;
+  const error = value as Record<string, unknown>;
+  return (
+    typeof error["code"] === "number" && typeof error["message"] === "string"
+  );
+}
+
+/**
+ * The answer a client can match to its request, whatever the hosted server
+ * sent back.
+ *
+ * A client waits for a reply that carries its own request id. Nothing else
+ * ends that wait except the client's own timeout. So a request with an id
+ * always gets an answer with that id (#5356):
+ *
+ *   - A JSON-RPC error keeps its code, message and data, and takes the
+ *     request's id. The MCP SDK transport refuses a bad POST before it reads
+ *     the body, so its refusal carries `id: null`. The 406 for a missing
+ *     `text/event-stream` was one. Passed through as it was, that refusal
+ *     matched no request, and the client waited 30 seconds for an answer.
+ *   - A non-2xx status with no JSON-RPC error becomes an internal error that
+ *     names the status and quotes the start of the body. So does a body that
+ *     is not a JSON-RPC answer at all: empty, not JSON, or an object with
+ *     neither `result` nor `error`.
+ *   - A 2xx `result` passes through unchanged.
+ *
+ * The HTTP status stays the hosted server's when it was not 2xx. It becomes
+ * 502 when a 2xx carried no answer. A notification has no id and wants no
+ * answer, so the gateway never passes one here.
+ */
+export function answerFor(
+  id: string | number,
+  upstream: UpstreamAnswer,
+): GatewayHttpResponse {
+  const { status, body } = upstream;
+  const ok = status >= 200 && status < 300;
+  const message =
+    body !== null && typeof body === "object" && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : undefined;
+  const error = message?.["error"];
+  if (isRpcErrorObject(error)) {
+    if (message?.["id"] === id) return { status, body };
+    return {
+      status,
+      body: { jsonrpc: "2.0", id, error } satisfies JsonRpcResponse,
+    };
+  }
+  if (ok && message !== undefined && "result" in message) {
+    return { status, body };
+  }
+  const flat = upstream.text.replace(/\s+/g, " ").trim();
+  const what =
+    flat.length === 0
+      ? "with no body"
+      : `with a body that is not a JSON-RPC answer: ${flat.slice(0, UPSTREAM_EXCERPT_MAX)}`;
+  return {
+    status: ok ? 502 : status,
+    body: rpcError(
+      id,
+      RPC_INTERNAL_ERROR,
+      `the Oxagen control plane answered HTTP ${status} ${what}`,
+    ),
+  };
 }
 
 /**
@@ -505,7 +604,7 @@ export function createMcpGateway(deps: McpGatewayDeps): McpGateway {
   async function forward(
     request: JsonRpcRequest,
     attribution: GatewayAttribution,
-  ): Promise<{ status: number; body: unknown }> {
+  ): Promise<UpstreamAnswer> {
     const controller = new AbortController();
     const timer = setTimeout(
       () => controller.abort(),
@@ -517,10 +616,11 @@ export function createMcpGateway(deps: McpGatewayDeps): McpGateway {
         headers: {
           Authorization: `Bearer ${attribution.apiKey}`,
           "Content-Type": "application/json",
-          // JSON only: the gateway answers one request at a time and has no
-          // stream to hand a client. A server that streams anyway is handled
-          // by `readRpcBody`.
-          Accept: "application/json",
+          // Both media types, as the MCP transport requires. The hosted
+          // server refuses any other Accept with a 406 (#5356). It answers
+          // with an event stream, and `readRpcBody` reads the response out of
+          // it, so the client still gets one JSON answer.
+          Accept: MCP_STREAMABLE_HTTP_ACCEPT,
           "User-Agent": "oxagen-local-gateway",
           "X-Tacho-Host": attribution.hostEnrollmentId,
           // Which chain this call belongs to. The control plane takes the
@@ -544,7 +644,17 @@ export function createMcpGateway(deps: McpGatewayDeps): McpGateway {
         signal: controller.signal,
       });
       const text = await response.text();
-      return { status: response.status, body: readRpcBody(text) };
+      let body: unknown;
+      try {
+        body = readRpcBody(text);
+      } catch {
+        // Not JSON, and not a stream that carries JSON: a load balancer's
+        // HTML page or a proxy's plain-text error. The server was reached,
+        // so this is no transport failure. `answerFor` tells the client
+        // what came back.
+        body = undefined;
+      }
+      return { status: response.status, body, text };
     } finally {
       clearTimeout(timer);
     }
@@ -611,9 +721,9 @@ export function createMcpGateway(deps: McpGatewayDeps): McpGateway {
       }
 
       const startedAt = now();
-      let response: { status: number; body: unknown };
+      let upstream: UpstreamAnswer;
       try {
-        response = await forward(request, attribution);
+        upstream = await forward(request, attribution);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         log(`mcp gateway forward failed: ${message}`);
@@ -626,6 +736,19 @@ export function createMcpGateway(deps: McpGatewayDeps): McpGateway {
             `the Oxagen control plane could not be reached: ${message}`,
           ),
         };
+      }
+
+      // A request gets an answer with its own id, whatever came back. A
+      // notification's acknowledgement (202, no body) passes through as it is.
+      let response: GatewayHttpResponse =
+        typeof request.id === "string" || typeof request.id === "number"
+          ? answerFor(request.id, upstream)
+          : { status: upstream.status, body: upstream.body };
+      if (response.body !== upstream.body) {
+        const said = (response.body as JsonRpcResponse).error?.message;
+        log(
+          `mcp gateway gave ${request.method} an error with the request's id after HTTP ${upstream.status}: ${said ?? "no message"}`,
+        );
       }
 
       const rpc = response.body as JsonRpcResponse | undefined;

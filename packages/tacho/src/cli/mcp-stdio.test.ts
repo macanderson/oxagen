@@ -16,6 +16,7 @@ import {
   runMcpStdio,
   shimError,
 } from "./mcp-stdio";
+import { MCP_STREAMABLE_HTTP_ACCEPT } from "../wire";
 
 const ENROLLMENT = "tch_abcdefghijklmnopqrstuv";
 
@@ -116,6 +117,25 @@ describe("the pump", () => {
       "Bearer tok",
     );
     expect(d.out).toEqual(['{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}\n']);
+  });
+
+  it("accepts both media types the MCP transport requires of a client (#5356)", async () => {
+    const fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      text: async () => '{"jsonrpc":"2.0","id":1,"result":{}}',
+    }));
+    const d = deps({
+      stdin: lines({ jsonrpc: "2.0", id: 1, method: "initialize" }),
+      fetch: fetch as unknown as typeof globalThis.fetch,
+    });
+    await runMcpStdio({ port: 1, enrollment: ENROLLMENT }, d);
+    const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    const accept = (init.headers as Record<string, string>)["Accept"];
+    expect(accept).toBe(MCP_STREAMABLE_HTTP_ACCEPT);
+    expect(accept).toContain("application/json");
+    expect(accept).toContain("text/event-stream");
   });
 
   it("carries the session id the gateway assigned on every later call", async () => {
@@ -228,6 +248,61 @@ describe("what the shim writes back is always something the client can parse", (
     };
     expect(reply.id).toBe(7);
     expect(reply.error.message).toContain("401");
+  });
+
+  it("gives a null-id error the request's id, so the client fails fast (#5356)", async () => {
+    // The MCP SDK transport refuses a POST before it reads the body, so its
+    // refusal carries id null. Written as it was, it matched no request and
+    // the client waited 30 seconds for an answer.
+    const error = {
+      code: -32000,
+      message:
+        "Not Acceptable: Client must accept both application/json and text/event-stream",
+    };
+    const d = deps({
+      stdin: lines({ jsonrpc: "2.0", id: 7, method: "initialize" }),
+      fetch: respond(406, JSON.stringify({ jsonrpc: "2.0", error, id: null })),
+    });
+    await runMcpStdio({ port: 1 }, d);
+    expect(d.out).toHaveLength(1);
+    expect(JSON.parse(d.out[0] as string)).toEqual({
+      jsonrpc: "2.0",
+      id: 7,
+      error,
+    });
+  });
+
+  it("gives an error with no id the request's id, and leaves a matched answer as it came", async () => {
+    const missing = deps({
+      stdin: lines({ jsonrpc: "2.0", id: "a", method: "tools/list" }),
+      fetch: respond(
+        400,
+        '{"jsonrpc":"2.0","error":{"code":-32600,"message":"bad"}}',
+      ),
+    });
+    await runMcpStdio({ port: 1 }, missing);
+    expect(JSON.parse(missing.out[0] as string)).toHaveProperty("id", "a");
+
+    const matched =
+      '{"jsonrpc":"2.0","id":5,"error":{"code":-32002,"message":"no"}}';
+    const kept = deps({
+      stdin: lines({ jsonrpc: "2.0", id: 5, method: "tools/call" }),
+      fetch: respond(403, matched),
+    });
+    await runMcpStdio({ port: 1 }, kept);
+    expect(kept.out).toEqual([`${matched}\n`]);
+  });
+
+  it("writes nothing for a notification the gateway refused with a null id", async () => {
+    const d = deps({
+      stdin: lines({ jsonrpc: "2.0", method: "notifications/initialized" }),
+      fetch: respond(
+        406,
+        '{"jsonrpc":"2.0","error":{"code":-32000,"message":"no"},"id":null}',
+      ),
+    });
+    await runMcpStdio({ port: 1 }, d);
+    expect(d.out).toEqual([]);
   });
 
   it("writes nothing for a notification, whatever the gateway answered", async () => {
