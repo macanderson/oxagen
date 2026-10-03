@@ -252,7 +252,6 @@ describe("link_repository: repository checks", () => {
   it.each([
     ["github_not_connected", "conflict"],
     ["repository_not_installed", "not_found"],
-    ["main_repo_claimed", "conflict"],
   ] as const)(
     "passes a %s refusal from resolveLinkTarget through and leaves the steering repository alone",
     async (reason, code) => {

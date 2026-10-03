@@ -304,16 +304,14 @@ describe("oxagen repo link", () => {
   it("routes a refusal to stderr and exits 1", async () => {
     (apiPostOrThrow as Mock).mockRejectedValueOnce(
       new apiMock.ApiError(
-        "acme/billing is the steering repository of another workspace",
+        "acme/billing is already linked to this workspace",
         409,
       ),
     );
     const { writer, out, err } = memoryWriter();
     await repoLink("acme/billing", {}, writer);
     expect(out).toEqual([]);
-    expect(err).toEqual([
-      "✗ acme/billing is the steering repository of another workspace",
-    ]);
+    expect(err).toEqual(["✗ acme/billing is already linked to this workspace"]);
     expect(process.exitCode).toBe(1);
   });
 });

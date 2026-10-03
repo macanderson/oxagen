@@ -3,8 +3,7 @@
 // and the steering sync (a linked head, once a steering PR that lists the
 // repository merges; see repository.link.write.ts). It also holds what every
 // writer of a workspace's heads shares: the workspace lock, the reading of a
-// head write the store refused, the check that the global claim is knowable,
-// and the GitHub repository reader.
+// head write the store refused, and the GitHub repository reader.
 //
 // `bind_main_repository` was the last writer that repaired or re-approved an
 // EXISTING head in place. #4616 removed it (ADR-212), so a head is now only
@@ -17,13 +16,10 @@
 // would violate that index. So the latest version for the pair is read first:
 // reused when nothing it records has moved, superseded by version + 1 when
 // something has, and only when there is none is a version 1 written.
-import { HandlerError } from "@oxagen/oxagen";
-import { schema, type Tx, withSystemDb } from "@oxagen/database";
+import { schema, type Tx } from "@oxagen/database";
 import { createGitHubClient, getInstallationToken } from "@oxagen/github";
 import type { GitHubRepoInfo } from "@oxagen/github";
-import { assertDataPlaneUsable, resolveDataPlane } from "@oxagen/tenancy";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
-import { logger } from "./logger";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { GITHUB_PROVIDER } from "./repository.github-connection";
 
 /**
@@ -64,37 +60,36 @@ export interface BindableRepository {
 }
 
 /**
- * What a 23505 from the heads table means, by constraint name. The partial
- * unique index refuses a second steering head for one repository; the trigger
- * `repository_binding_heads_exclusive_main`
- * (20260918200000_repository_binding_heads_exclusive_across_roles.sql) raises
- * the same code under three names, one of them the index's own, so a writer
- * maps the racing case and the ordinary case to one sentence.
+ * What a 23505 from the heads table means, by constraint name. One
+ * cross-workspace rule is left (ADR-293): a repository steers at most one
+ * workspace, held by the partial unique index on steering heads. Only a
+ * steering head write can break it. A linked head is outside the index's
+ * predicate, so no other workspace's heads can refuse a link.
+ *
+ * 20261003170000 dropped the trigger `repository_binding_heads_exclusive_main`
+ * and the two names it raised for a linked head beside another workspace's
+ * steering head. Neither name can reach a writer now.
  */
 const HEAD_CONFLICT_BY_CONSTRAINT: Readonly<
   Record<string, RepositoryHeadConflict>
 > = {
-  // The repository is another workspace's steering repository. Raised by the
-  // index and by the trigger for a steering head written where one exists
-  // elsewhere.
+  // A steering head written for a repository another workspace steers by.
   repository_binding_heads_main_repository_uq: "main_elsewhere",
-  // A linked head written where a steering head exists elsewhere: the same
-  // fact, seen from the other side.
-  repository_binding_heads_linked_is_main_elsewhere: "main_elsewhere",
-  // A steering head written where a linked head exists elsewhere.
-  repository_binding_heads_main_is_linked_elsewhere: "linked_elsewhere",
 };
 
 /**
- * Which cross-workspace rule a head write broke: the repository steers another
- * workspace, or another workspace links it and it was being claimed as a
- * steering repository. The names keep the store's `main` spelling.
+ * Which cross-workspace rule a head write broke. `main_elsewhere`: the
+ * repository already steers another workspace, so it cannot steer this one
+ * too. The name keeps the store's `main` spelling.
  */
-export type RepositoryHeadConflict = "main_elsewhere" | "linked_elsewhere";
+export type RepositoryHeadConflict = "main_elsewhere";
 
 /**
- * The cross-workspace rule a failed head write broke, or null when the error
- * is something else.
+ * The cross-workspace rule a failed steering head write broke, or null when
+ * the error is something else. No writer in service reads it today. The
+ * steering provisioner binds a repository Oxagen created for the workspace
+ * and passes a refused bind through unmapped. The Postgres tests read it to
+ * name the refusal.
  *
  * Matched on the constraint NAME rather than on 23505 alone: this insert can
  * also violate `repository_binding_heads_repository_uq`, which means something
@@ -117,107 +112,6 @@ export function repositoryHeadConflict(
     e = row.cause;
   }
   return null;
-}
-
-/**
- * Refuse unless the global steering-repository claim is actually knowable.
- *
- * `repository_binding_heads_main_repository_uq` is global only within ONE
- * Postgres. ADR-042 lets an organisation carry a dedicated plane, and
- * ingestion is tenant data such a plane holds, so the guard has two blind
- * spots and BOTH of them admit exactly the second claim it exists to refuse:
- *
- *   1. THIS organisation is dedicated. Its heads live on its own plane, where
- *      neither the shared index nor the shared read can see them, and the
- *      claim it writes is invisible to every other tenant.
- *   2. ANY OTHER organisation is dedicated. Then a steering head may already
- *      exist on that plane for this repository, and a shared-plane read
- *      returns nothing while the claim is real.
- *
- * Both are refused rather than guessed, the way `billing.evidence_retention`
- * refuses the same ADR-042 gap. The real repair is a plane-aware global claim
- * check, which is a change to the store seam. No organisation is dedicated
- * today (ADR-042 §1: absence of a row means shared, and the dedicated mode
- * has no customer), so nothing in service reaches either refusal.
- *
- * `org.data_planes` is itself always on the shared plane (a plane binding
- * cannot be stored on the plane it describes), so one `withSystemDb` read
- * answers (2) for every tenant at once.
- */
-export async function assertGlobalClaimIsKnowable(
-  orgId: string,
-): Promise<void> {
-  const plane = await resolveDataPlane(orgId, "postgres");
-  // Throws DataPlaneUnavailableError for any binding that is not active.
-  assertDataPlaneUsable(plane);
-  if (plane.mode !== "shared") throw planeUnsupported();
-
-  // tenancy: global read of org.data_planes, a shared-plane system table, with
-  // no org_id filter by design. It reads one row id to learn whether any
-  // dedicated plane exists, and nothing outside this function sees the id.
-  const dedicatedElsewhere = await withSystemDb((tx) =>
-    tx
-      .select({ id: schema.dataPlanes.id })
-      .from(schema.dataPlanes)
-      .where(
-        and(
-          eq(schema.dataPlanes.kind, "postgres"),
-          eq(schema.dataPlanes.mode, "dedicated"),
-          isNull(schema.dataPlanes.deletedAt),
-        ),
-      )
-      .limit(1),
-  );
-  if (dedicatedElsewhere.length > 0) {
-    logger.warn(
-      { orgId },
-      "repository head claim refused: a dedicated Postgres plane exists, so the global steering-repository claim cannot be checked",
-    );
-    throw planeUnsupported();
-  }
-}
-
-/**
- * Re-ask which plane the organisation is on, uncached, from inside the
- * transaction that writes a head (#3340 finding 1).
- *
- * `assertGlobalClaimIsKnowable` asks before the transaction opens. When the
- * organisation's Postgres plane moves between that answer and the write,
- * `withTenantDb` writes the head on the new dedicated plane, where neither the
- * shared trigger nor a cross-tenant read can see it, and another workspace
- * can later claim the same repository. Asking again inside the transaction
- * narrows that window to the transaction itself.
- *
- * `loadDataPlaneBinding`, not `resolveDataPlane`: the resolver caches per
- * process, and `set_data_plane` invalidates only the process it ran in, so a
- * cached re-ask would hand back the same stale `shared` answer the pre-check
- * had and check nothing.
- */
-export async function assertPlaneStillShared(scope: {
-  orgId: string;
-  workspaceId: string;
-}): Promise<void> {
-  // Loaded on first use, as `get_data_plane` loads it, so the many importers
-  // of this module do not load the plane resolver until a head is written.
-  const { loadDataPlaneBinding } = await import("@oxagen/database/data-plane");
-  const planeNow = await loadDataPlaneBinding(scope.orgId, "postgres");
-  assertDataPlaneUsable(planeNow);
-  if (planeNow.mode !== "shared") {
-    logger.warn(
-      { orgId: scope.orgId, workspaceId: scope.workspaceId },
-      "repository head write refused mid-transaction: the organization's Postgres plane moved after the pre-check",
-    );
-    throw planeUnsupported();
-  }
-}
-
-function planeUnsupported(): HandlerError {
-  return new HandlerError({
-    code: "conflict",
-    reason: "main_repo_plane_unsupported",
-    message:
-      "Oxagen cannot yet prove this repository is not another workspace's steering repository. A dedicated data plane is in use, and the uniqueness guard holds only within one database, so Oxagen refuses the write rather than admit a claim it cannot check.",
-  });
 }
 
 /** Reads a repository through a GitHub App installation. Tests pass a fake. */
@@ -291,8 +185,8 @@ export interface WrittenRepositoryHead {
 /**
  * Write a binding head for `repo` on `tx`, reusing the latest binding version
  * when nothing it records has moved, and superseding it otherwise. The caller
- * has already decided the head may exist (role, duplicates, claims) and holds
- * the workspace lock.
+ * has already decided the head may exist (role and duplicates) and holds the
+ * workspace lock.
  *
  * The latest version is the workspace's for this repository through ANY
  * connection (#3340 finding 7). A binding version is the evidence an admitted

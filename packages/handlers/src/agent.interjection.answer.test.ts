@@ -645,11 +645,11 @@ describe("answer_interjection: the link path", () => {
     const store = new MemoryStore([repoQuestion()]);
     const paths = fakePaths();
     paths.link.mockRejectedValueOnce(
-      new HandlerError({ code: "conflict", reason: "main_repo_claimed" }),
+      new HandlerError({ code: "conflict", reason: "workspace_toml_unreadable" }),
     );
     await expect(
       handlerFor(store, { paths })(pathInput(), OPERATOR),
-    ).rejects.toSatisfy(conflict("main_repo_claimed"));
+    ).rejects.toSatisfy(conflict("workspace_toml_unreadable"));
     expect(store.questions[0]?.answeredAt).toBeNull();
     expect(store.queued).toEqual([]);
     expect(store.audits).toEqual([]);
