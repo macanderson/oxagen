@@ -16,7 +16,8 @@
 // In a module (`.ts`, `.tsx`), the scan finds:
 // - A Tailwind arbitrary value in any string: `gap-[10px]`, `md:max-w-[720px]`,
 //   `bg-black/[0.35]`, `[overflow-wrap:anywhere]`, or an arbitrary breakpoint
-//   such as `min-[67.5rem]:grid-cols-3`. A bracket in a state variant
+//   such as `min-[67.5rem]:grid-cols-3`. A CSS-wide keyword in brackets,
+//   such as `rounded-[inherit]`, writes no value. A bracket in a state variant
 //   (`data-[state=open]:`, `aria-[sort=ascending]:`, `has-[>svg]:`,
 //   `group-data-[…]:`, `peer-…-[…]:`, `supports-[…]:`, `[&>svg]:`) selects an
 //   element and holds no value, so it does not count. Tailwind's variable
@@ -98,6 +99,9 @@ const ARBITRARY_BREAKPOINT = /^(?:@?(?:min|max)-|@)\[[^\]]+\]$/;
 
 /** A duration or delay step: `duration-200`, `delay-75`. */
 const MOTION_STEP = /^(?:duration|delay)-\d+$/;
+
+/** A CSS-wide keyword in brackets, such as `rounded-[inherit]`: it takes the parent's value and writes none. */
+const KEYWORD_VALUE = /-\[(?:inherit|initial|unset|revert)\]$/;
 
 /**
  * A number that is not part of a name: `12px`, `-50%`, `0.4`, the `100` in
@@ -211,6 +215,7 @@ export function isHardcodedClass(token: string): boolean {
   const parts = segments(token);
   const utility = (parts.pop() ?? "").replace(/^!|!$/g, "").replace(/^-/, "");
   if (parts.some((variant) => ARBITRARY_BREAKPOINT.test(variant))) return true;
+  if (KEYWORD_VALUE.test(utility)) return false;
   return (
     ARBITRARY_VALUE.test(utility) ||
     ARBITRARY_MODIFIER.test(utility) ||
