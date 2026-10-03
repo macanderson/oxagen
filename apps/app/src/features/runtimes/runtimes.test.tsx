@@ -23,6 +23,7 @@ import { IntlProvider } from "@/test/intl";
 import { nth } from "@/test/nth";
 import { phoneWidth } from "@/test/phone";
 import { optionNames, pickOption } from "@/test/select";
+import { expectTouchTarget } from "@/test/touch-target";
 import {
   enrollment,
   memberList,
@@ -1223,7 +1224,7 @@ describe("Runtimes on a phone", () => {
       const targets = phone.container.querySelectorAll("[data-touch-target]");
       expect(targets.length).toBeGreaterThan(1);
       for (const target of targets)
-        expect(getComputedStyle(target).minHeight).toBe("44px");
+        expectTouchTarget(getComputedStyle(target).minHeight);
     } finally {
       phone.restore();
     }
@@ -1237,7 +1238,7 @@ describe("Runtimes on a phone", () => {
       expect(row).toHaveClass("relative", "cursor-pointer");
       const link = within(row).getByRole("link");
       expect(link).toHaveAttribute("data-touch-target");
-      expect(getComputedStyle(link).minHeight).toBe("44px");
+      expectTouchTarget(getComputedStyle(link).minHeight);
       expect(link.className).toContain("after:inset-0");
     } finally {
       phone.restore();
@@ -1557,7 +1558,7 @@ describe("A named runtime's drawer and its containment (ADR-204)", () => {
         .closest("label");
       if (label === null) throw new Error("the switch has no label");
       expect(label).toHaveAttribute("data-touch-target");
-      expect(getComputedStyle(label).minHeight).toBe("44px");
+      expectTouchTarget(getComputedStyle(label).minHeight);
     } finally {
       phone.restore();
     }

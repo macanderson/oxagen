@@ -33,6 +33,7 @@ import type {
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { phoneWidth } from "@/test/phone";
+import { expectTouchTarget } from "@/test/touch-target";
 
 const readWorkspaceRepository = vi.fn();
 const listGithubInstallations = vi.fn();
@@ -402,7 +403,7 @@ describe("no GitHub App installation", () => {
       const targets = phone.container.querySelectorAll("[data-touch-target]");
       expect(targets.length).toBeGreaterThan(0);
       for (const target of targets)
-        expect(getComputedStyle(target).minHeight).toBe("44px");
+        expectTouchTarget(getComputedStyle(target).minHeight);
     } finally {
       phone.restore();
     }
