@@ -65,7 +65,7 @@ function Chip({
     <span
       data-testid={testId}
       title={title}
-      className={`inline-flex min-w-0 max-w-full items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-hl px-[7px] py-0.5 leading-normal tracking-[0.02em] text-muted-foreground ${code ? "font-mono text-xs font-medium" : "text-xs font-semibold"}`}
+      className={`inline-flex min-w-0 max-w-full items-center gap-1.25 whitespace-nowrap rounded-md border border-border bg-hl px-1.75 py-0.5 leading-normal tracking-[0.02em] text-muted-foreground ${code ? "font-mono text-xs font-medium" : "text-xs font-semibold"}`}
     >
       {children}
     </span>
@@ -153,7 +153,7 @@ function Rig({
   return (
     <div
       data-testid="run-rig"
-      className="mt-2 flex flex-wrap items-center gap-[9px]"
+      className="mt-2 flex flex-wrap items-center gap-2.25"
     >
       <Chip>
         {harness === null ? (
@@ -719,7 +719,7 @@ function SubagentsFromWork({
   return (
     <div
       data-testid="run-subagents"
-      className="mt-2 flex flex-wrap items-center gap-[9px]"
+      className="mt-2 flex flex-wrap items-center gap-2.25"
     >
       <span className="text-xs font-semibold uppercase tracking-[0.1em] text-dim">
         {t("subagents")}
@@ -756,7 +756,7 @@ function When({ run }: { run: RunRow }) {
   return (
     <p
       data-testid="run-when"
-      className="mt-2 max-w-[70ch] text-sm text-muted-foreground"
+      className="mt-2 max-w-measure text-sm text-muted-foreground"
     >
       {t("started")} <time dateTime={run.startedAt}>{when(run.startedAt)}</time>
       {run.status === "live" ? null : run.sealSource === "idle_timeout" &&
@@ -948,7 +948,7 @@ function PauseBanner({
       data-testid="run-paused"
       data-source={run.source}
       data-state={state}
-      className="mb-3.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[10px] border border-info/40 bg-info/10 px-3.5 py-[11px] text-sm text-foreground"
+      className="mb-3.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[10px] border border-info/40 bg-info/10 px-3.5 py-2.75 text-sm text-foreground"
     >
       <span aria-hidden="true" className="text-info">
         ❙❙
@@ -1044,7 +1044,7 @@ export function RunHeader({
     <>
       <header
         data-testid="run-header"
-        className="mb-[18px] flex flex-wrap items-start gap-[18px]"
+        className="mb-4.5 flex flex-wrap items-start gap-4.5"
       >
         <div className="min-w-0">
           <p className={`${eyebrow} mb-2.5`}>{t("header.eyebrow")}</p>
@@ -1059,7 +1059,7 @@ export function RunHeader({
           <div
             data-testid="run-chips"
             aria-label={t("header.chips")}
-            className="mt-2 flex flex-wrap items-center gap-[9px]"
+            className="mt-2 flex flex-wrap items-center gap-2.25"
           >
             <AgentCard
               layout="compact"

@@ -439,11 +439,11 @@ export function ApprovalsDrawer({
         aria-hidden={approvalsOpen ? undefined : true}
         inert={!approvalsOpen}
         data-open={approvalsOpen ? "" : undefined}
-        className={`fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-border bg-app-raised-bg text-app-raised-fg shadow-pop transition-transform motion-reduce:transition-none md:w-[min(680px,90vw)] ${
+        className={`fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-border bg-app-raised-bg text-app-raised-fg shadow-pop transition-transform motion-reduce:transition-none md:w-(--approvals-w) ${
           approvalsOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        <div className="flex items-center gap-2.5 border-b border-border px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <div className="flex items-center gap-2.5 border-b border-border px-4 py-3 pt-(--drawer-pad-top)">
           <h3 className="text-base font-semibold">{t("title")}</h3>
           {waitingLabel === null ? null : (
             <Badge tone={n !== null && n > 0 ? "approval" : "quiet"}>
@@ -464,7 +464,7 @@ export function ApprovalsDrawer({
         <div
           ref={bodyRef}
           data-testid="apdrawer-body"
-          className="min-h-0 flex-1 overflow-y-auto px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+          className="min-h-0 flex-1 overflow-y-auto px-4 py-4 pb-(--drawer-pad-bottom)"
         >
           {selected !== null ? (
             <>

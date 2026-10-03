@@ -29,7 +29,7 @@ import {
 import { Note, Panel, PanelBody } from "./parts";
 
 /** `.btn.sm { padding:4px 9px; font-size:12px; border-radius:7px }` */
-const buttonSmall = `${buttonSecondary} min-h-7 rounded-[7px] px-[9px] py-1 text-sm`;
+const buttonSmall = `${buttonSecondary} min-h-7 rounded-[7px] px-2.25 py-1 text-sm`;
 
 /** `.panel-b b` over `p.muted { margin:6px 0 0; font-size:12.5px }`: a card's title and its reading. */
 const cardTitle = "m-0 text-base font-bold text-foreground";
@@ -50,7 +50,7 @@ function MoveStub({
 }) {
   const whyId = `run-fit-${kind}-why`;
   return (
-    <div className="mt-2.5 flex flex-wrap items-center gap-[9px]">
+    <div className="mt-2.5 flex flex-wrap items-center gap-2.25">
       <button
         type="button"
         disabled
@@ -117,7 +117,7 @@ function ModelCard({
   return (
     <PanelBody>
       <div data-testid="fit-model-card" data-verdict={model.verdict}>
-        <div className="flex flex-wrap items-center gap-[9px]">
+        <div className="flex flex-wrap items-center gap-2.25">
           <h4 className={cardTitle}>{t("wrongTier")}</h4>
           <Badge tone="approval">{t(`modelVerdict.${model.verdict}`)}</Badge>
         </div>
@@ -182,7 +182,7 @@ function EffortCard({ run }: { run: RunRow }) {
   return (
     <PanelBody>
       <div data-testid="fit-effort-card" data-verdict={verdict.verdict}>
-        <div className="flex flex-wrap items-center gap-[9px]">
+        <div className="flex flex-wrap items-center gap-2.25">
           <h4 className={cardTitle}>{t("wrongEffort")}</h4>
           <Badge tone="approval">{t(`effortVerdict.${verdict.verdict}`)}</Badge>
         </div>

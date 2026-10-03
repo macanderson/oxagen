@@ -104,7 +104,7 @@ const SHAPE: Record<AvatarSubject, AvatarShape> = {
 const segment =
   "inline-flex max-w-full overflow-hidden rounded-lg border border-input-border bg-input-bg";
 const segmentButton =
-  "min-h-9 border-r border-input-border px-3 text-base font-medium text-muted-foreground last:border-r-0 aria-pressed:bg-secondary aria-pressed:font-semibold aria-pressed:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring";
+  "min-h-9 border-r border-input-border px-3 text-base font-medium text-muted-foreground last:border-r-0 aria-pressed:bg-secondary aria-pressed:font-semibold aria-pressed:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring";
 
 const FONT_FACE: Record<AvatarFont, string> = {
   sans: "font-sans",
@@ -404,12 +404,12 @@ function AvatarEditor({
                       aria-label={icon}
                       title={icon}
                       data-testid={`avatar-icon-${icon}`}
-                      className="grid h-9 place-items-center rounded-lg border border-transparent bg-input-bg text-muted-foreground hover:border-input-border hover:text-foreground aria-pressed:border-foreground aria-pressed:bg-secondary aria-pressed:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+                      className="grid h-9 place-items-center rounded-lg border border-transparent bg-input-bg text-muted-foreground hover:border-input-border hover:text-foreground aria-pressed:border-foreground aria-pressed:bg-secondary aria-pressed:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
                       onClick={() => {
                         edit({ icon });
                       }}
                     >
-                      <Glyph className="size-[18px]" aria-hidden />
+                      <Glyph className="size-4.5" aria-hidden />
                     </button>
                   );
                 })}
@@ -427,7 +427,7 @@ function AvatarEditor({
                 <input
                   id={lettersId}
                   data-testid="avatar-letters"
-                  className={`${inputBase} w-[120px] text-lg tracking-[0.08em] ${FONT_FACE[draft.font]}`}
+                  className={`${inputBase} w-30 text-lg tracking-[0.08em] ${FONT_FACE[draft.font]}`}
                   value={draft.text}
                   maxLength={INITIALS_MAX}
                   autoCapitalize="characters"
@@ -502,7 +502,7 @@ function AvatarEditor({
                     aria-pressed={draft.tone === tone}
                     aria-label={t(`tones.${tone}`)}
                     title={t(`tones.${tone}`)}
-                    className="grid place-items-center rounded-[11px] border border-transparent p-[3px] hover:border-input-border aria-pressed:border-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                    className="grid place-items-center rounded-[11px] border border-transparent p-0.75 hover:border-input-border aria-pressed:border-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
                     onClick={() => {
                       edit({ tone });
                     }}

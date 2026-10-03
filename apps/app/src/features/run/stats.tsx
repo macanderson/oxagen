@@ -96,7 +96,7 @@ function Involved({
       </span>
       <span
         data-testid="run-operator"
-        className="inline-flex min-w-0 max-w-full items-center gap-[9px] rounded-full border border-border bg-background py-[5px] pl-1.5 pr-3 text-sm text-foreground"
+        className="inline-flex min-w-0 max-w-full items-center gap-2.25 rounded-full border border-border bg-background py-1.25 pl-1.5 pr-3 text-sm text-foreground"
       >
         {hasOperator ? (
           <Avatar
@@ -196,7 +196,7 @@ export function SummaryPanel({
     <section
       aria-labelledby="run-summary-title"
       data-testid="run-summary"
-      className="rounded-xl border border-border bg-card px-[18px] py-4 text-card-foreground"
+      className="rounded-xl border border-border bg-card px-4.5 py-4 text-card-foreground"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 id="run-summary-title" className={`${eyebrowQuiet} m-0`}>
@@ -208,13 +208,13 @@ export function SummaryPanel({
       </div>
       <Involved run={run} agent={agent} place={place} />
       {summary === null ? (
-        <p className="mb-2.5 mt-3 max-w-[78ch] text-base text-muted-foreground">
+        <p className="mb-2.5 mt-3 max-w-measure text-base text-muted-foreground">
           {t("noSummary")}
         </p>
       ) : (
         <p
           data-testid="generated-summary"
-          className="mb-2.5 mt-3 max-w-[78ch] text-base leading-[1.55] text-foreground"
+          className="mb-2.5 mt-3 max-w-measure text-base leading-[1.55] text-foreground"
         >
           {shownSummary(summary.text)}
         </p>
@@ -227,7 +227,7 @@ export function SummaryPanel({
           {t("summaryFailed", { reason: run.enrichmentError })}
         </p>
       )}
-      <div className="mt-[13px] flex flex-wrap items-center gap-2.5 border-t border-border pt-[11px] font-mono text-xs text-dim">
+      <div className="mt-3.25 flex flex-wrap items-center gap-2.5 border-t border-border pt-2.75 font-mono text-xs text-dim">
         <span className="min-w-0 flex-1">
           {summary === null ? (
             t("summary.notGenerated")

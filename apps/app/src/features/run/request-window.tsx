@@ -104,7 +104,7 @@ export function CompositionBar({ recorded }: { recorded: ContextWindow }) {
   const size = (block: ContextBlock) => block.tokens ?? block.bytes;
   const whole = drawn.reduce((sum, block) => sum + size(block), 0);
   return (
-    <div data-testid="window-composition" className="flex flex-col gap-[7px]">
+    <div data-testid="window-composition" className="flex flex-col gap-1.75">
       {/* `display:flex; height:12px; border-radius:6px; overflow:hidden; border:1px solid var(--border)` */}
       <div
         aria-hidden="true"
@@ -126,7 +126,7 @@ export function CompositionBar({ recorded }: { recorded: ContextWindow }) {
             key={block.kind}
             data-testid="window-part"
             data-kind={block.kind}
-            className="inline-flex items-center gap-[5px]"
+            className="inline-flex items-center gap-1.25"
           >
             <i
               aria-hidden="true"
@@ -286,14 +286,14 @@ export function RequestWindow({
       <Section title={t("stack")}>
         <ol
           data-testid="window-stack"
-          className="m-0 flex list-none flex-col gap-[7px] p-0"
+          className="m-0 flex list-none flex-col gap-1.75 p-0"
         >
           {recorded.blocks.map((block) => (
             <li
               key={block.kind}
               data-testid="window-stack-row"
               data-kind={block.kind}
-              className="flex min-w-0 items-center gap-2 rounded-lg border border-border border-l-[3px] border-l-rule bg-background px-[11px] py-2 text-xs"
+              className="flex min-w-0 items-center gap-2 rounded-lg border border-border border-l-3 border-l-rule bg-background px-2.75 py-2 text-xs"
             >
               <b className={`${mono} text-foreground`}>
                 {t(`block.${block.kind}`)}

@@ -159,7 +159,7 @@ export function NotificationsDialog({ data }: { data: ShellData }) {
                   {n.unread ? (
                     <span
                       aria-hidden="true"
-                      className="mr-1.5 inline-block size-[5px] rounded-full bg-gold align-middle"
+                      className="mr-1.5 inline-block size-1.25 rounded-full bg-gold align-middle"
                     />
                   ) : null}
                   {n.unread ? (

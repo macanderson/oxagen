@@ -139,7 +139,7 @@ function Meter({
     grey: "bg-rule",
   }[tone];
   return (
-    <li data-meter={name} className="grid gap-[5px]">
+    <li data-meter={name} className="grid gap-1.25">
       <span className="flex text-xs text-muted-foreground">
         {label}
         <span className="ms-auto font-semibold tabular-nums text-foreground">

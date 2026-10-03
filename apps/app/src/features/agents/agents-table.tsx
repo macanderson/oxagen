@@ -147,7 +147,7 @@ function initialsOf(name: string): string {
 function Owner({ row }: { row: AgentRow }) {
   if (row.operatorId === null) return <NotRecordedValue />;
   return (
-    <span className="flex min-w-0 items-center gap-[7px] whitespace-nowrap">
+    <span className="flex min-w-0 items-center gap-1.75 whitespace-nowrap">
       <Avatar
         value={row.operatorAvatarUrl}
         initials={initialsOf(row.operatorName ?? row.operatorId)}
@@ -762,7 +762,7 @@ export function AgentsTable({
         <table
           aria-label={t("list.tableLabel", { workspace })}
           data-column-set={set}
-          className="w-full min-w-[560px] border-collapse text-sm"
+          className="w-full min-w-140 border-collapse text-sm"
         >
           <thead>
             <tr className="border-b border-border">

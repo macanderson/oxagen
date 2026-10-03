@@ -25,7 +25,7 @@ import { ProposalStatusBadge } from "./status";
 import { type SteeringAt, steeringLink } from "./view";
 
 /** A cell that sits above the row's stretched link, so its own control takes the click. */
-const lifted = `${cell} relative z-[1]`;
+const lifted = `${cell} relative z-1`;
 
 function PullRequestCell({ pr }: { pr: Proposal["pr"] }) {
   const t = useTranslations("steering.proposals.list");

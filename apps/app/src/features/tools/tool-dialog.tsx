@@ -272,7 +272,7 @@ type ToolTab = "overview" | "examples" | "details" | "classification";
 
 /** The tab style the Account dialog set, with room for a count. */
 const TAB_CLASS =
-  "inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3 text-base font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring aria-selected:border-brand aria-selected:text-foreground";
+  "inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3 text-base font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring aria-selected:border-brand aria-selected:text-foreground";
 
 /**
  * A value copied to the clipboard. The clipboard can refuse (an insecure

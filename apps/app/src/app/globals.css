@@ -68,6 +68,20 @@
   --color-code-string: var(--code-string);
   --color-code-number: var(--code-number);
   --color-code-punct: var(--code-punct);
+  /* Widths in characters (#5283). A line of prose and a truncated cell are
+     measured in ch, so each named width keeps its unit: max-w-measure for a
+     lede under a heading, max-w-measure-narrow for a state's message, and
+     max-w-cell-* for a truncated line in a table cell. */
+  --container-measure: 70ch;
+  --container-measure-narrow: 52ch;
+  --container-cell-narrow: 24ch;
+  --container-cell: 28ch;
+  --container-cell-wide: 36ch;
+  /* One character between a transcript's columns, and the device's safe
+     areas: gap-ch, pt-safe-top, pb-safe-bottom. */
+  --spacing-ch: 1ch;
+  --spacing-safe-top: env(safe-area-inset-top);
+  --spacing-safe-bottom: env(safe-area-inset-bottom);
   /* The corner scale is @oxagen/ui's, which reads the kit's --ox-radius-<step>
      tokens: the theme's corner base (0.45rem, shadcn's base-maia preset) times
      each step's multiplier. `rounded-4xl` is the pill a maia button and input
@@ -147,6 +161,32 @@
     --tx-surface: var(--ox-paper);
     --side-w: 236px;
     --sidebar-width: var(--side-w);
+    /* Overlay, drawer and frame geometry (#5283). Each reads the spacing
+       unit, the viewport or the safe area, so one edit here moves every
+       surface that uses it. */
+    --overlay-w: calc(100% - var(--spacing) * 6);
+    --overlay-max-h: 76dvh;
+    --command-top: 10vh;
+    --sheet-top: 12vh;
+    --sheet-h: min(76dvh, calc(var(--spacing) * 180));
+    --drawer-w: min(calc(var(--spacing) * 75), 86vw);
+    --drawer-pad-top: max(calc(var(--spacing) * 3), env(safe-area-inset-top));
+    --drawer-pad-bottom: max(
+      calc(var(--spacing) * 4),
+      env(safe-area-inset-bottom)
+    );
+    --approvals-w: min(calc(var(--spacing) * 170), 90vw);
+    --assistant-max-w: calc(100vw - var(--sidebar-width) - var(--spacing) * 14);
+    --topbar-pad-top: calc(var(--spacing) * 2.5 + env(safe-area-inset-top));
+    --frame-pad-bottom: calc(var(--spacing) * 24 + env(safe-area-inset-bottom));
+    --toast-bottom-mobile: calc(
+      var(--spacing) * 22 + env(safe-area-inset-bottom)
+    );
+    --popover-max-w: min(
+      calc(var(--spacing) * 136),
+      calc(100vw - var(--spacing) * 4)
+    );
+    --editor-max-h: calc(100vh - var(--spacing) * 75);
     --sidebar-bg: var(--void);
     --mono: var(--ox-font-mono);
     --font: var(--ox-font);

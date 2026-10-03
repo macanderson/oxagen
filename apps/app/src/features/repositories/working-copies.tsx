@@ -206,7 +206,7 @@ function CopiesBody({
         <table
           aria-label={t("label")}
           data-testid="working-copies-table"
-          className="w-full min-w-[720px] border-collapse text-sm"
+          className="w-full min-w-180 border-collapse text-sm"
         >
           <thead>
             <tr className="border-b border-border">

@@ -122,7 +122,7 @@ function Glyph({ kind }: { kind: RunOutputKind }) {
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
-      className="size-[13px]"
+      className="size-3.25"
     >
       {GLYPH[kind]}
     </svg>
@@ -200,7 +200,7 @@ const DOT_TONE: Partial<Record<RunOutputNode["state"], string>> = {
 };
 
 /** `.ro-tick { position:absolute; left:-23px; top:12px; width:9px; height:1px; background:var(--rule) }` */
-const tick = "absolute -left-[23px] top-3 h-px w-[9px] bg-rule";
+const tick = "absolute -left-5.75 top-3 h-px w-2.25 bg-rule";
 
 /**
  * `fr 118`: the frame that recorded the node, which opens the Frames tab on
@@ -265,11 +265,11 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
     <li
       data-kind={node.kind}
       data-state={node.state}
-      className="relative min-w-0 py-[7px]"
+      className="relative min-w-0 py-1.75"
     >
       <span
         aria-hidden="true"
-        className={`absolute -left-[30px] top-1.5 grid size-[23px] place-items-center rounded-full border bg-card ${
+        className={`absolute -left-7.5 top-1.5 grid size-5.75 place-items-center rounded-full border bg-card ${
           would
             ? "border-dashed border-border text-dim"
             : (DOT_TONE[node.state] ?? "border-border text-muted-foreground")
@@ -301,7 +301,7 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
           <Stat stat={node.stat} />
           <Frame node={node} place={place} />
         </div>
-        <div className="mt-[3px] flex flex-wrap items-baseline gap-2 text-xs leading-normal">
+        <div className="mt-0.75 flex flex-wrap items-baseline gap-2 text-xs leading-normal">
           {node.where === null ? null : (
             <span className="min-w-0 font-mono text-xs text-dim [overflow-wrap:anywhere]">
               {node.where}
@@ -319,7 +319,7 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
           ) : null}
         </div>
         {gate ? (
-          <div className="mt-[9px] flex flex-wrap items-center gap-2.5">
+          <div className="mt-2.25 flex flex-wrap items-center gap-2.5">
             <SafeLink
               to={routes.run(place.org, place.ws, place.runId, {
                 tab: "actions",
@@ -363,7 +363,7 @@ function ReadMark({
   return (
     <li
       data-kind="read"
-      className="relative flex min-w-0 flex-wrap items-baseline gap-2 py-[5px]"
+      className="relative flex min-w-0 flex-wrap items-baseline gap-2 py-1.25"
     >
       <span aria-hidden="true" className={tick} />
       <span className="min-w-0 text-xs text-dim">
@@ -435,7 +435,7 @@ function NodeGroup({
           <Node key={key} node={node} place={place} />
         ))}
         {group.items.length > FOLD_OVER ? (
-          <li className="relative py-[5px]">
+          <li className="relative py-1.25">
             <span aria-hidden="true" className={tick} />
             <SafeLink to={fold} className={linkQuiet}>
               {folds
@@ -486,7 +486,7 @@ export function OutputsSpine({
     <section
       aria-label={t("label")}
       data-testid="run-outputs"
-      className="rounded-xl border border-border bg-card px-[18px] pb-[13px] pt-[15px] text-card-foreground"
+      className="rounded-xl border border-border bg-card px-4.5 pb-3.25 pt-3.75 text-card-foreground"
     >
       <div className="mb-3 flex flex-wrap items-center gap-2.5">
         <h2 className={`${eyebrowQuiet} m-0`}>{t("title")}</h2>
@@ -512,9 +512,9 @@ export function OutputsSpine({
         </p>
       ) : (
         <ol
-          className={`relative m-0 list-none py-0 pl-[30px] before:absolute before:bottom-1.5 before:left-[11px] before:top-1.5 before:w-px before:content-[''] ${
+          className={`relative m-0 list-none py-0 pl-7.5 before:absolute before:bottom-1.5 before:left-2.75 before:top-1.5 before:w-px before:content-[''] ${
             live
-              ? "before:bg-gradient-to-b before:from-rule before:from-[78%] before:to-transparent"
+              ? "before:bg-gradient-to-b before:from-rule before:from-78% before:to-transparent"
               : "before:bg-rule"
           }`}
         >
@@ -540,7 +540,7 @@ export function OutputsSpine({
         </ol>
       )}
 
-      <p className="mt-[11px] flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border pt-2.5 text-xs text-dim">
+      <p className="mt-2.75 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border pt-2.5 text-xs text-dim">
         <span>{t("footer")}</span>
         {complete ? null : <span>{t("cut")}</span>}
       </p>

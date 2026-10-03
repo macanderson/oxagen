@@ -86,7 +86,7 @@ import type { Theme } from "./theme";
 type Outcome = "saved" | "invalid" | "denied" | "failed";
 
 const tabClass =
-  "inline-flex min-h-10 items-center whitespace-nowrap border-b-2 border-transparent px-3 text-base font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring aria-selected:border-brand aria-selected:text-foreground";
+  "inline-flex min-h-10 items-center whitespace-nowrap border-b-2 border-transparent px-3 text-base font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring aria-selected:border-brand aria-selected:text-foreground";
 
 type ProfileDraft = { userId: string; value: string };
 type ProfileDraftProps = {
