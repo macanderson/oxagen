@@ -358,7 +358,7 @@ export function ProviderDialog({
             {t(`healthWarning.${server.healthStatus}`)}
           </p>
         ) : null}
-        <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]">
+        <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-rail">
           <Row term={t("facts.system")}>{server.name}</Row>
           <Row term={t("facts.transport")}>
             <span className="flex flex-col gap-0.5">

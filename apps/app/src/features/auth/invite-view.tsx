@@ -165,7 +165,7 @@ export async function InvitationBody({
               </p>
             )}
           </div>
-          <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[minmax(0,8.5rem)_minmax(0,1fr)] sm:gap-y-2.5">
+          <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-rail-sm sm:gap-y-2.5">
             <dt className="text-dim">{t("organization")}</dt>
             <dd className="mb-2 min-w-0 break-words text-foreground sm:mb-0">
               {invitation.orgName}{" "}

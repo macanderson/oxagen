@@ -331,7 +331,7 @@ export function StatementEditor({
         </label>
       </div>
       <div
-        className={`${codeText} grid max-h-(--editor-max-h) min-h-45 grid-cols-[max-content_minmax(0,1fr)] overflow-auto bg-code-bg`}
+        className={`${codeText} grid max-h-(--editor-max-h) min-h-45 grid-cols-dl-clip overflow-auto bg-code-bg`}
       >
         <div
           aria-hidden="true"

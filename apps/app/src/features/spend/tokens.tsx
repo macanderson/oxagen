@@ -125,7 +125,7 @@ export function TokensSection({
             </span>
           }
           footer={
-            <dl className="grid w-full grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-sm">
+            <dl className="grid w-full grid-cols-dl-max gap-x-4 gap-y-1.5 text-sm">
               <dt>{t("cacheHit")}</dt>
               <dd className="text-foreground">
                 <Ratio value={cacheHitRate(classes)} /> {t("cacheHitNote")}

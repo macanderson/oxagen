@@ -176,7 +176,7 @@ function Total({
   return (
     <section
       aria-labelledby="spend-month-total"
-      className={`${panel} grid gap-4 p-4 md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]`}
+      className={`${panel} grid gap-4 p-4 md:grid-cols-rail-lg`}
     >
       <div className="flex min-w-0 flex-col gap-1">
         <h2 id="spend-month-total" className={statTerm}>

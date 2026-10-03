@@ -123,7 +123,7 @@ function ApprovalCard({
       <dl
         data-testid="chain"
         aria-label={t("chain.title")}
-        className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm"
+        className="grid grid-cols-dl gap-x-3 gap-y-1 text-sm"
       >
         <dt className="text-muted-foreground">{t("chain.who")}</dt>
         {recorded(item.requester)}

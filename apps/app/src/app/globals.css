@@ -87,6 +87,60 @@
      tab (#5283). */
   --shadow-rail: inset 2px 0 0 var(--gold);
   --shadow-tab-underline: inset 0 -2px 0 var(--accent-text);
+  /* Grid templates (#5283): grid-cols-<name>. A description list sets a
+     term, then its value: dl lets a long term wrap, dl-max never wraps a
+     term, and dl-clip lets a long value wrap inside its column. A rail is a
+     label column beside its content. */
+  --grid-template-columns-dl: auto 1fr;
+  --grid-template-columns-dl-max: max-content 1fr;
+  --grid-template-columns-dl-clip: max-content minmax(0, 1fr);
+  --grid-template-columns-lead: auto minmax(0, 1fr);
+  --grid-template-columns-form: minmax(calc(var(--spacing) * 32), auto) 1fr;
+  --grid-template-columns-rail-xs: minmax(0, calc(var(--spacing) * 24))
+    minmax(0, 1fr);
+  --grid-template-columns-rail-sm: minmax(0, calc(var(--spacing) * 36))
+    minmax(0, 1fr);
+  --grid-template-columns-rail: minmax(0, calc(var(--spacing) * 48))
+    minmax(0, 1fr);
+  --grid-template-columns-rail-lg: minmax(0, calc(var(--spacing) * 56))
+    minmax(0, 1fr);
+  --grid-template-columns-rail-lg-pair: calc(var(--spacing) * 56)
+    calc(var(--spacing) * 24) 1fr;
+  --grid-template-columns-split: minmax(0, 3fr) minmax(0, 2fr);
+  --grid-template-columns-split-end: minmax(0, 2fr) minmax(0, 3fr);
+  --grid-template-columns-main: minmax(0, 2fr) minmax(0, 1fr);
+  --grid-template-columns-main-end: minmax(0, 1fr) minmax(0, 2fr);
+  --grid-template-columns-aside: minmax(0, 1fr) calc(var(--spacing) * 85);
+  --grid-template-columns-shell: var(--sidebar-width) minmax(0, 1fr);
+  --grid-template-rows-shell: auto 1fr;
+  --grid-template-columns-icon: calc(var(--spacing) * 8) minmax(0, 1fr);
+  --grid-template-columns-icon-end: calc(var(--spacing) * 8) minmax(0, 1fr)
+    auto;
+  --grid-template-columns-diff: calc(var(--spacing) * 8.5)
+    calc(var(--spacing) * 8.5) minmax(0, 1fr);
+  --grid-template-columns-diff-sign: calc(var(--spacing) * 10)
+    calc(var(--spacing) * 10) calc(var(--spacing) * 4) minmax(0, 1fr);
+  --grid-template-columns-meter: calc(var(--spacing) * 5) minmax(0, 1fr) 34%
+    auto;
+  --grid-template-columns-label-row: minmax(0, 22ch) 1fr auto;
+  --grid-template-columns-count-row: 8ch minmax(0, 1fr) auto;
+  --grid-template-columns-row-end: minmax(0, 1fr) max-content max-content;
+  --grid-template-columns-swatches: repeat(
+    auto-fill,
+    minmax(calc(var(--spacing) * 9), 1fr)
+  );
+  --grid-template-columns-tiles: repeat(
+    auto-fit,
+    minmax(calc(var(--spacing) * 44), 1fr)
+  );
+  --grid-template-columns-cards: repeat(
+    auto-fit,
+    minmax(min(100%, calc(var(--spacing) * 80)), 1fr)
+  );
+  --grid-template-columns-cards-sm: repeat(
+    auto-fit,
+    minmax(min(100%, calc(var(--spacing) * 60)), 1fr)
+  );
   /* The corner scale is @oxagen/ui's, which reads the kit's --ox-radius-<step>
      tokens: the theme's corner base (0.45rem, shadcn's base-maia preset) times
      each step's multiplier. `rounded-4xl` is the pill a maia button and input

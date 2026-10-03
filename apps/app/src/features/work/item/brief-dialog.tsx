@@ -161,7 +161,7 @@ export function EditBriefDialog({
                   className={textareaBase}
                 />
               </div>
-              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+              <div className="grid gap-2 sm:grid-cols-main-end">
                 <div className="flex flex-col">
                   <label htmlFor={id("kind")} className={fieldLabel}>
                     {t("kind")}

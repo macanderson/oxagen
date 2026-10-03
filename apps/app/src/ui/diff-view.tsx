@@ -72,7 +72,7 @@ export function PatchLines({ patch }: { patch: string }) {
           // eslint-disable-next-line @eslint-react/no-array-index-key -- a patch never reorders
           key={i}
           data-line={line.kind}
-          className={`grid grid-cols-[34px_34px_minmax(0,1fr)] whitespace-pre ${DIFF_ROW[line.kind]}`}
+          className={`grid grid-cols-diff whitespace-pre ${DIFF_ROW[line.kind]}`}
         >
           <span className="select-none border-r border-border px-1.5 text-right text-dim">
             {line.old ?? ""}

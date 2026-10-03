@@ -103,7 +103,7 @@ export function LoadingBody() {
       data-testid="repositories-loading"
       className="flex flex-col gap-4"
     >
-      <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(175px,1fr))]">
+      <div className="grid gap-3.5 grid-cols-tiles">
         {[0, 1, 2, 3].map((tile) => (
           <div key={tile} className="skeleton h-16 rounded-xl" />
         ))}
@@ -241,7 +241,7 @@ export function DeniedBody({
           >
             {t("requestNotRecorded", { needed })}
           </p>
-          <dl className="mt-5 grid max-w-105 grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-left text-sm [&>dd]:text-foreground [&>dt]:text-muted-foreground">
+          <dl className="mt-5 grid max-w-105 grid-cols-dl-clip gap-x-4 gap-y-2 text-left text-sm [&>dd]:text-foreground [&>dt]:text-muted-foreground">
             <dt>{t("signedInTerm")}</dt>
             <dd data-testid="repositories-denied-roles">
               {t.rich("signedIn", {

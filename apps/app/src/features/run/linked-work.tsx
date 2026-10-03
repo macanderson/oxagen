@@ -833,7 +833,7 @@ function LinkedWorkBody({
       className="flex flex-col"
     >
       <Legend edges={rowEdges(work.value, outputs)} />
-      <div className="mb-3.5 grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
+      <div className="mb-3.5 grid gap-3.5 grid-cols-cards-sm">
         <Repositories work={work.value} place={place} />
         <Artifacts work={work.value} outputs={outputs} place={place} />
       </div>

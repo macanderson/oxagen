@@ -163,7 +163,7 @@ function PartFigures({ headline }: { headline: Read<UnproductiveSpend> }) {
       <h3 className={eyebrow}>{t("title")}</h3>
       <dl
         data-testid="spend-headline-parts"
-        className="grid grid-cols-[minmax(0,1fr)_max-content_max-content] gap-x-4 gap-y-1.5 text-sm"
+        className="grid grid-cols-row-end gap-x-4 gap-y-1.5 text-sm"
       >
         {parts.map((part) => (
           <div
@@ -277,7 +277,7 @@ export function FindingsSection({
       <section
         aria-labelledby="spend-findings-hero"
         data-testid="spend-findings-hero"
-        className={`${panel} grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]`}
+        className={`${panel} grid gap-6 p-5 lg:grid-cols-split-end`}
       >
         <div className="flex flex-col gap-1.5">
           <h2 id="spend-findings-hero" className={eyebrow}>
@@ -426,7 +426,7 @@ export function FindingEvidence({
             })}
           </Tile>
         </TileStrip>
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-sm">
+        <dl className="grid grid-cols-dl-max gap-x-4 gap-y-1.5 text-sm">
           <dt className="text-muted-foreground">
             {t("findings.evidence.confidence")}
           </dt>

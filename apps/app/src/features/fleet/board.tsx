@@ -1000,7 +1000,7 @@ function PauseDialog({
           ) : (
             <p className="text-sm text-muted-foreground">{t("body")}</p>
           )}
-          <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1.75 text-sm">
+          <dl className="grid grid-cols-dl items-baseline gap-x-4 gap-y-1.75 text-sm">
             <dt className="text-dim">{t("run")}</dt>
             <dd className={mono}>{run.id}</dd>
             <dt className="text-dim">{t("position")}</dt>

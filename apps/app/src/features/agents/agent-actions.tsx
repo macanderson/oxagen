@@ -282,7 +282,7 @@ export function RetireAgent({
             className="flex flex-col gap-3 text-base"
           >
             <p>{t("body")}</p>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+            <dl className="grid grid-cols-dl gap-x-4 gap-y-1 text-sm">
               {facts.map(([term, value]) => (
                 <div key={term} className="contents">
                   <dt className="text-muted-foreground">{term}</dt>

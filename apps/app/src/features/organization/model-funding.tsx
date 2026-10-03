@@ -50,7 +50,7 @@ import { DetailsDialog, StubDialog } from "./stub-dialog";
 const TIERS = ["complex", "light", "embed", "rerank"] as const;
 
 const term = "text-muted-foreground";
-const facts = "grid grid-cols-[minmax(8rem,auto)_1fr] gap-x-4 gap-y-2 text-base";
+const facts = "grid grid-cols-form gap-x-4 gap-y-2 text-base";
 
 export function ModelFundingTab({
   org,

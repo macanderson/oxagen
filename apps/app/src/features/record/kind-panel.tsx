@@ -48,7 +48,7 @@ const sectionEyebrow =
 
 /** `.kv`: a two-column definition list. */
 const kv =
-  "grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm [&>dt]:text-muted-foreground [&>dd]:min-w-0 [&>dd]:text-foreground";
+  "grid grid-cols-dl-clip gap-x-4 gap-y-2 text-sm [&>dt]:text-muted-foreground [&>dd]:min-w-0 [&>dd]:text-foreground";
 
 function Panel({ kind, children }: { kind: RecordKind; children: ReactNode }) {
   const term = useTranslations("ui.record");

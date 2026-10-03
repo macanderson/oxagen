@@ -125,7 +125,7 @@ export function PrioritiesTab({
     );
   const rules = [...record.rules].sort((a, b) => a.number - b.number);
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+    <div className="grid gap-4 lg:grid-cols-split">
       <section
         aria-labelledby="work-priorities-title"
         data-testid="work-priorities-record"

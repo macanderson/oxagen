@@ -142,7 +142,7 @@ export function PageFailure({
               >
                 {t("denied.requestNotRecorded", { needed })}
               </p>
-              <dl className="mt-5 grid max-w-105 grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-left text-sm [&>dd]:text-foreground [&>dt]:text-muted-foreground">
+              <dl className="mt-5 grid max-w-105 grid-cols-dl-clip gap-x-4 gap-y-2 text-left text-sm [&>dd]:text-foreground [&>dt]:text-muted-foreground">
                 <dt>{t("denied.signedInTerm")}</dt>
                 <dd>
                   {t.rich("denied.signedIn", {

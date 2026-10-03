@@ -625,7 +625,7 @@ export function ChainSection({
   const chain = read.value;
   const panels = (
     // `.grid.g2 { grid-template-columns:repeat(auto-fit,minmax(320px,1fr)) }`
-    <div className="grid items-start gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))]">
+    <div className="grid items-start gap-3.5 grid-cols-cards">
       <HashChain chain={chain} />
       <SealPanel
         chain={chain}

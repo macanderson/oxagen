@@ -89,7 +89,7 @@ export function AssistantToolCalls({
                   {formatDuration(call.durationMs, locale)}
                 </span>
               </summary>
-              <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+              <dl className="mt-1 grid grid-cols-lead gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                 <dt>{t("toolCalls.tool")}</dt>
                 <dd className={copyable}>{call.toolName}</dd>
                 <dt>{t("toolCalls.callId")}</dt>

@@ -357,7 +357,7 @@ export function RotateDialog({ gap }: { gap: Gap }) {
       subtitle={t("subtitle")}
       footer={<DisabledSubmit label={t("submit")} describedBy={noteId} />}
     >
-      <dl className="mb-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+      <dl className="mb-3 grid grid-cols-dl gap-x-4 gap-y-1.5 text-sm">
         <dt className={fact}>{t("facts.generation")}</dt>
         <dd data-recorded="false" className={fact}>
           {recorded("notRecorded")}

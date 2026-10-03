@@ -412,7 +412,7 @@ export async function Run({
         place={place}
         parked={parked}
       />
-      <div className="grid grid-cols-1 items-start gap-3.5 min-[67.5rem]:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 items-start gap-3.5 lg:grid-cols-main">
         <div className="flex min-w-0 flex-col">
           <SummaryPanel
             run={run}

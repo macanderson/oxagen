@@ -46,7 +46,7 @@ export function Section({
 
 export function Facts({ children }: { children: ReactNode }) {
   return (
-    <dl className="grid gap-x-6 gap-y-2 text-base sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+    <dl className="grid gap-x-6 gap-y-2 text-base sm:grid-cols-rail">
       {children}
     </dl>
   );

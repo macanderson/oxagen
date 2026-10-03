@@ -266,7 +266,7 @@ export function BisectDialog({
                     aligned: result.aligned,
                   })}
                 </p>
-                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                <dl className="grid grid-cols-dl gap-x-3 gap-y-1 text-sm">
                   <dt className="text-muted-foreground">{t("keyA")}</dt>
                   <dd className={`${mono} break-all`}>
                     {result.keyA ?? t("noFrame")}

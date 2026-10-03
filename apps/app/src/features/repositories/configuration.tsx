@@ -177,7 +177,7 @@ export function Configuration({
           )}
           <dl
             data-testid="configuration-modes"
-            className="mt-3 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm leading-relaxed"
+            className="mt-3 grid grid-cols-dl-clip gap-x-4 gap-y-2 text-sm leading-relaxed"
           >
             {GOVERNANCE_MODES.map((mode) => (
               <div key={mode} className="contents" data-mode={mode}>

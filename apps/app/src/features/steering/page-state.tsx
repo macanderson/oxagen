@@ -223,7 +223,7 @@ export function SteeringFailure({
             </>
           }
           after={
-            <dl className="mx-auto mt-5 grid max-w-105 grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-left text-sm">
+            <dl className="mx-auto mt-5 grid max-w-105 grid-cols-dl gap-x-4 gap-y-1.5 text-left text-sm">
               <dt className="text-muted-foreground">{t("denied.signedIn")}</dt>
               {/* The design sets the person's name in the sans face and the role and workspace, which are identifiers, in mono. */}
               <dd data-testid="steering-signed-in">

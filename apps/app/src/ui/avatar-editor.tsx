@@ -333,7 +333,7 @@ function AvatarEditor({
 
   return (
     <form id={formId} noValidate onSubmit={(e) => void onSubmit(e)}>
-      <div className="grid gap-4 md:grid-cols-[150px_1fr] md:items-start">
+      <div className="grid gap-4 md:grid-cols-rail-sm md:items-start">
         <div
           data-testid="avatar-preview"
           data-shape={shape}
@@ -392,7 +392,7 @@ function AvatarEditor({
               <div
                 role="group"
                 aria-label={t("icon")}
-                className="grid grid-cols-[repeat(auto-fill,minmax(36px,1fr))] gap-1"
+                className="grid grid-cols-swatches gap-1"
               >
                 {AVATAR_ICONS.map((icon) => {
                   const Glyph = AVATAR_GLYPHS[icon];

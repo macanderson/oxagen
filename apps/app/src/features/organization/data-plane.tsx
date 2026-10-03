@@ -56,7 +56,7 @@ const value = "text-sm text-foreground";
 
 function Facts({ rows }: { rows: readonly [string, ReactNode][] }) {
   return (
-    <dl className="grid grid-cols-[minmax(8rem,auto)_1fr] gap-x-4 gap-y-2">
+    <dl className="grid grid-cols-form gap-x-4 gap-y-2">
       {rows.map(([label, content]) => (
         <div key={label} className="contents">
           <dt className={term}>{label}</dt>
@@ -323,7 +323,7 @@ export function DataPlaneTab({
   const t = useTranslations("organization.dataPlane");
   return (
     <div className="flex flex-col gap-3.5">
-      <div className="grid gap-3.5 lg:grid-cols-[3fr_2fr]">
+      <div className="grid gap-3.5 lg:grid-cols-split">
         {read.ok ? (
           <Binding org={orgName} plane={read.value} />
         ) : (

@@ -81,7 +81,7 @@ const CUTS_SHOWN = 3;
  * and its `.v` figure (mono 10.5px): one part of the first request.
  */
 const promptBar =
-  "grid grid-cols-[minmax(0,22ch)_1fr_auto] items-center gap-2.25 text-xs text-muted-foreground";
+  "grid grid-cols-label-row items-center gap-2.25 text-xs text-muted-foreground";
 
 /**
  * `.ro-dot { position:absolute; left:-30px; top:6px; width:23px; height:23px;
@@ -915,8 +915,8 @@ function ContextBody({
       />
       <ManifestSpine manifest={manifest} run={run} />
       <PromptWindow request={request} context={context} runId={run.id} />
-      {/* `.split { grid-template-columns:minmax(0,1fr) 340px }`, one column under 1080px. */}
-      <div className="grid items-start gap-3.5 min-[67.5rem]:grid-cols-[minmax(0,1fr)_340px]">
+      {/* `.split { grid-template-columns:minmax(0,1fr) 340px }`, one column under Tailwind's lg (1024px). */}
+      <div className="grid items-start gap-3.5 lg:grid-cols-aside">
         <ContextFrames read={read} manifest={manifest} place={place} />
         <div className="flex min-w-0 flex-col gap-3.5">
           <WalkWindow stops={stops} place={place} />

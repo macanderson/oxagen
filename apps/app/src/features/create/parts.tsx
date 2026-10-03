@@ -305,7 +305,7 @@ export function PullRequestPlan({
           {checks.map((c) => (
             <li
               key={c.name}
-              className="flex flex-col gap-0.5 sm:grid sm:grid-cols-[8rem_1fr] sm:gap-3"
+              className="flex flex-col gap-0.5 sm:grid sm:grid-cols-rail-sm sm:gap-3"
             >
               <span className="font-medium text-foreground">{c.name}</span>
               <span className="text-muted-foreground">{c.detail}</span>

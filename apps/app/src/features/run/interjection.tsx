@@ -652,7 +652,7 @@ export function RunInterjection({
     >
       <Header detail={detail} row={row} stage={stage} />
       <Note row={row} stage={stage} interject={interject} answer={answer} />
-      <div className="grid grid-cols-1 gap-4 min-[67.5rem]:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <AgentView
           question={question}
           row={row}
