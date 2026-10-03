@@ -31,6 +31,7 @@ import {
   moneySchema,
   spendDaySchema,
   spendFigureSchema,
+  standingTokensSchema,
   tokenCountsSchema,
   unmeteredRunsSchema,
 } from "./spend.shared";
@@ -154,6 +155,27 @@ export const spendGet = registerCapability({
        * harness-reported model carries a cost.
        */
       reported: moneySchema.nullable(),
+      /**
+       * The part of the total the gateway metered: every model whose frames
+       * were all `gateway_observed`. A model with `mixed` or `estimated`
+       * frames counts as not observed, so this is a floor. Null when no
+       * gateway-observed model carries a cost. Absent from an answer built
+       * before it was read.
+       */
+      observed: moneySchema.nullable().optional(),
+      /**
+       * What the period's model calls carried besides the conversation, in
+       * tokens, from the run rows: the standing context by source, and the
+       * tool results. Each tool result counts once, when it was recorded,
+       * and not again for each later call that re-sent it. A part no run
+       * recorded is null. Absent from an answer built before it was read.
+       */
+      composition: standingTokensSchema
+        .extend({
+          toolResultTokens: z.number().int().nonnegative().nullable(),
+        })
+        .strict()
+        .optional(),
       /**
        * Priced runs in the period that were still open when their rollup was
        * last built (#3980). Their cost is in every figure here as a running
