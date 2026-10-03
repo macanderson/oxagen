@@ -126,10 +126,30 @@ const BoundRepository = z.object({
 });
 type BoundRepository = z.infer<typeof BoundRepository>;
 
+/** One lane's daily budget in US dollars, or null for no limit. */
+const DailyBudgetUsd = z.number().finite().nonnegative().nullable();
+
+/**
+ * The workspace's own model spend settings, as `get_workspace_settings`
+ * answers them (#5426): whether Stella names and summarizes its runs, and the
+ * daily budget of each lane in US dollars per UTC day. The Edit workspace
+ * dialog opens on these and writes them back.
+ */
+export const WorkspaceSpendSettings = z.object({
+  runEnrichmentEnabled: z.boolean(),
+  dailyBudgetUsd: z.object({
+    runEnrichment: DailyBudgetUsd,
+    assistant: DailyBudgetUsd,
+    work: DailyBudgetUsd,
+  }),
+});
+export type WorkspaceSpendSettings = z.infer<typeof WorkspaceSpendSettings>;
+
 /**
  * What one workspace binds and registers, read inside it (`list_repositories`
  * and `list_agents`): the Workspaces row's Main repo, Production branch,
- * Linked repos and Agents cells.
+ * Linked repos and Agents cells. `settings` is the third read,
+ * `get_workspace_settings`, for the Edit dialog's spend controls.
  */
 export const WorkspaceFacts = z.object({
   /** Main first, then the linked ones by full name, as `list_repositories` orders them. */
@@ -148,6 +168,13 @@ export const WorkspaceFacts = z.object({
     count: z.number().int().nonnegative(),
     more: z.boolean(),
   }),
+  /**
+   * The spend settings, or null when `get_workspace_settings` refused. Null
+   * rather than a refusal of the whole: the Edit dialog has to open to
+   * rename a workspace whose settings the viewer cannot read, so it shows
+   * the spend controls blank and says the current values were not read.
+   */
+  settings: WorkspaceSpendSettings.nullable(),
 });
 export type WorkspaceFacts = z.infer<typeof WorkspaceFacts>;
 

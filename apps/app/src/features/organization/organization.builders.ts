@@ -75,6 +75,27 @@ export function workspaceRow(overrides: Partial<Workspace> = {}): Workspace {
   };
 }
 
+/**
+ * What the tab read inside a workspace: one main repository, 64 agents of
+ * which 63 block an archive, enrichment on, and no daily limit on any lane.
+ */
+export function workspaceFacts(
+  overrides: Partial<WorkspaceFacts> = {},
+): WorkspaceFacts {
+  return {
+    repositories: [
+      { role: "main", fullName: "acme/platform", defaultRef: "main" },
+    ],
+    agents: 64,
+    archiveBlockers: { count: 63, more: false },
+    settings: {
+      runEnrichmentEnabled: true,
+      dailyBudgetUsd: { runEnrichment: null, assistant: null, work: null },
+    },
+    ...overrides,
+  };
+}
+
 export function apiKey(overrides: Partial<ApiKey> = {}): ApiKey {
   return {
     id: "aky_7k2m9q4x8r1t5v3w6y0z2a",
