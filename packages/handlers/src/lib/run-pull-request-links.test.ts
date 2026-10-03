@@ -6,6 +6,7 @@ vi.mock("../logger", () => ({
 
 import { logger } from "../logger";
 import {
+  forgeLinkEvents,
   pullRequestLinkEvents,
   sendPullRequestLinks,
 } from "./run-pull-request-links";
@@ -116,12 +117,56 @@ describe("pullRequestLinkEvents", () => {
   });
 });
 
+describe("forgeLinkEvents (ADR-288)", () => {
+  it("asks the forge sync once per link, naming the run and whether it opened the pull request", () => {
+    const links = pullRequestLinkEvents(SCOPE, [
+      frame({ "pr.url": URL_A }, "oxagen:pr_link"),
+      frame(
+        { "pr.url": "https://gitlab.com/acme/platform/api/-/merge_requests/9" },
+        "network",
+        OTHER,
+      ),
+    ]);
+    const opened = { ...links[1]!, data: { ...links[1]!.data, opened: true as const } };
+    expect(forgeLinkEvents(SCOPE, [links[0]!, opened])).toEqual([
+      {
+        name: "forge/pull-request.observed",
+        id: `forge-${links[0]!.id}`,
+        data: {
+          ...SCOPE,
+          provider: "github",
+          repository: "acme/api",
+          number: 42,
+          pullKey: `${SCOPE.workspaceId}:github:acme/api#42`,
+          link: { rootSessionUuid: ROOT, opened: false },
+        },
+      },
+      {
+        name: "forge/pull-request.observed",
+        id: `forge-${links[1]!.id}`,
+        data: {
+          ...SCOPE,
+          provider: "gitlab",
+          repository: "acme/platform/api",
+          number: 9,
+          pullKey: `${SCOPE.workspaceId}:gitlab:acme/platform/api#9`,
+          link: { rootSessionUuid: OTHER, opened: true },
+        },
+      },
+    ]);
+  });
+});
+
 describe("sendPullRequestLinks", () => {
-  it("sends the batch's link events in one call", async () => {
+  it("sends the batch's link events and their forge sync requests in one call", async () => {
     const send = vi.fn((_events: unknown[]) => Promise.resolve());
     await sendPullRequestLinks(send, SCOPE, [frame({ "pr.url": URL_A })]);
     expect(send).toHaveBeenCalledTimes(1);
-    expect(send.mock.calls[0]?.[0]).toHaveLength(1);
+    const sent = send.mock.calls[0]?.[0] as { name: string }[];
+    expect(sent.map((event) => event.name)).toEqual([
+      "run/pull-request.linked",
+      "forge/pull-request.observed",
+    ]);
   });
 
   it("sends nothing for a batch with no link", async () => {

@@ -68,7 +68,10 @@
  * chrome's markup too, where a fixed Tailwind size or a length in square
  * brackets is a literal. A literal is listed as `literal` with its line and
  * the token to use, and an allowlist entry that excuses nothing is listed as
- * `keep`.
+ * `keep`. On the two customer sites, oxagen.sh and docs.oxagen.sh, it also
+ * holds the house type rule (oxageninc/brand#83): h1 to h3 in Space Grotesk,
+ * every face from a kit token, and no size by hand in a hand-written page.
+ * Each break is listed as `type`.
  *
  * SURFACE_MARKS lists the marks each app may carry. The product shows the
  * wordmark where a word fits and the hive where the slot is square. The kit
@@ -87,7 +90,14 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { INK_TOKENS } from "../../apps/web/scripts/lib/theme.mjs";
-import { GUARDED, GUARDED_MARKUP, literalDrift, markupDrift } from "./lib/brand-literals.mjs";
+import {
+  GUARDED,
+  GUARDED_MARKUP,
+  GUARDED_PAGES,
+  literalDrift,
+  markupDrift,
+  typeDrift,
+} from "./lib/brand-literals.mjs";
 import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -861,8 +871,10 @@ function desktopIcons() {
 /**
  * The literal guard, in a check only: every corner, shadow, font size, or
  * page wrap a guarded stylesheet writes as a literal instead of a kit token,
- * and every fixed size, corner, or shadow class in the docs chrome's markup.
- * The kit's own house-tokens.css names the nearest token in each message.
+ * every fixed size, corner, or shadow class in the docs chrome's markup, and
+ * every break of the house type rule on oxagen.sh and docs.oxagen.sh. The
+ * kit's own house-tokens.css names the nearest token in each message, and
+ * gives the type pass the sizes it computes against.
  */
 function literals() {
   if (!CHECK) return;
@@ -894,6 +906,21 @@ function literals() {
       why: `line ${h.line}: ${h.prop} ${h.value}; use ${h.use}`,
     });
   }
+  // The type rule on the customer sites: Space Grotesk on h1 to h3, a face
+  // named by hand, and the hand-written pages' own sizes.
+  const typed = new Map(
+    [...GUARDED, ...GUARDED_PAGES].map(({ path }) => [
+      path,
+      committed(path)?.toString("utf8") ?? null,
+    ]),
+  );
+  for (const h of typeDrift(typed, { tokens })) {
+    drifted.push({
+      kind: "type",
+      path: h.path,
+      why: `line ${h.line}: ${h.prop}: ${h.value}; use ${h.use}`,
+    });
+  }
   for (const k of stale) {
     drifted.push({
       kind: "keep",
@@ -908,7 +935,8 @@ function literals() {
 const HOW_TO_FIX =
   "Run node tools/scripts/sync-brand-assets.mjs --brand <kit> and commit the result. " +
   "If the desktop icons are stale, also run pnpm --filter @oxagen/desktop icons. " +
-  "For a literal, write the token the line names, or name the literal and its reason in KEEP in tools/scripts/lib/brand-literals.mjs.";
+  "For a literal, write the token the line names, or name the literal and its reason in KEEP in tools/scripts/lib/brand-literals.mjs. " +
+  "For a type break, write the step or face the line names. A hand-written page keeps no size by hand.";
 
 if (isEntrypoint(import.meta.url)) {
   for (const surface of Object.keys(SURFACE_MARKS)) {

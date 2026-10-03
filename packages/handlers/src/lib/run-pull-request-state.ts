@@ -210,6 +210,64 @@ export function storedStatesQuery(
     );
 }
 
+/** One pull request's place in a map of forge states. */
+export function forgeKeyString(key: ForgeKey): string {
+  return `${key.provider}:${key.repository.toLowerCase()}#${key.number}`;
+}
+
+/**
+ * The state `forge.pull_requests` holds for each pull request a link names
+ * (ADR-288), one query for a page of links. That table has a row for every
+ * pull request a connected repository delivered, so it answers for a link
+ * whose run row no writer filled. A repository renamed and recreated can
+ * leave two rows for one path; the one seen last wins.
+ */
+export async function readForgePullRequestStates(
+  scope: { orgId: string; workspaceId: string },
+  keys: readonly ForgeKey[],
+): Promise<Map<string, StoredPullRequestState>> {
+  const out = new Map<string, StoredPullRequestState>();
+  if (keys.length === 0) return out;
+  const forge = schema.forgePullRequests;
+  const rows = await withTenantDb((tx) =>
+    tx
+      .select({
+        provider: forge.provider,
+        repository: forge.repository,
+        number: forge.number,
+        state: forge.state,
+        draft: forge.draft,
+        stateSeenAt: forge.stateSeenAt,
+      })
+      .from(forge)
+      .where(
+        and(
+          eq(forge.orgId, scope.orgId),
+          eq(forge.workspaceId, scope.workspaceId),
+          inArray(forge.number, [...new Set(keys.map((key) => key.number))]),
+        ),
+      ),
+  );
+  const wanted = new Set(keys.map(forgeKeyString));
+  const seen = new Map<string, number>();
+  for (const row of rows) {
+    const key = forgeKeyString({
+      provider: row.provider as PullRequestProvider,
+      repository: row.repository,
+      number: row.number,
+    });
+    if (!wanted.has(key)) continue;
+    const at = row.stateSeenAt.getTime();
+    if ((seen.get(key) ?? -1) > at) continue;
+    seen.set(key, at);
+    out.set(key, {
+      state: wireStateOf(row),
+      stateSeenAt: row.stateSeenAt.toISOString(),
+    });
+  }
+  return out;
+}
+
 /** Read the stored states for a page of root sessions, one query. */
 export async function readStoredPullRequestStates(
   scope: { orgId: string; workspaceId: string },

@@ -615,8 +615,45 @@ describe("revertPlanOf", () => {
       branch: "main",
       mark: { by: `github:acme/app@${SHA_B}`, at: at("2026-09-27T11:30:00Z"), readAt },
     });
-    // The incremental poll records no branch, so its revert commit marks nothing.
+    // A commit with no branch could have landed anywhere, so it marks nothing.
     expect(revertPlanOf({ ...commit, branch: null })).toBeNull();
+  });
+
+  it("marks the pull request a polled revert commit names, through the path a push takes (#5263)", () => {
+    // The commit as the poll hands it on: GitHub's list-commits row plus the
+    // default branch the poll listed. The default branch here is trunk, so
+    // nothing assumes main.
+    const polled = {
+      sha: SHA_B,
+      node_id: "C_kwDOAbc",
+      html_url: `https://github.com/acme/app/commit/${SHA_B}`,
+      commit: {
+        message: `Revert "Add x"\n\nThis reverts commit ${SHA_M}.`,
+        author: { name: "a", email: "a@example.com", date: "2026-09-27T11:30:00Z" },
+        committer: { name: "a", email: "a@example.com", date: "2026-09-27T11:30:00Z" },
+      },
+      author: { login: "a" },
+      parents: [{ sha: SHA_M }],
+      git_branch: "trunk",
+    };
+    const delivery = outcomeDeliveryOf("commit", polled, readAt);
+    if (delivery === null) throw new Error("fixture did not parse");
+    const plan = revertPlanOf(delivery);
+    if (plan === null) throw new Error("the polled revert made no plan");
+    expect(plan).toMatchObject({ kind: "merge_commits", shas: [SHA_M], branch: "trunk" });
+    const evidence = revertEvidenceOf(plan);
+    expect(
+      withStoredReverts(settled({ baseRef: "trunk", mergeCommitSha: SHA_M }), evidence),
+    ).toMatchObject({
+      reverted: true,
+      revertedBy: `github:acme/app@${SHA_B}`,
+      revertedAt: at("2026-09-27T11:30:00Z"),
+    });
+    // A pull request that merged into another branch stays as it was.
+    expect(
+      withStoredReverts(settled({ baseRef: "release", mergeCommitSha: SHA_M }), evidence)
+        .reverted,
+    ).toBe(false);
   });
 });
 

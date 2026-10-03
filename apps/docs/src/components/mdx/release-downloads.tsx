@@ -117,7 +117,7 @@ export function releaseUrls(version: string): {
 const card =
   "rounded-xl border border-fd-border bg-fd-card p-4 min-w-0 flex flex-col gap-2";
 const label =
-  "text-[11px] font-medium uppercase tracking-[0.08em] text-fd-muted-foreground";
+  "text-xs font-medium uppercase tracking-[0.08em] text-fd-muted-foreground";
 const link =
   "font-medium text-fd-foreground underline decoration-fd-border underline-offset-4 hover:decoration-fd-foreground";
 const mono = "font-mono text-xs text-fd-muted-foreground break-all";

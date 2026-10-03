@@ -89,6 +89,7 @@ import {
   runEnrichmentSweep,
 } from "./functions/run.enrich";
 import { runPullRequestBackfill } from "./functions/run.pull-request-backfill";
+import { forgePullRequestSync } from "./functions/forge.pull-request-sync";
 import { workOrderPullRequestLinked, workOrderRunEnded } from "./functions/work.order-results";
 import { agentInterjectionTimeout } from "./functions/agent.interjection-timeout";
 import { agentInterjectionTimeoutSweep } from "./functions/agent.interjection-timeout-sweep";
@@ -177,6 +178,7 @@ export const functions: any[] = [
   runEnrichOnFailure,
   runEnrichmentSweep,
   runPullRequestBackfill,
+  forgePullRequestSync,
   workOrderRunEnded,
   workOrderPullRequestLinked,
   agentInterjectionTimeout,

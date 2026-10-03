@@ -15,6 +15,8 @@ export type {
   GitHubCommitStatus,
   GitHubCiChecks,
   GitHubPrFile,
+  GitHubCompareRefs,
+  GitHubCompareDiff,
   GitHubBranch,
   GitHubPathCommit,
   GitHubRepoInfo,

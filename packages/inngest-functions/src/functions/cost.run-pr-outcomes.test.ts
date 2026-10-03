@@ -190,6 +190,33 @@ describe("cost.run-pr-outcomes-delivery", () => {
     expect(mocks.applyOutcomeDelivery).toHaveBeenCalledTimes(1);
   });
 
+  it("applies a revert commit the poll read, on the default branch it listed (#5263)", async () => {
+    // The first poll after a connection marks its records backfill. A revert
+    // is a fact whenever Oxagen reads it, so the flag stops no revert.
+    mocks.applyOutcomeDelivery.mockResolvedValue({ rows: 0, reverted: 1 });
+    await delivery().handler({
+      event: event({
+        sourceRecordType: "commit",
+        backfill: true,
+        payload: {
+          sha: "b".repeat(40),
+          html_url: `https://github.com/acme/app/commit/${"b".repeat(40)}`,
+          commit: {
+            message: `Revert "x"\n\nThis reverts commit ${SHA}.`,
+            author: { date: "2026-09-27T11:30:00Z" },
+            committer: { date: "2026-09-27T11:30:00Z" },
+          },
+          git_branch: "trunk",
+        },
+      }),
+      step,
+    });
+    expect(mocks.applyOutcomeDelivery).toHaveBeenCalledWith(
+      { orgId: "org-1", workspaceId: "ws-a" },
+      expect.objectContaining({ kind: "commit", branch: "trunk" }),
+    );
+  });
+
   it("opens no step for a commit that reverts nothing, another connector, or another record", async () => {
     const commit = {
       sha: "b".repeat(40),

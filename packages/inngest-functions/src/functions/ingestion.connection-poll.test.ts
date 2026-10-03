@@ -196,6 +196,38 @@ describe("ingestion-connection-poll — happy path", () => {
   });
 });
 
+describe("ingestion-connection-poll — backfill flag (#5263)", () => {
+  it("marks the events of records the connector read as backfill, and only those", async () => {
+    setupDb({ cursor: {}, consecutive_failure_count: 0, status: "connected" }, [
+      "commit",
+    ]);
+    mocks.getConnector.mockReturnValue(
+      makeConnector(async function* (rt) {
+        yield {
+          sourceRecordType: rt,
+          externalId: "old",
+          raw: { id: "old", updatedAt: "2026-05-01T00:00:00Z" },
+          receivedAt: "2026-07-04T00:00:00Z",
+          backfill: true,
+        };
+        yield {
+          sourceRecordType: rt,
+          externalId: "new",
+          raw: { id: "new", updatedAt: "2026-05-02T00:00:00Z" },
+          receivedAt: "2026-07-04T00:00:00Z",
+        };
+      }),
+    );
+    await capturedHandler!({ event: { data: eventData }, step: makeStep() });
+    const events = sentEvents
+      .filter((e) => e.id.startsWith("emit-"))
+      .flatMap((e) => e.events as Array<{ data: Record<string, unknown> }>);
+    expect(events).toHaveLength(2);
+    expect(events[0]!.data["backfill"]).toBe(true);
+    expect(events[1]!.data).not.toHaveProperty("backfill");
+  });
+});
+
 describe("ingestion-connection-poll — failure path", () => {
   it("marks a failed telemetry event when the credential cannot be resolved", async () => {
     setupDb({ cursor: {}, consecutive_failure_count: 0, status: "connected" }, [

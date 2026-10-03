@@ -1,5 +1,5 @@
 // This test reads the desktop icons, the synced avatar, and the guarded
-// stylesheets in the live tree.
+// stylesheets, markup, and pages in the live tree.
 // vitest.config.ts leaves `*.tree.test.ts` files out of turbo's cached tasks,
 // so `pnpm check:tree-guards` runs them uncached in the checks job (#4664
 // item 2). The cached tests in sync-brand-assets.test.ts run the sync against
@@ -8,7 +8,14 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { GUARDED, GUARDED_MARKUP, literalDrift, markupDrift } from "./lib/brand-literals.mjs";
+import {
+  GUARDED,
+  GUARDED_MARKUP,
+  GUARDED_PAGES,
+  literalDrift,
+  markupDrift,
+  typeDrift,
+} from "./lib/brand-literals.mjs";
 import { desktopIconDrift } from "./sync-brand-assets.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -75,6 +82,35 @@ describe("the guarded docs markup", () => {
         readFileSync(join(REPO_ROOT, path), "utf8"),
       ]),
     );
-    expect(markupDrift(files)).toEqual([]);
+    const tokens = readFileSync(
+      join(REPO_ROOT, "packages/ui/src/styles/house-tokens.css"),
+      "utf8",
+    );
+    expect(markupDrift(files, { tokens })).toEqual([]);
+  });
+});
+
+// oxageninc/brand#83: oxagen.sh and docs.oxagen.sh set no text under 14px,
+// every size and face from a kit token, and h1 to h3 in Space Grotesk.
+describe("the customer sites' type", () => {
+  it("has every guarded page in the tree, so a rename cannot drop one from the guard", () => {
+    const missing = GUARDED_PAGES.map((g) => g.path).filter(
+      (path) => !existsSync(join(REPO_ROOT, path)),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("breaks the house type rule nowhere", () => {
+    const files = new Map(
+      [...GUARDED, ...GUARDED_PAGES].map(({ path }): [string, string] => [
+        path,
+        readFileSync(join(REPO_ROOT, path), "utf8"),
+      ]),
+    );
+    const tokens = readFileSync(
+      join(REPO_ROOT, "packages/ui/src/styles/house-tokens.css"),
+      "utf8",
+    );
+    expect(typeDrift(files, { tokens })).toEqual([]);
   });
 });

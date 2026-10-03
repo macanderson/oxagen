@@ -219,6 +219,12 @@ export interface IngestionEntityReceived {
   idempotencyKey: string;
   payload: unknown;
   receivedAt: string; // ISO-8601
+  /**
+   * True for a record read at connect time: by the initial sync, or by a poll
+   * with no saved cursor. The pipeline writes the node and sends no trigger
+   * change event for it. A webhook delivery leaves it unset.
+   */
+  backfill?: boolean;
 }
 
 // ---------------------------------------------------------------------------

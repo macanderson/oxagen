@@ -352,6 +352,7 @@ function listing(over: Partial<SpendFindings> = {}): SpendFindings {
     annualised: cost("17649600000"),
     counts: { findings: 3, high: 2, medium: 1, operators: 3 },
     findings: [found(), onAgent, onOperator],
+    truncated: false,
     ...over,
   };
 }

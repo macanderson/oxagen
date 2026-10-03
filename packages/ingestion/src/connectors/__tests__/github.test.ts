@@ -144,6 +144,18 @@ describe("github connector – normalizeRecord", () => {
       expect(result.properties["authorEmail"]).toBe("bob@example.com");
     });
 
+    it("stores the commit date in UTC to the second, as GitHub's REST API writes it", () => {
+      const at = (date: string) =>
+        github.normalizeRecord("commit", {
+          sha: "abc123",
+          commit: { message: "m", author: { date } },
+        }).properties["committedAt"];
+      // A push delivery writes the date with an offset; the REST API in UTC.
+      expect(at("2026-09-27T07:30:00-04:00")).toBe("2026-09-27T11:30:00Z");
+      expect(at("2026-09-27T11:30:00Z")).toBe("2026-09-27T11:30:00Z");
+      expect(at("not a date")).toBe("not a date");
+    });
+
     it("attaches git_branch when the field is present in the raw payload", () => {
       const raw = {
         sha: "def456",
