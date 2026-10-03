@@ -282,7 +282,19 @@ describe("readProcessStarts", () => {
         [5151, LATER],
       ]),
     );
-    expect(calls).toEqual([["ps", "-o", "pid=,lstart=", "-p", "4242,5151"]]);
+    expect(calls).toEqual([
+      [
+        "env",
+        "TZ=UTC",
+        "LC_ALL=C",
+        "LANG=C",
+        "ps",
+        "-o",
+        "pid=,lstart=",
+        "-p",
+        "4242,5151",
+      ],
+    ]);
   });
 
   it("answers an empty listing when no pid names a process, and nothing when ps fails", () => {
@@ -313,7 +325,19 @@ describe("readProcessStarts", () => {
       "darwin",
     );
     expect(started).toEqual(new Map([[4242, STARTED]]));
-    expect(calls).toEqual([["ps", "-o", "pid=,lstart=", "-p", "4242,5151"]]);
+    expect(calls).toEqual([
+      [
+        "env",
+        "TZ=UTC",
+        "LC_ALL=C",
+        "LANG=C",
+        "ps",
+        "-o",
+        "pid=,lstart=",
+        "-p",
+        "4242,5151",
+      ],
+    ]);
   });
 
   const BOOT = "9f0c2b7e-51a4-4a4e-8d0b-3c1e7f2a6b90";
@@ -371,7 +395,12 @@ describe("readProcessStarts", () => {
       const ticks = procStartTicks(readFileSync("/proc/self/stat", "utf8"));
       expect(first?.endsWith(`:${ticks}`)).toBe(true);
       expect(
-        vi.mocked(spawnSync).mock.calls.some(([command]) => command === "ps"),
+        vi
+          .mocked(spawnSync)
+          .mock.calls.some(
+            ([command, args]) =>
+              command === "ps" || (Array.isArray(args) && args.includes("ps")),
+          ),
       ).toBe(false);
     },
   );
@@ -383,7 +412,18 @@ describe("readProcessStarts", () => {
       expect(started).toBeDefined();
       const call = vi
         .mocked(spawnSync)
-        .mock.calls.find(([command]) => command === "ps");
+        .mock.calls.find(
+          ([command, args]) =>
+            command === "env" && Array.isArray(args) && args.includes("ps"),
+        );
+      // Pinned on the command line, so any `Exec` reads in UTC, and in the
+      // environment as well.
+      expect(call?.[1]?.slice(0, 4)).toEqual([
+        "TZ=UTC",
+        "LC_ALL=C",
+        "LANG=C",
+        "ps",
+      ]);
       expect(call?.[2]?.env?.["TZ"]).toBe("UTC");
       expect(call?.[2]?.env?.["LC_ALL"]).toBe("C");
       expect(call?.[2]?.env?.["LANG"]).toBe("C");

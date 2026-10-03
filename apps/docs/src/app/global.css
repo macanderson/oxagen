@@ -75,9 +75,17 @@
  *
  * `.prose` is the page body and also each item in the table of contents,
  * which Fumadocs marks `prose text-sm`.
+ *
+ * The house type rule (Mac, 2026-10-02, oxageninc/brand#83) holds here too:
+ * every size reads a kit step, and h1 to h3 are Space Grotesk, the kit's
+ * display face, because the docs are a customer site. The kit's base rule
+ * sets h1 to h3 from --font-heading, which reads the text face, Aeonik, until
+ * a site points it at --font-display, as this block does. h4 to h6 and all
+ * other text stay Aeonik, and code stays Monaspace Neon.
  * ─────────────────────────────────────────────────────────────────────────── */
 :root {
   --docs-step: calc(8 / 7);
+  --font-heading: var(--font-display);
 }
 
 .prose {
@@ -299,7 +307,7 @@ figure.shiki pre {
   fill: var(--ox-dg-sub) !important;
   color: var(--ox-dg-sub) !important;
   font-family: var(--font-mono) !important;
-  font-size: 11px !important;
+  font-size: var(--ox-a-micro) !important;
 }
 /* No chip behind a wire label: only the page ground, so the wire stops short
    of the words instead of striking through them. */

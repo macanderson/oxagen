@@ -34,6 +34,7 @@ import {
 } from "@/ui/control-styles";
 import { DesktopDownloads } from "@/ui/desktop-downloads";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
+import { HarnessIcon } from "@/ui/harness-icon";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { advanceOnboarding, issueEnrollmentToken } from "../actions";
 import { UNANSWERED, useOnboardingFailure } from "../failure";
@@ -560,7 +561,14 @@ export function WrapStep({
           onChange={setTab}
           render={(item) => (
             <span className="flex flex-col items-start gap-0.5 px-3.5 py-3 text-left">
-              <span className="text-sm font-semibold text-foreground">
+              <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                {/* The SDK tab wraps an agent of your own, not a harness. */}
+                {item === "sdk" ? null : (
+                  <HarnessIcon
+                    harness={item === "cc" ? "claude-code" : item}
+                    size={16}
+                  />
+                )}
                 {t(`tabs.${item}.name`)}
               </span>
               <span className="font-mono text-sm text-muted-foreground">

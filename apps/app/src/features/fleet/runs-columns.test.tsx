@@ -156,6 +156,87 @@ describe("agent harness badges on Fleet rows", () => {
   });
 });
 
+describe("the Harness column", () => {
+  // Columns draw in FLEET_COLUMNS order: run, agent, harness.
+  const harnessCell = (id: string) => {
+    const found = within(rowOf(id)).getAllByRole("cell")[2];
+    if (found === undefined) throw new Error(`no harness cell on ${id}`);
+    return found;
+  };
+
+  it("draws the recorded harness's logo, product name and version, and names the source under the agent", async () => {
+    await renderFleet([
+      runRow({
+        id: "tse_codex",
+        source: "tacho",
+        harness: { name: "codex", version: "0.42.0", runtime: "node" },
+      }),
+    ]);
+    const harness = within(harnessCell("tse_codex")).getByTestId(
+      "row-harness",
+    );
+    expect(harness).toHaveAttribute("data-harness", "codex");
+    expect(harness).toHaveAttribute("data-basis", "run");
+    expect(harness).not.toHaveAttribute("title");
+    expect(harness).toHaveTextContent("Codex 0.42.0");
+    expect(harness.querySelector("[data-harness-mark]")).toHaveAttribute(
+      "data-harness-mark",
+      "codex",
+    );
+    expect(harness.querySelector("img")).toHaveAttribute(
+      "src",
+      "/harnesses/codex-light.svg",
+    );
+    // The agent column's line under the key names the source, so the
+    // harness and its version are not drawn twice.
+    const agent = within(rowOf("tse_codex")).getAllByRole("cell")[1];
+    expect(agent).toHaveTextContent("wrapped agent");
+    expect(agent).not.toHaveTextContent("0.42.0");
+  });
+
+  it("falls back to the harness the agent registered, and says so on hover", async () => {
+    await renderFleet([runRow({ id: "arun_registered" })]);
+    const harness = within(harnessCell("arun_registered")).getByTestId(
+      "row-harness",
+    );
+    expect(harness).toHaveAttribute("data-harness", "claude-code");
+    expect(harness).toHaveAttribute("data-basis", "agent");
+    expect(harness).toHaveAttribute(
+      "title",
+      "The harness this run's agent registered.",
+    );
+    expect(harness).toHaveTextContent("Claude Code");
+    // The badge on the agent's avatar reads the same harness.
+    expect(
+      rowOf("arun_registered").querySelector("[data-harness-badge]"),
+    ).toHaveAttribute("data-harness-badge", "claude-code");
+  });
+
+  it("reads not recorded when neither the run nor its agent names a harness (negative)", async () => {
+    await renderFleet([
+      runRow({ id: "arun_stranger", agentKey: "acme.core.stranger" }),
+    ]);
+    const cell = harnessCell("arun_stranger");
+    expect(within(cell).queryByTestId("row-harness")).toBeNull();
+    expect(cell.querySelector("[data-harness-mark]")).toBeNull();
+    expect(cell).toHaveTextContent("not recorded");
+  });
+
+  it("names a harness this build does not know as it was recorded, with the generic mark", async () => {
+    await renderFleet([
+      runRow({
+        id: "tse_new",
+        source: "tacho",
+        harness: { name: "opencode", version: null, runtime: null },
+      }),
+    ]);
+    const harness = within(harnessCell("tse_new")).getByTestId("row-harness");
+    expect(harness).toHaveTextContent("opencode");
+    expect(harness.querySelector("svg")).toBeTruthy();
+    expect(harness.querySelector("img")).toBeNull();
+  });
+});
+
 describe("pull requests on a Fleet row", () => {
   it("links a GitHub pull request and a GitLab merge request to their forge, in a new tab, with status unknown", async () => {
     await renderFleet([
@@ -401,6 +482,7 @@ describe("saved columns", () => {
     expect(heads()).toEqual([
       "Session name",
       "Agent",
+      "Harness",
       "Operator",
       "Status",
       "Pull requests",
@@ -413,7 +495,7 @@ describe("saved columns", () => {
     ]);
     expect(screen.getByTestId("rows-per-page")).toHaveTextContent("50");
     // Each row draws one cell per column shown, plus its action.
-    expect(within(rowOf("arun_1")).getAllByRole("cell")).toHaveLength(11);
+    expect(within(rowOf("arun_1")).getAllByRole("cell")).toHaveLength(12);
   });
 
   it("hides and shows a column from the picker, and saves the choice in the cookie", async () => {

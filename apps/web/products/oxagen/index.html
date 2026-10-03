@@ -119,8 +119,8 @@
 .hero{position:relative;padding:calc(var(--nav-h) + 68px) 0 72px;overflow:clip}
 .hero-in{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:48px;align-items:center}
 @media (max-width:1000px){.hero-in{grid-template-columns:1fr;gap:38px}.hero{padding-top:calc(var(--nav-h) + 42px)}}
-.hero h1{font-size:clamp(37px,5.2vw,60px);font-weight:680}
-.hero-sub{margin:20px 0 30px;color:var(--ink-3);font-size:clamp(16px,1.7vw,18.5px);max-width:52ch}
+.hero h1{font-size:clamp(calc(var(--ox-m-h2) * 12 / 13), 5.2vw, calc(var(--ox-m-h1) * 5 / 6));font-weight:680}
+.hero-sub{margin:20px 0 30px;color:var(--ink-3);font-size:clamp(var(--fs-small), 1.7vw, calc(var(--ox-m-h4) * 12 / 13));max-width:52ch}
 .hero-sub strong{color:var(--ink);font-weight:560}
 .hero-ctas{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
 
@@ -135,9 +135,9 @@
 .p-hops li:last-child::before{border-style:dashed}
 .p-hops .dg-k{padding-top:4px}
 .p-hops b{font-weight:560;min-width:0;overflow-wrap:anywhere}
-.p-hops small{grid-column:2;font-size:12.5px;color:var(--ink-3);overflow-wrap:anywhere}
+.p-hops small{grid-column:2;font-size:var(--fs-micro);color:var(--ink-3);overflow-wrap:anywhere}
 .p-decide{display:flex;flex-wrap:wrap;gap:10px}
-.p-btn{display:inline-flex;align-items:center;padding:8px 14px;border:1px solid var(--rule);border-radius:var(--r);background:var(--panel);font-size:14px}
+.p-btn{display:inline-flex;align-items:center;padding:8px 14px;border:1px solid var(--rule);border-radius:var(--r);background:var(--panel);font-size:var(--fs-micro)}
 .p-btn+.p-btn{color:var(--ink-3)}
 
 /* the four promises, with the features that hang on each */
@@ -145,9 +145,9 @@
 @media (max-width:980px){.p-four{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:560px){.p-four{grid-template-columns:1fr}}
 .p-four>div{background:var(--panel);padding:22px}
-.p-four h3{font-size:19px;margin:0 0 6px}
-.p-four p{color:var(--ink-3);font-size:14.5px}
-.p-four ol{list-style:none;margin:14px 0 0;padding:14px 0 0;border-top:1px solid var(--line);display:grid;gap:6px;font-size:13.5px}
+.p-four h3{font-size:var(--fs-card);margin:0 0 6px}
+.p-four p{color:var(--ink-3);font-size:var(--fs-ui)}
+.p-four ol{list-style:none;margin:14px 0 0;padding:14px 0 0;border-top:1px solid var(--line);display:grid;gap:6px;font-size:var(--fs-ui)}
 .p-four ol a{color:var(--ink-2)}
 .p-four ol a:hover{color:var(--ink)}
 .p-four .dg-k{margin-right:6px}
@@ -159,28 +159,28 @@
 .p-node.p-vault{border:3px double var(--ink-3);padding:10px 12px}
 @media (max-width:520px){.p-node{grid-template-columns:1fr;gap:4px}.p-node .dg-tag{justify-self:start}}
 .p-wire{position:relative;height:56px;margin-left:26px;border-left:1px dashed var(--ink-3)}
-.p-lbl{position:absolute;left:16px;right:0;top:50%;transform:translateY(-50%);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--ink-3);line-height:1.4}
+.p-lbl{position:absolute;left:16px;right:0;top:50%;transform:translateY(-50%);font-family:var(--font-mono);font-size:var(--fs-micro);color:var(--ink-3);line-height:1.4}
 .p-pkt{position:absolute;left:-4px;top:0;width:7px;height:7px;border-radius:50%;background:var(--ink);animation:pDrop 2.4s var(--ease) infinite}
 .p-wire.late .p-pkt{animation-delay:1.2s}
 @keyframes pDrop{0%{top:0;opacity:0}15%{opacity:1}85%{opacity:1}100%{top:calc(100% - 7px);opacity:0}}
-.p-note{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 18px;border-top:1px solid var(--line);font-size:13.5px;color:var(--ink-3)}
+.p-note{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 18px;border-top:1px solid var(--line);font-size:var(--fs-micro);color:var(--ink-3)}
 
 /* stop it, steer it: the fleet and a delivery report */
-.p-run{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto 104px;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);font-size:13.5px}
-.p-run.head{padding-block:8px;background:var(--panel);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.p-run{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto 104px;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);font-size:var(--fs-micro)}
+.p-run.head{padding-block:8px;background:var(--panel);font-family:var(--font-mono);font-size:var(--fs-micro);letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
 .p-run .dg-m{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .p-run .who{color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.p-run .seen{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--ink-2);text-align:right}
+.p-run .seen{font-family:var(--font-mono);font-size:var(--fs-micro);color:var(--ink-2);text-align:right}
 @media (max-width:560px){.p-run{grid-template-columns:minmax(0,1fr) auto 84px}.p-run .who{display:none}}
 .p-steer{margin:14px 16px 0;padding:12px 14px;border:1px solid var(--rule);border-radius:var(--r);background:var(--panel)}
-.p-steer p{margin-top:4px;font-size:15px}
-.p-report{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 16px 16px;font-size:12.5px;color:var(--ink-3)}
+.p-steer p{margin-top:4px;font-size:var(--fs-ui)}
+.p-report{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 16px 16px;font-size:var(--fs-micro);color:var(--ink-3)}
 
 /* mandates: authority as a ledger */
-.p-grant{font-size:13.5px;color:var(--ink-2)}
+.p-grant{font-size:var(--fs-micro);color:var(--ink-2)}
 .p-grant .dg-k{display:block;margin-bottom:3px}
 .p-limit{display:grid;gap:6px}
-.p-lr{display:flex;justify-content:space-between;gap:12px;font-size:13.5px;color:var(--ink-2)}
+.p-lr{display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-micro);color:var(--ink-2)}
 .p-chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .p-chips .dg-k{width:100%}
 
@@ -192,14 +192,14 @@
 .p-half>b{font-weight:560;overflow-wrap:anywhere}
 .p-half .dg-tag{justify-self:start}
 .p-kv{margin:0;display:grid;gap:6px}
-.p-kv div{display:grid;grid-template-columns:92px minmax(0,1fr);gap:10px;font-size:13px}
-.p-kv dt{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--faint);padding-top:1px}
+.p-kv div{display:grid;grid-template-columns:92px minmax(0,1fr);gap:10px;font-size:var(--fs-micro)}
+.p-kv dt{font-family:var(--font-mono);font-size:var(--fs-micro);color:var(--faint);padding-top:1px}
 .p-kv dd{margin:0;color:var(--ink-2);overflow-wrap:anywhere}
 
 /* the flight recorder: two runs, where they split, and the cost as it plays */
 .p-rec svg{width:100%;height:auto}
-.p-rec .k{font:500 10.5px ui-monospace,SFMono-Regular,Menlo,monospace;fill:var(--faint);letter-spacing:.08em}
-.p-rec .v{font:500 11px ui-monospace,SFMono-Regular,Menlo,monospace;fill:var(--ink-2)}
+.p-rec .k{font: 500 var(--fs-micro) var(--font-mono);fill:var(--faint);letter-spacing:.08em}
+.p-rec .v{font: 500 var(--fs-micro) var(--font-mono);fill:var(--ink-2)}
 .p-rec .sm{fill:var(--ink-3)}
 .p-rec .st{fill:var(--faint)}
 .p-rec .sp{fill:none;stroke:var(--ink-3)}
@@ -213,10 +213,10 @@
 .p-transport{display:flex;flex-wrap:wrap;gap:8px}
 
 /* every dollar: the reconciler and spend by outcome */
-.p-row{display:grid;grid-template-columns:minmax(0,1.3fr) repeat(2,minmax(0,.9fr)) minmax(0,1.2fr);gap:10px;align-items:center;padding:9px 16px;border-bottom:1px solid var(--line);font-size:13px}
-.p-row.head{padding-block:8px;background:var(--panel);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.p-row{display:grid;grid-template-columns:minmax(0,1.3fr) repeat(2,minmax(0,.9fr)) minmax(0,1.2fr);gap:10px;align-items:center;padding:9px 16px;border-bottom:1px solid var(--line);font-size:var(--fs-micro)}
+.p-row.head{padding-block:8px;background:var(--panel);font-family:var(--font-mono);font-size:var(--fs-micro);letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
 .p-row .dg-m{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.p-row>:nth-child(2),.p-row>:nth-child(3){text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums;color:var(--ink-2)}
+.p-row>:nth-child(2),.p-row>:nth-child(3){text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--ink-2)}
 .p-row>:nth-child(4){justify-self:end}
 @media (max-width:560px){.p-row{grid-template-columns:minmax(0,1fr) auto}.p-row>:nth-child(2),.p-row>:nth-child(3){display:none}}
 .p-spark{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;align-items:end}
@@ -228,13 +228,13 @@
 /* the shape of your business: a graph with provenance */
 .p-graph svg{width:100%;height:auto}
 .p-graph .e{stroke:var(--rule);stroke-width:1}
-.p-graph .el{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;fill:var(--faint)}
+.p-graph .el{font: var(--fs-micro) var(--font-mono);fill:var(--faint)}
 .p-graph .nd rect{fill:var(--panel);stroke:var(--rule)}
 .p-graph .nd .ring{fill:none;stroke:var(--ink-3)}
-.p-graph .nd .l{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;fill:var(--faint);letter-spacing:.08em}
-.p-graph .nd .t{font:500 12.5px "Aeonik",system-ui,-apple-system,"Segoe UI",sans-serif;fill:var(--ink)}
+.p-graph .nd .l{font: var(--fs-micro) var(--font-mono);fill:var(--faint);letter-spacing:.08em}
+.p-graph .nd .t{font: 500 var(--fs-micro) var(--font-sans);fill:var(--ink)}
 .p-ask{display:grid;gap:8px;padding:12px 14px;border:1px solid var(--rule);border-radius:var(--r);background:var(--panel)}
-.p-ask p{font-size:15px}
+.p-ask p{font-size:var(--fs-ui)}
 
 /* supported agents */
 #support .matrix-wrap{margin-top:4px}
@@ -244,15 +244,15 @@
 @media (max-width:1060px){.p-more{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:620px){.p-more{grid-template-columns:1fr}}
 .p-more .card{display:flex;flex-direction:column;padding:20px}
-.p-more .card h3{font-size:16.5px;margin:10px 0 8px}
-.p-mini{margin-top:auto;padding-top:16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--ink-3)}
+.p-more .card h3{font-size:var(--fs-lead);margin:10px 0 8px}
+.p-mini{margin-top:auto;padding-top:16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:var(--fs-micro);color:var(--ink-3)}
 .p-next{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .p-nest{margin-top:auto;padding-top:16px}
-.p-nest span{display:block;padding:5px 6px 0;border:1px solid var(--rule);border-radius:7px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--ink-3)}
+.p-nest span{display:block;padding:5px 6px 0;border:1px solid var(--rule);border-radius:7px;font-family:var(--font-mono);font-size:var(--fs-micro);color:var(--ink-3)}
 .p-nest span span{margin-top:5px}
 .p-nest .off{padding-bottom:6px;border-color:var(--fail);color:var(--ink)}
-.p-delta{list-style:none;margin:auto 0 0;padding:16px 0 0;display:grid;gap:4px;font-size:13px;color:var(--ink-3)}
-.p-delta b{display:inline-block;min-width:34px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink);font-weight:500}
+.p-delta{list-style:none;margin:auto 0 0;padding:16px 0 0;display:grid;gap:4px;font-size:var(--fs-micro);color:var(--ink-3)}
+.p-delta b{display:inline-block;min-width:34px;font-family:var(--font-mono);color:var(--ink);font-weight:500}
 </style>
 </head>
 <body>
@@ -267,7 +267,7 @@
     <div class="wrap hero-in">
       <div>
         <p class="eyebrow">Product · Oxagen</p>
-        <h1><span class="hero-line-1">See which agent spent what,</span><br><span class="gold">and on whose behalf.</span></h1>
+        <h1>See which agent spent what,<br><span class="gold">and on whose behalf.</span></h1>
         <p class="hero-sub">
           When an agent asks to act through Oxagen, a rule you wrote answers. Some rules send the
           request to a person first. Oxagen records each step and prices each model call that goes
@@ -584,7 +584,7 @@
             <p>Who owns the refund policy?</p>
             <div class="p-chips"><span class="dg-tag is-ok">team payments</span><span class="dg-tag">query shown</span><span class="dg-tag">3 sources</span></div>
           </div>
-          <div class="dg-in" style="--i:1"><svg viewBox="0 0 520 214" aria-hidden="true"><line class="e" x1="92" y1="40" x2="272" y2="34"/><text class="el" x="170" y="27">owns</text><line class="e" x1="272" y1="34" x2="440" y2="70"/><text class="el" x="356" y="44">built from</text><line class="e" x1="92" y1="40" x2="118" y2="150"/><text class="el" x="113" y="95">owns</text><line class="e" x1="118" y1="150" x2="308" y2="138"/><text class="el" x="212" y="136">cites</text><line class="e" x1="272" y1="34" x2="444" y2="176"/><text class="el" x="372" y="110">writes</text><g class="nd"><rect x="28" y="21" width="128" height="38" rx="8"/><text class="l" x="40" y="36">TEAM</text><text class="t" x="40" y="52">payments</text></g><g class="nd"><rect x="204" y="15" width="136" height="38" rx="8"/><text class="l" x="216" y="30">SERVICE</text><text class="t" x="216" y="46">refunds-api</text></g><g class="nd"><rect x="372" y="51" width="136" height="38" rx="8"/><text class="l" x="384" y="66">REPOSITORY</text><text class="t" x="384" y="82">acme/billing</text></g><g class="nd"><rect class="ring" x="29" y="127" width="178" height="46" rx="11"/><rect x="33" y="131" width="170" height="38" rx="8"/><text class="l" x="45" y="146">POLICY</text><text class="t" x="45" y="162">refunds above $100</text></g><g class="nd"><rect x="252" y="119" width="112" height="38" rx="8"/><text class="l" x="264" y="134">ISSUE</text><text class="t" x="264" y="150">PAY-212</text></g><g class="nd"><rect x="374" y="157" width="140" height="38" rx="8"/><text class="l" x="386" y="172">TABLE</text><text class="t" x="386" y="188">stripe_refunds</text></g><text class="el" x="33" y="192">source: github acme/billing@a91c</text><text class="el" x="33" y="206">source: linear PAY-212</text></svg></div>
+          <div class="dg-in" style="--i:1"><svg viewBox="0 0 520 214" aria-hidden="true"><line class="e" x1="92" y1="40" x2="272" y2="34"/><text class="el" x="161" y="29">owns</text><line class="e" x1="272" y1="34" x2="440" y2="70"/><text class="el" x="356" y="44">built from</text><line class="e" x1="92" y1="40" x2="118" y2="150"/><text class="el" x="113" y="95">owns</text><line class="e" x1="118" y1="150" x2="308" y2="138"/><text class="el" x="211" y="136">cites</text><line class="e" x1="272" y1="34" x2="444" y2="176"/><text class="el" x="372" y="110">writes</text><g class="nd"><rect x="28" y="21" width="128" height="38" rx="8"/><text class="l" x="40" y="36">TEAM</text><text class="t" x="40" y="52">payments</text></g><g class="nd"><rect x="204" y="15" width="136" height="38" rx="8"/><text class="l" x="216" y="30">SERVICE</text><text class="t" x="216" y="46">refunds-api</text></g><g class="nd"><rect x="372" y="51" width="136" height="38" rx="8"/><text class="l" x="384" y="66">REPOSITORY</text><text class="t" x="384" y="82">acme/billing</text></g><g class="nd"><rect class="ring" x="29" y="127" width="178" height="46" rx="11"/><rect x="33" y="131" width="170" height="38" rx="8"/><text class="l" x="45" y="146">POLICY</text><text class="t" x="45" y="162">refunds above $100</text></g><g class="nd"><rect x="260" y="119" width="112" height="38" rx="8"/><text class="l" x="272" y="134">ISSUE</text><text class="t" x="272" y="150">PAY-212</text></g><g class="nd"><rect x="374" y="157" width="140" height="38" rx="8"/><text class="l" x="386" y="172">TABLE</text><text class="t" x="386" y="188">stripe_refunds</text></g><text class="el" x="33" y="191">source: github acme/billing@a91c</text><text class="el" x="33" y="208">source: linear PAY-212</text></svg></div>
         </div>
       </figure>
     </div>
@@ -691,8 +691,8 @@
     <div class="wrap split">
       <div class="reveal">
         <p class="eyebrow">The short version</p>
-        <h2 style="font-size:clamp(28px,3.8vw,40px);margin:14px 0">What the control plane holds</h2>
-        <p style="color:var(--ink-3);font-size:17px">
+        <h2 style="font-size:clamp(var(--ox-m-h3), 3.8vw, var(--ox-m-h2));margin:14px 0">What the control plane holds</h2>
+        <p style="color:var(--ink-3);font-size:var(--fs-lead)">
           Oxagen works beside your agents, not inside them. You keep running the agents you chose.
           Oxagen sets the rules and keeps the record.
         </p>
@@ -719,15 +719,15 @@
       <div class="reveal">
         <p class="eyebrow">Get a demo</p>
         <h2>See Oxagen on your own code in twenty minutes</h2>
-        <p style="color:var(--ink-3);font-size:17.5px;margin-top:14px;max-width:48ch">
+        <p style="color:var(--ink-3);font-size:var(--fs-lead);margin-top:14px;max-width:48ch">
           Bring a repo. Together you add one machine and run one task. You watch a rule deny one
           request and send another to you. Then you read what the run cost by person, agent, run,
           turn, and step.
         </p>
         <ul style="list-style:none;padding:0;margin:24px 0 0;display:grid;gap:9px">
-          <li style="display:flex;gap:10px;font-size:14.8px;color:var(--ink-2)"><span class="mono" style="color:var(--ink-3)">→</span>A live walkthrough of your use case, with no slides</li>
-          <li style="display:flex;gap:10px;font-size:14.8px;color:var(--ink-2)"><span class="mono" style="color:var(--ink-3)">→</span>Clear answers on rollout, pricing, and security review</li>
-          <li style="display:flex;gap:10px;font-size:14.8px;color:var(--ink-2)"><span class="mono" style="color:var(--ink-3)">→</span>You keep the run record</li>
+          <li style="display:flex;gap:10px;font-size:var(--fs-ui);color:var(--ink-2)"><span class="mono" style="color:var(--ink-3)">→</span>A live walkthrough of your use case, with no slides</li>
+          <li style="display:flex;gap:10px;font-size:var(--fs-ui);color:var(--ink-2)"><span class="mono" style="color:var(--ink-3)">→</span>Clear answers on rollout, pricing, and security review</li>
+          <li style="display:flex;gap:10px;font-size:var(--fs-ui);color:var(--ink-2)"><span class="mono" style="color:var(--ink-3)">→</span>You keep the run record</li>
         </ul>
       </div>
 

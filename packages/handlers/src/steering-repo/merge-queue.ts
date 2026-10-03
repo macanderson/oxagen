@@ -569,12 +569,40 @@ export async function stampHead(input: StampInput): Promise<StampResult> {
   };
 }
 
+// ── The commit a check compares against ──────────────────────────────────────
+
+/**
+ * The commit the steering checks compare a PR's `head` with: the production
+ * head `main` when the head holds it, and otherwise the newest commit the
+ * branch shares with the production branch.
+ *
+ * The checks compare two whole trees. A branch cut before another steering
+ * PR merged lacks that PR's files and the ledger line its stamp wrote. Read
+ * against the production head, the branch looks like it removes those files
+ * and rewrites the ledger, and the owned check fails it (#5139). Against the
+ * shared commit, the checks see only what the PR changes. landSteeringPr
+ * then brings the branch up to date, and the checks run again against the
+ * production head, which the new head holds.
+ *
+ * Falls back to `main` when the two commits share no history.
+ */
+export async function checkBase(
+  host: Pick<SteeringHost, "mergeBase">,
+  repo: SteeringRepository,
+  head: string,
+  main: string,
+): Promise<string> {
+  return (await host.mergeBase(repo, head, main)) ?? main;
+}
+
 // ── Landing a PR ─────────────────────────────────────────────────────────────
 
 /** What a re-check after an update found: whether it passed, and which checks ran. */
 export interface RecheckResult {
   ok: boolean;
   checks: readonly string[];
+  /** The first error the checks found, as a sentence for the refusal. */
+  failure?: string | null;
 }
 
 export interface LandInput {
@@ -695,7 +723,7 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
         throw new HandlerError({
           code: "conflict",
           reason: "checks_failed",
-          message: `${repo.defaultBranch} moved, and the checks failed on ${head} after Oxagen brought ${input.branch} up to date. Fix the branch and run the checks again.`,
+          message: `${repo.defaultBranch} moved, and the checks failed on ${head} after Oxagen brought ${input.branch} up to date.${again.failure ? ` ${again.failure}` : ""} Fix the branch and run the checks again.`,
         });
       }
       checks = again.checks;

@@ -55,8 +55,11 @@ const PROCESS_START_TIMEOUT_MS = 2_000;
  * changes zone while the daemon runs, or a daemon restarted from a shell
  * with a different `LANG` than the service manager's, would print a
  * different string for the same process, and every session would read as a
- * new process. The zone is pinned to UTC and the locale to C.
+ * new process. The zone is pinned to UTC and the locale to C. The start-time
+ * read pins them again on its own command line (`psStartCommand`), because a
+ * caller may hand it an `Exec` that runs in the daemon's own zone.
  */
+const PS_ZONE = ["TZ=UTC", "LC_ALL=C", "LANG=C"] as const;
 const PS_ENV = { ...process.env, TZ: "UTC", LC_ALL: "C", LANG: "C" };
 
 function psExec(
@@ -217,12 +220,20 @@ function parsePsStarts(
   return out;
 }
 
-const PS_START_ARGS = (pids: readonly number[]) => [
-  "-o",
-  "pid=,lstart=",
-  "-p",
-  pids.join(","),
-];
+/**
+ * The start-time read as one command: `ps` run through `env` with the zone
+ * and locale pinned, whatever `Exec` runs it. The hook path once read through
+ * the daemon's general `execAsync`, which runs in the daemon's own zone, and
+ * the sweep read in UTC. On a Mac outside UTC the two reads of one live
+ * process never matched, so the sweep took the pid for a reused one and
+ * sealed the session `crashed` seconds after it started.
+ */
+function psStartCommand(pids: readonly number[]): [string, string[]] {
+  return [
+    "env",
+    [...PS_ZONE, "ps", "-o", "pid=,lstart=", "-p", pids.join(",")],
+  ];
+}
 
 /**
  * When each of these processes started, by pid. A pid is identified by its
@@ -248,7 +259,7 @@ export function readProcessStarts(
 ): Map<number, string> | undefined {
   if (platform === "win32" || pids.length === 0) return undefined;
   if (platform === "linux") return readProcStarts(pids, read);
-  return parsePsStarts(pids, exec("ps", PS_START_ARGS(pids)));
+  return parsePsStarts(pids, exec(...psStartCommand(pids)));
 }
 
 /**
@@ -264,7 +275,7 @@ export async function readProcessStartsAsync(
 ): Promise<Map<number, string> | undefined> {
   if (platform === "win32" || pids.length === 0) return undefined;
   if (platform === "linux") return readProcStarts(pids, read);
-  return parsePsStarts(pids, await exec("ps", PS_START_ARGS(pids)));
+  return parsePsStarts(pids, await exec(...psStartCommand(pids)));
 }
 
 /**
@@ -285,7 +296,7 @@ export function readProcessStartsNoWait(
   | Promise<Map<number, string> | undefined> {
   if (platform === "win32" || pids.length === 0) return undefined;
   if (platform === "linux") return readProcStarts(pids, read);
-  return exec("ps", PS_START_ARGS(pids)).then(
+  return exec(...psStartCommand(pids)).then(
     (result) => parsePsStarts(pids, result),
     () => undefined,
   );
