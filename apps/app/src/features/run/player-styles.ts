@@ -13,7 +13,7 @@
  * are each button's own, so no two classes set one property.
  */
 const shape =
-  "inline-flex items-center justify-center gap-1.75 rounded-[7px] border px-2 py-0.75 font-mono text-xs font-medium transition-colors hover:border-rule aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11";
+  "inline-flex items-center justify-center gap-1.75 rounded-lg border px-2 py-0.75 font-mono text-xs font-medium transition-colors hover:border-rule aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11";
 
 /** `.btn { border-color:var(--border); background:var(--panel) }`, `:hover { background:var(--hl) }`. */
 const raised =

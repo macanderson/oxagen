@@ -79,7 +79,7 @@ const barFill = "fill-info opacity-80";
 const chartLegend =
   "mt-2.5 flex flex-wrap items-center gap-3.5 text-xs text-muted-foreground";
 /** The turn-cost swatch, `width:9px; height:9px; border-radius:2px; background:var(--st-approval)`. */
-const swatch = "inline-block size-2.25 rounded-[2px] bg-info";
+const swatch = "inline-block size-2.25 rounded-xs bg-info";
 /** The cost-so-far key, `width:14px; border-top:2px dashed var(--fg)`. */
 const dashKey = "inline-block w-3.5 border-t-2 border-dashed border-foreground";
 /** `p.muted { font-size:11.5px; margin:10px 0 0 }`: how to read the chart. */

@@ -1150,7 +1150,7 @@ export function RegistryPackageFields({
                 {variables.map((name) => (
                   <li
                     key={name}
-                    className={`${mono} rounded border border-border px-1.5 py-0.5 text-xs text-foreground`}
+                    className={`${mono} rounded-sm border border-border px-1.5 py-0.5 text-xs text-foreground`}
                   >
                     {name}
                   </li>

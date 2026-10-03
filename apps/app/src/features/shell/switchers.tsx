@@ -47,7 +47,7 @@ function matchesChoice(choice: Choice, query: string): boolean {
 }
 
 const tileClass =
-  "mb-1.75 flex w-full items-center gap-2.25 rounded-[10px] border border-border bg-card px-2.5 py-2 text-left text-card-foreground transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-ring";
+  "mb-1.75 flex w-full items-center gap-2.25 rounded-xl border border-border bg-card px-2.5 py-2 text-left text-card-foreground transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-ring";
 
 /** An organization's or a workspace's avatar, or its letter tile when none is set. */
 function ChoiceAvatar({

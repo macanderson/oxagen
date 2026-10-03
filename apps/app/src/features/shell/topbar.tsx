@@ -136,13 +136,13 @@ export function Topbar({ data }: { data: ShellData }) {
         aria-keyshortcuts="Meta+K Control+K"
         aria-label={t("search")}
         data-touch-target=""
-        className="flex items-center gap-2 rounded-[9px] border border-border bg-card px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:border-rule hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring lg:min-w-47.5"
+        className="flex items-center gap-2 rounded-xl border border-border bg-card px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:border-rule hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring lg:min-w-47.5"
       >
         <MagnifyingGlassIcon aria-hidden="true" className="size-3.5" />
         <span className="hidden lg:inline">{t("search")}</span>
         <kbd
           aria-hidden="true"
-          className="ml-auto hidden rounded border border-border bg-hl px-1.25 font-mono text-xs text-muted-foreground sm:inline"
+          className="ml-auto hidden rounded-sm border border-border bg-hl px-1.25 font-mono text-xs text-muted-foreground sm:inline"
         >
           {t("searchShortcut")}
         </kbd>

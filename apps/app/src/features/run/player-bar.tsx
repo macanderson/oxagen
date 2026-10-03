@@ -167,7 +167,7 @@ export function PlayerBar({
       steps={steps}
       label={t("label")}
       // `.fp-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--panel) }`
-      className="flex flex-wrap items-center gap-1.5 rounded-[10px] border border-border bg-card px-3 py-2.5"
+      className="flex flex-wrap items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2.5"
     >
       <StepLink
         to={steps.first}
@@ -228,7 +228,7 @@ export function PlayerBar({
       <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-dim max-md:hidden">
         {t.rich("keys", {
           k: (chunks) => (
-            <kbd className="rounded border border-border bg-void px-1 font-mono text-xs text-muted-foreground">
+            <kbd className="rounded-sm border border-border bg-void px-1 font-mono text-xs text-muted-foreground">
               {chunks}
             </kbd>
           ),

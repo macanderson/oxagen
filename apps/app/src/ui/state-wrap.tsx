@@ -99,7 +99,7 @@ function StateIcon({ tone, glyph }: { tone: StateTone; glyph: StateGlyph }) {
 
 /** `code { font-family:var(--mono); font-size:.9em; background:var(--hl); padding:.12em .38em; border-radius:4px }` */
 export const stateCode =
-  "rounded bg-hl px-1.25 py-0.5 font-mono";
+  "rounded-sm bg-hl px-1.25 py-0.5 font-mono";
 
 /**
  * The trace line under an error's actions: `.mono.dim` at 11.5px, 16px below

@@ -36,7 +36,7 @@ export function MandateScope({ tools }: { tools: MandateRow["tools"] }) {
     return (
       <span
         data-scope="every-tool"
-        className="rounded bg-foreground px-1.5 py-0.5 text-sm font-medium text-background"
+        className="rounded-sm bg-foreground px-1.5 py-0.5 text-sm font-medium text-background"
       >
         {t("everyTool")}
       </span>

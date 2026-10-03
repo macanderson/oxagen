@@ -19,7 +19,7 @@ function ChromeSkeleton({ loading }: { loading: string }) {
         aria-hidden="true"
         className="sticky top-0 hidden h-dvh border-r border-sidebar-border bg-sidebar-bg md:col-start-1 md:row-span-2 md:row-start-1 md:block"
       >
-        <div className="m-3.5 h-6 w-24 animate-pulse rounded bg-sidebar-accent motion-reduce:animate-none" />
+        <div className="m-3.5 h-6 w-24 animate-pulse rounded-sm bg-sidebar-accent motion-reduce:animate-none" />
         <div className="mx-3.5 mb-2 h-11 animate-pulse rounded-lg bg-sidebar-accent motion-reduce:animate-none" />
         <div className="mx-3.5 h-11 animate-pulse rounded-lg bg-sidebar-accent motion-reduce:animate-none" />
       </div>
@@ -31,7 +31,7 @@ function ChromeSkeleton({ loading }: { loading: string }) {
         <span className="sr-only">{loading}</span>
         <div
           aria-hidden="true"
-          className="h-4 w-48 animate-pulse rounded bg-muted motion-reduce:animate-none"
+          className="h-4 w-48 animate-pulse rounded-sm bg-muted motion-reduce:animate-none"
         />
       </div>
     </>

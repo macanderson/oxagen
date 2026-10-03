@@ -84,15 +84,15 @@ describe("PageSkeleton", () => {
     // Four tiles, the panel's title bar and seven rows.
     expect(bones).toHaveLength(12);
     for (const tile of status.querySelectorAll("[data-skeleton-tile]")) {
-      expect(tile).toHaveClass("h-16", "rounded-[11px]");
+      expect(tile).toHaveClass("h-16", "rounded-xl");
       // `.sk.b` has no border: the shimmer is the whole tile.
       expect(tile.className).not.toMatch(/\bborder\b/);
     }
     for (const row of status.querySelectorAll("[data-skeleton-row]")) {
-      expect(row).toHaveClass("h-9.5", "rounded-[9px]");
+      expect(row).toHaveClass("h-9.5", "rounded-xl");
     }
     const bar = bones.find((bone) => bone.classList.contains("h-5.5"));
-    expect(bar).toHaveClass("w-45", "rounded-[7px]");
+    expect(bar).toHaveClass("w-45", "rounded-lg");
     // No pulse: the shimmer is the one loading motion.
     expect(status.querySelector(".animate-pulse")).toBeNull();
   });

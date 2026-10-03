@@ -260,7 +260,7 @@ function NamesToggle({
     <div
       role="group"
       aria-label={t("names.label")}
-      className="inline-flex rounded-[9px] border border-border p-0.5"
+      className="inline-flex rounded-xl border border-border p-0.5"
     >
       {(["labels", "api"] as const).map((style) => (
         <ToggleLink
@@ -503,7 +503,7 @@ export function Registry({
             />
             <span
               data-testid="tools-shown"
-              className={`${mono} rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground`}
+              className={`${mono} rounded-sm border border-border px-1.5 py-0.5 text-xs text-muted-foreground`}
             >
               {totalKnown
                 ? t("shownOf", {

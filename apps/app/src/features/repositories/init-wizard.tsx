@@ -499,7 +499,7 @@ export function InitWizard({
                   key={option}
                   data-mode={option}
                   data-touch-target=""
-                  className="flex cursor-pointer flex-col gap-1 rounded-[10px] border border-border px-3.5 py-3 has-[:checked]:border-gold has-[:checked]:bg-hl has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
+                  className="flex cursor-pointer flex-col gap-1 rounded-xl border border-border px-3.5 py-3 has-[:checked]:border-gold has-[:checked]:bg-hl has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
                 >
                   <input
                     type="radio"
@@ -585,13 +585,13 @@ export function InitWizard({
               code,
             })}
           </p>
-          <div className="overflow-hidden rounded-[10px] border border-border">
+          <div className="overflow-hidden rounded-xl border border-border">
             <div
               data-testid="init-wizard-pr-head"
               className="flex flex-wrap items-center gap-2 border-b border-border bg-hl px-3.5 py-2.5 text-sm"
             >
               <span
-                className={`${mono} rounded border border-border bg-card px-1.5 py-0.5`}
+                className={`${mono} rounded-sm border border-border bg-card px-1.5 py-0.5`}
               >
                 {repository?.fullName}
               </span>
@@ -599,7 +599,7 @@ export function InitWizard({
                 ←
               </span>
               <span
-                className={`${mono} rounded border border-info/40 bg-info/10 px-1.5 py-0.5 text-info`}
+                className={`${mono} rounded-sm border border-info/40 bg-info/10 px-1.5 py-0.5 text-info`}
               >
                 {INIT_BRANCH}
               </span>
@@ -663,7 +663,7 @@ export function InitWizard({
 function PermissionTable() {
   const t = useTranslations("repositories.wizard.permissions");
   return (
-    <div className="min-w-0 overflow-x-auto rounded-[10px] border border-border">
+    <div className="min-w-0 overflow-x-auto rounded-xl border border-border">
       <table
         aria-label={t("label")}
         data-testid="permission-table"

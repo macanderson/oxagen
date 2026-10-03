@@ -158,10 +158,10 @@ function Meter({
       </span>
       <div
         aria-hidden="true"
-        className="mt-1 h-1.5 overflow-hidden rounded-[3px] bg-hl"
+        className="mt-1 h-1.5 overflow-hidden rounded-xs bg-hl"
       >
         <i
-          className={`block h-full rounded-[3px] ${fill}`}
+          className={`block h-full rounded-xs ${fill}`}
           style={{ width: `${String(share)}%` }}
         />
       </div>
@@ -315,7 +315,7 @@ function ConstraintPanel({
         data-testid="record-boundary"
         data-effect={constraintEffect ?? "unknown"}
         data-grant="none"
-        className={`mb-3.5 grid gap-1.5 rounded-[10px] border px-3.5 py-3 ${tone}`}
+        className={`mb-3.5 grid gap-1.5 rounded-xl border px-3.5 py-3 ${tone}`}
       >
         <span
           data-word=""

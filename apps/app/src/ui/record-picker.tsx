@@ -771,7 +771,7 @@ export function RecordMultiPicker({
               key={v}
               data-chip={v}
               title={shown.context}
-              className="inline-flex max-w-full items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-sm text-foreground"
+              className="inline-flex max-w-full items-center gap-1 rounded-sm border border-border bg-muted px-1.5 py-0.5 text-sm text-foreground"
             >
               {shown.icon === undefined ? null : (
                 <PickerMark icon={shown.icon} size={16} />
@@ -787,7 +787,7 @@ export function RecordMultiPicker({
                   e.stopPropagation();
                   remove(v);
                 }}
-                className="rounded px-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                className="rounded-sm px-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
               >
                 ×
               </button>

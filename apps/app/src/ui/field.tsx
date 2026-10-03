@@ -98,7 +98,7 @@ export function PasswordField({
             setShown((s) => !s);
           }}
           aria-controls={props.id}
-          className="inline-flex items-center rounded px-2 py-1 text-sm text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          className="inline-flex items-center rounded-sm px-2 py-1 text-sm text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
         >
           {shown ? hideLabel : showLabel}
         </button>

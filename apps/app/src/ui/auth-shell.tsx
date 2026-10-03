@@ -90,7 +90,7 @@ export function AuthSkeleton() {
       aria-busy="true"
       className="flex w-full max-w-md flex-col gap-4"
     >
-      <div className="h-3 w-24 animate-pulse rounded bg-muted motion-reduce:animate-none" />
+      <div className="h-3 w-24 animate-pulse rounded-sm bg-muted motion-reduce:animate-none" />
       <div className="h-8 w-3/4 animate-pulse rounded-md bg-muted motion-reduce:animate-none" />
       <div className="h-72 w-full animate-pulse rounded-xl bg-muted motion-reduce:animate-none" />
     </div>

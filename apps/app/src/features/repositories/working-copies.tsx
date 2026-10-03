@@ -109,7 +109,7 @@ export function WorkingCopies({
           title={t("filesTitle")}
         >
           <PanelBody>
-            <pre className="overflow-x-auto rounded-[10px] border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-[1.6] text-foreground">
+            <pre className="overflow-x-auto rounded-xl border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-[1.6] text-foreground">
               {".oxagen/\n"}
               {`  ${WORKSPACE_TOML.replace(".oxagen/", "").padEnd(18)}`}
               <span className="text-code-comment">{t("filesToml")}</span>
@@ -428,7 +428,7 @@ export function ConnectDirectoryDialog({
           </h3>
           <pre
             data-testid="linkdir-command"
-            className="overflow-x-auto rounded-[10px] border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-[1.6] text-foreground"
+            className="overflow-x-auto rounded-xl border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-[1.6] text-foreground"
           >
             {`${commands[0]}  `}
             <span className="text-code-comment">{t("loginComment")}</span>

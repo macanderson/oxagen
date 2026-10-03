@@ -49,7 +49,7 @@ type Edge = "observed" | "stated" | "inferred" | "commit" | "branch";
  * line-height:1.7 }`: the provenance chip, and the `fr N` chip beside it.
  */
 const edgeChip =
-  "inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] border px-1.5 font-mono text-xs leading-[1.7]";
+  "inline-flex items-center gap-1 whitespace-nowrap rounded-sm border px-1.5 font-mono text-xs leading-[1.7]";
 
 /**
  * `.edge.observed { color:var(--st-proven) }`, `.edge.stated { color:
@@ -648,11 +648,11 @@ function FilesChanged({
             >
               {/* `.dbar i.a` and `.dbar i.d`: the added and removed share of the lines. */}
               <i
-                className="block h-full rounded-[1px] bg-success"
+                className="block h-full rounded-xs bg-success"
                 style={{ flex: added }}
               />
               <i
-                className="block h-full rounded-[1px] bg-warning"
+                className="block h-full rounded-xs bg-warning"
                 style={{ flex: removed }}
               />
             </span>

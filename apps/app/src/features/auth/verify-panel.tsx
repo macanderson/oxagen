@@ -73,7 +73,7 @@ export function VerifyPanel({
         <p
           role="status"
           data-testid="verify-resent"
-          className="rounded-[9px] border border-success/40 bg-success/10 px-3 py-2.5 text-sm text-foreground"
+          className="rounded-xl border border-success/40 bg-success/10 px-3 py-2.5 text-sm text-foreground"
         >
           {t("verify.resent")}
         </p>

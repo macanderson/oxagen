@@ -144,7 +144,7 @@ describe.each(SUBJECTS)("for a %s", (subject) => {
     expect(preview.dataset.shape).toBe(shape);
     const [big] = tiles(preview);
     expect(big?.className).toContain(
-      subject === "user" ? "rounded-full" : "rounded-[27%]",
+      subject === "user" ? "rounded-full" : "rounded-agent",
     );
   });
 

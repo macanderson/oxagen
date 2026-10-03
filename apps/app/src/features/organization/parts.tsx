@@ -15,7 +15,7 @@ export const note =
  * and a wash behind body ink, for what a write would end or refuse.
  */
 export const warn =
-  "rounded-[10px] border border-critical/45 bg-critical/10 px-3.5 py-2.75 text-sm text-foreground";
+  "rounded-xl border border-critical/45 bg-critical/10 px-3.5 py-2.75 text-sm text-foreground";
 
 export function DateCell({ iso }: { iso: string }) {
   const format = useFormatter();

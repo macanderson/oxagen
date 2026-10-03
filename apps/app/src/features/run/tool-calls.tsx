@@ -50,7 +50,7 @@ const histValue = "font-mono text-xs tabular-nums text-foreground";
 /** `.spec .sv { font-size:22px; font-weight:700; letter-spacing:-.02em; margin-bottom:7px }` */
 const specValue = "mb-1.75 text-xl font-bold tracking-[-0.02em]";
 /** `.stk { height:8px; border-radius:4px }` drawn as an empty track: no prefetch was recorded to fill it. */
-const emptyTrack = "block h-2 rounded bg-hl";
+const emptyTrack = "block h-2 rounded-sm bg-hl";
 
 function FamilyTable({ families }: { families: readonly Family[] }) {
   const t = useTranslations("run.cost");

@@ -91,20 +91,20 @@ export function OrganizationSkeleton() {
           <div
             key={tile}
             data-skeleton="tile"
-            className="skeleton h-16 rounded-[11px]"
+            className="skeleton h-16 rounded-xl"
           />
         ))}
       </div>
       <div className={panel}>
         <div className={panelHeader}>
-          <div className="skeleton h-5.5 w-45 max-w-full rounded-[7px]" />
+          <div className="skeleton h-5.5 w-45 max-w-full rounded-lg" />
         </div>
         <div className={`${panelBody} flex flex-col gap-2`}>
           {[1, 2, 3, 4, 5, 6, 7].map((row) => (
             <div
               key={row}
               data-skeleton="row"
-              className="skeleton h-9.5 rounded-[9px]"
+              className="skeleton h-9.5 rounded-xl"
             />
           ))}
         </div>

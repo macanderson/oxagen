@@ -446,7 +446,7 @@ export function RegistryOfferChip({ server }: { server: RegistryServer }) {
   return (
     <span
       data-offer={offer}
-      className="rounded border border-border px-1.5 py-0.5 text-xs text-foreground"
+      className="rounded-sm border border-border px-1.5 py-0.5 text-xs text-foreground"
     >
       {t(offer)}
     </span>

@@ -69,20 +69,20 @@ export function PageSkeleton({ label }: { label?: string }) {
           <span
             key={tile}
             data-skeleton-tile=""
-            className="skeleton h-16 rounded-[11px]"
+            className="skeleton h-16 rounded-xl"
           />
         ))}
       </div>
       <div aria-hidden="true" className={panel}>
         <div className={panelHeader}>
-          <span className="skeleton h-5.5 w-45 max-w-full rounded-[7px]" />
+          <span className="skeleton h-5.5 w-45 max-w-full rounded-lg" />
         </div>
         <div className={`${panelBody} flex flex-col gap-2`}>
           {[0, 1, 2, 3, 4, 5, 6].map((row) => (
             <span
               key={row}
               data-skeleton-row=""
-              className="skeleton h-9.5 rounded-[9px]"
+              className="skeleton h-9.5 rounded-xl"
             />
           ))}
         </div>

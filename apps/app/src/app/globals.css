@@ -187,6 +187,8 @@
       calc(100vw - var(--spacing) * 4)
     );
     --editor-max-h: calc(100vh - var(--spacing) * 75);
+    /* An agent avatar's corner, as a share of its size (#5283). */
+    --agent-corner: 27%;
     --sidebar-bg: var(--void);
     --mono: var(--ox-font-mono);
     --font: var(--ox-font);
@@ -620,4 +622,12 @@
 /* The stat tiles and panels settle their border on hover, no lift. */
 [data-shell-page] .app-panel {
   transition: border-color var(--motion-base) var(--ease-hover);
+}
+
+/* An agent's avatar: a corner that is a share of the avatar's size, so the
+   shape holds at every size, where a radius step would not (#5283). The app
+   names no --radius-* step of its own (design-record.test.ts), so the class
+   is a utility over --agent-corner. */
+@utility rounded-agent {
+  border-radius: var(--agent-corner);
 }
