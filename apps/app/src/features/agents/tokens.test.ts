@@ -1,7 +1,8 @@
 // The one 30-day token rollup every Agents figure reads (tokens.ts): the six
-// recorded classes summed into input and total, and the three rates that have
+// recorded classes summed into input and total, the three rates that have
 // no figure when their denominator is zero, so a page prints "not recorded"
-// rather than a division by zero.
+// rather than a division by zero, and the four prompt sources the row sums
+// over the agent's runs (#5295), each null when no run measured it.
 import { describe, expect, it } from "vitest";
 import { spendRow } from "./agents.builders";
 import { TOKEN_CLASSES, tokenRollup } from "./tokens";
@@ -19,7 +20,30 @@ describe("tokenRollup", () => {
       cacheRate: 0.6,
       perRun: 1500,
       perCall: 50,
+      // A row read before the sources were summed carries none.
+      toolDefinitions: null,
+      contextFrames: null,
+      steering: null,
+      toolResults: null,
     });
+  });
+
+  it("carries the prompt sources the row summed over the agent's runs (#5295)", () => {
+    const rollup = tokenRollup(
+      spendRow({
+        tokenSources: {
+          toolDefinitionTokens: 18_000,
+          contextFrameTokens: null,
+          steeringTokens: 0,
+          toolResultTokens: 2_000,
+        },
+      }),
+    );
+    expect(rollup.toolDefinitions).toBe(18_000);
+    expect(rollup.toolResults).toBe(2_000);
+    // A measured zero stays a zero, and an unmeasured source stays null.
+    expect(rollup.steering).toBe(0);
+    expect(rollup.contextFrames).toBeNull();
   });
 
   it("has no cache rate, per-run or per-call figure when nothing was counted (negative)", () => {
@@ -52,10 +76,20 @@ describe("tokenRollup", () => {
 });
 
 describe("TOKEN_CLASSES", () => {
-  it("records output and reasoning and leaves the six input classes unrecorded", () => {
+  it("records every class but conversation and system, which no 30-day read sums (#5295)", () => {
     expect(
       TOKEN_CLASSES.filter((c) => c.recorded !== null).map((c) => c.key),
-    ).toEqual(["output", "reasoning"]);
+    ).toEqual([
+      "toolResults",
+      "contextFrames",
+      "toolDefinitions",
+      "steering",
+      "output",
+      "reasoning",
+    ]);
+    expect(
+      TOKEN_CLASSES.filter((c) => c.recorded === null).map((c) => c.key),
+    ).toEqual(["conversation", "system"]);
     expect(TOKEN_CLASSES).toHaveLength(8);
   });
 });

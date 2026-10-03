@@ -79,6 +79,17 @@ export function toSpendReport(
         cost: run.cost,
         calls: run.calls,
       })),
+      // A row that holds part of a run carries no sources (#5295).
+      ...(row.tokenSources === undefined
+        ? {}
+        : {
+            tokenSources: {
+              toolDefinitionTokens: row.tokenSources.toolDefinitionTokens,
+              contextFrameTokens: row.tokenSources.contextFrameTokens,
+              steeringTokens: row.tokenSources.steeringTokens,
+              toolResultTokens: row.tokenSources.toolResultTokens,
+            },
+          }),
     })),
   };
 }
