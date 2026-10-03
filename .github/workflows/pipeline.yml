@@ -458,6 +458,21 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm check:prose
 
+      # #5062: no step read the dependency advisories, so a pull request could
+      # add a package with a known critical advisory and pass. Main's lockfile
+      # still carries advisories that wait on a major upgrade or on a fix that
+      # does not exist yet, so this step fails only on a high or critical
+      # finding the base commit does not carry. The checkout is the merge
+      # commit GitHub builds, and its first parent is the commit it merges
+      # into, on a pull request and in the merge queue alike, so HEAD^1 against
+      # HEAD is what the merge adds. A change that leaves package.json,
+      # pnpm-workspace.yaml and pnpm-lock.yaml alone passes without asking the
+      # advisory database. When the database never answers, the step fails. A
+      # push to main has no merge to compare and skips it.
+      - name: New dependency advisories
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && github.event_name != 'push' }}
+        run: node tools/scripts/check-new-advisories.mjs --base HEAD^1
+
       # Advisory (#3237): a squash merge applies a branch's diff against its
       # merge base, not against main's current tip, so a branch cut before a
       # later fix can carry the old copy of any file that fix touched, and a

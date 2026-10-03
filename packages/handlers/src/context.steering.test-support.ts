@@ -23,6 +23,7 @@ import {
 } from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
   alreadyMerged,
+  MERGE_CLAIM_SECONDS,
   refusedWrite,
   type AppendRow,
   type ProposalGuard,
@@ -294,10 +295,14 @@ export class MemoryStore implements SteeringStore {
       guard?.noClaimSince !== undefined &&
       current.mergeClaimedAt !== null &&
       current.mergeClaimedAt.getTime() > guard.noClaimSince.getTime();
+    const claimOwned =
+      guard?.claimedAt === undefined ||
+      current.mergeClaimedAt?.getTime() === guard.claimedAt.getTime();
     if (
       !from.includes(current.status as ProposalStatus) ||
       (guard?.headSha !== undefined && current.headSha !== guard.headSha) ||
-      claimStands
+      claimStands ||
+      !claimOwned
     )
       throw refusedWrite(current, from, guard);
     const next = { ...this.proposals[i]!, ...patch, updatedAt: new Date() };
@@ -1402,6 +1407,19 @@ export class FakeGitHub implements SteeringGitHub {
       url: `https://github.com/a-intel/platform/deployments/${args.environment}`,
     };
   }
+}
+
+/**
+ * Move every merge claim back past MERGE_CLAIM_SECONDS, as ten minutes
+ * passing would. A retry resumes a merge an earlier call claimed only once
+ * that claim has lapsed (#4567), and the harness clock moves one second a
+ * call.
+ */
+export function lapseMergeClaims(h: { store: MemoryStore; now: () => Date }): void {
+  const lapsed = new Date(h.now().getTime() - (MERGE_CLAIM_SECONDS + 1) * 1000);
+  for (const proposal of h.store.proposals)
+    if (proposal.mergeClaimedAt !== null)
+      Object.assign(proposal, { mergeClaimedAt: lapsed });
 }
 
 export interface Harness extends SteeringDeps {
