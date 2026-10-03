@@ -371,6 +371,8 @@ import { steeringPrOpen } from "./steering.pr.open";
 import { steeringPrGet } from "./steering.pr.get";
 import { steeringPrRefresh } from "./steering.pr.refresh";
 import { steeringPrDiffGet } from "./steering.pr.diff.get";
+import { changeSetGet } from "./forge.changes.get";
+import { revisionDiffGet } from "./forge.revision.diff.get";
 import { steeringPrMerge } from "./steering.pr.merge";
 import { steeringPrMergeWithoutReview } from "./steering.pr.merge_without_review";
 import { steeringPrRevert } from "./steering.pr.revert";
@@ -1251,6 +1253,8 @@ export {
   steeringPrGet,
   steeringPrRefresh,
   steeringPrDiffGet,
+  changeSetGet,
+  revisionDiffGet,
   steeringPrMerge,
   steeringPrMergeWithoutReview,
   steeringPrRevert,
@@ -1744,6 +1748,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   steeringPrGet,
   steeringPrRefresh,
   steeringPrDiffGet,
+  changeSetGet,
+  revisionDiffGet,
   steeringPrMerge,
   steeringPrMergeWithoutReview,
   steeringPrRevert,

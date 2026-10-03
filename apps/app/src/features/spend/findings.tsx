@@ -8,6 +8,14 @@
 // and pages the findings; Evidence opens one finding's arithmetic in a dialog
 // and Fix opens the change that removes it. Each card's share of the spend is
 // divided through the micros seam and printed as a ratio (INV-09, INV-10).
+//
+// The list is the open backlog, whatever each finding's window, and the
+// headline counts only the calls that ran in the period (#5294). So the hero
+// names the days it counts, and says the share's spend counts calls by the
+// day they ran where the Spend tile counts runs by the day they started.
+// When the headline is zero while open findings claim calls outside the
+// period, the hero says how many, so a zero beside a full list reads true.
+//
 // list_findings lists at most 50 findings a page, and a workspace can hold
 // more, since the findings job never caps a finding the headline counts
 // (#5262). The counts cover every open finding on every page. When the list
@@ -17,6 +25,7 @@
 // first page, as on an agent's incident list (#4693).
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
+import { compareMicros } from "@/data/contracts/money";
 import type {
   SpendFindingEvidence,
   SpendFindings,
@@ -32,6 +41,7 @@ import {
   mono,
   panel,
 } from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
@@ -57,12 +67,14 @@ import type { SpendAt } from "./view";
 const MIXED_CURRENCY = "unproductive_mixed_currency";
 
 /**
- * The headline and its share of the period's spend, side by side (rule 5).
- * A read that did not answer says why in place of the figures.
+ * The headline and its share of the period's spend, side by side (rule 5),
+ * with the days the headline counts. A read that did not answer says why in
+ * place of the figures.
  */
 function Headline({ headline }: { headline: Read<UnproductiveSpend> }) {
   const t = useTranslations("spend.findings");
   const locale = useLocale();
+  const format = useFormatter();
   if (!headline.ok) {
     if (headline.reason === "error" && headline.code === MIXED_CURRENCY)
       return (
@@ -70,7 +82,21 @@ function Headline({ headline }: { headline: Read<UnproductiveSpend> }) {
       );
     return <ReadFailure read={headline} section={t("hero")} />;
   }
-  const { unproductive, spend, share } = headline.value;
+  const { period, unproductive, spend, share, findingsOutsidePeriod } =
+    headline.value;
+  // The period is a range of UTC days, so each day prints in UTC: in the
+  // viewer's zone a day's first instant can fall on the day before.
+  const day = (iso: string) =>
+    format.dateTime(new Date(`${iso}T00:00:00.000Z`), {
+      dateStyle: "medium",
+      timeZone: "UTC",
+    });
+  const outside =
+    findingsOutsidePeriod > 0 &&
+    compareMicros(unproductive, {
+      micros: "0",
+      currency: unproductive.currency,
+    }) === 0;
   return (
     <>
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
@@ -87,6 +113,12 @@ function Headline({ headline }: { headline: Read<UnproductiveSpend> }) {
           {share === null ? <NotRecordedValue /> : formatRatio(share, locale)}
         </span>
       </div>
+      <p
+        data-testid="spend-headline-window"
+        className="text-sm text-muted-foreground"
+      >
+        {t("heroWindow", { from: day(period.from), to: day(period.to) })}
+      </p>
       <p className="text-sm text-muted-foreground">
         {spend === null ? (
           t("heroNoSpend")
@@ -96,6 +128,17 @@ function Headline({ headline }: { headline: Read<UnproductiveSpend> }) {
           </>
         )}
       </p>
+      {spend === null ? null : (
+        <p className="text-sm text-muted-foreground">{t("heroSpendNote")}</p>
+      )}
+      {outside ? (
+        <p
+          data-testid="spend-headline-outside"
+          className="text-sm text-muted-foreground"
+        >
+          {t("heroOutside", { count: findingsOutsidePeriod })}
+        </p>
+      ) : null}
     </>
   );
 }

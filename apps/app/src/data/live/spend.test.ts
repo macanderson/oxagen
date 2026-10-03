@@ -139,7 +139,28 @@ describe("spend port", () => {
         series: [],
         averages: { perCall: null, perRun: null },
         share: null,
+        tokens: {
+          input_uncached: 0,
+          cache_read: 0,
+          cache_write_5m: 0,
+          cache_write_1h: 0,
+          output: 0,
+          reasoning: 0,
+          server_tool_request: 0,
+        },
+        cacheHitRate: null,
+        modelCalls: 0,
+        observed: null,
+        standing: {
+          toolDefinitionTokens: null,
+          contextFrameTokens: null,
+          steeringTokens: null,
+        },
+        resultTokens: null,
         byTool: [],
+        byAgent: [],
+        byOperator: [],
+        byModel: [],
       }),
     );
     const read = await spend.drill(ctx, "agent", "acme/core-platform/triage");
@@ -163,6 +184,7 @@ describe("spend port", () => {
                 runsWithWaste: 0,
                 largestCause: null,
                 causes: [],
+                findingsOutsidePeriod: 0,
               })
             : readOk({ budgets: [] }),
         ),
@@ -362,6 +384,7 @@ describe("spend port", () => {
         { detector: 5, saving: usd("300"), findings: 2 },
       ],
       estimate: { saving: usd("900"), findings: 1 },
+      findingsOutsidePeriod: 2,
     };
     kernelRead.mockResolvedValue(readOk(answer));
     const read = await spend.unproductive(ctx, period);
@@ -492,7 +515,6 @@ describe("the findings the Spend page leads with", () => {
     const read = await spend.findings(ctx, {
       level: "agent",
       subject: "acme.core.release-bot",
-      kind: "spin_loops",
       cursor: "c2",
     });
     expect(read.ok && read.value.nextCursor).toBe("c3");
@@ -503,7 +525,6 @@ describe("the findings the Spend page leads with", () => {
         status: "open",
         level: "agent",
         subject: "acme.core.release-bot",
-        kind: "spin_loops",
         cursor: "c2",
       },
       page: "spend",

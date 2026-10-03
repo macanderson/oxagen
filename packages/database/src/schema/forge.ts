@@ -22,8 +22,15 @@
 // for both kinds of run. A work order is named by `work.orders.id`, with no
 // foreign key across the schema boundary (see _schemas.ts).
 //
-// The migration that creates these tables and their tenant policies is
-// 20261003120000_forge_pull_requests.sql.
+// `pull_request_issues` links a pull request to each issue it closes, as the
+// forge's closing references name them at its latest head (ADR-292). An issue
+// is keyed by the forge's node id, the id `work.items.provider_id` carries
+// (`issue:node:<id>`), so an issue a collector brought in as a work item and
+// the pull requests that close it meet on one value.
+//
+// The migrations that create these tables and their tenant policies are
+// 20261003120000_forge_pull_requests.sql and
+// 20261003150000_forge_pull_request_issues.sql.
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -293,6 +300,54 @@ export const forgePullRequestWorkOrders = forgeSchema.table(
     runCheck: check(
       "pull_request_work_orders_run_check",
       sql`${t.runId} IS NULL OR ${t.runId} ~ '^(arun|tse)_[0-9a-z]+$'`,
+    ),
+  }),
+);
+
+export const forgePullRequestIssues = forgeSchema.table(
+  "pull_request_issues",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    pullRequestId: uuid("pull_request_id")
+      .notNull()
+      .references(() => forgePullRequests.id, { onDelete: "cascade" }),
+    // The forge's node id for the issue; `work.items.provider_id` names the
+    // same issue as `issue:node:<id>`.
+    issueNodeId: text("issue_node_id").notNull(),
+    // Lower-cased `owner/name` of the repository that holds the issue.
+    repository: text("repository").notNull(),
+    number: integer("number").notNull(),
+    url: text("url").notNull(),
+    title: text("title"),
+    // `open` or `closed`, as the forge reported it when the link was read.
+    state: text("state").notNull(),
+    linkedAt: timestamp("linked_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    linkUniq: uniqueIndex("pull_request_issues_link_uq").on(
+      t.pullRequestId,
+      t.issueNodeId,
+    ),
+    issueIdx: index("pull_request_issues_issue_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.issueNodeId,
+    ),
+    urlIdx: index("pull_request_issues_url_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.url,
+    ),
+    numberCheck: check(
+      "pull_request_issues_number_check",
+      sql`${t.number} > 0`,
+    ),
+    stateCheck: check(
+      "pull_request_issues_state_check",
+      sql`${t.state} IN ('open','closed')`,
     ),
   }),
 );

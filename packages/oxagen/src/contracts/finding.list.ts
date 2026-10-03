@@ -78,7 +78,7 @@ export const findingList = registerCapability({
       subject: z.string().min(1).max(SUBJECT_MAX).optional(),
       /**
        * Lists only the findings of this kind, and the totals cover those
-       * findings (#5303). The Spend page's retry loops row reads its kind.
+       * findings (#5303), as the v2 sketch's `kind` does.
        */
       kind: findingKindSchema.optional(),
       /**

@@ -90,8 +90,8 @@ const FINDING_PAGES_MAX = 20;
 
 /**
  * Every open finding a query matches, page by page, for a tab that totals
- * findings by key or by kind (#5303). The first page alone would leave out a
- * finding that ranks past it. Null when a page does not answer, or when more
+ * findings by key (#5303). The first page alone would leave out a finding
+ * that ranks past it. Null when a page does not answer, or when more
  * findings match than FINDING_PAGES_MAX pages hold, so a total is never drawn
  * from part of the findings.
  */
@@ -189,6 +189,8 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
   );
 
   if (view.drill !== null) {
+    // Every drill names agents: an agent's own header, and the By agent
+    // table on an operator's or a tool's drill, so each reads the harnesses.
     const [drill, findings, names, harnesses] = await Promise.all([
       source.spend.drill(ctx, view.tab, view.drill),
       // A drill's kind names the finding level it lists: operator, agent or
@@ -198,9 +200,7 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
       view.tab === "operator"
         ? source.spend.byGroup(ctx, "operator", period)
         : Promise.resolve(null),
-      view.tab === "agent"
-        ? readAgentHarnessIndex(ctx, source)
-        : Promise.resolve(EMPTY_HARNESS_INDEX),
+      readAgentHarnessIndex(ctx, source),
     ]);
     if (!drill.ok) return <SpendReadFailure read={drill} {...failure} />;
     const operator =
@@ -221,6 +221,7 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
               ? harnessOfKey(harnesses, drill.value.key)
               : null
           }
+          harnesses={harnesses.byKey}
           at={at}
         />
       </>
@@ -416,16 +417,7 @@ async function body({
     }
     case "waste":
       if (!waste.ok) return <SpendReadFailure read={waste} {...failure} />;
-      // The retry loops row totals every retry loops finding, however far
-      // down the workspace's list each ranks.
-      return (
-        <WasteSection
-          waste={waste.value}
-          findings={await everyFinding(ctx, source, { kind: "retry_loops" })}
-          month={month}
-          at={at}
-        />
-      );
+      return <WasteSection waste={waste.value} month={month} at={at} />;
     case "budgets": {
       if (!budgets.ok) return <SpendReadFailure read={budgets} {...failure} />;
       const gateway = await source.spend.gatewayPolicy(ctx);
