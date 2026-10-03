@@ -23,6 +23,7 @@ import {
   type SpendGetOutput,
   type SpendGroupBy,
   type SpendRow,
+  type SpendTokenSources,
   type SpendTopRun,
 } from "@oxagen/oxagen/contracts/spend.get";
 import {
@@ -35,6 +36,7 @@ import {
   type DailyTotalsRecord,
   foldBasis,
   type RunTotalsRecord,
+  standingSourcesOf,
   utcDay,
 } from "@oxagen/billing";
 import { bareToolName } from "@oxagen/run-ledger";
@@ -253,6 +255,60 @@ export function runShares(
 }
 
 type Attributed = { run: SpendRunRecord; share: RunShare };
+
+/**
+ * The groupings whose rows hold whole runs, so each run's prompt sources
+ * belong to its row. A model, tool, or MCP server row holds part of a run,
+ * and the sources are not split by model or tool, so those rows carry none.
+ */
+const WHOLE_RUN_GROUPINGS: ReadonlySet<SpendGroupBy> = new Set([
+  "operator",
+  "agent",
+  "task",
+  "cost_center",
+]);
+
+/**
+ * A row's prompt sources (#5295): each run's tool definition, context frame
+ * and steering tokens, which the rollup stores beside its record, and its
+ * tools' result tokens, summed over the row's runs. A source no run measured
+ * stays null, never a zero, so a row of runs the proxy never carried says
+ * its tool definitions were not recorded.
+ */
+export function tokenSourcesOf(
+  runs: readonly RunTotalsRecord[],
+): SpendTokenSources {
+  const add = (sum: number | null, tokens: number | null) =>
+    tokens === null ? sum : (sum ?? 0) + tokens;
+  let toolDefinitionTokens: number | null = null;
+  let contextFrameTokens: number | null = null;
+  let steeringTokens: number | null = null;
+  let toolResultTokens: number | null = null;
+  for (const run of runs) {
+    const sources = standingSourcesOf(run);
+    toolDefinitionTokens = add(
+      toolDefinitionTokens,
+      sources.toolDefinitionTokens,
+    );
+    contextFrameTokens = add(contextFrameTokens, sources.contextFrameTokens);
+    steeringTokens = add(steeringTokens, sources.steeringTokens);
+    for (const tool of run.breakdown.tools)
+      toolResultTokens = add(toolResultTokens, tool.resultTokens);
+  }
+  return {
+    toolDefinitionTokens,
+    contextFrameTokens,
+    steeringTokens,
+    toolResultTokens,
+  };
+}
+
+/** Each run of `list` once, in the order first seen. */
+function runsOf(list: readonly Attributed[]): SpendRunRecord[] {
+  const seen = new Map<string, SpendRunRecord>();
+  for (const { run } of list) if (!seen.has(run.runId)) seen.set(run.runId, run);
+  return [...seen.values()];
+}
 
 /** Costliest first, then most calls, then newest; nothing priced sorts last. */
 function compareShares(a: Attributed, b: Attributed): number {
@@ -510,6 +566,8 @@ export function createSpendGetHandler(
             return left === null ? [] : [left];
           });
     const assistant = assistantRow(inAppByKey);
+    // A row of whole runs carries its runs' prompt sources (#5295).
+    const wholeRuns = WHOLE_RUN_GROUPINGS.has(groupBy);
     const top = new Map<string, Attributed[]>(
       grouped
         .filter((row) => row.key !== OTHER_SPEND_KEY)
@@ -577,11 +635,25 @@ export function createSpendGetHandler(
           ...row,
           operator: facts.get(row.key) ?? null,
           topRuns: topRuns(row.key),
+          ...(wholeRuns
+            ? { tokenSources: tokenSourcesOf(runsOf(byKey.get(row.key) ?? [])) }
+            : {}),
         })),
         // Last, after the workspace's own ranked rows and the rest, so the
         // assistant never ranks among the people and agents the workspace
         // manages, and the page finds it in one place.
-        ...(assistant === null ? [] : [assistant]),
+        ...(assistant === null
+          ? []
+          : [
+              wholeRuns
+                ? {
+                    ...assistant,
+                    tokenSources: tokenSourcesOf(
+                      runsOf([...inAppByKey.values()].flat()),
+                    ),
+                  }
+                : assistant,
+            ]),
       ],
     };
   };
