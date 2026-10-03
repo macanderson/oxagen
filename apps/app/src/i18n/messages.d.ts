@@ -2023,6 +2023,7 @@ type Messages = {
         aboveMax: string;
         denied: string;
         conflict: string;
+        subscriptionRequired: string;
         unavailable: string;
       };
     };
