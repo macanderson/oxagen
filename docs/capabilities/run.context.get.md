@@ -15,7 +15,7 @@ The window is read from the frames that recorded the model calls, never from Neo
 - API: `POST /v1/:org_slug/:workspace_slug/runs/context`
 - MCP: `get_run_context`
 - CLI: `oxagen run context <run-id> [--json]`
-- Authentication: session or API key (org Owner, Admin or Member; workspace Owner or Member)
+- Authentication: session or API key (org Owner, Admin, Billing or Member; workspace Owner or Member). Billing reads it because a run's Cost tab draws Prompt composition from it, and Billing can read that tab through `get_run_cost`.
 - Capability name: `get_run_context`
 - Not billed (`noBillingGate: true`): a console read is never a governed action. IAM default-deny; medium sensitivity.
 - Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
