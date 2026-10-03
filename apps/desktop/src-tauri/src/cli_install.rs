@@ -877,6 +877,28 @@ pub struct CliInstallView {
     /// which reports the same thing through `profile`.
     pub path_updated: bool,
     pub note: String,
+    /// What the launch-time re-apply did, once this launch found an agent
+    /// whose hooks ran another copy (#5421). None when none did.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reapply: Option<ReapplyView>,
+}
+
+/// The launch-time re-apply: after an upgrade, the hooks and the service of
+/// each live agent still name the copy that enrolled them, so the launch
+/// that keeps this version's copy also runs `oxagen agent enroll` from it.
+/// Before #5421 the app restarted the old daemon and offered a button, and a
+/// machine whose person never clicked it ran the old version for good.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ReapplyView {
+    /// `"moved"`: the re-apply ran and exited 0. `"failed"`: it ran and exited
+    /// non-zero, or could not be started. The hooks and the service are then
+    /// wherever enroll left them, which its own rollback keeps on the copy
+    /// that was running.
+    pub state: String,
+    /// The hook commands the agents ran before, one per agent.
+    pub from: Vec<String>,
+    /// The last lines enroll wrote, or why it could not run.
+    pub detail: String,
 }
 
 impl Default for CliInstallView {
@@ -889,6 +911,7 @@ impl Default for CliInstallView {
             profile: None,
             path_updated: false,
             note: "Checking whether the CLIs are on PATH…".to_string(),
+            reapply: None,
         }
     }
 }
@@ -1776,6 +1799,7 @@ pub(crate) fn install_cli_locked(env: &InstallEnv) -> CliInstallView {
         profile: None,
         path_updated: false,
         note: String::new(),
+        reapply: None,
     };
 
     let Some(bundled) = env.sidecars.clone() else {
@@ -1954,12 +1978,137 @@ pub(crate) fn install_cli_locked(env: &InstallEnv) -> CliInstallView {
 /// versions left that nothing names any more. The outcome goes into `state`
 /// before the lock is released: see `CliInstallState::set`.
 pub fn ensure_cli_installed(state: &CliInstallState) {
-    ensure_cli_installed_in(&InstallEnv::real(), state);
+    ensure_cli_installed_with(&InstallEnv::real(), state, Some(&run_reapply));
+}
+
+/// Runs `<kept copy>/oxagen agent enroll` and answers what it printed and
+/// how it exited. The launch passes the real one; a rig test passes a fake,
+/// and `ensure_cli_installed_in` passes none, so a rig that has no daemon
+/// to answer does not report a failed re-apply.
+pub(crate) type ReapplyRunner = dyn Fn(&Path) -> Result<std::process::Output, String>;
+
+/// The real runner: the kept copy, with the same environment the app's own
+/// sidecar calls get, so enroll records that copy and not the bundle.
+fn run_reapply(kept: &Path) -> Result<std::process::Output, String> {
+    let oxagen = kept.join(exe("oxagen"));
+    std::process::Command::new(&oxagen)
+        .args(["agent", "enroll"])
+        .envs(sidecar_env_for(kept))
+        .stdin(std::process::Stdio::null())
+        .output()
+        .map_err(|e| format!("cannot run {}: {e}", oxagen.display()))
+}
+
+/// Pure: the hook commands of the live agents this launch must re-apply,
+/// because they name one of the app's own kept copies other than `kept`,
+/// or that copy at a version other than this app's. A hook from anywhere
+/// else (Homebrew, a checkout, the bundle itself) is left alone: the page
+/// still offers Re-apply for those (`binSkew` in
+/// apps/desktop/src/machine-state.ts), but nothing takes them over unasked.
+pub(crate) fn hooks_needing_reapply(roots: &Roots, kept: &Path, version: &str) -> Vec<String> {
+    let kept_text = kept.display().to_string();
+    let durable = roots.durable_bin_dir().display().to_string();
+    let mut from = Vec::new();
+    for agent in crate::machine::agents(roots) {
+        if agent.enrollment() != crate::machine::Enrollment::Live {
+            continue;
+        }
+        let Ok(host) = &agent.host else { continue };
+        let hook = host.get("hook_command").and_then(Value::as_str).unwrap_or("");
+        if !hook.contains(&durable) {
+            continue;
+        }
+        let on_kept = hook.contains(&kept_text);
+        let same_version = host.get("wrapper_version").and_then(Value::as_str) == Some(version);
+        if on_kept && same_version {
+            continue;
+        }
+        from.push(hook.to_string());
+    }
+    from
+}
+
+/// The last lines of what enroll wrote, for a note a person reads. stderr
+/// carries the warnings and the final verdict, so it comes last.
+fn tail_of(output: &std::process::Output) -> String {
+    let text = format!(
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let lines: Vec<&str> = text.lines().filter(|line| !line.trim().is_empty()).collect();
+    lines.iter().rev().take(6).rev().copied().collect::<Vec<_>>().join("\n")
+}
+
+/// Re-apply the enrollment from `kept` when an agent's hooks run another
+/// copy (#5421). Enroll moves the service and the hooks, and rolls them back
+/// itself when the new daemon never answers. Either way the outcome lands
+/// in the view: a failure is the install's state, not a log line.
+fn reapply_if_stale(env: &InstallEnv, view: &mut CliInstallView, runner: Option<&ReapplyRunner>) {
+    let Some(runner) = runner else { return };
+    let kept = env.kept_dir();
+    let from = hooks_needing_reapply(&env.roots, &kept, &env.version);
+    if from.is_empty() {
+        return;
+    }
+    if !kept.join(exe("oxagen")).is_file() {
+        view.state = "failed".to_string();
+        view.reapply = Some(ReapplyView {
+            state: "failed".to_string(),
+            from,
+            detail: format!(
+                "The hooks and the collector still run an older copy, and {} has no oxagen to re-apply from.",
+                kept.display()
+            ),
+        });
+        return;
+    }
+    match runner(&kept) {
+        Ok(output) if output.status.success() => {
+            view.reapply = Some(ReapplyView {
+                state: "moved".to_string(),
+                from,
+                detail: tail_of(&output),
+            });
+        }
+        Ok(output) => {
+            view.state = "failed".to_string();
+            view.reapply = Some(ReapplyView {
+                state: "failed".to_string(),
+                from,
+                detail: format!("oxagen agent enroll exited {}:\n{}", output.status, tail_of(&output)),
+            });
+        }
+        Err(e) => {
+            view.state = "failed".to_string();
+            view.reapply = Some(ReapplyView {
+                state: "failed".to_string(),
+                from,
+                detail: e,
+            });
+        }
+    }
+    if let Some(reapply) = &view.reapply {
+        if reapply.state == "failed" {
+            view.note = format!(
+                "Oxagen could not move the hooks and the collector to this version. They run the copy that was working. {}",
+                reapply.detail
+            );
+        }
+    }
 }
 
 pub(crate) fn ensure_cli_installed_in(env: &InstallEnv, state: &CliInstallState) -> CliInstallView {
+    ensure_cli_installed_with(env, state, None)
+}
+
+pub(crate) fn ensure_cli_installed_with(
+    env: &InstallEnv,
+    state: &CliInstallState,
+    reapply: Option<&ReapplyRunner>,
+) -> CliInstallView {
     let _guard = install_guard();
-    let view = if read_auto_link_cli(&env.roots) {
+    let mut view = if read_auto_link_cli(&env.roots) {
         install_cli_locked(env)
     } else {
         let dir = env.roots.cli_install_dir();
@@ -1971,6 +2120,7 @@ pub(crate) fn ensure_cli_installed_in(env: &InstallEnv, state: &CliInstallState)
             profile: None,
             path_updated: false,
             note: String::new(),
+            reapply: None,
         };
         // Opting out of PATH links does not opt out of the copy: the hooks
         // and the service name it.
@@ -1983,6 +2133,10 @@ pub(crate) fn ensure_cli_installed_in(env: &InstallEnv, state: &CliInstallState)
         view.note = note_for("opted_out", &view);
         view
     };
+    // Once this version's copy is in place and before the older copies go:
+    // enroll's rollback needs the copy the hooks ran, and prune keeps a copy
+    // only while a host.json names it.
+    reapply_if_stale(env, &mut view, reapply);
     // After the links moved to this version, so a link into an older copy
     // no longer holds it.
     prune_old_copies(env);
@@ -2193,6 +2347,7 @@ pub fn uninstall_cli(app: tauri::AppHandle, state: tauri::State<CliInstallState>
         profile: None,
         path_updated: false,
         note: note_for("opted_out", &CliInstallView::default()),
+        reapply: None,
     });
     if !outcome.failed.is_empty() {
         return Err(outcome.failed.join("; "));
@@ -3100,6 +3255,92 @@ mod tests {
         assert_eq!(copies, vec![journal_entry("copy", &new_dir, None)]);
     }
 
+    /// #5421: the launch after an upgrade re-applies the enrollment from the
+    /// new copy, and a re-apply that fails is the install's state.
+    #[cfg(unix)]
+    #[test]
+    fn the_launch_after_an_update_reapplies_from_the_new_copy_and_fails_loudly() {
+        use std::sync::Mutex;
+        let old = scratch_env("reapply", "2.1.3");
+        write_auto_link_cli(&old.roots, false).unwrap();
+        ensure_cli_installed_in(&old, &CliInstallState::default());
+        let old_dir = old.kept_dir();
+        let host = old.roots.tacho_root().join("agents").join("0a1b2c3d").join("host.json");
+        let enrolled_on = |dir: &Path, version: &str| {
+            let oxagen = dir.join(exe("oxagen")).display().to_string();
+            serde_json::json!({
+                "host_enrollment_id": "tch_1",
+                "revoked_at": null,
+                "wrapper_version": version,
+                "hook_command": format!("'{oxagen}' hook"),
+                "daemon_command": [oxagen, "daemon"],
+            })
+            .to_string()
+        };
+        put_file(&host, enrolled_on(old_dir.as_path(), "2.1.3").as_bytes());
+        let exit = |code: i32| {
+            std::process::Command::new("sh")
+                .args(["-c", &format!("echo moved; echo 'the verdict' >&2; exit {code}")])
+                .output()
+                .unwrap()
+        };
+
+        // The update. The launch runs enroll from the new copy, once.
+        let new = scratch_env_over(&old, "2.1.4");
+        let new_dir = new.kept_dir();
+        let ran: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+        let ok = |kept: &Path| -> Result<std::process::Output, String> {
+            ran.lock().unwrap().push(kept.to_path_buf());
+            // What enroll does: host.json now names the new copy.
+            put_file(&host, enrolled_on(kept, "2.1.4").as_bytes());
+            Ok(exit(0))
+        };
+        let view = ensure_cli_installed_with(&new, &CliInstallState::default(), Some(&ok));
+        assert_eq!(*ran.lock().unwrap(), vec![new_dir.clone()]);
+        let reapply = view.reapply.clone().expect("a re-apply ran");
+        assert_eq!(reapply.state, "moved");
+        assert_eq!(reapply.from, vec![format!("'{}' hook", old_dir.join(exe("oxagen")).display())]);
+        assert!(reapply.detail.contains("moved"), "{reapply:?}");
+        assert_ne!(view.state, "failed");
+        // The old copy went with this launch, since nothing names it now.
+        assert!(!old_dir.exists());
+
+        // The same version again: nothing to re-apply, and the runner is not called.
+        ran.lock().unwrap().clear();
+        let view = ensure_cli_installed_with(&new, &CliInstallState::default(), Some(&ok));
+        assert!(ran.lock().unwrap().is_empty());
+        assert_eq!(view.reapply, None);
+
+        // A hook from somewhere else is not taken over unasked.
+        put_file(&host, br#"{"host_enrollment_id":"tch_1","revoked_at":null,"wrapper_version":"2.1.4","hook_command":"/opt/homebrew/bin/oxagen hook","daemon_command":["/opt/homebrew/bin/oxagen","daemon"]}"#);
+        let view = ensure_cli_installed_with(&new, &CliInstallState::default(), Some(&ok));
+        assert!(ran.lock().unwrap().is_empty());
+        assert_eq!(view.reapply, None);
+
+        // The next update, whose enroll exits 1 (its own rollback kept the
+        // previous copy): the install says so, and keeps saying so.
+        put_file(&host, enrolled_on(new_dir.as_path(), "2.1.4").as_bytes());
+        let newer = scratch_env_over(&new, "2.1.5");
+        let failing = |_: &Path| -> Result<std::process::Output, String> { Ok(exit(1)) };
+        let view = ensure_cli_installed_with(&newer, &CliInstallState::default(), Some(&failing));
+        assert_eq!(view.state, "failed");
+        let reapply = view.reapply.clone().expect("a re-apply ran");
+        assert_eq!(reapply.state, "failed");
+        assert!(reapply.detail.contains("exited exit status: 1"), "{reapply:?}");
+        assert!(reapply.detail.contains("the verdict"), "{reapply:?}");
+        assert!(view.note.contains("could not move the hooks and the collector"), "{}", view.note);
+        assert!(view.note.contains("run the copy that was working"), "{}", view.note);
+        // The copy the hooks still name stays.
+        assert!(new_dir.exists());
+
+        // A runner that cannot start is the same failure.
+        let missing =
+            |_: &Path| -> Result<std::process::Output, String> { Err("cannot run oxagen: No such file".to_string()) };
+        let view = ensure_cli_installed_with(&newer, &CliInstallState::default(), Some(&missing));
+        assert_eq!(view.state, "failed");
+        assert_eq!(view.reapply.unwrap().detail, "cannot run oxagen: No such file");
+    }
+
     /// The same bundle directory and home as `env`, carrying `version`.
     fn scratch_env_over(env: &InstallEnv, version: &str) -> InstallEnv {
         let bundle = env.sidecars.clone().unwrap();
@@ -3433,6 +3674,7 @@ map auto_home on /System/Volumes/Data/home (autofs, automounted, nobrowse)
             profile: None,
             path_updated: false,
             note: String::new(),
+            reapply: None,
         };
         view.note = note_for("linked", &view);
         if cfg!(windows) {
