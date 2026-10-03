@@ -13,21 +13,22 @@
 // A pull request that closes sends the same event with `closed` set, so the
 // job settles the statements the check stored for it (ADR-263): closed
 // without merging they go, and merged they stay. Its id names the close.
-import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import type { GitLabMergeRequestEvent } from "@oxagen/gitlab";
 import type {
   CodeRepoCheckRequest,
   CodeRepoProvider,
   CodeRepoPullRequestClose,
 } from "@oxagen/inngest-functions/code-repo-check-runner";
-import { runInTenantScope } from "@oxagen/tenancy";
-import { and, eq, isNull } from "drizzle-orm";
 import { eventClient } from "../event-client";
+import {
+  type HeadScope,
+  headsAnywhere,
+  postgresRepositoryHeads,
+  type RepositoryHeadReads,
+} from "../lib/repository-heads-anywhere";
 
-export interface CheckScope {
-  orgId: string;
-  workspaceId: string;
-}
+/** One workspace a check runs in. */
+export type CheckScope = HeadScope;
 
 /** One check request, as the event client sends it. */
 export interface CodeRepoCheckEvent {
@@ -53,98 +54,13 @@ export interface PullRequestClose {
 }
 
 /** One binding head for a repository. */
-export interface HeadRow {
-  orgId: string;
-  workspaceId: string;
-  role: string;
-}
+export type { HeadRow } from "../lib/repository-heads-anywhere";
 
-/** Where the routing reads binding heads. */
-export interface LinkedScopeDeps {
-  /** Every head for the repository on the shared Postgres plane. */
-  sharedHeads(provider: CodeRepoProvider, repositoryId: string): Promise<HeadRow[]>;
-  /** Every workspace of an organization on a dedicated Postgres plane (ADR-042). */
-  dedicatedScopes(): Promise<CheckScope[]>;
-  /** The heads one dedicated-plane workspace holds for the repository. */
-  headsOnPlane(
-    scope: CheckScope,
-    provider: CodeRepoProvider,
-    repositoryId: string,
-  ): Promise<HeadRow[]>;
-}
-
-const headColumns = {
-  orgId: schema.repositoryBindingHeads.orgId,
-  workspaceId: schema.repositoryBindingHeads.workspaceId,
-  role: schema.repositoryBindingHeads.role,
-};
-
-function sharedHeads(provider: CodeRepoProvider, repositoryId: string): Promise<HeadRow[]> {
-  // tenancy: webhook routing before any tenant is known. The route verified
-  // the delivery's signature or token, and this reads only the org id,
-  // workspace id, and role of the heads filtered by the host's immutable
-  // repository id that the delivery names.
-  return withSystemDb((tx) =>
-    tx
-      .select(headColumns)
-      .from(schema.repositoryBindingHeads)
-      .where(
-        and(
-          eq(schema.repositoryBindingHeads.provider, provider),
-          eq(schema.repositoryBindingHeads.providerRepositoryId, repositoryId),
-        ),
-      ),
-  );
-}
-
-function dedicatedScopes(): Promise<CheckScope[]> {
-  // tenancy: webhook routing has to learn which organizations live on a
-  // dedicated plane before it can scope anything. It reads only org_id and
-  // workspace_id from the control plane, filtered to live dedicated Postgres
-  // planes, and reads no tenant row. Each head is then read in its own scope.
-  return withSystemDb((tx) =>
-    tx
-      .select({ orgId: schema.workspaces.orgId, workspaceId: schema.workspaces.id })
-      .from(schema.workspaces)
-      .innerJoin(schema.dataPlanes, eq(schema.dataPlanes.orgId, schema.workspaces.orgId))
-      .where(
-        and(
-          eq(schema.dataPlanes.kind, "postgres"),
-          eq(schema.dataPlanes.mode, "dedicated"),
-          isNull(schema.dataPlanes.deletedAt),
-        ),
-      ),
-  );
-}
-
-function headsOnPlane(
-  scope: CheckScope,
-  provider: CodeRepoProvider,
-  repositoryId: string,
-): Promise<HeadRow[]> {
-  return runInTenantScope(scope, () =>
-    withTenantDb((tx) =>
-      tx
-        .select(headColumns)
-        .from(schema.repositoryBindingHeads)
-        .where(
-          and(
-            eq(schema.repositoryBindingHeads.orgId, scope.orgId),
-            eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
-            eq(schema.repositoryBindingHeads.provider, provider),
-            eq(schema.repositoryBindingHeads.providerRepositoryId, repositoryId),
-          ),
-        ),
-    ),
-  );
-}
+/** Where the routing reads binding heads (`lib/repository-heads-anywhere.ts`). */
+export type LinkedScopeDeps = RepositoryHeadReads;
 
 /** The binding heads in Postgres: the shared plane, then each dedicated one. */
-export const postgresLinkedScopes: LinkedScopeDeps = {
-  sharedHeads,
-  dedicatedScopes,
-  headsOnPlane,
-};
+export const postgresLinkedScopes: LinkedScopeDeps = postgresRepositoryHeads;
 
 /** The GitHub pull request actions that put a new head or base in front of the check. */
 const GITHUB_ACTIONS = new Set(["opened", "synchronize", "reopened", "ready_for_review", "edited"]);
@@ -279,14 +195,9 @@ export async function linkedScopes(
   repositoryId: string,
   deps: LinkedScopeDeps = postgresLinkedScopes,
 ): Promise<CheckScope[]> {
-  const rows = await deps.sharedHeads(provider, repositoryId);
-  const read = new Set(rows.map((row) => row.workspaceId));
-  // An organization on a dedicated Postgres plane keeps its binding heads on
-  // that plane, out of the shared read above.
-  for (const scope of await deps.dedicatedScopes()) {
-    if (read.has(scope.workspaceId)) continue;
-    rows.push(...(await deps.headsOnPlane(scope, provider, repositoryId)));
-  }
+  // Every plane: an organization on a dedicated Postgres plane keeps its
+  // binding heads there, out of the shared read.
+  const rows = await headsAnywhere(provider, repositoryId, deps);
   if (rows.some((row) => row.role === "steering")) return [];
   const scopes = new Map<string, CheckScope>();
   for (const row of rows)

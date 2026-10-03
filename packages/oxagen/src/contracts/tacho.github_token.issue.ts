@@ -9,10 +9,11 @@
  * the host's workspace, and scopes the token to that repository's immutable
  * id, so a caller cannot widen it by naming another repository.
  *
- * The workspace's steering repository takes changes through a steering PR,
- * so the handler refuses it with `conflict: steering_repo_propose_only`. The
- * GitHub App that mints the token holds the steering repository's ruleset
- * bypass (ADR-228), so no token for it leaves Oxagen.
+ * A steering repository takes changes through a steering PR, so the handler
+ * refuses one with `conflict: steering_repo_propose_only`. The GitHub App
+ * that mints the token holds the steering repository's ruleset bypass
+ * (ADR-228), so no token for it leaves Oxagen. That covers a linked
+ * repository another workspace steers by (ADR-293).
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
