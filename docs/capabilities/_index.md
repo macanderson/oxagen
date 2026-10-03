@@ -474,6 +474,7 @@ after the registered name separately when their contract uses a dotted stem.
 
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
+| [adopt_steering_merges](steering_repo.adopt.md) | [steering_repo.adopt.ts](../../packages/oxagen/src/contracts/steering_repo.adopt.ts) | api, mcp, agent |
 | [attach_github_installation](repository.installation.attach.md) | [repository.installation.attach.ts](../../packages/oxagen/src/contracts/repository.installation.attach.ts) | api |
 | [attach_gitlab_project](repository.gitlab.attach.md) | [repository.gitlab.attach.ts](../../packages/oxagen/src/contracts/repository.gitlab.attach.ts) | api |
 | [get_main_repository](repository.main.get.md) | [repository.main.get.ts](../../packages/oxagen/src/contracts/repository.main.get.ts) | api, mcp, agent |

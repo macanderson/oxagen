@@ -44,6 +44,19 @@ const FIRST_VERSION = 1;
 /** The external id of the check run on a revert commit, so a rerun finds it. */
 const REVERT_CHECK_EXTERNAL_ID = "oxagen-steering-revert";
 
+/**
+ * The check run adopt_steering_merges posts on each host merge a person
+ * adopted in Oxagen (#5195). GitHub lets only the steering app post a run
+ * under its app id, so the run is the record the history judge reads, and
+ * nothing is written into the repository's history.
+ */
+export const ADOPTION_CHECK_NAME = "Oxagen steering adoption";
+const ADOPTION_CHECK_EXTERNAL_ID = "oxagen-steering-adoption";
+/** Files a commit read lists before GitHub cuts the list. */
+const COMMIT_FILES_LIMIT = 300;
+/** Pages of 100 files a pull request read takes before it gives up. */
+const PULL_FILE_PAGES = 30;
+
 const SHORT_SHA = 7;
 /** Commits one GitHub compare page holds. More than this reads as truncated. */
 const COMPARE_PAGE = 100;
@@ -350,7 +363,11 @@ interface GithubPull {
 }
 
 interface GithubCheckRuns {
-  check_runs: { external_id?: string | null; conclusion?: string | null }[];
+  check_runs: {
+    external_id?: string | null;
+    conclusion?: string | null;
+    app?: { id?: number } | null;
+  }[];
 }
 
 function githubRoot(t: GithubHistoryTarget): string {
@@ -429,7 +446,16 @@ interface GithubMergedPull {
   merged?: boolean;
   merge_commit_sha?: string | null;
   base?: { ref?: string; repo?: { id?: number; full_name?: string } | null };
+  head?: { sha?: string } | null;
   merged_by?: { type?: string; login?: string } | null;
+}
+
+/** One file a commit or a pull request changes, as GitHub lists it. */
+interface GithubChangedFile {
+  filename: string;
+  status: string;
+  sha?: string | null;
+  previous_filename?: string | null;
 }
 
 /** `Title (#12)`: the pull request number GitHub and Oxagen put on a squash title. */
@@ -443,55 +469,106 @@ function titlePull(message: string): number | null {
 }
 
 /**
- * Authenticate the merge against the full pull request returned by GitHub.
+ * The pull requests that may have merged as `sha`: those GitHub lists for the
+ * commit, and the one its title names.
  *
  * GitHub fills in a commit's list of pull requests a few seconds after the
  * merge, so a read just after Oxagen merges finds none (#5157). Every merge
- * Oxagen makes ends its title with `(#N)`, so when the list does not prove
- * the merge, pull request N is read as well. The title only says which pull
- * request to read. The proof is the pull request itself: GitHub must say the
- * app merged it into this repository's production branch as exactly this
- * commit. A forged title can name a real pull request, but that pull
- * request's merge commit is another commit, so the forged one still fails.
+ * Oxagen makes ends its title with `(#N)`, so pull request N is read as well.
+ * The title only says which pull request to read. The proof is the pull
+ * request itself (see `mergedAs`). A forged title can name a real pull
+ * request, but that pull request's merge commit is another commit, so the
+ * forged one still fails.
  */
-async function githubAuthenticatedMerge(
+async function candidatePulls(
   t: GithubHistoryTarget,
   sha: string,
   message: string,
-): Promise<boolean> {
-  const root = githubRoot(t);
+): Promise<number[]> {
   const listed = await t.rest.request<{ number: number }[]>(
     "GET",
-    `${root}/commits/${seg(sha)}/pulls?per_page=100`,
+    `${githubRoot(t)}/commits/${seg(sha)}/pulls?per_page=100`,
   );
   const numbers = need(listed.data, "GitHub commit pull requests").map(
     (summary) => summary.number,
   );
   const named = titlePull(message);
   if (named !== null && !numbers.includes(named)) numbers.push(named);
-  for (const number of numbers) {
-    const response = await t.rest.request<GithubMergedPull>(
-      "GET",
-      `${root}/pulls/${seg(number)}`,
-    );
-    const pull = need(response.data, "GitHub pull request");
-    const repo = pull.base?.repo;
-    const sameRepo =
-      t.repo.id !== undefined
-        ? repo?.id === t.repo.id
-        : repo?.full_name?.toLowerCase() ===
-          `${t.repo.owner}/${t.repo.name}`.toLowerCase();
-    if (
-      pull.merged === true &&
-      pull.merge_commit_sha === sha &&
-      pull.base?.ref === (t.defaultBranch ?? STEERING_DEFAULT_BRANCH) &&
-      sameRepo &&
-      pull.merged_by?.type === "Bot" &&
-      pull.merged_by.login === `${t.app.slug}[bot]`
-    )
-      return true;
+  return numbers;
+}
+
+async function githubPull(
+  t: GithubHistoryTarget,
+  number: number,
+): Promise<GithubMergedPull> {
+  const response = await t.rest.request<GithubMergedPull>(
+    "GET",
+    `${githubRoot(t)}/pulls/${seg(number)}`,
+  );
+  return need(response.data, "GitHub pull request");
+}
+
+/** Whether GitHub says `pull` merged into this repository's production branch as exactly `sha`. */
+function mergedAs(t: GithubHistoryTarget, pull: GithubMergedPull, sha: string): boolean {
+  const repo = pull.base?.repo;
+  const sameRepo =
+    t.repo.id !== undefined
+      ? repo?.id === t.repo.id
+      : repo?.full_name?.toLowerCase() ===
+        `${t.repo.owner}/${t.repo.name}`.toLowerCase();
+  return (
+    pull.merged === true &&
+    pull.merge_commit_sha === sha &&
+    pull.base?.ref === (t.defaultBranch ?? STEERING_DEFAULT_BRANCH) &&
+    sameRepo
+  );
+}
+
+function mergedByApp(t: GithubHistoryTarget, pull: GithubMergedPull): boolean {
+  return (
+    pull.merged_by?.type === "Bot" &&
+    pull.merged_by.login === `${t.app.slug}[bot]`
+  );
+}
+
+/** Whether the steering app posted the adoption check run on `sha` (#5195). */
+async function githubAdopted(t: GithubHistoryTarget, sha: string): Promise<boolean> {
+  const res = await t.rest.request<GithubCheckRuns>(
+    "GET",
+    `${githubRoot(t)}/commits/${seg(sha)}/check-runs?check_name=${seg(ADOPTION_CHECK_NAME)}&app_id=${seg(t.app.id)}`,
+  );
+  return (res.data?.check_runs ?? []).some(
+    (run) =>
+      run.external_id === ADOPTION_CHECK_EXTERNAL_ID &&
+      run.conclusion === "success" &&
+      run.app?.id === t.app.id,
+  );
+}
+
+/**
+ * Authenticate the merge against the full pull request returned by GitHub:
+ * GitHub must say the app merged it into this repository's production branch
+ * as exactly this commit.
+ *
+ * A pull request a person merged on the host proves nothing about who
+ * approved it. It counts only once a person the governance mode lets merge
+ * adopted it in Oxagen, which leaves the app's adoption check run on the
+ * commit (adopt_steering_merges, #5195). A commit no pull request merged, such
+ * as a push past the branch rules, never counts.
+ */
+async function githubAuthenticatedMerge(
+  t: GithubHistoryTarget,
+  sha: string,
+  message: string,
+): Promise<boolean> {
+  let hostMerged = false;
+  for (const number of await candidatePulls(t, sha, message)) {
+    const pull = await githubPull(t, number);
+    if (!mergedAs(t, pull, sha)) continue;
+    if (mergedByApp(t, pull)) return true;
+    hostMerged = true;
   }
-  return false;
+  return hostMerged && (await githubAdopted(t, sha));
 }
 
 /** Judge the exact candidate, or the default branch, since `published`. */
@@ -789,6 +866,137 @@ export async function githubCloseRevert(
   const res = await t.rest.request<GithubPull>("GET", path, undefined, [404]);
   if (res.data?.state !== "open" || !isRevertBranch(res.data.head.ref)) return;
   await t.rest.request("PATCH", path, { state: "closed" });
+}
+
+// ── Adoption (GitHub) ────────────────────────────────────────────────────────
+
+/** A commit on main after the published one that no app merge or adoption proves. */
+export interface UnprovenCommit {
+  sha: string;
+  message: string;
+}
+
+/**
+ * The commits on main since `published` that the history judge would call
+ * foreign, oldest first, or why Oxagen cannot list them. Only a main that is
+ * ahead of the published commit can be adopted: a rewritten or truncated
+ * history has no list of merges to prove.
+ */
+export async function githubUnproven(
+  t: GithubHistoryTarget,
+  published: PublishedCommit,
+): Promise<{ main_sha: string; commits: UnprovenCommit[] } | { refused: string }> {
+  const p7 = short(published.sha);
+  const res = await t.rest.request<GithubCompare>(
+    "GET",
+    `${githubRoot(t)}/compare/${seg(published.sha)}...${seg(t.defaultBranch ?? STEERING_DEFAULT_BRANCH)}?per_page=${COMPARE_PAGE}`,
+    undefined,
+    [404],
+  );
+  if (res.status === 404)
+    return { refused: `main no longer contains the published commit ${p7}` };
+  const compare = need(res.data, "GitHub compare");
+  if (compare.status === "identical")
+    return { main_sha: published.sha, commits: [] };
+  if (compare.status !== "ahead")
+    return { refused: `main no longer contains the published commit ${p7}` };
+  if (compare.commits.length < compare.total_commits)
+    return {
+      refused: `main holds more commits since the published commit ${p7} than Oxagen can read`,
+    };
+  const baseTree = compare.base_commit.commit.tree.sha;
+  let restored_at = -1;
+  compare.commits.forEach((commit, index) => {
+    if (commit.commit.tree.sha === baseTree) restored_at = index;
+  });
+  const commits: UnprovenCommit[] = [];
+  for (const commit of compare.commits.slice(restored_at + 1))
+    if (!(await githubAuthenticatedMerge(t, commit.sha, commit.commit.message)))
+      commits.push({ sha: commit.sha, message: commit.commit.message });
+  const last = compare.commits.at(-1);
+  return { main_sha: last?.sha ?? published.sha, commits };
+}
+
+/** The pull request a person merged on the host as one commit, and the head it merged. */
+export interface HostMerge {
+  number: number;
+  headSha: string;
+}
+
+/**
+ * The pull request GitHub says merged into this repository's production
+ * branch as exactly `sha`, by someone other than the steering app, or null.
+ */
+export async function githubHostMerge(
+  t: GithubHistoryTarget,
+  commit: UnprovenCommit,
+): Promise<HostMerge | null> {
+  for (const number of await candidatePulls(t, commit.sha, commit.message)) {
+    const pull = await githubPull(t, number);
+    const headSha = pull.head?.sha;
+    if (mergedAs(t, pull, commit.sha) && !mergedByApp(t, pull) && typeof headSha === "string")
+      return { number, headSha };
+  }
+  return null;
+}
+
+function changeKey(file: GithubChangedFile): string {
+  return [file.status, file.filename, file.previous_filename ?? "", file.sha ?? ""].join("\t");
+}
+
+/**
+ * Whether merge commit `sha` changes exactly what pull request `number`
+ * changes: the same paths, with the same status and the same blob. The
+ * commit is compared with its first parent, so a pull request merged after
+ * another one still matches when the two touched different files. A list
+ * GitHub cuts short proves nothing, so it answers false.
+ */
+export async function githubSameChanges(
+  t: GithubHistoryTarget,
+  sha: string,
+  number: number,
+): Promise<boolean> {
+  const root = githubRoot(t);
+  const commit = await t.rest.request<{ files?: GithubChangedFile[] }>(
+    "GET",
+    `${root}/commits/${seg(sha)}`,
+  );
+  const merged = need(commit.data, "GitHub commit").files ?? [];
+  if (merged.length >= COMMIT_FILES_LIMIT) return false;
+  const proposed: GithubChangedFile[] = [];
+  for (let page = 1; ; page++) {
+    if (page > PULL_FILE_PAGES) return false;
+    const res = await t.rest.request<GithubChangedFile[]>(
+      "GET",
+      `${root}/pulls/${seg(number)}/files?per_page=100${pageParam(page)}`,
+    );
+    const rows = need(res.data, "GitHub pull request files");
+    proposed.push(...rows);
+    if (rows.length < 100) break;
+  }
+  const a = merged.map(changeKey).sort();
+  const b = proposed.map(changeKey).sort();
+  return a.length === b.length && a.every((key, index) => key === b[index]);
+}
+
+/**
+ * Post the adoption check run on `sha`, so every later history read counts
+ * the commit as Oxagen's (#5195). `summary` names who adopted it and from
+ * which pull request.
+ */
+export async function githubRecordAdoption(
+  t: GithubHistoryTarget,
+  sha: string,
+  summary: string,
+): Promise<void> {
+  await t.rest.request("POST", `${githubRoot(t)}/check-runs`, {
+    name: ADOPTION_CHECK_NAME,
+    head_sha: sha,
+    status: "completed",
+    conclusion: "success",
+    external_id: ADOPTION_CHECK_EXTERNAL_ID,
+    output: { title: "Adopted in Oxagen", summary },
+  });
 }
 
 // ── GitLab ───────────────────────────────────────────────────────────────────

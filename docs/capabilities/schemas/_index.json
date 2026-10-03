@@ -66,6 +66,18 @@
       "consumes": []
     },
     {
+      "name": "adopt_steering_merges",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "advance_onboarding",
       "domain": "onboarding",
       "surfaces": [
