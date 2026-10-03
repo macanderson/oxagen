@@ -41,20 +41,30 @@ import { AgentAvatar } from "./agent-avatar";
 import { Badge, type BadgeTone } from "./badge";
 import { inputBase, menuItemActive, menuSurface, mono } from "./control-styles";
 import { ProviderIcon } from "./provider-icon";
+import { ProviderMark, providerIdOf } from "./provider-mark";
 
 /**
  * A logo: the vendor's https icon, or the initial of `name` on a tile. An
  * agent option carries the agent instead (its key or slug, whose last segment
  * gives the initials) and the harness it registered, and is drawn as the
  * agent's avatar with its harness badge, as every other agent surface draws
- * it (#4871). No harness, no badge.
+ * it (#4871). No harness, no badge. A model option carries the model and its
+ * recorded provider and is drawn with its maker's mark (#5297), or the
+ * model's initial on a tile when the registry knows no maker for it.
  */
 export type PickerIcon =
   | { name: string; url: string | null }
-  | { agent: string; harness: string | null };
+  | { agent: string; harness: string | null }
+  | { model: string; provider: string | null };
 
-/** An option's mark: an agent's avatar with its harness badge, or a vendor's logo. */
+/** An option's mark: an agent's avatar with its harness badge, a model's maker, or a vendor's logo. */
 function PickerMark({ icon, size }: { icon: PickerIcon; size: number }) {
+  if ("model" in icon)
+    return providerIdOf(icon.provider, icon.model) === null ? (
+      <ProviderIcon name={icon.model} iconUrl={null} size={size} />
+    ) : (
+      <ProviderMark provider={icon.provider} model={icon.model} size={size} />
+    );
   if ("agent" in icon)
     return (
       <AgentAvatar

@@ -89,6 +89,24 @@ describe("providerFromModelId", () => {
     expect(providerFromModelId("openai:gpt-4o")).toBe("openai");
   });
 
+  it("maps OpenRouter's creator spellings to the vendor", () => {
+    expect(providerFromModelId("z-ai/glm-latest")).toBe("zai");
+    expect(providerFromModelId("zhipuai/glm-4.6")).toBe("zai");
+    expect(providerFromModelId("x-ai/grok-4")).toBe("xai");
+    expect(providerFromModelId("meta-llama/llama-4-maverick")).toBe("meta");
+    expect(providerFromModelId("mistralai/mistral-large")).toBe("mistral");
+    expect(providerFromModelId("moonshotai/kimi-k2")).toBe("moonshot");
+  });
+
+  it("maps bare open-weight model families to their vendor", () => {
+    expect(providerFromModelId("glm-flash-latest")).toBe("zai");
+    expect(providerFromModelId("llama-3.3-70b")).toBe("meta");
+    expect(providerFromModelId("codestral-latest")).toBe("mistral");
+    expect(providerFromModelId("deepseek-chat")).toBe("deepseek");
+    expect(providerFromModelId("kimi-k2")).toBe("moonshot");
+    expect(providerFromModelId("qwen3-coder")).toBe("qwen");
+  });
+
   it("returns '' for an unknown model id", () => {
     expect(providerFromModelId("unknown-model-xyz")).toBe("");
     expect(providerFromModelId("")).toBe("");
