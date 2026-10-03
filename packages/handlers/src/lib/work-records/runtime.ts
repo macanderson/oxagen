@@ -428,7 +428,7 @@ export async function recordWorkOrderAcks(tx: Tx, scope: WorkScope, host: Claimi
 // Ingest
 // ---------------------------------------------------------------------------
 
-/** The attribute a run started for a work order carries (WORK_OTLP_ATTRIBUTES.workOrderId). */
+/** The OTLP attribute a run started for a work order carries. */
 export const WORK_ORDER_RUN_ATTR = "oxagen.work_order.id";
 
 /**

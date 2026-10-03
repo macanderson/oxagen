@@ -2436,6 +2436,70 @@ describe("ingest_tacho_events", () => {
     ).toEqual([]);
   });
 
+  // ADR-251: a run whose frames name a work order binds to it only when this
+  // host claimed the order. A refused link never fails ingest: it is logged,
+  // and the batch is recorded like any other. The link itself runs against
+  // Postgres in lib/work-records/results.pg.test.ts.
+  it("logs a refused work order link and still records the batch", async () => {
+    const { WorkRecordError } = await import("@oxagen/work/records");
+    const { WORK_ORDER_RUN_ATTR } = await import("./lib/work-records/runtime");
+    const db = fakeDb();
+    wire(db);
+    const inner = mocks.withTenantDb.getMockImplementation() as (
+      fn: (tx: unknown) => Promise<unknown>,
+    ) => Promise<unknown>;
+    const refused = new WorkRecordError(
+      "forbidden",
+      "This work order was sent to another machine. This host must not start it.",
+    );
+    // The link runs in a savepoint of the ingest transaction, and here the
+    // savepoint refuses, as the link does for a host that never claimed it.
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) =>
+        inner((tx) =>
+          fn(
+            Object.assign(tx as object, {
+              transaction: async () => {
+                throw refused;
+              },
+            }),
+          ),
+        ),
+    );
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events: TachoEvent[] = [];
+    for (const draft of [
+      unsealed(
+        "agent_start",
+        { session_start_source: "startup" },
+        "hook",
+        CLAUDE_CODE,
+        { attrs: { [WORK_ORDER_RUN_ATTR]: "wo_01k5qk7d0000000000000000" } },
+      ),
+      unsealed("agent_stop", {
+        session_outcome: "completed",
+        session_end_reason: "other",
+      }),
+    ]) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      events.push(sealed.event);
+    }
+
+    const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
+
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(
+      { err: refused, run: "tse_fake0000000000000001" },
+      "tacho ingest: the run's work order link was refused",
+    );
+    expect(output.accepted).toBe(events.length);
+    expect(mocks.insertTachoEvents).toHaveBeenCalledOnce();
+    expect(mocks.insertTachoEvents.mock.calls[0]?.[0]).toHaveLength(
+      events.length,
+    );
+    expect(db.sessions.get(SESSION)).toMatchObject({ outcome: "completed" });
+  });
+
   describe("the spend counter (#3825)", () => {
     /**
      * Make the fake's transactions roll back: every table the fake holds is

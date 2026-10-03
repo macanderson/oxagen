@@ -237,6 +237,16 @@ registerHandlersOnce("@oxagen/handlers", () => {
       const { recordRunPullRequest } = await import("./lib/work-records/results");
       return recordRunPullRequest({ orgId: request.orgId, workspaceId: request.workspaceId }, request.rootSessionUuid, request.url);
     },
+    // The hourly sweep for a run end or a pull request delivery that never
+    // arrived (work/order-results-sweep).
+    async sweepScopes() {
+      const { listWorkOrderSweepScopes } = await import("./lib/work-records/sweep");
+      return listWorkOrderSweepScopes();
+    },
+    async sweep(scope) {
+      const { sweepWorkOrderResults } = await import("./lib/work-records/sweep");
+      return sweepWorkOrderResults(scope);
+    },
   });
   // The hourly run outcome refresh (#4491) reads GitHub through this package
   // too. It runs in the workspace's tenant scope, and is loaded on its first
