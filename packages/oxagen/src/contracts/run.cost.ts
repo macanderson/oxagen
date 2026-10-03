@@ -11,6 +11,12 @@
  * per-model call counts and reported cost that ingest has folded from the
  * run's `llm_call` frames so far. It is superseded by `rollup` once the rollup
  * rebuilds the run, and the page labels it provisional.
+ *
+ * `tokenSources` is the row's measured prompt sources over every counted call
+ * (#5295). The split of each request into system, conversation and the other
+ * blocks rides `get_run_context`'s `composition`, which walks the run's
+ * frames; this read stays on the one row, since every tab of the Run page
+ * makes it.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -145,6 +151,24 @@ export const runCostStandingContextSchema = z
   })
   .strict();
 
+/**
+ * What the run's model calls spent on tool definitions, context frames and
+ * steering, each summed over every call the rollup counted
+ * (`cost.run_totals`, spec §12.6; #4493, #5295). The recorder measures each
+ * on a call's frame, and a source no counted call measured is null, never a
+ * zero: the loopback model proxy measures tool definitions, a session's
+ * steering manifest gives steering, and no Claude Code path measures context
+ * frames (ADR-062, amendment of 2026-10-02). Each is an estimate, since no
+ * vendor reports them. They count input the run's `tokens` already count.
+ */
+export const runCostTokenSourcesSchema = z
+  .object({
+    toolDefinitionTokens: z.number().int().nonnegative().nullable(),
+    contextFrameTokens: z.number().int().nonnegative().nullable(),
+    steeringTokens: z.number().int().nonnegative().nullable(),
+  })
+  .strict();
+
 export const runCostRollupSchema = z
   .object({
     /** Null when no model frame was priced. */
@@ -224,6 +248,12 @@ export const runCostRollupSchema = z
      * when the recorder reported no source.
      */
     standingContext: runCostStandingContextSchema.nullable().default(null),
+    /**
+     * The run's tool definition, context frame and steering tokens over every
+     * counted call (#5295). Null when no counted call measured any of the
+     * three. Absent on an answer from before the field existed.
+     */
+    tokenSources: runCostTokenSourcesSchema.nullable().optional(),
     /** The price entries the frames were priced with (spec §12.2). */
     priceEntryIds: z.array(z.string()),
     /** RFC 3339: when the row was last rebuilt from the frames. */
@@ -265,7 +295,7 @@ export const runCostGet = registerCapability({
   name: "get_run_cost",
   domain: "run",
   description:
-    "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps and how many of them advanced the run, model and tool calls, and the per-model breakdown (cost by token class, cache saving, whether any call went unpriced) and per-tool breakdown with each tool's result tokens and their estimated cost, the standing context each call after the first re-sent by source (tool definitions, steering, context frames) with its estimated cost, marked as an estimate while the run is still open; null until the rollup has rebuilt the run from its frames, with provisional per-model figures for a wrapped run in the meantime. It also answers the agent's median cost and productive share over its runs in the 30 days before this one, and each loop that reached the workspace's no-progress limit: the call repeated with an unchanged result, how often, the mode, whether the run was paused, and why an enforced limit could not pause it.",
+    "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps and how many of them advanced the run, model and tool calls, and the per-model breakdown (cost by token class, cache saving, whether any call went unpriced) and per-tool breakdown with each tool's result tokens and their estimated cost, the standing context each call after the first re-sent by source (tool definitions, steering, context frames) with its estimated cost, the tokens each of those three sources took over every call, marked as an estimate while the run is still open; null until the rollup has rebuilt the run from its frames, with provisional per-model figures for a wrapped run in the meantime. It also answers the agent's median cost and productive share over its runs in the 30 days before this one, and each loop that reached the workspace's no-progress limit: the call repeated with an unchanged result, how often, the mode, whether the run was paused, and why an enforced limit could not pause it.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -310,6 +340,7 @@ export type RunCostBaseline = z.output<typeof runCostBaselineSchema>;
 export type RunCostStandingContext = z.output<
   typeof runCostStandingContextSchema
 >;
+export type RunCostTokenSources = z.output<typeof runCostTokenSourcesSchema>;
 export type RunCostUnproductiveCauses = z.output<
   typeof runCostUnproductiveCausesSchema
 >;
