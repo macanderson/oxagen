@@ -126,7 +126,10 @@ import {
   sendInterjectionsRaised,
 } from "./lib/interjection-frames";
 import { recordProofFrames } from "./lib/proof";
-import { readdressNextRunCommands } from "./lib/next-run-commands";
+import {
+  isDaemonChain,
+  readdressNextRunCommands,
+} from "./lib/next-run-commands";
 import { linkRunFromIngest } from "./lib/work-records/runtime";
 import { sendPullRequestLinks } from "./lib/run-pull-request-links";
 import {
@@ -2552,12 +2555,15 @@ const ingestBatch = async (
       }
       // `inserted`, not `accepted && !existing`: a conflict that took the update
       // path is accepted and still did not open the session, and `!existing` is
-      // the read that preceded the statement.
+      // the read that preceded the statement. The daemon's own chain opens a
+      // root session as soon as the daemon starts, before any agent runs, so
+      // it never counts as the organization's first run.
       if (
         sessionRow?.publicId &&
         inserted &&
         firstOpenedRunId === null &&
-        first.parent_session_uuid == null
+        first.parent_session_uuid == null &&
+        !isDaemonChain(first.session_id)
       ) {
         firstOpenedRunId = sessionRow.publicId;
       }

@@ -47,6 +47,15 @@ const REQUESTABLE_MODES: readonly TachoDeliveryMode[] = [
  */
 const DAEMON_CHAIN_PREFIX = "tachod-";
 
+/**
+ * Whether a root session is the daemon's own chain rather than an agent's
+ * run. Ingest asks this before it counts a session as a run: a next-run
+ * steer and the organization's first run both skip it.
+ */
+export function isDaemonChain(harnessSessionId: string): boolean {
+  return harnessSessionId.startsWith(DAEMON_CHAIN_PREFIX);
+}
+
 /** The run a queued command goes to: a root session ingest just opened. */
 export type NextRun = {
   /** `tacho.sessions.id`. */
@@ -96,11 +105,7 @@ export async function readdressNextRunCommands(
   },
 ): Promise<number> {
   const { scope, agentKey, run, hostFeatures, now } = args;
-  if (
-    agentKey === null ||
-    run.harnessSessionId.startsWith(DAEMON_CHAIN_PREFIX)
-  )
-    return 0;
+  if (agentKey === null || isDaemonChain(run.harnessSessionId)) return 0;
   const addressedToAgent = and(
     eq(commands.orgId, scope.orgId),
     eq(commands.workspaceId, scope.workspaceId),
