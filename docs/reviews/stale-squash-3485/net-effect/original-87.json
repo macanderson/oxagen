@@ -1,0 +1,162 @@
+{
+ "tip": "79d393a33480b440779594534d7c0b1c47501a23",
+ "since": "2026-09-17T14:30:00-07:00",
+ "commits": 87,
+ "pairsCompared": 84,
+ "pairsSkipped": 2,
+ "rawHits": 19,
+ "hits": [
+  {
+   "child": "accaa23b68e50079e90d90fad6c75b4b59eb9402",
+   "childSubject": "Store a mandate limit's measure kind instead of guessing it (ADR-108) (#3442)",
+   "parent": "275fc0bcd8a80796870fada2757b94b0c62cda17",
+   "parentSubject": "fix(mandates): a retired agent's mandate is revoked, not left active (#3437)",
+   "file": "packages/handlers/src/mandate.handlers.pg.test.ts",
+   "missingLines": 1
+  },
+  {
+   "child": "88823c40fa4f2e62d3232d0113b8bab4bfa5c738",
+   "childSubject": "An archived workspace accepts no machine credential (ADR-104) (#3432)",
+   "parent": "05175cc76e6332e28ba7ca6a11cdff0deec6cc5b",
+   "parentSubject": "tacho: one unfamiliar OTel field no longer drops a whole export (#3425)",
+   "file": "packages/tacho/src/claude-code/otel.test.ts",
+   "missingLines": 1
+  },
+  {
+   "child": "88823c40fa4f2e62d3232d0113b8bab4bfa5c738",
+   "childSubject": "An archived workspace accepts no machine credential (ADR-104) (#3432)",
+   "parent": "05175cc76e6332e28ba7ca6a11cdff0deec6cc5b",
+   "parentSubject": "tacho: one unfamiliar OTel field no longer drops a whole export (#3425)",
+   "file": "packages/tacho/src/envelope.ts",
+   "missingLines": 1
+  },
+  {
+   "child": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+   "childSubject": "run replay 2/3: transcript steps with tool i/o, chain and seal, live stream (#3352)",
+   "parent": "566b23723c5fff888a6bda7ef55c45358fb87696",
+   "parentSubject": "cost: record and show run cost \u2014 auto-seeded price book, negotiated rates, unpriced-model surfacing (#3271)",
+   "file": "docs/capabilities/schemas/README.md",
+   "missingLines": 1
+  },
+  {
+   "child": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+   "childSubject": "run replay 2/3: transcript steps with tool i/o, chain and seal, live stream (#3352)",
+   "parent": "566b23723c5fff888a6bda7ef55c45358fb87696",
+   "parentSubject": "cost: record and show run cost \u2014 auto-seeded price book, negotiated rates, unpriced-model surfacing (#3271)",
+   "file": "docs/capabilities/schemas/_index.json",
+   "missingLines": 1
+  },
+  {
+   "child": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+   "childSubject": "run replay 2/3: transcript steps with tool i/o, chain and seal, live stream (#3352)",
+   "parent": "566b23723c5fff888a6bda7ef55c45358fb87696",
+   "parentSubject": "cost: record and show run cost \u2014 auto-seeded price book, negotiated rates, unpriced-model surfacing (#3271)",
+   "file": "packages/database/atlas/migrations/atlas.sum",
+   "missingLines": 13
+  },
+  {
+   "child": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+   "childSubject": "run replay 2/3: transcript steps with tool i/o, chain and seal, live stream (#3352)",
+   "parent": "566b23723c5fff888a6bda7ef55c45358fb87696",
+   "parentSubject": "cost: record and show run cost \u2014 auto-seeded price book, negotiated rates, unpriced-model surfacing (#3271)",
+   "file": "packages/database/storage-manifest.json",
+   "missingLines": 1
+  },
+  {
+   "child": "dacf3fa7d13606c493b6fea3122c8405cc62c3bd",
+   "childSubject": "desktop: sign-in stops holding the setup wizard for five minutes, and a spec for the remaining gateway gaps (#3332)",
+   "parent": "f62edacf9847af3949ca4e4bb341abc80b13dddb",
+   "parentSubject": "app: Account dialog, avatar editor and user menu as the W11 mockup draws them (#3327)",
+   "file": "packages/database/atlas/migrations/atlas.sum",
+   "missingLines": 2
+  },
+  {
+   "child": "dacf3fa7d13606c493b6fea3122c8405cc62c3bd",
+   "childSubject": "desktop: sign-in stops holding the setup wizard for five minutes, and a spec for the remaining gateway gaps (#3332)",
+   "parent": "f62edacf9847af3949ca4e4bb341abc80b13dddb",
+   "parentSubject": "app: Account dialog, avatar editor and user menu as the W11 mockup draws them (#3327)",
+   "file": "packages/database/storage-manifest.json",
+   "missingLines": 1
+  },
+  {
+   "child": "f62edacf9847af3949ca4e4bb341abc80b13dddb",
+   "childSubject": "app: Account dialog, avatar editor and user menu as the W11 mockup draws them (#3327)",
+   "parent": "b35d47eb3033b895117f7f59835678b82a4d993c",
+   "parentSubject": "web: restore the demo and contact lead forms after ADR-043 dropped cms (#3390)",
+   "file": "apps/app/src/features/shell/account-dialog.test.tsx",
+   "missingLines": 1
+  },
+  {
+   "child": "f62edacf9847af3949ca4e4bb341abc80b13dddb",
+   "childSubject": "app: Account dialog, avatar editor and user menu as the W11 mockup draws them (#3327)",
+   "parent": "b35d47eb3033b895117f7f59835678b82a4d993c",
+   "parentSubject": "web: restore the demo and contact lead forms after ADR-043 dropped cms (#3390)",
+   "file": "apps/app/src/features/shell/account-dialog.tsx",
+   "missingLines": 1
+  },
+  {
+   "child": "f62edacf9847af3949ca4e4bb341abc80b13dddb",
+   "childSubject": "app: Account dialog, avatar editor and user menu as the W11 mockup draws them (#3327)",
+   "parent": "b35d47eb3033b895117f7f59835678b82a4d993c",
+   "parentSubject": "web: restore the demo and contact lead forms after ADR-043 dropped cms (#3390)",
+   "file": "packages/database/atlas/migrations/atlas.sum",
+   "missingLines": 1
+  },
+  {
+   "child": "b7acce8f4e2c2b5552fb0fbd20f3b9912e0ae919",
+   "childSubject": "HOTFIX: stop leaking the lead's email from the public /book/redeem response (#3412)",
+   "parent": "8a4f3c19553404015f32f57f24e08547347c7c2d",
+   "parentSubject": "Restore ebook lead gate and move contacts to oxagen.sh (#3389)",
+   "file": "apps/api/src/lib/cms/access.test.ts",
+   "missingLines": 3
+  },
+  {
+   "child": "b7acce8f4e2c2b5552fb0fbd20f3b9912e0ae919",
+   "childSubject": "HOTFIX: stop leaking the lead's email from the public /book/redeem response (#3412)",
+   "parent": "8a4f3c19553404015f32f57f24e08547347c7c2d",
+   "parentSubject": "Restore ebook lead gate and move contacts to oxagen.sh (#3389)",
+   "file": "apps/api/src/lib/cms/access.ts",
+   "missingLines": 5
+  },
+  {
+   "child": "b7acce8f4e2c2b5552fb0fbd20f3b9912e0ae919",
+   "childSubject": "HOTFIX: stop leaking the lead's email from the public /book/redeem response (#3412)",
+   "parent": "8a4f3c19553404015f32f57f24e08547347c7c2d",
+   "parentSubject": "Restore ebook lead gate and move contacts to oxagen.sh (#3389)",
+   "file": "apps/api/src/routes/v1/cms.test.ts",
+   "missingLines": 1
+  },
+  {
+   "child": "1608d2e0c5668b59524124ad5e15a994e91be1cd",
+   "childSubject": "M0: organisation graph placement, a real-Neo4j cross-tenant probe, and per-pattern tenant anchors (#3310)",
+   "parent": "4f86e753b91f0f3aa409fb6fdc0c856d7a8ae566",
+   "parentSubject": "BYOK for any OpenAI-compatible endpoint, and close an SSRF bypass in the outbound-URL guard (#3290)",
+   "file": "packages/database/atlas/migrations/atlas.sum",
+   "missingLines": 1
+  },
+  {
+   "child": "1608d2e0c5668b59524124ad5e15a994e91be1cd",
+   "childSubject": "M0: organisation graph placement, a real-Neo4j cross-tenant probe, and per-pattern tenant anchors (#3310)",
+   "parent": "4f86e753b91f0f3aa409fb6fdc0c856d7a8ae566",
+   "parentSubject": "BYOK for any OpenAI-compatible endpoint, and close an SSRF bypass in the outbound-URL guard (#3290)",
+   "file": "packages/database/storage-manifest.json",
+   "missingLines": 1
+  },
+  {
+   "child": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+   "childSubject": "handlers: steer on the ref the binding approved, and settle the ADR-087 collision (#3265)",
+   "parent": "a44c54151988534878534c8d828030b2a16432d1",
+   "parentSubject": "spec: repository binding, working copies, and one pull-request lifecycle for every governed file (#3242)",
+   "file": "docs/specs/repository-binding/README.md",
+   "missingLines": 1
+  },
+  {
+   "child": "e3b1b49c5afaed279cb1ebcee72cfbc77774b2bf",
+   "childSubject": "app: a Workspace settings dialog that binds a main repository (#3233)",
+   "parent": "5ef612e22f3ba36fd370e00ce14f9100cd920a33",
+   "parentSubject": "billing: measure the plan-change proration direction instead of inferring it (#3171)",
+   "file": "packages/database/storage-manifest.json",
+   "missingLines": 1
+  }
+ ]
+}

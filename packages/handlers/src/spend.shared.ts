@@ -218,6 +218,64 @@ export function sumStanding(runs: readonly SpendRunRecord[]): StandingTokens {
   return out;
 }
 
+const WINDOW_BLOCKS = [
+  "system",
+  "steering",
+  "tools",
+  "context",
+  "conversation",
+] as const;
+
+/** The runs' request windows summed, in the contract's shape. */
+export type SummedWindows = {
+  runs: number;
+  requests: number;
+  requestsWithoutTokens: number;
+  promptTokens: number;
+  blocks: Record<(typeof WINDOW_BLOCKS)[number], number | null>;
+};
+
+/**
+ * Each run's window composition summed over the runs (#5341): the requests,
+ * their prompt tokens, and each block's tokens. A run whose rollup stored no
+ * composition adds nothing: one that recorded no window, and one rolled up
+ * before the composition was kept. A block none of the runs carried stays
+ * null. Null when no run stored a composition, so a row of such runs says
+ * its conversation and system were not recorded, never zero.
+ */
+export function sumWindows(
+  runs: readonly RunTotalsRecord[],
+): SummedWindows | null {
+  let out: SummedWindows | null = null;
+  for (const run of runs) {
+    const windows = run.breakdown.windows;
+    if (windows === undefined || windows === null) continue;
+    out ??= {
+      runs: 0,
+      requests: 0,
+      requestsWithoutTokens: 0,
+      promptTokens: 0,
+      blocks: {
+        system: null,
+        steering: null,
+        tools: null,
+        context: null,
+        conversation: null,
+      },
+    };
+    out.runs += 1;
+    out.requests += windows.requests;
+    out.requestsWithoutTokens += windows.requestsWithoutTokens;
+    out.promptTokens += windows.promptTokens;
+    for (const block of WINDOW_BLOCKS) {
+      const tokens = windows.blocks[block];
+      if (tokens === null || tokens === undefined) continue;
+      out.blocks[block] = (out.blocks[block] ?? 0) + tokens;
+    }
+  }
+  return out;
+}
+
 /**
  * The tool-result tokens the runs recorded: one tool's when `tool` is given,
  * every tool's otherwise. Each result counts once, when it was recorded. Null

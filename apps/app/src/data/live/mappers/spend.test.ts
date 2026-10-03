@@ -191,6 +191,46 @@ describe("toSpendReport", () => {
     expect(view.rows[0]?.tokenSources).toEqual(sources);
     expect(view.rows[1]).not.toHaveProperty("tokenSources");
   });
+
+  it("copies a row's request windows, keeps a null one null, and leaves a row without them without (#5341)", () => {
+    const windows = {
+      runs: 2,
+      requests: 9,
+      requestsWithoutTokens: 1,
+      promptTokens: 40_000,
+      blocks: {
+        system: 4_000,
+        steering: null,
+        tools: 12_000,
+        context: null,
+        conversation: 24_000,
+      },
+    };
+    const row = {
+      ...figure,
+      provider: null,
+      operator: null,
+      tokens: wireTokens,
+      topRuns: [],
+    };
+    const out = spendGet.output.parse({
+      period: { from: "2026-09-01", to: "2026-09-30" },
+      groupBy: "agent",
+      total: figure,
+      days: [],
+      reported: null,
+      rows: [
+        { ...row, key: "acme.core.cc", windows },
+        { ...row, key: "acme.core.idle", windows: null },
+        { ...row, key: "acme.core.review" },
+      ],
+    });
+    const view = SpendReport.parse(toSpendReport(out));
+    expect(view.rows[0]?.windows).toEqual(windows);
+    // No run measured them: null, never a row of zeros.
+    expect(view.rows[1]?.windows).toBeNull();
+    expect(view.rows[2]).not.toHaveProperty("windows");
+  });
 });
 
 describe("toFleetSpend", () => {
